@@ -65823,20 +65823,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     const prod=_item.prod;
                     const pi=_item.gi;
                     return <div key={pi}
-                      draggable={_editUnitFilter}
-                      onDragStart={_editUnitFilter?function(e){
-                        _dragProdRef.current={unitId:_unitTab, srcIdx:filteredIdx};
-                        e.dataTransfer.effectAllowed="move";
-                        try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){}
-                        e.currentTarget.style.opacity="0.4";
-                      }:undefined}
-                      onDragEnd={_editUnitFilter?function(e){e.currentTarget.style.opacity="1";}:undefined}
                       onDragOver={_editUnitFilter?function(e){e.preventDefault();e.dataTransfer.dropEffect="move";}:undefined}
-                      onDragEnter={_editUnitFilter?function(e){e.preventDefault();e.currentTarget.style.boxShadow="0 0 0 2px "+PB_PURPLE;}:undefined}
-                      onDragLeave={_editUnitFilter?function(e){e.currentTarget.style.boxShadow="";}:undefined}
+                      onDragEnter={_editUnitFilter?function(e){e.preventDefault();e.currentTarget.style.boxShadow="0 0 0 2px "+PB_PURPLE;e.currentTarget.style.borderColor=PB_PURPLE;}:undefined}
+                      onDragLeave={_editUnitFilter?function(e){e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}:undefined}
                       onDrop={_editUnitFilter?function(e){
                         e.preventDefault();
                         e.currentTarget.style.boxShadow="";
+                        e.currentTarget.style.borderColor="#e2e8f0";
                         const dref=_dragProdRef.current;
                         if(dref.unitId===_unitTab && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){
                           _produtoReorderInUnit(_unitTab, dref.srcIdx, filteredIdx);
@@ -65844,16 +65837,31 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         _dragProdRef.current={unitId:null,srcIdx:-1};
                       }:undefined}
                       style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"box-shadow .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
-                    {/* Header: drag handle + position (so quando filter ativo) OU strip discreta */}
-                    {_editUnitFilter ? <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 14px",background:"#faf5ff",borderBottom:"1px solid #ede9fe",cursor:"move"}}>
-                      <div style={{color:PB_PURPLE,display:"inline-flex",alignItems:"center",gap:7,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>
-                        Posição {filteredIdx+1}
+                    {/* Header — draggable APENAS aqui pra nao conflitar com inputs internos */}
+                    {_editUnitFilter ? <div
+                      draggable={true}
+                      onDragStart={function(e){
+                        _dragProdRef.current={unitId:_unitTab, srcIdx:filteredIdx};
+                        e.dataTransfer.effectAllowed="move";
+                        try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){}
+                        // Aplica opacity no card inteiro (pai)
+                        try{ e.currentTarget.parentElement.style.opacity="0.4"; }catch(_){}
+                      }}
+                      onDragEnd={function(e){try{ e.currentTarget.parentElement.style.opacity="1"; }catch(_){} }}
+                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 16px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff",cursor:"grab",userSelect:"none"}}
+                      onMouseDown={function(e){e.currentTarget.style.cursor="grabbing";}}
+                      onMouseUp={function(e){e.currentTarget.style.cursor="grab";}}>
+                      <div style={{display:"inline-flex",alignItems:"center",gap:10,fontSize:13,fontWeight:800,letterSpacing:-.1}}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{opacity:.9}}><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>
+                        <span style={{background:"rgba(255,255,255,0.22)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Posição {filteredIdx+1}</span>
+                        <span style={{opacity:.85,fontWeight:600,fontSize:11.5,letterSpacing:.1}}>arraste pra reordenar</span>
                       </div>
                       <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
-                        style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:4,display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+                        draggable={false}
+                        onMouseDown={function(e){e.stopPropagation();}}
+                        style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",cursor:"pointer",padding:"6px 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:8,transition:"background .12s"}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
                         <Ico n="trash" size={14}/>
                       </button>
                     </div> : <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0 8px"}}>
@@ -65870,18 +65878,18 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
                         return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {_urls.map(function(_url,_ii){
-                            return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
+                            return <div key={_ii} style={{position:"relative",width:180,height:180,borderRadius:14,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
                               <img src={_url} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                               <button type="button" onClick={function(){_produtoRemoveImg(pi,_ii);}} title="Remover foto"
-                                style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
+                                style={{position:"absolute",top:7,right:7,background:"rgba(15,23,42,.8)",border:"none",borderRadius:99,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,lineHeight:1,padding:0}}>×</button>
                             </div>;
                           })}
                           <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); } });}}
-                            style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
+                            style={{width:180,height:180,borderRadius:14,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
                             onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
                             onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
-                            <Ico n="image" size={22} color="currentColor"/>
-                            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
+                            <Ico n="image" size={30} color="currentColor"/>
+                            <span style={{fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
                           </button>
                         </div>;
                       })()}
@@ -65961,16 +65969,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.06)";}}
                           onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
                           {_viewUrls.length>0
-                            ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>
-                                {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
+                            ? <div style={{display:"flex",flexDirection:"column",gap:7,flexShrink:0}}>
+                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:220,height:220,borderRadius:14,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>
+                                {_viewUrls.length>1 && <div style={{display:"flex",gap:6,flexWrap:"wrap",maxWidth:220}}>
                                   {_viewUrls.slice(1,5).map(function(_u,_ii){
-                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>;
+                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" style={{width:50,height:50,borderRadius:8,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>;
                                   })}
-                                  {_viewUrls.length>5 && <div style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_viewUrls.length-5}</div>}
+                                  {_viewUrls.length>5 && <div style={{width:50,height:50,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:12,fontWeight:800}}>+{_viewUrls.length-5}</div>}
                                 </div>}
                               </div>
-                            : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
+                            : <div style={{width:220,height:220,borderRadius:14,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={52} color="currentColor"/></div>
                           }
                           <div style={{flex:1,minWidth:0}}>
                             {!_hasFilter && _isBioter && (unitObjs.length>0 || unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
