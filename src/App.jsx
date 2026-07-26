@@ -34849,13 +34849,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
-                    {canEditRef&&<button onClick={()=>{const inp=fileInputRefRef.current;if(inp){inp.value="";inp.click();}}}
+                    {canEditRef&&<label htmlFor={"pixels-pick-ref-"+task.id}
                       style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(124,58,237,0.15)"}}
                       onMouseEnter={function(e){e.currentTarget.style.background="#6d28d9";e.currentTarget.style.boxShadow="0 3px 10px rgba(124,58,237,0.35)";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.boxShadow="0 1px 2px rgba(124,58,237,0.15)";}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
-                    </button>}
+                    </label>}
                   </div>
                   {totalRef===0&&(<div style={{background:"#faf5ff",border:"1.5px dashed #ddd6fe",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
                     <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #ede9fe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#a78bfa",marginBottom:10,boxShadow:"0 1px 3px rgba(124,58,237,0.06)"}}><Ico n="pin" size={20}/></div>
@@ -35012,13 +35012,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
-                    {canEdit&&<button onClick={()=>{const inp=fileInputRef.current;if(inp){inp.value="";inp.click();}}}
+                    {canEdit&&<label htmlFor={"pixels-pick-final-"+task.id}
                       style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.12)"}}
                       onMouseEnter={function(e){e.currentTarget.style.background="#1e293b";e.currentTarget.style.boxShadow="0 3px 10px rgba(15,23,42,0.3)";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.12)";}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
-                    </button>}
+                    </label>}
                   </div>
                   {totalFin===0&&(<div style={{background:"#f8fafc",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
                     <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",marginBottom:10,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}><Ico n="image" size={20}/></div>
@@ -35112,8 +35112,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
 
             {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
-            <input type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
-            <input type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
+            <input id={"pixels-pick-final-"+task.id} type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+            <input id={"pixels-pick-ref-"+task.id} type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
           </div>}
 
           {/* ÁUDIO */}
