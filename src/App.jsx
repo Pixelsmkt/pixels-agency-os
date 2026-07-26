@@ -65017,7 +65017,8 @@ function PagePlaybooks({isMob, perms, viewingAs}){
     return <PlaybookDetalhe
       cl={clCfg} area={"all"} areaCfg={areaCfg} data={data}
       isAdmin={isAdmin} editMode={editMode} setEditMode={setEditMode}
-      onBack={()=>{setOpenClient(null); setEditMode(false);}}
+      onBack={()=>{setOpenClient(null);}}
+      onSwitchClient={(newId)=>{ setOpenClient(newId); }}
       onUpdate={(patch)=>_updateClient(openClient, cur => Object.assign({}, cur, patch))}
       onUpdateArea={(areaPatch)=>_updateClient(openClient, cur => Object.assign({}, cur, areaPatch))}
       isMob={isMob}/>;
@@ -65318,7 +65319,7 @@ function _PbVideoProcesses({isAdmin}){
 // ═══════════════════════════════════════════════════════════════
 //  PlaybookDetalhe — página de um cliente/área específica
 // ═══════════════════════════════════════════════════════════════
-function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
+function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onSwitchClient, onUpdate, onUpdateArea, isMob}){
   // UNIFICADO: quando area==="all", areaData = MERGE de root + legacy por área.
   // Orientações visuais são mescladas de todas as áreas numa lista única.
   const areaData = (function(){
@@ -65382,7 +65383,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const handleSave = ()=>{
     onUpdate({sobre:editSobre, comunicacao:editComm, contatos:editContatos, contatos_by_unit:editContatosByUnit, produtos:editProdutos});
     onUpdateArea({checklist:editChk.split("\n").map(s=>s.trim()).filter(Boolean)});
-    setEditMode(false);
+    // editMode fica sempre true (edicao inline). Nao volta pra modo leitura.
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
   };
 
@@ -65554,6 +65555,35 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           </div>}
         </div>
       </div>
+
+      {/* ══════════ BARRINHA DE CLIENTES — troca de playbook em 1 clique ══════════ */}
+      {typeof onSwitchClient === "function" && (function(){
+        const _all = (typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
+        if(_all.length<=1) return null;
+        return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:12,padding:8,display:"flex",gap:6,overflowX:"auto",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+          {_all.map(function(c){
+            const _active = c.id === cl.id;
+            const _cor = c.color || "#7c3aed";
+            const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[c.id]) || null;
+            const _initials = (c.name||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
+            return <button key={c.id}
+              onClick={function(){ if(!_active) onSwitchClient(c.id); }}
+              title={_active?c.name+" (aqui)":"Ir pra playbook: "+c.name}
+              style={{background:_active?_cor+"12":"#fff",border:"1.5px solid "+(_active?_cor:"#e2e8f0"),borderRadius:10,padding:"6px 12px 6px 5px",fontSize:12.5,fontWeight:_active?700:600,color:_active?_cor:"#475569",cursor:_active?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",flexShrink:0,transition:"all .12s",boxShadow:_active?"0 2px 8px "+_cor+"22":"none"}}
+              onMouseEnter={function(e){if(!_active){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";e.currentTarget.style.color=_cor;}}}
+              onMouseLeave={function(e){if(!_active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}}>
+              <span style={{width:22,height:22,borderRadius:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
+                {_logoSrc
+                  ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                  : <span style={{color:"#fff",fontSize:9.5,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
+                }
+              </span>
+              <span>{c.name}</span>
+              {_active ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg> : null}
+            </button>;
+          })}
+        </div>;
+      })()}
 
       {/* ══════════ ANCORAS / NAV RÁPIDO ══════════ */}
       <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:6,display:"flex",gap:4,overflowX:"auto",position:"sticky",top:8,zIndex:5,boxShadow:"0 2px 10px rgba(15,23,42,.04)"}}>
