@@ -66295,6 +66295,39 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>
           </div>
 
+          {/* Google Drive — link clicável pra pasta do cliente */}
+          {(function(){
+            const _driveUrl = (data && data.driveUrl) || "";
+            const _hasDrive = !!_driveUrl.trim();
+            return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:editMode?10:(_hasDrive?10:0)}}>
+                <div style={{width:34,height:34,borderRadius:9,background:"#eff6ff",border:"1px solid #bfdbfe",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <svg width="17" height="15" viewBox="0 0 87 78" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 78L0 52.5L28 4H57L43 28.5L14.5 78Z" fill="#0066DA"/><path d="M43 28.5L57 4H87L72.5 28.5L43 28.5Z" fill="#EA4335"/><path d="M43 28.5L14.5 78H72.5L87 52.5L43 28.5Z" fill="#00832D"/><path d="M28 4L14.5 27L43 28.5L28 4Z" fill="#FFBA00"/></svg>
+                </div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Google Drive</div>
+                  <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>pasta do cliente</div>
+                </div>
+              </div>
+              {editMode && isAdmin
+                ? <input type="url" value={_driveUrl}
+                    onChange={function(e){ if(typeof onUpdate==="function") onUpdate({driveUrl: e.target.value}); }}
+                    placeholder="Cole aqui: https://drive.google.com/…"
+                    style={{width:"100%",background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",color:PB_INK,fontSize:12.5,outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"}}/>
+                : (_hasDrive
+                    ? <a href={_driveUrl} target="_blank" rel="noreferrer"
+                        style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",color:"#1e40af",fontSize:12.5,fontWeight:700,cursor:"pointer",textDecoration:"none",transition:"all .12s"}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="#dbeafe";e.currentTarget.style.borderColor="#93c5fd";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="#eff6ff";e.currentTarget.style.borderColor="#bfdbfe";}}>
+                        Abrir pasta no Drive
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      </a>
+                    : <div style={{color:PB_SOFT,fontSize:11.5,fontStyle:"italic",padding:"6px 2px"}}>Nenhum link cadastrado{isAdmin?" — clique em Editar pra adicionar":""}.</div>
+                  )
+              }
+            </div>;
+          })()}
+
           {/* Checklist com progresso */}
           <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
