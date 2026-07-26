@@ -65439,9 +65439,27 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     });
   };
   // Helper produtos: adicionar/remover/atualizar
-  const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",unidades:[]}]);});};
+  const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",unidades:[],imgUrls:[]}]);});};
   const _produtoUpd=function(idx,patch){setEditProdutos(function(p){return p.map(function(it,i){return i===idx?Object.assign({},it,patch):it;});});};
   const _produtoDel=function(idx){setEditProdutos(function(p){return p.filter(function(_,i){return i!==idx;});});};
+  // Adiciona uma nova imagem ao array imgUrls do produto (migra imgUrl legado se existir)
+  const _produtoAddImgToArr=function(idx,url){
+    setEditProdutos(function(p){return p.map(function(it,i){
+      if(i!==idx) return it;
+      const legacy = it.imgUrl && !(Array.isArray(it.imgUrls) && it.imgUrls.length) ? [it.imgUrl] : [];
+      const cur = Array.isArray(it.imgUrls) ? it.imgUrls : legacy;
+      return Object.assign({},it,{imgUrls:cur.concat([url]), imgUrl: it.imgUrl || url});
+    });});
+  };
+  const _produtoRemoveImg=function(idx,imgIdx){
+    setEditProdutos(function(p){return p.map(function(it,i){
+      if(i!==idx) return it;
+      const legacy = it.imgUrl && !(Array.isArray(it.imgUrls) && it.imgUrls.length) ? [it.imgUrl] : [];
+      const cur = Array.isArray(it.imgUrls) ? it.imgUrls.slice() : legacy;
+      cur.splice(imgIdx,1);
+      return Object.assign({},it,{imgUrls:cur, imgUrl: cur[0] || ""});
+    });});
+  };
   const _produtoToggleUnit=function(idx,unitId){setEditProdutos(function(p){return p.map(function(it,i){if(i!==idx)return it;const cur=Array.isArray(it.unidades)?it.unidades:[];const has=cur.indexOf(unitId)>=0;return Object.assign({},it,{unidades:has?cur.filter(function(u){return u!==unitId;}):cur.concat([unitId])});});});};
   // Reordena produtos dentro de UMA unidade Bioter e persiste em prod.ordemPorUnidade[unitId]
   const _produtoReorderInUnit=function(unitId, srcIdx, dstIdx){
@@ -65797,9 +65815,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     _visibleEdit=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
                   }
                   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {_editUnitFilter && _visibleEdit.length>1 && <div style={{background:"#fef3c7",border:"1px dashed #fbbf24",borderRadius:9,padding:"8px 12px",fontSize:11.5,color:"#78350f",fontWeight:600,display:"inline-flex",alignItems:"center",gap:7,alignSelf:"flex-start"}}>
+                  {_editUnitFilter && _visibleEdit.length>1 && <div style={{background:"#faf5ff",border:"1px dashed "+PB_PURPLE+"55",borderRadius:10,padding:"9px 13px",fontSize:12,color:PB_PURPLE_DK,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8,alignSelf:"flex-start"}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    Arraste os produtos pra ordenar por relevância nesta unidade
+                    Arraste os cards pra ordenar por relevância nesta unidade
                   </div>}
                   {_visibleEdit.map(function(_item,filteredIdx){
                     const prod=_item.prod;
@@ -65814,7 +65832,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       }:undefined}
                       onDragEnd={_editUnitFilter?function(e){e.currentTarget.style.opacity="1";}:undefined}
                       onDragOver={_editUnitFilter?function(e){e.preventDefault();e.dataTransfer.dropEffect="move";}:undefined}
-                      onDragEnter={_editUnitFilter?function(e){e.preventDefault();e.currentTarget.style.boxShadow="0 0 0 2px #f59e0b";}:undefined}
+                      onDragEnter={_editUnitFilter?function(e){e.preventDefault();e.currentTarget.style.boxShadow="0 0 0 2px "+PB_PURPLE;}:undefined}
                       onDragLeave={_editUnitFilter?function(e){e.currentTarget.style.boxShadow="";}:undefined}
                       onDrop={_editUnitFilter?function(e){
                         e.preventDefault();
@@ -65825,78 +65843,98 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         }
                         _dragProdRef.current={unitId:null,srcIdx:-1};
                       }:undefined}
-                      style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,cursor:_editUnitFilter?"move":"default",transition:"box-shadow .12s"}}>
-                    {_editUnitFilter && <div style={{display:"flex",alignItems:"center",gap:8,paddingBottom:6,borderBottom:"1px dashed #fde68a",marginBottom:-2}}>
-                      <div style={{color:"#a16207",display:"inline-flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700}}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"box-shadow .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+                    {/* Header: drag handle + position (so quando filter ativo) OU strip discreta */}
+                    {_editUnitFilter ? <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 14px",background:"#faf5ff",borderBottom:"1px solid #ede9fe",cursor:"move"}}>
+                      <div style={{color:PB_PURPLE,display:"inline-flex",alignItems:"center",gap:7,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>
                         Posição {filteredIdx+1}
                       </div>
-                    </div>}
-                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                      <button type="button" onClick={function(){_pbProdutoUploadImg(pi,_produtoUpd);}} title="Trocar imagem"
-                        style={{width:74,height:74,borderRadius:10,background:prod.imgUrl?"#fff":"#fef3c7",border:"1.5px dashed #fbbf24",cursor:"pointer",padding:0,overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {prod.imgUrl
-                          ? <img src={prod.imgUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} referrerPolicy="no-referrer"/>
-                          : <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:"#a16207"}}>
-                              <Ico n="image" size={20} color="#a16207"/>
-                              <span style={{fontSize:9,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>+ Foto</span>
-                            </div>
-                        }
-                      </button>
-                      <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-                        {/* Grid PT | ES lado a lado — cada idioma com Nome principal + Outros nomes */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                          <div style={{background:"#fff",border:"1px solid #009c3b33",borderRadius:9,padding:"9px 10px",display:"flex",flexDirection:"column",gap:6}}>
-                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
-                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
-                              Português
-                            </div>
-                            <input type="text" placeholder="Nome principal (PT)" value={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomePrincipalPt:e.target.value, nome:e.target.value});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                            <input type="text" placeholder="Outros nomes separados por vírgula (ex: Fossa, Biofábrica)" value={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomesPt:e.target.value});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"6px 10px",fontSize:11.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                          </div>
-                          <div style={{background:"#fff",border:"1px solid #d52b1e33",borderRadius:9,padding:"9px 10px",display:"flex",flexDirection:"column",gap:6}}>
-                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
-                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                              Español
-                            </div>
-                            <input type="text" placeholder="Nombre principal (ES)" value={prod.nomePrincipalEs||""}
-                              onChange={function(e){_produtoUpd(pi,{nomePrincipalEs:e.target.value});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                            <input type="text" placeholder="Otros nombres separados por coma (ej: Estanque, Laguna)" value={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomesEs:e.target.value});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"6px 10px",fontSize:11.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                          </div>
-                        </div>
-                        <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
-                          onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
-                          rows={2}
-                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:54,boxSizing:"border-box"}}/>
-                      </div>
                       <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
-                        style={{background:"#fee2e2",border:"1px solid #fecaca",borderRadius:8,width:32,height:32,color:"#dc2626",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <Ico n="trash" size={13}/>
+                        style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:4,display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+                        <Ico n="trash" size={14}/>
                       </button>
-                    </div>
-                    {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
-                      <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Unidades onde se aplica</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                        {BIOTER_UNITS.map(function(u){
-                          const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
-                          return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
-                            style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER}}>
-                            {u.pickerLabel||u.label}
-                          </button>;
-                        })}
-                      </div>
+                    </div> : <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0 8px"}}>
+                      <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
+                        style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#cbd5e1";}}>
+                        <Ico n="trash" size={14}/>
+                      </button>
                     </div>}
+                    <div style={{display:"flex",flexDirection:"column",gap:14,padding:_editUnitFilter?"14px 16px 16px 16px":"4px 16px 16px 16px"}}>
+                      {/* Galeria grandona de imagens do produto */}
+                      {(function(){
+                        const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
+                        return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {_urls.map(function(_url,_ii){
+                            return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
+                              <img src={_url} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                              <button type="button" onClick={function(){_produtoRemoveImg(pi,_ii);}} title="Remover foto"
+                                style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
+                            </div>;
+                          })}
+                          <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); } });}}
+                            style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
+                            onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
+                            onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
+                            <Ico n="image" size={22} color="currentColor"/>
+                            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
+                          </button>
+                        </div>;
+                      })()}
+                      {/* Grid PT | ES lado a lado */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
+                            <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
+                            Português
+                          </div>
+                          <input type="text" placeholder="Nome principal (PT)" value={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
+                            onChange={function(e){_produtoUpd(pi,{nomePrincipalPt:e.target.value, nome:e.target.value});}}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                          <input type="text" placeholder="Outros nomes (ex: Fossa, Biofábrica)" value={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
+                            onChange={function(e){_produtoUpd(pi,{nomesPt:e.target.value});}}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                        </div>
+                        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
+                            <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
+                            Español
+                          </div>
+                          <input type="text" placeholder="Nombre principal (ES)" value={prod.nomePrincipalEs||""}
+                            onChange={function(e){_produtoUpd(pi,{nomePrincipalEs:e.target.value});}}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                          <input type="text" placeholder="Otros nombres (ej: Estanque, Laguna)" value={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
+                            onChange={function(e){_produtoUpd(pi,{nomesEs:e.target.value});}}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                        </div>
+                      </div>
+                      <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
+                        onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
+                        rows={2}
+                        style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:56,boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                      {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
+                        <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:7}}>Unidades onde se aplica</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {BIOTER_UNITS.map(function(u){
+                            const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
+                            return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
+                              style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,transition:"all .12s"}}>
+                              {u.pickerLabel||u.label}
+                            </button>;
+                          })}
+                        </div>
+                      </div>}
+                    </div>
                   </div>;})}
                   <button onClick={_produtoAdd}
-                    style={{background:"#fff",border:"1.5px dashed #fde68a",borderRadius:10,padding:"10px 14px",color:"#a16207",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                    <Ico n="plus" size={13}/> Adicionar produto
+                    style={{background:"#fff",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"14px 18px",color:"#64748b",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+                    <Ico n="plus" size={14}/> Adicionar produto
                   </button>
                 </div>;
                 })()
@@ -65918,10 +65956,21 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
                         const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
                         const _hasFilter = _isBioter && _unitTab;
-                        return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
-                          {prod.imgUrl
-                            ? <img src={prod.imgUrl} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:74,height:74,borderRadius:10,objectFit:"cover",border:"1px solid "+PB_BORDER,flexShrink:0,background:"#fff"}}/>
-                            : <div style={{width:74,height:74,borderRadius:10,background:"#fef3c7",border:"1px solid #fde68a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="package" size={26} color="#f59e0b"/></div>
+                        const _viewUrls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
+                        return <div key={pi} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:16,display:"flex",gap:16,alignItems:"flex-start",boxShadow:"0 1px 2px rgba(15,23,42,.03)",transition:"box-shadow .15s, border-color .15s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.06)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
+                          {_viewUrls.length>0
+                            ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>
+                                {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
+                                  {_viewUrls.slice(1,5).map(function(_u,_ii){
+                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>;
+                                  })}
+                                  {_viewUrls.length>5 && <div style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_viewUrls.length-5}</div>}
+                                </div>}
+                              </div>
+                            : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
                           }
                           <div style={{flex:1,minWidth:0}}>
                             {!_hasFilter && _isBioter && (unitObjs.length>0 || unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
