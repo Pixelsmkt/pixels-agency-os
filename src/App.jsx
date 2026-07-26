@@ -65777,7 +65777,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Sobre a empresa */}
           <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
             {editMode
-              ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} onBlur={function(){if((editSobre||"")!==(data.sobre||"")) onUpdate({sobre:editSobre});}} rows={5}
+              ? <_PbAutoTextarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} onBlur={function(){if((editSobre||"")!==(data.sobre||"")) onUpdate({sobre:editSobre});}} rows={5}
                   placeholder="Quem é o cliente, o que vende, onde atua, posicionamento principal..."
                   style={_pbInpStyle()}/>
               : (function(){
@@ -65792,7 +65792,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Comunicação da marca */}
           <PlaybookBlock id="pb-comunicacao" title="Comunicação da marca" subtitle="Tom de voz, estilo e linguagem" icon="sparkles" color="#0ea5e9">
             {editMode
-              ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} onBlur={function(){if((editComm||"")!==(data.comunicacao||"")) onUpdate({comunicacao:editComm});}} rows={5}
+              ? <_PbAutoTextarea value={editComm} onChange={e=>setEditComm(e.target.value)} onBlur={function(){if((editComm||"")!==(data.comunicacao||"")) onUpdate({comunicacao:editComm});}} rows={5}
                   placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
                   style={_pbInpStyle()}/>
               : (data.comunicacao
@@ -67089,6 +67089,57 @@ function _pbSecIcon(sectionName){
   return "check";
 }
 
+// ── Auto-expand textarea ──────────────────────────────
+// Cresce automaticamente conforme o conteudo — sem scroll interno chato.
+function _PbAutoTextarea({value, onChange, onBlur, placeholder, style, rows}){
+  const _ref = useRef(null);
+  const _fit = function(){
+    const el = _ref.current;
+    if(!el) return;
+    el.style.height = "auto";
+    el.style.height = (el.scrollHeight + 2) + "px";
+  };
+  useEffect(_fit, [value]);
+  useEffect(function(){
+    setTimeout(_fit, 0);
+  // eslint-disable-next-line
+  }, []);
+  // Auto-bullet: "- " ou "* " no inicio de linha vira "• "
+  function _handleChange(e){
+    const el = e.target;
+    const _v = el.value;
+    const _pos = el.selectionStart;
+    // Detecta se o usuario digitou "- " ou "* " no comeco de uma linha
+    // Pega os 2 chars ANTES do cursor
+    if(_pos >= 2){
+      const _last2 = _v.slice(_pos-2, _pos);
+      if(_last2 === "- " || _last2 === "* "){
+        // Verifica se esta no comeco de linha (char anterior é \n ou é o comeco do texto)
+        const _prev = _pos-2 > 0 ? _v[_pos-3] : "\n";
+        if(_prev === "\n" || _pos === 2){
+          const _newVal = _v.slice(0, _pos-2) + "• " + _v.slice(_pos);
+          // Sintetiza um novo event pra manter o contrato do onChange
+          const _newEvent = Object.assign({}, e, {target: Object.assign({}, e.target, {value:_newVal})});
+          // Aplica o valor via ref e reposiciona cursor DEPOIS que o React re-render
+          if(typeof onChange === "function") onChange(_newEvent);
+          setTimeout(function(){
+            if(_ref.current){
+              _ref.current.setSelectionRange(_pos, _pos);
+              _fit();
+            }
+          }, 0);
+          return;
+        }
+      }
+    }
+    if(typeof onChange === "function") onChange(e);
+  }
+  return <textarea ref={_ref} value={value} onChange={_handleChange} onBlur={onBlur}
+    placeholder={placeholder} rows={rows||3}
+    onInput={_fit}
+    style={Object.assign({},style||{},{overflow:"hidden",resize:"none",minHeight:80})}/>;
+}
+
 // ── Empty state ──────────────────────────────────────
 
 function _PbEmpty({icon, text, sub}){
@@ -67508,12 +67559,12 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
       <div style={{color:PB_MUTE,fontSize:11.5,marginBottom:10,lineHeight:1.45}}>Regras, tabus, palavras proibidas, concorrentes que não podem ser mencionados…</div>
 
       {editMode && isAdmin
-        ? <textarea value={restricoes}
+        ? <_PbAutoTextarea value={restricoes}
             onChange={function(e){setRestricoes(e.target.value);}}
             onBlur={function(){_save({restricoes:restricoes});}}
             rows={4}
             placeholder="Ex: Nunca mencionar concorrente X. Não usar tom informal. Evitar emojis. Nunca prometer prazo de entrega em post público…"
-            style={Object.assign({},_pbInpStyle(),{minHeight:80,resize:"vertical"})}/>
+            style={_pbInpStyle()}/>
         : (restricoes
             ? <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"12px 14px",color:"#7f1d1d",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{restricoes}</div>
             : <_PbEmpty icon="alert" text="Sem restrições cadastradas." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>
