@@ -23403,7 +23403,31 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // FIX 3: usuário efetivo para o CardModal
   const effectiveUser=viewingAs?TEAM.find(u=>u.id===viewingAs)||CURRENT_USER:CURRENT_USER;
 
-  const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  // Renderiza texto de comentário quebrando [MM:SS] em pills roxos elegantes
+function _renderCmtWithTs(txt, accent){
+  const _acc = accent || "#7c3aed";
+  const _s = String(txt||"");
+  if(!_s) return null;
+  const _re = /\[(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d)?)\]/g;
+  const _parts = [];
+  let _last = 0, _m, _i = 0;
+  while((_m = _re.exec(_s)) !== null){
+    if(_m.index > _last) _parts.push(_s.slice(_last, _m.index));
+    _parts.push({ts: _m[1], key: "ts"+(_i++)});
+    _last = _m.index + _m[0].length;
+  }
+  if(_last < _s.length) _parts.push(_s.slice(_last));
+  if(_parts.length === 0) return _s;
+  return _parts.map(function(part, i){
+    if(typeof part === "string") return <span key={"t"+i}>{part}</span>;
+    return <span key={part.key} style={{display:"inline-flex",alignItems:"center",gap:3,background:_acc+"18",color:_acc,fontWeight:800,fontSize:10.5,padding:"2px 7px",borderRadius:6,fontVariantNumeric:"tabular-nums",letterSpacing:.2,marginRight:5,marginBottom:1,verticalAlign:"middle",border:"1px solid "+_acc+"33",lineHeight:1.4}}>
+      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      {part.ts}
+    </span>;
+  });
+}
+
+const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
   // Sort estável por ID asc (FIFO — mais antigos primeiro). Evita reordenar
   // a fila quando o cartão é editado e o polling retorna em ordem nova.
@@ -24398,7 +24422,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       }
                       return(<div key={cc.id} style={{color:C.tx,fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4,display:"flex",alignItems:"flex-start",gap:6}}>
                         <div style={{flex:1,minWidth:0}}>
-                          {txt}
+                          {_renderCmtWithTs(txt, accent)}
                           {cc.editedAt&&<span style={{color:C.td,fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
                         </div>
                         {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
@@ -24443,7 +24467,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               if(!s) return 0;
               const _s = String(s);
               if(/^\d{4}-\d{2}-\d{2}T/.test(_s)){ const _i=new Date(_s).getTime(); if(!isNaN(_i)&&_i>0) return _i; }
-              const _m = _s.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+              // aceita "26/07/2026", "26/07/2026 14:32" e "26/07/2026 às 14:32"
+              const _m = _s.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(?:às\s+)?(\d{1,2}):(\d{2}))?/);
               if(_m){ const _t=new Date(_m[3]+"-"+_m[2]+"-"+_m[1]+"T"+(_m[4]||"00").padStart(2,"0")+":"+(_m[5]||"00")+":00").getTime(); if(!isNaN(_t)) return _t; }
               return 0;
             };
@@ -24456,27 +24481,50 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             const _last = _sorted[0];
             let _senderName = "";
             let _sentAtTs = 0;
-            if(_last){
-              _senderName = _last.addedBy || "";
-              _sentAtTs = _parseT(_last.addedAtIso) || _parseT(_last.addedAt) || 0;
-            }
-            // Fallback: colEnteredAt (quando entrou em avaliação)
-            if(!_sentAtTs && current.colEnteredAt){
-              _sentAtTs = _parseT(current.colEnteredAt);
-            }
-            // Fallback pro nome: pega o último assignee que é designer/editor
-            if(!_senderName){
+            // ═════ COPYS: quem escreveu foi Hellen (coordinator) — nao usa arquivo final ═════
+            if(tab==="copys"){
               try{
-                const _asigs = Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
-                for(let i=_asigs.length-1;i>=0;i--){
-                  const _u = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[i];}):null;
-                  if(_u && (_u.dash==="designer"||_u.dash==="editor")){ _senderName = _u.name; break; }
+                const _tl = Array.isArray(current.timeline) ? current.timeline : [];
+                for(let i=_tl.length-1; i>=0; i--){
+                  const _e = _tl[i];
+                  if(!_e) continue;
+                  const _typ = _e.type || "", _toS = _e.to || "";
+                  if(_typ==="status" && (_toS==="demanda" || _toS==="alteracao_copy")){
+                    _senderName = _e.user || _senderName;
+                    if(_e.at) _sentAtTs = _parseT(_e.at) || _sentAtTs;
+                    if(!_sentAtTs && _e.atFmt) _sentAtTs = _parseT(_e.atFmt);
+                    if(_senderName) break;
+                  }
                 }
-                if(!_senderName && _asigs.length>0){
-                  const _u0 = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[0];}):null;
-                  _senderName = (_u0 && _u0.name) || _asigs[0];
+                if(!_senderName && typeof TEAM!=="undefined"){
+                  const _coord = TEAM.find(function(u){return u.dash==="coordinator";});
+                  if(_coord) _senderName = _coord.name;
                 }
               }catch(_){}
+              if(!_sentAtTs && current.colEnteredAt) _sentAtTs = _parseT(current.colEnteredAt);
+              if(!_sentAtTs && current.updated_at) _sentAtTs = _parseT(current.updated_at);
+            } else {
+              // ═════ DESIGN/VIDEO: quem subiu arquivo final ═════
+              if(_last){
+                _senderName = _last.addedBy || "";
+                _sentAtTs = _parseT(_last.addedAtIso) || _parseT(_last.addedAt) || 0;
+              }
+              if(!_sentAtTs && current.colEnteredAt){
+                _sentAtTs = _parseT(current.colEnteredAt);
+              }
+              if(!_senderName){
+                try{
+                  const _asigs = Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
+                  for(let i=_asigs.length-1;i>=0;i--){
+                    const _u = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[i];}):null;
+                    if(_u && (_u.dash==="designer"||_u.dash==="editor")){ _senderName = _u.name; break; }
+                  }
+                  if(!_senderName && _asigs.length>0){
+                    const _u0 = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[0];}):null;
+                    _senderName = (_u0 && _u0.name) || _asigs[0];
+                  }
+                }catch(_){}
+              }
             }
             if(!_sentAtTs && !_senderName) return null;
             const _d = _sentAtTs ? new Date(_sentAtTs) : null;
@@ -24908,7 +24956,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                               }
                               return(<div key={cc.id} style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500,marginBottom:r.images.length>0?7:0,display:"flex",alignItems:"flex-start",gap:6,group:"comment"}}>
                                 <div style={{flex:1,minWidth:0}}>
-                                  {txt}
+                                  {_renderCmtWithTs(txt, accent)}
                                   {cc.editedAt&&<span style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
                                 </div>
                                 {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
@@ -25009,7 +25057,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                             }
                             return(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4,display:"flex",alignItems:"flex-start",gap:6}}>
                               <div style={{flex:1,minWidth:0}}>
-                                {txt}
+                                {_renderCmtWithTs(txt, accent)}
                                 {cc.editedAt&&<span style={{color:C.td,fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
                               </div>
                               {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
@@ -33259,7 +33307,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Adiciona placeholder UPLOADING (com progress 0)
       setAttachments(p=>[...p,{
         id:tempId,name:file.name,type:mime,size:file.size,url:null,
-        uploading:true,progress:0,addedAt:nowFmt(),addedBy:user.name,
+        uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
         tipo,
       }]);
 
@@ -59260,6 +59308,9 @@ function PagePlanejamento({isMob, effectiveUser}){
     {/* ═══ Seção fixa de Metas (sempre visível embaixo das dailies/weeklies) ═══ */}
     <MetasFixedPanel entries={metas} onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert} onNew={openNew}/>
 
+    {/* ═══ Planejador de eventos (feiras, ações externas, etc.) ═══ */}
+    <_EventosPlanner isMob={isMob}/>
+
     {/* ═══ Modal editor ═══ */}
     {editing && <_PlEditErrorBoundary onClose={function(){setEditing(null);}}>
       <PlanEditModalInner entry={editing} setEntry={setEditing} onSave={handleSave}
@@ -60821,6 +60872,276 @@ function PlanEditModalInner({entry, setEntry, onSave, onClose, onAutoSave}){
 
 function _PlLBL({children}){
   return <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6,fontFamily:"inherit"}}>{children}</div>;
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  _EventosPlanner — feiras, ações externas e outros eventos da agência
+//  Persiste em Supabase team_data tipo='agency_events'
+// ═════════════════════════════════════════════════════════════════════════
+const _EV_KEY = "pixels-agency-events";
+
+function _EventosPlanner({isMob}){
+  const [eventos, setEventos] = useState(function(){
+    try{ const r=localStorage.getItem(_EV_KEY); if(r) return JSON.parse(r); }catch(_){}
+    return [];
+  });
+  const [editing, setEditing] = useState(null);
+
+  // Pull do Supabase no mount
+  useEffect(function(){
+    if(!window._sb) return;
+    window._sb.from("team_data").select("dados").eq("tipo","agency_events").single().then(function(r){
+      if(r.data && Array.isArray(r.data.dados)){
+        setEventos(r.data.dados);
+        try{ localStorage.setItem(_EV_KEY, JSON.stringify(r.data.dados)); }catch(_){}
+      }
+    }).catch(function(){});
+  },[]);
+
+  function _persist(next){
+    setEventos(next);
+    try{ localStorage.setItem(_EV_KEY, JSON.stringify(next)); }catch(_){}
+    if(window._sb){
+      window._sb.from("team_data").upsert({tipo:"agency_events",dados:next,updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"?")},{onConflict:"tipo"}).then(function(){}).catch(function(){});
+    }
+  }
+  function _new(){
+    setEditing({id:"ev-"+Date.now(), nome:"", cidade:"", uf:"", dataIni:"", dataFim:"", cliente:"", responsaveis:[], tasks:[], metas:[], observacoes:"", _isNew:true});
+  }
+  function _save(ev){
+    const _clean = Object.assign({}, ev);
+    delete _clean._isNew;
+    const _idx = eventos.findIndex(function(e){return e.id===ev.id;});
+    let next;
+    if(_idx>=0){ next = eventos.map(function(e,i){return i===_idx?_clean:e;}); }
+    else { next = eventos.concat([_clean]); }
+    _persist(next);
+    setEditing(null);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Evento salvo!");
+  }
+  function _del(id){
+    if(typeof pixelsConfirm==="function"){
+      pixelsConfirm("Excluir esse evento?",{okText:"Excluir",danger:true}).then(function(ok){
+        if(ok) _persist(eventos.filter(function(e){return e.id!==id;}));
+      });
+    } else if(window.confirm("Excluir?")){
+      _persist(eventos.filter(function(e){return e.id!==id;}));
+    }
+  }
+  function _toggleTask(evId, taskId){
+    const next = eventos.map(function(e){
+      if(e.id!==evId) return e;
+      const _tasks = (e.tasks||[]).map(function(t){return t.id===taskId?Object.assign({},t,{done:!t.done}):t;});
+      return Object.assign({},e,{tasks:_tasks});
+    });
+    _persist(next);
+  }
+  function _toggleMeta(evId, metaId){
+    const next = eventos.map(function(e){
+      if(e.id!==evId) return e;
+      const _metas = (e.metas||[]).map(function(m){return m.id===metaId?Object.assign({},m,{done:!m.done}):m;});
+      return Object.assign({},e,{metas:_metas});
+    });
+    _persist(next);
+  }
+
+  const _fmtDate = function(iso){
+    if(!iso) return "";
+    try{ const [y,m,d]=iso.split("-"); return d+"/"+m; }catch(_){return iso;}
+  };
+  const _fmtRange = function(ev){
+    const a=_fmtDate(ev.dataIni), b=_fmtDate(ev.dataFim);
+    if(a && b && a!==b) return a+" — "+b;
+    return a || b || "sem data";
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:16,paddingTop:16,borderTop:"2px dashed #e2e8f0"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,paddingBottom:4,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#f97316)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0,boxShadow:"0 6px 18px rgba(245,158,11,.32)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Planejamento de eventos</div>
+          <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Feiras, ativações e ações externas — tasks e metas por evento</div>
+        </div>
+      </div>
+      <button onClick={_new}
+        style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(245,158,11,0.38)"}}>
+        <_PlIco name="plus" size={13} color="#fff"/> Novo evento
+      </button>
+    </div>
+
+    {eventos.length===0
+      ? <div style={{background:"#fffbeb",border:"1px dashed #fbbf24",borderRadius:12,padding:"28px 20px",textAlign:"center",color:"#78350f",fontSize:13}}>
+          Nenhum evento cadastrado ainda. Cadastre feiras, ações externas ou eventos com tasks e metas.
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>
+          {eventos.map(function(ev){
+            const _totTasks = (ev.tasks||[]).length;
+            const _doneTasks = (ev.tasks||[]).filter(function(t){return t.done;}).length;
+            const _totMetas = (ev.metas||[]).length;
+            const _doneMetas = (ev.metas||[]).filter(function(m){return m.done;}).length;
+            return <div key={ev.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",display:"flex",flexDirection:"column"}}>
+              <div style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",padding:"12px 14px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.nome||"(sem nome)"}</div>
+                  <div style={{fontSize:11,fontWeight:600,opacity:.9,marginTop:2}}>
+                    {_fmtRange(ev)}{ev.cidade?" · "+ev.cidade:""}{ev.uf?"/"+ev.uf:""}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:4,flexShrink:0}}>
+                  <button onClick={function(){setEditing(Object.assign({},ev));}} title="Editar"
+                    style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:7,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    <_PlIco name="edit" size={11} color="#fff"/>
+                  </button>
+                  <button onClick={function(){_del(ev.id);}} title="Excluir"
+                    style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:7,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    <_PlIco name="x" size={11} color="#fff"/>
+                  </button>
+                </div>
+              </div>
+              <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,flex:1}}>
+                {_totTasks>0 && <div>
+                  <div style={{color:"#78350f",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Tasks {_doneTasks}/{_totTasks}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {(ev.tasks||[]).slice(0,6).map(function(t){
+                      return <label key={t.id} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12.5,color:t.done?"#94a3b8":"#0f172a",lineHeight:1.4,cursor:"pointer",textDecoration:t.done?"line-through":"none"}}>
+                        <input type="checkbox" checked={!!t.done} onChange={function(){_toggleTask(ev.id,t.id);}} style={{marginTop:2,cursor:"pointer",accentColor:"#f97316"}}/>
+                        <span style={{flex:1}}>{t.text}</span>
+                      </label>;
+                    })}
+                    {(ev.tasks||[]).length>6 && <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>+{(ev.tasks||[]).length-6} tasks</div>}
+                  </div>
+                </div>}
+                {_totMetas>0 && <div>
+                  <div style={{color:"#166534",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <_PlIco name="target" size={10} color="#166534"/> Metas {_doneMetas}/{_totMetas}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {(ev.metas||[]).slice(0,4).map(function(m){
+                      return <label key={m.id} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12.5,color:m.done?"#94a3b8":"#0f172a",lineHeight:1.4,cursor:"pointer",textDecoration:m.done?"line-through":"none"}}>
+                        <input type="checkbox" checked={!!m.done} onChange={function(){_toggleMeta(ev.id,m.id);}} style={{marginTop:2,cursor:"pointer",accentColor:"#16a34a"}}/>
+                        <span style={{flex:1,fontWeight:m.done?500:600}}>{m.text}</span>
+                      </label>;
+                    })}
+                    {(ev.metas||[]).length>4 && <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>+{(ev.metas||[]).length-4} metas</div>}
+                  </div>
+                </div>}
+                {_totTasks===0 && _totMetas===0 && <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>Sem tasks nem metas ainda. Clique em editar pra adicionar.</div>}
+                {ev.observacoes && <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:8,padding:"8px 10px",color:"#475569",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{ev.observacoes}</div>}
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+
+    {editing && <_EventoEditModal evento={editing} onSave={_save} onClose={function(){setEditing(null);}}/>}
+  </div>;
+}
+
+function _EventoEditModal({evento, onSave, onClose}){
+  const [ev, setEv] = useState(evento);
+  const _upd = function(patch){ setEv(function(cur){return Object.assign({},cur,patch);}); };
+  const _addTask = function(){ _upd({tasks:(ev.tasks||[]).concat([{id:"t-"+Date.now(),text:"",done:false}])}); };
+  const _updTask = function(idx,patch){ _upd({tasks:(ev.tasks||[]).map(function(t,i){return i===idx?Object.assign({},t,patch):t;})}); };
+  const _delTask = function(idx){ _upd({tasks:(ev.tasks||[]).filter(function(_,i){return i!==idx;})}); };
+  const _addMeta = function(){ _upd({metas:(ev.metas||[]).concat([{id:"m-"+Date.now(),text:"",done:false}])}); };
+  const _updMeta = function(idx,patch){ _upd({metas:(ev.metas||[]).map(function(m,i){return i===idx?Object.assign({},m,patch):m;})}); };
+  const _delMeta = function(idx){ _upd({metas:(ev.metas||[]).filter(function(_,i){return i!==idx;})}); };
+
+  useEffect(function(){
+    function _esc(e){ if(e.key==="Escape") onClose(); }
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  // eslint-disable-next-line
+  },[]);
+
+  const _inp = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,color:"#0f172a",fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+  const _lbl = {color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:5,display:"block"};
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(4px)"}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:0,maxWidth:640,width:"100%",maxHeight:"88vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 20px 60px rgba(0,0,0,.3)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",padding:"14px 18px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontWeight:800,fontSize:15,letterSpacing:-.2}}>{ev._isNew?"Novo evento":"Editar evento"}</div>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:18,lineHeight:1}}>×</button>
+      </div>
+      <div style={{padding:18,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <label style={_lbl}>Nome do evento</label>
+          <input type="text" value={ev.nome||""} onChange={function(e){_upd({nome:e.target.value});}} placeholder="Ex: Agroleite 2026" style={_inp}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
+          <div>
+            <label style={_lbl}>Cidade</label>
+            <input type="text" value={ev.cidade||""} onChange={function(e){_upd({cidade:e.target.value});}} placeholder="Ex: Castro" style={_inp}/>
+          </div>
+          <div>
+            <label style={_lbl}>UF</label>
+            <input type="text" value={ev.uf||""} onChange={function(e){_upd({uf:e.target.value.toUpperCase().slice(0,2)});}} placeholder="PR" maxLength={2} style={_inp}/>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <label style={_lbl}>Data início</label>
+            <input type="date" value={ev.dataIni||""} onChange={function(e){_upd({dataIni:e.target.value});}} style={_inp}/>
+          </div>
+          <div>
+            <label style={_lbl}>Data fim</label>
+            <input type="date" value={ev.dataFim||""} onChange={function(e){_upd({dataFim:e.target.value});}} style={_inp}/>
+          </div>
+        </div>
+
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+            <label style={Object.assign({},_lbl,{marginBottom:0})}>Tasks pra realizar no evento</label>
+            <button onClick={_addTask} type="button" style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 10px",color:"#475569",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <_PlIco name="plus" size={10} color="currentColor"/> Task
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(ev.tasks||[]).length===0 && <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic",padding:"4px 0"}}>Ex: montar stand · imprimir folders · levar cartões · agendar reuniões com prospects…</div>}
+            {(ev.tasks||[]).map(function(t,i){
+              return <div key={t.id} style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input type="text" value={t.text} onChange={function(e){_updTask(i,{text:e.target.value});}} placeholder={"Task "+(i+1)+"…"} style={Object.assign({},_inp,{fontSize:12.5,padding:"7px 11px"})}/>
+                <button onClick={function(){_delTask(i);}} type="button" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"inline-flex"}}><_PlIco name="x" size={12} color="currentColor"/></button>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
+            <label style={Object.assign({},_lbl,{marginBottom:0})}>Metas do evento</label>
+            <button onClick={_addMeta} type="button" style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 10px",color:"#475569",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <_PlIco name="plus" size={10} color="currentColor"/> Meta
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(ev.metas||[]).length===0 && <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic",padding:"4px 0"}}>Ex: fechar 3 contratos · 50 leads qualificados · gerar 10 posts do evento…</div>}
+            {(ev.metas||[]).map(function(m,i){
+              return <div key={m.id} style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input type="text" value={m.text} onChange={function(e){_updMeta(i,{text:e.target.value});}} placeholder={"Meta "+(i+1)+"…"} style={Object.assign({},_inp,{fontSize:12.5,padding:"7px 11px"})}/>
+                <button onClick={function(){_delMeta(i);}} type="button" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"inline-flex"}}><_PlIco name="x" size={12} color="currentColor"/></button>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label style={_lbl}>Observações</label>
+          <textarea value={ev.observacoes||""} onChange={function(e){_upd({observacoes:e.target.value});}} rows={3}
+            placeholder="Detalhes extras: público esperado, palestrantes, materiais, contatos…"
+            style={Object.assign({},_inp,{resize:"vertical",minHeight:70,lineHeight:1.5})}/>
+        </div>
+      </div>
+      <div style={{padding:"12px 18px",borderTop:"1px solid #eef0f3",display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button onClick={onClose} type="button" style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={function(){onSave(ev);}} type="button" style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:9,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 12px rgba(245,158,11,.35)"}}>Salvar evento</button>
+      </div>
+    </div>
+  </div>;
 }
 
 // DashSocio v5 (2026-06-10):
