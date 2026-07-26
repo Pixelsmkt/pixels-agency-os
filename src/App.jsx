@@ -65580,6 +65580,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     });
   };
   const _dragProdRef=useRef({unitId:null, srcIdx:-1});
+  // Indicador visual de drop position durante drag de produto
+  const [_dropIdx, setDropIdx] = useState(-1);
   const _isBioter=cl.id==="bioter";
 
   // Estado local dos checkboxes (lembra entre navegações)
@@ -65915,21 +65917,29 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   {_visibleEdit.map(function(_item,filteredIdx){
                     const prod=_item.prod;
                     const pi=_item.gi;
-                    return <div key={pi}
-                      onDragOver={_editUnitFilter?function(e){e.preventDefault();e.dataTransfer.dropEffect="move";}:undefined}
-                      onDragEnter={_editUnitFilter?function(e){e.preventDefault();e.currentTarget.style.boxShadow="0 0 0 2px "+PB_PURPLE;e.currentTarget.style.borderColor=PB_PURPLE;}:undefined}
-                      onDragLeave={_editUnitFilter?function(e){e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}:undefined}
+                    const _dref = _dragProdRef.current;
+                    const _isDragging = _dref.unitId===_unitTab && _dref.srcIdx===filteredIdx;
+                    // Onde renderizar o indicador: ANTES do card alvo se movendo pra cima, ANTES tambem se movendo pra baixo (indicador aparece na posicao de insercao)
+                    const _showDropBefore = _editUnitFilter && _dropIdx===filteredIdx && _dref.srcIdx>=0 && _dref.srcIdx!==filteredIdx;
+                    return <React.Fragment key={pi}>
+                      {_showDropBefore && <div style={{height:8,margin:"2px 0",background:"transparent",border:"2.5px dashed "+PB_PURPLE,borderRadius:99,boxShadow:"0 0 12px "+PB_PURPLE+"55",transition:"all .12s"}}/>}
+                    <div
+                      onDragOver={_editUnitFilter?function(e){e.preventDefault();e.dataTransfer.dropEffect="move";if(_dropIdx!==filteredIdx) setDropIdx(filteredIdx);}:undefined}
+                      onDragLeave={_editUnitFilter?function(e){
+                        // Só limpa se saiu de verdade do card (nao pra um filho)
+                        var _rt = e.relatedTarget;
+                        if(_rt && e.currentTarget.contains(_rt)) return;
+                      }:undefined}
                       onDrop={_editUnitFilter?function(e){
                         e.preventDefault();
-                        e.currentTarget.style.boxShadow="";
-                        e.currentTarget.style.borderColor="#e2e8f0";
                         const dref=_dragProdRef.current;
                         if(dref.unitId===_unitTab && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){
                           _produtoReorderInUnit(_unitTab, dref.srcIdx, filteredIdx);
                         }
                         _dragProdRef.current={unitId:null,srcIdx:-1};
+                        setDropIdx(-1);
                       }:undefined}
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"box-shadow .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+                      style={{background:"#fff",border:"1px solid "+(_isDragging?PB_PURPLE:"#e2e8f0"),borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"opacity .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)",opacity:_isDragging?0.35:1}}>
                     {/* Header — draggable APENAS aqui pra nao conflitar com inputs internos */}
                     {_editUnitFilter ? <div
                       draggable={true}
@@ -65937,10 +65947,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         _dragProdRef.current={unitId:_unitTab, srcIdx:filteredIdx};
                         e.dataTransfer.effectAllowed="move";
                         try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){}
-                        // Aplica opacity no card inteiro (pai)
-                        try{ e.currentTarget.parentElement.style.opacity="0.4"; }catch(_){}
+                        // Force re-render pra mostrar opacity via state
+                        setDropIdx(filteredIdx);
                       }}
-                      onDragEnd={function(e){try{ e.currentTarget.parentElement.style.opacity="1"; }catch(_){} }}
+                      onDragEnd={function(e){
+                        _dragProdRef.current={unitId:null,srcIdx:-1};
+                        setDropIdx(-1);
+                      }}
                       style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 16px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff",cursor:"grab",userSelect:"none"}}
                       onMouseDown={function(e){e.currentTarget.style.cursor="grabbing";}}
                       onMouseUp={function(e){e.currentTarget.style.cursor="grab";}}>
@@ -66031,7 +66044,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>
                       </div>}
                     </div>
-                  </div>;})}
+                  </div>
+                  </React.Fragment>;})}
                   <button onClick={_produtoAdd}
                     style={{background:"#fff",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"14px 18px",color:"#64748b",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .12s"}}
                     onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
