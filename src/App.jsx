@@ -65538,24 +65538,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   <Ico n={areaCfg.icon} size={11} color={areaCfg.color}/>{areaCfg.label}
                 </span>
                 {cl.sector && <span style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{cl.sector}</span>}
-                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
               </div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
-              {(function(){
-                // Mesma fonte que Estrategia > Clientes: data.sobre (editavel no bloco "Sobre a empresa")
-                // com fallback pra _pbAutoSobre. NAO usa descricaoCurta (que pode ter valor stale do seed).
-                const _desc = (data.sobre && data.sobre.trim()) || (typeof _pbAutoSobre==="function" ? _pbAutoSobre(cl.id) : "");
-                return _desc ? <div style={{color:"#64748b",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-                  {_desc}
-                </div> : null;
-              })()}
             </div>
           </div>
-          {/* Sem botão global — cada aba salva ao editar (auto-save inline) */}
-          {isAdmin && <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,paddingTop:2,color:PB_SOFT,fontSize:11,fontWeight:600,letterSpacing:.2}}>
-            <span style={{display:"inline-flex",width:6,height:6,borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 8px rgba(34,197,94,.5)"}}/>
-            Edição inline ativa — tudo salva automaticamente
-          </div>}
         </div>
       </div>
 
