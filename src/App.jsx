@@ -66040,33 +66040,36 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           </button>
                         </div>;
                       })()}
-                      {/* Grid PT | ES lado a lado */}
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
-                          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
-                            <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
-                            Português
+                      {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
+                      {(function(){
+                        const _showEsEdit = _isBioter && _unitTab === "paraguay";
+                        return <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
+                          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
+                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
+                              Português
+                            </div>
+                            <input type="text" placeholder="Nome principal (PT)" value={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
+                              onChange={function(e){_produtoUpd(pi,{nomePrincipalPt:e.target.value, nome:e.target.value});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            <input type="text" placeholder="Outros nomes (ex: Fossa, Biofábrica)" value={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
+                              onChange={function(e){_produtoUpd(pi,{nomesPt:e.target.value});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
                           </div>
-                          <input type="text" placeholder="Nome principal (PT)" value={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
-                            onChange={function(e){_produtoUpd(pi,{nomePrincipalPt:e.target.value, nome:e.target.value});}}
-                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                          <input type="text" placeholder="Outros nomes (ex: Fossa, Biofábrica)" value={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
-                            onChange={function(e){_produtoUpd(pi,{nomesPt:e.target.value});}}
-                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                        </div>
-                        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
-                          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
-                            <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                            Español
-                          </div>
-                          <input type="text" placeholder="Nombre principal (ES)" value={prod.nomePrincipalEs||""}
-                            onChange={function(e){_produtoUpd(pi,{nomePrincipalEs:e.target.value});}}
-                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                          <input type="text" placeholder="Otros nombres (ej: Estanque, Laguna)" value={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
-                            onChange={function(e){_produtoUpd(pi,{nomesEs:e.target.value});}}
-                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                        </div>
-                      </div>
+                          {_showEsEdit && <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
+                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
+                              Español
+                            </div>
+                            <input type="text" placeholder="Nombre principal (ES)" value={prod.nomePrincipalEs||""}
+                              onChange={function(e){_produtoUpd(pi,{nomePrincipalEs:e.target.value});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            <input type="text" placeholder="Otros nombres (ej: Estanque, Laguna)" value={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
+                              onChange={function(e){_produtoUpd(pi,{nomesEs:e.target.value});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                          </div>}
+                        </div>;
+                      })()}
                       <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
                         onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
                         rows={2}
@@ -67167,6 +67170,31 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
 
   function _save(patch){ if(typeof onUpdate==="function") onUpdate(patch); }
 
+  // Debounce de save de perfis pra evitar race condition (digitacao rapida
+  // gerava saves em paralelo e o ultimo response do Supabase sobrescrevia
+  // valores mais novos). 500ms depois da ultima tecla, agrupa e salva 1 vez so.
+  const _perfisSaveTimer = useRef(null);
+  const _perfisDirtyRef = useRef(false);
+  useEffect(function(){
+    if(!_perfisDirtyRef.current) return;
+    clearTimeout(_perfisSaveTimer.current);
+    _perfisSaveTimer.current = setTimeout(function(){
+      _perfisDirtyRef.current = false;
+      if(typeof onUpdate==="function") onUpdate({perfis: perfis});
+    }, 500);
+    return function(){ clearTimeout(_perfisSaveTimer.current); };
+  }, [perfis]);
+  // Flush ao desmontar (evita perder o save se sair rapido)
+  useEffect(function(){
+    return function(){
+      if(_perfisDirtyRef.current){
+        clearTimeout(_perfisSaveTimer.current);
+        if(typeof onUpdate==="function") onUpdate({perfis: perfis});
+      }
+    };
+  // eslint-disable-next-line
+  }, []);
+
   // ── Perfis ─────────────────────────────
   const PLATAFORMAS = [
     {id:"instagram", label:"Instagram", color:"#e1306c"},
@@ -67180,16 +67208,18 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
   function _perfilAdd(unitId){
     var _new = {plataforma:"instagram", handle:"", nome:"", papel:""};
     if(unitId) _new.unitId = unitId;
-    var next = perfis.concat([_new]);
-    setPerfis(next); _save({perfis:next});
+    _perfisDirtyRef.current = true;
+    setPerfis(function(cur){ return cur.concat([_new]); });
   }
   function _perfilSet(i, patch){
-    var next = perfis.map(function(p,idx){ return idx===i ? Object.assign({},p,patch) : p; });
-    setPerfis(next); _save({perfis:next});
+    _perfisDirtyRef.current = true;
+    setPerfis(function(cur){
+      return cur.map(function(p,idx){ return idx===i ? Object.assign({},p,patch) : p; });
+    });
   }
   function _perfilDel(i){
-    var next = perfis.filter(function(_,idx){ return idx!==i; });
-    setPerfis(next); _save({perfis:next});
+    _perfisDirtyRef.current = true;
+    setPerfis(function(cur){ return cur.filter(function(_,idx){ return idx!==i; }); });
   }
 
   function _cadenciaSet(patch){
