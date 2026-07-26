@@ -28041,6 +28041,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           email:pd.email||"",
           photo:pd.photo||"",
           primary_unit:p.primary_unit||"",
+          primary_client:cid,
+          client_id:cid,
+          user_type:"client",
         });
       });
       setClientAuthUsers(byClient);
@@ -66986,7 +66989,9 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
   const [particularidades, setParticularidades] = useState(_particularidadesInit);
   const [restricoes, setRestricoes] = useState(_restricoesInit);
 
-  // Sync do state local quando areaData muda (troca de cliente, refresh externo)
+  // Sync do state local SO ao trocar de cliente. Nao dispara por areaData
+  // pra evitar loop de sync durante digitacao (auto-save volta pra areaData,
+  // aciona useEffect, reseta o input no meio do digitar — cursor pula, texto some).
   useEffect(function(){
     setPerfis(Array.isArray(areaData && areaData.perfis) ? areaData.perfis : []);
     setCadencia((areaData && areaData.cadencia) || {postsSemana:"", stories:"", reels:""});
@@ -66994,7 +66999,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
     setParticularidades((areaData && areaData.particularidades) || "");
     setRestricoes((areaData && areaData.restricoes) || "");
   // eslint-disable-next-line
-  },[areaData]);
+  },[clientId]);
 
   function _save(patch){ if(typeof onUpdate==="function") onUpdate(patch); }
 
