@@ -59941,7 +59941,7 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
                           ? <div style={{color:"#334155",fontSize:12,fontWeight:500,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",marginLeft:17}}>{_val}</div>
                           : <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",fontWeight:500,marginLeft:17}}>Vazio · clique pra preencher</div>
                       }
-                      {typeof eventsFor==="function" && typeof periodBounds==="function" && typeof renderEventos==="function" && c.k==="feiras_eventos" && (function(){
+                      {typeof eventsFor==="function" && typeof periodBounds==="function" && typeof renderEventos==="function" && (c.k==="feiras_eventos" || c.k==="datas_importantes") && (function(){
                         const _key = year+"-Q"+quarter;
                         const _b = periodBounds("trimestral", _key);
                         const _list = eventsFor(cl.id, c.k, _b.start, _b.end);
