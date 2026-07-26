@@ -67141,7 +67141,23 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
   // pra evitar loop de sync durante digitacao (auto-save volta pra areaData,
   // aciona useEffect, reseta o input no meio do digitar — cursor pula, texto some).
   useEffect(function(){
-    setPerfis(Array.isArray(areaData && areaData.perfis) ? areaData.perfis : []);
+    var _initPerfis = Array.isArray(areaData && areaData.perfis) ? areaData.perfis : [];
+    // Auto-migracao: se cliente Bioter, atribui perfis orfaos (sem unitId) pra primeira unidade
+    var _isBio = clientId==="bioter";
+    var _firstUnit = (typeof BIOTER_UNITS!=="undefined" && BIOTER_UNITS[0]) ? BIOTER_UNITS[0].id : "";
+    if(_isBio && _firstUnit){
+      var _hasOrfaos = _initPerfis.some(function(p){ return !p.unitId; });
+      if(_hasOrfaos){
+        _initPerfis = _initPerfis.map(function(p){
+          return p.unitId ? p : Object.assign({}, p, {unitId:_firstUnit});
+        });
+        // Persiste a migracao silenciosamente (bem-comportado: async, sem toast)
+        setTimeout(function(){
+          if(typeof onUpdate==="function") onUpdate({perfis:_initPerfis});
+        }, 0);
+      }
+    }
+    setPerfis(_initPerfis);
     setCadencia((areaData && areaData.cadencia) || {postsSemana:"", stories:"", reels:""});
     setMix((areaData && areaData.mix) || {arte:"", carrossel:"", reel:"", fotoObra:"", story:""});
     setParticularidades((areaData && areaData.particularidades) || "");
@@ -67255,25 +67271,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
         var _perfisOrfaos = perfis.filter(function(p){ return !p.unitId; });
         return <div>
           {_header}
-          {_perfisOrfaos.length>0 && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 12px",marginBottom:12,fontSize:11.5,color:"#9a3412",lineHeight:1.5}}>
-            <b style={{fontWeight:800}}>{_perfisOrfaos.length} perfil sem unidade</b> — foi cadastrado antes da separação. Reatribua a uma unidade ou exclua:
-            <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
-              {_perfisOrfaos.map(function(p){
-                var i = perfis.indexOf(p);
-                return <div key={i} style={{display:"flex",gap:6,alignItems:"center",background:"#fff",border:"1px solid #fed7aa",borderRadius:8,padding:"6px 9px"}}>
-                  <span style={{color:PB_INK,fontSize:12,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.handle?"@"+String(p.handle).replace(/^@+/,""):"(sem @)"} {p.nome?"· "+p.nome:""}</span>
-                  {editMode && isAdmin && <select value="" onChange={function(e){if(e.target.value){_perfilSet(i,{unitId:e.target.value});}}}
-                    style={Object.assign({},_pbInpStyle(),{padding:"4px 8px",fontSize:11,width:130})}>
-                    <option value="">Atribuir a…</option>
-                    {_units.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
-                  </select>}
-                  {editMode && isAdmin && <button type="button" onClick={function(){_perfilDel(i);}} title="Excluir"
-                    style={{background:"transparent",border:"none",color:"#dc2626",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex"}}><Ico n="x" size={11} color="currentColor"/></button>}
-                </div>;
-              })}
-            </div>
-          </div>}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
             {_units.map(function(u){
               var _unitPerfis = perfis.map(function(p,idx){ return {p:p,idx:idx}; }).filter(function(x){ return x.p.unitId===u.id; });
               return <div key={u.id} style={{background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"12px 12px 10px",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
