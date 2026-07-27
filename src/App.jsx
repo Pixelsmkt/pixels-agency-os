@@ -61056,6 +61056,8 @@ function _EventosPlanner({isMob}){
 
 function _EventoEditModal({evento, onSave, onClose}){
   const [ev, setEv] = useState(evento);
+  // Guard pra não fechar quando usuário arrasta seleção de texto pra fora do modal
+  const _mouseDownOnBackdrop = useRef(false);
   useEffect(function(){
     function _esc(e){ if(e.key==="Escape"){ e.preventDefault(); onClose(); } }
     document.addEventListener("keydown", _esc);
@@ -61069,7 +61071,9 @@ function _EventoEditModal({evento, onSave, onClose}){
   function _setMeta(i,txt){ setEv(function(p){const m=(p.metas||[]).slice();m[i]=Object.assign({},m[i],{text:txt});return Object.assign({},p,{metas:m});}); }
   function _delMeta(i){ setEv(function(p){const m=(p.metas||[]).slice();m.splice(i,1);return Object.assign({},p,{metas:m});}); }
   const _inp = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
-  return <div onClick={function(e){if(e.target===e.currentTarget) onClose();}}
+  return <div
+    onMouseDown={function(e){ _mouseDownOnBackdrop.current = (e.target === e.currentTarget); }}
+    onClick={function(e){ if(e.target===e.currentTarget && _mouseDownOnBackdrop.current) onClose(); _mouseDownOnBackdrop.current = false; }}
     style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"inherit"}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(15,23,42,.3)",display:"flex",flexDirection:"column"}}>
       <div style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",padding:"14px 18px",color:"#fff",fontWeight:800,fontSize:14,letterSpacing:-.2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
