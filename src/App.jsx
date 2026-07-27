@@ -3363,6 +3363,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="copy")      return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
   if(n==="file")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
   if(n==="fileText")  return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+  if(n==="book")      return <svg {...p}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>;
   if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
   if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
   if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
@@ -48851,19 +48852,17 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 //   Persist: Supabase team_data tipo='portal_playbook' + cache localStorage
 // ═══════════════════════════════════════════════════════════════════════════
 function PortalPlaybookCliente({cl, canEdit, isMob}){
-  const _LS_KEY = "pixels-portal-playbook-v1";
+  const _LS_KEY = "pixels-portal-playbook-v2";
   const _accent = (cl && cl.color) || "#7c3aed";
   const [sections, setSections] = useState(function(){
     try{ const s = localStorage.getItem(_LS_KEY); if(s) return JSON.parse(s)||[]; }catch(_){}
     return [];
   });
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(null); // section sendo editada/criada
-  const [uploadingSec, setUploadingSec] = useState(null); // id da section com upload em andamento
+  const [editing, setEditing] = useState(null);
   const _saveTimer = useRef(null);
   const _dirtyRef = useRef(false);
 
-  // Carrega do Supabase no mount
   useEffect(function(){
     if(!window._sb){ setLoading(false); return; }
     let alive = true;
@@ -48872,8 +48871,12 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
         if(!alive) return;
         if(r && r.error){ console.warn("[portal_playbook load]", r.error.message||r.error); setLoading(false); return; }
         if(r && r.data && r.data.data && Array.isArray(r.data.data.sections)){
-          setSections(r.data.data.sections);
-          try{ localStorage.setItem(_LS_KEY, JSON.stringify(r.data.data.sections)); }catch(_){}
+          // Migration v1→v2: sections sem category ganham "Produção" como default
+          const _migrated = r.data.data.sections.map(function(s){
+            return Object.assign({}, s, {category: s.category || "Produção"});
+          });
+          setSections(_migrated);
+          try{ localStorage.setItem(_LS_KEY, JSON.stringify(_migrated)); }catch(_){}
         }
         setLoading(false);
       })
@@ -48881,7 +48884,6 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
     return function(){ alive = false; };
   }, []);
 
-  // Auto-save debounced quando sections mudam (só se dirty)
   useEffect(function(){
     if(!_dirtyRef.current) return;
     if(_saveTimer.current) clearTimeout(_saveTimer.current);
@@ -48899,10 +48901,16 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
   function _mutate(fn){ _dirtyRef.current = true; setSections(fn); }
 
   function _newSection(){
-    setEditing({id:"sec-"+Date.now(), title:"", description:"", images:[], isNew:true});
+    setEditing({id:"sec-"+Date.now(), title:"", description:"", images:[], category:"Produção", isNew:true});
   }
   function _saveSection(sec){
-    const _clean = {id:sec.id, title:(sec.title||"").trim(), description:sec.description||"", images:sec.images||[]};
+    const _clean = {
+      id:sec.id,
+      title:(sec.title||"").trim(),
+      description:sec.description||"",
+      images:sec.images||[],
+      category:(sec.category||"Produção").trim() || "Produção",
+    };
     _mutate(function(prev){
       const _exists = prev.some(function(s){return s.id===sec.id;});
       return _exists ? prev.map(function(s){return s.id===sec.id?_clean:s;}) : prev.concat(_clean);
@@ -48919,9 +48927,173 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
     }
   }
 
-  async function _uploadImages(secId, files){
+  // Agrupar sections por categoria (playbook)
+  const _byCategory = {};
+  const _catOrder = [];
+  sections.forEach(function(s){
+    const _cat = s.category || "Produção";
+    if(!_byCategory[_cat]){ _byCategory[_cat] = []; _catOrder.push(_cat); }
+    _byCategory[_cat].push(s);
+  });
+  // Sugestões de categorias existentes pro modal
+  const _catSuggestions = Array.from(new Set(sections.map(function(s){return s.category||"Produção";})));
+
+  if(loading) return <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando playbook...</div>;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:20}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+_accent+","+_accent+"cc)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 6px 18px "+_accent+"40"}}>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Playbooks</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500}}>Guia com instruções de gravação, uso de equipamentos, dicas visuais. Organizados por categoria</div>
+        </div>
+      </div>
+      {canEdit && <button onClick={_newSection} type="button"
+        style={{background:"linear-gradient(135deg,"+_accent+","+_accent+"cc)",border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px "+_accent+"40"}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova seção
+      </button>}
+    </div>
+
+    {sections.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>
+      {canEdit ? "Nenhuma seção ainda. Clique em '+ Nova seção' pra começar. Você pode agrupar por categoria (Produção, Gravação, Eventos, etc)." : "O playbook ainda não foi montado. Volta em breve!"}
+    </div>}
+
+    {/* Grupos de playbook por categoria */}
+    {_catOrder.map(function(cat){
+      const _list = _byCategory[cat] || [];
+      return <div key={cat} style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+          <div style={{width:34,height:34,borderRadius:9,background:_accent+"15",display:"inline-flex",alignItems:"center",justifyContent:"center",color:_accent,flexShrink:0}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25}}>Playbook de {cat.toLowerCase()}</div>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:1}}>{_list.length} {_list.length===1?"seção":"seções"}</div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
+          {_list.map(function(sec){
+            const _totMedia = (sec.images||[]).length;
+            return <div key={sec.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",display:"flex",flexDirection:"column"}}>
+              {_totMedia>0 && (function(){
+                const _first = (sec.images||[])[0];
+                const _isVid = _first.type && _first.type.startsWith("video/");
+                return <div style={{background:"#0f172a",aspectRatio:"16/9",position:"relative",overflow:"hidden"}}>
+                  {_isVid
+                    ? <><video src={_first.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                        <span style={{width:52,height:52,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.5)"}}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                        </span>
+                      </div></>
+                    : <img src={_first.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
+                  }
+                  {_totMedia>1 && <span style={{position:"absolute",bottom:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3}}>+{_totMedia-1}</span>}
+                </div>;
+              })()}
+              <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:9,flex:1}}>
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25,flex:1,lineHeight:1.3}}>{sec.title || "(Sem título)"}</div>
+                  {canEdit && <div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button onClick={function(){setEditing(Object.assign({},sec));}} type="button" title="Editar"
+                      style={{background:"transparent",border:"none",borderRadius:6,width:26,height:26,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button onClick={function(){_delSection(sec.id);}} type="button" title="Excluir"
+                      style={{background:"transparent",border:"none",borderRadius:6,width:26,height:26,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                    </button>
+                  </div>}
+                </div>
+                {sec.description && <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{sec.description}</div>}
+                {_totMedia>1 && <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginTop:4}}>
+                  {(sec.images||[]).slice(1,5).map(function(m,i){
+                    const _isVid = m.type && m.type.startsWith("video/");
+                    return <div key={i} style={{aspectRatio:"1/1",background:"#0f172a",borderRadius:6,overflow:"hidden",position:"relative"}}>
+                      {_isVid
+                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                          </div></>
+                        : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
+                      }
+                    </div>;
+                  })}
+                  {_totMedia>5 && <div style={{aspectRatio:"1/1",background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_totMedia-5}</div>}
+                </div>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>;
+    })}
+
+    {editing && <_PortalPlaybookEditModal
+      section={editing}
+      accent={_accent}
+      catSuggestions={_catSuggestions}
+      onSave={_saveSection}
+      onClose={function(){setEditing(null);}}
+    />}
+  </div>;
+}
+
+// ─── Modal editor com upload inline + auto-bullet + guard drag ───
+function _PortalPlaybookEditModal({section, accent, catSuggestions, onSave, onClose}){
+  const [sec, setSec] = useState(section);
+  const [uploading, setUploading] = useState(false);
+  const _mouseDownOnBackdrop = useRef(false);
+  const _fileInputRef = useRef(null);
+  const _txaRef = useRef(null);
+
+  useEffect(function(){
+    function _esc(e){ if(e.key==="Escape"){ e.preventDefault(); onClose(); } }
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  }, [onClose]);
+
+  // Auto-fit da textarea (cresce com conteúdo)
+  useEffect(function(){
+    const _el = _txaRef.current;
+    if(!_el) return;
+    _el.style.height = "auto";
+    _el.style.height = (_el.scrollHeight + 2) + "px";
+  }, [sec.description]);
+
+  function _set(k,v){ setSec(function(prev){ return Object.assign({},prev,{[k]:v}); }); }
+
+  // Auto-bullet: "- " ou "* " no início de linha vira "• "
+  function _handleDescChange(e){
+    const _el = e.target;
+    const _v = _el.value;
+    const _pos = _el.selectionStart;
+    if(_pos >= 2){
+      const _last2 = _v.slice(_pos-2, _pos);
+      if(_last2 === "- " || _last2 === "* "){
+        const _prev = _pos-2 > 0 ? _v[_pos-3] : "\n";
+        if(_prev === "\n" || _pos === 2){
+          const _newVal = _v.slice(0, _pos-2) + "• " + _v.slice(_pos);
+          setSec(function(prev){ return Object.assign({},prev,{description:_newVal}); });
+          setTimeout(function(){ if(_txaRef.current){ _txaRef.current.setSelectionRange(_pos, _pos); }}, 0);
+          return;
+        }
+      }
+    }
+    _set("description", _v);
+  }
+
+  async function _handleUpload(files){
     if(!window._sb || !files || files.length===0) return;
-    setUploadingSec(secId);
+    setUploading(true);
     try{
       const _out = [];
       for(const f of files){
@@ -48934,138 +49106,19 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
         _out.push({url:_pub.data.publicUrl, storagePath:_path, name:f.name, type:f.type});
       }
       if(_out.length>0){
-        if(editing && editing.id===secId){
-          setEditing(function(prev){return Object.assign({},prev,{images:(prev.images||[]).concat(_out)});});
-        }else{
-          _mutate(function(prev){return prev.map(function(s){return s.id===secId?Object.assign({},s,{images:(s.images||[]).concat(_out)}):s;});});
-        }
+        setSec(function(prev){ return Object.assign({},prev,{images:(prev.images||[]).concat(_out)}); });
       }
     }catch(e){
       console.warn("[playbook upload ex]", e && e.message ? e.message : e);
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no upload: "+(e&&e.message||"erro"));
     }
-    setUploadingSec(null);
+    setUploading(false);
   }
 
-  if(loading) return <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando playbook...</div>;
+  function _removeMedia(idx){
+    setSec(function(prev){ return Object.assign({},prev,{images:(prev.images||[]).filter(function(_,i){return i!==idx;})}); });
+  }
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+_accent+","+_accent+"cc)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 6px 18px "+_accent+"40"}}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-        </div>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Playbook de produção</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500}}>Guia rápido pra você gravar vídeos, usar equipamentos e conteúdos com qualidade profissional</div>
-        </div>
-      </div>
-      {canEdit && <button onClick={_newSection} type="button"
-        style={{background:"linear-gradient(135deg,"+_accent+","+_accent+"cc)",border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px "+_accent+"40"}}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nova seção
-      </button>}
-    </div>
-
-    {/* Empty state */}
-    {sections.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>
-      {canEdit ? "Nenhuma seção ainda. Clique em '+ Nova seção' pra começar." : "O playbook ainda não foi montado. Volta em breve!"}
-    </div>}
-
-    {/* Sections grid */}
-    {sections.length>0 && <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
-      {sections.map(function(sec){
-        const _imgs = (sec.images||[]).filter(function(m){return m.type&&m.type.startsWith("image/");});
-        const _vids = (sec.images||[]).filter(function(m){return m.type&&m.type.startsWith("video/");});
-        const _totMedia = (sec.images||[]).length;
-        return <div key={sec.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",display:"flex",flexDirection:"column"}}>
-          {/* Cover: primeira mídia */}
-          {_totMedia>0 && (function(){
-            const _first = (sec.images||[])[0];
-            const _isVid = _first.type && _first.type.startsWith("video/");
-            return <div style={{background:"#0f172a",aspectRatio:"16/9",position:"relative",overflow:"hidden"}}>
-              {_isVid
-                ? <><video src={_first.url} preload="metadata" muted playsInline
-                    style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                    <span style={{width:52,height:52,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.5)"}}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                    </span>
-                  </div></>
-                : <img src={_first.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-              }
-              {_totMedia>1 && <span style={{position:"absolute",bottom:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                +{_totMedia-1}
-              </span>}
-            </div>;
-          })()}
-          {/* Body */}
-          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:9,flex:1}}>
-            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25,flex:1,lineHeight:1.3}}>{sec.title || "(Sem título)"}</div>
-              {canEdit && <div style={{display:"flex",gap:4,flexShrink:0}}>
-                <button onClick={function(){setEditing(Object.assign({},sec));}} type="button" title="Editar"
-                  style={{background:"transparent",border:"none",borderRadius:6,width:26,height:26,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
-                  onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
-                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <button onClick={function(){_delSection(sec.id);}} type="button" title="Excluir"
-                  style={{background:"transparent",border:"none",borderRadius:6,width:26,height:26,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
-                  onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
-                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
-                </button>
-              </div>}
-            </div>
-            {sec.description && <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{sec.description}</div>}
-            {/* Mini gallery (extra thumbs) */}
-            {_totMedia>1 && <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginTop:4}}>
-              {(sec.images||[]).slice(1,5).map(function(m,i){
-                const _isVid = m.type && m.type.startsWith("video/");
-                return <div key={i} style={{aspectRatio:"1/1",background:"#0f172a",borderRadius:6,overflow:"hidden",position:"relative"}}>
-                  {_isVid
-                    ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                      </div></>
-                    : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-                  }
-                </div>;
-              })}
-              {_totMedia>5 && <div style={{aspectRatio:"1/1",background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_totMedia-5}</div>}
-            </div>}
-          </div>
-        </div>;
-      })}
-    </div>}
-
-    {editing && <_PortalPlaybookEditModal
-      section={editing}
-      accent={_accent}
-      uploading={uploadingSec===editing.id}
-      onUpload={function(files){ _uploadImages(editing.id, files); }}
-      onRemoveMedia={function(idx){ setEditing(function(prev){return Object.assign({},prev,{images:(prev.images||[]).filter(function(_,i){return i!==idx;})});}); }}
-      onSave={_saveSection}
-      onClose={function(){setEditing(null);}}
-    />}
-  </div>;
-}
-
-// ─── Modal editor de seção do Playbook Portal ───
-function _PortalPlaybookEditModal({section, accent, uploading, onUpload, onRemoveMedia, onSave, onClose}){
-  const [sec, setSec] = useState(section);
-  const _mouseDownOnBackdrop = useRef(false);
-  const _fileInputRef = useRef(null);
-  useEffect(function(){ setSec(section); }, [section]);
-  useEffect(function(){
-    function _esc(e){ if(e.key==="Escape"){ e.preventDefault(); onClose(); } }
-    document.addEventListener("keydown", _esc);
-    return function(){ document.removeEventListener("keydown", _esc); };
-  }, [onClose]);
-  function _set(k,v){ setSec(function(prev){ return Object.assign({},prev,{[k]:v}); }); }
   const _inp = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
 
   return <div
@@ -49081,15 +49134,25 @@ function _PortalPlaybookEditModal({section, accent, uploading, onUpload, onRemov
         </button>
       </div>
       <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:14}}>
+        {/* Categoria (playbook) */}
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Playbook (categoria)</div>
+          <input value={sec.category||""} onChange={function(e){_set("category",e.target.value);}} style={_inp}
+            placeholder="Ex: Produção, Gravação, Eventos, Podcast" list="_pb-cats"/>
+          <datalist id="_pb-cats">
+            {(catSuggestions||[]).map(function(c){return <option key={c} value={c}/>;})}
+          </datalist>
+          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>Crie quantos playbooks quiser. Seções da mesma categoria são agrupadas.</div>
+        </div>
         <div>
           <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Título</div>
           <input value={sec.title||""} onChange={function(e){_set("title",e.target.value);}} style={_inp} placeholder="Ex: Como gravar vídeos com celular"/>
         </div>
         <div>
-          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Instruções</div>
-          <textarea value={sec.description||""} onChange={function(e){_set("description",e.target.value);}}
-            style={Object.assign({},_inp,{minHeight:140,resize:"vertical",lineHeight:1.6})}
-            placeholder="Explique passo a passo. Ex:&#10;1. Segura o celular na horizontal&#10;2. Encosta as costas na parede pra ficar mais firme&#10;3. Boa iluminação: fica de frente pra uma janela&#10;4. Fala pausado, sem forçar"/>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Instruções <span style={{color:"#94a3b8",fontWeight:500,textTransform:"none",letterSpacing:0,fontSize:10}}>(digite <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:3,fontFamily:"inherit"}}>- </code> ou <code style={{background:"#f1f5f9",padding:"1px 4px",borderRadius:3,fontFamily:"inherit"}}>* </code> pra virar bullet)</span></div>
+          <textarea ref={_txaRef} value={sec.description||""} onChange={_handleDescChange}
+            style={Object.assign({},_inp,{minHeight:140,overflow:"hidden",resize:"none",lineHeight:1.6})}
+            placeholder="Explique passo a passo. Ex:&#10;- Segura o celular na horizontal&#10;- Encosta as costas na parede pra ficar mais firme&#10;- Boa iluminação: fica de frente pra uma janela"/>
         </div>
         <div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
@@ -49100,7 +49163,7 @@ function _PortalPlaybookEditModal({section, accent, uploading, onUpload, onRemov
               {uploading ? "Enviando..." : "Adicionar mídia"}
             </button>
             <input ref={_fileInputRef} type="file" accept="image/*,video/*" multiple style={{display:"none"}}
-              onChange={function(e){ const _fs = Array.from(e.target.files||[]); e.target.value=""; if(_fs.length>0) onUpload(_fs); }}/>
+              onChange={function(e){ const _fs = Array.from(e.target.files||[]); e.target.value=""; if(_fs.length>0) _handleUpload(_fs); }}/>
           </div>
           {(sec.images||[]).length===0
             ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"24px 12px",textAlign:"center",color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Nenhuma mídia anexada ainda</div>
@@ -49117,7 +49180,7 @@ function _PortalPlaybookEditModal({section, accent, uploading, onUpload, onRemov
                         </div></>
                       : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
                     }
-                    <button onClick={function(){onRemoveMedia(i);}} type="button" title="Remover"
+                    <button onClick={function(){_removeMedia(i);}} type="button" title="Remover"
                       style={{position:"absolute",top:4,right:4,background:"rgba(15,23,42,.85)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
