@@ -28572,6 +28572,26 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             return;
           }
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Acesso criado! "+payload.email+" pode logar agora.",5000);
+          // ═════ Auto-registra no Cofre de Senhas pra sócios consultarem depois ═════
+          try{
+            const _clName = _clSel ? _clSel.name : novoCliente.client_id;
+            const _unitTxt = novoCliente.client_unit ? " — "+novoCliente.client_unit : "";
+            const _portalUrl = (typeof window!=="undefined" && window.location ? window.location.origin+"/portal" : "");
+            const _pwdPayload = {
+              label: _clName + _unitTxt + " (Portal cliente)",
+              category: "cliente",
+              client_id: novoCliente.client_id || null,
+              username: payload.email,
+              password: novoCliente.password,
+              url: _portalUrl,
+              notes: novoCliente.name ? ("Contato: "+novoCliente.name) : "",
+              author_id: (typeof CURRENT_USER!=="undefined" ? CURRENT_USER.id : ""),
+              author_name: (typeof CURRENT_USER!=="undefined" ? CURRENT_USER.name : ""),
+              updated_at: new Date().toISOString(),
+            };
+            const _rvPwd = await sb.from("team_passwords").insert(_pwdPayload);
+            if(_rvPwd && _rvPwd.error) console.warn("[acessos] insert team_passwords:", _rvPwd.error.message||_rvPwd.error);
+          }catch(_e){ console.warn("[acessos] vault sync:", _e && _e.message ? _e.message : _e); }
           // Liga acesso no painel também (mesmo se foi configurado antes)
           const cur=clientAccess[novoCliente.client_id]||defaultClientAccess(_clSel||{id:novoCliente.client_id,name:""});
           saveClientAccess(novoCliente.client_id,{...cur,enabled:true,login:payload.email});
@@ -28955,7 +28975,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                             {_unitLabel(user.primary_unit)||"—"}
                           </span>
                         ):(
-                          <span style={{color:C.td,fontSize:11.5,fontStyle:"italic"}}>Acesso total</span>
+                          <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-block"}}>Portal exclusivo</span>
                         )}
                       </div>
                       {/* Ações: Ver como + Revogar */}
