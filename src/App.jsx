@@ -22612,8 +22612,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
       const sb=window._sb;
       if(!sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Supabase offline. Tenta de novo."); setRefUploading(false); return; }
       // files pode ser Array (do fix) ou FileList (legado) — Array.from lida com ambos
-      const uploads=Array.from(files).filter(f=>f&&f.type&&f.type.startsWith("image/"));
-      if(uploads.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione uma imagem válida."); setRefUploading(false); return; }
+      const uploads=Array.from(files).filter(f=>f&&f.type&&(f.type.startsWith("image/")||f.type.startsWith("video/")));
+      if(uploads.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione uma imagem ou vídeo válido."); setRefUploading(false); return; }
       const out=[];
       for(const f of uploads){
         const ext=(f.name.split(".").pop()||"png").toLowerCase();
@@ -23230,8 +23230,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
                 _refDropCount.current=0;
                 setRefDropOver(false);
                 if(refUploading)return;
-                const _fs = Array.from((e.dataTransfer&&e.dataTransfer.files)||[]).filter(function(f){return f&&f.type&&f.type.startsWith("image/");});
-                if(_fs.length===0){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Solte imagens (PNG, JPG, etc)",2500);return;}
+                const _fs = Array.from((e.dataTransfer&&e.dataTransfer.files)||[]).filter(function(f){return f&&f.type&&(f.type.startsWith("image/")||f.type.startsWith("video/"));});
+                if(_fs.length===0){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Solte imagens ou vídeos",2500);return;}
                 handleRefUpload(_fs);
               }}
               style={{position:"relative",padding:_refDropOver?8:0,margin:_refDropOver?-8:0,borderRadius:12,background:_refDropOver?"#faf5ff":"transparent",border:_refDropOver?"2px dashed #a140ff":"2px dashed transparent",transition:"background .12s, border .12s, padding .12s, margin .12s"}}>
@@ -23241,9 +23241,16 @@ function PublicacaoEditModal({task, onClose, onReject}){
               </div>}
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
                 <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Referências</label>
-                {refImages.length>0&&<span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>{refImages.length} {refImages.length===1?"imagem":"imagens"}</span>}
+                {refImages.length>0&&(function(){
+                  const _nV=refImages.filter(function(r){return r.type&&r.type.startsWith("video/");}).length;
+                  const _nI=refImages.length-_nV;
+                  const _parts=[];
+                  if(_nI>0)_parts.push(_nI+" "+(_nI===1?"imagem":"imagens"));
+                  if(_nV>0)_parts.push(_nV+" "+(_nV===1?"vídeo":"vídeos"));
+                  return <span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>{_parts.join(" + ")}</span>;
+                })()}
               </div>
-              <input ref={refFileInputRef} type="file" accept="image/*" multiple
+              <input ref={refFileInputRef} type="file" accept="image/*,video/*" multiple
                 onChange={e=>{const _fs=Array.from(e.target.files||[]);e.target.value="";if(_fs.length>0)handleRefUpload(_fs);}}
                 style={{display:"none"}}/>
               {refImages.length===0
@@ -23253,17 +23260,30 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   onMouseLeave={e=>{e.currentTarget.style.background="#fafafa";e.currentTarget.style.borderColor="#d4d4d8";e.currentTarget.style.color="#64748b";}}>
                   {refUploading
                     ?<><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:"spin 0.8s linear infinite"}}><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M12 2a10 10 0 0110 10"/></svg> <span>Enviando...</span></>
-                    :<><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span style={{fontSize:13}}>Anexar imagens</span></>}
+                    :<><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span style={{fontSize:13}}>Anexar imagens ou vídeos</span></>}
                 </button>
                 :<div style={{display:"flex",flexDirection:"column",gap:8}}>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                    {refImages.map(r=>(<div key={r.id} style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #e5e7eb",background:"#f8fafc",aspectRatio:"1 / 1"}}>
-                      <img src={r.url} alt={r.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      <button onClick={()=>removeRef(r.id)} title="Remover" type="button"
-                        style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,0.9)",border:"none",borderRadius:"50%",width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>))}
+                    {refImages.map(function(r){
+                      const _isVid = r.type && r.type.startsWith("video/");
+                      return <div key={r.id} style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #e5e7eb",background:"#0f172a",aspectRatio:"1 / 1"}}>
+                        {_isVid
+                          ? <><video src={r.url} preload="metadata" muted playsInline
+                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"}}/>
+                            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                              <span style={{width:34,height:34,borderRadius:"50%",background:"rgba(15,23,42,0.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.4)"}}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                              </span>
+                            </div>
+                            <span style={{position:"absolute",bottom:5,left:5,background:"rgba(15,23,42,0.85)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:5,letterSpacing:.3,textTransform:"uppercase"}}>VÍDEO</span></>
+                          : <img src={r.url} alt={r.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#f8fafc"}}/>
+                        }
+                        <button onClick={function(){removeRef(r.id);}} title="Remover" type="button"
+                          style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,0.9)",border:"none",borderRadius:"50%",width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>;
+                    })}
                   </div>
                   <button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading} type="button"
                     style={{width:"100%",background:"#fff",color:"#475569",border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 0",fontWeight:500,fontSize:12.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}
