@@ -1137,6 +1137,11 @@ function _isWellFormed(word){
   if(/^[A-ZÀ-Ý]{2}$/.test(word))return true;
   if(_isCamelCaseValid(word))return true;
   if(/^[0-9\-'.,!?:/]+$/.test(word))return true;
+  // Compound com "/" (ex: "Rural/Agricultor", "PR/SC") — cada segmento deve ser well-formed
+  if(word.indexOf("/")>=0){
+    const _segs=word.split("/");
+    if(_segs.length>=2 && _segs.every(function(s){return _isWellFormed(s);})) return true;
+  }
   return false;
 }
 function stripEmojis(input){
@@ -3361,8 +3366,6 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
   if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
   if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
-  if(n==="music")     return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
-  if(n==="volume"||n==="volume2") return <svg {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg>;
   if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
   if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
   if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
@@ -3522,13 +3525,11 @@ function _VideoThumb(props){
 // Ordem otimizada pro grid 2-cols do picker (left-right):
 // Col 1: Castro, Chapecó, Toledo   |   Col 2: Gloria de Dourados, Paraguay, Uberlandia
 const BIOTER_UNITS = [
-  // Matrizes (verde escuro)
   { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Castro" },
-  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Chapecó" },
-  { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Toledo" },
-  // Filiais (verde claro)
   { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Glória de Dourados" },
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Chapecó" },
   { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay",   cidade:"Obligado" },
+  { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Toledo" },
   { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Uberlândia" },
 ];
 
