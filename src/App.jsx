@@ -61016,7 +61016,10 @@ function _EventosPlanner({isMob}){
               </div>
               <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,flex:1}}>
                 {_totTasks>0 && <div>
-                  <div style={{color:"#78350f",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Tasks {_doneTasks}/{_totTasks}</div>
+                  <div style={{color:"#78350f",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    Tasks {_doneTasks}/{_totTasks}
+                  </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4}}>
                     {(ev.tasks||[]).slice(0,6).map(function(t){
                       return <label key={t.id} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12.5,color:t.done?"#94a3b8":"#0f172a",lineHeight:1.4,cursor:"pointer",textDecoration:t.done?"line-through":"none"}}>
@@ -61029,7 +61032,7 @@ function _EventosPlanner({isMob}){
                 </div>}
                 {_totMetas>0 && <div>
                   <div style={{color:"#166534",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                     Metas {_doneMetas}/{_totMetas}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -61051,6 +61054,39 @@ function _EventosPlanner({isMob}){
     }
 
     {editing && <_EventoEditModal evento={editing} onSave={_save} onClose={function(){setEditing(null);}}/>}
+  </div>;
+}
+
+// DateField moderno pro modal Evento: chip clicável que abre calendário nativo
+// (input type=date fica invisível por cima; visual bonito)
+function _EvDateField({value, onChange, placeholder}){
+  const _inpRef = useRef(null);
+  const _hasVal = !!value;
+  const _labelBR = _hasVal ? (value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4)) : (placeholder||"Selecionar data");
+  const _open = function(){
+    try{
+      if(_inpRef.current){
+        if(typeof _inpRef.current.showPicker==="function") _inpRef.current.showPicker();
+        else _inpRef.current.focus();
+      }
+    }catch(_){ if(_inpRef.current) _inpRef.current.focus(); }
+  };
+  return <div onClick={function(e){e.stopPropagation();_open();}}
+    style={{display:"flex",alignItems:"center",gap:8,background:_hasVal?"#fff":"#fafbfc",border:"1px solid "+(_hasVal?"#f9731633":"#e2e8f0"),borderRadius:9,padding:"0 12px",height:38,fontSize:13,color:_hasVal?"#0f172a":"#94a3b8",fontWeight:_hasVal?700:500,fontFamily:"inherit",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor="#f9731666";e.currentTarget.style.background="#fff";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=_hasVal?"#f9731633":"#e2e8f0";e.currentTarget.style.background=_hasVal?"#fff":"#fafbfc";}}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={_hasVal?"#f97316":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    <span style={{whiteSpace:"nowrap",flex:1}}>{_labelBR}</span>
+    {_hasVal && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();if(typeof onChange==="function") onChange("");}} title="Limpar"
+      style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
+      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>}
+    <input ref={_inpRef} type="date" value={value||""} onChange={function(e){if(typeof onChange==="function") onChange(e.target.value);}}
+      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
   </div>;
 }
 
@@ -61100,11 +61136,11 @@ function _EventoEditModal({evento, onSave, onClose}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
             <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data início</div>
-            <input type="date" value={ev.dataIni||""} onChange={function(e){_set("dataIni",e.target.value);}} style={_inp}/>
+            <_EvDateField value={ev.dataIni||""} onChange={function(v){_set("dataIni",v);}} placeholder="Selecionar data"/>
           </div>
           <div>
             <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data fim</div>
-            <input type="date" value={ev.dataFim||""} onChange={function(e){_set("dataFim",e.target.value);}} style={_inp}/>
+            <_EvDateField value={ev.dataFim||""} onChange={function(v){_set("dataFim",v);}} placeholder="Selecionar data"/>
           </div>
         </div>
         <div>
