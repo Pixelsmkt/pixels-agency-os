@@ -61032,7 +61032,7 @@ function _EventosPlanner({isMob}){
                 </div>}
                 {_totMetas>0 && <div>
                   <div style={{color:"#166534",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
                     Metas {_doneMetas}/{_totMetas}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4}}>
