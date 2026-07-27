@@ -24200,34 +24200,35 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
                       }
                     }}
-                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#0284c7",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s",padding:0}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0284c7";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s",padding:0}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </button>
                   <button type="button" title="Copiar link do cartão"
                     onClick={async function(){
                       try{
                         const _url = (typeof window!=="undefined" && window.location ? window.location.origin+window.location.pathname : "") + "?card="+encodeURIComponent(current.id);
-                        const _title = current.title || "Cartão Pixels";
-                        if(navigator && navigator.share){
-                          try{ await navigator.share({title:_title, url:_url}); return; }catch(_){/* usuario cancelou ou falhou → cai no fallback */}
-                        }
                         if(navigator && navigator.clipboard && navigator.clipboard.writeText){
                           await navigator.clipboard.writeText(_url);
                           if(typeof pixelsToast!=="undefined") pixelsToast.success("Link do cartão copiado!",2500);
                         } else {
-                          window.prompt("Copie o link:", _url);
+                          // Fallback antigo pra browsers sem clipboard API
+                          const _ta = document.createElement("textarea");
+                          _ta.value = _url; _ta.style.position="fixed"; _ta.style.opacity="0";
+                          document.body.appendChild(_ta); _ta.select();
+                          try{ document.execCommand("copy"); if(typeof pixelsToast!=="undefined") pixelsToast.success("Link do cartão copiado!",2500); }catch(_){ window.prompt("Copie o link:", _url); }
+                          document.body.removeChild(_ta);
                         }
                       }catch(e){
-                        console.warn("[share]",e);
-                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao compartilhar: "+(e&&e.message||"erro"),3000);
+                        console.warn("[copy link]",e);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao copiar: "+(e&&e.message||"erro"),3000);
                       }
                     }}
-                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#7c3aed",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s",padding:0}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor="#7c3aed";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s",padding:0}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                   </button>
                 </div>)}
               </div>)}
