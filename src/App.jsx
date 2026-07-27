@@ -61032,11 +61032,7 @@ function _EventosPlanner({isMob}){
                 </div>}
                 {_totMetas>0 && <div>
                   <div style={{color:"#166534",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <span style={{width:14,height:14,borderRadius:"50%",background:"#166534",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      <span style={{width:7,height:7,borderRadius:"50%",background:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                        <span style={{width:3,height:3,borderRadius:"50%",background:"#166534"}}/>
-                      </span>
-                    </span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0012 0V2z"/></svg>
                     Metas {_doneMetas}/{_totMetas}
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4}}>
