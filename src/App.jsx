@@ -28905,11 +28905,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       </div>)}
       </>}
 
-      {/* ══ CLIENTES DO PORTAL ══ */}
+      {/* ══ CLIENTES DO PORTAL — REDESIGN MODERNO ══ */}
       {mainTab==="clientes"&&(
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-
-          {/* ── ACESSOS ATIVOS (auth users reais do Supabase) ── */}
+        <div style={{display:"flex",flexDirection:"column",gap:18}}>
           {(()=>{
             const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno");
             const _comAcesso=[];
@@ -28928,125 +28926,128 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               const labels=ids.map(id=>{
                 const u=units.find(x=>x.id===id);
                 if(!u)return id;
-                if(u.id==="paraguay")return"Bioter Paraguay";
-                return"Bioter "+(u.pickerLabel||u.label.split("/")[0]);
+                if(u.id==="paraguay")return"Paraguay";
+                return(u.pickerLabel||u.label.split("/")[0]);
               });
               return labels.join(" + ");
             };
             return <>
-              {/* Bloco 1 — Acessos ATIVOS */}
-              <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-                <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10,background:"#f0fdf4"}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{color:"#15803d",fontWeight:800,fontSize:13,letterSpacing:-.1}}>Acessos ativos</div>
-                    <div style={{color:"#166534",fontSize:11,marginTop:1}}>Clientes que conseguem logar no portal agora</div>
-                  </div>
-                  <div style={{color:"#15803d",fontSize:12,fontWeight:700}}>{_comAcesso.length}</div>
+              {/* Header premium */}
+              <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:6}}>
+                <div style={{width:46,height:46,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#5b21b6)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 8px 20px rgba(124,58,237,.35)",flexShrink:0}}>
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                 </div>
-                {_comAcesso.length===0?(
-                  <div style={{padding:"40px 20px",textAlign:"center",color:C.td,fontSize:13,fontStyle:"italic"}}>
-                    Nenhum acesso de cliente criado ainda. Use o botão "+ Novo acesso cliente" pra começar.
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Acessos do portal</div>
+                  <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
+                    {_comAcesso.length} {_comAcesso.length===1?"cliente ativo":"clientes ativos"}
+                    {_semAcesso.length>0 && <span> · {_semAcesso.length} sem acesso criado</span>}
                   </div>
-                ):(
-                  _comAcesso.map(({cl,user},i)=>(
-                    <div key={user.id}
-                      style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.5fr 100px",padding:"14px 20px",borderBottom:i<_comAcesso.length-1?"1px solid "+C.b1+"44":"none",alignItems:"center",gap:12}}>
-                      {/* Cliente: logo + nome do cliente + nome do contato */}
-                      <div style={{display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{width:44,height:44,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
-                          <ClientLogo clientId={cl.id} size="md"/>
-                        </div>
-                        <div style={{minWidth:0}}>
-                          <div style={{color:C.tx,fontWeight:700,fontSize:14,letterSpacing:-.2}}>{cl.name}</div>
-                          {user.name&&user.name!==cl.name&&<div style={{color:C.td,fontSize:11,marginTop:1}}>{user.name}</div>}
-                        </div>
-                      </div>
-                      {/* Email do login */}
-                      <div style={{minWidth:0}}>
-                        <div style={{color:C.ts,fontSize:12,fontFamily:"monospace",wordBreak:"break-all"}}>{user.email||"—"}</div>
-                      </div>
-                      {/* Unidade(s) Bioter (se cliente Bioter) */}
-                      <div>
-                        {cl.id==="bioter"?(
-                          <span style={{background:"#16a34a15",color:"#15803d",border:"1px solid #16a34a40",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-block"}}>
-                            {_unitLabel(user.primary_unit)||"—"}
-                          </span>
-                        ):(
-                          <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-block"}}>Portal exclusivo</span>
-                        )}
-                      </div>
-                      {/* Ações: Ver como + Revogar */}
-                      <div style={{display:"flex",justifyContent:"flex-end",gap:6}}>
-                        {isPartner&&onViewAsClient&&(
-                          <button onClick={()=>onViewAsClient(user)}
-                            title={"Ver o portal como "+(user.name||cl.name)}
-                            style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 12px",color:C.a,fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-                            onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";}}
-                            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;}}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                            Ver como
-                          </button>
-                        )}
-                        {isPartner&&(
-                          <button onClick={()=>revogarClienteAcesso(user.id,cl.name)}
-                            title="Revogar acesso"
-                            style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-                            onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
-                            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                            Revogar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+                </div>
               </div>
 
-              {/* Bloco 2 — Clientes SEM acesso (com botão de criar acesso rápido) */}
-              {_semAcesso.length>0&&(
-                <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-                  <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10,background:C.s1}}>
-                    <div style={{width:30,height:30,borderRadius:8,background:C.b2,display:"flex",alignItems:"center",justifyContent:"center",color:C.td}}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{color:C.tx,fontWeight:800,fontSize:13,letterSpacing:-.1}}>Clientes sem acesso criado</div>
-                      <div style={{color:C.td,fontSize:11,marginTop:1}}>Ainda não tem login pro portal</div>
-                    </div>
-                    <div style={{color:C.ts,fontSize:12,fontWeight:700}}>{_semAcesso.length}</div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10,padding:16}}>
-                    {_semAcesso.map(cl=>(
-                      <div key={cl.id} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,transition:"all .12s"}}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.background="#fff";}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.background=C.s1;}}>
-                        <div style={{width:38,height:38,borderRadius:9,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:3}}>
-                          <ClientLogo clientId={cl.id} size="sm"/>
+              {/* ═════ Bloco ATIVOS ═════ */}
+              {_comAcesso.length>0 && <div>
+                <div style={{color:"#15803d",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",boxShadow:"0 0 0 3px rgba(22,163,74,0.18)"}}/>
+                  Ativos · {_comAcesso.length}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+                  {_comAcesso.map(({cl,user})=>{
+                    const _isBioter = cl.id==="bioter";
+                    const _unitTxt = _isBioter ? (_unitLabel(user.primary_unit)||"—") : "Portal exclusivo";
+                    return <div key={user.id}
+                      style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s",position:"relative"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"55";e.currentTarget.style.boxShadow="0 4px 14px "+cl.color+"20";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
+                      {/* Top: logo + nome + status */}
+                      <div style={{display:"flex",alignItems:"center",gap:11}}>
+                        <div style={{width:46,height:46,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:5}}>
+                          <ClientLogo clientId={cl.id} size="md"/>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{color:C.tx,fontWeight:700,fontSize:13,letterSpacing:-.1}}>{cl.name}</div>
-                          <div style={{color:C.td,fontSize:10.5,marginTop:1}}>{cl.sector}</div>
+                          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                          {user.name && user.name!==cl.name && <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>}
                         </div>
-                        {isPartner&&(
-                          <button onClick={()=>{setNovoCliente({client_id:cl.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
-                            title={"Criar acesso pra "+cl.name}
-                            style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:8,padding:"7px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,boxShadow:"0 2px 8px rgba(22,163,74,.35)",flexShrink:0}}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                            Criar
-                          </button>
-                        )}
+                        <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #16a34a40",fontSize:9.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>Ativo</span>
                       </div>
-                    ))}
-                  </div>
+                      {/* Email */}
+                      <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,padding:"7px 11px",display:"flex",alignItems:"center",gap:7}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        <span style={{color:"#334155",fontSize:12,fontFamily:"monospace",wordBreak:"break-all",fontWeight:500}}>{user.email||"—"}</span>
+                      </div>
+                      {/* Chip unidade / portal exclusivo */}
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        {_isBioter
+                          ? <span style={{background:"#16a34a15",color:"#15803d",border:"1px solid #16a34a40",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                              {_unitTxt}
+                            </span>
+                          : <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                              Portal exclusivo
+                            </span>
+                        }
+                      </div>
+                      {/* Ações */}
+                      {isPartner && <div style={{display:"flex",gap:6,paddingTop:9,borderTop:"1px solid #f1f5f9"}}>
+                        {onViewAsClient && <button onClick={()=>onViewAsClient(user)} title={"Ver o portal como "+(user.name||cl.name)} type="button"
+                          style={{flex:1,background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 12px",color:C.a,fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s",fontFamily:"inherit"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          Ver como
+                        </button>}
+                        <button onClick={()=>revogarClienteAcesso(user.id,cl.name)} title="Revogar acesso" type="button"
+                          style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",color:"#dc2626",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s",fontFamily:"inherit"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                          Revogar
+                        </button>
+                      </div>}
+                    </div>;
+                  })}
                 </div>
-              )}
+              </div>}
+
+              {/* ═════ Bloco SEM ACESSO ═════ */}
+              {_semAcesso.length>0 && <div>
+                <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:"#cbd5e1"}}/>
+                  Sem acesso ainda · {_semAcesso.length}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+                  {_semAcesso.map(cl=>(
+                    <div key={cl.id} style={{background:"#fafbfc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.background="#fff";e.currentTarget.style.borderStyle="solid";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderStyle="dashed";}}>
+                      <div style={{width:40,height:40,borderRadius:10,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
+                        <ClientLogo clientId={cl.id} size="sm"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                        <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"Sem setor"}</div>
+                      </div>
+                      {isPartner && <button onClick={()=>{setNovoCliente({client_id:cl.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
+                        title={"Criar acesso pra "+cl.name} type="button"
+                        style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:8,padding:"7px 12px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 2px 8px rgba(22,163,74,.32)",flexShrink:0,fontFamily:"inherit"}}
+                        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(22,163,74,.45)";e.currentTarget.style.transform="translateY(-1px)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(22,163,74,.32)";e.currentTarget.style.transform="";}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Criar
+                      </button>}
+                    </div>
+                  ))}
+                </div>
+              </div>}
+
+              {/* Empty state global */}
+              {_comAcesso.length===0 && _semAcesso.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>
+                Nenhum cliente cadastrado ainda.
+              </div>}
             </>;
           })()}
-
         </div>
       )}
 
