@@ -32970,6 +32970,55 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
+    // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
+    try{
+      if(typeof window!=="undefined" && window._sb){
+        const _prevTask = (tasks||[]).find(function(t){return t.id===task.id;}) || task;
+        const _mergedTl = (function(){
+          const _p = _prevTask.timeline || [];
+          const _tlIds = new Set(_p.map(function(x){return x.atFmt+"-"+(x.label||x.type||"");}));
+          const _newOnly = tl.filter(function(x){return !_tlIds.has(x.atFmt+"-"+(x.label||x.type||""));});
+          return [..._p, ..._newOnly];
+        })();
+        const _mergedCmts = (function(){
+          const _p = _prevTask.comments || [];
+          const _ids = new Set(_p.map(function(c){return c.id;}));
+          const _local = (comments||[]).filter(function(c){return !_ids.has(c.id);});
+          return [..._p, ..._local];
+        })();
+        window._sb.from("tasks").update({
+          title: formattedTitle,
+          assignee: assignees[0] || "",
+          assignees: assignees || [],
+          watchers: watchers || [],
+          priority: priority || null,
+          content_type: (typeof canEditContentType!=="undefined" && canEditContentType) ? (contentType||null) : (_prevTask.contentType||null),
+          reference_month: (typeof isAdmin!=="undefined" && isAdmin) ? (referenceMonth||null) : (_prevTask.referenceMonth||null),
+          deadline: deadline || null,
+          publish_date: publishDate || null,
+          publish_time: publishTime || null,
+          description: descFinal || "",
+          caption: captionFinal || "",
+          cover: cover || null,
+          bioter_unit: (client==="bioter") ? (bioterUnit||null) : null,
+          files: cleanedFiles || [],
+          timeline: _mergedTl,
+          comments: _mergedCmts,
+          checklist: checklist || [],
+          client: client || null,
+          sector: sector || null,
+          admin_tag: (typeof isAdmin!=="undefined" && isAdmin) ? ((adminTag||"").trim()||null) : (_prevTask.adminTag||null),
+          tags: (typeof isAdmin!=="undefined" && isAdmin) ? (tags||[]) : (_prevTask.tags||[]),
+        }).eq("id", task.id)
+          .then(function(r){
+            if(r && r.error){
+              console.warn("[save persist error]", r.error.message||r.error);
+              if(typeof pixelsToast!=="undefined") pixelsToast.error("Salvou local mas erro na base: "+r.error.message, 5000);
+            }
+          })
+          .catch(function(e){ console.warn("[save persist catch]", e && e.message||e); });
+      }
+    }catch(e){ console.warn("[save persist outer]", e && e.message||e); }
     onClose();
   };
 
@@ -33315,7 +33364,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const remainingTotal=MAX_IMAGES_PER_CARD-currentImgs;
     const remainingTipo=MAX_IMAGES_PER_TIPO-currentImgsTipo;
     const _secLabel = tipo==="referencia" ? "referências" : "arquivos finais";
-    // limite por seção
     if(newImgs>0 && remainingTipo<=0){
       pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_TIPO} ${_secLabel} atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
@@ -33324,7 +33372,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       pixelsToast.warning(`Você selecionou ${newImgs} imagens, mas só cabem mais ${remainingTipo} em ${_secLabel} (limite: ${MAX_IMAGES_PER_TIPO}).`,5000);
       return;
     }
-    // limite total (safety net)
     if(newImgs>0 && remainingTotal<=0){
       pixelsToast.warning(`Limite total de ${MAX_IMAGES_PER_CARD} imagens no cartão atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
@@ -35721,6 +35768,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     onClick={function(){
                       setClient(c.id);
                       if(c.id!=="bioter") setBioterUnit("");
+                      // Ao selecionar Grupo Bioter como cliente, auto-marca "grupo" nas unidades
+                      // (equivalente a clicar Grupo Bioter — TODAS em Unidades Bioter)
+                      else setBioterUnit("grupo");
                     }}
                     style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?_corSel+"14":"#fff",border:"1.5px solid "+(isSel?_corSel:"#e2e8f0"),borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?_corSel:"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",fontFamily:"inherit",minWidth:0}}
                     onMouseEnter={function(ev){if(canEdit&&!isSel){ev.currentTarget.style.borderColor=_corSel+"66";ev.currentTarget.style.background=_corSel+"08";}}}
