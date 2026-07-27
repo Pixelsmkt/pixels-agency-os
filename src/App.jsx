@@ -32486,13 +32486,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [dragOverSection,setDragOverSection]=useState(null); // "ref" | "fin" | null
   const _dragCountRefRef=useRef(0);
   const _dragCountFinRef=useRef(0);
+  const _dragCountMatRef=useRef(0);
   const _dragCountOuterRef=useRef(0);
   const _dragLeaveTimerRefRef=useRef(null);
   const _dragLeaveTimerFinRef=useRef(null);
+  const _dragLeaveTimerMatRef=useRef(null);
   const _dragLeaveTimerOuterRef=useRef(null);
   const _resetDragSection=()=>{
     _dragCountRefRef.current=0;
     _dragCountFinRef.current=0;
+    _dragCountMatRef.current=0;
     _dragCountOuterRef.current=0;
     setDragOverSection(null);
     setDragOverFiles(false);
@@ -32685,6 +32688,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const recTimerRef=useRef(null);
   const fileInputRef=useRef(null);    // Arquivos finais (designer/editor sobem)
   const fileInputRefRef=useRef(null); // Imagens de referência (criador sobe)
+  const matFileInputRef=useRef(null); // Materiais (imagens/vídeos brutos, takes, base)
   const descRef=useRef(null);
   const captionRef=useRef(null);
   // Sanitizador de HTML — permite apenas tags básicas de formatação.
@@ -33363,7 +33367,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const newImgs=files.filter(_isImgFile).length;
     const remainingTotal=MAX_IMAGES_PER_CARD-currentImgs;
     const remainingTipo=MAX_IMAGES_PER_TIPO-currentImgsTipo;
-    const _secLabel = tipo==="referencia" ? "referências" : "arquivos finais";
+    const _secLabel = tipo==="referencia" ? "referências" : tipo==="material" ? "materiais" : "arquivos finais";
     if(newImgs>0 && remainingTipo<=0){
       pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_TIPO} ${_secLabel} atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
@@ -33737,6 +33741,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const fakeEvent={target:{files,value:""}};
     let tipo=explicitTipo;
     if(tipo==="referencia"&&!canEditRef){pixelsToast.warning("Sem permissão pra subir referências.");return;}
+    if(tipo==="material"&&!canEditRef&&!canEdit){pixelsToast.warning("Sem permissão pra subir materiais.");return;}
     if(tipo==="final"&&!canEdit){pixelsToast.warning("Sem permissão pra subir arquivo final.");return;}
     if(!tipo){
       // Fallback: decide pelo cargo (caso a soltura aconteça na área neutra)
@@ -33792,11 +33797,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Filtros para grids — exclui placeholders de upload (a.uploading) pra evitar src=null quebrado
   // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo atual)
   const isRef=(a)=>a.tipo==="referencia";
+  const isMat=(a)=>a.tipo==="material";
   const isFin=(a)=>!a.tipo||a.tipo==="final";
   const imgRef=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isRef(a));
   const imgFin=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a));
+  const imgMat=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
   const vidRef=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isRef(a));
   const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
+  const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
   const imgAttachments=[...imgRef,...imgFin];
   const vidAttachments=[...vidRef,...vidFin];
@@ -34516,30 +34524,52 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     // Se antes do caret é exatamente "*" ou "-" (sem outro conteúdo)
                     if(before === "*" || before === "-"){
                       e.preventDefault();
-                      // Remove o "*" ou "-" digitado
-                      const newText = text.slice(0, lineStart) + text.slice(caret);
+                      // Substitui "*" (ou "-") por "• " — Unicode bullet puro, sem UL/LI bugado
+                      const newText = text.slice(0, lineStart) + "• " + text.slice(caret);
                       node.textContent = newText;
-                      // Reposiciona caret
                       const newRange = document.createRange();
-                      newRange.setStart(node, lineStart);
+                      newRange.setStart(node, lineStart + 2); // posiciona após "• "
                       newRange.collapse(true);
                       sel.removeAllRanges();
                       sel.addRange(newRange);
-                      // Insere bullet list
-                      try{ document.execCommand("insertUnorderedList", false, null); }catch(_){}
                     }
                   }
-                  // Auto-bullet: quando digita ENTER dentro de um <li> vazio, sai do bullet
+                  // Auto-continue: Enter em linha "• " continua com "• " na próxima
+                  // Enter em linha "• " vazia (só bullet) sai do bullet
                   if(e.key === "Enter"){
                     const sel = window.getSelection();
                     if(!sel || sel.rangeCount === 0) return;
                     const range = sel.getRangeAt(0);
-                    let n = range.startContainer;
-                    // Sobe até achar <li>
-                    while(n && n.nodeName !== "LI" && n.parentNode) n = n.parentNode;
-                    if(n && n.nodeName === "LI" && !n.textContent.trim()){
-                      e.preventDefault();
-                      try{ document.execCommand("insertUnorderedList", false, null); }catch(_){}
+                    const node = range.startContainer;
+                    if(node.nodeType !== 3) return;
+                    const text = node.textContent || "";
+                    const caret = range.startOffset;
+                    const lineStart = text.lastIndexOf("\n", caret - 1) + 1;
+                    const lineSoFar = text.slice(lineStart, caret);
+                    // Se linha atual começa com "• " e usuário tá no fim
+                    if(lineSoFar.startsWith("• ")){
+                      const restOfLine = text.slice(caret).split("\n")[0];
+                      // Se a linha atual é apenas "• " (vazia), Enter sai do bullet — remove ela
+                      if(lineSoFar === "• " && !restOfLine){
+                        e.preventDefault();
+                        const newText = text.slice(0, lineStart) + text.slice(caret);
+                        node.textContent = newText;
+                        const nr = document.createRange();
+                        nr.setStart(node, lineStart);
+                        nr.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(nr);
+                      } else {
+                        // Continua bullet: insere \n• no lugar do Enter
+                        e.preventDefault();
+                        const newText = text.slice(0, caret) + "\n• " + text.slice(caret);
+                        node.textContent = newText;
+                        const nr = document.createRange();
+                        nr.setStart(node, caret + 3);
+                        nr.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(nr);
+                      }
                     }
                   }
                 }}
@@ -34808,7 +34838,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 _dragLeaveTimerOuterRef.current=setTimeout(function(){
                   _dragLeaveTimerOuterRef.current=null;
                   if(_dragCountOuterRef.current===0) setDragOverFiles(false);
-                },60);
+                },120);
               }}
               onDrop={e=>{
                 if(_dragLeaveTimerOuterRef.current){clearTimeout(_dragLeaveTimerOuterRef.current);_dragLeaveTimerOuterRef.current=null;}
@@ -34887,6 +34917,126 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>);
               })()}
 
+              {/* ── SEÇÃO 0: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
+              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
+                const totalMat=imgMat.length+vidMat.length;
+                const _matActive=dragOverSection==="mat";
+                const _matCanEdit=canEditRef||canEdit;
+                return(<div
+                  onDragEnter={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    if(!_matCanEdit)return;
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current++;
+                    if(dragOverSection!=="mat")setDragOverSection("mat");
+                  }}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_matCanEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragLeave={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    _dragCountMatRef.current=Math.max(0,_dragCountMatRef.current-1);
+                    if(_dragLeaveTimerMatRef.current) clearTimeout(_dragLeaveTimerMatRef.current);
+                    _dragLeaveTimerMatRef.current=setTimeout(function(){
+                      _dragLeaveTimerMatRef.current=null;
+                      if(_dragCountMatRef.current===0) setDragOverSection(function(cur){return cur==="mat"?null:cur;});
+                    },120);
+                  }}
+                  onDrop={e=>{
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current=0;
+                    handleFilesDrop(e,"material");
+                  }}
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_matActive?"2px dashed #0891b2":"2px dashed transparent",background:_matActive?"#ecfeff":"transparent",padding:_matActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_matActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #a5f3fc",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0891b2",boxShadow:"0 8px 22px rgba(8,145,178,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="paperclip" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Materiais</span></div>
+                  </div>}
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalMat>0?14:10}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #cffafe"}}><Ico n="paperclip" size={16}/></div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
+                    </div>
+                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
+                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Baixar tudo
+                    </button>}
+                    {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
+                      style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#0891b2";e.currentTarget.style.boxShadow="0 1px 2px rgba(8,145,178,0.15)";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Adicionar
+                    </label>}
+                  </div>
+                  {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
+                  </div>)}
+                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
+                    {imgMat.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
+                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
+                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#0891b2"/>
+                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                            style={{background:"#0891b2",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            Abrir <Ico n="external" size={9} color="#fff"/>
+                          </a>
+                        </div>
+                        <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("mat #"+(i+1))}</span>
+                        </div>
+                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar material"
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(8,145,178,0.85)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {_matCanEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
+                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
+                      <video src={a.url} controls preload="metadata" playsInline
+                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
+                      <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
+                      </div>
+                      <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                        <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
+                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                        {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>}
+                      </div>
+                      {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
+                    </div>);
+                  })}</div>}
+                </div>);
+              })()}
+
               {/* ── SEÇÃO 1: REFERÊNCIAS — só quem cria cartão sobe ── */}
               {(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
                 const totalRef=imgRef.length+vidRef.length;
@@ -34909,7 +35059,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     _dragLeaveTimerRefRef.current=setTimeout(function(){
                       _dragLeaveTimerRefRef.current=null;
                       if(_dragCountRefRef.current===0) setDragOverSection(function(cur){return cur==="ref"?null:cur;});
-                    },60);
+                    },120);
                   }}
                   onDrop={e=>{
                     if(_dragLeaveTimerRefRef.current){clearTimeout(_dragLeaveTimerRefRef.current);_dragLeaveTimerRefRef.current=null;}
@@ -35072,7 +35222,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     _dragLeaveTimerFinRef.current=setTimeout(function(){
                       _dragLeaveTimerFinRef.current=null;
                       if(_dragCountFinRef.current===0) setDragOverSection(function(cur){return cur==="fin"?null:cur;});
-                    },60);
+                    },120);
                   }}
                   onDrop={e=>{
                     if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
@@ -35198,6 +35348,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
             <input id={"pixels-pick-final-"+task.id} type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
             <input id={"pixels-pick-ref-"+task.id} type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
+            <input id={"pixels-pick-mat-"+task.id} type="file" ref={matFileInputRef} onChange={e=>handleFileUpload(e,"material")} multiple style={{display:"none"}} accept="image/*,video/*"/>
           </div>}
 
           {/* ÁUDIO */}
