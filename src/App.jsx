@@ -14495,7 +14495,10 @@ function PageCalendarioInterno({isMob}){
       }
       if(ev.recurrence==="yearly"){
         if(_pastEnd) return false;
-        return ev.date.slice(5,10)===dm && ev.date<=dIso;
+        // Bidirecional: aparece em TODO ano no mesmo mes/dia, incluindo anos ANTES do evento original.
+        // Ex: criar 15/11/2027 c/ recorrencia anual -> aparece 15/11/2026, 15/11/2025, etc.
+        // (Datas comemorativas sao "todo ano" independente de quando cadastradas.)
+        return ev.date.slice(5,10)===dm;
       }
       // Multi-dia: se tem end_date, evento aparece em todos os dias do intervalo [date..end_date]
       if(ev.end_date && ev.end_date>ev.date){
@@ -29010,8 +29013,18 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
                       {/* Top: logo + nome + status */}
                       <div style={{display:"flex",alignItems:"center",gap:11}}>
-                        <div style={{width:46,height:46,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:5}}>
-                          <ClientLogo clientId={cl.id} size="md"/>
+                        {/* Logo do cliente + badge circular com foto do usuario (Rodrigo/Douglas/etc) */}
+                        <div style={{position:"relative",flexShrink:0}}>
+                          <div style={{width:46,height:46,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:5}}>
+                            <ClientLogo clientId={cl.id} size="md"/>
+                          </div>
+                          {user.name && <div title={user.name}
+                            style={{position:"absolute",right:-5,bottom:-5,width:22,height:22,borderRadius:"50%",border:"2px solid #fff",overflow:"hidden",background:(cl.color||"#64748b"),boxShadow:"0 2px 5px rgba(15,23,42,.18)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9.5,fontWeight:800,lineHeight:1}}>
+                            {user.photo
+                              ? <img src={user.photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                              : String(user.name||"?").trim().charAt(0).toUpperCase()
+                            }
+                          </div>}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
@@ -61696,36 +61709,113 @@ function _EventosPlanner({isMob}){
   </div>;
 }
 
-// DateField moderno pro modal Evento: chip clicável que abre calendário nativo
-// (input type=date fica invisível por cima; visual bonito)
+// DateField MODERNO pro modal Evento — calendario custom com paleta laranja (categoria evento)
+// Popup absoluto com header de mes, grid de dias, footer com Hoje/Fechar.
 function _EvDateField({value, onChange, placeholder}){
-  const _inpRef = useRef(null);
+  const [open,setOpen] = useState(false);
   const _hasVal = !!value;
   const _labelBR = _hasVal ? (value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4)) : (placeholder||"Selecionar data");
-  const _open = function(){
-    try{
-      if(_inpRef.current){
-        if(typeof _inpRef.current.showPicker==="function") _inpRef.current.showPicker();
-        else _inpRef.current.focus();
-      }
-    }catch(_){ if(_inpRef.current) _inpRef.current.focus(); }
+  const _initDate = _hasVal ? new Date(value+"T12:00:00") : new Date();
+  const [viewMonth,setViewMonth] = useState(_initDate.getMonth());
+  const [viewYear,setViewYear] = useState(_initDate.getFullYear());
+  const _MESES = ["Janeiro","Fevereiro","Marco","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const _DIAS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
+  const _daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const _firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const [selY,selM,selD] = _hasVal ? [parseInt(value.slice(0,4)), parseInt(value.slice(5,7))-1, parseInt(value.slice(8,10))] : [-1,-1,-1];
+  const _pickDay = function(d){
+    const iso = viewYear+"-"+String(viewMonth+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    if(typeof onChange==="function") onChange(iso);
+    setOpen(false);
   };
-  return <div onClick={function(e){e.stopPropagation();_open();}}
-    style={{display:"flex",alignItems:"center",gap:8,background:_hasVal?"#fff":"#fafbfc",border:"1px solid "+(_hasVal?"#f9731633":"#e2e8f0"),borderRadius:9,padding:"0 12px",height:38,fontSize:13,color:_hasVal?"#0f172a":"#94a3b8",fontWeight:_hasVal?700:500,fontFamily:"inherit",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
-    onMouseEnter={function(e){e.currentTarget.style.borderColor="#f9731666";e.currentTarget.style.background="#fff";}}
-    onMouseLeave={function(e){e.currentTarget.style.borderColor=_hasVal?"#f9731633":"#e2e8f0";e.currentTarget.style.background=_hasVal?"#fff":"#fafbfc";}}>
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={_hasVal?"#f97316":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-    <span style={{whiteSpace:"nowrap",flex:1}}>{_labelBR}</span>
-    {_hasVal && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();if(typeof onChange==="function") onChange("");}} title="Limpar"
-      style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
-      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>}
-    <input ref={_inpRef} type="date" value={value||""} onChange={function(e){if(typeof onChange==="function") onChange(e.target.value);}}
-      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+  const _prevMonth = function(){ if(viewMonth===0){setViewMonth(11);setViewYear(y=>y-1);}else setViewMonth(m=>m-1); };
+  const _nextMonth = function(){ if(viewMonth===11){setViewMonth(0);setViewYear(y=>y+1);}else setViewMonth(m=>m+1); };
+  const _today = new Date(); _today.setHours(0,0,0,0);
+  return <div style={{position:"relative",width:"100%"}}>
+    <div onClick={function(e){e.stopPropagation();setOpen(function(v){return !v;});}}
+      style={{display:"flex",alignItems:"center",gap:8,background:_hasVal?"#fff":"#fafbfc",border:"1px solid "+(_hasVal?"#f9731633":"#e2e8f0"),borderRadius:9,padding:"0 12px",height:38,fontSize:13,color:_hasVal?"#0f172a":"#94a3b8",fontWeight:_hasVal?700:500,fontFamily:"inherit",cursor:"pointer",transition:"all .12s",userSelect:"none",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor="#f9731666";e.currentTarget.style.background="#fff";}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=_hasVal?"#f9731633":"#e2e8f0";e.currentTarget.style.background=_hasVal?"#fff":"#fafbfc";}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={_hasVal?"#f97316":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span style={{whiteSpace:"nowrap",flex:1}}>{_labelBR}</span>
+      {_hasVal && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();if(typeof onChange==="function") onChange("");setOpen(false);}} title="Limpar"
+        style={{background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
+        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+        onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>}
+    </div>
+    {open && <>
+      {/* Backdrop pra fechar ao clicar fora */}
+      <div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,zIndex:299}}/>
+      {/* Calendario popup */}
+      <div onClick={function(e){e.stopPropagation();}}
+        style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:300,background:"#fff",border:"1px solid #fed7aa",borderRadius:14,boxShadow:"0 16px 40px rgba(249,115,22,0.18), 0 3px 10px rgba(15,23,42,0.06)",padding:"12px 14px",width:260,fontFamily:"'Inter',system-ui,sans-serif"}}>
+        {/* Header: navegacao de mes */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <button type="button" onClick={_prevMonth}
+            style={{width:26,height:26,borderRadius:"50%",border:"1px solid #fed7aa",background:"#fff7ed",color:"#f97316",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f97316";e.currentTarget.style.color="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#fff7ed";e.currentTarget.style.color="#f97316";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+            <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,textTransform:"capitalize"}}>{_MESES[viewMonth].toLowerCase()}</span>
+            <span style={{color:"#94a3b8",fontWeight:600,fontSize:12,fontFeatureSettings:"'tnum'"}}>{viewYear}</span>
+          </div>
+          <button type="button" onClick={_nextMonth}
+            style={{width:26,height:26,borderRadius:"50%",border:"1px solid #fed7aa",background:"#fff7ed",color:"#f97316",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f97316";e.currentTarget.style.color="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#fff7ed";e.currentTarget.style.color="#f97316";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        {/* Dias da semana */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:6,gap:2}}>
+          {_DIAS.map(function(d){return <div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,padding:"3px 0",textTransform:"uppercase"}}>{d}</div>;})}
+        </div>
+        {/* Grid de dias */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+          {Array.from({length:_firstDay},function(_,i){return <div key={"e"+i}/>;})}
+          {Array.from({length:_daysInMonth},function(_,i){
+            const d=i+1;
+            const isSel = selY===viewYear && selM===viewMonth && selD===d;
+            const dt = new Date(viewYear, viewMonth, d);
+            const isWeekend = dt.getDay()===0 || dt.getDay()===6;
+            const isToday = dt.getTime()===_today.getTime();
+            return <button key={d} type="button" onClick={function(){_pickDay(d);}}
+              style={{textAlign:"center",padding:0,height:30,borderRadius:"50%",cursor:"pointer",fontSize:12.5,fontWeight:isSel?800:(isToday?700:500),
+                border:isToday&&!isSel?"1.5px solid #f97316":"1.5px solid transparent",
+                background:isSel?"linear-gradient(135deg,#f97316,#ea580c)":"transparent",
+                color:isSel?"#fff":isToday?"#f97316":isWeekend?"#fb923c":"#0f172a",
+                boxShadow:isSel?"0 6px 14px rgba(249,115,22,0.35)":"none",
+                transition:"all .12s",fontFeatureSettings:"'tnum'",fontFamily:"inherit"}}
+              onMouseEnter={function(e){if(!isSel){e.currentTarget.style.background="#fff7ed";e.currentTarget.style.color=isToday?"#ea580c":"#0f172a";}}}
+              onMouseLeave={function(e){if(!isSel){e.currentTarget.style.background="transparent";e.currentTarget.style.color=isToday?"#f97316":isWeekend?"#fb923c":"#0f172a";}}}>
+              {d}
+            </button>;
+          })}
+        </div>
+        {/* Rodape: Hoje + Fechar */}
+        <div style={{marginTop:10,paddingTop:9,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
+          <button type="button" onClick={function(){const t=new Date();const iso=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0");if(typeof onChange==="function") onChange(iso);setViewMonth(t.getMonth());setViewYear(t.getFullYear());setOpen(false);}}
+            style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#ea580c",cursor:"pointer",fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f97316";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#f97316";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#fff7ed";e.currentTarget.style.color="#ea580c";e.currentTarget.style.borderColor="#fed7aa";}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Hoje
+          </button>
+          <button type="button" onClick={function(){setOpen(false);}}
+            style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,fontWeight:600,padding:"6px 10px",borderRadius:8,transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#475569";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+            Fechar
+          </button>
+        </div>
+      </div>
+    </>}
   </div>;
 }
 
