@@ -33017,6 +33017,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         })();
         window._sb.from("tasks").update({
           title: formattedTitle,
+          // Status: pega do _prevTask (que ja foi atualizado por _moveTo se user trocou coluna via seletor)
+          // Evita perder mudanca de status feita pelo seletor dentro do modal
+          status: _prevTask.status || task.status,
+          col_entered_at: _prevTask.colEnteredAt || null,
           assignee: assignees[0] || "",
           assignees: assignees || [],
           watchers: watchers || [],
