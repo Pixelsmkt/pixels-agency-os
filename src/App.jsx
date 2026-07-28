@@ -33015,12 +33015,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           const _local = (comments||[]).filter(function(c){return !_ids.has(c.id);});
           return [..._p, ..._local];
         })();
-        window._sb.from("tasks").update({
+        // UPSERT (nao .update): cria row se ainda nao existe no Supabase (fix criar 2x pelo calendario)
+        // Draft do calendario existe so no state local ate o save. .update nao acha, upsert insere.
+        window._sb.from("tasks").upsert({
+          id: task.id,
           title: formattedTitle,
           // Status: pega do _prevTask (que ja foi atualizado por _moveTo se user trocou coluna via seletor)
-          // Evita perder mudanca de status feita pelo seletor dentro do modal
           status: _prevTask.status || task.status,
-          col_entered_at: _prevTask.colEnteredAt || null,
+          col_entered_at: _prevTask.colEnteredAt || task.colEnteredAt || new Date().toISOString(),
+          created_at: _prevTask.createdAt || task.createdAt || null,
+          created_by: _prevTask.createdBy || task.createdBy || (user&&user.name) || null,
           assignee: assignees[0] || "",
           assignees: assignees || [],
           watchers: watchers || [],
@@ -33042,7 +33046,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           sector: sector || null,
           admin_tag: (typeof isAdmin!=="undefined" && isAdmin) ? ((adminTag||"").trim()||null) : (_prevTask.adminTag||null),
           tags: (typeof isAdmin!=="undefined" && isAdmin) ? (tags||[]) : (_prevTask.tags||[]),
-        }).eq("id", task.id)
+        }, {onConflict:"id"})
           .then(function(r){
             if(r && r.error){
               console.warn("[save persist error]", r.error.message||r.error);
