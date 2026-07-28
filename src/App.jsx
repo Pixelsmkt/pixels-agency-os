@@ -28007,7 +28007,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["senhas","Senhas"],["storage","Storage"]];
+const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["senhas","Senhas"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -28066,7 +28066,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     loadProfiles();
   },[]);
 
-  const [mainTab,setMainTab]=useState("equipe");
+  const [mainTab,setMainTab]=useState("clientes");
   const [teamRev,setTeamRev]=useState(0);
   useEffect(()=>{
     const onTeamUpdate=()=>setTeamRev(r=>r+1);
@@ -28095,6 +28095,20 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   // Map { client_id: [ {id,email,primary_unit,name,photo}, ... ] }
   const [clientAuthUsers,setClientAuthUsers]=useState({});
   const [clientAuthLoading,setClientAuthLoading]=useState(false);
+  // Mapa email -> senha (do team_passwords category=cliente) pra sócio consultar
+  const [clientPasswordsByEmail,setClientPasswordsByEmail]=useState({});
+  const [revealedPasswords,setRevealedPasswords]=useState({});
+  const reloadClientPasswords=async()=>{
+    try{
+      const sb=window._sb;
+      const{data,error}=await sb.from("team_passwords").select("username,password").eq("category","cliente");
+      if(error||!data)return;
+      const map={};
+      data.forEach(r=>{ if(r.username && r.password) map[String(r.username).toLowerCase().trim()]=r.password; });
+      setClientPasswordsByEmail(map);
+    }catch(e){console.warn("[acessos] reloadClientPasswords:",e);}
+  };
+  useEffect(()=>{reloadClientPasswords();},[]);
   const reloadClientAuthUsers=async()=>{
     try{
       setClientAuthLoading(true);
@@ -28618,6 +28632,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           const cur=clientAccess[novoCliente.client_id]||defaultClientAccess(_clSel||{id:novoCliente.client_id,name:""});
           saveClientAccess(novoCliente.client_id,{...cur,enabled:true,login:payload.email});
           reloadClientAuthUsers();
+          reloadClientPasswords();
           setNovoClienteOpen(false);
           setNovoClienteBusy(false);
         }catch(e){
@@ -28963,9 +28978,19 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                   <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Acessos do portal</div>
                   <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
                     {_comAcesso.length} {_comAcesso.length===1?"cliente ativo":"clientes ativos"}
-                    {_semAcesso.length>0 && <span> · {_semAcesso.length} sem acesso criado</span>}
                   </div>
                 </div>
+                {isPartner && <button onClick={()=>{
+                  const _firstClient=_semAcesso[0]||_clientesPortal[0]||{id:"",name:""};
+                  setNovoCliente({client_id:_firstClient.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});
+                  setNovoClienteOpen(true);
+                }} type="button"
+                  style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"9px 14px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 12px rgba(22,163,74,.32)",flexShrink:0,fontFamily:"inherit",letterSpacing:-.1,transition:"all .15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 18px rgba(22,163,74,.45)";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(22,163,74,.32)";e.currentTarget.style.transform="";}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Novo acesso
+                </button>}
               </div>
 
               {/* ═════ Bloco ATIVOS ═════ */}
@@ -28977,7 +29002,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
                   {_comAcesso.map(({cl,user})=>{
                     const _isBioter = cl.id==="bioter";
-                    const _unitTxt = _isBioter ? (_unitLabel(user.primary_unit)||"—") : "Portal exclusivo";
+                    // Bioter mostra unidade; outros clientes mostram o nome do cliente
+                    const _unitTxt = _isBioter ? (_unitLabel(user.primary_unit)||"—") : (cl.name||"Cliente");
                     return <div key={user.id}
                       style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s",position:"relative"}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"55";e.currentTarget.style.boxShadow="0 4px 14px "+cl.color+"20";}}
@@ -28998,6 +29024,39 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                         <span style={{color:"#334155",fontSize:12,fontFamily:"monospace",wordBreak:"break-all",fontWeight:500}}>{user.email||"—"}</span>
                       </div>
+                      {/* Senha (do cofre team_passwords) — sócios podem revelar/copiar */}
+                      {isPartner && (()=>{
+                        const _emailKey=String(user.email||"").toLowerCase().trim();
+                        const _pwd=clientPasswordsByEmail[_emailKey]||"";
+                        const _revealed=!!revealedPasswords[_emailKey];
+                        const _hasPwd=!!_pwd;
+                        return <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,padding:"7px 11px",display:"flex",alignItems:"center",gap:7}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                          <span style={{color:_hasPwd?"#334155":"#94a3b8",fontSize:12,fontFamily:"monospace",wordBreak:"break-all",fontWeight:500,flex:1,minWidth:0,letterSpacing:_revealed||!_hasPwd?"normal":".15em"}}>
+                            {_hasPwd?(_revealed?_pwd:"•".repeat(Math.min(_pwd.length,12))):"sem senha no cofre"}
+                          </span>
+                          {_hasPwd && <button type="button" onClick={(e)=>{e.stopPropagation();setRevealedPasswords(p=>({...p,[_emailKey]:!p[_emailKey]}));}}
+                            title={_revealed?"Ocultar senha":"Mostrar senha"}
+                            style={{background:"transparent",border:"none",padding:3,cursor:"pointer",color:"#64748b",borderRadius:5,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                            onMouseEnter={e=>e.currentTarget.style.color="#0f172a"}
+                            onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
+                            {_revealed
+                              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            }
+                          </button>}
+                          {_hasPwd && <button type="button" onClick={(e)=>{
+                              e.stopPropagation();
+                              try{navigator.clipboard.writeText(_pwd);if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha copiada!",2000);}catch(err){}
+                            }}
+                            title="Copiar senha"
+                            style={{background:"transparent",border:"none",padding:3,cursor:"pointer",color:"#64748b",borderRadius:5,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                            onMouseEnter={e=>e.currentTarget.style.color=C.a}
+                            onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                          </button>}
+                        </div>;
+                      })()}
                       {/* Chip unidade / portal exclusivo */}
                       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                         {_isBioter
@@ -29005,9 +29064,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg>
                               {_unitTxt}
                             </span>
-                          : <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                          : <span style={{background:(cl.color||"#64748b")+"15",color:cl.color||"#334155",border:"1px solid "+(cl.color||"#e2e8f0")+"40",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                              Portal exclusivo
+                              {_unitTxt}
                             </span>
                         }
                       </div>
@@ -29033,40 +29092,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 </div>
               </div>}
 
-              {/* ═════ Bloco SEM ACESSO ═════ */}
-              {_semAcesso.length>0 && <div>
-                <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:"#cbd5e1"}}/>
-                  Sem acesso ainda · {_semAcesso.length}
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-                  {_semAcesso.map(cl=>(
-                    <div key={cl.id} style={{background:"#fafbfc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,transition:"all .15s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.background="#fff";e.currentTarget.style.borderStyle="solid";}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderStyle="dashed";}}>
-                      <div style={{width:40,height:40,borderRadius:10,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
-                        <ClientLogo clientId={cl.id} size="sm"/>
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                        <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"Sem setor"}</div>
-                      </div>
-                      {isPartner && <button onClick={()=>{setNovoCliente({client_id:cl.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
-                        title={"Criar acesso pra "+cl.name} type="button"
-                        style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:8,padding:"7px 12px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 2px 8px rgba(22,163,74,.32)",flexShrink:0,fontFamily:"inherit"}}
-                        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(22,163,74,.45)";e.currentTarget.style.transform="translateY(-1px)";}}
-                        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(22,163,74,.32)";e.currentTarget.style.transform="";}}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        Criar
-                      </button>}
-                    </div>
-                  ))}
-                </div>
-              </div>}
-
-              {/* Empty state global */}
-              {_comAcesso.length===0 && _semAcesso.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>
-                Nenhum cliente cadastrado ainda.
+              {/* Empty state — quando não há nenhum acesso criado */}
+              {_comAcesso.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
+                <div style={{fontWeight:600,color:"#334155",marginBottom:6}}>Nenhum acesso criado ainda</div>
+                <div style={{fontSize:12}}>Clique em <strong style={{color:"#15803d"}}>+ Novo acesso</strong> pra liberar o portal pra um cliente.</div>
               </div>}
             </>;
           })()}
@@ -34911,114 +34940,110 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>);
               })()}
 
-              {/* ── SEÇÃO 0: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
-              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
-                const totalMat=imgMat.length+vidMat.length;
-                const _matActive=dragOverSection==="mat";
-                const _matCanEdit=canEditRef||canEdit;
+              {/* ── SEÇÃO 0: ARQUIVO FINAL — designer/editor sobem aqui ── */}
+              {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
+                const totalFin=imgFin.length+vidFin.length;
+                const _finActive=dragOverSection==="fin";
                 return(<div
                   onDragEnter={e=>{
                     e.preventDefault();e.stopPropagation();
-                    if(!_matCanEdit)return;
-                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
-                    _dragCountMatRef.current++;
-                    if(dragOverSection!=="mat")setDragOverSection("mat");
+                    if(!canEdit)return;
+                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
+                    _dragCountFinRef.current++;
+                    if(dragOverSection!=="fin")setDragOverSection("fin");
                   }}
-                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_matCanEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit)e.dataTransfer.dropEffect="copy";}}
                   onDragLeave={e=>{
                     e.preventDefault();e.stopPropagation();
-                    _dragCountMatRef.current=Math.max(0,_dragCountMatRef.current-1);
-                    if(_dragLeaveTimerMatRef.current) clearTimeout(_dragLeaveTimerMatRef.current);
-                    _dragLeaveTimerMatRef.current=setTimeout(function(){
-                      _dragLeaveTimerMatRef.current=null;
-                      if(_dragCountMatRef.current===0) setDragOverSection(function(cur){return cur==="mat"?null:cur;});
+                    _dragCountFinRef.current=Math.max(0,_dragCountFinRef.current-1);
+                    if(_dragLeaveTimerFinRef.current) clearTimeout(_dragLeaveTimerFinRef.current);
+                    _dragLeaveTimerFinRef.current=setTimeout(function(){
+                      _dragLeaveTimerFinRef.current=null;
+                      if(_dragCountFinRef.current===0) setDragOverSection(function(cur){return cur==="fin"?null:cur;});
                     },120);
                   }}
                   onDrop={e=>{
-                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
-                    _dragCountMatRef.current=0;
-                    handleFilesDrop(e,"material");
+                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
+                    _dragCountFinRef.current=0;
+                    handleFilesDrop(e,"final");
                   }}
-                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_matActive?"2px dashed #0891b2":"2px dashed transparent",background:_matActive?"#ecfeff":"transparent",padding:_matActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
-                  {_matActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #a5f3fc",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0891b2",boxShadow:"0 8px 22px rgba(8,145,178,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="paperclip" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Materiais</span></div>
+                  style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
                   </div>}
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalMat>0?14:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #cffafe"}}><Ico n="paperclip" size={16}/></div>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalFin>0?14:10,marginTop:6}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #e2e8f0"}}><Ico n="image" size={16}/></div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
-                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo final {totalFin>0&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalFin}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>entrega final da equipe — pronto pra avaliação</div>
                     </div>
-                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
+                    {totalFin>0&&<button onClick={function(){downloadAll([].concat(imgFin,vidFin),"Arquivos finais");}} title="Baixa todos os arquivos finais"
                       style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
-                    {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
-                      style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="#0891b2";e.currentTarget.style.boxShadow="0 1px 2px rgba(8,145,178,0.15)";}}>
+                    {canEdit&&<label htmlFor={"pixels-pick-final-"+task.id}
+                      style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.12)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#1e293b";e.currentTarget.style.boxShadow="0 3px 10px rgba(15,23,42,0.3)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.12)";}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
                     </label>}
                   </div>
-                  {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
-                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
-                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
-                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
+                  {totalFin===0&&(<div style={{background:"#f8fafc",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",marginBottom:10,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}><Ico n="image" size={20}/></div>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{canEdit?"Sem entrega ainda":"Sem arquivos finais entregues"}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{canEdit?"Arraste o arquivo final aqui ou clique em Adicionar":"A equipe ainda não subiu a versão final."}</div>
                   </div>)}
-                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
-                    {imgMat.map((a,i)=>(
-                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
+                  {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
+                    {imgFin.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
                         <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                           onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",textAlign:"center"}}>
-                          <Ico n="image" size={22} color="#0891b2"/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#64748b"/>
                           <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
                           <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            style={{background:"#0891b2",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
                             Abrir <Ico n="external" size={9} color="#fff"/>
                           </a>
                         </div>
-                        <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
-                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("mat #"+(i+1))}</span>
-                        </div>
+                        <div style={{position:"absolute",top:6,left:6,background:"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)"}}>#{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar material"
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar imagem"
                             style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(8,145,178,0.85)"}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           </button>
-                          {_matCanEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </button>}
                         </div>
                       </div>
                     ))}
                   </div>}
-                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
+                  {vidFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidFin.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",background:"#0f172a",transition:"all .15s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#0f172a";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.15)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+                      {/* Player nativo — mostra primeiro frame + controls pra play inline */}
                       <video src={a.url} controls preload="metadata" playsInline
                         style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
-                      <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
-                      </div>
+                      <div style={{position:"absolute",top:6,left:6,background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>FINAL · {a.name?a.name.slice(0,14):"vídeo"}</div>
                       <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                         <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
                           style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(15,23,42,0.95)";}}
                           onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         </button>
-                        {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                        {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
                           style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
                           onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
                           onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
@@ -35196,110 +35221,114 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>);
               })()}
 
-              {/* ── SEÇÃO 2: ARQUIVOS PRONTOS — designer/editor sobem aqui ── */}
-              {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
-                const totalFin=imgFin.length+vidFin.length;
-                const _finActive=dragOverSection==="fin";
+              {/* ── SEÇÃO 2: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
+              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
+                const totalMat=imgMat.length+vidMat.length;
+                const _matActive=dragOverSection==="mat";
+                const _matCanEdit=canEditRef||canEdit;
                 return(<div
                   onDragEnter={e=>{
                     e.preventDefault();e.stopPropagation();
-                    if(!canEdit)return;
-                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
-                    _dragCountFinRef.current++;
-                    if(dragOverSection!=="fin")setDragOverSection("fin");
+                    if(!_matCanEdit)return;
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current++;
+                    if(dragOverSection!=="mat")setDragOverSection("mat");
                   }}
-                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_matCanEdit)e.dataTransfer.dropEffect="copy";}}
                   onDragLeave={e=>{
                     e.preventDefault();e.stopPropagation();
-                    _dragCountFinRef.current=Math.max(0,_dragCountFinRef.current-1);
-                    if(_dragLeaveTimerFinRef.current) clearTimeout(_dragLeaveTimerFinRef.current);
-                    _dragLeaveTimerFinRef.current=setTimeout(function(){
-                      _dragLeaveTimerFinRef.current=null;
-                      if(_dragCountFinRef.current===0) setDragOverSection(function(cur){return cur==="fin"?null:cur;});
+                    _dragCountMatRef.current=Math.max(0,_dragCountMatRef.current-1);
+                    if(_dragLeaveTimerMatRef.current) clearTimeout(_dragLeaveTimerMatRef.current);
+                    _dragLeaveTimerMatRef.current=setTimeout(function(){
+                      _dragLeaveTimerMatRef.current=null;
+                      if(_dragCountMatRef.current===0) setDragOverSection(function(cur){return cur==="mat"?null:cur;});
                     },120);
                   }}
                   onDrop={e=>{
-                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
-                    _dragCountFinRef.current=0;
-                    handleFilesDrop(e,"final");
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current=0;
+                    handleFilesDrop(e,"material");
                   }}
-                  style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
-                  {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_matActive?"2px dashed #0891b2":"2px dashed transparent",background:_matActive?"#ecfeff":"transparent",padding:_matActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_matActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #a5f3fc",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0891b2",boxShadow:"0 8px 22px rgba(8,145,178,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="paperclip" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Materiais</span></div>
                   </div>}
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalFin>0?14:10,marginTop:6}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #e2e8f0"}}><Ico n="image" size={16}/></div>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalMat>0?14:10}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #cffafe"}}><Ico n="paperclip" size={16}/></div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo final {totalFin>0&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalFin}</span>}</div>
-                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>entrega final da equipe — pronto pra avaliação</div>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
                     </div>
-                    {totalFin>0&&<button onClick={function(){downloadAll([].concat(imgFin,vidFin),"Arquivos finais");}} title="Baixa todos os arquivos finais"
+                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
                       style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
                       onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                       Baixar tudo
                     </button>}
-                    {canEdit&&<label htmlFor={"pixels-pick-final-"+task.id}
-                      style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.12)"}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#1e293b";e.currentTarget.style.boxShadow="0 3px 10px rgba(15,23,42,0.3)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.12)";}}>
+                    {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
+                      style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#0891b2";e.currentTarget.style.boxShadow="0 1px 2px rgba(8,145,178,0.15)";}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                       Adicionar
                     </label>}
                   </div>
-                  {totalFin===0&&(<div style={{background:"#f8fafc",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
-                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",marginBottom:10,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}><Ico n="image" size={20}/></div>
-                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{canEdit?"Sem entrega ainda":"Sem arquivos finais entregues"}</div>
-                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{canEdit?"Arraste o arquivo final aqui ou clique em Adicionar":"A equipe ainda não subiu a versão final."}</div>
+                  {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
                   </div>)}
-                  {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
-                    {imgFin.map((a,i)=>(
-                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
+                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
+                    {imgMat.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
                         <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                           onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
-                          <Ico n="image" size={22} color="#64748b"/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#0891b2"/>
                           <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
                           <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            style={{background:"#0891b2",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
                             Abrir <Ico n="external" size={9} color="#fff"/>
                           </a>
                         </div>
-                        <div style={{position:"absolute",top:6,left:6,background:"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)"}}>#{i+1}</div>
+                        <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("mat #"+(i+1))}</span>
+                        </div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar imagem"
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar material"
                             style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(8,145,178,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                           </button>
-                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                          {_matCanEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                           </button>}
                         </div>
                       </div>
                     ))}
                   </div>}
-                  {vidFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidFin.map(a=>{
+                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",background:"#0f172a",transition:"all .15s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#0f172a";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.15)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-                      {/* Player nativo — mostra primeiro frame + controls pra play inline */}
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
                       <video src={a.url} controls preload="metadata" playsInline
                         style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
-                      <div style={{position:"absolute",top:6,left:6,background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>FINAL · {a.name?a.name.slice(0,14):"vídeo"}</div>
+                      <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
+                      </div>
                       <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                         <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
                           style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(15,23,42,0.95)";}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
                           onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         </button>
-                        {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                        {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
                           style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
                           onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
                           onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
@@ -48586,7 +48615,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   const clStatus=cl.payment?.status||"pendente";
   const clPayDate=cl.payment?.date||"—";
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",padding:isMob?"14px 12px 32px":"20px 28px 40px",boxSizing:"border-box",width:"100%"}}>
+  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1920,margin:"0 auto",padding:isMob?"14px 12px 32px":"20px 20px 40px",boxSizing:"border-box",width:"100%"}}>
 
     {/* Header — sem emoji, tipografia limpa */}
     <div>
@@ -48660,13 +48689,13 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       </button>}
     </div>}
 
-    {/* Tabs — Ico em vez de emoji, hover sutil */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap"}}>
+    {/* Tabs — sempre em 1 linha. Se nao couber, scroll horizontal (padrao SaaS moderno pra muitas tabs). */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
       {TABS.map(function(t){
         const active=tab===t.id;
         return <button key={t.id} onClick={function(){setTab(t.id);}}
-          style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 16px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",letterSpacing:-.1,transition:"color .12s"}}>
-          <Ico n={t.ico||"dot"} size={14}/>
+          style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
+          <Ico n={t.ico||"dot"} size={13}/>
           {t.label}
         </button>;
       })}
