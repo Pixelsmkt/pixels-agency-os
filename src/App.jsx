@@ -32911,16 +32911,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(caption!==task.caption)changed.push("texto da legenda");
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))changed.push("checklist");
     if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
-    // ── Validação: deadline < publishDate+Time (se ambos preenchidos) ──
-    // Sócios (level===1) bypassam essa regra — podem salvar com qualquer combinação de datas.
-    if(deadline&&publishDate&&!(user&&user.level===1)){
-      const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
-      const pd=new Date(publishDate+"T"+(publishTime||"11:00"));
-      if(dd>=pd){
-        pixelsToast.warning("O prazo de entrega precisa ser ANTES da data/hora de publicação.",6000);
-        return;
-      }
-    }
+    // ── Validação de datas removida ──
+    // Antes: bloqueava salvar quando prazo >= data/hora de publicação (só sócios bypassavam).
+    // User pediu pra tirar bloqueio (editores precisavam subir arquivos e ficavam presos).
+    // Agora salva livre — quem lida com datas incompatíveis vê no card, não trava upload/edição.
     // ── Auto-linkify: processa URLs em texto pra virar <a> clicáveis ──
     // Pega o conteúdo atual dos contentEditable (pode ter links digitados) e aplica autoLinkifyHTML
     const descFinal=descRef.current?autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc)):autoLinkifyHTML(sanitizeRichText(desc));
