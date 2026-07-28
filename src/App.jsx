@@ -32764,7 +32764,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const isAssigned=(Array.isArray(task.assignees)?task.assignees:task.assignee?[task.assignee]:[]).includes(user.id);
   // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
-  const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned;
+  // canEdit: editarDemanda OR level<=2 OR isAssigned OR eh executor (designer/editor sempre podem subir arquivo)
+  const _isExecutor=user&&(user.dash==="designer"||user.dash==="editor");
+  const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned||_isExecutor;
   // ── Permissão pra REFERÊNCIAS ── só quem cria cartão (sócio/coord) ou criador da própria demanda
   const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name)||user.dash==="designer"||user.dash==="editor"||user.dash==="coordinator";
 
