@@ -49228,21 +49228,27 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
             const _totMedia = (sec.images||[]).length;
             return <div key={sec.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",display:"flex",flexDirection:"column"}}>
               {_totMedia>0 && (function(){
-                const _first = (sec.images||[])[0];
-                const _isVid = _first.type && _first.type.startsWith("video/");
-                const _cap = _first.caption||"";
-                return <div style={{background:"#0f172a",aspectRatio:"16/9",position:"relative",overflow:"hidden"}}>
-                  {_isVid
-                    ? <><video src={_first.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                        <span style={{width:52,height:52,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.5)"}}>
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                        </span>
-                      </div></>
-                    : <img src={_first.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-                  }
-                  {_cap && <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"18px 12px 10px",background:"linear-gradient(to top, rgba(15,23,42,.85), rgba(15,23,42,0))",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:-.1,lineHeight:1.25,pointerEvents:"none"}}>{_cap}</div>}
-                  {_totMedia>1 && <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3}}>+{_totMedia-1}</span>}
+                const _imgs = sec.images||[];
+                const _n = _imgs.length;
+                // 1 imagem = full width; 2+ = grid 2col (mesmo tamanho)
+                const _cols = _n===1 ? "1fr" : "1fr 1fr";
+                return <div style={{background:"#0f172a",display:"grid",gridTemplateColumns:_cols,gap:2}}>
+                  {_imgs.map(function(m,i){
+                    const _isVid = m.type && m.type.startsWith("video/");
+                    const _cap = m.caption||"";
+                    return <div key={i} style={{position:"relative",background:"#0f172a",overflow:"hidden",minWidth:0}}>
+                      {_isVid
+                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"auto",display:"block"}}/>
+                          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                            <span style={{width:52,height:52,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.5)"}}>
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                            </span>
+                          </div></>
+                        : <img src={m.url} alt="" style={{width:"100%",height:"auto",display:"block"}} referrerPolicy="no-referrer"/>
+                      }
+                      {_cap && <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"18px 12px 10px",background:"linear-gradient(to top, rgba(15,23,42,.85), rgba(15,23,42,0))",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:-.1,lineHeight:1.25,pointerEvents:"none"}}>{_cap}</div>}
+                    </div>;
+                  })}
                 </div>;
               })()}
               <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:9,flex:1}}>
@@ -49264,25 +49270,7 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
                   </div>}
                 </div>
                 {sec.description && <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{sec.description}</div>}
-                {_totMedia>1 && <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:4}}>
-                  {(sec.images||[]).slice(1,5).map(function(m,i){
-                    const _isVid = m.type && m.type.startsWith("video/");
-                    const _cap = m.caption||"";
-                    return <div key={i} style={{display:"flex",flexDirection:"column",gap:3,minWidth:0}}>
-                      <div style={{aspectRatio:"1/1",background:"#0f172a",borderRadius:6,overflow:"hidden",position:"relative"}}>
-                        {_isVid
-                          ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                            </div></>
-                          : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-                        }
-                      </div>
-                      {_cap && <div title={_cap} style={{color:"#475569",fontSize:9.5,fontWeight:700,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cap}</div>}
-                    </div>;
-                  })}
-                  {_totMedia>5 && <div style={{aspectRatio:"1/1",background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_totMedia-5}</div>}
-                </div>}
+
               </div>
             </div>;
           })}
