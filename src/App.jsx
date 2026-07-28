@@ -28116,6 +28116,22 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     try{
       setClientAuthLoading(true);
       const sb=window._sb;
+      // 1) Buscar contatos de todos os clientes (fallback pra foto)
+      // Foto do Douglas/Rodrigo foi cadastrada em "Contatos do Cliente" (clients.contatos JSONB)
+      // Mapa: contactsByClient[client_id] = [{name, email, photo, ...}]
+      let contactsByClient={};
+      try{
+        const{data:_cdata}=await sb.from("clients").select("client_id,contatos");
+        if(Array.isArray(_cdata)){
+          _cdata.forEach(function(row){
+            const _cid=row.client_id||"";
+            const _list=Array.isArray(row.contatos)?row.contatos:[];
+            if(_cid && _list.length>0) contactsByClient[_cid]=_list;
+          });
+        }
+      }catch(_e){ console.warn("[acessos] load contatos:", _e && _e.message ? _e.message : _e); }
+
+      // 2) Buscar auth users tipo cliente
       const{data,error}=await sb.from("profiles")
         .select("id,name,primary_client,primary_unit,profile_data")
         .eq("user_type","client");
@@ -28125,12 +28141,30 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         const cid=p.primary_client||"";
         if(!cid)return;
         const pd=p.profile_data||{};
+        // Fallback de foto: se profile_data.photo vazio, tenta achar em contatos do cliente por email OU nome
+        let _photo = pd.photo||"";
+        if(!_photo){
+          const _contacts = contactsByClient[cid]||[];
+          const _uemail = String(pd.email||"").toLowerCase().trim();
+          const _uname = String(p.name||"").toLowerCase().trim();
+          const _uFirstName = _uname.split(" ")[0];
+          const _match = _contacts.find(function(c){
+            const _cemail = String(c.email||"").toLowerCase().trim();
+            const _cname = String(c.name||"").toLowerCase().trim();
+            if(_uemail && _cemail && _uemail===_cemail) return true;
+            if(_uname && _cname && _uname===_cname) return true;
+            // Match parcial pelo primeiro nome se o contato inclui o primeiro nome
+            if(_uFirstName && _cname && _cname.indexOf(_uFirstName)>=0) return true;
+            return false;
+          });
+          if(_match && _match.photo) _photo = _match.photo;
+        }
         if(!byClient[cid])byClient[cid]=[];
         byClient[cid].push({
           id:p.id,
           name:p.name||"",
           email:pd.email||"",
-          photo:pd.photo||"",
+          photo:_photo,
           primary_unit:p.primary_unit||"",
           primary_client:cid,
           client_id:cid,
@@ -45351,9 +45385,19 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
   const WEEKDAYS=PORTAL_WEEKDAYS;
 
   // Mostra: agendados + publicados + aprovacao_final (esses 3 estados ja foram aprovados pelo cliente)
+  // Filtro por unidade Bioter: se usuario tem unidade travada (ex: Rodrigo=chapeco), so mostra posts dessa unidade
+  // Cards "grupo" (Grupo Bioter) tambem aparecem porque aplicam a todos
+  const _isBioter = cl && cl.id==="bioter";
+  const _filterUnit = _isBioter && selUnit && selUnit!=="grupo" && selUnit!=="_minhas_";
   const publicacoes=(tasks||[]).filter(function(t){
     if(t.deletedAt||!t.publishDate||t.client!==cl.id)return false;
-    return t.status==="agendado"||t.status==="publicado"||t.status==="aprovacao_final";
+    if(t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="aprovacao_final")return false;
+    if(_filterUnit){
+      const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+      // Aceita: unidade especifica OU grupo (posts do grupo inteiro tambem aparecem pra cada unidade)
+      if(units.indexOf(selUnit)===-1 && units.indexOf("grupo")===-1) return false;
+    }
+    return true;
   }).sort(function(a,b){return (a.publishTime||"00:00").localeCompare(b.publishTime||"00:00");});
 
   const calDays=function(){
