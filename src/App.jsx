@@ -49230,6 +49230,7 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
               {_totMedia>0 && (function(){
                 const _first = (sec.images||[])[0];
                 const _isVid = _first.type && _first.type.startsWith("video/");
+                const _cap = _first.caption||"";
                 return <div style={{background:"#0f172a",aspectRatio:"16/9",position:"relative",overflow:"hidden"}}>
                   {_isVid
                     ? <><video src={_first.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
@@ -49240,7 +49241,8 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
                       </div></>
                     : <img src={_first.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
                   }
-                  {_totMedia>1 && <span style={{position:"absolute",bottom:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3}}>+{_totMedia-1}</span>}
+                  {_cap && <div style={{position:"absolute",left:0,right:0,bottom:0,padding:"18px 12px 10px",background:"linear-gradient(to top, rgba(15,23,42,.85), rgba(15,23,42,0))",color:"#fff",fontSize:12,fontWeight:700,letterSpacing:-.1,lineHeight:1.25,pointerEvents:"none"}}>{_cap}</div>}
+                  {_totMedia>1 && <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3}}>+{_totMedia-1}</span>}
                 </div>;
               })()}
               <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:9,flex:1}}>
@@ -49262,17 +49264,21 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
                   </div>}
                 </div>
                 {sec.description && <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{sec.description}</div>}
-                {_totMedia>1 && <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginTop:4}}>
+                {_totMedia>1 && <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginTop:4}}>
                   {(sec.images||[]).slice(1,5).map(function(m,i){
                     const _isVid = m.type && m.type.startsWith("video/");
-                    return <div key={i} style={{aspectRatio:"1/1",background:"#0f172a",borderRadius:6,overflow:"hidden",position:"relative"}}>
-                      {_isVid
-                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                          </div></>
-                        : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-                      }
+                    const _cap = m.caption||"";
+                    return <div key={i} style={{display:"flex",flexDirection:"column",gap:3,minWidth:0}}>
+                      <div style={{aspectRatio:"1/1",background:"#0f172a",borderRadius:6,overflow:"hidden",position:"relative"}}>
+                        {_isVid
+                          ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                            </div></>
+                          : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
+                        }
+                      </div>
+                      {_cap && <div title={_cap} style={{color:"#475569",fontSize:9.5,fontWeight:700,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cap}</div>}
                     </div>;
                   })}
                   {_totMedia>5 && <div style={{aspectRatio:"1/1",background:"#f1f5f9",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800}}>+{_totMedia-5}</div>}
@@ -49414,23 +49420,35 @@ function _PortalPlaybookEditModal({section, accent, catSuggestions, onSave, onCl
           </div>
           {(sec.images||[]).length===0
             ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"24px 12px",textAlign:"center",color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Nenhuma mídia anexada ainda</div>
-            : <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+            : <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
                 {(sec.images||[]).map(function(m,i){
                   const _isVid = m.type && m.type.startsWith("video/");
-                  return <div key={i} style={{position:"relative",aspectRatio:"1/1",background:"#0f172a",borderRadius:8,overflow:"hidden"}}>
-                    {_isVid
-                      ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-                          <span style={{width:26,height:26,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
-                          </span>
-                        </div></>
-                      : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
-                    }
-                    <button onClick={function(){_removeMedia(i);}} type="button" title="Remover"
-                      style={{position:"absolute",top:4,right:4,background:"rgba(15,23,42,.85)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
+                  function _setCap(v){
+                    setSec(function(prev){
+                      const _imgs = (prev.images||[]).slice();
+                      _imgs[i] = Object.assign({}, _imgs[i], {caption:v});
+                      return Object.assign({}, prev, {images:_imgs});
+                    });
+                  }
+                  return <div key={i} style={{display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{position:"relative",aspectRatio:"1/1",background:"#0f172a",borderRadius:8,overflow:"hidden"}}>
+                      {_isVid
+                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                            <span style={{width:30,height:30,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                            </span>
+                          </div></>
+                        : <img src={m.url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} referrerPolicy="no-referrer"/>
+                      }
+                      <button onClick={function(){_removeMedia(i);}} type="button" title="Remover"
+                        style={{position:"absolute",top:4,right:4,background:"rgba(15,23,42,.85)",border:"none",borderRadius:"50%",width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                    <input value={m.caption||""} onChange={function(e){_setCap(e.target.value);}}
+                      placeholder={'Legenda (ex: '+(i===0?"Como gravar":i===1?"Resultado esperado":"Passo "+(i+1))+')'}
+                      style={{width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 9px",fontSize:11.5,fontFamily:"inherit",outline:"none",boxSizing:"border-box",color:"#0f172a"}}/>
                   </div>;
                 })}
               </div>
