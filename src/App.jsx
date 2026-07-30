@@ -48774,12 +48774,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
     {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
-      // Briefing no portal: SÓ gestores Pixels (level<=2) editam. Cliente vê em read-only.
-      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
+      // Briefing no portal: CLIENTE + gestor Pixels podem editar (cliente conhece a propria empresa melhor que ninguem).
       // Bioter: passa unitId pra isolar briefing por unidade.
       // "_minhas_" (multi-locked) usa o primeiro locked unit como default; "grupo" fica igual.
       const _unitForBriefing = isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null;
-      return <BriefingFormCanonico key={_unitForBriefing||"root"} cl={cl} canEdit={_gestor} accentColor="#9F43F6" unitId={_unitForBriefing}/>;
+      return <BriefingFormCanonico key={_unitForBriefing||"root"} cl={cl} canEdit={true} accentColor="#9F43F6" unitId={_unitForBriefing}/>;
     })()}
     {tab==="marcos"&&typeof CMarcos==="function"&&(function(){
       // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
@@ -48792,9 +48791,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       return <PortalPlaybookCliente cl={cl} canEdit={!!_gestor} isMob={isMob}/>;
     })()}
     {tab==="metas"&&typeof CMetas==="function"&&(function(){
-      // Metas no portal: gestores Pixels editam, cliente que acessa o portal vê em read-only.
+      // Metas no portal: CLIENTE + gestor Pixels editam (cliente define/valida seus proprios objetivos).
       // Mesmo componente CMetas que Estratégia > Clientes usa — sincronizado via Supabase.
-      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       const _cid = String(cl && cl.id || "");
       // Bioter: isolamento por unidade em 2 casos:
       //  1) cl.id === "bioter_xxx" (cliente logado como unidade travada)
@@ -48802,15 +48800,15 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       if(_cid.indexOf("bioter_")===0){
         const _unitId = _cid.slice("bioter_".length);
         const _clBase = Object.assign({}, cl, {id:"bioter"});
-        return <CMetas cl={_clBase} accentColor={cl.color} readOnly={!_gestor} unitId={_unitId} unitLabel={cl.name}/>;
+        return <CMetas cl={_clBase} accentColor={cl.color} readOnly={false} unitId={_unitId} unitLabel={cl.name}/>;
       }
       if(_cid==="bioter" && selUnit && selUnit!=="grupo"){
         // Nome da unidade pra label
         const _unitInfo = (typeof BIOTER_GROUP_UNITS!=="undefined" ? BIOTER_GROUP_UNITS : []).find(function(u){return u.id==="bioter_"+selUnit;});
         const _unitLabel = _unitInfo ? _unitInfo.name : ("Bioter "+selUnit);
-        return <CMetas key={"metas-"+selUnit} cl={cl} accentColor={cl.color} readOnly={!_gestor} unitId={selUnit} unitLabel={_unitLabel}/>;
+        return <CMetas key={"metas-"+selUnit} cl={cl} accentColor={cl.color} readOnly={false} unitId={selUnit} unitLabel={_unitLabel}/>;
       }
-      return <CMetas cl={cl} accentColor={cl.color} readOnly={!_gestor}/>;
+      return <CMetas cl={cl} accentColor={cl.color} readOnly={false}/>;
     })()}
     {tab==="parcerias"&&typeof ClienteParcerias==="function"&&(function(){
       // Parcerias no portal: gestores Pixels alimentam, cliente vê tudo em read-only.
@@ -48819,10 +48817,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       return <ClienteParcerias cl={cl} readOnly={!_gestor}/>;
     })()}
     {tab==="concorrencia"&&typeof ClienteConcorrencia==="function"&&(function(){
-      // Concorrência no portal: gestores Pixels alimentam, cliente só visualiza.
-      // QG analítico — visão de mercado pro cliente acompanhar movimentos da concorrência.
-      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
-      return <ClienteConcorrencia cl={cl} tab="social_insta" setTab={function(){}} readOnly={!_gestor}/>;
+      // Concorrência no portal: CLIENTE + gestor Pixels editam (cliente conhece o mercado local dele melhor que a agencia).
+      // QG analitico — visao de mercado pro cliente acompanhar + alimentar movimentos da concorrencia.
+      return <ClienteConcorrencia cl={cl} tab="social_insta" setTab={function(){}} readOnly={false}/>;
     })()}
     {tab==="nps"&&typeof PortalNPS==="function"&&<PortalNPS cl={cl} isMob={isMob} unitId={isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null}/>}
 
@@ -58352,14 +58349,29 @@ function useClientNPS(clientId, unit){
     }, input);
     setRows(function(p){return [row].concat(p);});
     if(window._sb){
-      return window._sb.from("nps_responses").insert(row);
+      // Expor erro se RLS/insert falhar (evita usuario achar que salvou quando nao salvou)
+      return window._sb.from("nps_responses").insert(row).then(function(r){
+        if(r && r.error){
+          console.warn("[nps] insert falhou:", r.error.message||r.error);
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao salvar NPS: "+(r.error.message||"tenta de novo"));
+          // Rollback do optimistic
+          setRows(function(p){return p.filter(function(x){return x.id!==row.id;});});
+        }
+        return r;
+      });
     }
     return Promise.resolve();
   }
   function remove(id){
     setRows(function(p){return p.filter(function(r){return r.id!==id;});});
     if(window._sb){
-      return window._sb.from("nps_responses").delete().eq("id",id);
+      return window._sb.from("nps_responses").delete().eq("id",id).then(function(r){
+        if(r && r.error){
+          console.warn("[nps] delete falhou:", r.error.message||r.error);
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao apagar: "+(r.error.message||""));
+        }
+        return r;
+      });
     }
     return Promise.resolve();
   }
