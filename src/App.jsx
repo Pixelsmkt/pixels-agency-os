@@ -9652,6 +9652,14 @@ function COrientacoes({cl}){
   const fileInputFonte=useRef(null);
   const [pendingLogo,setPendingLogo]=useState(null); // {nome, modo:"upload"|"link"}
   const [pendingFonte,setPendingFonte]=useState(null);
+  // Adicionar fonte pelo nome (sem upload/link) — padrao das Cores acima
+  const [newFonteInline,setNewFonteInline]=useState({nome:"",uso:""});
+  const addFonteInline=()=>{
+    const _n=(newFonteInline.nome||"").trim();
+    if(!_n)return;
+    persist({...data,fontes:[...(data.fontes||[]),{nome:_n,uso:(newFonteInline.uso||"").trim(),url:"",formato:"NOME",externo:false}]});
+    setNewFonteInline({nome:"",uso:""});
+  };
   const [newColor,setNewColor]=useState({nome:"",hex:"#a140ff"});
   const [newHashtag,setNewHashtag]=useState("");
 
@@ -9838,13 +9846,25 @@ function COrientacoes({cl}){
               <div style={{color:C.tx,fontSize:13,fontWeight:500}}>{f.nome}</div>
               <div style={{color:C.td,fontSize:10,marginTop:2}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
             </div>
-            <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>
+            {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>}
             <button type="button" onClick={()=>removeItem("fontes",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:16,padding:0}}>×</button>
           </div>
         ))}
       </div>}
+      {/* Input inline pra registrar so o nome da fonte (sem obrigar upload/link) */}
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:10}}>
+        <input value={newFonteInline.nome} onChange={e=>setNewFonteInline(p=>({...p,nome:e.target.value}))}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addFonteInline();}}}
+          placeholder="Nome da fonte (ex: Poppins)" style={{...inp,flex:1,minWidth:160}}/>
+        <input value={newFonteInline.uso} onChange={e=>setNewFonteInline(p=>({...p,uso:e.target.value}))}
+          onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addFonteInline();}}}
+          placeholder="Uso (ex: Titulos, Corpo)" style={{...inp,flex:1,minWidth:140}}/>
+        <button type="button" onClick={addFonteInline} disabled={!(newFonteInline.nome||"").trim()}
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:(newFonteInline.nome||"").trim()?"pointer":"not-allowed",opacity:(newFonteInline.nome||"").trim()?1:.5,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",letterSpacing:-.1}}>+ Adicionar</button>
+      </div>
+      {/* Botoes: upload de arquivo OU link externo */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" onClick={()=>{setPendingFonte({nome:"",uso:""});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
+        <button type="button" onClick={()=>{setPendingFonte({nome:"",uso:""});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
         <button type="button" onClick={addFonteLink} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>+ Adicionar via link</button>
       </div>
     </_PlaybookSection>
