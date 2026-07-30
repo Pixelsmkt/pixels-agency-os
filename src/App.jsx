@@ -66876,9 +66876,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   ];
   // UNIFICADO: mostra TODAS as seções sempre (area==="all")
   if(area==="all" || area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:"sparkles"});
-  if(area==="all" || area==="video") SECTIONS.push({id:"pb-processos", label:"Processos técnicos", icon:"play"});
-  if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Publicação social", icon:"users"});
-  SECTIONS.push({id:"pb-orientacoes-visuais", label:"Orientações visuais", icon:"image"});
+  if(area==="all" || area==="video") SECTIONS.push({id:"pb-processos", label:"Processos", icon:"play"});
+  if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Social", icon:"users"});
+  SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
@@ -66942,13 +66942,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       })()}
 
       {/* ══════════ ANCORAS / NAV RÁPIDO ══════════ */}
-      <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:6,display:"flex",gap:4,overflowX:"auto",position:"sticky",top:8,zIndex:5,boxShadow:"0 2px 10px rgba(15,23,42,.04)"}}>
+      <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,display:"flex",gap:2,overflowX:isMob?"auto":"hidden",position:"sticky",top:8,zIndex:5,boxShadow:"0 2px 10px rgba(15,23,42,.04)"}}>
         {SECTIONS.map(s=>(
           <button key={s.id} onClick={()=>_pbScrollTo(s.id)}
-            style={{flex:isMob?"0 0 auto":1,background:"transparent",border:"none",borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,color:PB_TEXT,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,whiteSpace:"nowrap",transition:"all .15s"}}
+            style={{flex:isMob?"0 0 auto":"1 1 0",minWidth:0,background:"transparent",border:"none",borderRadius:9,padding:"7px 6px",fontSize:11.5,fontWeight:600,color:PB_TEXT,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.color=PB_PURPLE_DK;}}
             onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=PB_TEXT;}}>
-            <Ico n={s.icon} size={13} color="currentColor"/>{s.label}
+            <Ico n={s.icon} size={12} color="currentColor"/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</span>
           </button>
         ))}
       </div>
