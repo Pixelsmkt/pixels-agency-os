@@ -60391,6 +60391,20 @@ function PagePlanejamento({isMob, effectiveUser}){
 // Mês corrente + trimestre corrente. Cards clicáveis abrem a aba completa.
 // ═════════════════════════════════════════════════════════════════════════
 function _PlanejamentosClientes({isMob}){
+  // ── SYNC CLIENTES DO SUPABASE ──
+  // Fix: cards mostravam cl.sector antigo/hardcoded ("Climatizacao / HVAC") em vez do
+  // sector editado via modal Editar cliente. Solucao: puxar do Supabase no mount +
+  // re-render quando registry muda (evento disparado por registerDynamicClient).
+  const [_clientsRev, _setClientsRev] = useState(0);
+  useEffect(function(){
+    if(typeof window!=="undefined" && typeof window.loadDynamicClientsFromSupabase==="function"){
+      try{ window.loadDynamicClientsFromSupabase().catch(function(){}); }catch(_){}
+    }
+    function _bump(){ _setClientsRev(function(r){return r+1;}); }
+    try{ window.addEventListener("pixels:clients-registry-updated", _bump); }catch(_){}
+    return function(){ try{ window.removeEventListener("pixels:clients-registry-updated", _bump); }catch(_){} };
+  }, []);
+
   const _now = new Date();
   const _year  = _now.getFullYear();
   const _month = _now.getMonth()+1; // 1..12
