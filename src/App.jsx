@@ -60485,6 +60485,7 @@ function _PlanejamentosClientes({isMob}){
     if(!Array.isArray(_intEvents) || !clientId) return [];
     // Expansão: cliente "bioter" (Grupo) → aparece em TODAS as unidades Bioter.
     // "bioter_brasil" → só unidades BR. Unidade individual "bioter_toledo" → só ela.
+    const _isBioterGroup = clientId === "bioter"; // Card do guarda-chuva (agrega tudo)
     const _isBioterUnit = String(clientId).indexOf("bioter_")===0;
     const _isBrUnit = _isBioterUnit && (typeof BIOTER_GROUP_UNITS!=="undefined") && BIOTER_GROUP_UNITS.some(function(u){return u.id===clientId && u.pais==="BR";});
     // Helper: parse YYYY-MM-DD -> Date
@@ -60554,6 +60555,11 @@ function _PlanejamentosClientes({isMob}){
       if(_CAT_TO_SECTION[ev.category] !== sectionKey) return;
       const _ids = Array.isArray(ev.client_ids) ? ev.client_ids : (ev.client_id ? [ev.client_id] : []);
       let _match = _ids.indexOf(clientId) >= 0;
+      // Card Grupo Bioter: agrega QUALQUER unidade Bioter (bioter, bioter_brasil, bioter_xxx)
+      // Ex: Dia dos Pais criado com bioter_chapeco+bioter_toledo aparece no Grupo Bioter tb
+      if(!_match && _isBioterGroup){
+        _match = _ids.some(function(_id){ return _id==="bioter" || _id==="bioter_brasil" || String(_id).indexOf("bioter_")===0; });
+      }
       if(!_match && _isBioterUnit && _ids.indexOf("bioter")>=0) _match = true;
       if(!_match && _isBrUnit && _ids.indexOf("bioter_brasil")>=0) _match = true;
       if(!_match) return;
