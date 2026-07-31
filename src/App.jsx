@@ -36851,9 +36851,9 @@ function OrientacoesView({clientId, bioterUnit, sector}){
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
-      <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={32}/></div>
-      <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Sem orientações cadastradas</div>
-      <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:340,margin:"0 auto"}}>Vá em <strong>Clientes → {cl?.name||"esse cliente"} → Informações → Orientações para a equipe</strong> para cadastrar logos, paleta, fontes, tom de voz e mais.</div>
+      <div style={{marginBottom:10,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={32}/></div>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:6}}>Sem orientações cadastradas pra {cl?.name||"esse cliente"}</div>
+      <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong style={{color:"#7c3aed"}}>Estratégia → Clientes → {cl?.name||"esse cliente"} → Playbook</strong> e edite a seção <strong>Orientações</strong> pra cadastrar logos, paleta de cores, fontes, tom de voz, hashtags, CTA e redes sociais. O que for cadastrado aparece automaticamente aqui.</div>
     </div>
   );
 
