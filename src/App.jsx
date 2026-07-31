@@ -9668,12 +9668,18 @@ function COrientacoes({cl, sections}){
 
   useEffect(()=>{
     if(!sb)return;
+    // Reset ANTES do fetch — evita paleta/logos do cliente anterior vazarem
+    // (bug: user trocava de Arabutã pra Climaves e via cores da Arabutã)
+    const _empty={logos:[],paleta:[],fontes:[],tomDeVoz:"",hashtags:[],ctaPadrao:"",naoFazer:"",site:"",redes:{instagram:"",facebook:"",youtube:"",linkedin:"",tiktok:""},driveUrl:"",byUnit:{}};
+    setData(_empty);
     sb.from("clients").select("orientacoes").eq("client_id",cl.id).single()
       .then(({data:row})=>{
         if(row?.orientacoes){
           const o=typeof row.orientacoes==="string"?JSON.parse(row.orientacoes):row.orientacoes;
-          setData(p=>({...p,...o,redes:{...p.redes,...(o.redes||{})}}));
+          // Merge sobre o RESET (nao sobre estado anterior) — dados do cliente antigo somem
+          setData({..._empty,...o,redes:{..._empty.redes,...(o.redes||{})}});
         }
+        // Se row?.orientacoes for null, data ja foi resetado acima → vazio correto
       })
       .catch(e=>console.warn("[orientacoes] load:",e?.message||e));
   },[cl.id]);
@@ -67351,7 +67357,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
           {/* Orientacoes — Logo, paleta, fontes, tom de voz — inteira aqui no topo apos Comunicacao */}
           {typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
-            <COrientacoes cl={cl}/>
+            <COrientacoes key={"orient-"+cl.id} cl={cl}/>
           </PlaybookBlock>}
 
           {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
