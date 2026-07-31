@@ -9776,7 +9776,11 @@ function COrientacoes({cl, sections}){
 
   const addColor=()=>{
     if(!newColor.nome.trim())return;
-    persist({...data,paleta:[...(data.paleta||[]),{nome:newColor.nome.trim(),hex:newColor.hex}]});
+    // Normaliza hex: garante # inicial. Se invalido, usa preto.
+    let _hex = String(newColor.hex||"").trim();
+    if(_hex && !_hex.startsWith("#")) _hex = "#" + _hex;
+    if(!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(_hex)) _hex = "#000000";
+    persist({...data,paleta:[...(data.paleta||[]),{nome:newColor.nome.trim(),hex:_hex.toLowerCase()}]});
     setNewColor({nome:"",hex:"#a140ff"});
   };
   const removeColor=(idx)=>persist({...data,paleta:data.paleta.filter((_,i)=>i!==idx)});
@@ -9835,7 +9839,19 @@ function COrientacoes({cl, sections}){
       <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
         <input type="text" value={newColor.nome} onChange={e=>setNewColor(p=>({...p,nome:e.target.value}))} placeholder="Nome da cor" style={{...inp,width:160}}/>
         <input type="color" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{width:48,height:36,border:"0.5px solid "+C.b1,borderRadius:8,cursor:"pointer",padding:2,background:C.s1}}/>
-        <input type="text" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{...inp,width:100,fontFamily:"monospace"}} placeholder="#000000"/>
+        <input type="text" value={newColor.hex} onChange={e=>{
+          let _v = e.target.value.trim();
+          // Se user digitou sem #, adiciona automatico pra sincronizar com o picker
+          if(_v && !_v.startsWith("#")) _v = "#" + _v;
+          setNewColor(p=>({...p,hex:_v}));
+        }} onBlur={e=>{
+          // Ao sair do input, garante formato valido; senao mantém o antigo
+          let _v = String(e.target.value||"").trim();
+          if(_v && !_v.startsWith("#")) _v = "#" + _v;
+          if(_v && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(_v)){
+            setNewColor(p=>({...p,hex:"#a140ff"}));
+          }
+        }} style={{...inp,width:110,fontFamily:"monospace",textTransform:"lowercase"}} placeholder="#000000"/>
         <button type="button" onClick={addColor} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>+ Adicionar</button>
       </div>
     </_PlaybookSection>}
@@ -16681,6 +16697,142 @@ function CProducaoTab({cl, tasks, isMob}){
   const totalGeralDone = blocos.reduce(function(a,b){return a+b.totalDone;},0);
   const totalGeralMeta = blocos.reduce(function(a,b){return a+b.totalMeta;},0);
 
+  // ═══ CRONOGRAMA AUTOMATICO DO PROJETO ═══
+  // Persistido em client_meta.production_schedule = {package, start, duration, items[]}
+  const [_schedule, _setSchedule] = useState(null);
+  const [_scheduleLoading, _setScheduleLoading] = useState(true);
+  useEffect(function(){
+    if(!window._sb || !cl || !cl.id){ _setScheduleLoading(false); return; }
+    let _c = false;
+    window._sb.from("client_meta").select("production_schedule").eq("client_id", cl.id).maybeSingle()
+      .then(function(r){
+        if(_c) return;
+        if(r && r.data && r.data.production_schedule) _setSchedule(r.data.production_schedule);
+        _setScheduleLoading(false);
+      }).catch(function(){ if(!_c) _setScheduleLoading(false); });
+    return function(){ _c = true; };
+  }, [cl && cl.id]);
+
+  // Pacotes disponiveis
+  const _PACOTES_CFG = {
+    starter: {
+      label:"Starter 90 dias",
+      duration: 3,
+      color:"#7c3aed",
+      // Distribuicao por mes: quantidade de cada tipo
+      months:[
+        {arte:4, video:4, extras:["Diagnostico e estrategia","Analise da concorrencia","Planejamento de calendario editorial"]},
+        {arte:2, video:2, extras:["Ativacao de campanhas de midia paga","Otimizacao diaria","Publicos segmentados"]},
+        {arte:2, video:2, extras:["Otimizacao continua","Relatorio mensal completo","Reuniao de alinhamento estrategico","Plano de continuidade"]},
+      ],
+    },
+    completo: {
+      label:"Pacote Completo (mensal recorrente)",
+      duration: 12,
+      color:"#ec4899",
+      monthly:{arte:4, video:4, extras:["Gestao Meta Ads","Gestao Google Ads","Relatorio mensal"]},
+    },
+    social: {
+      label:"Gestao de Redes Sociais (mensal)",
+      duration: 12,
+      color:"#a855f7",
+      monthly:{arte:4, video:4, extras:["Planejamento mensal","Roteiros e copys","Relatorio mensal"]},
+    },
+  };
+
+  // Adiciona N dias uteis
+  function _prodBizDays(base, n){
+    const d = new Date(base.getTime());
+    let added = 0;
+    while(added<n){ d.setDate(d.getDate()+1); const dow=d.getDay(); if(dow!==0&&dow!==6) added++; }
+    return d;
+  }
+  function _prodIso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+  function _prodBrDate(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+
+  // Distribui N entregas em dias uteis dentro do periodo [start, end]
+  function _distribuirEmDiasUteis(startIso, endIso, quantidade){
+    if(quantidade<=0) return [];
+    const start = new Date(startIso+"T12:00:00");
+    const end = new Date(endIso+"T12:00:00");
+    // Lista todos os dias uteis no periodo
+    const uteis = [];
+    const cur = new Date(start);
+    while(cur<=end){
+      const dow = cur.getDay();
+      if(dow!==0 && dow!==6) uteis.push(_prodIso(cur));
+      cur.setDate(cur.getDate()+1);
+    }
+    if(uteis.length===0) return [];
+    if(quantidade>=uteis.length) return uteis.slice(0,quantidade);
+    // Espacamento igual: pega 1 a cada step
+    const step = uteis.length / quantidade;
+    const out = [];
+    for(let i=0;i<quantidade;i++){
+      const idx = Math.floor(i*step);
+      out.push(uteis[Math.min(idx, uteis.length-1)]);
+    }
+    return out;
+  }
+
+  // Gera o cronograma baseado no pacote + data de inicio
+  function _gerarCronograma(packageId, startIso, customDuration){
+    const cfg = _PACOTES_CFG[packageId];
+    if(!cfg || !startIso) return null;
+    const duration = cfg.duration || Number(customDuration)||3;
+    const start = new Date(startIso+"T12:00:00");
+    const items = [];
+    const months = [];
+    for(let m=0; m<duration; m++){
+      const mStart = new Date(start.getFullYear(), start.getMonth()+m, 1);
+      const mEnd = new Date(start.getFullYear(), start.getMonth()+m+1, 0);
+      // Se e o primeiro mes, comeca da data de inicio (nao do dia 1)
+      const effStart = m===0 ? start : mStart;
+      const monthCfg = cfg.months ? cfg.months[m] : (cfg.monthly || {arte:4,video:4,extras:[]});
+      const artes = monthCfg.arte||0;
+      const videos = monthCfg.video||0;
+      const arteDatas = _distribuirEmDiasUteis(_prodIso(effStart), _prodIso(mEnd), artes);
+      const videoDatas = _distribuirEmDiasUteis(_prodIso(effStart), _prodIso(mEnd), videos);
+      arteDatas.forEach(function(d,i){ items.push({date:d, type:"arte", label:"Arte "+(i+1), month:m+1, done:false}); });
+      videoDatas.forEach(function(d,i){ items.push({date:d, type:"video", label:"Video "+(i+1), month:m+1, done:false}); });
+      months.push({
+        idx:m+1,
+        startIso:_prodIso(mStart),
+        endIso:_prodIso(mEnd),
+        arte:artes,
+        video:videos,
+        extras: monthCfg.extras||[],
+      });
+    }
+    items.sort(function(a,b){return String(a.date).localeCompare(String(b.date));});
+    return {package:packageId, start:startIso, duration:duration, generated_at:new Date().toISOString(), items:items, months:months};
+  }
+
+  // Salva no Supabase
+  function _saveSchedule(sched){
+    _setSchedule(sched);
+    if(!window._sb || !cl || !cl.id) return;
+    window._sb.from("client_meta").upsert({client_id:cl.id, production_schedule:sched}, {onConflict:"client_id"})
+      .then(function(r){
+        if(r && r.error){ console.warn("[producao] save schedule:", r.error.message); if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao salvar cronograma"); return; }
+        if(sched && typeof pixelsToast!=="undefined") pixelsToast.success("Cronograma gerado!", 3000);
+      });
+  }
+
+  function _handlePickPackage(pkgId){
+    const _startNow = _prodIso(new Date());
+    const sched = _gerarCronograma(pkgId, (_schedule&&_schedule.start)||_startNow);
+    _saveSchedule(sched);
+  }
+  function _handlePickStart(newStart){
+    if(!newStart || !_schedule) return;
+    const sched = _gerarCronograma(_schedule.package, newStart);
+    _saveSchedule(sched);
+  }
+  function _handleClearSchedule(){
+    _saveSchedule(null);
+  }
+
   return <div style={{fontFamily:_INTER,display:"flex",flexDirection:"column",gap:18,padding:isMob?"16px 12px":"20px 24px"}}>
 
     {/* ═══ Header: contrato + tempo de casa ═══ */}
@@ -16702,6 +16854,100 @@ function CProducaoTab({cl, tasks, isMob}){
       </div>
       <_MonthNav/>
     </div>
+
+    {/* ═══ CRONOGRAMA DO PROJETO — pacote + start + timeline mes a mes ═══ */}
+    {!_scheduleLoading && (function(){
+      const _hasSched = _schedule && _schedule.items && _schedule.items.length>0;
+      const _pkg = _hasSched ? _PACOTES_CFG[_schedule.package] : null;
+      const _accent = _pkg ? _pkg.color : _PURPLE;
+      return <div style={{background:"#fff",border:"1px solid "+_accent+"22",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:38,height:38,borderRadius:10,background:_accent+"14",color:_accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:800,color:"#0f172a",letterSpacing:-.2,fontFamily:_INTER}}>Cronograma do projeto</div>
+              <div style={{fontSize:11.5,color:"#64748b",marginTop:2,fontFamily:_INTER}}>
+                {_hasSched ? _pkg.label+" · "+_schedule.duration+" meses a partir de "+_prodBrDate(_schedule.start) : "Escolha um pacote pra gerar cronograma automatico em dias uteis"}
+              </div>
+            </div>
+          </div>
+          {_hasSched && <button onClick={function(){if(confirm("Apagar cronograma? Os itens ja concluidos serao perdidos.")) _handleClearSchedule();}} type="button"
+            style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:_INTER}}
+            onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fca5a5";}}
+            onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";}}>
+            Apagar cronograma
+          </button>}
+        </div>
+
+        {/* Seletor de pacote (se nao gerado) OU controles de edicao (se gerado) */}
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          {!_hasSched && Object.keys(_PACOTES_CFG).map(function(pid){
+            const _cfg = _PACOTES_CFG[pid];
+            return <button key={pid} type="button" onClick={function(){_handlePickPackage(pid);}}
+              style={{background:_cfg.color+"10",color:_cfg.color,border:"1.5px solid "+_cfg.color+"55",borderRadius:11,padding:"11px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_INTER,display:"inline-flex",alignItems:"center",gap:8,transition:"all .15s"}}
+              onMouseEnter={function(e){e.currentTarget.style.background=_cfg.color;e.currentTarget.style.color="#fff";}}
+              onMouseLeave={function(e){e.currentTarget.style.background=_cfg.color+"10";e.currentTarget.style.color=_cfg.color;}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {_cfg.label}
+            </button>;
+          })}
+          {_hasSched && <label style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_INTER,position:"relative",overflow:"hidden",transition:"all .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor=_accent+"88";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>
+            <span style={{color:"#475569",fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>Inicio:</span>
+            <span style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_prodBrDate(_schedule.start)}</span>
+            <input type="date" value={_schedule.start} onChange={function(e){if(e.target.value) _handlePickStart(e.target.value);}}
+              style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,cursor:"pointer"}}/>
+          </label>}
+        </div>
+
+        {/* Timeline mes a mes */}
+        {_hasSched && (function(){
+          const _MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:12,marginTop:4}}>
+            {_schedule.months.map(function(mo){
+              const _mDate = new Date(mo.startIso+"T12:00:00");
+              const _mLbl = _MESES[_mDate.getMonth()]+"/"+_mDate.getFullYear();
+              const _mItems = _schedule.items.filter(function(it){return it.month===mo.idx;});
+              return <div key={mo.idx} style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:11,padding:"13px 15px",display:"flex",flexDirection:"column",gap:9}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <div>
+                    <div style={{fontSize:10.5,fontWeight:800,color:_accent,letterSpacing:.5,textTransform:"uppercase"}}>Mes {mo.idx} · {_mLbl}</div>
+                    <div style={{fontSize:12.5,fontWeight:700,color:"#0f172a",marginTop:2}}>{mo.arte} artes · {mo.video} videos</div>
+                  </div>
+                  <div style={{background:_accent+"14",color:_accent,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3}}>{_mItems.length} entregas</div>
+                </div>
+                {_mItems.length>0 && <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:2}}>
+                  {_mItems.map(function(it,idx){
+                    const _bg = it.type==="arte" ? "#ede9fe" : "#dbeafe";
+                    const _fg = it.type==="arte" ? "#6d28d9" : "#1d4ed8";
+                    return <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",background:"#fff",border:"1px solid #eef0f3",borderRadius:7}}>
+                      <span style={{background:_bg,color:_fg,fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:5,textTransform:"uppercase",letterSpacing:.3,flexShrink:0}}>{it.type}</span>
+                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:44}}>{_prodBrDate(it.date).slice(0,5)}</span>
+                      <span style={{color:"#475569",fontSize:11.5,fontWeight:600,flex:1}}>{it.label}</span>
+                    </div>;
+                  })}
+                </div>}
+                {mo.extras && mo.extras.length>0 && <div style={{marginTop:6,paddingTop:8,borderTop:"1px dashed #e2e8f0"}}>
+                  <div style={{fontSize:9.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Marcos do mes</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {mo.extras.map(function(ex,i){
+                      return <div key={i} style={{color:"#475569",fontSize:11,display:"flex",gap:6,alignItems:"flex-start"}}>
+                        <span style={{color:_accent,fontWeight:800,flexShrink:0}}>•</span>
+                        <span>{ex}</span>
+                      </div>;
+                    })}
+                  </div>
+                </div>}
+              </div>;
+            })}
+          </div>;
+        })()}
+      </div>;
+    })()}
 
     {/* ═══ Resumo geral do mês ═══ */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
@@ -55972,8 +56218,9 @@ function useClientOnboarding(clientId){
     _persist(next);
   }
 
-  const doneCount = Object.keys(items).filter(function(k){return k!=="__finalizado__" && items[k] && items[k].done;}).length;
+  const doneCount = Object.keys(items).filter(function(k){return k!=="__finalizado__" && k!=="__start_date__" && items[k] && items[k].done;}).length;
   const finalizado = !!items.__finalizado__;
+  const startDate = items.__start_date__ || "";
   function setFinalizado(value){
     const next = Object.assign({}, items);
     if(value){
@@ -55983,7 +56230,32 @@ function useClientOnboarding(clientId){
     }
     _persist(next);
   }
-  return { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado };
+  // Reprograma TODAS as datas em dias uteis a partir de newStart (YYYY-MM-DD)
+  // Usa os offsets ja definidos em _ONB_BLOCK_OFFSETS por bloco. Overwrite full.
+  function rescheduleAll(newStart){
+    if(!newStart) return;
+    const base = new Date(newStart+"T12:00:00");
+    base.setHours(0,0,0,0);
+    const next = Object.assign({}, items, {__start_date__: newStart});
+    ONBOARDING_BLOCKS.forEach(function(b){
+      const offset = _ONB_BLOCK_OFFSETS[b.id] || 0;
+      const due = _onbIsoDate(_onbAddBusinessDays(base, offset));
+      b.items.forEach(function(it){
+        next[it.id] = Object.assign({}, next[it.id]||{}, {due: due});
+        if(it.sub){
+          it.sub.forEach(function(sub){
+            next[sub.id] = Object.assign({}, next[sub.id]||{}, {due: due});
+          });
+        }
+      });
+    });
+    _persist(next);
+    try{
+      const _br = newStart.split("-").reverse().join("/");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Datas recalculadas a partir de "+_br+"!", 3500);
+    }catch(_){}
+  }
+  return { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll };
 }
 
 /* ─── COMPONENTE: ClientMetricsCards (visão geral) ───────────── */
@@ -56308,7 +56580,7 @@ function OnboardingSection(props){
 /* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
-  const { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado } = useClientOnboarding(cl.id);
+  const { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll } = useClientOnboarding(cl.id);
   const total = ONBOARDING_TOTAL;
   const pct = total>0?Math.round(doneCount/total*100):0;
   const accent = (cl && cl.color) || "#7c3aed";
@@ -56368,6 +56640,25 @@ function OnboardingChecklist(props){
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
         </div>
         <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
+        {/* Data de inicio do projeto — muda todas as datas em dias uteis */}
+        {(function(){
+          const _v = startDate || "";
+          const _br = _v ? _v.split("-").reverse().join("/") : "";
+          return <label title="Data de inicio do projeto. Ao mudar, recalcula todas as datas em dias uteis."
+            style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_ONB_FF,transition:"all .15s",position:"relative",overflow:"hidden"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"88";e.currentTarget.style.background="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span style={{color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Inicio:</span>
+            <span style={{color:_v?"#0f172a":"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",minWidth:_v?66:80}}>{_v ? _br : "escolher..."}</span>
+            <input type="date" value={_v} onChange={function(e){
+              const _nv = e.target.value;
+              if(!_nv) return;
+              rescheduleAll(_nv);
+            }}
+              style={{position:"absolute",left:0,top:0,opacity:0,width:"100%",height:"100%",cursor:"pointer"}}/>
+          </label>;
+        })()}
         <button onClick={function(){setFinalizado(true);}}
           title="Marca o onboarding como concluído e esconde toda a checklist"
           style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0}}
@@ -60190,21 +60481,84 @@ function _PlanejamentosClientes({isMob}){
     // "bioter_brasil" → só unidades BR. Unidade individual "bioter_toledo" → só ela.
     const _isBioterUnit = String(clientId).indexOf("bioter_")===0;
     const _isBrUnit = _isBioterUnit && (typeof BIOTER_GROUP_UNITS!=="undefined") && BIOTER_GROUP_UNITS.some(function(u){return u.id===clientId && u.pais==="BR";});
-    return _intEvents.filter(function(ev){
-      if(!ev || !ev.date) return false;
-      if(_CAT_TO_SECTION[ev.category] !== sectionKey) return false;
+    // Helper: parse YYYY-MM-DD -> Date
+    const _parse = function(s){const _p=String(s).split("-");return new Date(parseInt(_p[0],10), parseInt(_p[1],10)-1, parseInt(_p[2],10));};
+    const _fmt = function(d){const _pad=function(n){return String(n).padStart(2,"0");};return d.getFullYear()+"-"+_pad(d.getMonth()+1)+"-"+_pad(d.getDate());};
+    // Expandir recorrencia dentro do periodo. Retorna array de datas virtuais dentro do periodo.
+    const _expand = function(ev){
+      const _dates = [];
+      const _pStart = _parse(periodStart);
+      const _pEnd = _parse(periodEnd);
+      const _recUntil = ev.recurrence_until || "";
+      if(!ev.recurrence || ev.recurrence==="none" || ev.recurrence===""){
+        // Sem recorrencia: so a data original se cair no periodo
+        if(ev.date>=periodStart && ev.date<=periodEnd) _dates.push(ev.date);
+        return _dates;
+      }
+      const _orig = _parse(ev.date);
+      if(ev.recurrence==="yearly"){
+        // Bidirecional: aparece em TODO ano no mesmo mes/dia. Ex: Dia dos Pais 09/08 aparece em qualquer ano.
+        const _m = _orig.getMonth();
+        const _d = _orig.getDate();
+        for(let _y=_pStart.getFullYear(); _y<=_pEnd.getFullYear(); _y++){
+          const _cand = new Date(_y, _m, _d);
+          const _iso = _fmt(_cand);
+          if(_recUntil && _iso > _recUntil) continue;
+          if(_iso>=periodStart && _iso<=periodEnd) _dates.push(_iso);
+        }
+      } else if(ev.recurrence==="monthly"){
+        // Todo dia N do mes, a partir da data original.
+        const _d = _orig.getDate();
+        let _cur = new Date(_pStart.getFullYear(), _pStart.getMonth(), _d);
+        while(_cur <= _pEnd){
+          const _iso = _fmt(_cur);
+          if(_iso >= ev.date && (!_recUntil || _iso <= _recUntil) && _iso>=periodStart && _iso<=periodEnd){
+            _dates.push(_iso);
+          }
+          _cur = new Date(_cur.getFullYear(), _cur.getMonth()+1, _d);
+        }
+      } else if(ev.recurrence==="weekly" || ev.recurrence==="biweekly"){
+        // Toda semana/2 semanas no mesmo dia da semana, comecando da data original.
+        const _step = ev.recurrence==="weekly" ? 7 : 14;
+        let _cur = new Date(_orig);
+        // Avanca ate entrar no periodo
+        while(_cur < _pStart) _cur.setDate(_cur.getDate()+_step);
+        // Ou volta ate entrar (caso original seja no futuro)
+        while(_cur > _pStart){
+          const _prev = new Date(_cur); _prev.setDate(_prev.getDate()-_step);
+          if(_prev < _pStart) break;
+          _cur = _prev;
+        }
+        while(_cur <= _pEnd){
+          const _iso = _fmt(_cur);
+          if((!_recUntil || _iso <= _recUntil) && _iso>=periodStart && _iso<=periodEnd){
+            _dates.push(_iso);
+          }
+          _cur.setDate(_cur.getDate()+_step);
+        }
+      } else {
+        // Recorrencia desconhecida: fallback data original
+        if(ev.date>=periodStart && ev.date<=periodEnd) _dates.push(ev.date);
+      }
+      return _dates;
+    };
+    const _out = [];
+    _intEvents.forEach(function(ev){
+      if(!ev || !ev.date) return;
+      if(_CAT_TO_SECTION[ev.category] !== sectionKey) return;
       const _ids = Array.isArray(ev.client_ids) ? ev.client_ids : (ev.client_id ? [ev.client_id] : []);
-      // Match direto
       let _match = _ids.indexOf(clientId) >= 0;
-      // Se card é unidade Bioter, também considera se evento tem "bioter" (Grupo)
       if(!_match && _isBioterUnit && _ids.indexOf("bioter")>=0) _match = true;
-      // Se card é unidade Bioter BR, também considera "bioter_brasil"
       if(!_match && _isBrUnit && _ids.indexOf("bioter_brasil")>=0) _match = true;
-      if(!_match) return false;
-      const _d = String(ev.date);
-      if(_d < periodStart || _d > periodEnd) return false;
-      return true;
-    }).sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+      if(!_match) return;
+      // Expande datas dentro do periodo (respeitando recorrencia)
+      const _virtDates = _expand(ev);
+      _virtDates.forEach(function(_vd){
+        // Cria evento virtual com a data expandida (mantem id+title+etc, so troca date)
+        _out.push(Object.assign({}, ev, {date:_vd, _virtualDate:_vd, _origDate:ev.date}));
+      });
+    });
+    return _out.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
   }
 
   function _fmtEvDate(d){
@@ -66870,12 +67224,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const SECTIONS = [
     {id:"pb-sobre",        label:"Sobre",        icon:"building"},
     {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
-    {id:"pb-brand-visual", label:"Marca visual", icon:"image"},
+    {id:"pb-equipe",       label:"Orientações",  icon:"sparkles"},
     {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
     {id:"pb-produtos",     label:"Produtos",     icon:"package"},
   ];
-  // UNIFICADO: mostra TODAS as seções sempre (area==="all")
-  if(area==="all" || area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:"sparkles"});
+  // UNIFICADO: Orientacoes ja incluida no topo. Nao push denovo.
+  // (Placeholder pra manter estrutura do if abaixo — nao adiciona nada duplicado)
+  if(false){}
   if(area==="all" || area==="video") SECTIONS.push({id:"pb-processos", label:"Processos", icon:"play"});
   if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Social", icon:"users"});
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
@@ -66994,9 +67349,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>}
           </PlaybookBlock>
 
-          {/* Marca visual — Logo + Paleta de cores no topo (mais consumidos pela equipe) */}
-          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-brand-visual" title="Marca visual" subtitle="Logo e paleta de cores — usados em toda peca" icon="image" color="#ec4899">
-            <COrientacoes cl={cl} sections={["logos","paleta"]}/>
+          {/* Orientacoes — Logo, paleta, fontes, tom de voz — inteira aqui no topo apos Comunicacao */}
+          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
+            <COrientacoes cl={cl}/>
           </PlaybookBlock>}
 
           {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
@@ -67467,11 +67822,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               Logos, paleta de cores copiável, fontes, tom de voz, hashtags, CTA,
               não-fazer e redes sociais. Mesma fonte (Supabase clients.orientacoes)
               que o card de cada cliente lê — alterações refletem em todo lugar. */}
-          {(area==="all" || area==="design") && typeof COrientacoes==="function" &&
-            <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Fontes, tom de voz, hashtags, CTA e redes — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
-              <COrientacoes cl={cl} sections={["fontes","tom","hashtags","cta","naofazer","siteredes"]}/>
-            </PlaybookBlock>
-          }
+          {/* Bloco Orientacoes ja renderizado no topo apos Comunicacao. Aqui: nada. */}
 
           {/* Processos técnicos — GLOBAIS pra todos os vídeos (sincronizado entre clientes via team_data) */}
           {(area==="all" || area==="video") && <PlaybookBlock id="pb-processos" title="Processos técnicos de vídeo" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
