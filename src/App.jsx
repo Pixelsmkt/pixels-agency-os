@@ -56583,6 +56583,42 @@ function OnboardingSection(props){
   </section>;
 }
 
+/* ─── Pill "Inicio:" do Onboarding — usa showPicker() pra abrir date picker de forma confiavel ─── */
+function _OnbStartDatePill({startDate, accent, onPick}){
+  const _inpRef = useRef(null);
+  const _v = startDate || "";
+  const _br = _v ? _v.split("-").reverse().join("/") : "";
+  const _open = function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    const _inp = _inpRef.current;
+    if(!_inp) return;
+    // showPicker() e a API moderna e confiavel. Fallback pra .click() se nao suportar.
+    try{
+      if(typeof _inp.showPicker === "function") _inp.showPicker();
+      else _inp.click();
+    }catch(_){ try{_inp.click();}catch(_){} }
+  };
+  return <div style={{position:"relative",display:"inline-flex"}}>
+    <button type="button" onClick={_open}
+      title="Data de inicio do projeto. Ao mudar, recalcula todas as datas em dias uteis."
+      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_ONB_FF,transition:"all .15s"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"88";e.currentTarget.style.background="#fff";}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span style={{color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Inicio:</span>
+      <span style={{color:_v?"#0f172a":"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",minWidth:_v?66:80}}>{_v ? _br : "escolher..."}</span>
+    </button>
+    {/* Input escondido — controlado via ref pelo botao acima. Position absolute so pra o picker abrir perto do botao. */}
+    <input ref={_inpRef} type="date" value={_v} onChange={function(e){
+        const _nv = e.target.value;
+        if(!_nv) return;
+        if(typeof onPick === "function") onPick(_nv);
+      }}
+      style={{position:"absolute",left:0,top:"100%",opacity:0,width:1,height:1,pointerEvents:"none",border:"none",padding:0,margin:0}}/>
+  </div>;
+}
+
 /* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
@@ -56646,25 +56682,8 @@ function OnboardingChecklist(props){
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
         </div>
         <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
-        {/* Data de inicio do projeto — muda todas as datas em dias uteis */}
-        {(function(){
-          const _v = startDate || "";
-          const _br = _v ? _v.split("-").reverse().join("/") : "";
-          return <label title="Data de inicio do projeto. Ao mudar, recalcula todas as datas em dias uteis."
-            style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_ONB_FF,transition:"all .15s",position:"relative",overflow:"hidden"}}
-            onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"88";e.currentTarget.style.background="#fff";}}
-            onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span style={{color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Inicio:</span>
-            <span style={{color:_v?"#0f172a":"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",minWidth:_v?66:80}}>{_v ? _br : "escolher..."}</span>
-            <input type="date" value={_v} onChange={function(e){
-              const _nv = e.target.value;
-              if(!_nv) return;
-              rescheduleAll(_nv);
-            }}
-              style={{position:"absolute",left:0,top:0,opacity:0,width:"100%",height:"100%",cursor:"pointer"}}/>
-          </label>;
-        })()}
+        {/* Data de inicio do projeto — muda todas as datas em dias uteis. Botao chama showPicker() diretamente */}
+        <_OnbStartDatePill startDate={startDate} accent={accent} onPick={rescheduleAll}/>
         <button onClick={function(){setFinalizado(true);}}
           title="Marca o onboarding como concluído e esconde toda a checklist"
           style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0}}
