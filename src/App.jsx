@@ -43538,18 +43538,15 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
     (async function(){
       try{
         if(!window._sb) return;
+        // Le UMA row com dados = {uid1:{...}, uid2:{...}} — padrao consolidado
         const {data, error} = await window._sb
           .from("team_data")
-          .select("user_id,payload,updated_at")
-          .eq("tipo","info_pessoal");
-        if(error){ console.warn("[Time] load team_data:", error.message); return; }
+          .select("dados")
+          .eq("tipo","info_pessoal")
+          .maybeSingle();
+        if(error && error.code!=="PGRST116"){ console.warn("[Time] load team_data:", error.message); return; }
         if(cancelled) return;
-        const fromSb = {};
-        (data||[]).forEach(function(row){
-          if(row && row.user_id && row.payload && typeof row.payload==="object"){
-            fromSb[row.user_id] = row.payload;
-          }
-        });
+        const fromSb = (data && data.dados && typeof data.dados==="object") ? data.dados : {};
         setExtras(function(prev){
           const merged = {};
           const allUids = new Set([].concat(Object.keys(fromSb), Object.keys(prev||{})));
@@ -43564,18 +43561,32 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
     return function(){ cancelled = true; };
   },[]);
 
-  const _save = function(uid, patch){
+  const _save = async function(uid, patch){
+    // Optimistic: aplica local + cache imediato
+    let _nextRef = null;
     setExtras(function(prev){
       const next = Object.assign({}, prev||{}, {[uid]: Object.assign({}, (prev||{})[uid]||{}, patch)});
       try{ localStorage.setItem("pixels-team-data", JSON.stringify(next)); }catch(_){}
-      // Sync opcional pro Supabase (silencioso)
-      try{
-        if(typeof window!=="undefined" && window._sb){
-          window._sb.from("team_data").upsert({id:"info_"+uid,tipo:"info_pessoal",user_id:uid,payload:next[uid],updated_at:new Date().toISOString()},{onConflict:"id"}).then(()=>{}).catch(()=>{});
-        }
-      }catch(_){}
+      _nextRef = next;
       return next;
     });
+    // Aguarda proximo tick pra pegar _nextRef preenchido
+    await new Promise(function(r){setTimeout(r,0);});
+    // Save real no Supabase — sem swallow, com toast em caso de erro
+    if(typeof window==="undefined" || !window._sb || !_nextRef) return;
+    try{
+      const {error} = await window._sb.from("team_data").upsert(
+        {tipo:"info_pessoal", dados:_nextRef, updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")},
+        {onConflict:"tipo"}
+      );
+      if(error){
+        console.error("[Time save]", error);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao salvar no servidor: "+(error.message||"erro desconhecido")+". Cache local mantido — tente de novo.",6000);
+      }
+    }catch(e){
+      console.error("[Time save exception]", e);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro de rede ao salvar. Cache local mantido.",5000);
+    }
   };
 
   const startEdit = function(u){
@@ -62278,24 +62289,38 @@ function _EventosPlanner({isMob}){
   // Carrega do Supabase no mount
   useEffect(function(){
     if(!window._sb) return;
-    window._sb.from("team_data").select("data").eq("tipo","agency_events").maybeSingle()
+    // Le do padrao consolidado: dados.eventos. Fallback pra data.eventos (legado).
+    window._sb.from("team_data").select("dados,data").eq("tipo","agency_events").maybeSingle()
       .then(function(r){
-        if(r && r.error){ console.warn("[agency_events load]", r.error.message||r.error); return; }
-        if(r && r.data && Array.isArray(r.data.data && r.data.data.eventos)){
-          setEventos(r.data.data.eventos);
-          try{ localStorage.setItem(_LS_KEY, JSON.stringify(r.data.data.eventos)); }catch(_){}
+        if(r && r.error && r.error.code!=="PGRST116"){ console.warn("[agency_events load]", r.error.message||r.error); return; }
+        if(!r || !r.data) return;
+        const _payload = (r.data.dados && r.data.dados.eventos) ? r.data.dados : (r.data.data || null);
+        if(_payload && Array.isArray(_payload.eventos)){
+          setEventos(_payload.eventos);
+          try{ localStorage.setItem(_LS_KEY, JSON.stringify(_payload.eventos)); }catch(_){}
         }
       })
       .catch(function(e){ console.warn("[agency_events load]", e && e.message ? e.message : e); });
   }, []);
 
-  function _persist(next){
+  async function _persist(next){
     setEventos(next);
     try{ localStorage.setItem(_LS_KEY, JSON.stringify(next)); }catch(_){}
     if(!window._sb) return;
-    window._sb.from("team_data").upsert({tipo:"agency_events", data:{eventos:next}}, {onConflict:"tipo"})
-      .then(function(r){ if(r && r.error) console.warn("[agency_events save]", r.error.message||r.error); })
-      .catch(function(e){ console.warn("[agency_events save]", e && e.message ? e.message : e); });
+    // Padrao consolidado: dados + onConflict tipo + toast visivel em erro
+    try{
+      const {error} = await window._sb.from("team_data").upsert(
+        {tipo:"agency_events", dados:{eventos:next}, updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")},
+        {onConflict:"tipo"}
+      );
+      if(error){
+        console.error("[agency_events save]", error);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Evento salvo no PC mas falhou no servidor: "+(error.message||"erro")+". Outros PCs nao vao ver ate salvar de novo.",6500);
+      }
+    }catch(e){
+      console.error("[agency_events save exception]", e);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro de rede — evento so foi salvo neste PC.",5500);
+    }
   }
 
   function _new(){
