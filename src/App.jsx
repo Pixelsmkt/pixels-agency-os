@@ -1394,6 +1394,15 @@ function smartFormatTitle(input){
 
 /* ─── DESIGNER PAYMENTS ─── */
 const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
+// Overrides por designer — combinados individualmente. Maria: Ajuste de template = R$ 25.
+const DESIGNER_PRICE_OVERRIDES = {
+  maria: { fotoObra: 25 },
+};
+// Retorna preços mesclando defaults + override do designer (se houver).
+function _pricesFor(designerId){
+  const _ov = (DESIGNER_PRICE_OVERRIDES && DESIGNER_PRICE_OVERRIDES[designerId]) || {};
+  return Object.assign({}, DESIGNER_PRICES, _ov);
+}
 // "reprovado" entra porque o material foi produzido — paga igual.
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
 const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
@@ -1443,14 +1452,17 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     else if(t.contentType==="video_feira"){out.videoFeira++;out.tasksVideoFeira.push(t);}
     else {out.naoClassificado++;out.tasksOutros.push(t);}
   });
-  out.total = out.fotoObra*DESIGNER_PRICES.fotoObra
-            + out.arte*DESIGNER_PRICES.arte
-            + out.carrossel*DESIGNER_PRICES.carrossel
-            + out.folder*DESIGNER_PRICES.folder
-            + out.video*DESIGNER_PRICES.video
-            + out.corte*DESIGNER_PRICES.corte
-            + out.videoComplexo*DESIGNER_PRICES.videoComplexo
-            + out.videoFeira*DESIGNER_PRICES.videoFeira;
+  // Preços específicos deste designer (aplica overrides se houver)
+  const _prices = _pricesFor(designerId);
+  out._prices = _prices; // expõe pros consumers renderizarem o preço certo
+  out.total = out.fotoObra*_prices.fotoObra
+            + out.arte*_prices.arte
+            + out.carrossel*_prices.carrossel
+            + out.folder*_prices.folder
+            + out.video*_prices.video
+            + out.corte*_prices.corte
+            + out.videoComplexo*_prices.videoComplexo
+            + out.videoFeira*_prices.videoFeira;
   return out;
 }
 function formatRefMonth(refMonth){
@@ -37681,11 +37693,11 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
   // Editor vê só Vídeo. Designer e outros veem Foto/Arte/Carrossel.
   const isEditor=user.dash==="editor";
   const entregas=isEditor
-    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video})),
-      ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte de vídeo",_price:DESIGNER_PRICES.corte}))]
-    :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Ajuste de template",_price:DESIGNER_PRICES.fotoObra})),
-      ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:DESIGNER_PRICES.arte})),
-      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:DESIGNER_PRICES.carrossel}))];
+    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:(calc._prices||DESIGNER_PRICES).video})),
+      ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte de vídeo",_price:(calc._prices||DESIGNER_PRICES).corte}))]
+    :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Ajuste de template",_price:(calc._prices||DESIGNER_PRICES).fotoObra})),
+      ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:(calc._prices||DESIGNER_PRICES).arte})),
+      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:(calc._prices||DESIGNER_PRICES).carrossel}))];
   return <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
     {/* Header com mês picker + total */}
     <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
@@ -37705,13 +37717,13 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
     {/* Breakdown — categorias dependem do role (editor=vídeo, designer=foto/arte/carrossel) */}
     {isEditor
       ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-        <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
-        <CardCat label="Corte de vídeo" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
+        <CardCat label="Vídeo" count={calc.video} price={(calc._prices||DESIGNER_PRICES).video} color="#16a34a"/>
+        <CardCat label="Corte de vídeo" count={calc.corte} price={(calc._prices||DESIGNER_PRICES).corte} color="#16a34a"/>
       </div>
       :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-        <CardCat label="Ajuste de template" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
-        <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
-        <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+        <CardCat label="Ajuste de template" count={calc.fotoObra} price={(calc._prices||DESIGNER_PRICES).fotoObra} color="#16a34a"/>
+        <CardCat label="Arte única" count={calc.arte} price={(calc._prices||DESIGNER_PRICES).arte} color="#16a34a"/>
+        <CardCat label="Carrossel" count={calc.carrossel} price={(calc._prices||DESIGNER_PRICES).carrossel} color="#16a34a"/>
       </div>}
     {calc.naoClassificado>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11,borderRadius:8,padding:"10px 14px",lineHeight:1.5}}>
       <strong>{calc.naoClassificado} demanda(s) sem tipo de conteúdo definido</strong> — ainda não entram no cálculo. Os sócios precisam abrir e classificar.
@@ -59701,16 +59713,16 @@ function DashColabV2(props){
   // ── Detalhamento por tipo (pra cards do pagamento) ──
   const breakdown = isEditor
     ? [
-        {label:"Vídeo",           count:calc.video||0,         price:DESIGNER_PRICES.video,         tasks:calc.tasksVideo||[]},
-        {label:"Corte de vídeo",  count:calc.corte||0,         price:DESIGNER_PRICES.corte,         tasks:calc.tasksCorte||[]},
-        {label:"Vídeo dinâmico",  count:calc.videoComplexo||0, price:DESIGNER_PRICES.videoComplexo, tasks:calc.tasksVideoComplexo||[]},
-        {label:"Vídeo básico",     count:calc.videoFeira||0,    price:DESIGNER_PRICES.videoFeira,    tasks:calc.tasksVideoFeira||[]},
+        {label:"Vídeo",           count:calc.video||0,         price:(calc._prices||DESIGNER_PRICES).video,         tasks:calc.tasksVideo||[]},
+        {label:"Corte de vídeo",  count:calc.corte||0,         price:(calc._prices||DESIGNER_PRICES).corte,         tasks:calc.tasksCorte||[]},
+        {label:"Vídeo dinâmico",  count:calc.videoComplexo||0, price:(calc._prices||DESIGNER_PRICES).videoComplexo, tasks:calc.tasksVideoComplexo||[]},
+        {label:"Vídeo básico",     count:calc.videoFeira||0,    price:(calc._prices||DESIGNER_PRICES).videoFeira,    tasks:calc.tasksVideoFeira||[]},
       ]
     : [
-        {label:"Ajuste de template",    count:calc.fotoObra||0,      price:DESIGNER_PRICES.fotoObra,      tasks:calc.tasksFotoObra||[]},
-        {label:"Arte única",      count:calc.arte||0,          price:DESIGNER_PRICES.arte,          tasks:calc.tasksArte||[]},
-        {label:"Carrossel",       count:calc.carrossel||0,     price:DESIGNER_PRICES.carrossel,     tasks:calc.tasksCarrossel||[]},
-        {label:"Folder",          count:calc.folder||0,        price:DESIGNER_PRICES.folder,        tasks:calc.tasksFolder||[]},
+        {label:"Ajuste de template",    count:calc.fotoObra||0,      price:(calc._prices||DESIGNER_PRICES).fotoObra,      tasks:calc.tasksFotoObra||[]},
+        {label:"Arte única",      count:calc.arte||0,          price:(calc._prices||DESIGNER_PRICES).arte,          tasks:calc.tasksArte||[]},
+        {label:"Carrossel",       count:calc.carrossel||0,     price:(calc._prices||DESIGNER_PRICES).carrossel,     tasks:calc.tasksCarrossel||[]},
+        {label:"Folder",          count:calc.folder||0,        price:(calc._prices||DESIGNER_PRICES).folder,        tasks:calc.tasksFolder||[]},
       ];
 
   // ── Status geral do mês ──
@@ -59872,7 +59884,7 @@ function DashColabV2(props){
           {tasksPagas.map(function(t){
             const cl = clientObj(t.client);
             const ct = String(t.contentType||"").toLowerCase();
-            const price = ct==="foto"?DESIGNER_PRICES.fotoObra : ct==="arte"?DESIGNER_PRICES.arte : ct==="carrossel"?DESIGNER_PRICES.carrossel : ct==="folder"?DESIGNER_PRICES.folder : ct==="video"?DESIGNER_PRICES.video : ct==="corte"?DESIGNER_PRICES.corte : ct==="video_complexo"?DESIGNER_PRICES.videoComplexo : ct==="video_feira"?DESIGNER_PRICES.videoFeira : 0;
+            const price = ct==="foto"?(calc._prices||DESIGNER_PRICES).fotoObra : ct==="arte"?(calc._prices||DESIGNER_PRICES).arte : ct==="carrossel"?(calc._prices||DESIGNER_PRICES).carrossel : ct==="folder"?(calc._prices||DESIGNER_PRICES).folder : ct==="video"?(calc._prices||DESIGNER_PRICES).video : ct==="corte"?(calc._prices||DESIGNER_PRICES).corte : ct==="video_complexo"?(calc._prices||DESIGNER_PRICES).videoComplexo : ct==="video_feira"?(calc._prices||DESIGNER_PRICES).videoFeira : 0;
             const dateRef = t.completedAt || t.publishDate || "";
             const dateStr = dateRef && dateRef.length>=10 ? dateRef.slice(8,10)+"/"+dateRef.slice(5,7) : "—";
             return <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:11,transition:"all .15s"}}
