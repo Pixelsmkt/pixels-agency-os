@@ -34142,6 +34142,34 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const checkDone=checklist.filter(i=>i.done).length;
   const checkPct=checklist.length>0?Math.round(checkDone/checklist.length*100):0;
 
+  // ═══ DRAG & DROP DE REORDENAÇÃO — Arquivo final (carrossel Instagram) ═══
+  // Social media precisa definir a ordem exata das mídias antes de publicar.
+  // Reordena o array attachments preservando posições relativas + persiste no Supabase.
+  const _dragItemIdRef = useRef(null);
+  const [_dragOverItemId, _setDragOverItemId] = useState(null);
+  const reorderFinItem = async function(fromId, toId){
+    if(!fromId || !toId || fromId===toId) return;
+    // Encontra os índices no attachments array
+    const _newAtts = attachments.slice();
+    const _fromIdx = _newAtts.findIndex(function(a){return a.id===fromId;});
+    const _toIdx   = _newAtts.findIndex(function(a){return a.id===toId;});
+    if(_fromIdx<0 || _toIdx<0) return;
+    const _moved = _newAtts.splice(_fromIdx, 1)[0];
+    _newAtts.splice(_toIdx, 0, _moved);
+    setAttachments(_newAtts);
+    // Persiste no Supabase
+    try{
+      const sb = window._sb;
+      if(sb && task && task.id){
+        const _cleanFiles = _newAtts.filter(function(a){return a && !a.uploading;});
+        await sb.from("tasks").update({files:_cleanFiles}).eq("id", task.id);
+        if(typeof setTasks==="function"){
+          setTasks(function(prev){ return prev.map(function(_t){ return _t.id===task.id ? Object.assign({}, _t, {files:_cleanFiles}) : _t; }); });
+        }
+      }
+    }catch(e){ /* silencioso */ }
+  };
+
   const timeline_all=[...(task.createdAt?[{type:"created",label:`Criado por ${task.createdBy||"sistema"}`,atFmt:task.createdAt}]:[]),...(task.timeline||[])];
 
   // Filtros para grids — exclui placeholders de upload (a.uploading) pra evitar src=null quebrado
@@ -34154,6 +34182,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const imgMat=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
   const vidRef=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isRef(a));
   const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
+  // Unificado: imagens + videos finais na ordem em que aparecem no attachments (respeita drag&drop)
+  const finItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a);});
   const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
   const imgAttachments=[...imgRef,...imgFin];
@@ -35324,62 +35354,86 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{canEdit?"Sem entrega ainda":"Sem arquivos finais entregues"}</div>
                     <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{canEdit?"Arraste o arquivo final aqui ou clique em Adicionar":"A equipe ainda não subiu a versão final."}</div>
                   </div>)}
-                  {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
-                    {imgFin.map((a,i)=>(
-                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
-                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
-                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
-                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
-                          <Ico n="image" size={22} color="#64748b"/>
-                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
-                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
-                            Abrir <Ico n="external" size={9} color="#fff"/>
-                          </a>
+                  {/* ═══ GRID UNIFICADO — imagens + vídeos numeradas na ordem do carrossel ═══
+                       Drag & drop entre tiles pra reordenar. Numeração #1..#N respeita a ordem. */}
+                  {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    {finItems.map(function(a,i){
+                      const _isVideo = isVid(a);
+                      const _isDraggedOver = _dragOverItemId===a.id;
+                      const sizeMB = _isVideo && a.size ? (a.size/1024/1024).toFixed(1) : null;
+                      return(
+                        <div key={a.id}
+                          draggable={canEdit?"true":undefined}
+                          onDragStart={canEdit?function(e){
+                            _dragItemIdRef.current=a.id;
+                            try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",a.id);}catch(_){}
+                          }:undefined}
+                          onDragOver={canEdit?function(e){
+                            if(!_dragItemIdRef.current) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            try{e.dataTransfer.dropEffect="move";}catch(_){}
+                            if(_dragOverItemId!==a.id) _setDragOverItemId(a.id);
+                          }:undefined}
+                          onDragLeave={canEdit?function(e){
+                            e.stopPropagation();
+                            if(_dragOverItemId===a.id) _setDragOverItemId(null);
+                          }:undefined}
+                          onDrop={canEdit?function(e){
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const _fromId = _dragItemIdRef.current;
+                            _dragItemIdRef.current=null;
+                            _setDragOverItemId(null);
+                            if(_fromId && _fromId!==a.id) reorderFinItem(_fromId, a.id);
+                          }:undefined}
+                          onDragEnd={canEdit?function(){
+                            _dragItemIdRef.current=null;
+                            _setDragOverItemId(null);
+                          }:undefined}
+                          style={{position:"relative",borderRadius:10,overflow:"hidden",border:_isDraggedOver?"2px dashed #7c3aed":"0.5px solid #e2e8f0",aspectRatio:"1",background:_isVideo?"#0f172a":"#f8fafc",cursor:canEdit?"grab":"default",transition:"border .12s, transform .12s",transform:_isDraggedOver?"scale(1.02)":"scale(1)"}}>
+                          {_isVideo ? (
+                            <video src={a.url} controls preload="metadata" playsInline
+                              onClick={function(e){e.stopPropagation();}}
+                              style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
+                          ) : (<>
+                            <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                              onClick={function(){setLightbox({url:a.url,name:a.name,storagePath:a.storagePath});}}
+                              onError={function(e){e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                            <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
+                              <Ico n="image" size={22} color="#64748b"/>
+                              <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
+                              <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={function(e){e.stopPropagation();}}
+                                style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                                Abrir <Ico n="external" size={9} color="#fff"/>
+                              </a>
+                            </div>
+                          </>)}
+                          {/* Badge de ordem — inclui ícone de arrastar pra ficar claro que da pra reordenar */}
+                          <div style={{position:"absolute",top:6,left:6,background:_isVideo?"#0f172a":"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px 2px 7px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)",display:"inline-flex",alignItems:"center",gap:4,boxShadow:_isVideo?"0 2px 6px rgba(0,0,0,0.4)":"none",pointerEvents:"none"}}>
+                            {canEdit&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.7}}><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>}
+                            #{i+1}{_isVideo?" · vídeo":""}
+                          </div>
+                          <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                            <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title={_isVideo?"Baixar vídeo":"Baixar imagem"}
+                              style={{background:"rgba(15,23,42,"+(_isVideo?"0.65":"0.55")+")",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
+                              onMouseEnter={function(e){e.currentTarget.style.background=_isVideo?"rgba(15,23,42,0.95)":"rgba(124,58,237,0.85)";}}
+                              onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,"+(_isVideo?"0.65":"0.55")+")";}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </button>
+                            {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                              style={{background:"rgba(15,23,42,"+(_isVideo?"0.65":"0.55")+")",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
+                              onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                              onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,"+(_isVideo?"0.65":"0.55")+")";}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>}
+                          </div>
+                          {sizeMB&&<div style={{position:"absolute",bottom:6,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
                         </div>
-                        <div style={{position:"absolute",top:6,left:6,background:"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)"}}>#{i+1}</div>
-                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar imagem"
-                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
-                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                          </button>
-                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>}
-                  {vidFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidFin.map(a=>{
-                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",background:"#0f172a",transition:"all .15s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#0f172a";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.15)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-                      {/* Player nativo — mostra primeiro frame + controls pra play inline */}
-                      <video src={a.url} controls preload="metadata" playsInline
-                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
-                      <div style={{position:"absolute",top:6,left:6,background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,boxShadow:"0 2px 6px rgba(0,0,0,0.4)",pointerEvents:"none"}}>FINAL · {a.name?a.name.slice(0,14):"vídeo"}</div>
-                      <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                        <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
-                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(15,23,42,0.95)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        </button>
-                        {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
-                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>}
-                      </div>
-                      {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
-                    </div>);
-                  })}</div>}
                 </div>);
               })()}
 
