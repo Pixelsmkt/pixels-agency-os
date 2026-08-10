@@ -24763,19 +24763,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                       {isLatest&&rounds2.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
                       {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt2(r.ts)}</span>}
                     </div>
-                    {isSent && r.sentFiles && r.sentFiles.length>0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:0}}>
-                              {r.sentFiles.slice(0,6).map(function(f){
-                                const _isVid = f && f.url && ((String(f.type||"").startsWith("video/")) || (typeof _isVideoUrl==="function" && _isVideoUrl(f.url)));
-                                return <div key={f.id||f.url} onClick={function(){setOpenCard(current);}} title="Clique pra abrir o cartão"
-                                  style={{width:52,height:52,borderRadius:8,overflow:"hidden",border:"1px solid #e2e8f0",cursor:"pointer",background:"#0f172a",position:"relative"}}>
-                                  {_isVid
-                                    ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
-                                    : <img src={f.url} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={function(e){e.currentTarget.style.display="none";}}/>}
-                                </div>;
-                              })}
-                              {r.sentFiles.length>6 && <div style={{width:52,height:52,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700}}>+{r.sentFiles.length-6}</div>}
-                            </div>}
-                            {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
+                    {/* Áudio do ajuste (se houver). Bloco de sentFiles removido — pertence à aba design, aqui `isSent` nao existe -> dava ReferenceError -> tela preta. */}
+                    {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
                     {r.comments.map(cc=>{
                       const txt = String(cc.text||"").replace("AJUSTE NECESSARIO: ","");
                       const _isEditing = editingCmt && editingCmt.taskId===current.id && editingCmt.cmtId===cc.id;
