@@ -34767,6 +34767,47 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* DESC */}
           {activeTab==="desc"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
 
+            {/* ── ENTREGA COMPACTA — thumbs dos arquivos finais no topo do Briefing ──
+                 Aparece quando ja tem entrega. Deixa socio ver o resultado sem trocar de aba. */}
+            {finItems.length>0&&(()=>{
+              const _MAX=6;
+              const _shown=finItems.slice(0,_MAX);
+              const _rest=Math.max(0, finItems.length-_MAX);
+              return <div style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11,fontWeight:700,letterSpacing:-.05,flexShrink:0}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  Entrega ({finItems.length})
+                </div>
+                <div style={{display:"flex",gap:5,flex:1,overflow:"hidden"}}>
+                  {_shown.map(function(a,i){
+                    const _v=isVid(a);
+                    return <div key={a.id} onClick={function(e){
+                        e.stopPropagation();
+                        if(_v){ setActiveTab("files"); }
+                        else { setLightbox({url:a.url,name:a.name,storagePath:a.storagePath}); }
+                      }} title={"#"+(i+1)+(_v?" · video":"")+" — clique pra abrir"}
+                      style={{position:"relative",width:44,height:44,borderRadius:7,overflow:"hidden",border:"1px solid #e2e8f0",background:_v?"#0f172a":"#f8fafc",cursor:"pointer",flexShrink:0,transition:"transform .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}>
+                      {_v
+                        ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+                        : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      }
+                      <div style={{position:"absolute",top:2,left:2,background:"rgba(15,23,42,0.75)",color:"#fff",fontSize:8.5,fontWeight:700,padding:"1px 4px",borderRadius:4,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>#{i+1}</div>
+                    </div>;
+                  })}
+                  {_rest>0&&<div onClick={function(e){e.stopPropagation();setActiveTab("files");}} title="Ver todos os arquivos"
+                    style={{width:44,height:44,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+{_rest}</div>}
+                </div>
+                <button onClick={function(){setActiveTab("files");}} type="button"
+                  style={{background:"transparent",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                  Ver todos
+                </button>
+              </div>;
+            })()}
+
             {/* AJUSTES SOLICITADOS — agrupados por lote (comentario + imagens daquele round) */}
             {(task.isAlteracao||task.status==="alteracao"||task.status==="ajustes"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
               const allAnnotations=(task.files||[]).filter(f=>f.isAnnotation);
