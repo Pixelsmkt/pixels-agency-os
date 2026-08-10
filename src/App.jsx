@@ -26875,8 +26875,8 @@ function _DRELinha({kind, pos, label, valor, cor, subtitle, op, isMob}){
   </div>;
 }
 
-function _DRESecao({pos, op, label, total, cor, subtitle, state, isSocio, brl, isMob, extra, extraBottom}){
-  const [expanded, setExpanded] = useState(false);
+function _DRESecao({pos, op, label, total, cor, subtitle, state, isSocio, brl, isMob, extra, extraBottom, defaultExpanded}){
+  const [expanded, setExpanded] = useState(!!defaultExpanded);
   return <div style={{border:"1px solid #f1f5f9",borderRadius:11,overflow:"hidden"}}>
     <div onClick={function(){setExpanded(!expanded);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"12px 16px",cursor:"pointer",background:expanded?cor+"08":"#fff",transition:"background .12s",flexWrap:"wrap"}}
       onMouseEnter={function(e){e.currentTarget.style.background=cor+"10";}}
@@ -27429,7 +27429,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
 
       <_DRELinha kind="subtotal" pos="3." op="=" label="Receita líquida" valor={receitaLiquida} cor="#f59e0b" isMob={isMob}/>
 
-      <_DRESecao pos="4." op="−" label="CSP (Custo do Serviço Prestado)" total={cspTotal} cor="#84cc16" state={_custosCSP} isSocio={_isSocio} brl={_brlF} isMob={isMob}
+      <_DRESecao pos="4." op="−" label="CSP (Custo do Serviço Prestado)" total={cspTotal} cor="#84cc16" state={_custosCSP} isSocio={_isSocio} brl={_brlF} isMob={isMob} defaultExpanded={true}
         extra={{label:"Freelancers do mês (cálculo auto)", valor:freelancersTotal, hint:"Via Pagamentos por demanda"}}
         extraBottom={<div style={{padding:"12px 16px",background:"#f7fee7",borderLeft:"3px solid #84cc16",borderRadius:8}}>
           <FreelancerPaymentsBlock tasks={tasks||[]} setTasks={setTasks} refMonth={dreMonth} onChangeMonth={setDreMonth} isMob={isMob} compact={true}/>
@@ -35516,6 +35516,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </div>)}
                   {/* ═══ GRID UNIFICADO — imagens + vídeos numeradas na ordem do carrossel ═══
                        Drag & drop entre tiles pra reordenar. Numeração #1..#N respeita a ordem. */}
+                  {finItems.length>1&&canEdit&&<div style={{display:"flex",alignItems:"center",gap:6,color:"#64748b",fontSize:11,fontWeight:600,marginBottom:8,padding:"6px 10px",background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:8,letterSpacing:-.05}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                    <span style={{color:"#7c3aed"}}>Arraste os cards</span> pra definir a ordem exata do carrossel do Instagram.
+                  </div>}
                   {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
@@ -35551,7 +35555,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             _dragItemIdRef.current=null;
                             _setDragOverItemId(null);
                           }:undefined}
-                          style={{position:"relative",borderRadius:10,overflow:"hidden",border:_isDraggedOver?"2px dashed #7c3aed":"0.5px solid #e2e8f0",aspectRatio:"1",background:_isVideo?"#0f172a":"#f8fafc",cursor:canEdit?"grab":"default",transition:"border .12s, transform .12s",transform:_isDraggedOver?"scale(1.02)":"scale(1)"}}>
+                          style={{position:"relative",borderRadius:10,overflow:"hidden",border:_isDraggedOver?"2px dashed #7c3aed":"1px solid #e2e8f0",aspectRatio:"1",background:_isVideo?"#0f172a":"#f8fafc",cursor:canEdit?"grab":"default",transition:"border .12s, transform .12s, box-shadow .12s",transform:_isDraggedOver?"scale(1.02)":"scale(1)",boxShadow:_isDraggedOver?"0 8px 24px rgba(124,58,237,0.25)":"none"}}
+                          onMouseDown={canEdit?function(e){e.currentTarget.style.cursor="grabbing";}:undefined}
+                          onMouseUp={canEdit?function(e){e.currentTarget.style.cursor="grab";}:undefined}>
                           {_isVideo ? (
                             <video src={a.url} controls preload="metadata" playsInline
                               onClick={function(e){e.stopPropagation();}}
@@ -35570,9 +35576,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                               </a>
                             </div>
                           </>)}
-                          {/* Badge de ordem — inclui ícone de arrastar pra ficar claro que da pra reordenar */}
-                          <div style={{position:"absolute",top:6,left:6,background:_isVideo?"#0f172a":"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px 2px 7px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)",display:"inline-flex",alignItems:"center",gap:4,boxShadow:_isVideo?"0 2px 6px rgba(0,0,0,0.4)":"none",pointerEvents:"none"}}>
-                            {canEdit&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.7}}><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>}
+                          {/* GRIP HANDLE grande e visivel — mostra que da pra arrastar */}
+                          {canEdit&&<div title="Arraste pra reordenar a sequência do carrossel"
+                            style={{position:"absolute",top:6,left:6,background:"rgba(15,23,42,0.85)",color:"#fff",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)",boxShadow:"0 2px 8px rgba(0,0,0,0.3)",pointerEvents:"none",transition:"transform .12s"}}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                          </div>}
+                          {/* Badge de numero — pra baixo pra nao conflitar com grip */}
+                          <div style={{position:"absolute",bottom:6,left:6,background:_isVideo?"#0f172a":"rgba(15,23,42,0.85)",color:"#fff",borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:800,letterSpacing:.3,backdropFilter:"blur(4px)",boxShadow:_isVideo?"0 2px 6px rgba(0,0,0,0.4)":"0 2px 6px rgba(15,23,42,0.3)",pointerEvents:"none",fontFeatureSettings:"'tnum'"}}>
                             #{i+1}{_isVideo?" · vídeo":""}
                           </div>
                           <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
