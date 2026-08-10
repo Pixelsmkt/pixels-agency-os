@@ -27039,6 +27039,151 @@ function _DREEvolucaoChart({dreMonth, cores, isMob}){
 }
 
 
+/* ═══ MODAL EDITAR CONTRATO — Gestao > Financeiro > Contratos ativos ═══
+   Fields: valor, pagDia, respFin (Vinicius/Gustavo), nfAsaas (bool),
+           metodoPag (PIX/Boleto/Cartao), dataInicio, observacoes. */
+function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose}){
+  const _c = editContrato;
+  const _isUnit = _c.unitIdx !== null && _c.unitIdx !== undefined;
+  const _initDraft = _c.draft || {};
+  const [d, setD] = useState({
+    valor:      _initDraft.valor      || 0,
+    pagDia:     _initDraft.pagDia     || 10,
+    respFin:    _initDraft.respFin    || "",
+    nfAsaas:    _initDraft.nfAsaas    === undefined ? false : _initDraft.nfAsaas,
+    metodoPag:  _initDraft.metodoPag  || "PIX",
+    dataInicio: _initDraft.dataInicio || "",
+    observacoes:_initDraft.observacoes|| "",
+  });
+  const set = function(k,v){ setD(function(p){return Object.assign({},p,{[k]:v});}); };
+
+  if(typeof useEscToClose==="function") useEscToClose(true, onClose);
+
+  function _save(){
+    updateContratos(function(prev){
+      return (prev||[]).map(function(row){
+        if(row.grupo !== _c.grupo) return row;
+        if(_isUnit && Array.isArray(row.unidades)){
+          const _newUnits = row.unidades.slice();
+          _newUnits[_c.unitIdx] = Object.assign({}, _newUnits[_c.unitIdx], d);
+          return Object.assign({}, row, {unidades:_newUnits});
+        }
+        // Cliente unico
+        return Object.assign({}, row, d);
+      });
+    });
+    onClose();
+  }
+
+  const _RESP_OPTS = [
+    {id:"Vinicius", name:"Vinicius"},
+    {id:"Gustavo",  name:"Gustavo"},
+  ];
+  const _MET_OPTS = ["PIX","Boleto","Cartão"];
+
+  const _title = _isUnit
+    ? "Editar unidade — "+_c.grupo+" · "+(_initDraft.nome||"")
+    : "Editar contrato — "+_c.grupo;
+
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
+      <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>{_title}</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3}}>Dados financeiros do contrato ativo.</div>
+        </div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
+      </div>
+      <div style={{padding:22,display:"flex",flexDirection:"column",gap:14}}>
+
+        {/* Valor + Dia de pagamento — linha */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Valor mensal (R$)</div>
+            <input type="number" min="0" step="100" value={d.valor||0}
+              onChange={function(e){set("valor", Number(e.target.value)||0);}}
+              style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Dia do pagamento</div>
+            <input type="number" min="1" max="31" value={d.pagDia||10}
+              onChange={function(e){set("pagDia", Math.max(1,Math.min(31, Number(e.target.value)||10)));}}
+              style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:14,fontWeight:600,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          </div>
+        </div>
+
+        {/* Responsavel financeiro — chips clicaveis */}
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Responsável financeiro</div>
+          <div style={{display:"flex",gap:6}}>
+            {_RESP_OPTS.map(function(o){
+              const _sel = d.respFin===o.id;
+              return <button key={o.id} onClick={function(){set("respFin", _sel?"":o.id);}}
+                style={{flex:1,background:_sel?"#7c3aed":"#f8fafc",color:_sel?"#fff":"#475569",border:"1px solid "+(_sel?"#7c3aed":"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+                {o.name}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        {/* NF automatizada Asaas — toggle grande */}
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Nota fiscal automatizada pelo Asaas?</div>
+          <div style={{display:"flex",gap:6}}>
+            {[{v:true,lbl:"Sim, automática",bg:"#dcfce7",fg:"#166534",bd:"#86efac"},{v:false,lbl:"Não, manual",bg:"#fef3c7",fg:"#92400e",bd:"#fde68a"}].map(function(o){
+              const _sel = d.nfAsaas===o.v;
+              return <button key={String(o.v)} onClick={function(){set("nfAsaas", o.v);}}
+                style={{flex:1,background:_sel?o.bg:"#f8fafc",color:_sel?o.fg:"#475569",border:"1px solid "+(_sel?o.bd:"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:_sel?700:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+                {o.lbl}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        {/* Metodo de pagamento — chips */}
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Método de pagamento</div>
+          <div style={{display:"flex",gap:6}}>
+            {_MET_OPTS.map(function(m){
+              const _sel = d.metodoPag===m;
+              return <button key={m} onClick={function(){set("metodoPag", m);}}
+                style={{flex:1,background:_sel?"#1d4ed8":"#f8fafc",color:_sel?"#fff":"#475569",border:"1px solid "+(_sel?"#1d4ed8":"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+                {m}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        {/* Data de inicio */}
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Data de início do contrato</div>
+          <input type="date" value={d.dataInicio||""}
+            onChange={function(e){set("dataInicio", e.target.value);}}
+            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+        </div>
+
+        {/* Observacoes */}
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Observações</div>
+          <textarea rows={3} value={d.observacoes||""}
+            onChange={function(e){set("observacoes", e.target.value);}}
+            placeholder="Notas internas: renegociar em Nov, tem desconto de fidelidade, etc."
+            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical",minHeight:70,lineHeight:1.5}}/>
+        </div>
+
+      </div>
+      <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
+        <button onClick={onClose}
+          style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={_save}
+          style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar contrato</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   // Mês de referência da DRE (histórico persistido por mês em localStorage)
   const [dreMonth,setDreMonth]=useState(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
@@ -27525,14 +27670,29 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               <span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
               <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span>
             </div>
-            {(c.pagDia||c.respFin)&&<div style={{display:"flex",gap:12,fontSize:10.5,color:"#64748b",fontWeight:600,paddingTop:4}}>
-              {c.pagDia&&<span>Pagto. dia <strong style={{color:"#0f172a"}}>{c.pagDia}</strong></span>}
-              {c.respFin&&<span>Resp. <strong style={{color:"#0f172a"}}>{c.respFin}</strong></span>}
-            </div>}
+            {/* Metadados do contrato — badges modernos */}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:6,borderTop:"1px dashed "+c.cor+"1c"}}>
+              {c.pagDia&&<span style={{background:"#f1f5f9",color:"#0f172a",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                dia {c.pagDia}</span>}
+              {c.metodoPag&&<span style={{background:"#eff6ff",color:"#1d4ed8",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{c.metodoPag}</span>}
+              {c.nfAsaas===true&&<span style={{background:"#dcfce7",color:"#166534",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                NF Asaas</span>}
+              {c.nfAsaas===false&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>NF manual</span>}
+              {c.respFin&&<span style={{background:"#faf5ff",color:"#7c3aed",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{c.respFin}</span>}
+            </div>
           </div>;
         })}
       </div>
     </Block>
+
+    {/* Modal de edicao do contrato — abre ao clicar em qualquer card ou unidade */}
+    {editContrato && <_GFEditContratoModal
+      editContrato={editContrato}
+      contratos={contratos}
+      updateContratos={_updateContratos}
+      onClose={function(){setEditContrato(null);}}/>}
 
   </div>;
 }
