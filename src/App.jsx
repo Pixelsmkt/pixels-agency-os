@@ -24815,7 +24815,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <div style={{color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
             </div>)}
 
-            {!captionTxt2&&!descTxt2&&(<div style={{color:C.td,fontSize:14,fontStyle:"italic",textAlign:"center",padding:"40px 0"}}>Sem legenda nem briefing preenchido pra revisar.</div>)}
+            {!captionTxt2&&!descTxt2&&(<div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"32px 24px",textAlign:"center",marginTop:8}}>
+              <div style={{width:44,height:44,borderRadius:12,background:"#f59e0b",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <div style={{color:"#78350f",fontWeight:800,fontSize:15,marginBottom:4}}>Sem legenda nem briefing cadastrado</div>
+              <div style={{color:"#92400e",fontSize:12.5,lineHeight:1.5,maxWidth:420,margin:"0 auto"}}>Esse card foi enviado pra avaliação sem legenda ou briefing preenchidos. Reprove ou abra o card pra pedir a copy pra Hellen.</div>
+            </div>)}
 
             {/* Tags */}
             {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid "+C.b1,paddingTop:14}}>
@@ -42118,6 +42124,37 @@ export default function AgencyOS(){
     try{const s=localStorage.getItem("pixels-active-client");return s||null;}catch{return null;}
   });
   useEffect(()=>{try{if(activeCl)localStorage.setItem("pixels-active-client",activeCl);else localStorage.removeItem("pixels-active-client");}catch(e){}},[activeCl]);
+
+  // ═══ BROWSER BACK BUTTON — history stack pra botão voltar navegar dentro do app ═══
+  // Sem isso, botao voltar do navegador saia pro Google. Agora navega entre pages/clientes.
+  const _navIgnoreNext = useRef(false);
+  useEffect(function(){
+    // Garante entry inicial no history
+    try{
+      if(!window.history.state || !window.history.state._pixelsApp){
+        window.history.replaceState({_pixelsApp:true, page:page, activeCl:activeCl}, "");
+      }
+    }catch(_){}
+    function _onPop(e){
+      const s = e && e.state;
+      if(s && s._pixelsApp){
+        _navIgnoreNext.current = true; // proximo effect nao pusha (evita loop)
+        if(s.page !== undefined && s.page !== page) setPage(s.page);
+        if(s.activeCl !== undefined && s.activeCl !== activeCl) setActiveCl(s.activeCl);
+      }
+    }
+    window.addEventListener("popstate", _onPop);
+    return function(){ window.removeEventListener("popstate", _onPop); };
+  }, []);
+  // Toda mudança de page/activeCl empurra uma entry no history
+  useEffect(function(){
+    if(_navIgnoreNext.current){
+      _navIgnoreNext.current = false;
+      return; // Restauracao via popstate: nao empurra
+    }
+    try{ window.history.pushState({_pixelsApp:true, page:page, activeCl:activeCl}, ""); }catch(_){}
+  }, [page, activeCl]);
+
   const [mindmapActiveCl,setMindmapActiveCl] = useState(false);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   // Persistir notifs em localStorage + manter NOTIF_STORE.items sincronizado
