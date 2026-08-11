@@ -3205,14 +3205,80 @@ function BriefingFormCanonico(props){
     {/* Conteúdo da seção */}
     <div style={{flex:1,minWidth:0}}>
       <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
-          <div style={{width:36,height:36,borderRadius:10,background:current.color+"14",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18,paddingBottom:14,borderBottom:"1px solid #f1f5f9",flexWrap:"wrap"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:current.color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <Ico n={current.icon} size={16} color={current.color}/>
           </div>
-          <div>
+          <div style={{flex:1,minWidth:0}}>
             <div style={{color:current.color,fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Seção</div>
             <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.3}}>{current.label}</div>
           </div>
+          {/* Botões de copiar — formato texto simples pra colar no GPT/WhatsApp/email */}
+          {(function(){
+            function _formatFieldValue(f, v){
+              if(v===null || v===undefined) return "(vazio)";
+              if(Array.isArray(v)) return v.length ? v.join(", ") : "(vazio)";
+              const s = String(v).trim();
+              return s.length ? s : "(vazio)";
+            }
+            function _buildSectionText(sec){
+              const lines = [];
+              lines.push("═══ "+sec.label.toUpperCase()+" ═══");
+              sec.fields.forEach(function(f){
+                if(f.showIf){
+                  const cond = (data[sec.id]||{})[f.showIf.field];
+                  if(cond !== f.showIf.value) return;
+                }
+                const v = (data[sec.id]||{})[f.id];
+                lines.push("");
+                lines.push("• "+f.label);
+                lines.push(_formatFieldValue(f, v));
+              });
+              return lines.join("\n");
+            }
+            function _buildFullText(){
+              const clienteNome = (cl && (cl.name||cl.label)) || "";
+              const header = [
+                "BRIEFING — "+clienteNome,
+                "Gerado em "+new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+                "",
+              ].join("\n");
+              const body = sections.map(function(s){return _buildSectionText(s);}).join("\n\n");
+              return header+body;
+            }
+            function _copyText(txt, msg){
+              try{
+                if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+                  navigator.clipboard.writeText(txt);
+                } else {
+                  const ta = document.createElement("textarea");
+                  ta.value = txt; document.body.appendChild(ta); ta.select();
+                  document.execCommand("copy"); document.body.removeChild(ta);
+                }
+                if(typeof pixelsToast!=="undefined") pixelsToast.success(msg,3000);
+              }catch(e){
+                if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Tente selecionar manualmente.",4000);
+              }
+            }
+            return <div style={{display:"flex",gap:6,flexShrink:0}}>
+              <button onClick={function(){_copyText(_buildSectionText(current), "Seção \""+current.label+"\" copiada!");}} type="button"
+                title={"Copia perguntas e respostas da seção \""+current.label+"\""}
+                style={{background:"transparent",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",whiteSpace:"nowrap"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copiar seção
+              </button>
+              <button onClick={function(){_copyText(_buildFullText(), "Briefing completo copiado! Cole no seu agente do GPT.");}} type="button"
+                title="Copia TODAS as seções (perguntas + respostas) pra colar no ChatGPT, e-mail ou WhatsApp"
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(22,163,74,0.25)"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#15803d";e.currentTarget.style.boxShadow="0 3px 10px rgba(22,163,74,0.35)";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";e.currentTarget.style.boxShadow="0 1px 3px rgba(22,163,74,0.25)";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                Copiar tudo
+              </button>
+            </div>;
+          })()}
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -56939,14 +57005,14 @@ function _OnbStartDatePill({startDate, accent, onPick}){
   </div>;
 }
 
-/* ═══ ONBOARDING SCRIPTS — mensagens reutilizaveis globais ═══
+/* ═══ ONBOARDING SCRIPTS — mensagens reutilizáveis globais ═══
    Persiste em team_data tipo='onboarding_scripts'. Placeholders substituem
    {{cliente}} {{data_inicio}} {{setor}} no momento da copia. */
 const _ONBSCRIPTS_SEED = [
-  {id:"s-wa-status", titulo:"WhatsApp — Atualizacao de status",
-   texto:"Ola, {{cliente}}!\n\nPassando pra atualizar o status do seu projeto:\n• Etapa atual: [preencher]\n• Proximas entregas: [preencher]\n\nQualquer duvida, so avisar. Abraco!"},
+  {id:"s-wa-status", titulo:"WhatsApp — Atualização de status",
+   texto:"Olá, {{cliente}}!\n\nPassando pra atualizar o status do seu projeto:\n• Etapa atual: [preencher]\n• Próximas entregas: [preencher]\n\nQualquer dúvida, só chamar. Abraço!"},
   {id:"s-wa-boasvindas", titulo:"WhatsApp — Boas-vindas kickoff",
-   texto:"Ola, {{cliente}}!\n\nSeja muito bem-vindo(a) a Pixels. Nosso onboarding oficial comeca em {{data_inicio}}.\n\nNos proximos dias vamos:\n• Entender profundamente sua marca\n• Alinhar planejamento e cronograma\n• Configurar acessos e ferramentas\n\nVamos juntos!"},
+   texto:"Olá, {{cliente}}!\n\nSeja muito bem-vindo(a) à Pixels. Nosso onboarding oficial começa em {{data_inicio}}.\n\nNos próximos dias vamos:\n• Entender profundamente sua marca\n• Alinhar planejamento e cronograma\n• Configurar acessos e ferramentas\n\nVamos juntos!"},
 ];
 
 function _OnbScriptsSubstitute(txt, cl, startDate){
@@ -56965,6 +57031,86 @@ function _OnbScriptsSubstitute(txt, cl, startDate){
   out = out.replace(/\{\{\s*data_inicio\s*\}\}/gi, _dataBR || "[data]");
   out = out.replace(/\{\{\s*setor\s*\}\}/gi, _setor);
   return out;
+}
+
+/* Card individual do script — com barra de tokens rapidos ("+ Nome cliente" etc). */
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl}){
+  const _taRef = useRef(null);
+  const _insertToken = function(token){
+    const ta = _taRef.current;
+    const _cur = s.texto || "";
+    let _newText, _newCaret;
+    if(ta && document.activeElement===ta && typeof ta.selectionStart==="number"){
+      const _start = ta.selectionStart, _end = ta.selectionEnd;
+      _newText = _cur.slice(0,_start) + token + _cur.slice(_end);
+      _newCaret = _start + token.length;
+    } else {
+      // Sem foco: anexa no fim
+      _newText = _cur + (_cur && !_cur.endsWith(" ") ? " " : "") + token;
+      _newCaret = _newText.length;
+    }
+    _updateScript(s.id, {texto:_newText});
+    // Restaura foco + cursor apos o token
+    setTimeout(function(){
+      if(_taRef.current){
+        _taRef.current.focus();
+        try{ _taRef.current.setSelectionRange(_newCaret, _newCaret); }catch(_){}
+      }
+    }, 0);
+  };
+  const _TOKS = [
+    {tok:"{{cliente}}",     label:"Nome do cliente"},
+    {tok:"{{data_inicio}}", label:"Data de início"},
+    {tok:"{{setor}}",       label:"Setor"},
+  ];
+  const _chipBtn = {background:"#faf5ff",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"};
+
+  return <div style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
+    {_editing
+      ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
+          autoFocus onBlur={function(){setEditingId(null);}}
+          onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
+          style={Object.assign({},_INP,{fontWeight:700,fontSize:13})}/>
+      : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
+          style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"text",padding:"1px 0"}}>
+          {s.titulo||"(sem título)"}
+        </div>
+    }
+    <textarea ref={_taRef} value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
+      placeholder={"Digite ou cole o texto do script..."}
+      rows={5}
+      style={Object.assign({},_INP,{resize:"vertical",minHeight:100,lineHeight:1.55,fontFamily:_ONB_FF})}/>
+    {/* Barra de tokens rapidos — clica pra inserir nome/data/setor onde o cursor esta */}
+    <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+      <span style={{color:"#94a3b8",fontSize:10,fontWeight:600,marginRight:2}}>inserir:</span>
+      {_TOKS.map(function(o){
+        return <button key={o.tok} onClick={function(){_insertToken(o.tok);}} type="button" title={"Insere "+o.label.toLowerCase()+" (substituído automaticamente ao copiar)"}
+          style={_chipBtn}
+          onMouseEnter={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#ede9fe";}}>
+          + {o.label}
+        </button>;
+      })}
+    </div>
+    <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
+          style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,width:30,height:30,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.background="#fef2f2";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+        <button onClick={function(){_copyScript(s);}} type="button" title={"Copia com dados de "+((cl&&cl.name)||"cliente")+" preenchidos automaticamente"}
+          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#15803d";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
+        </button>
+      </div>
+    </div>
+  </div>;
 }
 
 function _OnboardingScripts({cl, startDate, accent}){
@@ -57021,7 +57167,7 @@ function _OnboardingScripts({cl, startDate, accent}){
   };
   const _deleteScript = async function(id){
     if(typeof pixelsConfirm==="function"){
-      const ok = await pixelsConfirm({title:"Excluir script?", message:"O script sera removido pra todos os clientes.", danger:true});
+      const ok = await pixelsConfirm({title:"Excluir script?", message:"O script será removido pra todos os clientes.", danger:true});
       if(!ok) return;
     } else if(!window.confirm("Excluir?")) return;
     _persist(scripts.filter(function(s){return s.id!==id;}));
@@ -57038,7 +57184,7 @@ function _OnboardingScripts({cl, startDate, accent}){
       }
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado com dados de "+((cl&&cl.name)||"cliente")+"!",2500);
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Nao consegui copiar. Tente selecionar manualmente.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Tente selecionar manualmente.",4000);
     }
   };
 
@@ -57053,7 +57199,7 @@ function _OnboardingScripts({cl, startDate, accent}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Scripts do onboarding</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra WhatsApp, e-mail e reunioes. Compartilhado entre todos clientes.</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizáveis pra WhatsApp, e-mail e reuniões. Compartilhado entre todos os clientes.</div>
         </div>
       </div>
       <button onClick={_newScript} type="button"
@@ -57065,11 +57211,6 @@ function _OnboardingScripts({cl, startDate, accent}){
       </button>
     </div>
 
-    {/* Hint de placeholders */}
-    <div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:9,padding:"8px 12px",marginBottom:12,color:"#6d28d9",fontSize:11,fontWeight:500,lineHeight:1.5}}>
-      <span style={{fontWeight:700}}>Placeholders:</span> use <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{cliente}}'}</code> <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{data_inicio}}'}</code> <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{setor}}'}</code> — serao substituidos automaticamente ao copiar.
-    </div>
-
     {/* Lista de scripts */}
     {scripts.length===0
       ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
@@ -57078,40 +57219,9 @@ function _OnboardingScripts({cl, startDate, accent}){
       : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
           {scripts.map(function(s){
             const _editing = editingId===s.id;
-            return <div key={s.id} style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
-              {_editing
-                ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
-                    autoFocus onBlur={function(){setEditingId(null);}}
-                    onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
-                    style={Object.assign({},_INP,{fontWeight:700,fontSize:13})}/>
-                : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
-                    style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"text",padding:"1px 0"}}>
-                    {s.titulo||"(sem titulo)"}
-                  </div>
-              }
-              <textarea value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
-                placeholder={"Ola, {{cliente}}!\n\nCole ou digite aqui o texto do script..."}
-                rows={5}
-                style={Object.assign({},_INP,{resize:"vertical",minHeight:100,lineHeight:1.55,fontFamily:_ONB_FF})}/>
-              <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
-                    style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,width:30,height:30,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
-                    onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.background="#fef2f2";}}
-                    onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                  </button>
-                  <button onClick={function(){_copyScript(s);}} type="button" title={"Copia substituindo placeholders por dados de "+((cl&&cl.name)||"cliente")}
-                    style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#15803d";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";}}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    Copiar
-                  </button>
-                </div>
-              </div>
-            </div>;
+            return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
+              _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
+              _INP={_INP} cl={cl}/>;
           })}
         </div>
     }
@@ -57200,7 +57310,7 @@ function OnboardingChecklist(props){
       return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"checkCircle"}/>;
     })}
 
-    {/* Scripts reutilizaveis do onboarding — globais, com placeholders */}
+    {/* Scripts reutilizáveis do onboarding — globais, com placeholders */}
     <_OnboardingScripts cl={cl} startDate={startDate} accent={accent}/>
   </div>;
 }
