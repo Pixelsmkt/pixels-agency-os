@@ -35639,11 +35639,32 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                     <span style={{color:"#7c3aed"}}>Arraste os cards</span> pra definir a ordem exata do carrossel do Instagram.
                   </div>}
-                  {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                  {finItems.length>0&&(()=>{
+                    // Descobre o mais recente via addedAtIso (fallback vazio)
+                    const _tsOf=function(x){try{return x&&x.addedAtIso?new Date(x.addedAtIso).getTime():0;}catch(_){return 0;}};
+                    const _maxTs=finItems.reduce(function(m,x){const t=_tsOf(x);return t>m?t:m;},0);
+                    const _latestFinId=_maxTs>0?(finItems.find(function(x){return _tsOf(x)===_maxTs;})||{}).id:null;
+                    // Formata data/hora curta: "hoje 14:32" | "ontem 09:11" | "11/08 14:32"
+                    const _fmtWhen=function(a){
+                      const iso=a&&a.addedAtIso; if(!iso) return a&&a.addedAt||"";
+                      try{
+                        const d=new Date(iso), now=new Date();
+                        const sameDay=d.toDateString()===now.toDateString();
+                        const y=new Date(now); y.setDate(now.getDate()-1);
+                        const wasYesterday=d.toDateString()===y.toDateString();
+                        const hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
+                        if(sameDay) return "hoje "+hh+":"+mm;
+                        if(wasYesterday) return "ontem "+hh+":"+mm;
+                        return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+hh+":"+mm;
+                      }catch(_){return a.addedAt||"";}
+                    };
+                    return <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
                       const _isDraggedOver = _dragOverItemId===a.id;
                       const sizeMB = _isVideo && a.size ? (a.size/1024/1024).toFixed(1) : null;
+                      const _isLatest = _latestFinId && a.id===_latestFinId;
+                      const _whenLabel = _fmtWhen(a);
                       return(
                         <div key={a.id}
                           draggable={canEdit?"true":undefined}
@@ -35718,11 +35739,22 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>}
                           </div>
-                          {sizeMB&&<div style={{position:"absolute",bottom:6,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
+                          {/* MB pill no topo esquerdo (nao conflita com #num embaixo) */}
+                          {sizeMB&&<div style={{position:"absolute",top:6,left:44,background:"rgba(15,23,42,0.72)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'",pointerEvents:"none",letterSpacing:.2}}>{sizeMB} MB</div>}
+                          {/* Badge NOVO no mais recente — verde, canto sup-direito abaixo dos botoes */}
+                          {_isLatest&&<div title={"Ultimo arquivo subido — "+(_whenLabel||"")}
+                            style={{position:"absolute",top:38,right:6,background:"#16a34a",color:"#fff",borderRadius:99,padding:"3px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,boxShadow:"0 2px 6px rgba(22,163,74,0.35)",pointerEvents:"none",display:"inline-flex",alignItems:"center",gap:3}}>
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
+                            NOVO
+                          </div>}
+                          {/* Data/hora do upload — sempre visivel embaixo, canto direito */}
+                          {_whenLabel&&<div title={"Subido em "+_whenLabel+(a.addedBy?" por "+a.addedBy:"")}
+                            style={{position:"absolute",bottom:6,right:6,background:"rgba(15,23,42,0.72)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none",letterSpacing:.15,maxWidth:"70%",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_whenLabel}</div>}
                         </div>
                       );
                     })}
-                  </div>}
+                  </div>;
+                  })()}
                 </div>);
               })()}
 
