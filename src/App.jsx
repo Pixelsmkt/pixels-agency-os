@@ -10951,6 +10951,9 @@ function COngoing({cl, isMob}){
       </div>;
     })()}
 
+    {/* ── SCRIPTS DO ONGOING — mensagens reutilizaveis (WhatsApp, e-mail, reuniao) ── */}
+    {typeof _OngoingScripts==="function" && <_OngoingScripts cl={cl} accent={accent}/>}
+
   </div>;
 }
 
@@ -57367,12 +57370,11 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           </svg>
         </div>
     }
-    {/* TEXTAREA — auto-expand pra caber TODO o texto sem barra de scroll interna.
+    {/* TEXTAREA — alto o suficiente pra ver o texto inteiro sem scroll interno.
         Plain text puro: underscores continuam _ (nao vira italico), perfeito pra WhatsApp. */}
     <textarea value={s.texto||""}
       ref={function(el){
         if(!el) return;
-        // Auto-size no mount + a cada render pra caber conteudo inteiro
         try{ el.style.height="auto"; el.style.height=(el.scrollHeight+4)+"px"; }catch(_){}
       }}
       onChange={function(e){
@@ -57504,6 +57506,134 @@ function _OnboardingScripts({cl, startDate, accent}){
     </div>
 
     {/* Lista de scripts */}
+    {scripts.length===0
+      ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
+          Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
+          {scripts.map(function(s){
+            const _editing = editingId===s.id;
+            return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
+              _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
+              _INP={_INP} cl={cl}/>;
+          })}
+        </div>
+    }
+  </div>;
+}
+
+/* ═══ ONGOING SCRIPTS — mensagens reutilizaveis pra fase de acompanhamento ═══
+   Estrutura identica ao _OnboardingScripts. Persiste em team_data tipo='ongoing_scripts'.
+   Placeholders {{cliente}} {{data_inicio}} {{setor}} substituidos ao copiar. */
+const _ONGSCRIPTS_SEED = [
+  {id:"s-ong-checkin", titulo:"WhatsApp — Check-in mensal",
+   texto:"Olá, {{cliente}}!\n\nPassando pra fazer o check-in mensal do nosso trabalho:\n• Últimas entregas: [preencher]\n• O que vem pela frente: [preencher]\n• Ponto de atenção: [preencher]\n\nQuer marcar uma call rápida essa semana pra alinharmos?"},
+  {id:"s-ong-reuniao", titulo:"WhatsApp — Convite reunião de resultado",
+   texto:"Olá, {{cliente}}!\n\nVamos marcar nossa reunião mensal de resultado?\n\nNa call vamos passar por:\n• Números do mês\n• Publicações que performaram melhor\n• Próximas ações da estratégia\n\nQual dia e horário fica melhor pra você?"},
+  {id:"s-ong-nps", titulo:"WhatsApp — Solicitar NPS",
+   texto:"Olá, {{cliente}}!\n\nEstamos rodando nossa pesquisa mensal de satisfação e queria muito saber sua nota + feedback.\n\nSó abrir aqui e responder (leva 30 segundos): [link do portal]\n\nObrigado por confiar na Pixels!"},
+  {id:"s-ong-indicacao", titulo:"WhatsApp — Pedido de indicação",
+   texto:"Olá, {{cliente}}!\n\nEstamos com espaço na agenda pra pegar novos projetos e a melhor forma de crescer é pela recomendação de quem já confia no nosso trabalho.\n\nSe você conhece alguém que precise de marketing digital sério, me apresenta? Basta me passar o contato aqui.\n\nUm super obrigado!"},
+  {id:"s-ong-funil", titulo:"WhatsApp — Solicitação de resultados do funil",
+   texto:"Olá, {{cliente}}!\n\nPra fechar o mês e montar seu relatório de performance, preciso dos números do seu funil de vendas.\n\nMe passa por gentileza:\n• Leads recebidos no mês\n• Quantos viraram oportunidade / atendimento\n• Quantos fecharam venda\n• Ticket médio / faturamento gerado\n\nCom esses dados eu consigo calcular o ROI real da campanha e ajustar a estratégia pro próximo mês. Se preferir, dá pra preencher direto no portal (aba Performance).\n\nObrigado!"},
+];
+
+function _OngoingScripts({cl, accent}){
+  const _KEY = "pixels-ongoing-scripts";
+  const [scripts, setScripts] = useState(function(){
+    try{ const s=localStorage.getItem(_KEY); if(s){const p=JSON.parse(s); if(Array.isArray(p)) return p;} }catch(_){}
+    return _ONGSCRIPTS_SEED;
+  });
+  const [editingId, setEditingId] = useState(null);
+
+  useEffect(function(){
+    if(!window._sb) return;
+    let cancelled = false;
+    window._sb.from("team_data").select("dados").eq("tipo","ongoing_scripts").maybeSingle()
+      .then(function(r){
+        if(cancelled) return;
+        if(r && r.error && r.error.code!=="PGRST116"){ console.warn("[ong scripts load]", r.error.message); return; }
+        if(r && r.data && Array.isArray(r.data.dados)){
+          setScripts(r.data.dados);
+          try{ localStorage.setItem(_KEY, JSON.stringify(r.data.dados)); }catch(_){}
+        }
+      })
+      .catch(function(e){ console.warn("[ong scripts load]", e && e.message ? e.message : e); });
+    return function(){ cancelled = true; };
+  }, []);
+
+  const _persist = async function(next){
+    setScripts(next);
+    try{ localStorage.setItem(_KEY, JSON.stringify(next)); }catch(_){}
+    if(!window._sb) return;
+    try{
+      const {error} = await window._sb.from("team_data").upsert(
+        {tipo:"ongoing_scripts", dados:next, updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")},
+        {onConflict:"tipo"}
+      );
+      if(error){
+        console.error("[ong scripts save]", error);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao sincronizar scripts: "+(error.message||"erro")+". Cache local mantido.",5500);
+      }
+    }catch(e){ console.error("[ong scripts save]", e); }
+  };
+
+  const _newScript = function(){
+    const _id = "s-"+Date.now()+"-"+Math.random().toString(36).slice(2,5);
+    const _next = [{id:_id, titulo:"Novo script", texto:""}].concat(scripts);
+    _persist(_next);
+    setEditingId(_id);
+  };
+  const _updateScript = function(id, patch){
+    const _next = scripts.map(function(s){return s.id===id?Object.assign({},s,patch):s;});
+    _persist(_next);
+  };
+  const _deleteScript = async function(id){
+    if(typeof pixelsConfirm==="function"){
+      const ok = await pixelsConfirm({title:"Excluir script?", message:"O script sera removido pra todos os clientes.", danger:true});
+      if(!ok) return;
+    } else if(!window.confirm("Excluir?")) return;
+    _persist(scripts.filter(function(s){return s.id!==id;}));
+  };
+  const _copyScript = function(s){
+    const _final = (typeof _OnbScriptsSubstitute==="function") ? _OnbScriptsSubstitute(s.texto, cl, "") : (s.texto||"");
+    try{
+      if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(_final);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = _final; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado com dados de "+((cl&&cl.name)||"cliente")+"!",2500);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Nao consegui copiar. Tente selecionar manualmente.",4000);
+    }
+  };
+
+  const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
+  const _accent = accent || "#7c3aed";
+
+  return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"#dbeafe",border:"1px solid #bfdbfe",color:"#1d4ed8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Scripts do ongoing</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra check-ins, reunioes, NPS, indicacoes e resultados de funil. Compartilhado entre todos os clientes.</div>
+        </div>
+      </div>
+      <button onClick={_newScript} type="button"
+        style={{background:_accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
+        onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo script
+      </button>
+    </div>
+
     {scripts.length===0
       ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
           Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
