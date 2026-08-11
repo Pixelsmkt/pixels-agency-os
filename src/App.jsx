@@ -34002,11 +34002,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const thumbPromise=isVideo?generateVideoThumbnail(file):Promise.resolve(null);
 
       // Adiciona placeholder UPLOADING (com progress 0)
-      setAttachments(p=>[...p,{
-        id:tempId,name:file.name,type:mime,size:file.size,url:null,
-        uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
-        tipo,
-      }]);
+      // Arquivo FINAL: novo upload vai pra FRENTE (posicao #1 do carrossel = mais recente).
+      // Referencia continua no fim (nao importa ordem).
+      setAttachments(p=>{
+        const _newAtt={
+          id:tempId,name:file.name,type:mime,size:file.size,url:null,
+          uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
+          tipo,
+        };
+        return tipo==="final" ? [_newAtt, ...p] : [...p, _newAtt];
+      });
 
       try{
         const sb=window._sb;
@@ -46101,20 +46106,28 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
   const thisMonth=publicacoes.filter(function(t){const d=new Date(t.publishDate+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
   const eventsThisMonth=(clientEvents||[]).filter(function(ev){if(!ev.date)return false;const d=new Date(ev.date+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
 
-  const deleteEvent=function(id){
+  const deleteEvent=async function(id){
     if(!window.confirm("Apagar este evento? Ele vai sumir do calendário da Pixels."))return;
-    const newEvents=(clientEvents||[]).filter(function(e){return e.id!==id;});
+    const _prevEvents=clientEvents||[];
+    const newEvents=_prevEvents.filter(function(e){return e.id!==id;});
+    // Optimistic
     setClientEvents(newEvents);
+    // Persist EXPLICITO
     try{
-      if(typeof window!=="undefined"&&window._sb){
-        window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"}).then(function(){
-          if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.",3000);
-        }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);});
-      }
-    }catch(e){console.warn("[client-events] delete:",e);}
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"});
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.",3000);
+    }catch(err){
+      console.error("[client-events deleteEvent] Falha:", err);
+      // Rollback
+      setClientEvents(_prevEvents);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel apagar: "+(err.message||"erro desconhecido"),7000);
+    }
   };
-  const submitEvent=function(){
+  const submitEvent=async function(){
     if(!evTitle.trim()||!evDate)return;
+    const _prevEvents=clientEvents||[];
     const ev={
       id:"ce-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
       title:evTitle.trim(),
@@ -46123,17 +46136,22 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
       createdAt:new Date().toISOString(),
       createdBy:"Cliente",
     };
-    const newEvents=[...(clientEvents||[]),ev];
+    const newEvents=[..._prevEvents,ev];
+    // Optimistic
     setClientEvents(newEvents);
-    // Persistir em Supabase
-    try{
-      if(typeof window!=="undefined"&&window._sb){
-        window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"}).then(function(){
-          if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
-        }).catch(function(e){console.warn("[client-events] save:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar evento.");});
-      }
-    }catch(e){console.warn("[client-events] save:",e);}
     setShowNewEvent(false);setEvTitle("");setEvDesc("");setEvDate(new Date().toISOString().slice(0,10));
+    // Persist EXPLICITO
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"});
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
+    }catch(err){
+      console.error("[client-events submitEvent] Falha:", err);
+      // Rollback
+      setClientEvents(_prevEvents);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel salvar o evento: "+(err.message||"erro desconhecido"),7000);
+    }
   };
 
   // Cor do card por unidade Bioter (segue logica do interno)
@@ -46967,31 +46985,63 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   const goPrev=function(){setCardIdx(function(i){return aguardando.length<=1?0:(i<=0?aguardando.length-1:i-1);});setImgIdx(0);};
   const goNext=function(){setCardIdx(function(i){return aguardando.length<=1?0:(i>=aguardando.length-1?0:i+1);});setImgIdx(0);};
 
-  const handleAprovar=function(task){
+  const handleAprovar=async function(task){
+    // Prepara os novos dados
+    const _newTimeline = [].concat(task.timeline||[],[{
+      type:"client_approved",
+      fromLabel:"Aprovado internamente",
+      toLabel:"Aprovado pelo cliente",
+      from:"aprovado",
+      to:"aprovacao_final",
+      clientId:cl.id,
+      clientName:cl.name,
+      at:_nowIso(),
+      atFmt:_nowFmt(),
+      user:"Cliente: "+cl.name,
+      ..._clientUserMeta(),
+    }]);
+    const _updates = {
+      status:"aprovacao_final",
+      colEnteredAt:_nowIso(),
+      timeline:_newTimeline,
+    };
+    // 1) Optimistic — atualiza local pra UI reagir imediato
     setTasks(function(prev){return prev.map(function(t){
       if(t.id!==task.id)return t;
-      return Object.assign({},t,{
-        status:"aprovacao_final",
-        colEnteredAt:_nowIso(),
-        timeline:[].concat(t.timeline||[],[{
-          type:"client_approved",
-          fromLabel:"Aprovado internamente",
-          toLabel:"Aprovado pelo cliente",
-          from:"aprovado",
-          to:"aprovacao_final",
-          clientId:cl.id,
-          clientName:cl.name,
-          at:_nowIso(),
-          atFmt:_nowFmt(),
-          user:"Cliente: "+cl.name,
-          ..._clientUserMeta(),
-        }]),
-      });
+      return Object.assign({},t,_updates);
     });});
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada! Seguiu para Aprovado pelo cliente.",3500);
+    // 2) PERSIST EXPLICITO no Supabase — await + surface erros
+    // Sem isso, RLS ou rede podem falhar silenciosamente e o cliente pensa que
+    // aprovou mas nao aprovou (dado volta ao recarregar).
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado — recarregue a pagina");
+      const {error} = await window._sb.from("tasks").update({
+        status:"aprovacao_final",
+        col_entered_at:_nowIso(),
+        timeline:_newTimeline,
+      }).eq("id", String(task.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada! Seguiu para Aprovado pelo cliente.",3500);
+      // Fluxo continuo: rola pro topo pra proximo card aparecer
+      try{ setTimeout(function(){ window.scrollTo({top:0,behavior:"smooth"}); }, 50); }catch(_){}
+    }catch(err){
+      console.error("[handleAprovar] Falha ao salvar no Supabase:", err);
+      // Rollback: reverte state local pra manter consistencia
+      setTasks(function(prev){return prev.map(function(t){
+        if(t.id!==task.id)return t;
+        return Object.assign({},t,{
+          status: task.status,
+          colEnteredAt: task.colEnteredAt,
+          timeline: task.timeline||[],
+        });
+      });});
+      if(typeof pixelsToast!=="undefined"){
+        pixelsToast.error("Nao foi possivel salvar a aprovacao: "+(err.message||"erro desconhecido")+". Tenta de novo em alguns segundos.", 7000);
+      }
+    }
   };
 
-  const handleConfirmarAjuste=function(){
+  const handleConfirmarAjuste=async function(){
     if(!ajusteModal)return;
     const t=ajusteModal.task;
     const text=(ajusteModal.text||"").trim();
@@ -46999,6 +47049,33 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
       if(typeof pixelsToast!=="undefined")pixelsToast.warning("Descreva o ajuste solicitado antes de enviar.",3500);
       return;
     }
+    const _newComment = {
+      id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+      type:"client_request",
+      text:text,
+      user:"Cliente: "+cl.name,
+      clientId:cl.id,
+      at:_nowIso(),
+      atFmt:_nowFmt(),
+      ..._clientUserMeta(),
+    };
+    const _newTimelineEntry = {
+      type:"client_rejected",
+      fromLabel:"Aprovado internamente",
+      toLabel:"Ajustes",
+      from:"aprovado",
+      to:"ajustes",
+      clientId:cl.id,
+      clientName:cl.name,
+      text:text,
+      at:_nowIso(),
+      atFmt:_nowFmt(),
+      user:"Cliente: "+cl.name,
+      ..._clientUserMeta(),
+    };
+    const _newComments = [].concat(t.comments||[], [_newComment]);
+    const _newTimeline = [].concat(t.timeline||[], [_newTimelineEntry]);
+    // 1) Optimistic — UI reage imediato
     setTasks(function(prev){return prev.map(function(x){
       if(x.id!==t.id)return x;
       return Object.assign({},x,{
@@ -47006,34 +47083,43 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
         ajustar:true,
         isAlteracao:true,
         colEnteredAt:_nowIso(),
-        comments:[].concat(x.comments||[],[{
-          id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
-          type:"client_request",
-          text:text,
-          user:"Cliente: "+cl.name,
-          clientId:cl.id,
-          at:_nowIso(),
-          atFmt:_nowFmt(),
-          ..._clientUserMeta(),
-        }]),
-        timeline:[].concat(x.timeline||[],[{
-          type:"client_rejected",
-          fromLabel:"Aprovado internamente",
-          toLabel:"Ajustes",
-          from:"aprovado",
-          to:"ajustes",
-          clientId:cl.id,
-          clientName:cl.name,
-          text:text,
-          at:_nowIso(),
-          atFmt:_nowFmt(),
-          user:"Cliente: "+cl.name,
-          ..._clientUserMeta(),
-        }]),
+        comments:_newComments,
+        timeline:_newTimeline,
       });
     });});
     setAjusteModal(null);
-    if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação de ajuste enviada para a equipe.",3500);
+    // 2) PERSIST EXPLICITO no Supabase
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado — recarregue a pagina");
+      const {error} = await window._sb.from("tasks").update({
+        status:"ajustes",
+        ajustar:true,
+        is_alteracao:true,
+        col_entered_at:_nowIso(),
+        comments:_newComments,
+        timeline:_newTimeline,
+      }).eq("id", String(t.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação de ajuste enviada para a equipe.",3500);
+      try{ setTimeout(function(){ window.scrollTo({top:0,behavior:"smooth"}); }, 50); }catch(_){}
+    }catch(err){
+      console.error("[handleConfirmarAjuste] Falha ao salvar no Supabase:", err);
+      // Rollback
+      setTasks(function(prev){return prev.map(function(x){
+        if(x.id!==t.id)return x;
+        return Object.assign({},x,{
+          status: t.status,
+          ajustar: t.ajustar,
+          isAlteracao: t.isAlteracao,
+          colEnteredAt: t.colEnteredAt,
+          comments: t.comments||[],
+          timeline: t.timeline||[],
+        });
+      });});
+      if(typeof pixelsToast!=="undefined"){
+        pixelsToast.error("Nao foi possivel enviar o ajuste: "+(err.message||"erro desconhecido")+". Tenta de novo.", 7000);
+      }
+    }
   };
 
   // Tipos de conteúdo -> label
@@ -47058,6 +47144,69 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     if(!ct)return "";
     const s=String(ct).replace(/_/g," ").toLowerCase();
     return s.charAt(0).toUpperCase()+s.slice(1);
+  };
+
+  // ═══ HISTORICO RECENTE — acoes do cliente (aprovou/solicitou ajuste) ═══
+  // Extrai timeline entries relevantes de todas as tasks do cliente, ordena por data DESC.
+  const _clienteHistorico = (function(){
+    const _rows=[];
+    (clTasks||[]).forEach(function(tk){
+      (tk.timeline||[]).forEach(function(ev){
+        if(!ev) return;
+        if(ev.type==="client_approved" || ev.type==="client_rejected"){
+          _rows.push({
+            taskId: tk.id,
+            title: tk.title || "(sem título)",
+            action: ev.type==="client_approved" ? "aprovou" : "solicitou ajuste",
+            actionType: ev.type,
+            atIso: ev.at || null,
+            atFmt: ev.atFmt || "",
+            text: ev.text || "",
+          });
+        }
+      });
+      // Fallback: pega comentario client_request se nao tiver evento timeline
+      (tk.comments||[]).forEach(function(cm){
+        if(cm && cm.type==="client_request"){
+          const _alreadyIn = _rows.some(function(r){return r.taskId===tk.id && r.atIso===cm.at;});
+          if(!_alreadyIn){
+            _rows.push({
+              taskId: tk.id,
+              title: tk.title || "(sem título)",
+              action: "solicitou ajuste",
+              actionType: "client_rejected",
+              atIso: cm.at || null,
+              atFmt: cm.atFmt || "",
+              text: cm.text || "",
+            });
+          }
+        }
+      });
+    });
+    _rows.sort(function(a,b){
+      const ta = a.atIso ? new Date(a.atIso).getTime() : 0;
+      const tb = b.atIso ? new Date(b.atIso).getTime() : 0;
+      return tb - ta;
+    });
+    return _rows.slice(0, 15); // ultimos 15 eventos
+  })();
+  const _histCounts = _clienteHistorico.reduce(function(acc,r){
+    if(r.actionType==="client_approved") acc.aprov++;
+    else acc.ajuste++;
+    return acc;
+  }, {aprov:0, ajuste:0});
+  const _fmtHistWhen = function(iso, fallback){
+    if(!iso) return fallback || "";
+    try{
+      const d=new Date(iso), now=new Date();
+      const same=d.toDateString()===now.toDateString();
+      const y=new Date(now); y.setDate(now.getDate()-1);
+      const wasY=d.toDateString()===y.toDateString();
+      const hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
+      if(same) return "hoje às "+hh+":"+mm;
+      if(wasY) return "ontem às "+hh+":"+mm;
+      return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" às "+hh+":"+mm;
+    }catch(_){ return fallback || ""; }
   };
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1280,margin:"0 auto",width:"100%"}}>
@@ -47208,6 +47357,45 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
             </button>
           </div>
         </div>
+      </div>
+    </div>}
+
+    {/* ═══ HISTORICO — o que o cliente ja aprovou / solicitou ajuste ═══
+         Rodape da pagina Aprovacoes. Sempre visivel se houver historico. */}
+    {_clienteHistorico.length>0&&<div style={{background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",overflow:"hidden",marginTop:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc"}}>
+        <div style={{width:32,height:32,borderRadius:9,background:"#dbeafe",color:"#1d4ed8",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15}}>Histórico do cliente</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:1,letterSpacing:-.05}}>{_histCounts.aprov} aprovaç{_histCounts.aprov===1?"ão":"ões"} · {_histCounts.ajuste} ajuste{_histCounts.ajuste===1?"":"s"} solicitado{_histCounts.ajuste===1?"":"s"}</div>
+        </div>
+      </div>
+      <div style={{maxHeight:340,overflowY:"auto"}}>
+        {_clienteHistorico.map(function(r,idx){
+          const _ok=r.actionType==="client_approved";
+          return <div key={r.taskId+"|"+idx} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 16px",borderTop:idx===0?"none":"1px solid #f8fafc"}}>
+            <div style={{width:26,height:26,borderRadius:99,background:_ok?"#dcfce7":"#fee2e2",color:_ok?"#16a34a":"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+              {_ok
+                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              }
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.35,wordBreak:"break-word"}}>
+                {r.title}
+              </div>
+              <div style={{color:"#64748b",fontSize:11,marginTop:2,letterSpacing:-.05}}>
+                <span style={{color:_ok?"#16a34a":"#dc2626",fontWeight:700}}>{_ok?"Aprovou":"Solicitou ajuste"}</span>
+                <span> · {_fmtHistWhen(r.atIso, r.atFmt)}</span>
+              </div>
+              {r.text && !_ok && <div style={{marginTop:6,padding:"7px 10px",background:"#fef2f2",borderRadius:7,color:"#7f1d1d",fontSize:11.5,lineHeight:1.45,borderLeft:"2px solid #fca5a5",wordBreak:"break-word"}}>
+                "{r.text.length>240?r.text.slice(0,240)+"...":r.text}"
+              </div>}
+            </div>
+          </div>;
+        })}
       </div>
     </div>}
 
@@ -47626,53 +47814,106 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   };
 
   // ── Aprovar / Solicitar ajuste ──
-  const handleAprovar=function(task){
+  const handleAprovar=async function(task){
+    const _newTimeline=[].concat(task.timeline||[],[Object.assign({type:"client_approved",fromLabel:"Aprovado internamente",toLabel:"Aprovado pelo cliente",from:"aprovado",to:"aprovacao_final",clientId:cl.id,clientName:cl.name,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]);
+    // Optimistic
     setTasks(function(prev){return prev.map(function(t){
       if(t.id!==task.id)return t;
-      return Object.assign({},t,{
-        status:"aprovacao_final",colEnteredAt:_nowIso(),
-        timeline:[].concat(t.timeline||[],[Object.assign({type:"client_approved",fromLabel:"Aprovado internamente",toLabel:"Aprovado pelo cliente",from:"aprovado",to:"aprovacao_final",clientId:cl.id,clientName:cl.name,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]),
-      });
+      return Object.assign({},t,{status:"aprovacao_final",colEnteredAt:_nowIso(),timeline:_newTimeline});
     });});
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada!",3000);
+    // Persist EXPLICITO no Supabase
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("tasks").update({
+        status:"aprovacao_final", col_entered_at:_nowIso(), timeline:_newTimeline,
+      }).eq("id", String(task.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada!",3000);
+    }catch(err){
+      console.error("[PortalDemandas handleAprovar] Falha:", err);
+      // Rollback
+      setTasks(function(prev){return prev.map(function(t){
+        if(t.id!==task.id)return t;
+        return Object.assign({},t,{status:task.status,colEnteredAt:task.colEnteredAt,timeline:task.timeline||[]});
+      });});
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel salvar: "+(err.message||"erro desconhecido"),7000);
+    }
   };
-  const handleConfirmarAjuste=function(){
+  const handleConfirmarAjuste=async function(){
     if(!ajusteModal)return;
     const t=ajusteModal.task;const text=(ajusteModal.text||"").trim();
     if(!text){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Descreva o ajuste solicitado.",3500);return;}
+    const _newComments=[].concat(t.comments||[],[Object.assign({id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),type:"client_request",text:text,user:"Cliente: "+cl.name,clientId:cl.id,at:_nowIso(),atFmt:_nowFmt()},_clientUserMeta())]);
+    const _newTimeline=[].concat(t.timeline||[],[Object.assign({type:"client_rejected",fromLabel:"Aprovado internamente",toLabel:"Ajustes",from:"aprovado",to:"ajustes",clientId:cl.id,clientName:cl.name,text:text,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]);
+    // Optimistic
     setTasks(function(prev){return prev.map(function(x){
       if(x.id!==t.id)return x;
-      return Object.assign({},x,{
-        status:"ajustes",ajustar:true,isAlteracao:true,colEnteredAt:_nowIso(),
-        comments:[].concat(x.comments||[],[Object.assign({id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),type:"client_request",text:text,user:"Cliente: "+cl.name,clientId:cl.id,at:_nowIso(),atFmt:_nowFmt()},_clientUserMeta())]),
-        timeline:[].concat(x.timeline||[],[Object.assign({type:"client_rejected",fromLabel:"Aprovado internamente",toLabel:"Ajustes",from:"aprovado",to:"ajustes",clientId:cl.id,clientName:cl.name,text:text,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]),
-      });
+      return Object.assign({},x,{status:"ajustes",ajustar:true,isAlteracao:true,colEnteredAt:_nowIso(),comments:_newComments,timeline:_newTimeline});
     });});
     setAjusteModal(null);
-    if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação enviada à equipe.",3500);
+    // Persist EXPLICITO
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("tasks").update({
+        status:"ajustes", ajustar:true, is_alteracao:true, col_entered_at:_nowIso(),
+        comments:_newComments, timeline:_newTimeline,
+      }).eq("id", String(t.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação enviada à equipe.",3500);
+    }catch(err){
+      console.error("[PortalDemandas handleConfirmarAjuste] Falha:", err);
+      // Rollback
+      setTasks(function(prev){return prev.map(function(x){
+        if(x.id!==t.id)return x;
+        return Object.assign({},x,{status:t.status,ajustar:t.ajustar,isAlteracao:t.isAlteracao,colEnteredAt:t.colEnteredAt,comments:t.comments||[],timeline:t.timeline||[]});
+      });});
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel enviar: "+(err.message||"erro desconhecido"),7000);
+    }
   };
 
   // ── Excluir demanda (soft delete) ──
   const handleExcluir=async function(task){
+    const _now=_nowIso();
+    // Optimistic
     setTasks(function(prev){return prev.map(function(t){
       if(t.id!==task.id)return t;
-      return Object.assign({},t,{deletedAt:_nowIso(),deleted_at:_nowIso()});
+      return Object.assign({},t,{deletedAt:_now,deleted_at:_now});
     });});
     setExcluirTask(null);
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda excluída.",3000);
+    // Persist EXPLICITO
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("tasks").update({deleted_at:_now}).eq("id", String(task.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda excluída.",3000);
+    }catch(err){
+      console.error("[PortalDemandas handleExcluir] Falha:", err);
+      // Rollback
+      setTasks(function(prev){return prev.map(function(t){
+        if(t.id!==task.id)return t;
+        return Object.assign({},t,{deletedAt:task.deletedAt||null,deleted_at:task.deleted_at||null});
+      });});
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel excluir: "+(err.message||"erro desconhecido"),7000);
+    }
   };
 
   // ── Editar demanda (título, tipo, descrição, prioridade) ──
   const handleSalvarEdicao=async function(taskId, patch){
-    setTasks(function(prev){return prev.map(function(t){
-      if(t.id!==taskId) return t;
-      const _merged=Object.assign({},t,patch);
-      // Espelhar descricao no field local `desc` (usado pelo rowToTask)
-      if(patch.internoDescricao!==undefined){ _merged.desc=patch.internoDescricao; _merged.description=patch.internoDescricao; }
-      return _merged;
-    });});
+    // Snapshot pra rollback caso Supabase falhe
+    let _snapshot=null;
+    setTasks(function(prev){
+      const _orig=prev.find(function(t){return t.id===taskId;});
+      if(_orig) _snapshot=Object.assign({},_orig);
+      return prev.map(function(t){
+        if(t.id!==taskId) return t;
+        const _merged=Object.assign({},t,patch);
+        if(patch.internoDescricao!==undefined){ _merged.desc=patch.internoDescricao; _merged.description=patch.internoDescricao; }
+        return _merged;
+      });
+    });
     setEditTask(null);
     try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
       const rowPatch={};
       if(patch.title!==undefined) rowPatch.title=patch.title;
       if(patch.contentType!==undefined) rowPatch.tipo_solicitacao=patch.contentType;
@@ -47682,29 +47923,56 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       if(error) throw error;
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda atualizada",2000);
     }catch(e){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao salvar: "+(e&&e.message||e),5000);
+      console.error("[PortalDemandas handleSalvarEdicao] Falha:", e);
+      // Rollback: reverte state local pra evitar divergencia
+      if(_snapshot){
+        setTasks(function(prev){return prev.map(function(t){return t.id===taskId?_snapshot:t;});});
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao salvar: "+(e&&e.message||e)+". Alteracao revertida.",6000);
     }
   };
 
   // ── Vincular sprint (calcula data prevista de entrega) ──
-  const handleVincularSprint=function(task,sprintData){
+  const handleVincularSprint=async function(task,sprintData){
+    const _newTimeline=[].concat(task.timeline||[],[{
+      type:"sprint_linked",
+      sprint_id:sprintData.id,
+      at:_nowIso(),atFmt:_nowFmt(),
+      user:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Equipe Pixels",
+      text:"Demanda vinculada à sprint "+sprintData.id+" ("+sprintData.data_inicio+" → "+sprintData.data_fim+")",
+    }]);
+    // Optimistic
     setTasks(function(prev){return prev.map(function(t){
       if(t.id!==task.id)return t;
       return Object.assign({},t,{
-        sprint_id:sprintData.id,
-        data_entrada_sprint:_nowIso(),
-        data_prevista_entrega:sprintData.data_fim,
-        timeline:[].concat(t.timeline||[],[{
-          type:"sprint_linked",
-          sprint_id:sprintData.id,
-          at:_nowIso(),atFmt:_nowFmt(),
-          user:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Equipe Pixels",
-          text:"Demanda vinculada à sprint "+sprintData.id+" ("+sprintData.data_inicio+" → "+sprintData.data_fim+")",
-        }]),
+        sprint_id:sprintData.id, data_entrada_sprint:_nowIso(),
+        data_prevista_entrega:sprintData.data_fim, timeline:_newTimeline,
       });
     });});
     setSprintPickerTask(null);
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda vinculada à sprint "+sprintData.id,3500);
+    // Persist EXPLICITO
+    try{
+      if(!window._sb) throw new Error("Supabase nao conectado");
+      const {error}=await window._sb.from("tasks").update({
+        sprint_id:sprintData.id,
+        data_entrada_sprint:_nowIso(),
+        data_prevista_entrega:sprintData.data_fim,
+        timeline:_newTimeline,
+      }).eq("id", String(task.id));
+      if(error) throw error;
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda vinculada à sprint "+sprintData.id,3500);
+    }catch(err){
+      console.error("[PortalDemandas handleVincularSprint] Falha:", err);
+      // Rollback
+      setTasks(function(prev){return prev.map(function(t){
+        if(t.id!==task.id)return t;
+        return Object.assign({},t,{
+          sprint_id:task.sprint_id, data_entrada_sprint:task.data_entrada_sprint,
+          data_prevista_entrega:task.data_prevista_entrega, timeline:task.timeline||[],
+        });
+      });});
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Nao foi possivel vincular: "+(err.message||"erro desconhecido"),7000);
+    }
   };
 
   // Sprint atual (carregado primeiro pra usar no agrupamento)
@@ -49866,10 +50134,22 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
       _saveTimer.current = null;
       _dirtyRef.current = false;
       try{ localStorage.setItem(_LS_KEY, JSON.stringify(sections)); }catch(_){}
-      if(!window._sb) return;
+      if(!window._sb){
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Supabase nao conectado — Playbook nao foi salvo. Recarregue a pagina.",7000);
+        return;
+      }
+      // Persist EXPLICITO com toast de erro visivel se falhar
       window._sb.from("team_data").upsert({tipo:"portal_playbook", data:{sections:sections}}, {onConflict:"tipo"})
-        .then(function(r){ if(r && r.error) console.warn("[portal_playbook save]", r.error.message||r.error); })
-        .catch(function(e){ console.warn("[portal_playbook save]", e && e.message ? e.message : e); });
+        .then(function(r){
+          if(r && r.error){
+            console.error("[portal_playbook save] Falha:", r.error);
+            if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando Playbook: "+(r.error.message||"erro desconhecido"),7000);
+          }
+        })
+        .catch(function(e){
+          console.error("[portal_playbook save] Falha:", e);
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando Playbook: "+((e&&e.message)||"rede/erro desconhecido"),7000);
+        });
     }, 500);
   }, [sections]);
 
@@ -57087,12 +57367,23 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           </svg>
         </div>
     }
-    {/* TEXTAREA — alto o suficiente pra ver o texto inteiro sem scroll interno.
+    {/* TEXTAREA — auto-expand pra caber TODO o texto sem barra de scroll interna.
         Plain text puro: underscores continuam _ (nao vira italico), perfeito pra WhatsApp. */}
-    <textarea value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
+    <textarea value={s.texto||""}
+      ref={function(el){
+        if(!el) return;
+        // Auto-size no mount + a cada render pra caber conteudo inteiro
+        try{ el.style.height="auto"; el.style.height=(el.scrollHeight+4)+"px"; }catch(_){}
+      }}
+      onChange={function(e){
+        _updateScript(s.id,{texto:e.target.value});
+        try{ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight+4)+"px"; }catch(_){}
+      }}
+      onInput={function(e){
+        try{ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight+4)+"px"; }catch(_){}
+      }}
       placeholder={"Digite ou cole o texto do script..."}
-      rows={10}
-      style={Object.assign({},_INP,{resize:"vertical",minHeight:240,lineHeight:1.55,fontFamily:_ONB_FF})}/>
+      style={Object.assign({},_INP,{resize:"none",minHeight:180,overflow:"hidden",lineHeight:1.55,fontFamily:_ONB_FF})}/>
     <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
       <div style={{display:"flex",gap:6}}>
