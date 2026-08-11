@@ -56206,15 +56206,16 @@ const ONBOARDING_BLOCKS = [
     items:[
       {id:"d1_contrato_redigir", label:"Redigir contrato no Autentique"},
       {id:"d1_contrato_assinar", label:"Assinatura do contrato"},
+      {id:"d1_indicacoes", label:"Pedir indicações (no dia da assinatura)"},
       {id:"d1_pagamento", label:"Pagamento", sub:[
         {id:"d1_pagamento_nfse", label:"Emitir NFSe"},
       ]},
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas"},
+      {id:"d1_portal_criar", label:"Criação do portal do cliente no App Pixels"},
+      {id:"d1_portal_acesso", label:"Criação e envio do acesso ao cliente"},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_template", label:"Personalização do brief no Google Forms após copiar template"},
-        {id:"d1_brief_link", label:"Envio do link do brief para cliente"},
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
-        {id:"d1_brief_subir", label:"Remover dados sensíveis e subir no projeto do cliente no Aplicativo da Pixels"},
         {id:"d1_brief_gpt", label:"Upload do brief no agente do GPT"},
       ]},
       {id:"d1_reuniao_op", label:"Reunião com equipe operacional sobre o projeto"},
@@ -56224,8 +56225,8 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_apresentar_equipe", label:"Apresentação da equipe"},
       {id:"d1_data_kickoff", label:"Confirmar data da reunião de kickoff"},
       {id:"d1_templates", label:"Produção dos templates"},
+      {id:"d1_templates_aprovar", label:"Aprovação dos templates"},
       {id:"d1_gpt_agente", label:"Criação do agente personalizado no ChatGPT com materiais"},
-      {id:"d1_fluxos_app", label:"Criação dos fluxos do cliente no Aplicativo da Pixels: Calendário, Design e Edição de vídeo"},
       {id:"d1_drive_compartilhada", label:"Criação da pasta compartilhada no Drive"},
       {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
       {id:"d1_wpp_status", label:"Envio de mensagem de atualização de status no WhatsApp"},
@@ -56298,8 +56299,13 @@ const ONBOARDING_BLOCKS = [
       {id:"d31_reuniao", label:"Reunião de alinhamento"},
       {id:"d31_relatorio", label:"Relatório"},
       {id:"d31_resultados", label:"Demonstração de resultados"},
-      {id:"d31_indicacoes", label:"Pedido de indicações"},
       {id:"d31_ongoing", label:"Copiar tarefas do template de Ongoing para o Gantt do projeto"},
+    ],
+  },
+  {
+    id:"dia90", title:"Dia 90", subtitle:"Último dia da parceria",
+    items:[
+      {id:"d90_indicacoes", label:"Pedir indicações (encerramento da parceria)"},
     ],
   },
 ];
@@ -56933,6 +56939,185 @@ function _OnbStartDatePill({startDate, accent, onPick}){
   </div>;
 }
 
+/* ═══ ONBOARDING SCRIPTS — mensagens reutilizaveis globais ═══
+   Persiste em team_data tipo='onboarding_scripts'. Placeholders substituem
+   {{cliente}} {{data_inicio}} {{setor}} no momento da copia. */
+const _ONBSCRIPTS_SEED = [
+  {id:"s-wa-status", titulo:"WhatsApp — Atualizacao de status",
+   texto:"Ola, {{cliente}}!\n\nPassando pra atualizar o status do seu projeto:\n• Etapa atual: [preencher]\n• Proximas entregas: [preencher]\n\nQualquer duvida, so avisar. Abraco!"},
+  {id:"s-wa-boasvindas", titulo:"WhatsApp — Boas-vindas kickoff",
+   texto:"Ola, {{cliente}}!\n\nSeja muito bem-vindo(a) a Pixels. Nosso onboarding oficial comeca em {{data_inicio}}.\n\nNos proximos dias vamos:\n• Entender profundamente sua marca\n• Alinhar planejamento e cronograma\n• Configurar acessos e ferramentas\n\nVamos juntos!"},
+];
+
+function _OnbScriptsSubstitute(txt, cl, startDate){
+  if(!txt) return "";
+  let out = String(txt);
+  const _clienteNome = (cl && (cl.name||cl.label)) || "";
+  const _setor = (cl && (cl.sector||cl.setor)) || "";
+  let _dataBR = "";
+  if(startDate){
+    try{
+      const p = String(startDate).split("-");
+      if(p.length===3) _dataBR = p[2]+"/"+p[1]+"/"+p[0];
+    }catch(_){}
+  }
+  out = out.replace(/\{\{\s*cliente\s*\}\}/gi, _clienteNome);
+  out = out.replace(/\{\{\s*data_inicio\s*\}\}/gi, _dataBR || "[data]");
+  out = out.replace(/\{\{\s*setor\s*\}\}/gi, _setor);
+  return out;
+}
+
+function _OnboardingScripts({cl, startDate, accent}){
+  const _KEY = "pixels-onboarding-scripts";
+  const [scripts, setScripts] = useState(function(){
+    try{ const s=localStorage.getItem(_KEY); if(s){const p=JSON.parse(s); if(Array.isArray(p)) return p;} }catch(_){}
+    return _ONBSCRIPTS_SEED;
+  });
+  const [editingId, setEditingId] = useState(null);
+  const [savingIds, setSavingIds] = useState({});
+
+  // Carrega do Supabase no mount
+  useEffect(function(){
+    if(!window._sb) return;
+    let cancelled = false;
+    window._sb.from("team_data").select("dados").eq("tipo","onboarding_scripts").maybeSingle()
+      .then(function(r){
+        if(cancelled) return;
+        if(r && r.error && r.error.code!=="PGRST116"){ console.warn("[onb scripts load]", r.error.message); return; }
+        if(r && r.data && Array.isArray(r.data.dados)){
+          setScripts(r.data.dados);
+          try{ localStorage.setItem(_KEY, JSON.stringify(r.data.dados)); }catch(_){}
+        }
+      })
+      .catch(function(e){ console.warn("[onb scripts load]", e && e.message ? e.message : e); });
+    return function(){ cancelled = true; };
+  }, []);
+
+  const _persist = async function(next){
+    setScripts(next);
+    try{ localStorage.setItem(_KEY, JSON.stringify(next)); }catch(_){}
+    if(!window._sb) return;
+    try{
+      const {error} = await window._sb.from("team_data").upsert(
+        {tipo:"onboarding_scripts", dados:next, updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")},
+        {onConflict:"tipo"}
+      );
+      if(error){
+        console.error("[onb scripts save]", error);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao sincronizar scripts: "+(error.message||"erro")+". Cache local mantido.",5500);
+      }
+    }catch(e){ console.error("[onb scripts save]", e); }
+  };
+
+  const _newScript = function(){
+    const _id = "s-"+Date.now()+"-"+Math.random().toString(36).slice(2,5);
+    const _next = [{id:_id, titulo:"Novo script", texto:""}].concat(scripts);
+    _persist(_next);
+    setEditingId(_id);
+  };
+  const _updateScript = function(id, patch){
+    const _next = scripts.map(function(s){return s.id===id?Object.assign({},s,patch):s;});
+    _persist(_next);
+  };
+  const _deleteScript = async function(id){
+    if(typeof pixelsConfirm==="function"){
+      const ok = await pixelsConfirm({title:"Excluir script?", message:"O script sera removido pra todos os clientes.", danger:true});
+      if(!ok) return;
+    } else if(!window.confirm("Excluir?")) return;
+    _persist(scripts.filter(function(s){return s.id!==id;}));
+  };
+  const _copyScript = function(s){
+    const _final = _OnbScriptsSubstitute(s.texto, cl, startDate);
+    try{
+      if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(_final);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = _final; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado com dados de "+((cl&&cl.name)||"cliente")+"!",2500);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Nao consegui copiar. Tente selecionar manualmente.",4000);
+    }
+  };
+
+  const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
+
+  return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"#fef3c7",border:"1px solid #fde68a",color:"#a16207",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Scripts do onboarding</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra WhatsApp, e-mail e reunioes. Compartilhado entre todos clientes.</div>
+        </div>
+      </div>
+      <button onClick={_newScript} type="button"
+        style={{background:accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
+        onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo script
+      </button>
+    </div>
+
+    {/* Hint de placeholders */}
+    <div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:9,padding:"8px 12px",marginBottom:12,color:"#6d28d9",fontSize:11,fontWeight:500,lineHeight:1.5}}>
+      <span style={{fontWeight:700}}>Placeholders:</span> use <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{cliente}}'}</code> <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{data_inicio}}'}</code> <code style={{background:"#fff",padding:"1px 6px",borderRadius:4,color:"#7c3aed",fontFamily:"monospace",fontSize:10.5}}>{'{{setor}}'}</code> — serao substituidos automaticamente ao copiar.
+    </div>
+
+    {/* Lista de scripts */}
+    {scripts.length===0
+      ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
+          Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
+          {scripts.map(function(s){
+            const _editing = editingId===s.id;
+            return <div key={s.id} style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
+              {_editing
+                ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
+                    autoFocus onBlur={function(){setEditingId(null);}}
+                    onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
+                    style={Object.assign({},_INP,{fontWeight:700,fontSize:13})}/>
+                : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
+                    style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"text",padding:"1px 0"}}>
+                    {s.titulo||"(sem titulo)"}
+                  </div>
+              }
+              <textarea value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
+                placeholder={"Ola, {{cliente}}!\n\nCole ou digite aqui o texto do script..."}
+                rows={5}
+                style={Object.assign({},_INP,{resize:"vertical",minHeight:100,lineHeight:1.55,fontFamily:_ONB_FF})}/>
+              <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
+                    style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,width:30,height:30,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.background="#fef2f2";}}
+                    onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                  </button>
+                  <button onClick={function(){_copyScript(s);}} type="button" title={"Copia substituindo placeholders por dados de "+((cl&&cl.name)||"cliente")}
+                    style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#15803d";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    Copiar
+                  </button>
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+  </div>;
+}
+
 /* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
@@ -56950,6 +57135,7 @@ function OnboardingChecklist(props){
     dia7:    "trending-up",
     dia14:   "chart",
     dia31:   "target",
+    dia90:   "checkCircle",
   };
 
   if(loading)return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando onboarding...</div>;
@@ -57013,6 +57199,9 @@ function OnboardingChecklist(props){
     {ONBOARDING_BLOCKS.map(function(b){
       return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"checkCircle"}/>;
     })}
+
+    {/* Scripts reutilizaveis do onboarding — globais, com placeholders */}
+    <_OnboardingScripts cl={cl} startDate={startDate} accent={accent}/>
   </div>;
 }
 
