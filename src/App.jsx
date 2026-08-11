@@ -47155,41 +47155,32 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     return s.charAt(0).toUpperCase()+s.slice(1);
   };
 
-  // ═══ HISTORICO RECENTE — acoes do cliente (aprovou/solicitou ajuste) ═══
-  // Extrai timeline entries relevantes de todas as tasks do cliente, ordena por data DESC.
+  // ═══ HISTORICO RECENTE — SO acoes feitas pelo CLIENTE via portal (nunca acoes internas) ═══
+  // Regra ESTRITA: so timeline entries com type client_approved/client_rejected E clientId
+  // igual ao cliente atual. Nao usar comments fallback (comments podem ser criados por
+  // qualquer usuario interno — misturaria acoes internas com do cliente).
   const _clienteHistorico = (function(){
     const _rows=[];
     (clTasks||[]).forEach(function(tk){
       (tk.timeline||[]).forEach(function(ev){
         if(!ev) return;
-        if(ev.type==="client_approved" || ev.type==="client_rejected"){
-          _rows.push({
-            taskId: tk.id,
-            title: tk.title || "(sem título)",
-            action: ev.type==="client_approved" ? "aprovou" : "solicitou ajuste",
-            actionType: ev.type,
-            atIso: ev.at || null,
-            atFmt: ev.atFmt || "",
-            text: ev.text || "",
-          });
-        }
-      });
-      // Fallback: pega comentario client_request se nao tiver evento timeline
-      (tk.comments||[]).forEach(function(cm){
-        if(cm && cm.type==="client_request"){
-          const _alreadyIn = _rows.some(function(r){return r.taskId===tk.id && r.atIso===cm.at;});
-          if(!_alreadyIn){
-            _rows.push({
-              taskId: tk.id,
-              title: tk.title || "(sem título)",
-              action: "solicitou ajuste",
-              actionType: "client_rejected",
-              atIso: cm.at || null,
-              atFmt: cm.atFmt || "",
-              text: cm.text || "",
-            });
-          }
-        }
+        // FILTRO 1: type deve ser especifico do cliente
+        if(ev.type!=="client_approved" && ev.type!=="client_rejected") return;
+        // FILTRO 2: clientId deve bater com o cliente atual (evita mostrar acoes de outros clientes)
+        if(ev.clientId && cl && cl.id && String(ev.clientId)!==String(cl.id)) return;
+        // FILTRO 3: precisa ter user prefixado "Cliente:" (evita eventos internos que
+        // reusam o type por engano) — se nao tem esse marcador, so aceita se clientId existir
+        const _fromClient = (ev.user && String(ev.user).indexOf("Cliente:")===0) || !!ev.clientId;
+        if(!_fromClient) return;
+        _rows.push({
+          taskId: tk.id,
+          title: tk.title || "(sem título)",
+          action: ev.type==="client_approved" ? "aprovou" : "solicitou ajuste",
+          actionType: ev.type,
+          atIso: ev.at || null,
+          atFmt: ev.atFmt || "",
+          text: ev.text || "",
+        });
       });
     });
     _rows.sort(function(a,b){
@@ -47351,11 +47342,20 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
 
           {/* Botões de ação (sticky no topo da sidebar) */}
           <div style={{position:"sticky",top:8,zIndex:5,background:"#fff",borderRadius:14,padding:"14px",border:"1px solid #e2e8f0",boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
-            <button onClick={function(){handleAprovar(current);}}
+            <button type="button" onClick={function(e){
+                e.preventDefault(); e.stopPropagation();
+                console.log("[Aprovar CLICK] current:", current && current.id);
+                if(!current){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Nenhum card selecionado.",4000); return; }
+                try{ handleAprovar(current); }catch(err){ console.error("[Aprovar CLICK] erro sincrono:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(err.message||err),5000); }
+              }}
               style={{width:"100%",background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #05966933",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
               <Ico n="check" size={16}/> Aprovar
             </button>
-            <button onClick={function(){setAjusteModal({task:current,text:""});}}
+            <button type="button" onClick={function(e){
+                e.preventDefault(); e.stopPropagation();
+                if(!current){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Nenhum card selecionado.",4000); return; }
+                setAjusteModal({task:current,text:""});
+              }}
               style={{width:"100%",background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
               <Ico n="rotate" size={16}/> Solicitar ajuste
             </button>
@@ -47365,43 +47365,53 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     </div>}
 
     {/* ═══ HISTORICO — o que o cliente ja aprovou / solicitou ajuste ═══
-         Rodape da pagina Aprovacoes. Sempre visivel se houver historico. */}
-    {_clienteHistorico.length>0&&<div style={{background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",overflow:"hidden",marginTop:8}}>
+         Rodape da pagina Aprovacoes. SEMPRE visivel (com empty state se vazio). */}
+    <div style={{background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",overflow:"hidden",marginTop:8}}>
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc"}}>
         <div style={{width:32,height:32,borderRadius:9,background:"#dbeafe",color:"#1d4ed8",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15}}>Histórico do cliente</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:1,letterSpacing:-.05}}>{_histCounts.aprov} aprovaç{_histCounts.aprov===1?"ão":"ões"} · {_histCounts.ajuste} ajuste{_histCounts.ajuste===1?"":"s"} solicitado{_histCounts.ajuste===1?"":"s"}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:1,letterSpacing:-.05}}>
+            {_clienteHistorico.length===0
+              ? "Ainda sem histórico. Quando aprovar ou solicitar ajuste, aparece aqui."
+              : (_histCounts.aprov+" aprovaç"+(_histCounts.aprov===1?"ão":"ões")+" · "+_histCounts.ajuste+" ajuste"+(_histCounts.ajuste===1?"":"s")+" solicitado"+(_histCounts.ajuste===1?"":"s"))
+            }
+          </div>
         </div>
       </div>
-      <div style={{maxHeight:340,overflowY:"auto"}}>
-        {_clienteHistorico.map(function(r,idx){
-          const _ok=r.actionType==="client_approved";
-          return <div key={r.taskId+"|"+idx} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 16px",borderTop:idx===0?"none":"1px solid #f8fafc"}}>
-            <div style={{width:26,height:26,borderRadius:99,background:_ok?"#dcfce7":"#fee2e2",color:_ok?"#16a34a":"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-              {_ok
-                ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-              }
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.35,wordBreak:"break-word"}}>
-                {r.title}
-              </div>
-              <div style={{color:"#64748b",fontSize:11,marginTop:2,letterSpacing:-.05}}>
-                <span style={{color:_ok?"#16a34a":"#dc2626",fontWeight:700}}>{_ok?"Aprovou":"Solicitou ajuste"}</span>
-                <span> · {_fmtHistWhen(r.atIso, r.atFmt)}</span>
-              </div>
-              {r.text && !_ok && <div style={{marginTop:6,padding:"7px 10px",background:"#fef2f2",borderRadius:7,color:"#7f1d1d",fontSize:11.5,lineHeight:1.45,borderLeft:"2px solid #fca5a5",wordBreak:"break-word"}}>
-                "{r.text.length>240?r.text.slice(0,240)+"...":r.text}"
-              </div>}
-            </div>
-          </div>;
-        })}
-      </div>
-    </div>}
+      {_clienteHistorico.length===0
+        ? <div style={{padding:"22px 16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>
+            Aprovações e solicitações de ajuste aparecerão aqui.
+          </div>
+        : <div style={{maxHeight:340,overflowY:"auto"}}>
+            {_clienteHistorico.map(function(r,idx){
+              const _ok=r.actionType==="client_approved";
+              return <div key={r.taskId+"|"+idx} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 16px",borderTop:idx===0?"none":"1px solid #f8fafc"}}>
+                <div style={{width:26,height:26,borderRadius:99,background:_ok?"#dcfce7":"#fee2e2",color:_ok?"#16a34a":"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                  {_ok
+                    ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  }
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.35,wordBreak:"break-word"}}>
+                    {r.title}
+                  </div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2,letterSpacing:-.05}}>
+                    <span style={{color:_ok?"#16a34a":"#dc2626",fontWeight:700}}>{_ok?"Aprovou":"Solicitou ajuste"}</span>
+                    <span> · {_fmtHistWhen(r.atIso, r.atFmt)}</span>
+                  </div>
+                  {r.text && !_ok && <div style={{marginTop:6,padding:"7px 10px",background:"#fef2f2",borderRadius:7,color:"#7f1d1d",fontSize:11.5,lineHeight:1.45,borderLeft:"2px solid #fca5a5",wordBreak:"break-word"}}>
+                    "{r.text.length>240?r.text.slice(0,240)+"...":r.text}"
+                  </div>}
+                </div>
+              </div>;
+            })}
+          </div>
+      }
+    </div>
 
     {/* Modal Solicitar Ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
