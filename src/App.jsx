@@ -46989,6 +46989,12 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   const goNext=function(){setCardIdx(function(i){return aguardando.length<=1?0:(i>=aguardando.length-1?0:i+1);});setImgIdx(0);};
 
   const handleAprovar=async function(task){
+    console.log("[Aprovar] iniciando pra task:", task && task.id, task && task.title);
+    if(!task || !task.id){
+      console.error("[Aprovar] task invalida");
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: task invalida. Recarregue a pagina.",5000);
+      return;
+    }
     // Prepara os novos dados
     const _newTimeline = [].concat(task.timeline||[],[{
       type:"client_approved",
@@ -47325,16 +47331,11 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
             </div>
             {/* Briefing pra equipe (desc) REMOVIDO do portal — cliente vê só a legenda final */}
             {/* Caption (legenda do post) — única coisa textual que o cliente precisa ver */}
-            {current.caption
-              ? <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid "+cl.color}}>
-                  <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Legenda do post</div>
-                  <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,wordBreak:"break-word"}} dangerouslySetInnerHTML={{__html: _sanitizeCaption(current.caption)}}/>
-                </div>
-              : <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 12px",color:"#9a3412",fontSize:11.5,lineHeight:1.5,display:"flex",alignItems:"center",gap:8}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  <span>Sem legenda preenchida ainda. A equipe vai adicionar antes de publicar.</span>
-                </div>
-            }
+            {/* Legenda: SO mostra se tiver conteudo. Sem legenda = nada aparece (nao polui a UI). */}
+            {current.caption && String(current.caption).trim() && <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid "+cl.color}}>
+              <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Legenda do post</div>
+              <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,wordBreak:"break-word"}} dangerouslySetInnerHTML={{__html: _sanitizeCaption(current.caption)}}/>
+            </div>}
             {/* Siglas da unidade Bioter (se for Bioter) */}
             {cl&&cl.id==="bioter"&&current.bioterUnit&&(function(){
               const ids=String(current.bioterUnit).split(",").filter(Boolean);
