@@ -57033,65 +57033,32 @@ function _OnbScriptsSubstitute(txt, cl, startDate){
   return out;
 }
 
-/* Card individual do script — com barra de tokens rapidos ("+ Nome cliente" etc). */
+/* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
 function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl}){
-  const _taRef = useRef(null);
-  const _insertToken = function(token){
-    const ta = _taRef.current;
-    const _cur = s.texto || "";
-    let _newText, _newCaret;
-    if(ta && document.activeElement===ta && typeof ta.selectionStart==="number"){
-      const _start = ta.selectionStart, _end = ta.selectionEnd;
-      _newText = _cur.slice(0,_start) + token + _cur.slice(_end);
-      _newCaret = _start + token.length;
-    } else {
-      // Sem foco: anexa no fim
-      _newText = _cur + (_cur && !_cur.endsWith(" ") ? " " : "") + token;
-      _newCaret = _newText.length;
-    }
-    _updateScript(s.id, {texto:_newText});
-    // Restaura foco + cursor apos o token
-    setTimeout(function(){
-      if(_taRef.current){
-        _taRef.current.focus();
-        try{ _taRef.current.setSelectionRange(_newCaret, _newCaret); }catch(_){}
-      }
-    }, 0);
-  };
-  const _TOKS = [
-    {tok:"{{cliente}}",     label:"Nome do cliente"},
-    {tok:"{{data_inicio}}", label:"Data de início"},
-    {tok:"{{setor}}",       label:"Setor"},
-  ];
-  const _chipBtn = {background:"#faf5ff",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"};
-
   return <div style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
+    {/* TITULO — editavel com icone de lapis visivel do lado */}
     {_editing
       ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
           autoFocus onBlur={function(){setEditingId(null);}}
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:700,fontSize:13})}/>
       : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
-          style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"text",padding:"1px 0"}}>
-          {s.titulo||"(sem título)"}
+          style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"pointer",padding:"1px 0",display:"inline-flex",alignItems:"center",gap:7,alignSelf:"flex-start",borderRadius:6,transition:"background .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+          <span>{s.titulo||"(sem título)"}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
         </div>
     }
-    <textarea ref={_taRef} value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
+    {/* TEXTAREA — alto o suficiente pra ver o texto inteiro sem scroll interno.
+        Plain text puro: underscores continuam _ (nao vira italico), perfeito pra WhatsApp. */}
+    <textarea value={s.texto||""} onChange={function(e){_updateScript(s.id,{texto:e.target.value});}}
       placeholder={"Digite ou cole o texto do script..."}
-      rows={5}
-      style={Object.assign({},_INP,{resize:"vertical",minHeight:100,lineHeight:1.55,fontFamily:_ONB_FF})}/>
-    {/* Barra de tokens rapidos — clica pra inserir nome/data/setor onde o cursor esta */}
-    <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-      <span style={{color:"#94a3b8",fontSize:10,fontWeight:600,marginRight:2}}>inserir:</span>
-      {_TOKS.map(function(o){
-        return <button key={o.tok} onClick={function(){_insertToken(o.tok);}} type="button" title={"Insere "+o.label.toLowerCase()+" (substituído automaticamente ao copiar)"}
-          style={_chipBtn}
-          onMouseEnter={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#ede9fe";}}>
-          + {o.label}
-        </button>;
-      })}
-    </div>
+      rows={10}
+      style={Object.assign({},_INP,{resize:"vertical",minHeight:240,lineHeight:1.55,fontFamily:_ONB_FF})}/>
     <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
       <div style={{display:"flex",gap:6}}>
