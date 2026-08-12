@@ -34713,14 +34713,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo atual)
   const isRef=(a)=>a.tipo==="referencia";
   const isMat=(a)=>a.tipo==="material";
-  const isFin=(a)=>!a.tipo||a.tipo==="final";
+  // Anexos de "Solicitar ajuste" — flag isRef:true (nao confundir com tipo:"referencia" do briefing)
+  const isAdj=(a)=>!!a.isRef && a.tipo!=="referencia" && a.tipo!=="material";
+  const isFin=(a)=>(!a.tipo||a.tipo==="final") && !isAdj(a);
   const imgRef=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isRef(a));
   const imgFin=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a));
   const imgMat=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
+  const imgAdj=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a));
   const vidRef=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isRef(a));
   const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
+  const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   // Unificado: imagens + videos finais na ordem em que aparecem no attachments (respeita drag&drop)
   const finItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a);});
+  // Unificado: anexos de ajuste (imagens + videos que a equipe subiu pra explicar o ajuste)
+  const adjItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a);});
   const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
   const imgAttachments=[...imgRef,...imgFin];
@@ -35957,7 +35963,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+hh+":"+mm;
                       }catch(_){return a.addedAt||"";}
                     };
-                    return <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    return <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
                       const _isDraggedOver = _dragOverItemId===a.id;
@@ -36219,6 +36225,56 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
                     </div>);
                   })}</div>}
+                </div>);
+              })()}
+
+              {/* ── SEÇÃO — ANEXOS DE AJUSTES — imagens/videos subidos na hora de Solicitar ajuste ── */}
+              {adjItems.length>0&&(()=>{
+                return(<div style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,padding:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#fff7ed,#fed7aa)",color:"#c2410c",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #fed7aa"}}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Anexos de ajustes {adjItems.length>0&&<span style={{background:"#ffedd5",color:"#c2410c",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{adjItems.length}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>anexos subidos no "Solicitar ajuste" — explicam o que precisa mexer</div>
+                    </div>
+                    {adjItems.length>0&&<button onClick={function(){downloadAll(adjItems,"Anexos-ajustes");}} title="Baixa todos os anexos de ajuste"
+                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#fff7ed";e.currentTarget.style.borderColor="#fed7aa";e.currentTarget.style.color="#c2410c";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Baixar tudo
+                    </button>}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                    {adjItems.map(function(a,i){
+                      const _isVideo=isVid(a);
+                      const _who=a.addedBy||"";
+                      return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #fed7aa",aspectRatio:"1",background:"#fff7ed"}}>
+                        {_isVideo
+                          ? <video src={a.url} preload="metadata" muted playsInline
+                              onClick={function(){setLightbox({url:a.url,name:a.name,storagePath:a.storagePath,isVideo:true});}}
+                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in",background:"#0f172a"}}/>
+                          : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                              onClick={function(){setLightbox({url:a.url,name:a.name,storagePath:a.storagePath});}}
+                              onError={function(e){e.currentTarget.style.display="none";}}
+                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                        }
+                        <div style={{position:"absolute",top:6,left:6,background:"#c2410c",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(194,65,12,0.35)",display:"inline-flex",alignItems:"center",gap:4}}>
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          ajuste #{i+1}
+                        </div>
+                        {_who&&<div title={"Anexado por "+_who} style={{position:"absolute",bottom:6,left:6,background:"rgba(15,23,42,0.65)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,pointerEvents:"none",backdropFilter:"blur(4px)",maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_who.split(" ")[0]}</div>}
+                        {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Excluir anexo"
+                          style={{position:"absolute",top:6,right:6,background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"4px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.55)";}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>}
+                      </div>);
+                    })}
+                  </div>
                 </div>);
               })()}
 
