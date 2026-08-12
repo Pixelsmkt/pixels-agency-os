@@ -23097,6 +23097,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
     }
   };
   const [feedback,setFeedback]=useState("");
+  // Guarda ajustes POR LAMINA — {0: "texto lamina 1", 2: "texto lamina 3", ...}
+  // Populado ao trocar de lamina. Ao salvar, gera 1 comentario por lamina com texto.
+  const [feedbackByLamina, setFeedbackByLamina] = useState({});
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
@@ -23192,6 +23195,13 @@ function PublicacaoEditModal({task, onClose, onReject}){
       const cv=canvasRef.current;
       setDrawings(d=>{const n=[...d];n[activeIdx]=cv.toDataURL();return n;});
     }
+    // Salva feedback atual pra lamina que estava ativa + carrega da nova
+    setFeedbackByLamina(function(prev){
+      const _next = Object.assign({}, prev);
+      _next[activeIdx] = feedback;
+      return _next;
+    });
+    setFeedback(feedbackByLamina[idx] || "");
     setActiveIdx(idx);
   };
 
@@ -23375,11 +23385,43 @@ function PublicacaoEditModal({task, onClose, onReject}){
     // Refs subidas no painel — viram files do card com flag isRef pra serem exibidas como referência
     const refFiles=refImages.map((r,i)=>({...r,addedAt:nowStr,addedAtIso:nowIso,addedBy:CURRENT_USER.name,isRef:true,batchId}));
     const extraFiles=[...audioFiles,...refFiles];
-    // Prefixa [Lamina X] quando for carrossel — ajuda equipe identificar qual lamina precisa mexer
-    const _laminaTag = (allImgs.length>1) ? ("[Lâmina "+(activeIdx+1)+"/"+allImgs.length+"] ") : "";
-    const newComment=_feedbackFinal.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+_laminaTag+_feedbackFinal.trim(),time:nowFull,at:nowIso,atFmt:nowFull,type:"feedback",batchId,laminaIdx:allImgs.length>1?activeIdx:null,laminaTotal:allImgs.length>1?allImgs.length:null}:null;
+    // ═══ CARROSSEL: 1 comentario por lamina com texto ═══
+    // Consolida feedbacks: pega o feedback atual (da lamina ativa) + os salvos das outras laminas
+    const _allFeedbacks = Object.assign({}, feedbackByLamina);
+    _allFeedbacks[activeIdx] = _feedbackFinal; // lamina ativa usa o feedback atual (que ja tem timestamps de video se houver)
+    const _isCarr = allImgs.length > 1;
+    // Coleta comentarios ordenados por indice de lamina
+    const _feedbackComments = [];
+    if(_isCarr){
+      Object.keys(_allFeedbacks).sort(function(a,b){return Number(a)-Number(b);}).forEach(function(k){
+        const _idx = Number(k);
+        const _txt = String(_allFeedbacks[k]||"").trim();
+        if(!_txt) return;
+        const _tag = "[Lâmina "+(_idx+1)+"/"+allImgs.length+"] ";
+        _feedbackComments.push({
+          id: Date.now()+_idx,
+          user: CURRENT_USER.name, av: CURRENT_USER.av, color: C.or,
+          text: "AJUSTE NECESSARIO: "+_tag+_txt,
+          time: nowFull, at: nowIso, atFmt: nowFull,
+          type: "feedback", batchId,
+          laminaIdx: _idx, laminaTotal: allImgs.length,
+        });
+      });
+    } else if(_feedbackFinal.trim()){
+      // Arte unica — 1 so comentario sem tag
+      _feedbackComments.push({
+        id: Date.now(),
+        user: CURRENT_USER.name, av: CURRENT_USER.av, color: C.or,
+        text: "AJUSTE NECESSARIO: "+_feedbackFinal.trim(),
+        time: nowFull, at: nowIso, atFmt: nowFull,
+        type: "feedback", batchId,
+      });
+    }
+    // Compat com codigo abaixo: newComment = primeiro comentario (pra fluxo legacy). Extras vao em comments[].
+    const newComment = _feedbackComments[0] || null;
+    const extraFeedbackComments = _feedbackComments.slice(1);
     const audioComment=audioURL?{id:Date.now()+1,user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"",type:"audio",audioUrl:audioURL,time:nowFull,at:nowIso,atFmt:nowFull,batchId}:null;
-    const comments=[newComment,audioComment].filter(Boolean);
+    const comments=[newComment,audioComment].concat(extraFeedbackComments||[]).filter(Boolean);
 
     // Collect entries that have a drawing
     const entries=finalDrawings.map((d,i)=>d?{d,bg:allImgs[i]||null,i}:null).filter(Boolean);
@@ -23696,12 +23738,23 @@ function PublicacaoEditModal({task, onClose, onReject}){
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
                 <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
-                {/* Tag da lamina atual — so aparece se for carrossel */}
-                {allImgs.length>1 && <span title={"Este ajuste sera marcado como [Lamina "+(activeIdx+1)+"] no comentario"}
-                  style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#faf5ff 0%,#f3e8ff 100%)",border:"1px solid #d8b4fe",color:"#7c3aed",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-                  Lâmina {activeIdx+1} de {allImgs.length}
-                </span>}
+                {/* Tag da lamina atual + contador de laminas ja anotadas */}
+                {allImgs.length>1 && (function(){
+                  const _outrasComTexto = Object.keys(feedbackByLamina).filter(function(k){return String(feedbackByLamina[k]||"").trim() && Number(k)!==activeIdx;}).length;
+                  const _totalComTexto = _outrasComTexto + (feedback.trim() ? 1 : 0);
+                  return <div style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                    {_totalComTexto>1 && <span title={_totalComTexto+" lâminas com ajustes — cada uma vira um comentário separado ao salvar"}
+                      style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f0fdf4",border:"1px solid #86efac",color:"#15803d",padding:"3px 8px",borderRadius:20,fontSize:10.5,fontWeight:700,letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      {_totalComTexto} lâminas
+                    </span>}
+                    <span title={"Editando ajuste da lâmina "+(activeIdx+1)+" — trocar de lâmina salva automaticamente"}
+                      style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#faf5ff 0%,#f3e8ff 100%)",border:"1px solid #d8b4fe",color:"#7c3aed",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                      Lâmina {activeIdx+1} de {allImgs.length}
+                    </span>
+                  </div>;
+                })()}
               </div>
               <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
                 placeholder="Ex: trocar fundo verde por azul, centralizar o título, aumentar a logo Bioter no canto superior direito..."
