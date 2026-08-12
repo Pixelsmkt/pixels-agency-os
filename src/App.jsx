@@ -33234,24 +33234,41 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const ss = parseInt(m[3],10)||0;
     return h*3600 + mm*60 + ss;
   }
-  // Splits text on [MM:SS] pattern → JSX com botões clicáveis (só se tem vídeo)
+  // Splits text on [MM:SS] pattern → JSX com botões clicáveis (video) + [Lâmina X/Y] → chip roxo destaque (carrossel)
   function _renderAjusteText(text, hasVideo){
     const s = String(text||"");
-    if(!hasVideo) return s;
     const parts = [];
-    const re = /\[(\d{1,2}(?::\d{2}){1,2})\]/g;
+    // Regex unificada: casa [MM:SS], [H:MM:SS] OU [Lâmina X/Y]
+    const re = /\[(\d{1,2}(?::\d{2}){1,2})\]|\[Lâmina\s+(\d+)\/(\d+)\]/g;
     let last = 0, m;
     while((m = re.exec(s)) !== null){
       if(m.index > last) parts.push({t:"txt", v:s.slice(last, m.index)});
-      const secs = _parseTimestamp(m[1]);
-      if(secs != null) parts.push({t:"ts", label:m[1], secs:secs});
-      else parts.push({t:"txt", v:m[0]});
+      if(m[1]){
+        // timestamp de video
+        const secs = _parseTimestamp(m[1]);
+        if(secs != null && hasVideo) parts.push({t:"ts", label:m[1], secs:secs});
+        else parts.push({t:"txt", v:m[0]});
+      } else if(m[2] && m[3]){
+        // tag de lamina do carrossel
+        parts.push({t:"lam", idx:m[2], total:m[3]});
+      } else {
+        parts.push({t:"txt", v:m[0]});
+      }
       last = re.lastIndex;
     }
     if(last < s.length) parts.push({t:"txt", v:s.slice(last)});
     if(parts.length===0) return s;
     return parts.map(function(p,i){
       if(p.t==="txt") return <span key={"t"+i}>{p.v}</span>;
+      if(p.t==="lam"){
+        // Chip visual roxo pra tag de lamina — designer bate o olho e sabe qual e
+        return <span key={"l"+i} title={"Ajuste referente à lâmina "+p.idx+" de "+p.total+" do carrossel"}
+          style={{display:"inline-flex",alignItems:"center",gap:4,background:"linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",color:"#fff",padding:"3px 10px",borderRadius:6,fontSize:11,fontWeight:800,letterSpacing:.3,fontFamily:"'Inter',system-ui,sans-serif",margin:"0 4px 0 0",verticalAlign:"middle",boxShadow:"0 1px 3px rgba(124,58,237,0.35)"}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Lâmina {p.idx}/{p.total}
+        </span>;
+      }
+      // timestamp de video (existente)
       return <button key={"b"+i} type="button" onClick={function(e){e.preventDefault(); e.stopPropagation(); _seekAjusteVideo(p.secs);}}
         style={{background:"#a140ff",color:"#fff",border:"none",padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",fontFeatureSettings:"'tnum'",fontFamily:"'Inter',system-ui,sans-serif",margin:"3px 4px",verticalAlign:"middle",transition:"background .12s"}}
         onMouseEnter={function(e){e.currentTarget.style.background="#8b2fea";}}
