@@ -11492,6 +11492,121 @@ function NovoClienteModal({onClose,onSave}){
 // Sócio muda: nome, setor/subtítulo, cidade/UF, cor, logo, "Cliente desde"
 // Persiste em `clients` no Supabase (upsert). Preserva riqueza dos hardcoded.
 // ══════════════════════════════════════════════════════════════════
+/* ═══ COLOR PICKER MODERNO — sem <input type="color"> (Chrome tem bug de eyedropper) ═══
+   Popover custom com: swatch preview + EyeDropper API + hex input + 24 presets curados.
+   Nada de picker nativo do browser — é ele que registra cor errada em displays HiDPI. */
+function _CorDaMarcaPicker({color, setColor, LBL, FF}){
+  const [open, setOpen] = useState(false);
+  const _ref = useRef(null);
+  const _hasEyeDropper = typeof window!=="undefined" && "EyeDropper" in window;
+
+  // Fecha ao clicar fora
+  useEffect(function(){
+    if(!open) return;
+    const _onDoc = function(e){ if(_ref.current && !_ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", _onDoc);
+    return function(){ document.removeEventListener("mousedown", _onDoc); };
+  }, [open]);
+
+  // 24 cores curadas — cobre 95% dos casos (marcas comuns + tons neutros)
+  const _PRESETS = [
+    "#0f172a","#334155","#64748b","#94a3b8", // neutros escuro→claro
+    "#dc2626","#ea580c","#f59e0b","#eab308", // vermelho/laranja/amber
+    "#84cc16","#16a34a","#059669","#14b8a6", // verdes
+    "#06b6d4","#0ea5e9","#3b82f6","#6366f1", // ciano/azul
+    "#8b5cf6","#a855f7","#d946ef","#ec4899", // roxo/rosa
+    "#f43f5e","#78716c","#a16207","#166534", // extras
+  ];
+
+  const _pickEye = async function(){
+    if(!_hasEyeDropper) return;
+    try{
+      const _ed = new window.EyeDropper();
+      const _r = await _ed.open();
+      if(_r && _r.sRGBHex) setColor(_r.sRGBHex);
+      setOpen(false);
+    }catch(_){ /* usuario cancelou */ }
+  };
+
+  return <div ref={_ref} style={{position:"relative"}}>
+    <LBL t="Cor da marca"/>
+    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+      {/* Swatch clicavel — abre popover */}
+      <button type="button" onClick={function(){setOpen(function(o){return !o;});}}
+        title="Escolher cor"
+        style={{width:56,height:44,borderRadius:10,border:"1px solid #e2e8f0",background:color,cursor:"pointer",padding:0,flexShrink:0,transition:"transform .12s, box-shadow .12s",boxShadow:open?"0 0 0 3px "+color+"33":"none"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.03)";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}/>
+      {/* Botao conta-gotas — API moderna EyeDropper (precisa, sem bug de zoom) */}
+      {_hasEyeDropper && <button type="button" onClick={_pickEye}
+        title="Conta-gotas — pega cor exata de qualquer lugar da tela"
+        style={{width:44,height:44,borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#475569",flexShrink:0,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.color="#7c3aed";}}
+        onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 22l1-1c1-1 2-2 4-2s3 1 4 2l1 1"/><path d="M17.5 6.5l-11 11L2 22l4.5-4.5 11-11"/><path d="M18 2l4 4-2 2-4-4z"/></svg>
+      </button>}
+      {/* Hex manual */}
+      <input value={color} onChange={function(e){
+          let _v=e.target.value.trim();
+          if(_v && !_v.startsWith("#")) _v="#"+_v;
+          setColor(_v.slice(0,7));
+        }}
+        placeholder="#000000"
+        style={{flex:1,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:"monospace",textTransform:"lowercase",boxSizing:"border-box"}}/>
+    </div>
+
+    {/* POPOVER moderno — swatches + conta-gotas grande + hex */}
+    {open && <div style={{position:"absolute",top:"100%",left:0,marginTop:8,zIndex:1000,background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",boxShadow:"0 12px 40px rgba(15,23,42,0.16)",padding:16,width:296,fontFamily:FF}}>
+      {/* Header do popover */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <div style={{width:38,height:38,borderRadius:9,background:color,border:"1px solid #e2e8f0",flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1}}>Cor selecionada</div>
+          <div style={{color:"#64748b",fontSize:11,fontFamily:"monospace",marginTop:1}}>{color}</div>
+        </div>
+        <button type="button" onClick={function(){setOpen(false);}} title="Fechar"
+          style={{background:"transparent",border:"none",cursor:"pointer",color:"#94a3b8",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#0f172a";e.currentTarget.style.background="#f1f5f9";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      {/* Conta-gotas destaque */}
+      {_hasEyeDropper && <button type="button" onClick={_pickEye}
+        style={{width:"100%",background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",color:"#7c3aed",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:FF,marginBottom:12,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 22l1-1c1-1 2-2 4-2s3 1 4 2l1 1"/><path d="M17.5 6.5l-11 11L2 22l4.5-4.5 11-11"/><path d="M18 2l4 4-2 2-4-4z"/></svg>
+        Pegar cor da tela
+      </button>}
+
+      {/* Grid de presets 6x4 */}
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Paleta rápida</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(6, 1fr)",gap:6,marginBottom:12}}>
+        {_PRESETS.map(function(hex){
+          const _active = String(color).toLowerCase()===hex.toLowerCase();
+          return <button key={hex} type="button" onClick={function(){setColor(hex);}}
+            title={hex}
+            style={{width:"100%",aspectRatio:"1",borderRadius:8,border:_active?"2px solid #0f172a":"1px solid #e2e8f0",background:hex,cursor:"pointer",padding:0,transition:"transform .12s",transform:_active?"scale(1.06)":"scale(1)"}}
+            onMouseEnter={function(e){if(!_active) e.currentTarget.style.transform="scale(1.08)";}}
+            onMouseLeave={function(e){if(!_active) e.currentTarget.style.transform="scale(1)";}}/>;
+        })}
+      </div>
+
+      {/* Hex input dentro do popover */}
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Hex customizado</div>
+      <input value={color} onChange={function(e){
+          let _v=e.target.value.trim();
+          if(_v && !_v.startsWith("#")) _v="#"+_v;
+          setColor(_v.slice(0,7));
+        }}
+        placeholder="#000000"
+        style={{width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:"monospace",textTransform:"lowercase",boxSizing:"border-box"}}/>
+    </div>}
+  </div>;
+}
+
 function EditarClienteModal({cl, onClose}){
   const FF = "'Inter',system-ui,-apple-system,sans-serif";
   const inp = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:FF,fontWeight:500};
@@ -11716,14 +11831,9 @@ function EditarClienteModal({cl, onClose}){
           </div>}
         </div>
 
-        {/* Cor */}
-        <div>
-          <LBL t="Cor da marca"/>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <input type="color" value={color} onChange={function(e){setColor(e.target.value);}} style={{width:56,height:44,border:"1px solid #e2e8f0",borderRadius:10,cursor:"pointer",padding:2,background:"#fff"}}/>
-            <input value={color} onChange={function(e){setColor(e.target.value);}} style={Object.assign({},inp,{fontFamily:"monospace"})}/>
-          </div>
-        </div>
+        {/* Cor — picker CUSTOM moderno: swatch + popover com preset + eyedropper + hex.
+            Sem <input type="color"> nativo (Chrome tem bug de precisao no eyedropper). */}
+        <_CorDaMarcaPicker color={color} setColor={setColor} LBL={LBL} FF={FF}/>
       </div>
 
       <div style={{padding:"16px 26px",borderTop:"1px solid #f1f5f9",display:"flex",gap:10,justifyContent:"flex-end"}}>
