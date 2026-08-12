@@ -11488,13 +11488,9 @@ function NovoClienteModal({onClose,onSave}){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// MODAL EDITAR CLIENTE — funciona pra QUALQUER cliente (hardcoded + dinâmico)
-// Sócio muda: nome, setor/subtítulo, cidade/UF, cor, logo, "Cliente desde"
-// Persiste em `clients` no Supabase (upsert). Preserva riqueza dos hardcoded.
-// ══════════════════════════════════════════════════════════════════
-/* ═══ COLOR PICKER MODERNO — sem <input type="color"> (Chrome tem bug de eyedropper) ═══
-   Popover custom com: swatch preview + EyeDropper API + hex input + 24 presets curados.
-   Nada de picker nativo do browser — é ele que registra cor errada em displays HiDPI. */
+/* ═══ COLOR PICKER MODERNO — sem input type="color" (Chrome tem bug de eyedropper) ═══
+   Popover custom com: swatch preview + EyeDropper API + hex input + presets curados
+   + EXTRAÇÃO AUTOMÁTICA de cores dominantes da logo (solução pro bug HiDPI). */
 function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
   const [open, setOpen] = useState(false);
   const [logoColors, setLogoColors] = useState([]);
@@ -11502,7 +11498,6 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
   const _ref = useRef(null);
   const _hasEyeDropper = typeof window!=="undefined" && "EyeDropper" in window;
 
-  // Fecha ao clicar fora
   useEffect(function(){
     if(!open) return;
     const _onDoc = function(e){ if(_ref.current && !_ref.current.contains(e.target)) setOpen(false); };
@@ -11510,8 +11505,7 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
     return function(){ document.removeEventListener("mousedown", _onDoc); };
   }, [open]);
 
-  // Extrai cores dominantes da logo — SOLUÇÃO pro bug do EyeDropper
-  // Pega pixels reais da imagem, quantiza, ignora fundos brancos/pretos, retorna top 8
+  // Extrai cores dominantes da logo via canvas — SOLUCAO pro bug do EyeDropper em HiDPI
   useEffect(function(){
     if(!logoUrl){ setLogoColors([]); return; }
     setExtracting(true);
@@ -11519,7 +11513,7 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
     _img.crossOrigin = "anonymous";
     _img.onload = function(){
       try{
-        const _MAX = 120; // downscale pra performance
+        const _MAX = 120;
         const _r = Math.min(1, _MAX / Math.max(_img.width, _img.height));
         const _w = Math.max(1, Math.floor(_img.width * _r));
         const _h = Math.max(1, Math.floor(_img.height * _r));
@@ -11531,15 +11525,13 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         const _buckets = {};
         for(let i=0; i<_data.length; i+=4){
           const _a = _data[i+3];
-          if(_a < 200) continue; // ignora transparente
+          if(_a < 200) continue;
           let _r2 = _data[i], _g2 = _data[i+1], _b2 = _data[i+2];
-          // ignora quase branco / quase preto / cinza chapado
           const _max = Math.max(_r2,_g2,_b2), _min = Math.min(_r2,_g2,_b2);
           if(_max > 245 && _min > 245) continue;
           if(_max < 20 && _min < 20) continue;
           const _sat = _max===0 ? 0 : (_max - _min) / _max;
           const _isNeutral = _sat < 0.08;
-          // quantiza (32 níveis por canal — grupos de ~8 valores)
           const _qr = Math.round(_r2/32)*32;
           const _qg = Math.round(_g2/32)*32;
           const _qb = Math.round(_b2/32)*32;
@@ -11555,12 +11547,10 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
           const _r2 = Math.round(_b.r/_b.count);
           const _g2 = Math.round(_b.g/_b.count);
           const _b2 = Math.round(_b.b/_b.count);
-          // prioriza saturado (peso*2 se não for neutro)
           const _score = _b.count * (_b.neutral ? 1 : 2);
           return {hex:"#"+[_r2,_g2,_b2].map(function(v){return v.toString(16).padStart(2,"0");}).join(""), score:_score};
         });
         _arr.sort(function(a,b){return b.score-a.score;});
-        // dedupe visual (dist mín. entre swatches)
         const _final = [];
         for(let j=0; j<_arr.length && _final.length<8; j++){
           const _h = _arr[j].hex;
@@ -11579,14 +11569,13 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
     _img.src = logoUrl;
   }, [logoUrl]);
 
-  // 24 cores curadas — cobre 95% dos casos (marcas comuns + tons neutros)
   const _PRESETS = [
-    "#0f172a","#334155","#64748b","#94a3b8", // neutros escuro→claro
-    "#dc2626","#ea580c","#f59e0b","#eab308", // vermelho/laranja/amber
-    "#84cc16","#16a34a","#059669","#14b8a6", // verdes
-    "#06b6d4","#0ea5e9","#3b82f6","#6366f1", // ciano/azul
-    "#8b5cf6","#a855f7","#d946ef","#ec4899", // roxo/rosa
-    "#f43f5e","#78716c","#a16207","#166534", // extras
+    "#0f172a","#334155","#64748b","#94a3b8",
+    "#dc2626","#ea580c","#f59e0b","#eab308",
+    "#84cc16","#16a34a","#059669","#14b8a6",
+    "#06b6d4","#0ea5e9","#3b82f6","#6366f1",
+    "#8b5cf6","#a855f7","#d946ef","#ec4899",
+    "#f43f5e","#78716c","#a16207","#166534",
   ];
 
   const _pickEye = async function(){
@@ -11596,19 +11585,17 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
       const _r = await _ed.open();
       if(_r && _r.sRGBHex) setColor(_r.sRGBHex);
       setOpen(false);
-    }catch(_){ /* usuario cancelou */ }
+    }catch(_){}
   };
 
   return <div ref={_ref} style={{position:"relative"}}>
     <LBL t="Cor da marca"/>
     <div style={{display:"flex",gap:10,alignItems:"center"}}>
-      {/* Swatch clicavel — abre popover */}
       <button type="button" onClick={function(){setOpen(function(o){return !o;});}}
         title="Escolher cor"
         style={{width:56,height:44,borderRadius:10,border:"1px solid #e2e8f0",background:color,cursor:"pointer",padding:0,flexShrink:0,transition:"transform .12s, box-shadow .12s",boxShadow:open?"0 0 0 3px "+color+"33":"none"}}
         onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.03)";}}
         onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}/>
-      {/* Botao conta-gotas — API moderna EyeDropper (precisa, sem bug de zoom) */}
       {_hasEyeDropper && <button type="button" onClick={_pickEye}
         title="Conta-gotas — pega cor exata de qualquer lugar da tela"
         style={{width:44,height:44,borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#475569",flexShrink:0,transition:"all .12s"}}
@@ -11616,7 +11603,6 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
       </button>}
-      {/* Hex manual */}
       <input value={color} onChange={function(e){
           let _v=e.target.value.trim();
           if(_v && !_v.startsWith("#")) _v="#"+_v;
@@ -11626,9 +11612,7 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         style={{flex:1,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:"monospace",textTransform:"lowercase",boxSizing:"border-box"}}/>
     </div>
 
-    {/* POPOVER moderno — swatches + conta-gotas grande + hex */}
     {open && <div style={{position:"absolute",top:"100%",left:0,marginTop:8,zIndex:1000,background:"#fff",borderRadius:14,border:"1px solid #e2e8f0",boxShadow:"0 12px 40px rgba(15,23,42,0.16)",padding:16,width:296,fontFamily:FF}}>
-      {/* Header do popover */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
         <div style={{width:38,height:38,borderRadius:9,background:color,border:"1px solid #e2e8f0",flexShrink:0}}/>
         <div style={{flex:1,minWidth:0}}>
@@ -11643,7 +11627,6 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         </button>
       </div>
 
-      {/* Conta-gotas destaque */}
       {_hasEyeDropper && <button type="button" onClick={_pickEye}
         style={{width:"100%",background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",color:"#7c3aed",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:FF,marginBottom:12,transition:"all .12s"}}
         onMouseEnter={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";}}
@@ -11652,7 +11635,6 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         Pegar cor da tela
       </button>}
 
-      {/* Cores extraídas da logo — SOLUÇÃO pro bug do EyeDropper em displays HiDPI */}
       {logoColors.length>0 && <div style={{marginBottom:12}}>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/></svg>
@@ -11662,17 +11644,16 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
           {logoColors.map(function(hex){
             const _active = String(color).toLowerCase()===hex.toLowerCase();
             return <button key={hex} type="button" onClick={function(){setColor(hex);}}
-              title={hex+" — extraída da logo"}
+              title={hex+" — extraida da logo"}
               style={{width:"100%",aspectRatio:"1",borderRadius:7,border:_active?"2px solid #0f172a":"1px solid #e2e8f0",background:hex,cursor:"pointer",padding:0,transition:"transform .12s",transform:_active?"scale(1.1)":"scale(1)"}}
               onMouseEnter={function(e){if(!_active) e.currentTarget.style.transform="scale(1.12)";}}
               onMouseLeave={function(e){if(!_active) e.currentTarget.style.transform="scale(1)";}}/>;
           })}
         </div>
       </div>}
-      {extracting && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",padding:"6px 0 10px",fontStyle:"italic"}}>Extraindo cores da logo…</div>}
+      {extracting && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",padding:"6px 0 10px",fontStyle:"italic"}}>Extraindo cores da logo...</div>}
 
-      {/* Grid de presets 6x4 */}
-      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Paleta rápida</div>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Paleta rapida</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(6, 1fr)",gap:6,marginBottom:12}}>
         {_PRESETS.map(function(hex){
           const _active = String(color).toLowerCase()===hex.toLowerCase();
@@ -11684,7 +11665,6 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
         })}
       </div>
 
-      {/* Hex input dentro do popover */}
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Hex customizado</div>
       <input value={color} onChange={function(e){
           let _v=e.target.value.trim();
@@ -11697,6 +11677,10 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF, logoUrl}){
   </div>;
 }
 
+// MODAL EDITAR CLIENTE — funciona pra QUALQUER cliente (hardcoded + dinâmico)
+// Sócio muda: nome, setor/subtítulo, cidade/UF, cor, logo, "Cliente desde"
+// Persiste em `clients` no Supabase (upsert). Preserva riqueza dos hardcoded.
+// ══════════════════════════════════════════════════════════════════
 function EditarClienteModal({cl, onClose}){
   const FF = "'Inter',system-ui,-apple-system,sans-serif";
   const inp = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:FF,fontWeight:500};
@@ -11921,8 +11905,7 @@ function EditarClienteModal({cl, onClose}){
           </div>}
         </div>
 
-        {/* Cor — picker CUSTOM moderno: swatch + popover com preset + eyedropper + hex.
-            Sem <input type="color"> nativo (Chrome tem bug de precisao no eyedropper). */}
+        {/* Cor — picker moderno com extracao automatica de cores da logo */}
         <_CorDaMarcaPicker color={color} setColor={setColor} LBL={LBL} FF={FF} logoUrl={logoUrl}/>
       </div>
 
@@ -23392,7 +23375,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
     // Refs subidas no painel — viram files do card com flag isRef pra serem exibidas como referência
     const refFiles=refImages.map((r,i)=>({...r,addedAt:nowStr,addedAtIso:nowIso,addedBy:CURRENT_USER.name,isRef:true,batchId}));
     const extraFiles=[...audioFiles,...refFiles];
-    const newComment=_feedbackFinal.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+_feedbackFinal.trim(),time:nowFull,at:nowIso,atFmt:nowFull,type:"feedback",batchId}:null;
+    // Prefixa [Lamina X] quando for carrossel — ajuda equipe identificar qual lamina precisa mexer
+    const _laminaTag = (allImgs.length>1) ? ("[Lâmina "+(activeIdx+1)+"/"+allImgs.length+"] ") : "";
+    const newComment=_feedbackFinal.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+_laminaTag+_feedbackFinal.trim(),time:nowFull,at:nowIso,atFmt:nowFull,type:"feedback",batchId,laminaIdx:allImgs.length>1?activeIdx:null,laminaTotal:allImgs.length>1?allImgs.length:null}:null;
     const audioComment=audioURL?{id:Date.now()+1,user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"",type:"audio",audioUrl:audioURL,time:nowFull,at:nowIso,atFmt:nowFull,batchId}:null;
     const comments=[newComment,audioComment].filter(Boolean);
 
@@ -23709,7 +23694,15 @@ function PublicacaoEditModal({task, onClose, onReject}){
 
             {/* Instruções */}
             <div>
-              <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:8,letterSpacing:-.1}}>Instruções de alteração</label>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+                <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
+                {/* Tag da lamina atual — so aparece se for carrossel */}
+                {allImgs.length>1 && <span title={"Este ajuste sera marcado como [Lamina "+(activeIdx+1)+"] no comentario"}
+                  style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,#faf5ff 0%,#f3e8ff 100%)",border:"1px solid #d8b4fe",color:"#7c3aed",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                  Lâmina {activeIdx+1} de {allImgs.length}
+                </span>}
+              </div>
               <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
                 placeholder="Ex: trocar fundo verde por azul, centralizar o título, aumentar a logo Bioter no canto superior direito..."
                 rows={8}
@@ -24736,16 +24729,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 </span>))}
                 {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento/prioridade ═════ */}
                 {(tab==="video"||tab==="publicacao")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <button type="button" title={tab==="video"?"Baixar vídeo original":"Baixar arte final"}
+                  <button type="button" title={tab==="video"?"Baixar vídeo original":((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
                     onClick={async function(){
                       try{
-                        let _url = null;
+                        const _isVid = function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(u);};
+                        let _urls = [];
                         if(tab==="video"){
-                          const _videos = (current.files||[]).filter(function(f){return !f.isAnnotation && (String(f.type||"").startsWith("video/") || (typeof _isVideoUrl==="function" && _isVideoUrl(f.url)));}).filter(function(f){return !f.tipo || f.tipo==="final";});
-                          const _v = _videos[0] || (Array.isArray(allImgs)?allImgs.find(function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(typeof u==="string"?u:u&&u.url);}):null);
-                          _url = _v ? (typeof _v==="string"?_v:_v.url) : null;
+                          const _videos = (current.files||[]).filter(function(f){return !f.isAnnotation && (String(f.type||"").startsWith("video/") || _isVid(f.url));}).filter(function(f){return !f.tipo || f.tipo==="final";});
+                          const _v = _videos[0] || (Array.isArray(allImgs)?allImgs.find(function(u){return _isVid(typeof u==="string"?u:u&&u.url);}):null);
+                          const _vUrl = _v ? (typeof _v==="string"?_v:_v.url) : null;
+                          if(_vUrl) _urls = [_vUrl];
                         } else {
-                          const _isVid = function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(u);};
                           const _imgs = (current.files||[]).filter(function(f){
                             if(!f || f.isAnnotation) return false;
                             if(f.tipo && f.tipo!=="final") return false;
@@ -24754,28 +24748,55 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             return !!f.url;
                           });
                           const _parseT = function(s){if(!s)return 0;const _i=new Date(s).getTime();return isNaN(_i)?0:_i;};
-                          _imgs.sort(function(a,b){return (_parseT(b.addedAtIso)||_parseT(b.addedAt)||0)-(_parseT(a.addedAtIso)||_parseT(a.addedAt)||0);});
-                          if(_imgs[0]) _url = _imgs[0].url;
-                          if(!_url && Array.isArray(allImgs)){
-                            for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
+                          _imgs.sort(function(a,b){return (_parseT(a.addedAtIso)||_parseT(a.addedAt)||0)-(_parseT(b.addedAtIso)||_parseT(b.addedAt)||0);});
+                          const _ct = String(current.contentType||current.tipo||"").toLowerCase();
+                          const _isCarr = _ct==="carrossel";
+                          if(_isCarr && _imgs.length>0){
+                            _urls = _imgs.map(function(f){return f.url;});
+                          } else if(_imgs.length>0){
+                            _urls = [_imgs[_imgs.length-1].url];
+                          } else if(Array.isArray(allImgs)){
+                            const _fallback = [];
+                            for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)) _fallback.push(_u); }
+                            _urls = _isCarr ? _fallback : (_fallback.length ? [_fallback[0]] : []);
                           }
                         }
-                        if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning((tab==="video"?"Nenhum vídeo":"Nenhuma arte")+" anexado(a).",3000); return; }
-                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando…",2000);
-                        let _fname = "";
-                        try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                        if(!_fname || _fname.length<4){
-                          const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : (tab==="video"?"video":"arte");
-                          const _extM = String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                          _fname = _t + "." + (_extM?_extM[1]:(tab==="video"?"mp4":"png"));
+                        if(_urls.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.warning((tab==="video"?"Nenhum vídeo":"Nenhuma arte")+" anexado(a).",3000); return; }
+                        const _multi = _urls.length>1;
+                        if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" lâminas…"):"Baixando…",2500);
+                        const _title = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : (tab==="video"?"video":"arte");
+                        let _okCount = 0;
+                        for(let i=0;i<_urls.length;i++){
+                          const _url = _urls[i];
+                          let _fname = "";
+                          try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                          if(!_fname || _fname.length<4){
+                            const _extM = String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
+                            _fname = _title + (_multi?("_lamina_"+(i+1)):"") + "." + (_extM?_extM[1]:(tab==="video"?"mp4":"png"));
+                          } else if(_multi){
+                            const _dot = _fname.lastIndexOf(".");
+                            const _base = _dot>0?_fname.slice(0,_dot):_fname;
+                            const _ext = _dot>0?_fname.slice(_dot):"";
+                            _fname = _base+"_lamina_"+(i+1)+_ext;
+                          }
+                          try{
+                            const _r = await fetch(_url);
+                            const _b = await _r.blob();
+                            const _u = URL.createObjectURL(_b);
+                            const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
+                            document.body.appendChild(_a); _a.click();
+                            setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
+                            _okCount++;
+                            if(i<_urls.length-1) await new Promise(function(r){setTimeout(r,350);});
+                          }catch(e2){
+                            console.warn("[download lamina "+(i+1)+"]",e2);
+                          }
                         }
-                        const _r = await fetch(_url);
-                        const _b = await _r.blob();
-                        const _u = URL.createObjectURL(_b);
-                        const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
-                        document.body.appendChild(_a); _a.click();
-                        setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
-                        if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname,3000);
+                        if(typeof pixelsToast!=="undefined"){
+                          if(_okCount===_urls.length) pixelsToast.success(_multi?("Baixadas "+_okCount+" lâminas ✓"):"Baixado ✓",3000);
+                          else if(_okCount>0) pixelsToast.warning("Baixadas "+_okCount+"/"+_urls.length+" (algumas falharam)",4000);
+                          else pixelsToast.error("Falha em todos os downloads",4000);
+                        }
                       }catch(e){
                         console.warn("[header download]",e);
                         if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
