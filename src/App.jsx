@@ -11543,7 +11543,7 @@ function _CorDaMarcaPicker({color, setColor, LBL, FF}){
         style={{width:44,height:44,borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#475569",flexShrink:0,transition:"all .12s"}}
         onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.color="#7c3aed";}}
         onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 22l1-1c1-1 2-2 4-2s3 1 4 2l1 1"/><path d="M17.5 6.5l-11 11L2 22l4.5-4.5 11-11"/><path d="M18 2l4 4-2 2-4-4z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
       </button>}
       {/* Hex manual */}
       <input value={color} onChange={function(e){
