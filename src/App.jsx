@@ -24027,18 +24027,30 @@ function _renderCmtWithTs(txt, accent){
   const _acc = accent || "#7c3aed";
   const _s = String(txt||"");
   if(!_s) return null;
-  const _re = /\[(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d)?)\]/g;
+  // Regex unificada: casa [MM:SS timestamp] OU [Lâmina X/Y]
+  const _re = /\[(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d)?)\]|\[Lâmina\s+(\d+)\/(\d+)\]/g;
   const _parts = [];
   let _last = 0, _m, _i = 0;
   while((_m = _re.exec(_s)) !== null){
     if(_m.index > _last) _parts.push(_s.slice(_last, _m.index));
-    _parts.push({ts: _m[1], key: "ts"+(_i++)});
+    if(_m[1]){
+      _parts.push({ts: _m[1], key: "ts"+(_i++)});
+    } else if(_m[2] && _m[3]){
+      _parts.push({lam: true, idx: _m[2], total: _m[3], key: "lam"+(_i++)});
+    }
     _last = _m.index + _m[0].length;
   }
   if(_last < _s.length) _parts.push(_s.slice(_last));
   if(_parts.length === 0) return _s;
   return _parts.map(function(part, i){
     if(typeof part === "string") return <span key={"t"+i}>{part}</span>;
+    if(part.lam){
+      return <span key={part.key} title={"Ajuste referente à lâmina "+part.idx+" de "+part.total+" do carrossel"}
+        style={{display:"inline-flex",alignItems:"center",gap:4,background:"linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",color:"#fff",padding:"3px 10px",borderRadius:6,fontSize:11,fontWeight:800,letterSpacing:.3,fontFamily:"'Inter',system-ui,sans-serif",marginRight:5,marginBottom:1,verticalAlign:"middle",boxShadow:"0 1px 3px rgba(124,58,237,0.35)"}}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Lâmina {part.idx}/{part.total}
+      </span>;
+    }
     return <span key={part.key} style={{display:"inline-flex",alignItems:"center",gap:3,background:_acc+"18",color:_acc,fontWeight:800,fontSize:10.5,padding:"2px 7px",borderRadius:6,fontVariantNumeric:"tabular-nums",letterSpacing:.2,marginRight:5,marginBottom:1,verticalAlign:"middle",border:"1px solid "+_acc+"33",lineHeight:1.4}}>
       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       {part.ts}
@@ -35964,10 +35976,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                               onClick={function(e){e.stopPropagation();}}
                               style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                           ) : (<>
-                            <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                            <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer" draggable="false"
                               onClick={function(){setLightbox({url:a.url,name:a.name,storagePath:a.storagePath});}}
                               onError={function(e){e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                              style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:canEdit?"grab":"zoom-in",pointerEvents:"auto"}}/>
                             <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
                               <Ico n="image" size={22} color="#64748b"/>
                               <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
