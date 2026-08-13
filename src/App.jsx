@@ -3209,6 +3209,120 @@ function _BriefingPasswordField(props){
   </div>;
 }
 
+// Renderiza a seção "Logins e acessos" como cards por rede social — ícones brand, user+pass side-by-side
+function _LoginsCardsView(props){
+  const data = props.data || {};
+  const canEdit = !!props.canEdit;
+  const setField = props.setField;
+  const logins = data.logins || {};
+  const get = function(k){ return logins[k]; };
+
+  const SERVICES = [
+    { id:"instagram", name:"Instagram",
+      brand:"linear-gradient(135deg,#f58529 0%,#dd2a7b 50%,#8134af 100%)",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
+      userField:"instagram_user", userLabel:"@ ou e-mail",
+      passField:"instagram_pass"
+    },
+    { id:"facebook", name:"Facebook",
+      brand:"#1877F2",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
+      userField:"facebook_user", userLabel:"Usuário / e-mail",
+      passField:"facebook_pass",
+      extraField:"facebook_bm", extraLabel:"Business Manager (BM) — ID / URL"
+    },
+    { id:"tiktok", name:"TikTok",
+      brand:"#000000",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.62a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.05z"/></svg>,
+      userField:"tiktok_user", userLabel:"Usuário / e-mail",
+      passField:"tiktok_pass"
+    },
+    { id:"google", name:"Google",
+      brand:"linear-gradient(135deg,#4285F4 0%,#EA4335 100%)",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032 s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2 C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>,
+      userField:"google_user", userLabel:"E-mail principal",
+      userHint:"YouTube, Google Ads e Google Meu Negócio",
+      passField:"google_pass"
+    },
+    { id:"linkedin", name:"LinkedIn",
+      brand:"#0A66C2",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
+      userField:"linkedin_user", userLabel:"Usuário / e-mail",
+      passField:"linkedin_pass"
+    },
+    { id:"site", name:"Site — painel admin",
+      brand:"linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+      userField:"site_user", userLabel:"Usuário",
+      passField:"site_pass",
+      extraField:"site_admin_url", extraLabel:"URL do painel administrativo",
+      extraHint:"ex: meusite.com.br/wp-admin"
+    },
+  ];
+
+  const inpStyle = {width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:"#0f172a"};
+  const microLbl = {color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:5};
+  const microHint = {color:"#94a3b8",fontSize:11,marginTop:4};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      {SERVICES.map(function(svc){
+        const uv = get(svc.userField) || "";
+        const pv = get(svc.passField) || "";
+        const filled = !!(uv || pv);
+        return <div key={svc.id} style={{background:"#fff",border:"1px solid "+(filled?"#e2e8f0":"#eef0f3"),borderRadius:12,padding:14,boxShadow:"0 1px 2px rgba(15,23,42,.03)",transition:"border-color .12s, box-shadow .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.06)";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor=filled?"#e2e8f0":"#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingBottom:11,borderBottom:"1px solid #f5f6f8"}}>
+            <div style={{width:34,height:34,borderRadius:9,background:svc.brand,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 5px rgba(15,23,42,.15)"}}>
+              {svc.icon}
+            </div>
+            <div style={{fontSize:13.5,fontWeight:800,color:"#0f172a",letterSpacing:-.15,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{svc.name}</div>
+            {filled && <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",flexShrink:0}} title="Preenchido"/>}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{minWidth:0}}>
+              <div style={microLbl}>{svc.userLabel}</div>
+              <input type="text" value={uv} disabled={!canEdit} spellCheck={false} autoComplete="off"
+                onChange={function(e){ setField("logins", svc.userField, e.target.value); }}
+                style={inpStyle}/>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={microLbl}>Senha</div>
+              <_BriefingPasswordField val={pv} canEdit={canEdit}
+                onChange={function(v){ setField("logins", svc.passField, v); }}/>
+            </div>
+          </div>
+          {svc.userHint && <div style={microHint}>{svc.userHint}</div>}
+          {svc.extraField && <div style={{marginTop:11,paddingTop:11,borderTop:"1px solid #f5f6f8"}}>
+            <div style={microLbl}>{svc.extraLabel}</div>
+            <input type="text" value={get(svc.extraField)||""} disabled={!canEdit} spellCheck={false} autoComplete="off"
+              onChange={function(e){ setField("logins", svc.extraField, e.target.value); }}
+              style={inpStyle}/>
+            {svc.extraHint && <div style={microHint}>{svc.extraHint}</div>}
+          </div>}
+        </div>;
+      })}
+    </div>
+
+    {/* Outros acessos + observações full-width */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:14}}>
+      <div style={microLbl}>Outros acessos importantes</div>
+      <textarea value={get("outros_acessos")||""} disabled={!canEdit} rows={3}
+        onChange={function(e){ setField("logins", "outros_acessos", e.target.value); }}
+        style={Object.assign({},inpStyle,{resize:"vertical",minHeight:64,fontFamily:"inherit"})}
+        placeholder="ex: Shopee, Mercado Livre, e-mail marketing, CRM, gestor de senhas"/>
+    </div>
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:14}}>
+      <div style={microLbl}>Observações sobre segurança e 2FA</div>
+      <textarea value={get("obs_seguranca")||""} disabled={!canEdit} rows={3}
+        onChange={function(e){ setField("logins", "obs_seguranca", e.target.value); }}
+        style={Object.assign({},inpStyle,{resize:"vertical",minHeight:64,fontFamily:"inherit"})}
+        placeholder="quem tem acesso, 2FA ativado, celular/e-mail de recuperação, códigos de backup"/>
+    </div>
+  </div>;
+}
+
 // Componente canônico — usado em Estratégia > Briefing E no Portal > Briefing
 function BriefingFormCanonico(props){
   const cl = props.cl;
@@ -3362,7 +3476,7 @@ function BriefingFormCanonico(props){
           })()}
         </div>
 
-        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+        {current.id==="logins" ? <_LoginsCardsView data={data} canEdit={canEdit} setField={setField}/> : <div style={{display:"flex",flexDirection:"column",gap:18}}>
           {current.fields.map(function(f){
             // Conditional display
             if(f.showIf){
@@ -3481,7 +3595,7 @@ function BriefingFormCanonico(props){
             }
             return null;
           })}
-        </div>
+        </div>}
 
         {/* Navegação inferior */}
         <div style={{display:"flex",justifyContent:"space-between",marginTop:22,paddingTop:16,borderTop:"1px solid #f1f5f9",gap:8}}>
