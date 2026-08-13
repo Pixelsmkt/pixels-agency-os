@@ -33234,41 +33234,24 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const ss = parseInt(m[3],10)||0;
     return h*3600 + mm*60 + ss;
   }
-  // Splits text on [MM:SS] pattern → JSX com botões clicáveis (video) + [Lâmina X/Y] → chip roxo destaque (carrossel)
+  // Splits text on [MM:SS] pattern → JSX com botões clicáveis (só se tem vídeo)
   function _renderAjusteText(text, hasVideo){
     const s = String(text||"");
+    if(!hasVideo) return s;
     const parts = [];
-    // Regex unificada: casa [MM:SS], [H:MM:SS] OU [Lâmina X/Y]
-    const re = /\[(\d{1,2}(?::\d{2}){1,2})\]|\[Lâmina\s+(\d+)\/(\d+)\]/g;
+    const re = /\[(\d{1,2}(?::\d{2}){1,2})\]/g;
     let last = 0, m;
     while((m = re.exec(s)) !== null){
       if(m.index > last) parts.push({t:"txt", v:s.slice(last, m.index)});
-      if(m[1]){
-        // timestamp de video
-        const secs = _parseTimestamp(m[1]);
-        if(secs != null && hasVideo) parts.push({t:"ts", label:m[1], secs:secs});
-        else parts.push({t:"txt", v:m[0]});
-      } else if(m[2] && m[3]){
-        // tag de lamina do carrossel
-        parts.push({t:"lam", idx:m[2], total:m[3]});
-      } else {
-        parts.push({t:"txt", v:m[0]});
-      }
+      const secs = _parseTimestamp(m[1]);
+      if(secs != null) parts.push({t:"ts", label:m[1], secs:secs});
+      else parts.push({t:"txt", v:m[0]});
       last = re.lastIndex;
     }
     if(last < s.length) parts.push({t:"txt", v:s.slice(last)});
     if(parts.length===0) return s;
     return parts.map(function(p,i){
       if(p.t==="txt") return <span key={"t"+i}>{p.v}</span>;
-      if(p.t==="lam"){
-        // Chip visual roxo pra tag de lamina — designer bate o olho e sabe qual e
-        return <span key={"l"+i} title={"Ajuste referente à lâmina "+p.idx+" de "+p.total+" do carrossel"}
-          style={{display:"inline-flex",alignItems:"center",gap:4,background:"linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",color:"#fff",padding:"3px 10px",borderRadius:6,fontSize:11,fontWeight:800,letterSpacing:.3,fontFamily:"'Inter',system-ui,sans-serif",margin:"0 4px 0 0",verticalAlign:"middle",boxShadow:"0 1px 3px rgba(124,58,237,0.35)"}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-          Lâmina {p.idx}/{p.total}
-        </span>;
-      }
-      // timestamp de video (existente)
       return <button key={"b"+i} type="button" onClick={function(e){e.preventDefault(); e.stopPropagation(); _seekAjusteVideo(p.secs);}}
         style={{background:"#a140ff",color:"#fff",border:"none",padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",fontFeatureSettings:"'tnum'",fontFamily:"'Inter',system-ui,sans-serif",margin:"3px 4px",verticalAlign:"middle",transition:"background .12s"}}
         onMouseEnter={function(e){e.currentTarget.style.background="#8b2fea";}}
@@ -34296,16 +34279,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const thumbPromise=isVideo?generateVideoThumbnail(file):Promise.resolve(null);
 
       // Adiciona placeholder UPLOADING (com progress 0)
-      // Arquivo FINAL: novo upload vai pra FRENTE (posicao #1 do carrossel = mais recente).
-      // Referencia continua no fim (nao importa ordem).
-      setAttachments(p=>{
-        const _newAtt={
-          id:tempId,name:file.name,type:mime,size:file.size,url:null,
-          uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
-          tipo,
-        };
-        return tipo==="final" ? [_newAtt, ...p] : [...p, _newAtt];
-      });
+      setAttachments(p=>[...p,{
+        id:tempId,name:file.name,type:mime,size:file.size,url:null,
+        uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
+        tipo,
+      }]);
 
       try{
         const sb=window._sb;
@@ -34719,13 +34697,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const imgRef=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isRef(a));
   const imgFin=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a));
   const imgMat=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isMat(a));
-  const imgAdj=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a));
   const vidRef=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isRef(a));
   const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
-  const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   // Unificado: imagens + videos finais na ordem em que aparecem no attachments (respeita drag&drop)
   const finItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a);});
-  // Unificado: anexos de ajuste (imagens + videos que a equipe subiu pra explicar o ajuste)
+  const imgAdj=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a));
+  const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   const adjItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a);});
   const vidMat=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isMat(a));
   // Compat: agregados (usados em outros lugares — carrossel, contagens)
@@ -35908,7 +35885,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     _dragCountFinRef.current=0;
                     handleFilesDrop(e,"final");
                   }}
-                  style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,marginBottom:18,transition:"border .12s, background .12s, padding .12s"}}>
                   {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                     <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
                   </div>}
@@ -35944,32 +35921,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                     <span style={{color:"#7c3aed"}}>Arraste os cards</span> pra definir a ordem exata do carrossel do Instagram.
                   </div>}
-                  {finItems.length>0&&(()=>{
-                    // Descobre o mais recente via addedAtIso (fallback vazio)
-                    const _tsOf=function(x){try{return x&&x.addedAtIso?new Date(x.addedAtIso).getTime():0;}catch(_){return 0;}};
-                    const _maxTs=finItems.reduce(function(m,x){const t=_tsOf(x);return t>m?t:m;},0);
-                    const _latestFinId=_maxTs>0?(finItems.find(function(x){return _tsOf(x)===_maxTs;})||{}).id:null;
-                    // Formata data/hora curta: "hoje 14:32" | "ontem 09:11" | "11/08 14:32"
-                    const _fmtWhen=function(a){
-                      const iso=a&&a.addedAtIso; if(!iso) return a&&a.addedAt||"";
-                      try{
-                        const d=new Date(iso), now=new Date();
-                        const sameDay=d.toDateString()===now.toDateString();
-                        const y=new Date(now); y.setDate(now.getDate()-1);
-                        const wasYesterday=d.toDateString()===y.toDateString();
-                        const hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
-                        if(sameDay) return "hoje "+hh+":"+mm;
-                        if(wasYesterday) return "ontem "+hh+":"+mm;
-                        return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+hh+":"+mm;
-                      }catch(_){return a.addedAt||"";}
-                    };
-                    return <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                  {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
                       const _isDraggedOver = _dragOverItemId===a.id;
                       const sizeMB = _isVideo && a.size ? (a.size/1024/1024).toFixed(1) : null;
-                      const _isLatest = _latestFinId && a.id===_latestFinId;
-                      const _whenLabel = _fmtWhen(a);
                       return(
                         <div key={a.id}
                           draggable={canEdit?"true":undefined}
@@ -36044,22 +36000,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>}
                           </div>
-                          {/* MB pill no topo esquerdo (nao conflita com #num embaixo) */}
-                          {sizeMB&&<div style={{position:"absolute",top:6,left:44,background:"rgba(15,23,42,0.72)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'",pointerEvents:"none",letterSpacing:.2}}>{sizeMB} MB</div>}
-                          {/* Badge NOVO no mais recente — verde, canto sup-direito abaixo dos botoes */}
-                          {_isLatest&&<div title={"Ultimo arquivo subido — "+(_whenLabel||"")}
-                            style={{position:"absolute",top:38,right:6,background:"#16a34a",color:"#fff",borderRadius:99,padding:"3px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,boxShadow:"0 2px 6px rgba(22,163,74,0.35)",pointerEvents:"none",display:"inline-flex",alignItems:"center",gap:3}}>
-                            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
-                            NOVO
-                          </div>}
-                          {/* Data/hora do upload — sempre visivel embaixo, canto direito */}
-                          {_whenLabel&&<div title={"Subido em "+_whenLabel+(a.addedBy?" por "+a.addedBy:"")}
-                            style={{position:"absolute",bottom:6,right:6,background:"rgba(15,23,42,0.72)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none",letterSpacing:.15,maxWidth:"70%",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_whenLabel}</div>}
+                          {sizeMB&&<div style={{position:"absolute",bottom:6,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
                         </div>
                       );
                     })}
-                  </div>;
-                  })()}
+                  </div>}
                 </div>);
               })()}
 
@@ -36110,6 +36055,126 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>);
                     })}
                   </div>
+                </div>);
+              })()}
+
+              {/* ── SEÇÃO 2: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
+              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
+                const totalMat=imgMat.length+vidMat.length;
+                const _matActive=dragOverSection==="mat";
+                const _matCanEdit=canEditRef||canEdit;
+                return(<div
+                  onDragEnter={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    if(!_matCanEdit)return;
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current++;
+                    if(dragOverSection!=="mat")setDragOverSection("mat");
+                  }}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_matCanEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragLeave={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    _dragCountMatRef.current=Math.max(0,_dragCountMatRef.current-1);
+                    if(_dragLeaveTimerMatRef.current) clearTimeout(_dragLeaveTimerMatRef.current);
+                    _dragLeaveTimerMatRef.current=setTimeout(function(){
+                      _dragLeaveTimerMatRef.current=null;
+                      if(_dragCountMatRef.current===0) setDragOverSection(function(cur){return cur==="mat"?null:cur;});
+                    },120);
+                  }}
+                  onDrop={e=>{
+                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
+                    _dragCountMatRef.current=0;
+                    handleFilesDrop(e,"material");
+                  }}
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_matActive?"2px dashed #0891b2":"2px dashed transparent",background:_matActive?"#ecfeff":"transparent",padding:_matActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_matActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #a5f3fc",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0891b2",boxShadow:"0 8px 22px rgba(8,145,178,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="paperclip" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Materiais</span></div>
+                  </div>}
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalMat>0?14:10}}>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #cffafe"}}><Ico n="paperclip" size={16}/></div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
+                    </div>
+                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
+                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Baixar tudo
+                    </button>}
+                    {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
+                      style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="#0891b2";e.currentTarget.style.boxShadow="0 1px 2px rgba(8,145,178,0.15)";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Adicionar
+                    </label>}
+                  </div>
+                  {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
+                  </div>)}
+                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
+                    {imgMat.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
+                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
+                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#0891b2"/>
+                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                            style={{background:"#0891b2",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            Abrir <Ico n="external" size={9} color="#fff"/>
+                          </a>
+                        </div>
+                        <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("mat #"+(i+1))}</span>
+                        </div>
+                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar material"
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(8,145,178,0.85)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {_matCanEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>}
+                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
+                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
+                      <video src={a.url} controls preload="metadata" playsInline
+                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
+                      <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
+                      </div>
+                      <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                        <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
+                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        </button>
+                        {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
+                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>}
+                      </div>
+                      {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
+                    </div>);
+                  })}</div>}
                 </div>);
               })()}
 
@@ -36278,125 +36343,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>);
               })()}
 
-              {/* ── SEÇÃO 2: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
-              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
-                const totalMat=imgMat.length+vidMat.length;
-                const _matActive=dragOverSection==="mat";
-                const _matCanEdit=canEditRef||canEdit;
-                return(<div
-                  onDragEnter={e=>{
-                    e.preventDefault();e.stopPropagation();
-                    if(!_matCanEdit)return;
-                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
-                    _dragCountMatRef.current++;
-                    if(dragOverSection!=="mat")setDragOverSection("mat");
-                  }}
-                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(_matCanEdit)e.dataTransfer.dropEffect="copy";}}
-                  onDragLeave={e=>{
-                    e.preventDefault();e.stopPropagation();
-                    _dragCountMatRef.current=Math.max(0,_dragCountMatRef.current-1);
-                    if(_dragLeaveTimerMatRef.current) clearTimeout(_dragLeaveTimerMatRef.current);
-                    _dragLeaveTimerMatRef.current=setTimeout(function(){
-                      _dragLeaveTimerMatRef.current=null;
-                      if(_dragCountMatRef.current===0) setDragOverSection(function(cur){return cur==="mat"?null:cur;});
-                    },120);
-                  }}
-                  onDrop={e=>{
-                    if(_dragLeaveTimerMatRef.current){clearTimeout(_dragLeaveTimerMatRef.current);_dragLeaveTimerMatRef.current=null;}
-                    _dragCountMatRef.current=0;
-                    handleFilesDrop(e,"material");
-                  }}
-                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_matActive?"2px dashed #0891b2":"2px dashed transparent",background:_matActive?"#ecfeff":"transparent",padding:_matActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
-                  {_matActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #a5f3fc",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0891b2",boxShadow:"0 8px 22px rgba(8,145,178,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="paperclip" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Materiais</span></div>
-                  </div>}
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalMat>0?14:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #cffafe"}}><Ico n="paperclip" size={16}/></div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Materiais {totalMat>0&&<span style={{background:"#cffafe",color:"#0e7490",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalMat}</span>}</div>
-                      <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>arquivos brutos — takes, fotos originais, base pra edição</div>
-                    </div>
-                    {totalMat>0&&<button onClick={function(){downloadAll([].concat(imgMat,vidMat),"Materiais");}} title="Baixa todos os materiais"
-                      style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",letterSpacing:-.05}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#ecfeff";e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.color="#0891b2";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Baixar tudo
-                    </button>}
-                    {_matCanEdit&&<label htmlFor={"pixels-pick-mat-"+task.id}
-                      style={{background:"#0891b2",color:"#fff",border:"none",borderRadius:9,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:"0 1px 2px rgba(8,145,178,0.15)"}}
-                      onMouseEnter={function(e){e.currentTarget.style.background="#0e7490";e.currentTarget.style.boxShadow="0 3px 10px rgba(8,145,178,0.35)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background="#0891b2";e.currentTarget.style.boxShadow="0 1px 2px rgba(8,145,178,0.15)";}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Adicionar
-                    </label>}
-                  </div>
-                  {totalMat===0&&(<div style={{background:"#ecfeff",border:"1.5px dashed #a5f3fc",borderRadius:12,padding:"22px 20px",textAlign:"center",marginBottom:6}}>
-                    <div style={{width:44,height:44,borderRadius:12,background:"#fff",border:"1px solid #cffafe",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#22d3ee",marginBottom:10,boxShadow:"0 1px 3px rgba(8,145,178,0.06)"}}><Ico n="paperclip" size={20}/></div>
-                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
-                    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
-                  </div>)}
-                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
-                    {imgMat.map((a,i)=>(
-                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
-                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
-                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
-                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#ecfeff,#cffafe)",color:"#0891b2",textAlign:"center"}}>
-                          <Ico n="image" size={22} color="#0891b2"/>
-                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
-                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                            style={{background:"#0891b2",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
-                            Abrir <Ico n="external" size={9} color="#fff"/>
-                          </a>
-                        </div>
-                        <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
-                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? a.label : ("mat #"+(i+1))}</span>
-                        </div>
-                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar material"
-                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="rgba(8,145,178,0.85)"}
-                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                          </button>
-                          {_matCanEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>}
-                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
-                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
-                      <video src={a.url} controls preload="metadata" playsInline
-                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
-                      <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
-                      </div>
-                      <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                        <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
-                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(8,145,178,0.85)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        </button>
-                        {_matCanEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Remover"
-                          style={{background:"rgba(15,23,42,0.65)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.65)";}}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>}
-                      </div>
-                      {sizeMB&&<div style={{position:"absolute",bottom:36,left:6,background:"rgba(15,23,42,0.7)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>{sizeMB} MB</div>}
-                    </div>);
-                  })}</div>}
-                </div>);
-              })()}
 
               {audAttachments.length>0&&<>
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",alignItems:"center",gap:5}}><Ico n="mic" size={12}/> Áudios ({audAttachments.length})</div>
