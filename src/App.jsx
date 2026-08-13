@@ -3217,6 +3217,7 @@ function _LoginsCardsView(props){
   const logins = data.logins || {};
   const get = function(k){ return logins[k]; };
 
+  // Ordem propositalmente: pares sem extras em cima, pares com extras embaixo (simetria de altura)
   const SERVICES = [
     { id:"instagram", name:"Instagram",
       brand:"linear-gradient(135deg,#f58529 0%,#dd2a7b 50%,#8134af 100%)",
@@ -3224,18 +3225,17 @@ function _LoginsCardsView(props){
       userField:"instagram_user", userLabel:"@ ou e-mail",
       passField:"instagram_pass"
     },
-    { id:"facebook", name:"Facebook",
-      brand:"#1877F2",
-      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
-      userField:"facebook_user", userLabel:"Usuário / e-mail",
-      passField:"facebook_pass",
-      extraField:"facebook_bm", extraLabel:"Business Manager (BM) — ID / URL"
-    },
     { id:"tiktok", name:"TikTok",
       brand:"#000000",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.62a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.05z"/></svg>,
       userField:"tiktok_user", userLabel:"Usuário / e-mail",
       passField:"tiktok_pass"
+    },
+    { id:"linkedin", name:"LinkedIn",
+      brand:"#0A66C2",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
+      userField:"linkedin_user", userLabel:"Usuário / e-mail",
+      passField:"linkedin_pass"
     },
     { id:"google", name:"Google",
       brand:"linear-gradient(135deg,#4285F4 0%,#EA4335 100%)",
@@ -3244,11 +3244,12 @@ function _LoginsCardsView(props){
       userHint:"YouTube, Google Ads e Google Meu Negócio",
       passField:"google_pass"
     },
-    { id:"linkedin", name:"LinkedIn",
-      brand:"#0A66C2",
-      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
-      userField:"linkedin_user", userLabel:"Usuário / e-mail",
-      passField:"linkedin_pass"
+    { id:"facebook", name:"Facebook",
+      brand:"#1877F2",
+      icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
+      userField:"facebook_user", userLabel:"Usuário / e-mail",
+      passField:"facebook_pass",
+      extraField:"facebook_bm", extraLabel:"Business Manager (BM) — ID / URL"
     },
     { id:"site", name:"Site — painel admin",
       brand:"linear-gradient(135deg,#7c3aed 0%,#a855f7 100%)",
@@ -3260,19 +3261,19 @@ function _LoginsCardsView(props){
     },
   ];
 
-  const inpStyle = {width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:"#0f172a"};
-  const microLbl = {color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:5};
+  const inpStyle = {width:"100%",padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:9,fontSize:13.5,lineHeight:1.55,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:"#0f172a",transition:"border-color .12s"};
+  const microLbl = {color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6};
   const microHint = {color:"#94a3b8",fontSize:11,marginTop:4};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,alignItems:"stretch"}}>
       {SERVICES.map(function(svc){
         const uv = get(svc.userField) || "";
         const pv = get(svc.passField) || "";
         const filled = !!(uv || pv);
-        return <div key={svc.id} style={{background:"#fff",border:"1px solid "+(filled?"#e2e8f0":"#eef0f3"),borderRadius:12,padding:14,boxShadow:"0 1px 2px rgba(15,23,42,.03)",transition:"border-color .12s, box-shadow .12s"}}
-          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.06)";}}
-          onMouseLeave={function(e){e.currentTarget.style.borderColor=filled?"#e2e8f0":"#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
+        return <div key={svc.id} style={{background:"#fff",border:"1px solid "+(filled?"#cbd5e1":"#e2e8f0"),borderRadius:12,padding:16,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"border-color .12s, box-shadow .12s",display:"flex",flexDirection:"column",minWidth:0}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.08)";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor=filled?"#cbd5e1":"#e2e8f0";e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingBottom:11,borderBottom:"1px solid #f5f6f8"}}>
             <div style={{width:34,height:34,borderRadius:9,background:svc.brand,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 5px rgba(15,23,42,.15)"}}>
               {svc.icon}
