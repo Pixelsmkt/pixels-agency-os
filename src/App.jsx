@@ -36365,13 +36365,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidMat.map(a=>{
+                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{vidMat.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s"}}
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
                       onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
                       <video src={a.url} controls preload="metadata" playsInline
-                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
+                        onClick={function(e){e.stopPropagation();}}
+                        style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                       <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
                         <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
                       </div>
@@ -36509,14 +36510,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>{vidRef.map(a=>{
+                  {vidRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{vidRef.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",background:"#0f172a",transition:"all .15s"}}
+                    return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.18)";}}
                       onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";e.currentTarget.style.boxShadow="none";}}>
                       {/* Player nativo — mostra primeiro frame + controls pra play inline */}
                       <video src={a.url} controls preload="metadata" playsInline
-                        style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:420,objectFit:"contain"}}/>
+                        onClick={function(e){e.stopPropagation();}}
+                        style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                       {/* Badge REF (topo esquerda) */}
                       {editingRefId===a.id
                         ? <input autoFocus value={editingRefDraft} onChange={function(e){setEditingRefDraft(e.target.value);}}
@@ -57427,8 +57429,20 @@ function useClientOnboarding(clientId){
         delete next[itemId];
       }
     }else{
+      // Auto-registra a data de HOJE ao marcar (usuario pode editar depois via _OnbDateField)
+      // Se ja havia uma data (usuario setou manual antes de marcar), preserva a existente
+      const _today = (function(){
+        const d = new Date();
+        return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      })();
+      const _prevDue = (items[itemId]||{}).due || "";
       next = Object.assign({}, items, {
-        [itemId]: Object.assign({}, items[itemId]||{}, { done:true, completed_at:new Date().toISOString(), completed_by:currentUserId||"" })
+        [itemId]: Object.assign({}, items[itemId]||{}, {
+          done:true,
+          completed_at:new Date().toISOString(),
+          completed_by:currentUserId||"",
+          due: _prevDue || _today
+        })
       });
     }
     _persist(next);
