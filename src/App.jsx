@@ -2953,6 +2953,33 @@ const BRIEFING_SECTIONS = [
       { id:"contato_comercial", label:"Time comercial", help:"nomes, região, WhatsApp, e-mail", type:"textarea" },
     ]
   },
+  { id:"logins",          label:"Logins e acessos",      icon:"lock",         color:"#0ea5e9",
+    fields:[
+      // Instagram
+      { id:"instagram_user", label:"Instagram — usuário", help:"@handle ou e-mail cadastrado", type:"text" },
+      { id:"instagram_pass", label:"Instagram — senha", type:"password" },
+      // Facebook
+      { id:"facebook_user",  label:"Facebook — usuário / e-mail", type:"text" },
+      { id:"facebook_pass",  label:"Facebook — senha", type:"password" },
+      { id:"facebook_bm",    label:"Business Manager (BM) — ID/URL", help:"ID do gerenciador de negócios (Meta Business)", type:"text" },
+      // TikTok
+      { id:"tiktok_user",    label:"TikTok — usuário / e-mail", type:"text" },
+      { id:"tiktok_pass",    label:"TikTok — senha", type:"password" },
+      // Google / YouTube / Google Ads / Google Meu Negócio
+      { id:"google_user",    label:"Google — e-mail principal", help:"conta usada em YouTube, Google Ads e Perfil de Empresa (Google Meu Negócio)", type:"text" },
+      { id:"google_pass",    label:"Google — senha", type:"password" },
+      // LinkedIn
+      { id:"linkedin_user",  label:"LinkedIn — usuário / e-mail", type:"text" },
+      { id:"linkedin_pass",  label:"LinkedIn — senha", type:"password" },
+      // Site
+      { id:"site_admin_url", label:"Site — URL do painel administrativo", help:"ex: meusite.com.br/wp-admin", type:"text" },
+      { id:"site_user",      label:"Site — usuário", type:"text" },
+      { id:"site_pass",      label:"Site — senha", type:"password" },
+      // Outros
+      { id:"outros_acessos", label:"Outros acessos importantes", help:"ex: Shopee, Mercado Livre, e-mail marketing, CRM, gestor de senhas, plataforma de vendas", type:"textarea" },
+      { id:"obs_seguranca",  label:"Observações sobre segurança e 2FA", help:"quem tem acesso, autenticação em 2 fatores ativada, celular/e-mail de recuperação, códigos de backup", type:"textarea" },
+    ]
+  },
 ];
 
 // Seed inicial — preenche dados antes do primeiro save remoto
@@ -3131,6 +3158,57 @@ function _useBriefing(clientId, unitId){
   return {data:dataVisible, setData:setRawData, save, loading, saving};
 }
 
+// Campo de senha: input mascarado com botão de mostrar/ocultar (olhinho) e copiar
+function _BriefingPasswordField(props){
+  const val = props.val || "";
+  const canEdit = !!props.canEdit;
+  const onChange = props.onChange;
+  const [show,setShow] = useState(false);
+  const [copied,setCopied] = useState(false);
+  function _copy(){
+    try{
+      if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(val);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = val; document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(function(){setCopied(false);}, 1400);
+    }catch(_){}
+  }
+  return <div style={{position:"relative"}}>
+    <input
+      type={show?"text":"password"}
+      value={val}
+      onChange={function(e){ onChange(e.target.value); }}
+      disabled={!canEdit}
+      autoComplete="new-password"
+      spellCheck={false}
+      placeholder=""
+      style={{width:"100%",padding:"10px 82px 10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,fontFamily:show?"'JetBrains Mono','SF Mono',Consolas,monospace":"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1",letterSpacing:show?0.4:2}}/>
+    <div style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",display:"flex",gap:2}}>
+      {val && <button type="button" onClick={_copy} title={copied?"Copiado!":"Copiar senha"}
+        style={{background:copied?"#16a34a":"transparent",color:copied?"#fff":"#94a3b8",border:"none",borderRadius:7,padding:"6px 7px",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={function(e){if(!copied){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#475569";}}}
+        onMouseLeave={function(e){if(!copied){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}}>
+        {copied
+          ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>}
+      </button>}
+      <button type="button" onClick={function(){setShow(!show);}} title={show?"Ocultar senha":"Mostrar senha"}
+        style={{background:"transparent",color:show?"#0ea5e9":"#94a3b8",border:"none",borderRadius:7,padding:"6px 7px",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+        {show
+          ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+      </button>
+    </div>
+  </div>;
+}
+
 // Componente canônico — usado em Estratégia > Briefing E no Portal > Briefing
 function BriefingFormCanonico(props){
   const cl = props.cl;
@@ -3219,7 +3297,10 @@ function BriefingFormCanonico(props){
               if(v===null || v===undefined) return "(vazio)";
               if(Array.isArray(v)) return v.length ? v.join(", ") : "(vazio)";
               const s = String(v).trim();
-              return s.length ? s : "(vazio)";
+              if(!s.length) return "(vazio)";
+              // Nunca copia senha em plain text — evita vazar em GPT/e-mail/WhatsApp
+              if(f && f.type==="password") return "(senha oculta — copiar manualmente pelo campo)";
+              return s;
             }
             function _buildSectionText(sec){
               const lines = [];
@@ -3336,6 +3417,15 @@ function BriefingFormCanonico(props){
                   disabled={!canEdit} rows={3}
                   placeholder=""
                   style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,resize:"none",fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1",overflow:"hidden",minHeight:64}}/>
+              </div>;
+            }
+            if(f.type==="password"){
+              return <div key={f.id}>
+                {labelDom}
+                <_BriefingPasswordField
+                  val={val}
+                  canEdit={canEdit}
+                  onChange={function(v){ setField(current.id, f.id, v); }}/>
               </div>;
             }
             if(f.type==="text"){
