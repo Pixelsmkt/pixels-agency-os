@@ -58626,6 +58626,56 @@ const PORTF_IA = [
 /* ─── HELPERS ─────────────────────────────────────────────── */
 const _PORTF_FF = "'Inter',system-ui,-apple-system,sans-serif";
 
+/* ═══════════════════════════════════════════════════════════════
+   _PxIco — icones no tracado da Lucide, desenhados inline pra nao
+   depender do pacote lucide-react (que nao esta no bundle do app).
+   Uso: <_PxIco n="share2" size={24} color="#9F43F6"/>
+═══════════════════════════════════════════════════════════════ */
+function _PxIco(props){
+  const n  = props.n;
+  const sz = props.size || 22;
+  const co = props.color || "currentColor";
+  const sw = props.strokeWidth || 2;
+  const base = {width:sz,height:sz,viewBox:"0 0 24 24",fill:"none",stroke:co,strokeWidth:sw,strokeLinecap:"round",strokeLinejoin:"round"};
+  const P = {
+    share2:      <g><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></g>,
+    palette:     <g><circle cx="13.5" cy="6.5" r=".8" fill={co} stroke="none"/><circle cx="17.5" cy="10.5" r=".8" fill={co} stroke="none"/><circle cx="8.5" cy="7.5" r=".8" fill={co} stroke="none"/><circle cx="6.5" cy="12.5" r=".8" fill={co} stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></g>,
+    target:      <g><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></g>,
+    video:       <g><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></g>,
+    folderkanban:<g><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M8 10v4"/><path d="M12 10v2"/><path d="M16 10v6"/></g>,
+    clipboard:   <g><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></g>,
+    compass:     <g><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></g>,
+    calendar:    <g><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></g>,
+    chart:       <g><path d="M12 16v5"/><path d="M16 14v7"/><path d="M20 10v11"/><path d="m22 3-8.646 8.646a.5.5 0 0 1-.708 0L9.5 8.5 2 16"/><path d="M4 18v3"/><path d="M8 14v7"/></g>,
+    messages:    <g><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></g>,
+    copy:        <g><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>,
+    check:       <polyline points="20 6 9 17 4 12"/>,
+    lightbulb:   <g><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></g>,
+    checkcircle: <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></g>,
+    send:        <g><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></g>,
+    barchart:    <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
+    dollar:      <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
+    sliders:     <g><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></g>,
+  };
+  return <svg {...base}>{P[n] || P.check}</svg>;
+}
+
+/* Container de icone padrao — 3 estados: ativo (roxo), concluido (verde), neutro */
+function _PxIcoBox(props){
+  const estado = props.estado || "neutro";   // ativo | ok | neutro
+  const box    = props.box || 48;
+  const n      = props.n;
+  const cores = {
+    ativo:  {bg:"#f6f0ff", bd:"#e4d4fd", ico:"#7c3aed"},
+    ok:     {bg:"#f0fdf4", bd:"#c9f0d4", ico:"#16a34a"},
+    neutro: {bg:"#f6f7fa", bd:"#eceef3", ico:"#a3adbb"},
+  };
+  const c = cores[estado] || cores.neutro;
+  return <div style={{width:box,height:box,borderRadius:Math.round(box*0.30),background:c.bg,border:"1px solid "+c.bd,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+    <_PxIco n={n} size={Math.round(box*0.50)} color={c.ico} strokeWidth={2}/>
+  </div>;
+}
+
 // Painel de entregáveis do módulo selecionado na calculadora — dark theme
 function _CalcEntregas({cor, titulo, itens}){
   if(!itens || itens.length===0) return null;
@@ -58875,13 +58925,42 @@ function _CalculadoraModular({isMob}){
   const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies);
 
   // ═══ Textos comuns ═══
-  const SOCIAL_INCLUSOS = [
-    "Diagnóstico do posicionamento atual da marca",
-    "Estruturação de plano tático",
-    "Planejamento de calendário editorial",
-    "Criação de copywriting estratégico",
-    "Suporte diário 24 horas",
-    "Reunião mensal de alinhamento estratégico",
+  // Entregaveis da Gestao de Redes Sociais — 4 frentes de trabalho.
+  const SOCIAL_BLOCOS = [
+    { ico:"compass", titulo:"Estratégia e Posicionamento", itens:[
+      "Diagnóstico do posicionamento atual da marca",
+      "Definição de objetivos e direcionamento estratégico",
+      "Estruturação dos pilares editoriais",
+      "Benchmarking de concorrentes e referências do mercado",
+    ]},
+    { ico:"calendar", titulo:"Planejamento e Operação", itens:[
+      "Planejamento do calendário editorial",
+      "Definição das pautas e direcionamento dos conteúdos",
+      "Copywriting estratégico para as publicações",
+      "Agendamento e publicação dos conteúdos",
+    ]},
+    { ico:"chart", titulo:"Performance e Otimização", itens:[
+      "Monitoramento do desempenho dos conteúdos",
+      "Acompanhamento dos principais indicadores",
+      "Relatório mensal de performance",
+      "Ajustes de pauta e estratégia com base nos resultados",
+    ]},
+    { ico:"messages", titulo:"Acompanhamento e Marca", itens:[
+      "Organização e otimização das informações dos perfis",
+      "Identificação de oportunidades e datas estratégicas",
+      "Interações estratégicas quando necessárias",
+      "Canal direto com a equipe para suporte e alinhamentos",
+    ]},
+  ];
+  // Lista plana usada no texto do "Copiar resumo".
+  const SOCIAL_INCLUSOS = SOCIAL_BLOCOS.reduce(function(acc,b){ return acc.concat(b.itens); },[]);
+  // Fluxo de trabalho exibido de forma discreta abaixo dos entregaveis.
+  const SOCIAL_FLUXO = [
+    {ico:"lightbulb",   label:"Planejamento"},
+    {ico:"palette",     label:"Produção"},
+    {ico:"checkcircle", label:"Aprovação"},
+    {ico:"send",        label:"Publicação"},
+    {ico:"barchart",    label:"Análise"},
   ];
   const CREATIVES_INCLUSOS = [
     "Planejamento criativo",
@@ -58988,37 +59067,35 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   // ═══ Sub-componentes de UI ═══
-  const cardStyle = {background:PX_GRAD_TOP,border:"1px solid "+BORD,borderRadius:16,padding:isMob?"20px 18px":"22px 22px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
+  const cardStyle = {background:"linear-gradient(180deg,#fdfbff 0%,#ffffff 42%)",border:"1px solid #eceaf4",borderRadius:20,padding:isMob?"22px 18px":"28px 28px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
   const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX_BD,boxShadow:"0 14px 34px rgba(159,67,246,0.16), 0 2px 6px rgba(15,23,42,.05)"});
 
-  // Header modernizado estilo V4 — check circular + pills Versão + Nível
-  function _ModuleHeader({num, title, subtitle, active, versaoLabel, nivelLabel, badge}){
-    return <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16,flexWrap:"wrap"}}>
-      <div style={{width:44,height:44,borderRadius:"50%",background:active?"linear-gradient(135deg,#22c55e,#16a34a)":"linear-gradient(135deg,#e2e8f0,#cbd5e1)",border:"3px solid #fff",boxShadow:active?"0 6px 16px rgba(34,197,94,0.30)":"0 3px 10px rgba(15,23,42,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
-        {active
-          ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        }
-        <div style={{position:"absolute",bottom:-6,right:-4,width:18,height:18,borderRadius:"50%",background:active?PX:"#94a3b8",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,border:"2px solid #fff"}}>{num}</div>
-      </div>
-      <div style={{flex:1,minWidth:180}}>
-        <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>{title}</div>
-        <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>{subtitle}</div>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:120,flexShrink:0,alignItems:"flex-end"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-          <span style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão Escolhida</span>
-          <span style={{background:active?PX_BG:"#f1f5f9",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:BORD),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
+  // Header do modulo — icone grande 52px + titulo + selo de concluido + pills
+  function _ModuleHeader({num, ico, title, subtitle, active, versaoLabel, nivelLabel, badge}){
+    return <div style={{display:"flex",alignItems:"flex-start",gap:15,flexWrap:"wrap"}}>
+      <_PxIcoBox n={ico||"share2"} box={52} estado={active?"ativo":"neutro"}/>
+      <div style={{flex:1,minWidth:190}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+          <div style={{color:INK,fontWeight:800,fontSize:18.5,letterSpacing:-.45,lineHeight:1.2}}>{title}</div>
+          {active && <span style={{background:"#f0fdf4",color:"#16a34a",border:"1px solid #c9f0d4",fontSize:10,fontWeight:800,padding:"3px 9px 3px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
+            <_PxIco n="check" size={11} color="#16a34a" strokeWidth={3.2}/>Configurado
+          </span>}
         </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-          <span style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Nível da Equipe</span>
-          <span style={{background:"#f8fafc",color:MUTE,border:"1px solid "+BORD,fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{nivelLabel||"Pro"}</span>
+        <div style={{color:MUTE,fontSize:13,marginTop:5,lineHeight:1.5}}>{subtitle}</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:5,minWidth:130,flexShrink:0,alignItems:"flex-end"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+          <span style={{color:SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão</span>
+          <span style={{background:active?PX_BG:"#f6f7fa",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:"#eceef3"),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.2,whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+          <span style={{color:SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Equipe</span>
+          <span style={{background:"#fafbfc",color:MUTE,border:"1px solid #eceef3",fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.2,whiteSpace:"nowrap"}}>{nivelLabel||"Pro"}</span>
         </div>
       </div>
       {badge}
     </div>;
   }
-
 
   function _StepNum({n, active}){
     return <div style={{width:30,height:30,borderRadius:9,background:active?PX:PX_BG,color:active?"#fff":PX,border:"1px solid "+(active?PX:PX_BD),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{n}</div>;
@@ -59051,29 +59128,40 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       </div>
     </div>;
   }
-  function _IncluiList({titulo, cor, itens}){
-    return <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
-      <div style={{color:cor||MUTE,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>{titulo}</div>
-      <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>
+  function _IncluiList({titulo, cor, itens, ico}){
+    return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,.035)",transition:"all .18s",height:"100%",display:"flex",flexDirection:"column",boxSizing:"border-box"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.boxShadow="0 8px 22px rgba(88,64,166,.09)";e.currentTarget.style.transform="translateY(-2px)";}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.035)";e.currentTarget.style.transform="";}}>
+      {ico && <div style={{marginBottom:12}}><_PxIcoBox n={ico} box={42} estado="ativo"/></div>}
+      <div style={{color:cor||PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.55,textTransform:"uppercase",marginBottom:11,lineHeight:1.35}}>{titulo}</div>
+      <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:9}}>
         {itens.map(function(it,i){
-          return <li key={i} style={{color:INK,fontSize:12.5,display:"flex",gap:8,alignItems:"flex-start"}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cor||PX} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><polyline points="20 6 9 17 4 12"/></svg>
+          return <li key={i} style={{color:"#334155",fontSize:12.5,lineHeight:1.5,display:"flex",gap:9,alignItems:"flex-start"}}>
+            <span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1.5}}>
+              <_PxIco n="check" size={9} color={PX} strokeWidth={3.4}/>
+            </span>
             <span>{it}</span>
           </li>;
         })}
       </ul>
     </div>;
   }
+
   function _BlocoTitulo({titulo}){
     return <div style={{color:INK,fontSize:12,fontWeight:800,letterSpacing:-.1,marginBottom:8,marginTop:6}}>{titulo}</div>;
   }
   function _ValorModulo({label, price, mini}){
-    return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,paddingTop:mini?8:12,borderTop:"1px solid "+BORD,marginTop:mini?10:14}}>
-      <div>
-        <div style={{color:SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{label||"Valor do módulo"}</div>
-        <div style={{color:INK,fontWeight:900,fontSize:mini?18:22,letterSpacing:-.6,marginTop:3,fontFeatureSettings:"'tnum'"}}>{fmt(price)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+    return <div style={{marginTop:18,paddingTop:17,borderTop:"1px solid #eef0f5",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:13}}>
+        <_PxIcoBox n="dollar" box={42} estado="ativo"/>
+        <div>
+          <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>{label||"Investimento mensal"}</div>
+          <div style={{color:INK,fontWeight:900,fontSize:mini?21:26,letterSpacing:-.9,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>
+            {fmt(price)}<span style={{color:MUTE,fontSize:12.5,fontWeight:700,marginLeft:5,letterSpacing:0}}>/mês</span>
+          </div>
+        </div>
       </div>
-      <span style={{background:PX_BG,color:PX_DK,border:"1px solid "+PX_BD,fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>No mensal</span>
+      <span style={{background:PX_BG,color:PX_DK,border:"1px solid "+PX_BD,fontSize:10,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.45,textTransform:"uppercase"}}>Recorrente mensal</span>
     </div>;
   }
 
@@ -59082,12 +59170,12 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   /* ═══════════════ WIZARD — etapas horizontais ═══════════════ */
   const STEPS = [
-    { id:"social",    label:"Redes Sociais", done:socialActive,        price:socialPrice },
-    { id:"creatives", label:"Criativos",     done:creativesActive,     price:creativesPrice },
-    { id:"traffic",   label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
-    { id:"capture",   label:"Captação",      done:captureActive,       price:capturePrice },
-    { id:"projects",  label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
-    { id:"resumo",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
+    { id:"social",    ico:"share2",       label:"Redes Sociais", done:socialActive,        price:socialPrice },
+    { id:"creatives", ico:"palette",      label:"Criativos",     done:creativesActive,     price:creativesPrice },
+    { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
+    { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
+    { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
+    { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
   ];
   const stepSafe = Math.max(0, Math.min(STEPS.length-1, stepIdx));
   const curStep  = STEPS[stepSafe];
@@ -59097,29 +59185,52 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     return <svg width={size||16} height={size||16} viewBox="0 0 24 24" fill="none" stroke={color||"#fff"} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
   }
 
-  /* ═══ Trilha de etapas — chips horizontais, sem conectores tortos ═══ */
+  /* ═══ Fluxo de trabalho — mini stepper discreto ═══ */
+  function _FluxoAprovacao(){
+    return <div style={{background:"#fbfaff",border:"1px solid #f0eefa",borderRadius:14,padding:isMob?"13px 12px":"14px 18px"}}>
+      <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase",marginBottom:11}}>Como o trabalho acontece</div>
+      <div style={{display:"flex",alignItems:"flex-start",gap:0,overflowX:"auto"}}>
+        {SOCIAL_FLUXO.map(function(f,i){
+          const isLast = i===SOCIAL_FLUXO.length-1;
+          return <React.Fragment key={f.label}>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0,minWidth:isMob?62:70}}>
+              <div style={{width:30,height:30,borderRadius:9,background:"#fff",border:"1px solid "+PX_BD,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(88,64,166,.07)"}}>
+                <_PxIco n={f.ico} size={14} color={PX} strokeWidth={2.2}/>
+              </div>
+              <div style={{color:MUTE,fontSize:10,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap"}}>{f.label}</div>
+            </div>
+            {!isLast && <div style={{flex:1,height:1.5,minWidth:10,background:"linear-gradient(90deg,#e4d4fd,#f0eefa)",borderRadius:2,marginTop:15}}/>}
+          </React.Fragment>;
+        })}
+      </div>
+    </div>;
+  }
+
+  /* ═══ Stepper de serviços — ícone grande por módulo ═══ */
   function _StepRail(){
-    return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:15,padding:6,display:"flex",alignItems:"stretch",gap:4,overflowX:"auto",boxShadow:"0 2px 10px rgba(88,64,166,.05)"}}>
-      {STEPS.map(function(s,i){
+    return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+      {STEPS.map(function(st,i){
         const isCur  = i===stepSafe;
-        const isDone = !!s.done;
-        const bgChip = isCur ? "linear-gradient(135deg,#f6f1ff,#fdfbff)" : (isDone ? "#f2fdf5" : "transparent");
-        const bdChip = isCur ? PX : (isDone ? "#c9f0d4" : "transparent");
-        const badgeBg= isCur ? "linear-gradient(135deg,#9F43F6,#7c3aed)" : (isDone ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#eef0f5");
-        const badgeCol= (isCur||isDone) ? "#fff" : "#9aa4b2";
-        const lblCol = isCur ? "#4c1d95" : (isDone ? "#166534" : "#9aa4b2");
-        const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c4cbd6");
-        const sub = isDone && s.price>0 ? fmt(s.price) : (isCur ? "em edição" : "não incluso");
-        return <button key={s.id} type="button" onClick={function(){goStep(i);}}
-          style={{flex:"1 1 0",minWidth:isMob?130:0,background:bgChip,border:"1.5px solid "+bdChip,borderRadius:11,padding:isMob?"9px 9px":"10px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",transition:"all .16s",textAlign:"left",boxShadow:isCur?"0 4px 14px rgba(159,67,246,.14)":"none",fontFamily:_PORTF_FF}}
-          onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#eafaef":"#f8f9fc"; }}
+        const isDone = !!st.done;
+        const estado = isCur ? "ativo" : (isDone ? "ok" : "neutro");
+        const bgChip = isCur ? "#faf7ff" : (isDone ? "#fafefb" : "transparent");
+        const bdChip = isCur ? PX_BD : (isDone ? "#dcf2e3" : "transparent");
+        const lblCol = isCur ? "#4c1d95" : (isDone ? "#15803d" : "#98a2b0");
+        const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c3cad6");
+        const sub = isDone && st.price>0 ? fmt(st.price) : (isCur ? "em edição" : "não incluso");
+        return <button key={st.id} type="button" onClick={function(){goStep(i);}}
+          style={{flex:"1 1 0",minWidth:isMob?146:0,background:bgChip,border:"1.5px solid "+bdChip,borderRadius:14,padding:isMob?"11px 10px":"12px 13px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",transition:"all .18s",textAlign:"left",fontFamily:_PORTF_FF,boxShadow:isCur?"0 5px 16px rgba(159,67,246,.13)":"none"}}
+          onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#f3fcf6":"#f8f9fc"; }}
           onMouseLeave={function(e){ e.currentTarget.style.background = bgChip; }}>
-          <div style={{width:26,height:26,borderRadius:8,background:badgeBg,color:badgeCol,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",boxShadow:(isCur||isDone)?"0 3px 8px rgba(15,23,42,.14)":"none",transition:"all .16s"}}>
-            {isDone && !isCur ? <_CheckIcon size={14} color="#fff"/> : (i+1)}
+          <div style={{position:"relative",flexShrink:0}}>
+            <_PxIcoBox n={st.ico} box={isMob?42:46} estado={estado}/>
+            {isDone && <div style={{position:"absolute",top:-4,right:-4,width:17,height:17,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(34,197,94,.32)"}}>
+              <_PxIco n="check" size={9} color="#fff" strokeWidth={3.6}/>
+            </div>}
           </div>
           <div style={{minWidth:0,flex:1}}>
-            <div style={{color:lblCol,fontSize:isMob?12:12.5,fontWeight:isCur?800:700,letterSpacing:-.25,lineHeight:1.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</div>
-            <div style={{color:subCol,fontSize:10.5,fontWeight:isDone?800:600,letterSpacing:-.1,marginTop:2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
+            <div style={{color:lblCol,fontSize:isMob?12.5:13,fontWeight:isCur?800:700,letterSpacing:-.3,lineHeight:1.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</div>
+            <div style={{color:subCol,fontSize:11,fontWeight:isDone?800:600,letterSpacing:-.1,marginTop:3,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
           </div>
         </button>;
       })}
@@ -59176,8 +59287,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   /* ═══════════════ CORPO DE CADA ETAPA ═══════════════ */
 
   // ── ETAPA 1 — REDES SOCIAIS ──
-  const _stepSocial = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="1" active={socialActive}
+  const _stepSocial = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="1" ico="share2" active={socialActive}
       title="Gestão de Redes Sociais"
       subtitle="Estratégia, planejamento, publicação e acompanhamento."
       versaoLabel={socialActive?(socialCount+" conta"+(socialCount>1?"s":"")+" · "+socialPosts+" pubs/sem"):"Não selecionado"}
@@ -59205,19 +59316,14 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>
 
     {socialActive && <>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-        <_IncluiList titulo="Diagnóstico e Estratégia" cor={PX} itens={[
-          "Diagnóstico do posicionamento atual da marca",
-          "Estruturação de plano tático",
-        ]}/>
-        <_IncluiList titulo="Gestão de Redes Sociais" cor={PX} itens={[
-          "Planejamento de calendário editorial",
-          "Criação de copywriting estratégico",
-        ]}/>
-        <_IncluiList titulo="Suporte e Acompanhamento" cor={PX} itens={[
-          "Suporte diário 24 horas",
-          "Reunião mensal de alinhamento estratégico",
-        ]}/>
+      <div>
+        <_BlocoTitulo titulo="O que está incluso na gestão"/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+          {SOCIAL_BLOCOS.map(function(b){
+            return <_IncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
+          })}
+        </div>
+        <div style={{marginTop:12}}><_FluxoAprovacao/></div>
       </div>
 
       <div>
@@ -59241,13 +59347,13 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   </div>;
 
   // ── ETAPA 2 — CRIATIVOS ──
-  const _stepCreatives = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="2" active={creativesActive}
+  const _stepCreatives = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="2" ico="palette" active={creativesActive}
       title="Criativos"
       subtitle="Produção dos materiais que serão publicados."
       versaoLabel={creativesActive?"Personalizado":"Não selecionado"}
       nivelLabel="Pro"/>
-    <_IncluiList titulo="O que está incluso" cor={PX} itens={CREATIVES_INCLUSOS}/>
+    <_IncluiList ico="palette" titulo="O que está incluso na produção" cor={PX_DK} itens={CREATIVES_INCLUSOS}/>
     <div>
       <_BlocoTitulo titulo="Quantidades por mês"/>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
@@ -59263,8 +59369,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   </div>;
 
   // ── ETAPA 3 — TRÁFEGO PAGO ──
-  const _stepTraffic = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="3" active={trafficKey!=="none"}
+  const _stepTraffic = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="3" ico="target" active={trafficKey!=="none"}
       title="Tráfego Pago"
       subtitle="Gestão de campanhas para alcance e conversão."
       versaoLabel={trafficKey!=="none"?cfg.traffic[trafficKey].label:"Não selecionado"}
@@ -59303,7 +59409,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:8}}>
         {TRAFFIC_BLOCOS.map(function(b,i){
-          return <_IncluiList key={i} titulo={b.titulo} cor={PX} itens={b.itens}/>;
+          return <_IncluiList key={i} ico={["compass","sliders","palette","chart"][i]||"target"} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
         })}
       </div>
       <div style={{padding:"10px 14px",background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,color:"#a16207",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
@@ -59315,13 +59421,13 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   </div>;
 
   // ── ETAPA 4 — CAPTAÇÃO AUDIOVISUAL ──
-  const _stepCapture = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="4" active={captureActive}
+  const _stepCapture = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="4" ico="video" active={captureActive}
       title="Captação Audiovisual"
       subtitle="Diárias de captação com equipamento e equipe."
       versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
       nivelLabel="Pro"/>
-    <_IncluiList titulo="O que está incluso" cor={PX} itens={CAPTURE_INCLUSOS}/>
+    <_IncluiList ico="video" titulo="O que está incluso na captação" cor={PX_DK} itens={CAPTURE_INCLUSOS}/>
     <div>
       <_BlocoTitulo titulo="Diárias por mês"/>
       <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
@@ -59342,8 +59448,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   </div>;
 
   // ── ETAPA 5 — PROJETOS PONTUAIS ──
-  const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="5" active={oneTimeIds.length>0}
+  const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="5" ico="folderkanban" active={oneTimeIds.length>0}
       title="Projetos Pontuais"
       subtitle="Investimento único, separado do mensal."
       versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
@@ -59369,8 +59475,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   </div>;
 
   // ── ETAPA 6 — RESUMO (revisão final) ──
-  const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <_ModuleHeader num="6" active={hasAnySelection}
+  const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="6" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -59512,105 +59618,120 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   return _conteudo;
 }
 
-/* ─── _ResumoBox — cartão de resumo comercial (reusado desktop/mobile) ── */
+/* ─── _ResumoBox — painel lateral do escopo (desktop/mobile) ─────── */
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
     captureActive, captureDailies, capturePrice, cfg,
     oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
-  return <div style={{background:"linear-gradient(180deg,#faf5ff 0%,#ffffff 40%)",border:"1px solid "+BORD,borderRadius:18,padding:"22px 22px",boxShadow:"0 16px 40px rgba(88,64,166,.12), 0 2px 6px rgba(15,23,42,.05)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
-    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
-    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
-      <div style={{width:24,height:24,borderRadius:7,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 10px rgba(159,67,246,0.35)"}}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+  const [copied,setCopied] = useState(false);
+
+  function _handleCopy(){
+    if(!hasAny) return;
+    onCopy();
+    setCopied(true);
+    setTimeout(function(){ setCopied(false); }, 2000);
+  }
+
+  // Monta a lista de modulos recorrentes contratados
+  const itens = [];
+  if(socialActive){
+    const linhas = [];
+    if(socialChannels && socialChannels.length) linhas.push(socialChannels.join(" · "));
+    linhas.push(socialPosts + " publicaç" + (socialPosts>1?"ões":"ão") + "/semana");
+    itens.push({ico:"share2", nome:"Gestão de Redes Sociais", linhas:linhas, valor:socialPrice});
+  }
+  if(creativesActive){
+    const det = [
+      creatives.staticCreatives>0 && (creatives.staticCreatives+" estáticos"),
+      creatives.editedVideos>0    && (creatives.editedVideos+" vídeos editados"),
+      creatives.videoVariations>0 && (creatives.videoVariations+" variações"),
+    ].filter(Boolean);
+    itens.push({ico:"palette", nome:"Criativos", linhas:[det.join(" · ")], valor:creativesPrice});
+  }
+  if(trafficKey!=="none" && cfg.traffic[trafficKey].price>0){
+    itens.push({ico:"target", nome:cfg.traffic[trafficKey].label, linhas:["Verba de mídia não inclusa"], valor:trafficPrice});
+  }
+  if(captureActive){
+    itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
+  }
+
+  return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:20,padding:"22px 20px",boxShadow:"0 10px 30px rgba(88,64,166,.08), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
+
+    {/* Cabecalho */}
+    <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:16}}>
+      <_PxIcoBox n="clipboard" box={38} estado="ativo"/>
+      <div>
+        <div style={{color:INK,fontWeight:800,fontSize:15.5,letterSpacing:-.35}}>Resumo do escopo</div>
+        <div style={{color:SOFT,fontSize:11,marginTop:1}}>{hasAny ? (itens.length + (oneTimeIds.length>0?1:0)) + " item(ns) no pacote" : "nenhum módulo ainda"}</div>
       </div>
-      <div style={{color:INK,fontWeight:800,fontSize:15,letterSpacing:-.3}}>Resumo do escopo</div>
     </div>
 
-    {/* Blocos de valor */}
-    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{background:"linear-gradient(135deg,#f5f0ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:14,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:0,right:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
-        <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Mensal recorrente</div>
-        <div style={{color:INK,fontWeight:900,fontSize:28,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.05}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+    {/* Valor mensal em destaque */}
+    <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
+      <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
+      <div style={{color:INK,fontWeight:900,fontSize:32,letterSpacing:-1.4,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+        {fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span>
       </div>
-
-      {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:14,padding:"14px 16px"}}>
-        <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento pontual</div>
-        <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.6,marginTop:2,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)} <span style={{color:MUTE,fontSize:11,fontWeight:600,marginLeft:2}}>· único</span></div>
-      </div>}
     </div>
 
-    {/* Módulos selecionados */}
-    {hasAny && <div style={{marginTop:14,paddingTop:14,borderTop:"1px dashed "+BORD,display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        Módulos selecionados
+    {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:14,padding:"14px 16px",marginTop:10}}>
+      <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.55,textTransform:"uppercase"}}>Investimento pontual</div>
+      <div style={{color:INK,fontWeight:900,fontSize:21,letterSpacing:-.7,marginTop:3,fontFeatureSettings:"'tnum'"}}>
+        {fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:11.5,fontWeight:600,marginLeft:6}}>· pagamento único</span>
       </div>
-
-      {socialActive && <div>
-        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Gestão de Redes Sociais</span>
-          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(socialPrice)}</span>
-        </div>
-        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Canais: {socialChannels.join(", ")} · {p.socialPosts} pubs/semana</div>
-      </div>}
-
-      {creativesActive && <div>
-        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Criativos</span>
-          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(creativesPrice)}</span>
-        </div>
-        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>
-          {[
-            creatives.staticCreatives>0 && (creatives.staticCreatives+" estáticos"),
-            creatives.editedVideos>0    && (creatives.editedVideos+" vídeos"),
-            creatives.videoVariations>0 && (creatives.videoVariations+" variações"),
-          ].filter(Boolean).join(" · ")}
-        </div>
-      </div>}
-
-      {trafficKey!=="none" && cfg.traffic[trafficKey].price>0 && <div>
-        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <span style={{color:INK,fontSize:12,fontWeight:700}}>· {cfg.traffic[trafficKey].label}</span>
-          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(trafficPrice)}</span>
-        </div>
-        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Verba de mídia não inclusa</div>
-      </div>}
-
-      {captureActive && <div>
-        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Captação Audiovisual</span>
-          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(capturePrice)}</span>
-        </div>
-        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>{captureDailies} diária{captureDailies>1?"s":""}/mês</div>
-      </div>}
-
-      {oneTimeIds.length>0 && <div style={{marginTop:6,paddingTop:10,borderTop:"1px dashed "+BORD}}>
-        <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Projetos pontuais</div>
-        {oneTimeIds.map(function(id){
-          const proj = cfg.oneTimeProjects.find(x=>x.id===id);
-          if(!proj) return null;
-          return <div key={id} style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
-            <span style={{color:INK,fontSize:12,fontWeight:600}}>· {proj.label}</span>
-            <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(proj.price)}</span>
-          </div>;
-        })}
-      </div>}
     </div>}
 
-    {/* CTA */}
-    <button onClick={onCopy} disabled={!hasAny}
+    {/* Modulos contratados */}
+    {hasAny && <div style={{marginTop:18,paddingTop:16,borderTop:"1px solid #f2f3f7"}}>
+      <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:12}}>Módulos contratados</div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:11}}>
+        {itens.map(function(it){
+          return <div key={it.nome} style={{display:"flex",alignItems:"flex-start",gap:11}}>
+            <_PxIcoBox n={it.ico} box={32} estado="ativo"/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
+                <span style={{color:INK,fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{it.nome}</span>
+                <span style={{color:INK,fontWeight:900,fontSize:12.5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(it.valor)}</span>
+              </div>
+              {it.linhas.filter(Boolean).map(function(l,li){
+                return <div key={li} style={{color:MUTE,fontSize:11,marginTop:2,lineHeight:1.4}}>{l}</div>;
+              })}
+            </div>
+          </div>;
+        })}
+
+        {oneTimeIds.length>0 && <div style={{marginTop:4,paddingTop:12,borderTop:"1px dashed #eceef3"}}>
+          <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:9}}>Projetos pontuais</div>
+          {oneTimeIds.map(function(id){
+            const proj = cfg.oneTimeProjects.find(function(x){return x.id===id;});
+            if(!proj) return null;
+            return <div key={id} style={{display:"flex",alignItems:"flex-start",gap:11,marginTop:9}}>
+              <_PxIcoBox n="folderkanban" box={32} estado="neutro"/>
+              <div style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
+                <span style={{color:INK,fontSize:12.5,fontWeight:700,letterSpacing:-.2}}>{proj.label}</span>
+                <span style={{color:INK,fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(proj.price)}</span>
+              </div>
+            </div>;
+          })}
+        </div>}
+      </div>
+    </div>}
+
+    {/* CTA copiar */}
+    <button onClick={_handleCopy} disabled={!hasAny}
       title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
-      style={{marginTop:16,width:"100%",background:!hasAny?"transparent":"#0f172a",color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?BORD:"#0f172a"),borderRadius:10,padding:"10px 14px",fontWeight:700,fontSize:12.5,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:-.1,transition:"all .15s"}}
-      onMouseEnter={function(e){if(hasAny){e.currentTarget.style.background="#1e293b";}}}
-      onMouseLeave={function(e){if(hasAny){e.currentTarget.style.background="#0f172a";}}}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-      Copiar resumo
+      style={{marginTop:18,width:"100%",background:!hasAny?"#fafbfc":(copied?"linear-gradient(135deg,#22c55e,#16a34a)":"#0f172a"),color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?"#eef0f5":(copied?"#16a34a":"#0f172a")),borderRadius:12,padding:"12px 14px",fontWeight:800,fontSize:13,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.2,transition:"all .18s",boxShadow:copied?"0 6px 18px rgba(34,197,94,.28)":"none"}}
+      onMouseEnter={function(e){if(hasAny && !copied){e.currentTarget.style.background="#1e293b";}}}
+      onMouseLeave={function(e){if(hasAny && !copied){e.currentTarget.style.background="#0f172a";}}}>
+      <_PxIco n={copied?"check":"copy"} size={15} color="currentColor" strokeWidth={copied?3.2:2.2}/>
+      {copied ? "Resumo copiado" : "Copiar resumo"}
     </button>
-    <div style={{color:SOFT,fontSize:10.5,marginTop:9,lineHeight:1.5,textAlign:"center"}}>Cola no WhatsApp ou e-mail — texto formatado pra cliente.</div>
-    <div style={{color:MUTE,fontSize:10.5,marginTop:12,lineHeight:1.5,paddingTop:12,borderTop:"1px dashed "+BORD,fontStyle:"italic"}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
+    <div style={{color:SOFT,fontSize:10.5,marginTop:10,lineHeight:1.5,textAlign:"center"}}>Cola no WhatsApp ou e-mail — texto formatado pra cliente.</div>
+    <div style={{color:MUTE,fontSize:10.5,marginTop:14,lineHeight:1.55,paddingTop:14,borderTop:"1px solid #f2f3f7",fontStyle:"italic"}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
   </div>;
 }
 
