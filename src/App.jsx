@@ -35424,12 +35424,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       {_mb&&<span>· {_mb}</span>}
                     </div>
                   </div>
-                  <button onClick={function(){setActiveTab("files");}} type="button"
-                    style={{background:"transparent",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-                    Ver todos ({finItems.length})
-                  </button>
                 </div>
 
                 {/* VÍDEO — player grande. ARTE — grid simétrica, todos do mesmo tamanho. */}
@@ -58428,21 +58422,18 @@ function OnboardingChecklist(props){
 // ═══════════════════════════════════════════════════════════════
 const PRICE_CONFIG = {
   socialManagement: {
-    // MULTIPLICACAO SIMPLES: cada rede social selecionada custa a base cheia.
-    // 1 rede = R$ 2.000 · 2 redes = R$ 4.000 · 3 redes = R$ 6.000.
-    // Facebook + Instagram contam como 1 rede (pacote unico, mesmo conteudo).
-    // Publicacoes/semana acima da base somam +R$ 250 cada, uma unica vez.
-    basePostsPerWeek: 2,
-    basePrice: 2000,
-    additionalPostPrice: 250,
+    // Cada canal tem preco proprio e um pacote de criativos ja incluso.
+    // Facebook + Instagram = R$ 4.000 com 4 artes, 4 videos e 8 publicacoes/mes.
+    // O valor multiplica pela quantidade de contas de cada canal.
+    basePostsPerWeek: 2,          // 8 publicacoes/mes inclusas
+    additionalPostPrice: 250,     // cada publicacao/semana a mais, por conta
     minPostsPerWeek: 1,
     maxPostsPerWeek: 7,
-    // Publicacoes extras sao cobradas POR CONTA (cada conta publica o proprio volume).
     multiplyPostsPerChannel: true,
     channels: {
-      facebookInstagram: { label: "Facebook + Instagram" },
-      tiktok:            { label: "TikTok" },
-      linkedin:          { label: "LinkedIn" },
+      fbInsta:  { key:"fbInsta",  label:"Facebook + Instagram", price:4000, inclusos:{estaticos:4, videos:4} },
+      tiktok:   { key:"tiktok",   label:"TikTok",               price:2000, inclusos:{estaticos:0, videos:0} },
+      linkedin: { key:"linkedin", label:"LinkedIn",             price:2000, inclusos:{estaticos:0, videos:0} },
     },
   },
   creatives: {
@@ -58450,6 +58441,8 @@ const PRICE_CONFIG = {
     editedVideo:    400, // por vídeo editado
     videoVariation: 50,  // por variação de vídeo
   },
+  // Growth — pacote fechado mensal de crescimento orientado a dados.
+  growth: { price: 7000 },
   audiovisualCapture: {
     firstDaily:     1500, // primeira diária/mês
     additionalDaily:1000, // cada diária adicional
@@ -58457,9 +58450,9 @@ const PRICE_CONFIG = {
   },
   traffic: {
     none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[], brand:null },
-    meta:       { id:"meta",       label:"Meta Ads",         price:2500, channels:["Facebook","Instagram"], brand:"meta" },
+    meta:       { id:"meta",       label:"Meta Ads",         price:2500, channels:["Facebook","Instagram"], brand:"meta", inclusos:{estaticos:3, videos:3} },
     google:     { id:"google",     label:"Google Ads",       price:2500, channels:["Search","Display"], brand:"google" },
-    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
+    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle", inclusos:{estaticos:3, videos:3} },
   },
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
@@ -58577,14 +58570,30 @@ function calculateSocialManagementPrice(state){
   // state = { channels:{fbInsta,tiktok,linkedin}, postsPerWeek }
   if(!state) return 0;
   const cfg = PRICE_CONFIG.socialManagement;
-  const activeCount = countSocialChannels(state.channels);
-  if(activeCount === 0) return 0;
+  const ch  = state.channels || {};
+  let total = 0, contas = 0;
+  Object.keys(cfg.channels).forEach(function(k){
+    const q = socialChannelQty(ch, k);
+    if(q>0){ total += cfg.channels[k].price * q; contas += q; }
+  });
+  if(contas === 0) return 0;
   const posts = Math.max(cfg.minPostsPerWeek, Math.min(cfg.maxPostsPerWeek, Number(state.postsPerWeek)||cfg.basePostsPerWeek));
-  const postsDelta = Math.max(0, posts - cfg.basePostsPerWeek);
-  const extraPosts = postsDelta * cfg.additionalPostPrice;
-  // Base multiplicada pelo numero de redes. Publicacoes extras somam uma vez
-  // (ou por rede, se multiplyPostsPerChannel estiver ligado no PRICE_CONFIG).
-  return (cfg.basePrice * activeCount) + (cfg.multiplyPostsPerChannel ? extraPosts * activeCount : extraPosts);
+  const extra = Math.max(0, posts - cfg.basePostsPerWeek) * cfg.additionalPostPrice;
+  return total + (cfg.multiplyPostsPerChannel ? extra*contas : extra);
+}
+// Criativos que ja vem inclusos no pacote (redes + trafego).
+function calculateIncludedCreatives(socialChannels, trafficKey){
+  const cfg = PRICE_CONFIG.socialManagement;
+  let est = 0, vid = 0;
+  Object.keys(cfg.channels).forEach(function(k){
+    const q = socialChannelQty(socialChannels, k);
+    const inc = cfg.channels[k].inclusos || {estaticos:0, videos:0};
+    est += (inc.estaticos||0) * q;
+    vid += (inc.videos||0) * q;
+  });
+  const t = PRICE_CONFIG.traffic[trafficKey];
+  if(t && t.inclusos){ est += t.inclusos.estaticos||0; vid += t.inclusos.videos||0; }
+  return { estaticos:est, videos:vid };
 }
 function calculateCreativesPrice(state){
   if(!state) return 0;
@@ -58596,6 +58605,9 @@ function calculateCreativesPrice(state){
 function calculateTrafficPrice(trafficKey){
   const t = PRICE_CONFIG.traffic[trafficKey];
   return t ? t.price : 0;
+}
+function calculateGrowthPrice(ativo){
+  return ativo ? (PRICE_CONFIG.growth.price||0) : 0;
 }
 function calculateAudiovisualCapturePrice(dailies){
   const d = Math.max(0, Number(dailies)||0);
@@ -58620,10 +58632,11 @@ function calculateOneTimeProjects(selectedIds){
     .filter(p => selectedIds.indexOf(p.id) >= 0)
     .reduce((s,p) => s + p.price, 0);
 }
-function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies){
+function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies, growthOn){
   return calculateSocialManagementPrice(socialState)
        + calculateCreativesPrice(creativesState)
        + calculateTrafficPrice(trafficKey)
+       + calculateGrowthPrice(growthOn)
        + calculateAudiovisualCapturePrice(captureDailies);
 }
 function calculateOneTimeTotal(selectedIds){
@@ -59289,6 +59302,8 @@ function _CalculadoraModular({isMob}){
   const [creatives,setCreatives] = useState({ staticCreatives:0, editedVideos:0, videoVariations:0 });
   // 3) Tráfego pago
   const [trafficKey,setTrafficKey] = useState("none");
+  // 3.5) Growth — pacote fechado, liga/desliga
+  const [growthOn,setGrowthOn] = useState(false);
   // 4) Captação audiovisual (diárias/mês)
   const [captureDailies,setCaptureDailies] = useState(0);
   // 5) Projetos pontuais
@@ -59350,15 +59365,17 @@ function _CalculadoraModular({isMob}){
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
   // Módulo Captação audiovisual ativo = diárias > 0
   const captureActive = captureDailies > 0;
+  const growthActive  = !!growthOn;
 
   // ═══ Cálculos ═══
   const _socialState = { channels: socialChannels, postsPerWeek: socialPosts };
   const socialPrice   = calculateSocialManagementPrice(_socialState);
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
+  const growthPrice    = calculateGrowthPrice(growthOn);
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn);
 
   // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
   // pra o vendedor abrir na frente do cliente.
@@ -59422,6 +59439,33 @@ function _CalculadoraModular({isMob}){
     "Backup e organização do material captado",
     "Entrega dos arquivos brutos pra edição",
   ];
+  // Entregaveis do Growth — 4 frentes.
+  const GROWTH_BLOCOS = [
+    { ico:"compass", titulo:"Diagnóstico e Funil", itens:[
+      "Mapeamento do funil completo: topo, meio e fundo",
+      "Definição da métrica principal e dos indicadores de apoio",
+      "Análise de concorrentes e referências do mercado",
+      "Identificação dos gargalos que travam o crescimento",
+    ]},
+    { ico:"sliders", titulo:"Experimentação", itens:[
+      "Roadmap mensal de experimentos priorizados",
+      "Testes A/B de páginas, ofertas e criativos",
+      "Validação de novos canais e públicos",
+      "Registro dos aprendizados de cada teste",
+    ]},
+    { ico:"target", titulo:"Conversão e Retenção", itens:[
+      "Otimização das páginas de conversão (CRO)",
+      "Revisão de oferta, copy e chamadas para ação",
+      "Automações de nutrição e recuperação de leads",
+      "Ações de reativação da base de clientes",
+    ]},
+    { ico:"chart", titulo:"Dados e Acompanhamento", itens:[
+      "Dashboard de indicadores em tempo real",
+      "Rastreamento de eventos e integração das ferramentas",
+      "Relatório mensal com leitura estratégica",
+      "Reunião quinzenal de growth com a equipe",
+    ]},
+  ];
   const TRAFFIC_BLOCOS = [
     { titulo:"Diagnóstico e Estratégia", itens:[
       "Diagnóstico do funil digital e posicionamento atual",
@@ -59466,18 +59510,25 @@ function _CalculadoraModular({isMob}){
 
     const lines = ["Estimativa Comercial — Pixels Marketing Digital", "", "Serviços recorrentes:", ""];
 
+    const _inc = calculateIncludedCreatives(socialChannels, trafficKey);
     if(socialActive){
       lines.push("Gestão de Redes Sociais");
       lines.push("Canais: " + socialCh.join(", "));
-      lines.push("Publicações/semana: " + socialPosts);
+      lines.push("Publicações/mês por conta: " + (socialPosts*4));
       lines.push("Inclui:");
       SOCIAL_INCLUSOS.forEach(i => lines.push("- " + i));
       lines.push("Valor: " + fmt(socialPrice) + "/mês");
       lines.push("");
     }
+    if(_inc.estaticos>0 || _inc.videos>0){
+      lines.push("Criativos inclusos no pacote (sem custo adicional):");
+      if(_inc.estaticos>0) lines.push("- " + _inc.estaticos + " criativos estáticos/mês");
+      if(_inc.videos>0)    lines.push("- " + _inc.videos + " vídeos editados/mês");
+      lines.push("");
+    }
     if(creativesActive){
-      lines.push("Criativos");
-      lines.push("Entregas/mês:");
+      lines.push("Criativos Extras");
+      lines.push("Além do incluso, por mês:");
       if(creatives.staticCreatives>0) lines.push("- " + creatives.staticCreatives + " criativos estáticos");
       if(creatives.editedVideos>0)    lines.push("- " + creatives.editedVideos    + " vídeos editados");
       if(creatives.videoVariations>0) lines.push("- " + creatives.videoVariations + " pequenas variações de vídeo");
@@ -59493,6 +59544,14 @@ function _CalculadoraModular({isMob}){
       TRAFFIC_BLOCOS.forEach(b => b.itens.forEach(it => lines.push("- " + it)));
 lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       lines.push("Observação: verba de anúncios não inclusa");
+      lines.push("");
+    }
+    if(growthActive){
+      lines.push("Growth");
+      lines.push("Pacote fechado mensal — crescimento orientado a dados.");
+      lines.push("Inclui:");
+      GROWTH_BLOCOS.forEach(function(b){ b.itens.forEach(function(it){ lines.push("- " + it); }); });
+      lines.push("Valor: " + fmt(growthPrice) + "/mês");
       lines.push("");
     }
     if(oneItems.length>0){
@@ -59622,8 +59681,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>;
   }
 
-  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
   const socialCount = countSocialChannels(socialChannels);
+  // Criativos que já vêm no pacote (redes + tráfego). Criativos Extras são só o excedente.
+  const inclusos = calculateIncludedCreatives(socialChannels, trafficKey);
   // Bonus desbloqueados pelo valor mensal recorrente
   const BONUS_LIST      = cfg.bonusUnlocks || [];
   const unlockedBonuses = calculateUnlockedBonuses(monthlyRecurring);
@@ -59633,8 +59694,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   /* ═══════════════ WIZARD — etapas horizontais ═══════════════ */
   const STEPS = [
     { id:"social",    ico:"share2",       label:"Redes Sociais", done:socialActive,        price:socialPrice },
-    { id:"creatives", ico:"palette",      label:"Criativos",     done:creativesActive,     price:creativesPrice },
+    { id:"creatives", ico:"palette",      label:"Criativos Extras", done:creativesActive,  price:creativesPrice },
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
+    { id:"growth",    ico:"chart",        label:"Growth",        done:growthActive,        price:growthPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
@@ -59706,6 +59768,13 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   function _ChannelCard({ckey, name, brand, icon}){
     const qty = socialChannelQty(socialChannels, ckey);
     const active = qty > 0;
+    const _canal = cfg.socialManagement.channels[ckey] || {price:0, inclusos:{}};
+    const _inc   = _canal.inclusos || {};
+    const _partes = [];
+    if(_inc.estaticos>0) _partes.push(_inc.estaticos+" artes");
+    if(_inc.videos>0)    _partes.push(_inc.videos+" vídeos");
+    _partes.push((cfg.socialManagement.basePostsPerWeek*4)+" publicações");
+    const _pacote = _partes.join(" · ") + "/mês";
     function setQty(v){
       const n = Math.max(0, Math.min(9, v));
       setSocialChannels(function(c){ const o = Object.assign({}, c); o[ckey] = n; return o; });
@@ -59724,9 +59793,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:active?INK:"#94a3b8",fontSize:13.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
-        <div style={{color:active?(qty>1?PX_DK:MUTE):"#b6bfcc",fontSize:11,marginTop:2,fontWeight:qty>1?800:500}}>
-          {qty===0 ? "não incluso" : (qty===1 ? "1 conta" : qty+" contas")}
+        <div style={{color:active?PX_DK:"#b6bfcc",fontSize:11.5,marginTop:2,fontWeight:800,fontFeatureSettings:"'tnum'"}}>
+          {fmt(_canal.price)}{qty>1&&<span style={{color:MUTE,fontWeight:700}}> × {qty}</span>}
         </div>
+        {_pacote&&<div style={{color:active?MUTE:"#c3cad6",fontSize:10,marginTop:2,lineHeight:1.35}}>{_pacote}</div>}
       </div>
 
       {/* Stepper de contas */}
@@ -59777,12 +59847,17 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
               {socialCount===0
                 ? "Ative uma rede no + para começar"
                 : <>
-                    {fmt(cfg.socialManagement.basePrice)} × {socialCount} {socialCount>1?"contas":"conta"}
+                    {Object.keys(cfg.socialManagement.channels).map(function(k){
+                      const q=socialChannelQty(socialChannels,k);
+                      if(q<1) return null;
+                      const c=cfg.socialManagement.channels[k];
+                      return <span key={k}>{fmt(c.price)}{q>1?(" × "+q):""} <span style={{color:SOFT}}>({c.label})</span>{" "}</span>;
+                    })}
                     {socialPosts>cfg.socialManagement.basePostsPerWeek && <>
-                      {" + "}{fmt(cfg.socialManagement.additionalPostPrice)} × {socialPosts-cfg.socialManagement.basePostsPerWeek} pub. extra{(socialPosts-cfg.socialManagement.basePostsPerWeek)>1?"s":""}
-                      {socialCount>1 && <> × {socialCount} contas</>}
+                      {"+ "}{fmt(cfg.socialManagement.additionalPostPrice)} × {socialPosts-cfg.socialManagement.basePostsPerWeek} pub. extra{(socialPosts-cfg.socialManagement.basePostsPerWeek)>1?"s":""}
+                      {socialCount>1 && <> × {socialCount} contas</>}{" "}
                     </>}
-                    {" = "}<b style={{color:INK,fontWeight:800}}>{fmt(socialPrice)}</b>
+                    {"= "}<b style={{color:INK,fontWeight:800}}>{fmt(socialPrice)}</b>
                   </>}
             </div>
           </div>
@@ -59808,7 +59883,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div style={{minWidth:0,flex:1}}>
             <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Publicações por semana <span style={{color:PX_DK,fontWeight:800}}>· por conta</span></div>
             <div style={{color:MUTE,fontSize:11,marginTop:2}}>
-              {cfg.socialManagement.basePostsPerWeek} inclusas em cada conta · cada publicação a mais {fmt(cfg.socialManagement.additionalPostPrice)}
+              {cfg.socialManagement.basePostsPerWeek*4} publicações/mês inclusas em cada conta · cada publicação/semana a mais {fmt(cfg.socialManagement.additionalPostPrice)}
               {socialCount>1 && <span style={{color:PX_DK,fontWeight:800}}> × {socialCount} contas</span>}
             </div>
           </div>
@@ -59836,13 +59911,37 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   // ── ETAPA 2 — CRIATIVOS ──
   const _stepCreatives = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="2" ico="palette" active={creativesActive}
-      title="Criativos"
-      subtitle="Produção dos materiais que serão publicados."
-      versaoLabel={creativesActive?"Personalizado":"Não selecionado"}
+      title="Criativos Extras"
+      subtitle="Volume além do que já vem nos pacotes de redes e tráfego."
+      versaoLabel={creativesActive?"Personalizado":"Só o incluso"}
       nivelLabel="Pro"/>
+
+    {/* ═══ O QUE JÁ ESTÁ INCLUSO NO PACOTE ═══ */}
+    {(inclusos.estaticos>0||inclusos.videos>0)&&<div style={{background:"linear-gradient(135deg,#f4fdf7,#ffffff)",border:"1px solid #c9f0d4",borderRadius:14,padding:"15px 17px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"#dcfce7",border:"1px solid #bbf0cb",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <_PxIco n="check" size={17} color="#16a34a" strokeWidth={3}/>
+        </div>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:INK,fontSize:13,fontWeight:800,letterSpacing:-.2}}>Já incluso no pacote — sem custo adicional</div>
+          <div style={{color:MUTE,fontSize:11,marginTop:2}}>Vem junto com os módulos que você já selecionou.</div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:9}}>
+        {inclusos.estaticos>0&&<div style={{background:"#fff",border:"1px solid #d9f2e1",borderRadius:11,padding:"11px 13px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:"#16a34a",fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",minWidth:26,textAlign:"center"}}>{inclusos.estaticos}</div>
+          <div style={{color:"#15803d",fontSize:12,fontWeight:700}}>criativos estáticos<div style={{color:SOFT,fontSize:10.5,fontWeight:500,marginTop:1}}>por mês</div></div>
+        </div>}
+        {inclusos.videos>0&&<div style={{background:"#fff",border:"1px solid #d9f2e1",borderRadius:11,padding:"11px 13px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:"#16a34a",fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",minWidth:26,textAlign:"center"}}>{inclusos.videos}</div>
+          <div style={{color:"#15803d",fontSize:12,fontWeight:700}}>vídeos editados<div style={{color:SOFT,fontSize:10.5,fontWeight:500,marginTop:1}}>por mês</div></div>
+        </div>}
+      </div>
+    </div>}
+
     <_IncluiList ico="palette" titulo="O que está incluso na produção" cor={PX_DK} itens={CREATIVES_INCLUSOS}/>
     <div>
-      <_BlocoTitulo titulo="Quantidades por mês"/>
+      <_BlocoTitulo titulo="Quantidades EXTRAS por mês (além do incluso)"/>
 
       {/* Contexto: as quantidades sao o TOTAL do mes somando todas as contas */}
       {socialCount>1 && <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:12,padding:"12px 15px",marginBottom:11,display:"flex",alignItems:"center",gap:11}}>
@@ -59854,13 +59953,13 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       </div>}
 
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-        <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
+        <_QtyControl label="Criativos estáticos extras" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
           extra={_porConta(creatives.staticCreatives)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{staticCreatives:v});});}}/>
-        <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
+        <_QtyControl label="Vídeos editados extras" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
           extra={_porConta(creatives.editedVideos)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{editedVideos:v});});}}/>
-        <_QtyControl label="Variações de vídeo" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
+        <_QtyControl label="Variações de vídeo extras" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
           extra={_porConta(creatives.videoVariations)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{videoVariations:v});});}}/>
       </div>
@@ -59918,9 +60017,49 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </>}
   </div>;
 
-  // ── ETAPA 4 — CAPTAÇÃO AUDIOVISUAL ──
+  // ── ETAPA 4 — GROWTH ──
+  const _stepGrowth = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="4" ico="chart" active={growthActive}
+      title="Growth"
+      subtitle="Crescimento orientado a dados: funil, testes e otimização contínua."
+      versaoLabel={growthActive?"Incluso":"Não selecionado"}
+      nivelLabel="Sênior"/>
+
+    {/* ═══ ATIVAÇÃO — pacote fechado ═══ */}
+    <div onClick={function(){setGrowthOn(!growthOn);}}
+      style={{background:growthActive?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff",border:"1.5px solid "+(growthActive?PX:"#eef0f5"),borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:15,transition:"all .18s",boxShadow:growthActive?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
+      onMouseEnter={function(e){ if(!growthActive) e.currentTarget.style.borderColor=PX_BD; }}
+      onMouseLeave={function(e){ if(!growthActive) e.currentTarget.style.borderColor="#eef0f5"; }}>
+      <_PxIcoBox n="chart" box={48} estado={growthActive?"ativo":"neutro"}/>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:growthActive?INK:"#7a8494",fontSize:14.5,fontWeight:800,letterSpacing:-.3}}>Incluir Growth no pacote</div>
+        <div style={{color:MUTE,fontSize:11.5,marginTop:3,lineHeight:1.45}}>Pacote fechado mensal — estratégia, experimentação e otimização do funil inteiro.</div>
+      </div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{color:growthActive?PX_DK:"#9aa4b2",fontWeight:900,fontSize:19,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{fmt(cfg.growth.price)}</div>
+        <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>/mês</div>
+      </div>
+      <div style={{width:24,height:24,borderRadius:"50%",background:growthActive?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:growthActive?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+        {growthActive && <_PxIco n="check" size={14} color="#fff" strokeWidth={3.4}/>}
+      </div>
+    </div>
+
+    {growthActive && <>
+      <div>
+        <_BlocoTitulo titulo="O que está incluso no Growth"/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+          {GROWTH_BLOCOS.map(function(b){
+            return <_IncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
+          })}
+        </div>
+      </div>
+      <_ValorModulo price={growthPrice}/>
+    </>}
+  </div>;
+
+  // ── ETAPA 5 — CAPTAÇÃO AUDIOVISUAL ──
   const _stepCapture = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="4" ico="video" active={captureActive}
+    <_ModuleHeader num="5" ico="video" active={captureActive}
       title="Captação Audiovisual"
       subtitle="Diárias de captação com equipamento e equipe."
       versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
@@ -59968,9 +60107,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     {captureActive && <_ValorModulo price={capturePrice}/>}
   </div>;
 
-  // ── ETAPA 5 — PROJETOS PONTUAIS ──
+  // ── ETAPA 6 — PROJETOS PONTUAIS ──
   const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="5" ico="folderkanban" active={oneTimeIds.length>0}
+    <_ModuleHeader num="6" ico="folderkanban" active={oneTimeIds.length>0}
       title="Projetos Pontuais"
       subtitle="Investimento único, separado do mensal."
       versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
@@ -60052,7 +60191,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>}
   </div>;
 
-  // ── ETAPA 6 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
+  // ── ETAPA 7 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
   const _pctTotal = bonusTopo>0 ? Math.max(0, Math.min(1, monthlyRecurring/bonusTopo)) : 0;
 
   /* Carta de bônus — formato chanfrado + medalhão hexagonal */
@@ -60207,7 +60346,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0} semPills
+    <_ModuleHeader num="7" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
       subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
@@ -60259,6 +60398,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
               socialActive&&{ico:"share2",lbl:"Redes Sociais"},
               creativesActive&&{ico:"palette",lbl:"Criativos"},
               (trafficKey!=="none"&&cfg.traffic[trafficKey].price>0)&&{ico:"target",lbl:cfg.traffic[trafficKey].label},
+              growthActive&&{ico:"chart",lbl:"Growth"},
               captureActive&&{ico:"video",lbl:"Captação"},
               oneTimeIds.length>0&&{ico:"folderkanban",lbl:oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")},
             ].filter(Boolean).map(function(c,i){
@@ -60322,7 +60462,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>
   </div>;
 
-  // ── ETAPA 7 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
+  // ── ETAPA 8 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
   function _ResumoModulo({ico, titulo, config, preco, blocos, sufixo}){
     return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px",boxShadow:"0 1px 2px rgba(15,23,42,.035)"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12,paddingBottom:13,borderBottom:"1px solid #f2f3f7"}}>
@@ -60350,7 +60490,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="7" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="8" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -60382,7 +60522,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             config={_selectedSocialLabels().join(" · ")+" · "+socialPosts+" publicaç"+(socialPosts>1?"ões":"ão")+"/semana por conta"}
             preco={socialPrice} blocos={SOCIAL_INCLUSOS}/>}
 
-          {creativesActive&&<_ResumoModulo ico="palette" titulo="Criativos"
+          {creativesActive&&<_ResumoModulo ico="palette" titulo="Criativos Extras"
             config={[
               creatives.staticCreatives>0&&(creatives.staticCreatives+" criativos estáticos"),
               creatives.editedVideos>0&&(creatives.editedVideos+" vídeos editados"),
@@ -60394,6 +60534,11 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             config="Gestão de campanhas · verba de mídia não inclusa"
             preco={trafficPrice}
             blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
+
+          {growthActive&&<_ResumoModulo ico="chart" titulo="Growth"
+            config="Pacote fechado — funil, experimentação e otimização contínua"
+            preco={growthPrice}
+            blocos={GROWTH_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
 
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
             config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
@@ -60453,7 +60598,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
+    growth:_stepGrowth, capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -60462,6 +60607,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     setSocialPosts(cfg.socialManagement.basePostsPerWeek);
     setCreatives({ staticCreatives:0, editedVideos:0, videoVariations:0 });
     setTrafficKey("none");
+    setGrowthOn(false);
     setCaptureDailies(0);
     setOneTimeIds([]);
     setStepIdx(0);
@@ -60554,7 +60700,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
@@ -60565,7 +60711,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -60585,9 +60731,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
-    captureActive, captureDailies, capturePrice, cfg,
+    captureActive, captureDailies, capturePrice, growthActive, growthPrice, cfg,
     oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
-  const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
   if(socialActive){
@@ -60602,10 +60748,13 @@ function _ResumoBox(p){
       creatives.editedVideos>0    && (creatives.editedVideos+" vídeos editados"),
       creatives.videoVariations>0 && (creatives.videoVariations+" variações"),
     ].filter(Boolean);
-    itens.push({ico:"palette", nome:"Criativos", linhas:[det.join(" · ")], valor:creativesPrice});
+    itens.push({ico:"palette", nome:"Criativos Extras", linhas:[det.join(" · ")], valor:creativesPrice});
   }
   if(trafficKey!=="none" && cfg.traffic[trafficKey].price>0){
     itens.push({ico:"target", nome:cfg.traffic[trafficKey].label, linhas:["Verba de mídia não inclusa"], valor:trafficPrice});
+  }
+  if(growthActive){
+    itens.push({ico:"chart", nome:"Growth", linhas:["Funil, experimentação e otimização"], valor:growthPrice});
   }
   if(captureActive){
     itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
