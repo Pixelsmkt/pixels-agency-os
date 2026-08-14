@@ -58329,7 +58329,7 @@ const PRICE_CONFIG = {
     { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1500,  fixo:true,  ico:"mappin", brand:"google" },
     { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:3000,  fixo:true,  ico:"pentool"  },
     { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true, ico:"rocket" },
-    { id:"aiLandingPage",        label:"Sites / Landing Pages com IA", price:3000,  fixo:false, ico:"sparkles" },
+    { id:"aiLandingPage",        label:"Sites com IA", price:3000,  fixo:false, ico:"sparkles" },
     { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:3000,  fixo:false, ico:"bot"      },
     { id:"customSystems",        label:"Sistemas personalizados com IA",price:12000, fixo:false, ico:"cpu"      },
   ],
