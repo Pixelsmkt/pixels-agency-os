@@ -58319,19 +58319,19 @@ const PRICE_CONFIG = {
     maxDailiesPerMonth: 12,
   },
   traffic: {
-    none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[] },
-    meta:       { id:"meta",       label:"Meta Ads",         price:2000, channels:["Facebook","Instagram"] },
-    google:     { id:"google",     label:"Google Ads",       price:2000, channels:["Search","Display"] },
-    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:3000, channels:["Facebook","Instagram","Search","Display"], combo:true },
+    none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[], brand:null },
+    meta:       { id:"meta",       label:"Meta Ads",         price:2000, channels:["Facebook","Instagram"], brand:"meta" },
+    google:     { id:"google",     label:"Google Ads",       price:2000, channels:["Search","Display"], brand:"google" },
+    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:3000, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
   },
   oneTimeProjects: [
-    { id:"landingPage",          label:"Landing Page",                 price:1500,  fixo:true  },
-    { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1000,  fixo:true  },
-    { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:2000,  fixo:true  },
-    { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true },
-    { id:"aiLandingPage",        label:"Sites / Landing Pages com IA", price:2500,  fixo:false },
-    { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:2500,  fixo:false },
-    { id:"customSystems",        label:"Sistemas personalizados",      price:7000,  fixo:false },
+    { id:"landingPage",          label:"Landing Page",                 price:1500,  fixo:true,  ico:"layout"   },
+    { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1000,  fixo:true,  ico:"mappin", brand:"google" },
+    { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:2000,  fixo:true,  ico:"pentool"  },
+    { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true, ico:"rocket" },
+    { id:"aiLandingPage",        label:"Sites / Landing Pages com IA", price:2500,  fixo:false, ico:"sparkles" },
+    { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:2500,  fixo:false, ico:"bot"      },
+    { id:"customSystems",        label:"Sistemas personalizados",      price:7000,  fixo:false, ico:"cpu"      },
   ],
 };
 
@@ -58655,9 +58655,46 @@ function _PxIco(props){
     send:        <g><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></g>,
     barchart:    <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
     dollar:      <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
+    layout:      <g><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></g>,
+    mappin:      <g><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></g>,
+    pentool:     <g><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></g>,
+    rocket:      <g><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></g>,
+    sparkles:    <g><path d="m12 3-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.8 1.9a2 2 0 0 1 1.288 1.287L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.8-1.9a2 2 0 0 1-1.288-1.287z"/></g>,
+    bot:         <g><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></g>,
+    cpu:         <g><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></g>,
+    xcircle:     <g><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></g>,
     sliders:     <g><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></g>,
   };
   return <svg {...base}>{P[n] || P.check}</svg>;
+}
+
+/* ═══ Logos de marca (Meta, Google) — cores originais, sem stroke ═══ */
+function _PxBrand(props){
+  const n  = props.n;
+  const sz = props.size || 22;
+  const META = <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none">
+    <path d="M2 14.4c0-4.1 2-8.4 5.1-8.4 2.2 0 3.6 2 5 4.6 1.4-2.6 2.8-4.6 5-4.6 3.1 0 5.1 4.3 5.1 8.4 0 2.3-1.1 3.8-2.9 3.8-1.8 0-3.1-1.7-4.6-4.4L12 11.3l-1.7 2.5C8.8 16.5 7.5 18.2 5.7 18.2 3.9 18.2 2 16.7 2 14.4Zm3.3-.4c0 1.2.5 1.9 1.3 1.9.9 0 1.6-.8 2.7-2.6l.9-1.5-.8-1.4C8.3 8.6 7.6 7.9 6.8 7.9c-.9 0-1.5 1.1-1.5 3.1 0 1 0 2 0 3Zm10.1-.7 .9 1.5c1.1 1.8 1.8 2.6 2.7 2.6.8 0 1.3-.7 1.3-1.9 0-1 0-2 0-3 0-2-.6-3.1-1.5-3.1-.8 0-1.5.7-2.6 2.5l-.8 1.4Z" fill="#0081FB"/>
+  </svg>;
+  const GOOGLE = <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none">
+    <path fill="#4285F4" d="M23.06 12.25c0-.85-.08-1.67-.22-2.45H12v4.64h6.2a5.3 5.3 0 0 1-2.3 3.48v2.9h3.72c2.18-2 3.44-4.96 3.44-8.57z"/>
+    <path fill="#34A853" d="M12 23.5c3.11 0 5.72-1.03 7.62-2.79l-3.72-2.89c-1.03.69-2.35 1.1-3.9 1.1-3 0-5.54-2.03-6.45-4.75H1.7v2.98A11.5 11.5 0 0 0 12 23.5z"/>
+    <path fill="#FBBC05" d="M5.55 14.17a6.9 6.9 0 0 1 0-4.41V6.78H1.7a11.5 11.5 0 0 0 0 10.37l3.85-2.98z"/>
+    <path fill="#EA4335" d="M12 5.02c1.69 0 3.2.58 4.4 1.72l3.3-3.3C17.72 1.55 15.11.5 12 .5A11.5 11.5 0 0 0 1.7 6.78l3.85 2.98C6.46 7.05 9 5.02 12 5.02z"/>
+  </svg>;
+  if(n==="meta")   return META;
+  if(n==="google") return GOOGLE;
+  if(n==="metagoogle") return <div style={{display:"inline-flex",alignItems:"center",gap:3}}>{META}{GOOGLE}</div>;
+  return null;
+}
+
+/* Caixa de logo de marca — mesmo formato do _PxIcoBox */
+function _PxBrandBox(props){
+  const ativo = !!props.ativo;
+  const box   = props.box || 46;
+  const dupla = props.n==="metagoogle";
+  return <div style={{width:dupla?box+16:box,height:box,borderRadius:Math.round(box*0.30),background:ativo?"#fff":"#f6f7fa",border:"1px solid "+(ativo?"#e4d4fd":"#eceef3"),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",filter:ativo?"none":"grayscale(1) opacity(.55)"}}>
+    <_PxBrand n={props.n} size={Math.round(box*0.46)}/>
+  </div>;
 }
 
 /* Container de icone padrao — 3 estados: ativo (roxo), concluido (verde), neutro */
@@ -59375,26 +59412,30 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       subtitle="Gestão de campanhas para alcance e conversão."
       versaoLabel={trafficKey!=="none"?cfg.traffic[trafficKey].label:"Não selecionado"}
       nivelLabel="Pro"/>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
       {Object.keys(cfg.traffic).map(function(k){
         const t = cfg.traffic[k];
         const sel = trafficKey===k;
         return <button key={k} type="button" onClick={function(){setTrafficKey(k);}}
-          style={{background:sel?"#fff":"#fbfbfd",border:"1.5px solid "+(sel?PX:BORD),borderRadius:14,padding:"14px 16px",cursor:"pointer",textAlign:"left",transition:"all .18s",position:"relative",boxShadow:sel?"0 8px 22px rgba(159,67,246,.15)":"none",opacity:sel?1:.75}}
-          onMouseEnter={function(e){e.currentTarget.style.opacity=1;}}
-          onMouseLeave={function(e){e.currentTarget.style.opacity=sel?1:.75;}}>
-          {t.combo && <div style={{position:"absolute",top:-8,right:12,background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(245,158,11,0.30)"}}>Combo</div>}
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:20,height:20,borderRadius:99,border:"2px solid "+(sel?PX:BORD),background:sel?PX:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {sel && <div style={{width:8,height:8,borderRadius:99,background:"#fff"}}/>}
+          style={{background:"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"16px 17px",cursor:"pointer",textAlign:"left",transition:"all .18s",position:"relative",boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)",display:"flex",alignItems:"center",gap:13,fontFamily:_PORTF_FF}}
+          onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(88,64,166,.08)";} }}
+          onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.035)";} }}>
+          {t.combo && <div style={{position:"absolute",top:-9,right:14,background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.45,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(245,158,11,.3)"}}>Combo</div>}
+
+          {t.brand
+            ? <_PxBrandBox n={t.brand} box={46} ativo={sel}/>
+            : <_PxIcoBox n="xcircle" box={46} estado={sel?"ativo":"neutro"}/>}
+
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:sel?INK:"#7a8494",fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{t.label}</div>
+            <div style={{color:sel?PX_DK:"#9aa4b2",fontWeight:800,fontSize:t.price===0?12:17,marginTop:4,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.2}}>
+              {t.price===0?"sem custo de gestão":fmt(t.price)}
+              {t.price>0 && <span style={{color:SOFT,fontSize:11.5,fontWeight:600,marginLeft:4,letterSpacing:0}}>/mês</span>}
             </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:sel?INK:"#94a3b8",fontSize:13.5,fontWeight:800,letterSpacing:-.1}}>{t.label}</div>
-              <div style={{color:sel?PX_DK:MUTE,fontWeight:800,fontSize:t.price===0?12:15,marginTop:4,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
-                {t.price===0?"Grátis":fmt(t.price)}
-                {t.price>0 && <span style={{color:SOFT,fontSize:11,fontWeight:600,marginLeft:4}}>/mês</span>}
-              </div>
-            </div>
+          </div>
+
+          <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+            {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
           </div>
         </button>;
       })}
@@ -59454,20 +59495,34 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       subtitle="Investimento único, separado do mensal."
       versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
       nivelLabel="Pontual"/>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(210px,1fr))",gap:10}}>
-      {cfg.oneTimeProjects.map(function(p){
-        const sel = oneTimeIds.indexOf(p.id)>=0;
-        return <button key={p.id} type="button" onClick={function(){setOneTimeIds(function(prev){return sel?prev.filter(function(x){return x!==p.id;}):prev.concat([p.id]);});}}
-          style={{background:sel?"#fff":"#fbfbfd",border:"1.5px solid "+(sel?PX:BORD),borderRadius:13,padding:"13px 15px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:11,minHeight:60,position:"relative",transition:"all .18s",boxShadow:sel?"0 8px 20px rgba(159,67,246,.13)":"none",opacity:sel?1:.75}}
-          onMouseEnter={function(e){e.currentTarget.style.opacity=1;}}
-          onMouseLeave={function(e){e.currentTarget.style.opacity=sel?1:.75;}}>
-          {p.destaque && <div style={{position:"absolute",top:-8,right:10,background:"linear-gradient(90deg,#9F43F6,#7c3aed)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Mais vendido</div>}
-          <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid "+BORD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            {sel && <_CheckIcon size={13} color="#fff"/>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(238px,1fr))",gap:12}}>
+      {cfg.oneTimeProjects.map(function(pr){
+        const sel = oneTimeIds.indexOf(pr.id)>=0;
+        return <button key={pr.id} type="button" onClick={function(){setOneTimeIds(function(prev){return sel?prev.filter(function(x){return x!==pr.id;}):prev.concat([pr.id]);});}}
+          style={{background:"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"16px 16px 15px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:12,position:"relative",transition:"all .18s",boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)",fontFamily:_PORTF_FF,minHeight:132}}
+          onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(88,64,166,.08)";} }}
+          onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.035)";} }}>
+
+          {pr.destaque && <div style={{position:"absolute",top:-9,right:12,background:"linear-gradient(90deg,#9F43F6,#7c3aed)",color:"#fff",fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.45,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(159,67,246,.3)"}}>Mais vendido</div>}
+
+          {/* topo: icone + check */}
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,width:"100%"}}>
+            {pr.brand
+              ? <_PxBrandBox n={pr.brand} box={42} ativo={sel}/>
+              : <_PxIcoBox n={pr.ico||"folderkanban"} box={42} estado={sel?"ativo":"neutro"}/>}
+            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",marginTop:2}}>
+              {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
+            </div>
           </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:sel?INK:"#94a3b8",fontSize:13,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.label}</div>
-            <div style={{color:sel?PX_DK:MUTE,fontSize:11.5,fontWeight:700,marginTop:2,fontFeatureSettings:"'tnum'"}}>{p.fixo?"":"a partir de "}{fmt(p.price)}</div>
+
+          {/* titulo — quebra em ate 2 linhas, sem cortar */}
+          <div style={{color:sel?INK:"#7a8494",fontSize:13.5,fontWeight:800,letterSpacing:-.3,lineHeight:1.3,marginTop:"auto"}}>{pr.label}</div>
+
+          {/* preco */}
+          <div style={{display:"flex",alignItems:"baseline",gap:5,flexWrap:"wrap"}}>
+            {!pr.fixo && <span style={{color:SOFT,fontSize:10.5,fontWeight:700}}>a partir de</span>}
+            <span style={{color:sel?PX_DK:"#9aa4b2",fontWeight:900,fontSize:17,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmt(pr.price)}</span>
+            <span style={{color:SOFT,fontSize:10.5,fontWeight:700}}>· único</span>
           </div>
         </button>;
       })}
@@ -59738,7 +59793,7 @@ function _ResumoBox(p){
 /* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
 function PagePortfolio(props){
   const isMob = props.isMob;
-  const [view, setView] = useState("overview"); // overview | recorrentes | projetos | ia | starter
+  const [view, setView] = useState("calculadora"); // abre direto na Calculadora | overview | recorrentes | projetos | ia | starter
   const [modalItem, setModalItem] = useState(null);
   // Contador de sessao da calculadora: muda a key e forca remontagem, entao
   // toda vez que a aba Calculadora e aberta ela volta zerada.
