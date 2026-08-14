@@ -58467,8 +58467,6 @@ const PRICE_CONFIG = {
     { id:"kit", ico:"mic", min:7000,
       nome:"Kit de Gravação Profissional",
       tagline:"Equipamento profissional de brinde",
-      // Em 10k o kit dobra — a carta sobe de nível.
-      upgrade:{ min:10000, nome:"Kit de Gravação em Dobro", tagline:"Dois kits completos, de brinde", selo:"×2" },
       itens:[
         { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
         { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
@@ -58482,13 +58480,21 @@ const PRICE_CONFIG = {
         { ico:"palette",label:"Direção de conteúdo na diária",       detalhe:"Roteiro e condução no set" },
         { ico:"drone",  label:"Imagens aéreas com drone",            detalhe:"Tomadas de drone na diária" },
       ] },
+    { id:"kit2", ico:"tripod", min:10000,
+      nome:"Kit Adicional de Captação",
+      tagline:"Segunda unidade completa do kit",
+      itens:[
+        { ico:"mic",    label:"2º microfone sem fio de lapela", detalhe:"Grave duas pessoas ao mesmo tempo" },
+        { ico:"tripod", label:"2º tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
+        { ico:"sun",    label:"2º ponto de iluminação LED",     detalhe:"Cena iluminada por dois ângulos" },
+      ] },
     { id:"estrategia", ico:"users", min:10000,
       nome:"Sessão Estratégica com os Sócios",
-      tagline:"Acesso direto a quem decide",
+      tagline:"Encontro presencial de growth",
       itens:[
-        { ico:"users",     label:"Reunião trimestral de 1h",      detalhe:"Direto com Vinicius e Gustavo" },
-        { ico:"chart",     label:"Análise dos resultados",        detalhe:"Números, aprendizados e gargalos" },
-        { ico:"lightbulb", label:"Plano do próximo trimestre",    detalhe:"Prioridades definidas em conjunto" },
+        { ico:"users",     label:"Encontro presencial trimestral", detalhe:"Cara a cara com Vinicius e Gustavo" },
+        { ico:"chart",     label:"Imersão de growth",              detalhe:"Onde crescer e como acelerar" },
+        { ico:"lightbulb", label:"Leitura de dados e oportunidades", detalhe:"Canais, funil e novos mercados" },
       ] },
   ],
   oneTimeProjects: [
@@ -59292,6 +59298,7 @@ function _CalculadoraModular({isMob}){
   // 7) Pacote de prêmios — cartas ficam viradas até clicar em "Revelar prêmios"
   const [packOpen,setPackOpen] = useState(false);
   const [confete,setConfete]   = useState(false);
+  const [copiado,setCopiado]   = useState(false);
   const _prevUnlocked = useRef(0);
   // Peças do confete — geradas uma única vez pra não recalcular a cada render.
   const _confPecas = useMemo(function(){
@@ -59520,7 +59527,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX_BD,boxShadow:"0 14px 34px rgba(159,67,246,0.16), 0 2px 6px rgba(15,23,42,.05)"});
 
   // Header do modulo — icone grande 52px + titulo + selo de concluido + pills
-  function _ModuleHeader({num, ico, title, subtitle, active, versaoLabel, nivelLabel, badge}){
+  function _ModuleHeader({num, ico, title, subtitle, active, versaoLabel, nivelLabel, badge, semPills}){
     return <div style={{display:"flex",alignItems:"flex-start",gap:15,flexWrap:"wrap"}}>
       <_PxIcoBox n={ico||"share2"} box={52} estado={active?"ativo":"neutro"}/>
       <div style={{flex:1,minWidth:190}}>
@@ -59532,7 +59539,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         </div>
         <div style={{color:MUTE,fontSize:13,marginTop:5,lineHeight:1.5}}>{subtitle}</div>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:5,minWidth:130,flexShrink:0,alignItems:"flex-end"}}>
+      {!semPills&&<div style={{display:"flex",flexDirection:"column",gap:5,minWidth:130,flexShrink:0,alignItems:"flex-end"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
           <span style={{color:SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão</span>
           <span style={{background:active?PX_BG:"#f6f7fa",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:"#eceef3"),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.2,whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
@@ -59541,7 +59548,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <span style={{color:SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Equipe</span>
           <span style={{background:"#fafbfc",color:MUTE,border:"1px solid #eceef3",fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.2,whiteSpace:"nowrap"}}>{nivelLabel||"Pro"}</span>
         </div>
-      </div>
+      </div>}
       {badge}
     </div>;
   }
@@ -60055,14 +60062,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   function _BonusCard({b}){
     const ok    = monthlyRecurring >= b.min;
-    // Carta com upgrade: depois de liberada, a barra passa a mirar o próximo nível.
-    const temUp = !!b.upgrade;
-    const upOk  = temUp && monthlyRecurring >= b.upgrade.min;
-    const alvo  = (temUp && ok && !upOk) ? b.upgrade.min : b.min;
-    const nome  = upOk ? b.upgrade.nome    : b.nome;
-    const tag   = upOk ? b.upgrade.tagline : b.tagline;
-    const pct   = Math.round(bonusProgress(monthlyRecurring, alvo)*100);
-    const falta = Math.max(0, alvo - monthlyRecurring);
+    const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
+    const falta = Math.max(0, b.min - monthlyRecurring);
     const OURO  = "#f0b429";
     const OURO2 = "#ffd868";
 
@@ -60100,7 +60101,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
           <div>
             <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:8.5,fontWeight:900,letterSpacing:1.1,textTransform:"uppercase"}}>Requisito</div>
-            <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:20,letterSpacing:-.8,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(upOk?b.upgrade.min:b.min)}</div>
+            <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:20,letterSpacing:-.8,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(b.min)}</div>
             <div style={{color:ok?"rgba(255,255,255,.42)":"#b3bcc9",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>recorrência mensal</div>
           </div>
           {ok
@@ -60130,8 +60131,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
         {/* nome */}
         <div style={{textAlign:"center",position:"relative"}}>
-          <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:13.5,letterSpacing:-.35,lineHeight:1.25,textShadow:ok?"0 2px 12px rgba(0,0,0,.30)":"none"}}>{nome}{upOk&&<span style={{marginLeft:6,background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:9.5,fontWeight:900,padding:"2px 8px",borderRadius:99,letterSpacing:.4,verticalAlign:"middle"}}>{b.upgrade.selo}</span>}</div>
-          <div style={{color:ok?"rgba(255,216,104,.78)":"#a3adbb",fontSize:9.5,fontWeight:700,marginTop:4,letterSpacing:.15,lineHeight:1.35}}>{tag}</div>
+          <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:13.5,letterSpacing:-.35,lineHeight:1.25,textShadow:ok?"0 2px 12px rgba(0,0,0,.30)":"none"}}>{b.nome}</div>
+          <div style={{color:ok?"rgba(255,216,104,.78)":"#a3adbb",fontSize:9.5,fontWeight:700,marginTop:4,letterSpacing:.15,lineHeight:1.35}}>{b.tagline}</div>
           {/* divisor com losango central */}
           <div style={{display:"flex",alignItems:"center",gap:7,marginTop:9}}>
             <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,"+(ok?"rgba(240,180,41,.45)":"#e2e6ee")+")"}}/>
@@ -60159,14 +60160,14 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{marginTop:"auto",position:"relative"}}>
           <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
             <span style={{color:ok?"rgba(255,216,104,.9)":MUTE,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
-              {upOk ? "Nível máximo" : (temUp&&ok ? "Rumo ao 2º kit" : (ok ? "Conquistado" : "Progresso"))}
+              {ok ? "Conquistado" : "Progresso"}
             </span>
             <span style={{color:ok?OURO2:PX_DK,fontSize:12.5,fontWeight:900,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{pct}%</span>
           </div>
           <div style={{height:7,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
-            <div style={{width:pct+"%",height:"100%",background:(pct>=100)?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:(pct>=100)?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
+            <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
           </div>
-          {falta>0 && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> {(temUp&&ok)?"pro 2º kit":"de recorrência"}</div>}
+          {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
         </div>
       </div>
     </div>;
@@ -60206,11 +60207,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0}
+    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
-      subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."
-      versaoLabel={unlockedBonuses.length>0?(unlockedBonuses.length+" de "+BONUS_LIST.length+" liberados"):"Nenhum ainda"}
-      nivelLabel="Cortesia"/>
+      subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
     {/* ═══ TRILHA DE PROGRESSO GERAL ═══ */}
     <div style={{background:"linear-gradient(135deg,#faf7ff,#ffffff)",border:"1px solid #eceaf4",borderRadius:18,padding:isMob?"18px 16px 14px":"22px 24px 16px"}}>
@@ -60219,16 +60218,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase"}}>Mensal recorrente atual</div>
           <div style={{color:INK,fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:3,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5,letterSpacing:0}}>/mês</span></div>
         </div>
-        {nextBonus
-          ? <div style={{textAlign:isMob?"left":"right"}}>
-              <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Próxima carta</div>
-              <div style={{color:PX_DK,fontSize:13,fontWeight:800,marginTop:3,letterSpacing:-.2}}>{nextBonus.nome}</div>
-              <div style={{color:MUTE,fontSize:11.5,marginTop:2,fontFeatureSettings:"'tnum'"}}>faltam <b style={{color:INK}}>{fmt(nextBonus.min - monthlyRecurring)}</b></div>
-            </div>
-          : <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#fff6dd,#fffdf6)",border:"1px solid #f2d99a",borderRadius:99,padding:"7px 14px"}}>
-              <_PxIco n="trophy" size={15} color="#b7791f" strokeWidth={2.2}/>
-              <span style={{color:"#8a5a09",fontSize:12,fontWeight:800,letterSpacing:-.1}}>Todas as cartas liberadas</span>
-            </div>}
+        {!nextBonus&&<div style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#fff6dd,#fffdf6)",border:"1px solid #f2d99a",borderRadius:99,padding:"7px 14px"}}>
+          <_PxIco n="trophy" size={15} color="#b7791f" strokeWidth={2.2}/>
+          <span style={{color:"#8a5a09",fontSize:12,fontWeight:800,letterSpacing:-.1}}>Todas as cartas liberadas</span>
+        </div>}
       </div>
 
       <div style={{position:"relative",paddingBottom:32}}>
@@ -60485,6 +60478,24 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </button>;
   }
 
+  /* ═══ Copiar resumo — mesmo estilo de Limpar / Modo foco ═══ */
+  function _CopyButton(){
+    function _copiar(){
+      if(!hasAnySelection) return;
+      copyResumo();
+      setCopiado(true);
+      setTimeout(function(){ setCopiado(false); }, 2000);
+    }
+    return <button type="button" onClick={_copiar} disabled={!hasAnySelection}
+      title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
+      style={{background:copiado?"linear-gradient(135deg,#22c55e,#16a34a)":"#fff",color:copiado?"#fff":(hasAnySelection?MUTE:"#cbd5e1"),border:"1px solid "+(copiado?"#16a34a":BORD),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:700,cursor:hasAnySelection?"pointer":"not-allowed",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0,fontFamily:_PORTF_FF,boxShadow:copiado?"0 5px 14px rgba(34,197,94,.28)":"none"}}
+      onMouseEnter={function(e){if(hasAnySelection&&!copiado){e.currentTarget.style.borderColor=PX;e.currentTarget.style.color=PX_DK;}}}
+      onMouseLeave={function(e){if(!copiado){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color=hasAnySelection?MUTE:"#cbd5e1";}}}>
+      <_PxIco n={copiado?"check":"copy"} size={14} color="currentColor" strokeWidth={copiado?3.2:2.2}/>
+      {copiado?"Copiado":"Copiar resumo"}
+    </button>;
+  }
+
   /* ═══ Botão de modo foco ═══ */
   function _FocusButton(){
     return <button type="button" onClick={function(){setFocusMode(!focusMode);}}
@@ -60514,6 +60525,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
+        <_CopyButton/>
         <_FocusButton/>
       </div>
     </div>
@@ -60576,15 +60588,6 @@ function _ResumoBox(p){
     captureActive, captureDailies, capturePrice, cfg,
     oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
-  const [copied,setCopied] = useState(false);
-
-  function _handleCopy(){
-    if(!hasAny) return;
-    onCopy();
-    setCopied(true);
-    setTimeout(function(){ setCopied(false); }, 2000);
-  }
-
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
   if(socialActive){
@@ -60702,17 +60705,7 @@ function _ResumoBox(p){
       </div>;
     })()}
 
-    {/* CTA copiar */}
-    <button onClick={_handleCopy} disabled={!hasAny}
-      title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
-      style={{marginTop:16,width:"100%",background:!hasAny?"#fafbfc":(copied?"linear-gradient(135deg,#22c55e,#16a34a)":"#0f172a"),color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?"#eef0f5":(copied?"#16a34a":"#0f172a")),borderRadius:10,padding:"9px 12px",fontWeight:700,fontSize:11.5,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.2,transition:"all .18s",boxShadow:copied?"0 6px 18px rgba(34,197,94,.28)":"none"}}
-      onMouseEnter={function(e){if(hasAny && !copied){e.currentTarget.style.background="#1e293b";}}}
-      onMouseLeave={function(e){if(hasAny && !copied){e.currentTarget.style.background="#0f172a";}}}>
-      <_PxIco n={copied?"check":"copy"} size={13} color="currentColor" strokeWidth={copied?3.2:2.2}/>
-      {copied ? "Resumo copiado" : "Copiar resumo"}
-    </button>
-    <div style={{color:SOFT,fontSize:10.5,marginTop:10,lineHeight:1.5,textAlign:"center"}}>Cola no WhatsApp ou e-mail — texto formatado pra cliente.</div>
-    <div style={{color:MUTE,fontSize:10.5,marginTop:14,lineHeight:1.55,paddingTop:14,borderTop:"1px solid #f2f3f7",fontStyle:"italic"}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
+    <div style={{color:MUTE,fontSize:10.5,marginTop:16,lineHeight:1.55,paddingTop:14,borderTop:"1px solid #f2f3f7",fontStyle:"italic"}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
   </div>;
 }
 
