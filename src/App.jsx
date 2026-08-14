@@ -58324,6 +58324,26 @@ const PRICE_CONFIG = {
     google:     { id:"google",     label:"Google Ads",       price:2500, channels:["Search","Display"], brand:"google" },
     metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
   },
+  // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
+  // "min" = valor de mensal recorrente que desbloqueia a carta.
+  bonusUnlocks: [
+    { id:"kit", ico:"video", min:7000,
+      nome:"Kit de Gravação Profissional",
+      tagline:"Equipamento completo em comodato",
+      itens:[
+        { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
+        { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
+        { ico:"sun",    label:"Iluminação LED",              detalhe:"Kit de luz contínua" },
+      ] },
+    { id:"capbi", ico:"trophy", min:10000,
+      nome:"Captação Bimestral",
+      tagline:"Nossa equipe em campo, por nossa conta",
+      itens:[
+        { ico:"video",  label:"1 diária de captação a cada 2 meses", detalhe:"Cinegrafista + equipamento" },
+        { ico:"palette",label:"Direção de conteúdo na diária",       detalhe:"Roteiro e condução no set" },
+        { ico:"folderkanban", label:"Material bruto organizado",     detalhe:"Entregue pronto pra edição" },
+      ] },
+  ],
   oneTimeProjects: [
     { id:"landingPage",          label:"Landing Page",                 price:2000,  fixo:false, ico:"layout"   },
     { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1500,  fixo:true,  ico:"mappin", brand:"google" },
@@ -58382,6 +58402,17 @@ function calculateAudiovisualCapturePrice(dailies){
   if(d === 0) return 0;
   const cfg = PRICE_CONFIG.audiovisualCapture;
   return cfg.firstDaily + (d - 1) * cfg.additionalDaily;
+}
+// Bonus: retorna os itens ja desbloqueados pelo valor mensal recorrente.
+function calculateUnlockedBonuses(monthlyRecurring){
+  const v = Number(monthlyRecurring)||0;
+  return (PRICE_CONFIG.bonusUnlocks||[]).filter(function(b){ return v >= b.min; });
+}
+// Progresso (0 a 1) do cliente rumo a um bonus especifico.
+function bonusProgress(monthlyRecurring, min){
+  const v = Number(monthlyRecurring)||0;
+  if(!min || min<=0) return 1;
+  return Math.max(0, Math.min(1, v/min));
 }
 function calculateOneTimeProjects(selectedIds){
   if(!selectedIds || !Array.isArray(selectedIds)) return 0;
@@ -58655,6 +58686,12 @@ function _PxIco(props){
     send:        <g><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></g>,
     barchart:    <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
     dollar:      <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
+    mic:         <g><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></g>,
+    tripod:      <g><rect x="9" y="2" width="6" height="10" rx="1.5"/><path d="M12 12v4"/><path d="m12 16-4.5 6"/><path d="m12 16 4.5 6"/><path d="M12 16v6"/></g>,
+    sun:         <g><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></g>,
+    gift:        <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
+    lock:        <g><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>,
+    trophy:      <g><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></g>,
     layout:      <g><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></g>,
     mappin:      <g><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></g>,
     pentool:     <g><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></g>,
@@ -59141,6 +59178,16 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       oneItems.forEach(p => lines.push("- " + p.label + ": " + fmt(p.price)));
       lines.push("");
     }
+    const bonusOk = calculateUnlockedBonuses(monthlyRecurring);
+    if(bonusOk.length>0){
+      lines.push("BÔNUS INCLUSOS — cortesia Pixels:");
+      lines.push("");
+      bonusOk.forEach(function(b){
+        lines.push(b.nome + " (" + b.tagline + ")");
+        b.itens.forEach(function(it){ lines.push("- " + it.label + (it.detalhe ? (" — " + it.detalhe) : "")); });
+        lines.push("");
+      });
+    }
     lines.push("Resumo:");
     lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
     if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
@@ -59254,6 +59301,11 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   const socialCount = countSocialChannels(socialChannels);
+  // Bonus desbloqueados pelo valor mensal recorrente
+  const BONUS_LIST      = cfg.bonusUnlocks || [];
+  const unlockedBonuses = calculateUnlockedBonuses(monthlyRecurring);
+  const nextBonus       = BONUS_LIST.find(function(b){ return monthlyRecurring < b.min; }) || null;
+  const bonusTopo       = BONUS_LIST.length ? BONUS_LIST[BONUS_LIST.length-1].min : 0;
 
   /* ═══════════════ WIZARD — etapas horizontais ═══════════════ */
   const STEPS = [
@@ -59262,6 +59314,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
+    { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
     { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
   ];
   const stepSafe = Math.max(0, Math.min(STEPS.length-1, stepIdx));
@@ -59304,7 +59357,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         const bdChip = isCur ? PX_BD : (isDone ? "#dcf2e3" : "transparent");
         const lblCol = isCur ? "#4c1d95" : (isDone ? "#15803d" : "#98a2b0");
         const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c3cad6");
-        const sub = isDone && st.price>0 ? fmt(st.price) : (isCur ? "em edição" : "não incluso");
+        const sub = st.isBonus
+          ? (unlockedBonuses.length>0 ? unlockedBonuses.length+" de "+BONUS_LIST.length+" liberados" : (isCur?"em edição":"nenhum ainda"))
+          : (isDone && st.price>0 ? fmt(st.price) : (isCur ? "em edição" : "não incluso"));
         return <button key={st.id} type="button" onClick={function(){goStep(i);}}
           style={{flex:"1 1 0",minWidth:isMob?146:0,background:bgChip,border:"1.5px solid "+bdChip,borderRadius:14,padding:isMob?"11px 10px":"12px 13px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",transition:"all .18s",textAlign:"left",fontFamily:_PORTF_FF,boxShadow:isCur?"0 5px 16px rgba(159,67,246,.13)":"none"}}
           onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#f3fcf6":"#f8f9fc"; }}
@@ -59573,9 +59628,157 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>
   </div>;
 
+  // ── ETAPA 6 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
+  const _pctTotal = bonusTopo>0 ? Math.max(0, Math.min(1, monthlyRecurring/bonusTopo)) : 0;
+
+  /* Carta de bônus — estilo card colecionável */
+  function _BonusCard({b}){
+    const ok    = monthlyRecurring >= b.min;
+    const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
+    const falta = Math.max(0, b.min - monthlyRecurring);
+    const OURO  = "#f0b429";
+    const OURO2 = "#ffd868";
+
+    return <div style={{
+      position:"relative", borderRadius:20, overflow:"hidden",
+      background: ok
+        ? "linear-gradient(160deg,#3b1670 0%,#2a0f52 45%,#1c0838 100%)"
+        : "linear-gradient(160deg,#f7f8fb 0%,#eef0f5 100%)",
+      border: "1.5px solid " + (ok ? "rgba(240,180,41,.55)" : "#e4e8ef"),
+      boxShadow: ok ? "0 16px 40px rgba(43,16,85,.30), inset 0 1px 0 rgba(255,255,255,.14)" : "0 1px 3px rgba(15,23,42,.05)",
+      padding: isMob ? "20px 18px 18px" : "24px 22px 20px",
+      display:"flex", flexDirection:"column", gap:15,
+      transition:"transform .22s cubic-bezier(.4,0,.2,1), box-shadow .22s",
+      minHeight: 330,
+    }}
+      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow=ok?"0 24px 54px rgba(43,16,85,.40)":"0 10px 26px rgba(88,64,166,.10)";}}
+      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=ok?"0 16px 40px rgba(43,16,85,.30), inset 0 1px 0 rgba(255,255,255,.14)":"0 1px 3px rgba(15,23,42,.05)";}}>
+
+      {/* brilho radial da carta liberada */}
+      {ok && <div style={{position:"absolute",top:-70,right:-50,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(240,180,41,.30) 0%,rgba(240,180,41,0) 68%)",pointerEvents:"none"}}/>}
+
+      {/* topo: requisito + selo */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
+        <div>
+          <div style={{color:ok?"rgba(255,216,104,.85)":"#a3adbb",fontSize:9,fontWeight:900,letterSpacing:.9,textTransform:"uppercase"}}>Requisito</div>
+          <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:23,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2}}>{fmt(b.min)}</div>
+          <div style={{color:ok?"rgba(255,255,255,.45)":"#b3bcc9",fontSize:10,fontWeight:700,letterSpacing:.2}}>por mês</div>
+        </div>
+        {ok
+          ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:"#3b1670",fontSize:9,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase",boxShadow:"0 4px 12px rgba(240,180,41,.40)"}}>
+              <_PxIco n="check" size={10} color="#3b1670" strokeWidth={3.8}/>Liberado
+            </div>
+          : <div style={{width:30,height:30,borderRadius:10,background:"#fff",border:"1px solid #e4e8ef",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(15,23,42,.07)"}}>
+              <_PxIco n="lock" size={14} color="#98a2b0" strokeWidth={2.4}/>
+            </div>}
+      </div>
+
+      {/* icone grande central */}
+      <div style={{display:"flex",justifyContent:"center",position:"relative",padding:"4px 0 2px"}}>
+        <div style={{width:82,height:82,borderRadius:24,
+          background: ok ? "linear-gradient(145deg,rgba(240,180,41,.22),rgba(240,180,41,.06))" : "#fff",
+          border:"1.5px solid "+(ok?"rgba(240,180,41,.45)":"#e8ebf1"),
+          display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow: ok ? "0 8px 26px rgba(240,180,41,.22), inset 0 1px 0 rgba(255,255,255,.20)" : "0 1px 3px rgba(15,23,42,.05)"}}>
+          <_PxIco n={b.ico} size={40} color={ok?OURO2:"#c3cad6"} strokeWidth={1.7}/>
+        </div>
+      </div>
+
+      {/* nome */}
+      <div style={{textAlign:"center",position:"relative"}}>
+        <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:16.5,letterSpacing:-.4,lineHeight:1.25}}>{b.nome}</div>
+        <div style={{color:ok?"rgba(255,216,104,.80)":"#a3adbb",fontSize:11,fontWeight:700,marginTop:4}}>{b.tagline}</div>
+      </div>
+
+      {/* itens da carta */}
+      <div style={{borderTop:"1px solid "+(ok?"rgba(255,255,255,.11)":"#e8ebf1"),borderBottom:"1px solid "+(ok?"rgba(255,255,255,.11)":"#e8ebf1"),padding:"13px 0",display:"flex",flexDirection:"column",gap:10,position:"relative"}}>
+        {b.itens.map(function(it,ix){
+          return <div key={ix} style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <div style={{width:26,height:26,borderRadius:8,background:ok?"rgba(240,180,41,.14)":"#fff",border:"1px solid "+(ok?"rgba(240,180,41,.28)":"#eceef3"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n={it.ico} size={13} color={ok?OURO2:"#b3bcc9"} strokeWidth={2.1}/>
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:ok?"rgba(255,255,255,.95)":"#8b95a3",fontSize:12,fontWeight:700,letterSpacing:-.15,lineHeight:1.35}}>{it.label}</div>
+              <div style={{color:ok?"rgba(255,255,255,.48)":"#b3bcc9",fontSize:10.5,marginTop:1.5}}>{it.detalhe}</div>
+            </div>
+          </div>;
+        })}
+      </div>
+
+      {/* progresso */}
+      <div style={{marginTop:"auto",position:"relative"}}>
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
+          <span style={{color:ok?"rgba(255,216,104,.9)":MUTE,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
+            {ok ? "Conquistado" : "Progresso"}
+          </span>
+          <span style={{color:ok?OURO2:PX_DK,fontSize:14,fontWeight:900,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{pct}%</span>
+        </div>
+        <div style={{height:8,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
+          <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
+        </div>
+        {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
+      </div>
+    </div>;
+  }
+
+  const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0}
+      title="Bônus por recorrência"
+      subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."
+      versaoLabel={unlockedBonuses.length>0?(unlockedBonuses.length+" de "+BONUS_LIST.length+" liberados"):"Nenhum ainda"}
+      nivelLabel="Cortesia"/>
+
+    {/* ═══ TRILHA DE PROGRESSO GERAL ═══ */}
+    <div style={{background:"linear-gradient(135deg,#faf7ff,#ffffff)",border:"1px solid #eceaf4",borderRadius:18,padding:isMob?"18px 16px 14px":"22px 24px 16px"}}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:16}}>
+        <div>
+          <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase"}}>Mensal recorrente atual</div>
+          <div style={{color:INK,fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:3,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5,letterSpacing:0}}>/mês</span></div>
+        </div>
+        {nextBonus
+          ? <div style={{textAlign:isMob?"left":"right"}}>
+              <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Próxima carta</div>
+              <div style={{color:PX_DK,fontSize:13,fontWeight:800,marginTop:3,letterSpacing:-.2}}>{nextBonus.nome}</div>
+              <div style={{color:MUTE,fontSize:11.5,marginTop:2,fontFeatureSettings:"'tnum'"}}>faltam <b style={{color:INK}}>{fmt(nextBonus.min - monthlyRecurring)}</b></div>
+            </div>
+          : <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"linear-gradient(135deg,#fff6dd,#fffdf6)",border:"1px solid #f2d99a",borderRadius:99,padding:"7px 14px"}}>
+              <_PxIco n="trophy" size={15} color="#b7791f" strokeWidth={2.2}/>
+              <span style={{color:"#8a5a09",fontSize:12,fontWeight:800,letterSpacing:-.1}}>Todas as cartas liberadas</span>
+            </div>}
+      </div>
+
+      <div style={{position:"relative",paddingBottom:32}}>
+        <div style={{position:"relative",height:9,background:"#eef0f5",borderRadius:99}}>
+          <div style={{position:"absolute",left:0,top:0,bottom:0,width:(_pctTotal*100)+"%",background:"linear-gradient(90deg,#9F43F6 0%,#c084fc 50%,#f0b429 100%)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:"0 2px 8px rgba(159,67,246,.30)"}}/>
+          {BONUS_LIST.map(function(b){
+            const pos = bonusTopo>0 ? (b.min/bonusTopo)*100 : 0;
+            const ok  = monthlyRecurring >= b.min;
+            return <div key={b.id} style={{position:"absolute",left:pos+"%",top:"50%",transform:"translate(-50%,-50%)"}}>
+              <div style={{width:20,height:20,borderRadius:"50%",background:ok?"linear-gradient(135deg,#ffd868,#f0b429)":"#fff",border:"2.5px solid "+(ok?"#fff":"#dfe3ea"),boxShadow:ok?"0 2px 9px rgba(240,180,41,.5)":"0 1px 3px rgba(15,23,42,.10)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {ok && <_PxIco n="check" size={10} color="#3b1670" strokeWidth={3.8}/>}
+              </div>
+              <div style={{position:"absolute",top:25,left:"50%",transform:"translateX(-50%)",color:ok?"#b7791f":"#a3adbb",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(b.min)}</div>
+            </div>;
+          })}
+        </div>
+      </div>
+    </div>
+
+    {/* ═══ CARTAS ═══ */}
+    <div>
+      <_BlocoTitulo titulo="Cartas de recompensa"/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:16}}>
+        {BONUS_LIST.map(function(b){ return <_BonusCard key={b.id} b={b}/>; })}
+      </div>
+      <div style={{color:SOFT,fontSize:11,marginTop:13,lineHeight:1.55,fontStyle:"italic"}}>
+        As cartas são liberadas automaticamente conforme o valor mensal recorrente do pacote. Equipamentos cedidos em regime de comodato durante a vigência do contrato.
+      </div>
+    </div>
+  </div>;
+
   // ── ETAPA 6 — RESUMO (revisão final) ──
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="7" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -59600,7 +59803,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    capture:_stepCapture, projects:_stepProjects, resumo:_stepResumo,
+    capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -59811,6 +60014,29 @@ function _ResumoBox(p){
         </div>}
       </div>
     </div>}
+
+    {/* Bonus conquistados */}
+    {(function(){
+      const bns = calculateUnlockedBonuses(monthlyRecurring);
+      if(!bns.length) return null;
+      return <div style={{marginTop:16,paddingTop:15,borderTop:"1px solid #f2f3f7"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+          <_PxIco n="gift" size={12} color="#b7791f" strokeWidth={2.4}/>
+          <span style={{color:"#b7791f",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Bônus conquistados</span>
+        </div>
+        {bns.map(function(b){
+          return <div key={b.id} style={{display:"flex",alignItems:"center",gap:9,background:"linear-gradient(135deg,#fffaf0,#fffdf8)",border:"1px solid #f2e2bd",borderRadius:11,padding:"9px 11px",marginBottom:7}}>
+            <div style={{width:26,height:26,borderRadius:8,background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 6px rgba(240,180,41,.34)"}}>
+              <_PxIco n={b.ico} size={13} color="#3b1670" strokeWidth={2.2}/>
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:INK,fontSize:12,fontWeight:800,letterSpacing:-.2,lineHeight:1.25}}>{b.nome}</div>
+              <div style={{color:"#a3812a",fontSize:10.5,marginTop:1}}>cortesia · sem custo</div>
+            </div>
+          </div>;
+        })}
+      </div>;
+    })()}
 
     {/* CTA copiar */}
     <button onClick={_handleCopy} disabled={!hasAny}
