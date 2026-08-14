@@ -58503,7 +58503,7 @@ const PRICE_CONFIG = {
       itens:[
         { ico:"video",  label:"1 diária de captação a cada 2 meses", detalhe:"Cinegrafista + equipamento" },
         { ico:"palette",label:"Direção de conteúdo na diária",       detalhe:"Roteiro e condução no set" },
-        { ico:"folderkanban", label:"Material bruto organizado",     detalhe:"Entregue pronto pra edição" },
+        { ico:"drone",  label:"Imagens aéreas com drone",     detalhe:"Tomadas de drone na diária" },
       ] },
   ],
   oneTimeProjects: [
@@ -58848,6 +58848,7 @@ function _PxIco(props){
     send:        <g><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></g>,
     barchart:    <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
     dollar:      <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
+    drone:       <g><circle cx="12" cy="12" r="2.6"/><path d="M10.2 10.2 7.1 7.1"/><path d="M13.8 10.2 16.9 7.1"/><path d="M10.2 13.8 7.1 16.9"/><path d="M13.8 13.8 16.9 16.9"/><circle cx="5.4" cy="5.4" r="2.3"/><circle cx="18.6" cy="5.4" r="2.3"/><circle cx="5.4" cy="18.6" r="2.3"/><circle cx="18.6" cy="18.6" r="2.3"/></g>,
     mic:         <g><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></g>,
     tripod:      <g><rect x="9" y="2" width="6" height="10" rx="1.5"/><path d="M12 12v4"/><path d="m12 16-4.5 6"/><path d="m12 16 4.5 6"/><path d="M12 16v6"/></g>,
     sun:         <g><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></g>,
@@ -59765,6 +59766,29 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       subtitle="Diárias de captação com equipamento e equipe."
       versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
       nivelLabel="Pro"/>
+
+    {/* ═══ Faixa do bônus de captação — some quando a recorrência bate o requisito ═══ */}
+    {(function(){
+      const _cap = BONUS_LIST.find(function(b){ return b.id==="capbi"; });
+      if(!_cap) return null;
+      const _ok = monthlyRecurring >= _cap.min;
+      if(!_ok) return null;
+      return <div style={{background:"linear-gradient(135deg,#fffaf0,#fffdf8)",border:"1px solid #f2e2bd",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",gap:13}}>
+        <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(240,180,41,.34)"}}>
+          <_PxIco n="gift" size={20} color="#2d1058" strokeWidth={2.1}/>
+        </div>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:INK,fontSize:13,fontWeight:800,letterSpacing:-.2,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+            Bônus liberado: 1 diária bimestral de cortesia
+            <span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"3px 9px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase"}}>Grátis</span>
+          </div>
+          <div style={{color:"#a3812a",fontSize:11.5,marginTop:3,lineHeight:1.45}}>
+            É <b>adicional</b> às diárias contratadas aqui — não desconta do valor do módulo. Liberada por atingir {fmt(_cap.min)} de recorrência mensal.
+          </div>
+        </div>
+      </div>;
+    })()}
+
     <_IncluiList ico="video" titulo="O que está incluso na captação" cor={PX_DK} itens={CAPTURE_INCLUSOS}/>
     <div>
       <_BlocoTitulo titulo="Diárias por mês"/>
@@ -59876,7 +59900,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div>
             <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:8.5,fontWeight:900,letterSpacing:1.1,textTransform:"uppercase"}}>Requisito</div>
             <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:24,letterSpacing:-1,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:3,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(b.min)}</div>
-            <div style={{color:ok?"rgba(255,255,255,.42)":"#b3bcc9",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>por mês</div>
+            <div style={{color:ok?"rgba(255,255,255,.42)":"#b3bcc9",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>recorrência mensal</div>
           </div>
           {ok
             ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.7,textTransform:"uppercase",boxShadow:"0 4px 14px rgba(240,180,41,.45)"}}>
