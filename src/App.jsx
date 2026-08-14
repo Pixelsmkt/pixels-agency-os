@@ -59229,8 +59229,19 @@ function _CalculadoraModular({isMob}){
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
   const [stepIdx,setStepIdx] = useState(0);
-  // 7) Modo foco — expande a calculadora e esconde a sidebar do app
+  // 7) Pacote de prêmios — cartas ficam viradas até clicar em "Checar prêmios"
+  const [packOpen,setPackOpen] = useState(false);
+  const _prevUnlocked = useRef(0);
+  // 8) Modo foco — expande a calculadora e esconde a sidebar do app
   const [focusMode,setFocusMode] = useState(false);
+  // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
+  // pra o vendedor abrir na frente do cliente.
+  useEffect(function(){
+    const n = calculateUnlockedBonuses(monthlyRecurring).length;
+    if(n > _prevUnlocked.current) setPackOpen(false);
+    _prevUnlocked.current = n;
+  },[monthlyRecurring]);
+
   // ESC sai do modo foco
   useEffect(function(){
     if(!focusMode) return undefined;
@@ -60062,6 +60073,39 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>;
   }
 
+  /* Verso da carta — enquanto o pacote não foi aberto */
+  function _BonusVerso({b}){
+    const ok = monthlyRecurring >= b.min;
+    return <div style={{clipPath:_CUT_OUT,padding:"1.5px",
+      background: ok ? "linear-gradient(150deg,rgba(255,216,104,.9),rgba(240,180,41,.45) 40%,rgba(120,60,200,.4))" : "linear-gradient(150deg,#e8ebf1,#dfe3ea)",
+      filter: ok ? "drop-shadow(0 14px 30px rgba(43,16,85,.30))" : "drop-shadow(0 2px 6px rgba(15,23,42,.06))"}}>
+      <div style={{clipPath:_CUT_IN,position:"relative",overflow:"hidden",minHeight:330,
+        background: ok ? "linear-gradient(158deg,#43197e 0%,#2d1058 45%,#180730 100%)" : "linear-gradient(158deg,#fbfcfe,#eef0f5)",
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"26px 22px"}}>
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:ok?.07:.5,
+          background:"repeating-linear-gradient(115deg, transparent 0 13px, "+(ok?"rgba(255,255,255,.8)":"rgba(148,163,184,.09)")+" 13px 14px)"}}/>
+        {ok&&<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(240,180,41,.22) 0%,rgba(240,180,41,0) 66%)",pointerEvents:"none"}}/>}
+
+        <div style={{position:"relative",width:98,height:106,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{position:"absolute",width:98,height:106,clipPath:_HEX,
+            background: ok ? "linear-gradient(155deg,#ffe89a,#f0b429 42%,#a8690f 80%,#ffd868)" : "linear-gradient(155deg,#e8ebf1,#d7dce5)"}}/>
+          <div style={{position:"absolute",width:88,height:95,clipPath:_HEX,
+            background: ok ? "linear-gradient(158deg,#4a1d8a,#2a0f52 55%,#1a0733)" : "#fff"}}/>
+          <div style={{position:"relative",color:ok?"#ffd868":"#c3cad6",fontSize:40,fontWeight:900,letterSpacing:-2,lineHeight:1,textShadow:ok?"0 2px 16px rgba(240,180,41,.5)":"none"}}>?</div>
+        </div>
+
+        <div style={{textAlign:"center",position:"relative"}}>
+          <div style={{color:ok?"#fff":"#8b95a3",fontWeight:900,fontSize:15,letterSpacing:-.4}}>
+            {ok ? "Prêmio disponível" : "Prêmio bloqueado"}
+          </div>
+          <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:11,fontWeight:700,marginTop:5}}>
+            {ok ? "Clique em Checar prêmios pra revelar" : "Requisito: "+fmt(b.min)+" de recorrência"}
+          </div>
+        </div>
+      </div>
+    </div>;
+  }
+
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0}
       title="Bônus por recorrência"
@@ -60105,38 +60149,199 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       </div>
     </div>
 
-    {/* ═══ CARTAS ═══ */}
+    {/* ═══ PACOTE DO CLIENTE + ABERTURA DAS CARTAS ═══ */}
     <div>
-      <_BlocoTitulo titulo="Cartas de recompensa"/>
+      <style>{"@keyframes pxReveal{from{opacity:0;transform:translateY(16px) scale(.93)}to{opacity:1;transform:none}}@keyframes pxPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}"}</style>
+
+      {/* resumo do pacote montado */}
+      <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:16,padding:isMob?"15px 14px":"17px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase",marginBottom:9}}>Pacote do cliente</div>
+          <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+            {[
+              socialActive&&{ico:"share2",lbl:"Redes Sociais"},
+              creativesActive&&{ico:"palette",lbl:"Criativos"},
+              (trafficKey!=="none"&&cfg.traffic[trafficKey].price>0)&&{ico:"target",lbl:cfg.traffic[trafficKey].label},
+              captureActive&&{ico:"video",lbl:"Captação"},
+              oneTimeIds.length>0&&{ico:"folderkanban",lbl:oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")},
+            ].filter(Boolean).map(function(c,i){
+              return <div key={i} style={{display:"inline-flex",alignItems:"center",gap:7,background:PX_BG,border:"1px solid "+PX_BD,borderRadius:99,padding:"5px 12px 5px 6px"}}>
+                <span style={{width:22,height:22,borderRadius:7,background:"#fff",border:"1px solid "+PX_BD,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                  <_PxIco n={c.ico} size={12} color={PX_DK} strokeWidth={2.2}/>
+                </span>
+                <span style={{color:PX_DK,fontSize:11.5,fontWeight:800,letterSpacing:-.15}}>{c.lbl}</span>
+              </div>;
+            })}
+            {!hasAnySelection&&<span style={{color:SOFT,fontSize:12,fontStyle:"italic"}}>nenhum módulo selecionado ainda</span>}
+          </div>
+        </div>
+        <div style={{textAlign:isMob?"left":"right",flexShrink:0}}>
+          <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Recorrência</div>
+          <div style={{color:INK,fontWeight:900,fontSize:22,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1.15,marginTop:2}}>{fmt(monthlyRecurring)}</div>
+        </div>
+      </div>
+
+      {/* botão de abrir o pacote */}
+      {!packOpen&&<button type="button" onClick={function(){setPackOpen(true);}}
+        style={{width:"100%",marginBottom:14,background:unlockedBonuses.length>0?"linear-gradient(135deg,#43197e,#2d1058)":"#f6f7fa",border:"1.5px solid "+(unlockedBonuses.length>0?"rgba(240,180,41,.5)":"#e8ebf1"),borderRadius:16,padding:"16px 20px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:11,fontFamily:_PORTF_FF,transition:"all .2s",boxShadow:unlockedBonuses.length>0?"0 10px 26px rgba(43,16,85,.26)":"none",animation:unlockedBonuses.length>0?"pxPulse 2.1s ease-in-out infinite":"none"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.animation="none";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.animation=unlockedBonuses.length>0?"pxPulse 2.1s ease-in-out infinite":"none";}}>
+        <_PxIco n="gift" size={20} color={unlockedBonuses.length>0?"#ffd868":"#b3bcc9"} strokeWidth={2.1}/>
+        <span style={{color:unlockedBonuses.length>0?"#fff":"#a3adbb",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Checar prêmios</span>
+        {unlockedBonuses.length>0&&<span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:10,fontWeight:900,padding:"4px 11px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>
+          {unlockedBonuses.length} liberado{unlockedBonuses.length>1?"s":""}
+        </span>}
+      </button>}
+
+      {packOpen&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+        <_BlocoTitulo titulo="Cartas de recompensa"/>
+        <button type="button" onClick={function(){setPackOpen(false);}}
+          style={{background:"transparent",border:"1px solid "+BORD,borderRadius:9,padding:"6px 12px",fontSize:11,fontWeight:700,color:MUTE,cursor:"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:6}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.color=PX_DK;}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color=MUTE;}}>
+          <_PxIco n="gift" size={12} color="currentColor" strokeWidth={2.2}/>
+          Fechar pacote
+        </button>
+      </div>}
+
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:16}}>
-        {BONUS_LIST.map(function(b){ return <_BonusCard key={b.id} b={b}/>; })}
+        {BONUS_LIST.map(function(b,i){
+          if(!packOpen) return <_BonusVerso key={"v-"+b.id} b={b}/>;
+          return <div key={"c-"+b.id} style={{animation:"pxReveal .55s cubic-bezier(.34,1.28,.5,1) both "+(i*180)+"ms"}}>
+            <_BonusCard b={b}/>
+          </div>;
+        })}
       </div>
     </div>
   </div>;
 
-  // ── ETAPA 6 — RESUMO (revisão final) ──
+  // ── ETAPA 7 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
+  function _ResumoModulo({ico, titulo, config, preco, blocos, sufixo}){
+    return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px",boxShadow:"0 1px 2px rgba(15,23,42,.035)"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12,paddingBottom:13,borderBottom:"1px solid #f2f3f7"}}>
+        <_PxIcoBox n={ico} box={40} estado="ativo"/>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:INK,fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{titulo}</div>
+          {config&&<div style={{color:MUTE,fontSize:11.5,marginTop:3,lineHeight:1.45}}>{config}</div>}
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{color:INK,fontWeight:900,fontSize:16,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.2}}>{fmt(preco)}</div>
+          <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>{sufixo||"/mês"}</div>
+        </div>
+      </div>
+      <div style={{paddingTop:12,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"9px 16px"}}>
+        {blocos.map(function(it,i){
+          return <div key={i} style={{color:"#334155",fontSize:12,lineHeight:1.45,display:"flex",gap:8,alignItems:"flex-start"}}>
+            <span style={{width:14,height:14,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1.5}}>
+              <_PxIco n="check" size={8.5} color={PX} strokeWidth={3.4}/>
+            </span>
+            <span>{it}</span>
+          </div>;
+        })}
+      </div>
+    </div>;
+  }
+
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="7" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
       nivelLabel="Final"/>
-    {!hasAnySelection && <div style={{background:BG_INNER,border:"1px dashed "+BORD,borderRadius:12,padding:"26px 20px",textAlign:"center",color:MUTE,fontSize:13}}>
+
+    {!hasAnySelection&&<div style={{background:BG_INNER,border:"1px dashed "+BORD,borderRadius:14,padding:"30px 20px",textAlign:"center",color:MUTE,fontSize:13}}>
       Nenhum módulo selecionado ainda. Volte às etapas anteriores para montar o pacote.
     </div>}
-    {hasAnySelection && <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
-      {STEPS.slice(0,5).filter(function(s){return s.done;}).map(function(s){
-        return <div key={s.id} style={{background:"linear-gradient(135deg,#f5f0ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-            <div style={{width:26,height:26,borderRadius:8,background:"linear-gradient(135deg,#22c55e,#16a34a)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <_CheckIcon size={14} color="#fff"/>
-            </div>
-            <div style={{color:INK,fontSize:13,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</div>
-          </div>
-          <div style={{color:INK,fontWeight:900,fontSize:14,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(s.price)}</div>
-        </div>;
-      })}
-    </div>}
+
+    {hasAnySelection&&<>
+      {/* ═══ TOTAIS ═══ */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(oneTimePrice>0?"1fr 1fr":"1fr"),gap:12}}>
+        <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
+          <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
+          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></div>
+        </div>
+        {oneTimePrice>0&&<div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:16,padding:"18px 20px"}}>
+          <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Investimento pontual</div>
+          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>único</span></div>
+        </div>}
+      </div>
+
+      {/* ═══ MÓDULOS RECORRENTES COM ENTREGÁVEIS ═══ */}
+      <div>
+        <_BlocoTitulo titulo="Serviços recorrentes e entregáveis"/>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {socialActive&&<_ResumoModulo ico="share2" titulo="Gestão de Redes Sociais"
+            config={_selectedSocialLabels().join(" · ")+" · "+socialPosts+" publicaç"+(socialPosts>1?"ões":"ão")+"/semana por conta"}
+            preco={socialPrice} blocos={SOCIAL_INCLUSOS}/>}
+
+          {creativesActive&&<_ResumoModulo ico="palette" titulo="Criativos"
+            config={[
+              creatives.staticCreatives>0&&(creatives.staticCreatives+" criativos estáticos"),
+              creatives.editedVideos>0&&(creatives.editedVideos+" vídeos editados"),
+              creatives.videoVariations>0&&(creatives.videoVariations+" variações de vídeo"),
+            ].filter(Boolean).join(" · ")}
+            preco={creativesPrice} blocos={CREATIVES_INCLUSOS}/>}
+
+          {trafficKey!=="none"&&cfg.traffic[trafficKey].price>0&&<_ResumoModulo ico="target" titulo={cfg.traffic[trafficKey].label}
+            config="Gestão de campanhas · verba de mídia não inclusa"
+            preco={trafficPrice}
+            blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
+
+          {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
+            config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
+            preco={capturePrice} blocos={CAPTURE_INCLUSOS}/>}
+        </div>
+      </div>
+
+      {/* ═══ PROJETOS PONTUAIS ═══ */}
+      {oneTimeIds.length>0&&<div>
+        <_BlocoTitulo titulo="Projetos pontuais"/>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {oneTimeIds.map(function(id){
+            const pr=cfg.oneTimeProjects.find(function(x){return x.id===id;});
+            if(!pr) return null;
+            return <_ResumoModulo key={id} ico={pr.ico||"folderkanban"} titulo={pr.label}
+              config={pr.short} preco={pr.price} sufixo={pr.fixo?"único":"a partir de"}
+              blocos={pr.entregas||[]}/>;
+          })}
+        </div>
+      </div>}
+
+      {/* ═══ BÔNUS CONQUISTADOS ═══ */}
+      {unlockedBonuses.length>0&&<div>
+        <_BlocoTitulo titulo="Bônus conquistados"/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+          {unlockedBonuses.map(function(b){
+            return <div key={b.id} style={{background:"linear-gradient(135deg,#fffaf0,#fffdf8)",border:"1px solid #f2e2bd",borderRadius:16,padding:"16px 17px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,paddingBottom:12,borderBottom:"1px solid #f4e8ce"}}>
+                <div style={{width:40,height:40,borderRadius:12,background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(240,180,41,.32)"}}>
+                  <_PxIco n={b.ico} size={20} color="#2d1058" strokeWidth={2}/>
+                </div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:INK,fontSize:13.5,fontWeight:800,letterSpacing:-.3}}>{b.nome}</div>
+                  <div style={{color:"#a3812a",fontSize:11,marginTop:2}}>{b.tagline}</div>
+                </div>
+                <span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"4px 10px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase",flexShrink:0}}>Grátis</span>
+              </div>
+              <div style={{paddingTop:11,display:"flex",flexDirection:"column",gap:8}}>
+                {b.itens.map(function(it,ix){
+                  return <div key={ix} style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                    <span style={{width:14,height:14,borderRadius:5,background:"rgba(240,180,41,.18)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1.5}}>
+                      <_PxIco n="check" size={8.5} color="#b7791f" strokeWidth={3.4}/>
+                    </span>
+                    <div style={{minWidth:0}}>
+                      <div style={{color:"#334155",fontSize:12,fontWeight:600,lineHeight:1.4}}>{it.label}</div>
+                      <div style={{color:SOFT,fontSize:10.5,marginTop:1}}>{it.detalhe}</div>
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
+    </>}
   </div>;
 
   const STEP_BODIES = {
