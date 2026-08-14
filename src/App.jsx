@@ -58832,10 +58832,10 @@ function _CalculadoraModular({isMob}){
 
   // ═══ Estado ═══
   // 1) Gestão de Redes Sociais: canais + publicações/semana (default 2)
-  const [socialChannels,setSocialChannels] = useState({ fbInsta:1, tiktok:0, linkedin:0 });
+  const [socialChannels,setSocialChannels] = useState({ fbInsta:0, tiktok:0, linkedin:0 });
   const [socialPosts,setSocialPosts] = useState(cfg.socialManagement.basePostsPerWeek);
   // 2) Criativos: quantidades mensais
-  const [creatives,setCreatives] = useState({ staticCreatives:4, editedVideos:0, videoVariations:0 });
+  const [creatives,setCreatives] = useState({ staticCreatives:0, editedVideos:0, videoVariations:0 });
   // 3) Tráfego pago
   const [trafficKey,setTrafficKey] = useState("none");
   // 4) Captação audiovisual (diárias/mês)
@@ -59093,50 +59093,36 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   const curStep  = STEPS[stepSafe];
   function goStep(i){ setStepIdx(Math.max(0, Math.min(STEPS.length-1, i))); }
 
-  // ═══ Ícones das etapas (SVG inline — sem dependência externa) ═══
-  function _StepIcon({id, color}){
-    const st = {fill:"none", stroke:color, strokeWidth:2.3, strokeLinecap:"round", strokeLinejoin:"round"};
-    if(id==="social")    return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
-    if(id==="creatives") return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-    if(id==="traffic")   return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
-    if(id==="capture")   return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>;
-    if(id==="projects")  return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
-    return <svg width="17" height="17" viewBox="0 0 24 24" {...st}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>;
-  }
   function _CheckIcon({size, color}){
     return <svg width={size||16} height={size||16} viewBox="0 0 24 24" fill="none" stroke={color||"#fff"} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
   }
 
-  /* ═══ Trilha de etapas — apagada até acender, check verde quando concluída ═══ */
+  /* ═══ Trilha de etapas — chips horizontais, sem conectores tortos ═══ */
   function _StepRail(){
-    return <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:isMob?"14px 10px":"18px 18px",boxShadow:"0 3px 12px rgba(88,64,166,.06)",overflowX:"auto"}}>
-      <div style={{display:"flex",alignItems:"center",gap:0,minWidth:isMob?620:"auto"}}>
-        {STEPS.map(function(s,i){
-          const isCur  = i===stepSafe;
-          const isDone = !!s.done;
-          const isLast = i===STEPS.length-1;
-          // Estados visuais: apagado (nem atual nem concluído), aceso (atual), concluído (check verde)
-          const bg     = isCur ? "linear-gradient(135deg,#9F43F6,#7c3aed)" : (isDone ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#eef1f6");
-          const iconCol= (isCur||isDone) ? "#fff" : "#aab3c0";
-          const txtCol = isCur ? PX_DK : (isDone ? "#15803d" : "#8d97a5");
-          return <React.Fragment key={s.id}>
-            <button type="button" onClick={function(){goStep(i);}}
-              style={{background:"transparent",border:"none",cursor:"pointer",padding:isMob?"4px 5px":"4px 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,transition:"all .18s"}}>
-              <div style={{width:isMob?38:44,height:isMob?38:44,borderRadius:"50%",background:bg,border:"2px solid "+((isCur||isDone)?"#fff":"#e6eaf1"),boxShadow:isCur?"0 6px 18px rgba(159,67,246,.38)":(isDone?"0 4px 12px rgba(34,197,94,.28)":"none"),display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .2s"}}>
-                {isDone && !isCur ? <_CheckIcon size={18} color="#fff"/> : <_StepIcon id={s.id} color={iconCol}/>}
-                <div style={{position:"absolute",bottom:-6,right:-4,width:18,height:18,borderRadius:"50%",background:isCur?PX:(isDone?"#16a34a":"#b9c2ce"),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:900,border:"2px solid #fff",fontFeatureSettings:"'tnum'"}}>{i+1}</div>
-              </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                <div style={{color:txtCol,fontSize:isMob?11.5:13,fontWeight:isCur?800:(isDone?700:600),letterSpacing:-.25,whiteSpace:"nowrap",lineHeight:1.2}}>{s.label}</div>
-                {isDone && s.price>0
-                  ? <div style={{color:"#16a34a",fontSize:isMob?10:11,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2,whiteSpace:"nowrap"}}>{fmt(s.price)}</div>
-                  : <div style={{color:isCur?PX:"#d5dbe4",fontSize:isMob?10:11,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap"}}>{isCur?"em edição":"—"}</div>}
-              </div>
-            </button>
-            {!isLast && <div style={{flex:1,height:2.5,minWidth:16,background:isDone?"linear-gradient(90deg,#22c55e,#86efac)":"#e8ecf3",borderRadius:2,marginBottom:34,transition:"background .2s"}}/>}
-          </React.Fragment>;
-        })}
-      </div>
+    return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:15,padding:6,display:"flex",alignItems:"stretch",gap:4,overflowX:"auto",boxShadow:"0 2px 10px rgba(88,64,166,.05)"}}>
+      {STEPS.map(function(s,i){
+        const isCur  = i===stepSafe;
+        const isDone = !!s.done;
+        const bgChip = isCur ? "linear-gradient(135deg,#f6f1ff,#fdfbff)" : (isDone ? "#f2fdf5" : "transparent");
+        const bdChip = isCur ? PX : (isDone ? "#c9f0d4" : "transparent");
+        const badgeBg= isCur ? "linear-gradient(135deg,#9F43F6,#7c3aed)" : (isDone ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#eef0f5");
+        const badgeCol= (isCur||isDone) ? "#fff" : "#9aa4b2";
+        const lblCol = isCur ? "#4c1d95" : (isDone ? "#166534" : "#9aa4b2");
+        const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c4cbd6");
+        const sub = isDone && s.price>0 ? fmt(s.price) : (isCur ? "em edição" : "não incluso");
+        return <button key={s.id} type="button" onClick={function(){goStep(i);}}
+          style={{flex:"1 1 0",minWidth:isMob?130:0,background:bgChip,border:"1.5px solid "+bdChip,borderRadius:11,padding:isMob?"9px 9px":"10px 12px",display:"flex",alignItems:"center",gap:9,cursor:"pointer",transition:"all .16s",textAlign:"left",boxShadow:isCur?"0 4px 14px rgba(159,67,246,.14)":"none",fontFamily:_PORTF_FF}}
+          onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#eafaef":"#f8f9fc"; }}
+          onMouseLeave={function(e){ e.currentTarget.style.background = bgChip; }}>
+          <div style={{width:26,height:26,borderRadius:8,background:badgeBg,color:badgeCol,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",boxShadow:(isCur||isDone)?"0 3px 8px rgba(15,23,42,.14)":"none",transition:"all .16s"}}>
+            {isDone && !isCur ? <_CheckIcon size={14} color="#fff"/> : (i+1)}
+          </div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:lblCol,fontSize:isMob?12:12.5,fontWeight:isCur?800:700,letterSpacing:-.25,lineHeight:1.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.label}</div>
+            <div style={{color:subCol,fontSize:10.5,fontWeight:isDone?800:600,letterSpacing:-.1,marginTop:2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div>
+          </div>
+        </button>;
+      })}
     </div>;
   }
 
@@ -59412,6 +59398,28 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     capture:_stepCapture, projects:_stepProjects, resumo:_stepResumo,
   };
 
+  /* ═══ Zerar a calculadora ═══ */
+  function resetAll(){
+    setSocialChannels({ fbInsta:0, tiktok:0, linkedin:0 });
+    setSocialPosts(cfg.socialManagement.basePostsPerWeek);
+    setCreatives({ staticCreatives:0, editedVideos:0, videoVariations:0 });
+    setTrafficKey("none");
+    setCaptureDailies(0);
+    setOneTimeIds([]);
+    setStepIdx(0);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info("Calculadora zerada.", 1800);
+  }
+  function _ResetButton(){
+    return <button type="button" onClick={resetAll} disabled={!hasAnySelection}
+      title="Zerar tudo e comecar um novo orcamento"
+      style={{background:"#fff",color:hasAnySelection?MUTE:"#cbd5e1",border:"1px solid "+BORD,borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:700,cursor:hasAnySelection?"pointer":"not-allowed",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0,fontFamily:_PORTF_FF}}
+      onMouseEnter={function(e){if(hasAnySelection){e.currentTarget.style.borderColor="#f87171";e.currentTarget.style.color="#dc2626";}}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color=hasAnySelection?MUTE:"#cbd5e1";}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L3 8"/></svg>
+      Limpar
+    </button>;
+  }
+
   /* ═══ Botão de modo foco ═══ */
   function _FocusButton(){
     return <button type="button" onClick={function(){setFocusMode(!focusMode);}}
@@ -59440,6 +59448,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{color:MUTE,fontSize:13,marginTop:6,lineHeight:1.55,maxWidth:620}}>Passe etapa por etapa. Cada módulo acende quando você seleciona e marca o check ao concluir.</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
+        <_ResetButton/>
         <_FocusButton/>
       </div>
     </div>
@@ -59610,6 +59619,13 @@ function PagePortfolio(props){
   const isMob = props.isMob;
   const [view, setView] = useState("overview"); // overview | recorrentes | projetos | ia | starter
   const [modalItem, setModalItem] = useState(null);
+  // Contador de sessao da calculadora: muda a key e forca remontagem, entao
+  // toda vez que a aba Calculadora e aberta ela volta zerada.
+  const [calcRun, setCalcRun] = useState(0);
+  function irParaTab(id){
+    if(id==="calculadora" && view!=="calculadora") setCalcRun(function(n){return n+1;});
+    setView(id);
+  }
 
   const TABS = [
     {id:"calculadora", label:"Calculadora"},
@@ -59624,7 +59640,7 @@ function PagePortfolio(props){
 
   /* ───── Visão geral: 4 cards de categoria ───── */
   function _OverviewCard({icon, ac, title, sub, tabId, count, footer}){
-    return <div onClick={function(){setView(tabId);}}
+    return <div onClick={function(){irParaTab(tabId);}}
       style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 22px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .18s",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}
       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 16px 36px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=ac+"55";}}
       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
@@ -59672,7 +59688,7 @@ function PagePortfolio(props){
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:4,display:"inline-flex",gap:2,flexWrap:"wrap",alignSelf:"flex-start",fontFamily:_PORTF_FF}}>
       {TABS.map(function(t){
         const a=view===t.id;
-        return <button key={t.id} onClick={function(){setView(t.id);}}
+        return <button key={t.id} onClick={function(){irParaTab(t.id);}}
           style={{background:a?"#9F43F6":"transparent",color:a?"#fff":"#475569",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:_PORTF_FF,transition:"all .15s",letterSpacing:-.1}}>
           {t.label}
         </button>;
@@ -59904,7 +59920,7 @@ function PagePortfolio(props){
     </section>}
 
     {/* ════ CALCULADORA MODULAR — estilo V4 com identidade Pixels ════ */}
-    {view==="calculadora" && <_CalculadoraModular isMob={isMob}/>}
+    {view==="calculadora" && <_CalculadoraModular key={"calc-"+calcRun} isMob={isMob}/>}
 
         {/* DRAWER */}
     {modalItem && <_PortfDrawer item={modalItem} onClose={function(){setModalItem(null);}} isMob={isMob}/>}
