@@ -32911,6 +32911,31 @@ function _pxFileWhen(f){
   const hora=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
   return hora==="00:00" ? data : (data+" às "+hora);
 }
+// Timestamp do pedido de ajuste mais recente (comentarios de feedback/audio/
+// cliente + imagens marcadas). Usado pra decidir se o bloco de ajuste sobe.
+function _pxUltimoAjusteTs(task){
+  let mx=0;
+  ((task&&task.comments)||[]).forEach(function(c){
+    if(c && (c.type==="feedback"||c.type==="audio"||c.type==="client_request")){
+      const t=_pxParseTs(c.at)||_pxParseTs(c.atFmt)||_pxParseTs(c.time)||0;
+      if(t>mx) mx=t;
+    }
+  });
+  ((task&&task.files)||[]).forEach(function(f){
+    if(f && f.isAnnotation){ const t=_pxFileTs(f); if(t>mx) mx=t; }
+  });
+  return mx;
+}
+// true = a entrega e mais nova (ou empatada) que o ultimo ajuste.
+function _pxEntregaNoTopo(finItems, task){
+  const l=_pxLastFile(finItems);
+  const eTs=l?_pxFileTs(l):0;
+  const aTs=_pxUltimoAjusteTs(task);
+  if(!aTs) return true;
+  if(!eTs) return false;
+  return eTs>=aTs;
+}
+
 // Item mais recente de uma lista de arquivos (fallback: ultimo do array)
 function _pxLastFile(list){
   const arr=(list||[]).slice();
@@ -35358,8 +35383,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         {/* ── LEFT PANEL ── */}
         <div style={{padding:"18px 22px",borderRight:"1px solid #f1f5f9",overflowY:"auto",maxHeight:"82vh"}}>
 
+          {/* Timestamps pra decidir qual bloco (entrega x ajuste) fica no topo */}
           {/* DESC */}
           {activeTab==="desc"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
+
+            {/* ═══ ORDEM CRONOLÓGICA — o bloco do evento mais recente sobe pro topo ═══
+                 Compara o timestamp da última entrega com o do último pedido de ajuste.
+                 Reordena via flex "order", sem mexer na lógica de cada bloco. */}
+            <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
             {/* ── ÚLTIMA ENTREGA — player grande do arquivo final mais recente ──
                  O que o sócio quer ver primeiro ao abrir o card: a entrega, grande,
@@ -35371,7 +35402,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               const _when   = _pxFileWhen(_last);
               const _outros = finItems.filter(function(x){return x.id!==_last.id;});
               const _mb     = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
-              return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+              const _noTopo = _pxEntregaNoTopo(finItems, task);
+              return <div style={{order:_noTopo?1:2,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
 
                 {/* cabecalho */}
                 <div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -35380,9 +35412,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </div>
                   <div style={{minWidth:0,flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-                      <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>Última entrega</span>
-                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>#{_lastIdx+1} de {finItems.length}</span>}
+                      <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>{_isV?"Última entrega":"Entrega"}</span>
+                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?("#"+(_lastIdx+1)+" de "+finItems.length):(finItems.length+" artes")}</span>}
                       {_isV&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
+                      {_noTopo&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
                     </div>
                     <div style={{color:"#94a3b8",fontSize:11,marginTop:2,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                       {_when&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontWeight:600}}>
@@ -35401,24 +35434,40 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </button>
                 </div>
 
-                {/* player / imagem grande */}
-                <div style={{background:_isV?"#0f172a":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
-                  {_isV
-                    ? <video src={_last.url} controls preload="metadata" playsInline
+                {/* VÍDEO — player grande. ARTE — grid simétrica, todos do mesmo tamanho. */}
+                {_isV
+                  ? <div style={{background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
+                      <video src={_last.url} controls preload="metadata" playsInline
                         style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
-                    : <img src={_last.url} alt={_last.name||"Entrega"} referrerPolicy="no-referrer"
-                        onClick={function(){setLightbox({url:_last.url,name:_last.name,storagePath:_last.storagePath});}}
-                        onError={function(e){
-                          if(_last.storagePath && !e.currentTarget.dataset.retried){
-                            e.currentTarget.dataset.retried="1";
-                            try{const sb=window._sb; if(sb){const{data}=sb.storage.from("agency-files").getPublicUrl(_last.storagePath); if(data&&data.publicUrl&&data.publicUrl!==_last.url){e.currentTarget.src=data.publicUrl; return;}}}catch(_){}
-                          }
-                        }}
-                        style={{width:"100%",maxHeight:420,objectFit:"contain",display:"block",cursor:"zoom-in"}}/>}
-                </div>
+                    </div>
+                  : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                      {finItems.map(function(a,i){
+                        const _av=isVid(a);
+                        return <div key={a.id} onClick={function(e){
+                            e.stopPropagation();
+                            if(_av){ setActiveTab("files"); }
+                            else { setLightbox({url:a.url,name:a.name,storagePath:a.storagePath}); }
+                          }} title={(a.name||("#"+(i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")}
+                          style={{position:"relative",borderRadius:9,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1",background:_av?"#0f172a":"#f8fafc",cursor:"pointer",transition:"transform .12s, box-shadow .12s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.03)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.12)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="none";}}>
+                          {_av
+                            ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+                            : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
+                                onError={function(e){
+                                  if(a.storagePath && !e.currentTarget.dataset.retried){
+                                    e.currentTarget.dataset.retried="1";
+                                    try{const sb=window._sb; if(sb){const{data}=sb.storage.from("agency-files").getPublicUrl(a.storagePath); if(data&&data.publicUrl&&data.publicUrl!==a.url){e.currentTarget.src=data.publicUrl; return;}}}catch(_){}
+                                  }
+                                }}
+                                style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+                          <div style={{position:"absolute",bottom:5,left:5,background:"rgba(15,23,42,0.78)",color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>#{i+1}</div>
+                        </div>;
+                      })}
+                    </div>}
 
                 {/* thumbs das demais entregas */}
-                {_outros.length>0&&<div style={{padding:"10px 14px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:7,overflowX:"auto"}}>
+                {_isV&&_outros.length>0&&<div style={{padding:"10px 14px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:7,overflowX:"auto"}}>
                   <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,flexShrink:0,marginRight:2}}>Outras</span>
                   {_outros.slice(0,8).map(function(a){
                     const _v=isVid(a);
@@ -35579,11 +35628,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
               if(rounds.length===0&&!task.isAlteracao&&task.status!=="ajustes")return null;
 
+              const _ajusteNoTopo = !_pxEntregaNoTopo(finItems, task);
               return(
-                <div style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
+                <div style={{order:_ajusteNoTopo?1:2,background:"#fff",border:"1px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
                   <div style={{padding:"9px 13px",borderBottom:"1px solid #f3e8ff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                     <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:12}}>Solicitação de ajuste</span>
+                      {_ajusteNoTopo&&<span style={{background:"#fee2e2",color:"#b91c1c",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
                       {rounds.length>1&&<span style={{background:"#f3e8ff",color:"#7c3aed",fontSize:9.5,padding:"2px 9px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>{rounds.length} rounds</span>}
                     </div>
                     <span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"3px 10px",borderRadius:99,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pendente</span>
@@ -35726,6 +35777,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
               );
             })()}
+            </div>
             <div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
@@ -36211,8 +36263,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   {/* ═══ DESTAQUE — arquivo final mais recente, grande, com data/hora ═══ */}
                   {finItems.length>0&&(function(){
                     const _last = _pxLastFile(finItems) || finItems[finItems.length-1];
-                    const _li   = finItems.findIndex(function(x){return x.id===_last.id;});
                     const _v    = isVid(_last);
+                    // Destaque grande so pra video. Arte fica na grid simetrica abaixo.
+                    if(!_v) return null;
+                    const _li   = finItems.findIndex(function(x){return x.id===_last.id;});
                     const _when = _pxFileWhen(_last);
                     const _mb   = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
                     return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",marginBottom:12,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
