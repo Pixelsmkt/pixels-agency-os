@@ -24772,7 +24772,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
   const _fixUrl=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
-  const _extractImgs=(files,fn)=>(files||[]).filter(fn).slice().reverse().map(f=>_fixUrl(f.url)).filter(_isValidUrl);
+  // ORDEM DO CARROSSEL = ordem do array files (drag&drop da aba Arquivos do card).
+  // Tinha um .reverse() aqui que exibia tudo de tras pra frente.
+  const _extractImgs=(files,fn)=>(files||[]).filter(fn).map(f=>_fixUrl(f.url)).filter(_isValidUrl);
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
@@ -25054,7 +25056,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             return !!f.url;
                           });
                           const _parseT = function(s){if(!s)return 0;const _i=new Date(s).getTime();return isNaN(_i)?0:_i;};
-                          _imgs.sort(function(a,b){return (_parseT(a.addedAtIso)||_parseT(a.addedAt)||0)-(_parseT(b.addedAtIso)||_parseT(b.addedAt)||0);});
+                          // NAO ordenar por data: a sequencia do carrossel e a do
+                          // drag&drop na aba Arquivos. Ordenar por upload embaralha tudo.
+                          // (_parseT segue usado abaixo pra pegar o item mais recente)
                           const _ct = String(current.contentType||current.tipo||"").toLowerCase();
                           const _isCarr = _ct==="carrossel";
                           if(_isCarr && _imgs.length>0){
