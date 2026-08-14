@@ -29052,7 +29052,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["senhas","Senhas"],["storage","Storage"]];
+const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["ferramentas","Ferramentas"],["senhas","Senhas"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -30192,11 +30192,294 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       )}
 
       {/* Tab Storage — só admins */}
+      {mainTab==="ferramentas"&&isMePartner&&<ToolsVault user={CURRENT_USER}/>}
       {mainTab==="senhas"&&isMePartner&&<PasswordVault user={CURRENT_USER}/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
     </div>
   </>);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOOLS VAULT — Ferramentas da Pixels (cursos, e-mails, assinaturas).
+   Mesma tabela do cofre (team_passwords) com category='ferramenta'
+   e um campo `setor` livre pra organizar. Só sócios.
+═══════════════════════════════════════════════════════════════ */
+function ToolsVault({user}){
+  const [items,setItems]     = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [editing,setEditing] = useState(null);
+  const [search,setSearch]   = useState("");
+  const [showPwd,setShowPwd] = useState({});
+  const [copied,setCopied]   = useState("");
+
+  const PX="#9F43F6", PX_DK="#7c3aed", PX_BG="#f6f0ff", PX_BD="#e4d4fd";
+  const INK="#0f172a", MUTE="#64748b", SOFT="#94a3b8", BORD="#eceef3";
+
+  const _load = async function(){
+    try{
+      setLoading(true);
+      const sb=window._sb; if(!sb) return;
+      const{data,error}=await sb.from("team_passwords").select("*").eq("category","ferramenta").order("setor",{ascending:true});
+      if(!error&&data) setItems(data);
+    }catch(e){ console.warn("[ferramentas] load:",e); }
+    finally{ setLoading(false); }
+  };
+  useEffect(function(){ _load(); },[]);
+
+  // Setores já usados viram sugestão no cadastro
+  const _setores = Array.from(new Set(items.map(function(i){return (i.setor||"").trim();}).filter(Boolean))).sort();
+
+  const _new   = function(){ setEditing({id:"",label:"",setor:"",username:"",password:"",url:"",notes:""}); };
+  const _edit  = function(it){ setEditing(Object.assign({},it)); };
+  const _close = function(){ setEditing(null); };
+
+  const _save = async function(){
+    if(!editing.label || !editing.label.trim()){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra ferramenta.");
+      return;
+    }
+    try{
+      const sb=window._sb;
+      const payload={
+        label:(editing.label||"").trim(),
+        category:"ferramenta",
+        setor:(editing.setor||"").trim()||null,
+        username:editing.username||"",
+        password:editing.password||"",
+        url:editing.url||"",
+        notes:editing.notes||"",
+        author_id:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),
+        author_name:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""),
+        updated_at:new Date().toISOString(),
+      };
+      let r;
+      if(editing.id) r=await sb.from("team_passwords").update(payload).eq("id",editing.id);
+      else           r=await sb.from("team_passwords").insert(payload);
+      if(r&&r.error){
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+(r.error.message||""),6000);
+        return;
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Ferramenta salva.");
+      setEditing(null); _load();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+((e&&e.message)||""),6000);
+    }
+  };
+
+  const _del = async function(it){
+    try{
+      const sb=window._sb;
+      const r=await sb.from("team_passwords").delete().eq("id",it.id);
+      if(r&&r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro removendo."); return; }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Removido.");
+      _load();
+    }catch(_){}
+  };
+
+  const _copy = function(txt,key){
+    try{
+      if(navigator&&navigator.clipboard) navigator.clipboard.writeText(txt||"");
+      setCopied(key); setTimeout(function(){ setCopied(""); },1500);
+    }catch(_){}
+  };
+
+  // Filtro de busca
+  const _q=(search||"").trim().toLowerCase();
+  const _visiveis = _q
+    ? items.filter(function(i){
+        const hay=((i.label||"")+" "+(i.setor||"")+" "+(i.username||"")+" "+(i.url||"")+" "+(i.notes||"")).toLowerCase();
+        return hay.indexOf(_q)>=0;
+      })
+    : items;
+
+  // Agrupa por setor
+  const _grupos={};
+  _visiveis.forEach(function(i){
+    const k=(i.setor||"").trim()||"Sem setor";
+    if(!_grupos[k]) _grupos[k]=[];
+    _grupos[k].push(i);
+  });
+  const _nomesSetores=Object.keys(_grupos).sort(function(a,b){
+    if(a==="Sem setor") return 1;
+    if(b==="Sem setor") return -1;
+    return a.localeCompare(b,"pt-BR");
+  });
+
+  const _inp={width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:"#fff",color:INK};
+  const _lbl={color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* ═══ CABEÇALHO ═══ */}
+    <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:"18px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+      <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(159,67,246,.28)"}}>
+        <Ico n="settings" size={21} color="#fff"/>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:INK,fontSize:17,fontWeight:800,letterSpacing:-.4}}>Ferramentas da Pixels</div>
+        <div style={{color:MUTE,fontSize:12.5,marginTop:2}}>Cursos, e-mails, assinaturas e serviços — organizados por setor.</div>
+      </div>
+      <div style={{position:"relative",flexShrink:0}}>
+        <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Buscar ferramenta, setor, e-mail..."
+          style={{width:250,padding:"9px 12px 9px 34px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:12.5,fontFamily:"inherit",outline:"none",background:"#fafbfc"}}/>
+        <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",display:"inline-flex",color:SOFT}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+      </div>
+      <button onClick={_new}
+        style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",color:"#fff",border:"none",borderRadius:11,padding:"11px 18px",fontSize:12.5,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,flexShrink:0,boxShadow:"0 6px 16px rgba(159,67,246,.28)",fontFamily:"inherit"}}>
+        <Ico n="plus" size={14} color="#fff"/> Nova ferramenta
+      </button>
+    </div>
+
+    {/* ═══ AVISO DE SEGURANÇA ═══ */}
+    <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:12,padding:"11px 15px",display:"flex",alignItems:"center",gap:10}}>
+      <Ico n="alert" size={15} color="#c2410c"/>
+      <div style={{color:"#9a3412",fontSize:11.5,lineHeight:1.5}}>
+        Visível só para sócios. As senhas ficam em texto puro no banco com RLS restringindo a level 1 — não use para dados bancários.
+      </div>
+    </div>
+
+    {loading&&<div style={{color:SOFT,fontSize:13,padding:"30px 0",textAlign:"center",fontStyle:"italic"}}>Carregando...</div>}
+
+    {!loading&&_visiveis.length===0&&<div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:16,padding:"46px 20px",textAlign:"center"}}>
+      <div style={{width:48,height:48,borderRadius:14,background:"#fff",border:"1px solid "+BORD,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+        <Ico n="settings" size={22} color={SOFT}/>
+      </div>
+      <div style={{color:INK,fontSize:14,fontWeight:700}}>{_q?"Nada encontrado":"Nenhuma ferramenta cadastrada"}</div>
+      <div style={{color:SOFT,fontSize:12,marginTop:5}}>{_q?"Tente outro termo.":"Clique em Nova ferramenta pra cadastrar a primeira."}</div>
+    </div>}
+
+    {/* ═══ GRUPOS POR SETOR ═══ */}
+    {!loading&&_nomesSetores.map(function(setor){
+      const lista=_grupos[setor];
+      return <div key={setor}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:11}}>
+          <span style={{background:PX_BG,color:PX_DK,border:"1px solid "+PX_BD,fontSize:11,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.3}}>{setor}</span>
+          <span style={{color:SOFT,fontSize:11,fontWeight:700}}>{lista.length} {lista.length===1?"item":"itens"}</span>
+          <div style={{flex:1,height:1,background:"linear-gradient(90deg,#eceef3,transparent)"}}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+          {lista.map(function(it){
+            const _k=String(it.id);
+            const _show=!!showPwd[_k];
+            return <div key={_k} style={{background:"#fff",border:"1px solid "+BORD,borderRadius:14,padding:"15px 16px",boxShadow:"0 1px 2px rgba(15,23,42,.04)",transition:"all .18s",display:"flex",flexDirection:"column",gap:10}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.boxShadow="0 8px 20px rgba(88,64,166,.09)";e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";e.currentTarget.style.transform="";}}>
+
+              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                <div style={{width:34,height:34,borderRadius:10,background:PX_BG,border:"1px solid "+PX_BD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Ico n="lock" size={15} color={PX_DK}/>
+                </div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:INK,fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,wordBreak:"break-word"}}>{it.label}</div>
+                  {it.url&&<a href={it.url} target="_blank" rel="noreferrer" style={{color:PX_DK,fontSize:11,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4,marginTop:3}}>
+                    <Ico n="link" size={10}/> abrir site
+                  </a>}
+                </div>
+                <div style={{display:"flex",gap:4,flexShrink:0}}>
+                  <button onClick={function(){_edit(it);}} title="Editar" style={{background:"transparent",border:"none",color:SOFT,cursor:"pointer",padding:5,borderRadius:7,display:"inline-flex"}}><Ico n="edit" size={13}/></button>
+                  <button onClick={function(){ if(window.confirm("Remover \""+it.label+"\"?")) _del(it); }} title="Remover" style={{background:"transparent",border:"none",color:"#f87171",cursor:"pointer",padding:5,borderRadius:7,display:"inline-flex"}}><Ico n="trash" size={13}/></button>
+                </div>
+              </div>
+
+              {it.username&&<div style={{background:"#fafbfc",border:"1px solid #f1f3f7",borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:8}}>
+                <Ico n="mail" size={12} color={SOFT}/>
+                <span style={{flex:1,minWidth:0,color:INK,fontSize:12,fontFamily:"'JetBrains Mono',monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username}</span>
+                <button onClick={function(){_copy(it.username,_k+"-u");}} title="Copiar" style={{background:"transparent",border:"none",color:copied===(_k+"-u")?"#16a34a":SOFT,cursor:"pointer",padding:3,display:"inline-flex"}}>
+                  <Ico n={copied===(_k+"-u")?"check":"copy"} size={12}/>
+                </button>
+              </div>}
+
+              {it.password&&<div style={{background:"#fafbfc",border:"1px solid #f1f3f7",borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:8}}>
+                <Ico n="lock" size={12} color={SOFT}/>
+                <span style={{flex:1,minWidth:0,color:INK,fontSize:12,fontFamily:"'JetBrains Mono',monospace",letterSpacing:_show?0:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {_show?it.password:"••••••••••"}
+                </span>
+                <button onClick={function(){setShowPwd(function(p){const n=Object.assign({},p); n[_k]=!n[_k]; return n;});}} title={_show?"Ocultar":"Mostrar"} style={{background:"transparent",border:"none",color:_show?PX_DK:SOFT,cursor:"pointer",padding:3,display:"inline-flex"}}>
+                  <Ico n="eye" size={12}/>
+                </button>
+                <button onClick={function(){_copy(it.password,_k+"-p");}} title="Copiar" style={{background:"transparent",border:"none",color:copied===(_k+"-p")?"#16a34a":SOFT,cursor:"pointer",padding:3,display:"inline-flex"}}>
+                  <Ico n={copied===(_k+"-p")?"check":"copy"} size={12}/>
+                </button>
+              </div>}
+
+              {it.notes&&<div style={{color:MUTE,fontSize:11.5,lineHeight:1.45,borderTop:"1px solid #f4f5f8",paddingTop:9}}>{it.notes}</div>}
+            </div>;
+          })}
+        </div>
+      </div>;
+    })}
+
+    {/* ═══ MODAL DE CADASTRO ═══ */}
+    {editing&&<div onMouseDown={_close} style={{position:"fixed",inset:0,zIndex:2000,background:"rgba(15,23,42,.5)",backdropFilter:"blur(3px)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div onMouseDown={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"min(520px,100%)",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(15,23,42,.28)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{padding:"20px 22px",borderBottom:"1px solid "+BORD,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:38,height:38,borderRadius:11,background:PX_BG,border:"1px solid "+PX_BD,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="settings" size={17} color={PX_DK}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:INK,fontSize:16,fontWeight:800,letterSpacing:-.3}}>{editing.id?"Editar ferramenta":"Nova ferramenta"}</div>
+            <div style={{color:SOFT,fontSize:11.5,marginTop:1}}>Cadastro rápido de acesso da Pixels</div>
+          </div>
+          <button onClick={_close} style={{background:"transparent",border:"none",color:SOFT,cursor:"pointer",padding:6,display:"inline-flex"}}><Ico n="x" size={17}/></button>
+        </div>
+
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:15}}>
+          <div>
+            <div style={_lbl}>Nome da ferramenta *</div>
+            <input value={editing.label||""} onChange={function(e){setEditing(Object.assign({},editing,{label:e.target.value}));}}
+              placeholder="ex: Curso de Growth — Hotmart" style={_inp} autoFocus/>
+          </div>
+
+          <div>
+            <div style={_lbl}>Setor</div>
+            <input value={editing.setor||""} onChange={function(e){setEditing(Object.assign({},editing,{setor:e.target.value}));}}
+              placeholder="ex: Educação, E-mails, Design..." style={_inp} list="px-setores-sugestao"/>
+            <datalist id="px-setores-sugestao">
+              {_setores.map(function(x){ return <option key={x} value={x}/>; })}
+            </datalist>
+            {_setores.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:7}}>
+              {_setores.map(function(x){
+                return <button key={x} onClick={function(){setEditing(Object.assign({},editing,{setor:x}));}}
+                  style={{background:editing.setor===x?PX_BG:"#fafbfc",color:editing.setor===x?PX_DK:MUTE,border:"1px solid "+(editing.setor===x?PX_BD:BORD),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{x}</button>;
+              })}
+            </div>}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={_lbl}>E-mail / usuário</div>
+              <input value={editing.username||""} onChange={function(e){setEditing(Object.assign({},editing,{username:e.target.value}));}}
+                placeholder="contato@pixels.com.br" style={_inp} autoComplete="off"/>
+            </div>
+            <div>
+              <div style={_lbl}>Senha</div>
+              <input value={editing.password||""} onChange={function(e){setEditing(Object.assign({},editing,{password:e.target.value}));}}
+                placeholder="••••••••" style={Object.assign({},_inp,{fontFamily:"'JetBrains Mono',monospace"})} autoComplete="new-password"/>
+            </div>
+          </div>
+
+          <div>
+            <div style={_lbl}>Link de acesso</div>
+            <input value={editing.url||""} onChange={function(e){setEditing(Object.assign({},editing,{url:e.target.value}));}}
+              placeholder="https://..." style={_inp}/>
+          </div>
+
+          <div>
+            <div style={_lbl}>Observações</div>
+            <textarea value={editing.notes||""} onChange={function(e){setEditing(Object.assign({},editing,{notes:e.target.value}));}}
+              placeholder="plano contratado, vencimento, quem usa, 2FA..." rows={3}
+              style={Object.assign({},_inp,{resize:"vertical",minHeight:70,fontFamily:"inherit"})}/>
+          </div>
+        </div>
+
+        <div style={{padding:"16px 22px",borderTop:"1px solid "+BORD,display:"flex",justifyContent:"flex-end",gap:9,background:"#fafbfc",borderRadius:"0 0 18px 18px"}}>
+          <button onClick={_close} style={{background:"#fff",color:MUTE,border:"1px solid "+BORD,borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={_save} style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 5px 14px rgba(159,67,246,.28)"}}>Salvar</button>
+        </div>
+      </div>
+    </div>}
+  </div>;
 }
 
 /* ─── PASSWORD VAULT (cofre de senhas — só sócios) ─── */
