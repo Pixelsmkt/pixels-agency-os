@@ -58507,13 +58507,60 @@ const PRICE_CONFIG = {
       ] },
   ],
   oneTimeProjects: [
-    { id:"landingPage",          label:"Landing Page",                 price:2000,  fixo:false, ico:"layout"   },
-    { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1500,  fixo:true,  ico:"mappin", brand:"google" },
-    { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:3000,  fixo:true,  ico:"pentool"  },
-    { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true, ico:"rocket" },
-    { id:"aiLandingPage",        label:"Site com IA", price:3000,  fixo:false, ico:"sparkles" },
-    { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:3000,  fixo:false, ico:"bot"      },
-    { id:"customSystems",        label:"Sistema/aplicativo personalizado com IA",price:7000, fixo:false, ico:"cpu" },
+    { id:"landingPage", label:"Landing Page", price:2000, fixo:false, ico:"layout",
+      short:"Página única de alta conversão pra captar leads.",
+      entregas:[
+        "Estrutura estratégica de conversão",
+        "Copywriting comercial da página",
+        "Design responsivo (desktop e celular)",
+        "Integração com WhatsApp e formulários",
+        "Instalação de pixel e tags de campanha",
+      ] },
+    { id:"googleBusinessProfile", label:"Google Perfil de Empresa", price:1500, fixo:true, ico:"mappin", brand:"google",
+      short:"Otimização completa pra aparecer nas buscas locais.",
+      entregas:[
+        "Cadastro e verificação do perfil",
+        "Categorias, atributos e horários",
+        "Fotos e publicações iniciais",
+        "Otimização de SEO local",
+        "Orientação de como pedir avaliações",
+      ] },
+    { id:"logoIdentity", label:"Logo e Identidade Visual", price:3000, fixo:false, ico:"shapes",
+      short:"Marca construída a partir do posicionamento do negócio.",
+      entregas:[
+        "Briefing e imersão estratégica",
+        "Logo principal e variações de uso",
+        "Paleta de cores e tipografia",
+        "Aplicações em papelaria e redes",
+        "Manual de marca em PDF",
+      ] },
+    { id:"aiLandingPage", label:"Site com IA", price:3000, fixo:false, ico:"sparkles",
+      short:"Site institucional completo com apoio de IA na produção.",
+      entregas:[
+        "Arquitetura de páginas e navegação",
+        "Copy e conteúdo gerados com IA e revisados",
+        "Design responsivo e otimizado",
+        "SEO técnico e velocidade de carregamento",
+        "Integrações de contato e analytics",
+      ] },
+    { id:"chatbotAutomation", label:"Chatbot / Automações", price:3000, fixo:false, ico:"bot",
+      short:"Atendimento automático que qualifica lead sozinho.",
+      entregas:[
+        "Chatbot para WhatsApp",
+        "Qualificação automática de leads",
+        "Fluxos de conversa sob medida",
+        "Integração com formulários e CRM",
+        "Painel de acompanhamento das conversas",
+      ] },
+    { id:"customSystems", label:"Sistema/aplicativo personalizado com IA", price:7000, fixo:false, ico:"cpu",
+      short:"Software sob medida pra operação do cliente.",
+      entregas:[
+        "Levantamento de processos e requisitos",
+        "Painéis de gestão e área do cliente",
+        "Dashboards comerciais e indicadores",
+        "Automações e integração com IA",
+        "Treinamento da equipe e suporte inicial",
+      ] },
   ],
 };
 
@@ -58855,6 +58902,7 @@ function _PxIco(props){
     gift:        <g><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></g>,
     lock:        <g><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>,
     trophy:      <g><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></g>,
+    shapes:      <g><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></g>,
     layout:      <g><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></g>,
     mappin:      <g><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></g>,
     pentool:     <g><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></g>,
@@ -59338,7 +59386,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     }
     if(oneItems.length>0){
       lines.push("Projetos pontuais:");
-      oneItems.forEach(p => lines.push("- " + p.label + ": " + fmt(p.price)));
+      oneItems.forEach(function(p){ lines.push("- " + p.label + ": " + (p.fixo?"":"a partir de ") + fmt(p.price)); });
       lines.push("");
     }
     const bonusOk = calculateUnlockedBonuses(monthlyRecurring);
@@ -59820,7 +59868,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       {cfg.oneTimeProjects.map(function(pr){
         const sel = oneTimeIds.indexOf(pr.id)>=0;
         return <button key={pr.id} type="button" onClick={function(){setOneTimeIds(function(prev){return sel?prev.filter(function(x){return x!==pr.id;}):prev.concat([pr.id]);});}}
-          style={{background:"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"16px 16px 15px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:12,position:"relative",transition:"all .18s",boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)",fontFamily:_PORTF_FF,minHeight:132}}
+          style={{background:"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"16px 16px 15px",cursor:"pointer",textAlign:"left",display:"flex",flexDirection:"column",gap:12,position:"relative",transition:"all .18s",boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)",fontFamily:_PORTF_FF,minHeight:186}}
           onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(88,64,166,.08)";} }}
           onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.035)";} }}>
 
@@ -59836,8 +59884,11 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             </div>
           </div>
 
-          {/* titulo — quebra em ate 2 linhas, sem cortar */}
-          <div style={{color:sel?INK:"#7a8494",fontSize:13.5,fontWeight:800,letterSpacing:-.3,lineHeight:1.3,marginTop:"auto"}}>{pr.label}</div>
+          {/* titulo + frase curta */}
+          <div style={{marginTop:"auto"}}>
+            <div style={{color:sel?INK:"#7a8494",fontSize:13.5,fontWeight:800,letterSpacing:-.3,lineHeight:1.3}}>{pr.label}</div>
+            {pr.short&&<div style={{color:sel?MUTE:"#b3bcc9",fontSize:11,lineHeight:1.4,marginTop:4}}>{pr.short}</div>}
+          </div>
 
           {/* preco */}
           <div style={{display:"flex",alignItems:"baseline",gap:5,flexWrap:"wrap"}}>
@@ -59848,6 +59899,46 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         </button>;
       })}
     </div>
+
+    {/* ═══ DETALHAMENTO DOS PROJETOS ESCOLHIDOS ═══ */}
+    {oneTimeIds.length>0&&<div style={{marginTop:20}}>
+      <_BlocoTitulo titulo="O que entra em cada projeto escolhido"/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+        {oneTimeIds.map(function(id){
+          const pr = cfg.oneTimeProjects.find(function(x){return x.id===id;});
+          if(!pr) return null;
+          return <div key={id} style={{background:"#fff",border:"1px solid "+PX_BD,borderRadius:16,padding:"17px 18px 16px",boxShadow:"0 2px 8px rgba(88,64,166,.06)",display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+              {pr.brand ? <_PxBrandBox n={pr.brand} box={40} ativo={true}/> : <_PxIcoBox n={pr.ico||"folderkanban"} box={40} estado="ativo"/>}
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:INK,fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{pr.label}</div>
+                {pr.short&&<div style={{color:MUTE,fontSize:11.5,lineHeight:1.45,marginTop:3}}>{pr.short}</div>}
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                {!pr.fixo&&<div style={{color:SOFT,fontSize:9.5,fontWeight:700,letterSpacing:.2}}>a partir de</div>}
+                <div style={{color:PX_DK,fontWeight:900,fontSize:16,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.2}}>{fmt(pr.price)}</div>
+              </div>
+            </div>
+            {pr.entregas&&pr.entregas.length>0&&<div style={{borderTop:"1px solid #f2f3f7",paddingTop:12}}>
+              <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.55,textTransform:"uppercase",marginBottom:9}}>O que está incluso</div>
+              <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:8}}>
+                {pr.entregas.map(function(en,ei){
+                  return <li key={ei} style={{color:"#334155",fontSize:12.5,lineHeight:1.45,display:"flex",gap:9,alignItems:"flex-start"}}>
+                    <span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1.5}}>
+                      <_PxIco n="check" size={9} color={PX} strokeWidth={3.4}/>
+                    </span>
+                    <span>{en}</span>
+                  </li>;
+                })}
+              </ul>
+            </div>}
+            {!pr.fixo&&<div style={{color:SOFT,fontSize:10.5,lineHeight:1.45,fontStyle:"italic",borderTop:"1px dashed #eceef3",paddingTop:10}}>
+              Valor de entrada — o escopo final define o investimento.
+            </div>}
+          </div>;
+        })}
+      </div>
+    </div>}
   </div>;
 
   // ── ETAPA 6 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
@@ -60223,6 +60314,8 @@ function _ResumoBox(p){
       <div style={{color:INK,fontWeight:900,fontSize:21,letterSpacing:-.7,marginTop:3,fontFeatureSettings:"'tnum'"}}>
         {fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:11.5,fontWeight:600,marginLeft:6}}>· pagamento único</span>
       </div>
+      {oneTimeIds.some(function(id){const x=cfg.oneTimeProjects.find(function(y){return y.id===id;}); return x&&!x.fixo;})&&
+        <div style={{color:SOFT,fontSize:10.5,marginTop:4,fontStyle:"italic"}}>valor de entrada — escopo final pode variar</div>}
     </div>}
 
     {/* Modulos contratados */}
@@ -60251,10 +60344,13 @@ function _ResumoBox(p){
             const proj = cfg.oneTimeProjects.find(function(x){return x.id===id;});
             if(!proj) return null;
             return <div key={id} style={{display:"flex",alignItems:"flex-start",gap:11,marginTop:9}}>
-              <_PxIcoBox n="folderkanban" box={32} estado="neutro"/>
+              <_PxIcoBox n={proj.ico||"folderkanban"} box={32} estado="neutro"/>
               <div style={{flex:1,minWidth:0,display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
                 <span style={{color:INK,fontSize:12.5,fontWeight:700,letterSpacing:-.2}}>{proj.label}</span>
-                <span style={{color:INK,fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(proj.price)}</span>
+                <span style={{color:INK,fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
+                  {!proj.fixo&&<span style={{color:SOFT,fontSize:9.5,fontWeight:700,marginRight:3}}>a partir de</span>}
+                  {fmt(proj.price)}
+                </span>
               </div>
             </div>;
           })}
