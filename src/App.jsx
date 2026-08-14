@@ -58320,9 +58320,9 @@ const PRICE_CONFIG = {
   },
   traffic: {
     none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[], brand:null },
-    meta:       { id:"meta",       label:"Meta Ads",         price:2000, channels:["Facebook","Instagram"], brand:"meta" },
-    google:     { id:"google",     label:"Google Ads",       price:2000, channels:["Search","Display"], brand:"google" },
-    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:3000, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
+    meta:       { id:"meta",       label:"Meta Ads",         price:2500, channels:["Facebook","Instagram"], brand:"meta" },
+    google:     { id:"google",     label:"Google Ads",       price:2500, channels:["Search","Display"], brand:"google" },
+    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
   },
   oneTimeProjects: [
     { id:"landingPage",          label:"Landing Page",                 price:1500,  fixo:true,  ico:"layout"   },
@@ -59442,12 +59442,6 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>
 
     {trafficKey!=="none" && <>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
-        <div style={{color:SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",width:"100%",marginBottom:4}}>Canais ativados</div>
-        {cfg.traffic[trafficKey].channels.map(function(ch){
-          return <span key={ch} style={{background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:99}}>{ch}</span>;
-        })}
-      </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:8}}>
         {TRAFFIC_BLOCOS.map(function(b,i){
           return <_IncluiList key={i} ico={["compass","sliders","palette","chart"][i]||"target"} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
