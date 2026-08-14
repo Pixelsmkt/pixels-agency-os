@@ -58341,8 +58341,17 @@ const PRICE_CONFIG = {
 // R$ 4.000, 3 redes R$ 6.000. FB+IG contam como 1 rede (pacote unico).
 // Publicacoes acima da base somam +R$ 250 cada.
 function countSocialChannels(channels){
+  // Cada chave guarda a QUANTIDADE de contas daquele canal (0 = desligado).
+  // Aceita boolean legado (true = 1 conta).
   const ch = channels || {};
-  return (ch.fbInsta?1:0) + (ch.tiktok?1:0) + (ch.linkedin?1:0);
+  function _q(v){ if(v===true) return 1; if(!v) return 0; return Math.max(0, Number(v)||0); }
+  return _q(ch.fbInsta) + _q(ch.tiktok) + _q(ch.linkedin);
+}
+function socialChannelQty(channels, key){
+  const v = (channels||{})[key];
+  if(v===true) return 1;
+  if(!v) return 0;
+  return Math.max(0, Number(v)||0);
 }
 function calculateSocialManagementPrice(state){
   // state = { channels:{fbInsta,tiktok,linkedin}, postsPerWeek }
@@ -58823,7 +58832,7 @@ function _CalculadoraModular({isMob}){
 
   // ═══ Estado ═══
   // 1) Gestão de Redes Sociais: canais + publicações/semana (default 2)
-  const [socialChannels,setSocialChannels] = useState({ fbInsta:true, tiktok:false, linkedin:false });
+  const [socialChannels,setSocialChannels] = useState({ fbInsta:1, tiktok:0, linkedin:0 });
   const [socialPosts,setSocialPosts] = useState(cfg.socialManagement.basePostsPerWeek);
   // 2) Criativos: quantidades mensais
   const [creatives,setCreatives] = useState({ staticCreatives:4, editedVideos:0, videoVariations:0 });
@@ -58850,7 +58859,7 @@ function _CalculadoraModular({isMob}){
     };
   },[focusMode]);
   // Estado do módulo Gestão ativo/inativo (depende de ter algum canal)
-  const socialActive = !!(socialChannels.fbInsta || socialChannels.tiktok || socialChannels.linkedin);
+  const socialActive = countSocialChannels(socialChannels) > 0;
   // Módulo Criativos ativo = alguma quantidade > 0
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
   // Módulo Captação audiovisual ativo = diárias > 0
@@ -58914,9 +58923,13 @@ function _CalculadoraModular({isMob}){
   // ═══ Nome dos canais de Redes Sociais selecionados ═══
   function _selectedSocialLabels(){
     const out = [];
-    if(socialChannels.fbInsta) out.push("Facebook + Instagram");
-    if(socialChannels.tiktok)   out.push("TikTok");
-    if(socialChannels.linkedin) out.push("LinkedIn");
+    function _push(key, nome){
+      const q = socialChannelQty(socialChannels, key);
+      if(q>0) out.push(q>1 ? (nome+" ("+q+" contas)") : nome);
+    }
+    _push("fbInsta",  "Facebook + Instagram");
+    _push("tiktok",   "TikTok");
+    _push("linkedin", "LinkedIn");
     return out;
   }
 
@@ -59096,51 +59109,78 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   /* ═══ Trilha de etapas — apagada até acender, check verde quando concluída ═══ */
   function _StepRail(){
-    return <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:isMob?"12px 10px":"14px 16px",boxShadow:"0 3px 12px rgba(88,64,166,.06)",overflowX:"auto"}}>
-      <div style={{display:"flex",alignItems:"center",gap:0,minWidth:isMob?540:"auto"}}>
+    return <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:isMob?"14px 10px":"18px 18px",boxShadow:"0 3px 12px rgba(88,64,166,.06)",overflowX:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:0,minWidth:isMob?620:"auto"}}>
         {STEPS.map(function(s,i){
           const isCur  = i===stepSafe;
           const isDone = !!s.done;
           const isLast = i===STEPS.length-1;
           // Estados visuais: apagado (nem atual nem concluído), aceso (atual), concluído (check verde)
-          const bg     = isCur ? "linear-gradient(135deg,#9F43F6,#7c3aed)" : (isDone ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#f1f5f9");
-          const iconCol= (isCur||isDone) ? "#fff" : "#cbd5e1";
-          const txtCol = isCur ? PX_DK : (isDone ? "#16a34a" : "#cbd5e1");
+          const bg     = isCur ? "linear-gradient(135deg,#9F43F6,#7c3aed)" : (isDone ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#eef1f6");
+          const iconCol= (isCur||isDone) ? "#fff" : "#aab3c0";
+          const txtCol = isCur ? PX_DK : (isDone ? "#15803d" : "#8d97a5");
           return <React.Fragment key={s.id}>
-            <button type="button" onClick={function(){goStep(i);}} title={s.label}
-              style={{background:"transparent",border:"none",cursor:"pointer",padding:isMob?"4px 4px":"4px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:6,flexShrink:0,opacity:(isCur||isDone)?1:.75,transition:"opacity .18s"}}
-              onMouseEnter={function(e){e.currentTarget.style.opacity=1;}}
-              onMouseLeave={function(e){e.currentTarget.style.opacity=(isCur||isDone)?1:.75;}}>
-              <div style={{width:isMob?36:40,height:isMob?36:40,borderRadius:"50%",background:bg,border:"2px solid "+(isCur?"#fff":(isDone?"#fff":"#e2e8f0")),boxShadow:isCur?"0 6px 18px rgba(159,67,246,.38)":(isDone?"0 4px 12px rgba(34,197,94,.28)":"none"),display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .2s"}}>
-                {isDone && !isCur ? <_CheckIcon size={17} color="#fff"/> : <_StepIcon id={s.id} color={iconCol}/>}
-                <div style={{position:"absolute",bottom:-5,right:-3,width:16,height:16,borderRadius:"50%",background:isCur?PX:(isDone?"#16a34a":"#cbd5e1"),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:900,border:"2px solid #fff"}}>{i+1}</div>
+            <button type="button" onClick={function(){goStep(i);}}
+              style={{background:"transparent",border:"none",cursor:"pointer",padding:isMob?"4px 5px":"4px 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:8,flexShrink:0,transition:"all .18s"}}>
+              <div style={{width:isMob?38:44,height:isMob?38:44,borderRadius:"50%",background:bg,border:"2px solid "+((isCur||isDone)?"#fff":"#e6eaf1"),boxShadow:isCur?"0 6px 18px rgba(159,67,246,.38)":(isDone?"0 4px 12px rgba(34,197,94,.28)":"none"),display:"flex",alignItems:"center",justifyContent:"center",position:"relative",transition:"all .2s"}}>
+                {isDone && !isCur ? <_CheckIcon size={18} color="#fff"/> : <_StepIcon id={s.id} color={iconCol}/>}
+                <div style={{position:"absolute",bottom:-6,right:-4,width:18,height:18,borderRadius:"50%",background:isCur?PX:(isDone?"#16a34a":"#b9c2ce"),color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:900,border:"2px solid #fff",fontFeatureSettings:"'tnum'"}}>{i+1}</div>
               </div>
-              <div style={{color:txtCol,fontSize:isMob?10:11,fontWeight:isCur?800:700,letterSpacing:-.1,whiteSpace:"nowrap"}}>{s.label}</div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <div style={{color:txtCol,fontSize:isMob?11.5:13,fontWeight:isCur?800:(isDone?700:600),letterSpacing:-.25,whiteSpace:"nowrap",lineHeight:1.2}}>{s.label}</div>
+                {isDone && s.price>0
+                  ? <div style={{color:"#16a34a",fontSize:isMob?10:11,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2,whiteSpace:"nowrap"}}>{fmt(s.price)}</div>
+                  : <div style={{color:isCur?PX:"#d5dbe4",fontSize:isMob?10:11,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap"}}>{isCur?"em edição":"—"}</div>}
+              </div>
             </button>
-            {!isLast && <div style={{flex:1,height:2,minWidth:14,background:isDone?"linear-gradient(90deg,#22c55e,#86efac)":"#eef1f6",borderRadius:2,marginBottom:18,transition:"background .2s"}}/>}
+            {!isLast && <div style={{flex:1,height:2.5,minWidth:16,background:isDone?"linear-gradient(90deg,#22c55e,#86efac)":"#e8ecf3",borderRadius:2,marginBottom:34,transition:"background .2s"}}/>}
           </React.Fragment>;
         })}
       </div>
     </div>;
   }
 
-  /* ═══ Card de canal — apagado até selecionar, acende com check ═══ */
-  function _ChannelCard({id, name, hint, brand, icon, active, onClick}){
-    return <button type="button" onClick={onClick}
-      style={{background:active?"#fff":"#fbfbfd",border:"1.5px solid "+(active?PX:BORD),borderRadius:14,padding:"14px 15px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:12,position:"relative",transition:"all .18s",boxShadow:active?"0 8px 22px rgba(159,67,246,.14)":"none",opacity:active?1:.72}}
-      onMouseEnter={function(e){e.currentTarget.style.opacity=1;e.currentTarget.style.borderColor=active?PX:"#c7bde8";}}
-      onMouseLeave={function(e){e.currentTarget.style.opacity=active?1:.72;e.currentTarget.style.borderColor=active?PX:BORD;}}>
-      <div style={{width:38,height:38,borderRadius:10,background:active?brand:"#e9ecf2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",boxShadow:active?"0 4px 10px rgba(15,23,42,.16)":"none"}}>
+  /* ═══ Card de canal — apagado até selecionar, com quantidade de contas ═══ */
+  function _ChannelCard({ckey, name, brand, icon}){
+    const qty = socialChannelQty(socialChannels, ckey);
+    const active = qty > 0;
+    function setQty(v){
+      const n = Math.max(0, Math.min(9, v));
+      setSocialChannels(function(c){ const o = Object.assign({}, c); o[ckey] = n; return o; });
+    }
+    const stepBtn = {width:28,height:28,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,cursor:"pointer",transition:"all .15s",lineHeight:1};
+    return <div
+      style={{background:active?"#fff":"#fbfbfd",border:"1.5px solid "+(active?PX:BORD),borderRadius:14,padding:"13px 14px",display:"flex",alignItems:"center",gap:11,position:"relative",transition:"all .18s",boxShadow:active?"0 8px 22px rgba(159,67,246,.14)":"none",opacity:active?1:.78,minWidth:0}}
+      onMouseEnter={function(e){e.currentTarget.style.opacity=1;}}
+      onMouseLeave={function(e){e.currentTarget.style.opacity=active?1:.78;}}>
+
+      {/* Ícone da marca — clique liga/desliga rápido */}
+      <div onClick={function(){setQty(active?0:1);}} title={active?"Remover canal":"Adicionar canal"}
+        style={{width:38,height:38,borderRadius:10,background:active?brand:"#e9ecf2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",transition:"all .18s",boxShadow:active?"0 4px 10px rgba(15,23,42,.16)":"none"}}>
         {icon}
       </div>
+
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:active?INK:"#94a3b8",fontSize:13.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{name}</div>
-        <div style={{color:active?MUTE:"#b6bfcc",fontSize:11,marginTop:2}}>{hint}</div>
+        <div style={{color:active?(qty>1?PX_DK:MUTE):"#b6bfcc",fontSize:11,marginTop:2,fontWeight:qty>1?800:500}}>
+          {qty===0 ? "não incluso" : (qty===1 ? "1 conta" : qty+" contas")}
+        </div>
       </div>
-      <div style={{width:22,height:22,borderRadius:"50%",background:active?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:active?"none":"1.5px solid "+BORD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
-        {active && <_CheckIcon size={13} color="#fff"/>}
+
+      {/* Stepper de contas */}
+      <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+        <button type="button" onClick={function(){setQty(qty-1);}} disabled={qty===0} title="Menos uma conta"
+          style={Object.assign({},stepBtn,{background:"#fff",border:"1px solid "+BORD,color:qty===0?"#dbe1ea":PX,cursor:qty===0?"not-allowed":"pointer"})}>−</button>
+        <div style={{minWidth:24,textAlign:"center",color:active?INK:"#c3cad6",fontWeight:900,fontSize:15,fontFeatureSettings:"'tnum'"}}>{qty}</div>
+        <button type="button" onClick={function(){setQty(qty+1);}} title="Mais uma conta"
+          style={Object.assign({},stepBtn,{background:PX_BG,border:"1px solid "+PX_BD,color:PX})}>+</button>
       </div>
-    </button>;
+
+      {/* Check verde de canal ativo */}
+      {active && <div style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"2px solid #fff",boxShadow:"0 3px 8px rgba(34,197,94,.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <_CheckIcon size={12} color="#fff"/>
+      </div>}
+    </div>;
   }
 
   const _ICO_META = <svg width="19" height="19" viewBox="0 0 24 24" fill="#fff"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zm0 3.18a6.66 6.66 0 100 13.32 6.66 6.66 0 000-13.32zm0 10.98a4.32 4.32 0 110-8.64 4.32 4.32 0 010 8.64zm8.48-11.24a1.56 1.56 0 11-3.11 0 1.56 1.56 0 013.11 0z"/></svg>;
@@ -59154,21 +59194,15 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     <_ModuleHeader num="1" active={socialActive}
       title="Gestão de Redes Sociais"
       subtitle="Estratégia, planejamento, publicação e acompanhamento."
-      versaoLabel={socialActive?(socialCount+" rede"+(socialCount>1?"s":"")+" · "+socialPosts+" pubs/sem"):"Não selecionado"}
+      versaoLabel={socialActive?(socialCount+" conta"+(socialCount>1?"s":"")+" · "+socialPosts+" pubs/sem"):"Não selecionado"}
       nivelLabel="Pro"/>
 
     <div>
-      <_BlocoTitulo titulo="Quais redes o cliente vai ter?"/>
+      <_BlocoTitulo titulo="Quais redes o cliente vai ter? (use + para mais de uma conta)"/>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
-        <_ChannelCard id="fbInsta" name="Facebook + Instagram" hint="conta como 1 rede" brand="linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)" icon={_ICO_META}
-          active={socialChannels.fbInsta}
-          onClick={function(){setSocialChannels(function(c){return Object.assign({},c,{fbInsta:!c.fbInsta});});}}/>
-        <_ChannelCard id="tiktok" name="TikTok" hint="conta como 1 rede" brand="#111827" icon={_ICO_TIKTOK}
-          active={socialChannels.tiktok}
-          onClick={function(){setSocialChannels(function(c){return Object.assign({},c,{tiktok:!c.tiktok});});}}/>
-        <_ChannelCard id="linkedin" name="LinkedIn" hint="conta como 1 rede" brand="#0A66C2" icon={_ICO_LINKEDIN}
-          active={socialChannels.linkedin}
-          onClick={function(){setSocialChannels(function(c){return Object.assign({},c,{linkedin:!c.linkedin});});}}/>
+        <_ChannelCard ckey="fbInsta" name="Facebook + Instagram" brand="linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)" icon={_ICO_META}/>
+        <_ChannelCard ckey="tiktok" name="TikTok" brand="#111827" icon={_ICO_TIKTOK}/>
+        <_ChannelCard ckey="linkedin" name="LinkedIn" brand="#0A66C2" icon={_ICO_LINKEDIN}/>
       </div>
 
       {/* Contador de redes + memória de cálculo do multiplicador */}
@@ -59176,8 +59210,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:30,height:30,borderRadius:9,background:socialActive?PX_BG:"#eef1f6",border:"1px solid "+(socialActive?PX_BD:BORD),display:"flex",alignItems:"center",justifyContent:"center",color:socialActive?PX_DK:"#b6bfcc",fontWeight:900,fontSize:14,fontFeatureSettings:"'tnum'"}}>{socialCount}</div>
           <div>
-            <div style={{color:socialActive?INK:"#94a3b8",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{socialCount===1?"1 rede selecionada":socialCount+" redes selecionadas"}</div>
-            <div style={{color:MUTE,fontSize:11,marginTop:2}}>{socialCount>0 ? (fmt(cfg.socialManagement.basePrice)+" × "+socialCount+(socialPosts>cfg.socialManagement.basePostsPerWeek?(" + "+fmt((socialPosts-cfg.socialManagement.basePostsPerWeek)*cfg.socialManagement.additionalPostPrice)+" de publicações extras"):"")) : "Toque numa rede para ativar o módulo"}</div>
+            <div style={{color:socialActive?INK:"#94a3b8",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{socialCount===1?"1 conta selecionada":socialCount+" contas selecionadas"}</div>
+            <div style={{color:MUTE,fontSize:11,marginTop:2}}>{socialCount>0 ? (fmt(cfg.socialManagement.basePrice)+" × "+socialCount+(socialPosts>cfg.socialManagement.basePostsPerWeek?(" + "+fmt((socialPosts-cfg.socialManagement.basePostsPerWeek)*cfg.socialManagement.additionalPostPrice)+" de publicações extras"):"")) : "Ative uma rede no + para começar"}</div>
           </div>
         </div>
         {socialCount>1 && <span style={{background:"linear-gradient(90deg,#9F43F6,#7c3aed)",color:"#fff",fontSize:11,fontWeight:900,padding:"5px 12px",borderRadius:99,letterSpacing:.3,boxShadow:"0 4px 12px rgba(159,67,246,.30)"}}>×{socialCount}</span>}
