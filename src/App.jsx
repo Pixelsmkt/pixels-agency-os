@@ -58329,7 +58329,7 @@ const PRICE_CONFIG = {
   bonusUnlocks: [
     { id:"kit", ico:"video", min:7000,
       nome:"Kit de Gravação Profissional",
-      tagline:"Equipamento completo em comodato",
+      tagline:"Equipamento profissional de brinde",
       itens:[
         { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
         { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
@@ -59667,7 +59667,11 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   // ── ETAPA 6 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
   const _pctTotal = bonusTopo>0 ? Math.max(0, Math.min(1, monthlyRecurring/bonusTopo)) : 0;
 
-  /* Carta de bônus — estilo card colecionável */
+  /* Carta de bônus — formato chanfrado + medalhão hexagonal */
+  const _CUT_OUT = "polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)";
+  const _CUT_IN  = "polygon(25px 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%, 0 25px)";
+  const _HEX     = "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
+
   function _BonusCard({b}){
     const ok    = monthlyRecurring >= b.min;
     const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
@@ -59676,83 +59680,107 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     const OURO2 = "#ffd868";
 
     return <div style={{
-      position:"relative", borderRadius:20, overflow:"hidden",
+      clipPath:_CUT_OUT, padding:"1.5px",
       background: ok
-        ? "linear-gradient(160deg,#3b1670 0%,#2a0f52 45%,#1c0838 100%)"
-        : "linear-gradient(160deg,#f7f8fb 0%,#eef0f5 100%)",
-      border: "1.5px solid " + (ok ? "rgba(240,180,41,.55)" : "#e4e8ef"),
-      boxShadow: ok ? "0 16px 40px rgba(43,16,85,.30), inset 0 1px 0 rgba(255,255,255,.14)" : "0 1px 3px rgba(15,23,42,.05)",
-      padding: isMob ? "20px 18px 18px" : "24px 22px 20px",
-      display:"flex", flexDirection:"column", gap:15,
-      transition:"transform .22s cubic-bezier(.4,0,.2,1), box-shadow .22s",
-      minHeight: 330,
+        ? "linear-gradient(150deg,rgba(255,216,104,.95) 0%,rgba(240,180,41,.55) 28%,rgba(120,60,200,.35) 62%,rgba(255,216,104,.75) 100%)"
+        : "linear-gradient(150deg,#e8ebf1,#dfe3ea 55%,#e8ebf1)",
+      filter: ok ? "drop-shadow(0 18px 34px rgba(43,16,85,.34))" : "drop-shadow(0 2px 6px rgba(15,23,42,.06))",
+      transition:"transform .22s cubic-bezier(.4,0,.2,1), filter .22s",
     }}
-      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-4px)";e.currentTarget.style.boxShadow=ok?"0 24px 54px rgba(43,16,85,.40)":"0 10px 26px rgba(88,64,166,.10)";}}
-      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=ok?"0 16px 40px rgba(43,16,85,.30), inset 0 1px 0 rgba(255,255,255,.14)":"0 1px 3px rgba(15,23,42,.05)";}}>
+      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-5px)";e.currentTarget.style.filter=ok?"drop-shadow(0 26px 48px rgba(43,16,85,.44))":"drop-shadow(0 10px 22px rgba(88,64,166,.13))";}}
+      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.filter=ok?"drop-shadow(0 18px 34px rgba(43,16,85,.34))":"drop-shadow(0 2px 6px rgba(15,23,42,.06))";}}>
 
-      {/* brilho radial da carta liberada */}
-      {ok && <div style={{position:"absolute",top:-70,right:-50,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(240,180,41,.30) 0%,rgba(240,180,41,0) 68%)",pointerEvents:"none"}}/>}
+      <div style={{
+        clipPath:_CUT_IN, position:"relative", overflow:"hidden",
+        background: ok
+          ? "linear-gradient(158deg,#43197e 0%,#2d1058 42%,#180730 100%)"
+          : "linear-gradient(158deg,#fbfcfe 0%,#f2f4f8 55%,#eaedf3 100%)",
+        padding: isMob ? "22px 18px 18px" : "26px 22px 20px",
+        display:"flex", flexDirection:"column", gap:15, minHeight:330,
+      }}>
 
-      {/* topo: requisito + selo */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
-        <div>
-          <div style={{color:ok?"rgba(255,216,104,.85)":"#a3adbb",fontSize:9,fontWeight:900,letterSpacing:.9,textTransform:"uppercase"}}>Requisito</div>
-          <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:23,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2}}>{fmt(b.min)}</div>
-          <div style={{color:ok?"rgba(255,255,255,.45)":"#b3bcc9",fontSize:10,fontWeight:700,letterSpacing:.2}}>por mês</div>
+        {/* textura de linhas diagonais */}
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:ok?.055:.5,
+          background:"repeating-linear-gradient(115deg, transparent 0 13px, "+(ok?"rgba(255,255,255,.8)":"rgba(148,163,184,.09)")+" 13px 14px)"}}/>
+
+        {/* brilho radial + faixa de shine */}
+        {ok && <>
+          <div style={{position:"absolute",top:-80,right:-60,width:250,height:250,borderRadius:"50%",background:"radial-gradient(circle,rgba(240,180,41,.32) 0%,rgba(240,180,41,0) 68%)",pointerEvents:"none"}}/>
+          <div style={{position:"absolute",top:0,bottom:0,left:"-30%",width:"42%",transform:"skewX(-19deg)",background:"linear-gradient(100deg,transparent,rgba(255,255,255,.075),transparent)",pointerEvents:"none"}}/>
+        </>}
+
+        {/* topo: requisito + selo */}
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
+          <div>
+            <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:8.5,fontWeight:900,letterSpacing:1.1,textTransform:"uppercase"}}>Requisito</div>
+            <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:24,letterSpacing:-1,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:3,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(b.min)}</div>
+            <div style={{color:ok?"rgba(255,255,255,.42)":"#b3bcc9",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>por mês</div>
+          </div>
+          {ok
+            ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.7,textTransform:"uppercase",boxShadow:"0 4px 14px rgba(240,180,41,.45)"}}>
+                <_PxIco n="check" size={10} color="#2d1058" strokeWidth={3.8}/>Liberado
+              </div>
+            : <div style={{width:30,height:30,borderRadius:9,background:"#fff",border:"1px solid #e4e8ef",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(15,23,42,.07)"}}>
+                <_PxIco n="lock" size={14} color="#98a2b0" strokeWidth={2.4}/>
+              </div>}
         </div>
-        {ok
-          ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:"#3b1670",fontSize:9,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase",boxShadow:"0 4px 12px rgba(240,180,41,.40)"}}>
-              <_PxIco n="check" size={10} color="#3b1670" strokeWidth={3.8}/>Liberado
+
+        {/* medalhão hexagonal */}
+        <div style={{display:"flex",justifyContent:"center",position:"relative",padding:"2px 0"}}>
+          <div style={{position:"relative",width:98,height:106,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {ok && <div style={{position:"absolute",width:150,height:150,borderRadius:"50%",background:"radial-gradient(circle,rgba(240,180,41,.30) 0%,rgba(240,180,41,0) 62%)",pointerEvents:"none"}}/>}
+            {/* moldura */}
+            <div style={{position:"absolute",width:98,height:106,clipPath:_HEX,
+              background: ok ? "linear-gradient(155deg,#ffe89a 0%,"+OURO+" 40%,#a8690f 78%,#ffd868 100%)" : "linear-gradient(155deg,#e8ebf1,#d7dce5)"}}/>
+            {/* miolo */}
+            <div style={{position:"absolute",width:88,height:95,clipPath:_HEX,
+              background: ok ? "linear-gradient(158deg,#4a1d8a 0%,#2a0f52 55%,#1a0733 100%)" : "#fff"}}/>
+            <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <_PxIco n={b.ico} size={38} color={ok?OURO2:"#c3cad6"} strokeWidth={1.7}/>
             </div>
-          : <div style={{width:30,height:30,borderRadius:10,background:"#fff",border:"1px solid #e4e8ef",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(15,23,42,.07)"}}>
-              <_PxIco n="lock" size={14} color="#98a2b0" strokeWidth={2.4}/>
-            </div>}
-      </div>
-
-      {/* icone grande central */}
-      <div style={{display:"flex",justifyContent:"center",position:"relative",padding:"4px 0 2px"}}>
-        <div style={{width:82,height:82,borderRadius:24,
-          background: ok ? "linear-gradient(145deg,rgba(240,180,41,.22),rgba(240,180,41,.06))" : "#fff",
-          border:"1.5px solid "+(ok?"rgba(240,180,41,.45)":"#e8ebf1"),
-          display:"flex",alignItems:"center",justifyContent:"center",
-          boxShadow: ok ? "0 8px 26px rgba(240,180,41,.22), inset 0 1px 0 rgba(255,255,255,.20)" : "0 1px 3px rgba(15,23,42,.05)"}}>
-          <_PxIco n={b.ico} size={40} color={ok?OURO2:"#c3cad6"} strokeWidth={1.7}/>
+          </div>
         </div>
-      </div>
 
-      {/* nome */}
-      <div style={{textAlign:"center",position:"relative"}}>
-        <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:16.5,letterSpacing:-.4,lineHeight:1.25}}>{b.nome}</div>
-        <div style={{color:ok?"rgba(255,216,104,.80)":"#a3adbb",fontSize:11,fontWeight:700,marginTop:4}}>{b.tagline}</div>
-      </div>
-
-      {/* itens da carta */}
-      <div style={{borderTop:"1px solid "+(ok?"rgba(255,255,255,.11)":"#e8ebf1"),borderBottom:"1px solid "+(ok?"rgba(255,255,255,.11)":"#e8ebf1"),padding:"13px 0",display:"flex",flexDirection:"column",gap:10,position:"relative"}}>
-        {b.itens.map(function(it,ix){
-          return <div key={ix} style={{display:"flex",alignItems:"flex-start",gap:10}}>
-            <div style={{width:26,height:26,borderRadius:8,background:ok?"rgba(240,180,41,.14)":"#fff",border:"1px solid "+(ok?"rgba(240,180,41,.28)":"#eceef3"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <_PxIco n={it.ico} size={13} color={ok?OURO2:"#b3bcc9"} strokeWidth={2.1}/>
-            </div>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{color:ok?"rgba(255,255,255,.95)":"#8b95a3",fontSize:12,fontWeight:700,letterSpacing:-.15,lineHeight:1.35}}>{it.label}</div>
-              <div style={{color:ok?"rgba(255,255,255,.48)":"#b3bcc9",fontSize:10.5,marginTop:1.5}}>{it.detalhe}</div>
-            </div>
-          </div>;
-        })}
-      </div>
-
-      {/* progresso */}
-      <div style={{marginTop:"auto",position:"relative"}}>
-        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
-          <span style={{color:ok?"rgba(255,216,104,.9)":MUTE,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
-            {ok ? "Conquistado" : "Progresso"}
-          </span>
-          <span style={{color:ok?OURO2:PX_DK,fontSize:14,fontWeight:900,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{pct}%</span>
+        {/* nome */}
+        <div style={{textAlign:"center",position:"relative"}}>
+          <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:16.5,letterSpacing:-.45,lineHeight:1.25,textShadow:ok?"0 2px 12px rgba(0,0,0,.30)":"none"}}>{b.nome}</div>
+          <div style={{color:ok?"rgba(255,216,104,.78)":"#a3adbb",fontSize:10.5,fontWeight:700,marginTop:5,letterSpacing:.2}}>{b.tagline}</div>
+          {/* divisor com losango central */}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:11}}>
+            <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,"+(ok?"rgba(240,180,41,.45)":"#e2e6ee")+")"}}/>
+            <div style={{width:6,height:6,transform:"rotate(45deg)",background:ok?OURO:"#dfe3ea"}}/>
+            <div style={{flex:1,height:1,background:"linear-gradient(90deg,"+(ok?"rgba(240,180,41,.45)":"#e2e6ee")+",transparent)"}}/>
+          </div>
         </div>
-        <div style={{height:8,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
-          <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
+
+        {/* itens da carta */}
+        <div style={{paddingBottom:13,borderBottom:"1px solid "+(ok?"rgba(255,255,255,.10)":"#e8ebf1"),display:"flex",flexDirection:"column",gap:10,position:"relative"}}>
+          {b.itens.map(function(it,ix){
+            return <div key={ix} style={{display:"flex",alignItems:"flex-start",gap:10}}>
+              <div style={{width:26,height:26,borderRadius:8,background:ok?"rgba(240,180,41,.14)":"#fff",border:"1px solid "+(ok?"rgba(240,180,41,.28)":"#eceef3"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <_PxIco n={it.ico} size={13} color={ok?OURO2:"#b3bcc9"} strokeWidth={2.1}/>
+              </div>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:ok?"rgba(255,255,255,.95)":"#8b95a3",fontSize:12,fontWeight:700,letterSpacing:-.15,lineHeight:1.35}}>{it.label}</div>
+                <div style={{color:ok?"rgba(255,255,255,.46)":"#b3bcc9",fontSize:10.5,marginTop:1.5}}>{it.detalhe}</div>
+              </div>
+            </div>;
+          })}
         </div>
-        {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
+
+        {/* progresso — mantido como estava */}
+        <div style={{marginTop:"auto",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
+            <span style={{color:ok?"rgba(255,216,104,.9)":MUTE,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
+              {ok ? "Conquistado" : "Progresso"}
+            </span>
+            <span style={{color:ok?OURO2:PX_DK,fontSize:14,fontWeight:900,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{pct}%</span>
+          </div>
+          <div style={{height:8,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
+            <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
+          </div>
+          {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
+        </div>
       </div>
     </div>;
   }
@@ -59805,9 +59833,6 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       <_BlocoTitulo titulo="Cartas de recompensa"/>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:16}}>
         {BONUS_LIST.map(function(b){ return <_BonusCard key={b.id} b={b}/>; })}
-      </div>
-      <div style={{color:SOFT,fontSize:11,marginTop:13,lineHeight:1.55,fontStyle:"italic"}}>
-        As cartas são liberadas automaticamente conforme o valor mensal recorrente do pacote. Equipamentos cedidos em regime de comodato durante a vigência do contrato.
       </div>
     </div>
   </div>;
