@@ -58300,8 +58300,8 @@ const PRICE_CONFIG = {
     additionalPostPrice: 250,
     minPostsPerWeek: 1,
     maxPostsPerWeek: 7,
-    // Se virar true, as publicacoes extras tambem sao multiplicadas por rede.
-    multiplyPostsPerChannel: false,
+    // Publicacoes extras sao cobradas POR CONTA (cada conta publica o proprio volume).
+    multiplyPostsPerChannel: true,
     channels: {
       facebookInstagram: { label: "Facebook + Instagram" },
       tiktok:            { label: "TikTok" },
@@ -58349,9 +58349,9 @@ const PRICE_CONFIG = {
     { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1500,  fixo:true,  ico:"mappin", brand:"google" },
     { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:3000,  fixo:true,  ico:"pentool"  },
     { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true, ico:"rocket" },
-    { id:"aiLandingPage",        label:"Sites com IA", price:3000,  fixo:false, ico:"sparkles" },
+    { id:"aiLandingPage",        label:"Site com IA", price:3000,  fixo:false, ico:"sparkles" },
     { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:3000,  fixo:false, ico:"bot"      },
-    { id:"customSystems",        label:"Sistemas personalizados com IA",price:12000, fixo:false, ico:"cpu"      },
+    { id:"customSystems",        label:"Sistema/aplicativo personalizado com IA",price:7000, fixo:false, ico:"cpu" },
   ],
 };
 
@@ -58629,8 +58629,8 @@ const PORTF_IA = [
     short:"Painéis, áreas do cliente e dashboards próprios.",
     long:"Painéis, sistemas internos e áreas do cliente que organizam processos, dados e operação — saindo das planilhas soltas para uma estrutura própria.",
     entregas:["Gestão interna e painéis de demandas","Área do cliente e controle de produção","Dashboards comerciais e indicadores","Automações e integração com IA"],
-    valor:"A partir de R$ 12.000",
-    resumo:"Aplicativos e Sistemas Personalizados — A partir de R$ 12.000. Painéis, sistemas internos, área do cliente, dashboards e automações com IA.",
+    valor:"A partir de R$ 7.000",
+    resumo:"Aplicativos e Sistemas Personalizados — A partir de R$ 7.000. Painéis, sistemas internos, área do cliente, dashboards e automações com IA.",
   },
   {
     id:"site", icon:"globe",
@@ -59247,11 +59247,12 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       {label}
     </button>;
   }
-  function _QtyControl({label, unitPrice, value, onChange}){
+  function _QtyControl({label, unitPrice, value, onChange, extra}){
     return <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>{label}</div>
         <div style={{color:MUTE,fontSize:11,marginTop:2}}>{fmt(unitPrice)} cada</div>
+        {extra && <div style={{color:PX_DK,fontSize:10.5,fontWeight:800,marginTop:3}}>{extra}</div>}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
         <button type="button" onClick={function(){onChange(Math.max(0, value-1));}}
@@ -59450,7 +59451,18 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div style={{width:30,height:30,borderRadius:9,background:socialActive?PX_BG:"#eef1f6",border:"1px solid "+(socialActive?PX_BD:BORD),display:"flex",alignItems:"center",justifyContent:"center",color:socialActive?PX_DK:"#b6bfcc",fontWeight:900,fontSize:14,fontFeatureSettings:"'tnum'"}}>{socialCount}</div>
           <div>
             <div style={{color:socialActive?INK:"#94a3b8",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{socialCount===1?"1 conta selecionada":socialCount+" contas selecionadas"}</div>
-            <div style={{color:MUTE,fontSize:11,marginTop:2}}>{socialCount>0 ? (fmt(cfg.socialManagement.basePrice)+" × "+socialCount+(socialPosts>cfg.socialManagement.basePostsPerWeek?(" + "+fmt((socialPosts-cfg.socialManagement.basePostsPerWeek)*cfg.socialManagement.additionalPostPrice)+" de publicações extras"):"")) : "Ative uma rede no + para começar"}</div>
+            <div style={{color:MUTE,fontSize:11,marginTop:2,lineHeight:1.5}}>
+              {socialCount===0
+                ? "Ative uma rede no + para começar"
+                : <>
+                    {fmt(cfg.socialManagement.basePrice)} × {socialCount} {socialCount>1?"contas":"conta"}
+                    {socialPosts>cfg.socialManagement.basePostsPerWeek && <>
+                      {" + "}{fmt(cfg.socialManagement.additionalPostPrice)} × {socialPosts-cfg.socialManagement.basePostsPerWeek} pub. extra{(socialPosts-cfg.socialManagement.basePostsPerWeek)>1?"s":""}
+                      {socialCount>1 && <> × {socialCount} contas</>}
+                    </>}
+                    {" = "}<b style={{color:INK,fontWeight:800}}>{fmt(socialPrice)}</b>
+                  </>}
+            </div>
           </div>
         </div>
         {socialCount>1 && <span style={{background:"linear-gradient(90deg,#9F43F6,#7c3aed)",color:"#fff",fontSize:11,fontWeight:900,padding:"5px 12px",borderRadius:99,letterSpacing:.3,boxShadow:"0 4px 12px rgba(159,67,246,.30)"}}>×{socialCount}</span>}
@@ -59472,8 +59484,11 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <_BlocoTitulo titulo="Volume de publicações"/>
         <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div style={{minWidth:0,flex:1}}>
-            <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Publicações por semana</div>
-            <div style={{color:MUTE,fontSize:11,marginTop:2}}>{cfg.socialManagement.basePostsPerWeek} inclusas · cada publicação a mais {fmt(cfg.socialManagement.additionalPostPrice)}</div>
+            <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Publicações por semana <span style={{color:PX_DK,fontWeight:800}}>· por conta</span></div>
+            <div style={{color:MUTE,fontSize:11,marginTop:2}}>
+              {cfg.socialManagement.basePostsPerWeek} inclusas em cada conta · cada publicação a mais {fmt(cfg.socialManagement.additionalPostPrice)}
+              {socialCount>1 && <span style={{color:PX_DK,fontWeight:800}}> × {socialCount} contas</span>}
+            </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
             <button type="button" onClick={function(){setSocialPosts(function(p){return Math.max(cfg.socialManagement.minPostsPerWeek, p-1);});}}
@@ -59488,6 +59503,14 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </>}
   </div>;
 
+  // Rateio informativo: quanto da quantidade fica pra cada conta de rede social.
+  function _porConta(qtd){
+    if(socialCount<2 || !qtd) return null;
+    const v = qtd/socialCount;
+    const txt = (Math.round(v*10)/10).toString().replace(".", ",");
+    return "≈ " + txt + " por conta";
+  }
+
   // ── ETAPA 2 — CRIATIVOS ──
   const _stepCreatives = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="2" ico="palette" active={creativesActive}
@@ -59498,12 +59521,25 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     <_IncluiList ico="palette" titulo="O que está incluso na produção" cor={PX_DK} itens={CREATIVES_INCLUSOS}/>
     <div>
       <_BlocoTitulo titulo="Quantidades por mês"/>
+
+      {/* Contexto: as quantidades sao o TOTAL do mes somando todas as contas */}
+      {socialCount>1 && <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:12,padding:"12px 15px",marginBottom:11,display:"flex",alignItems:"center",gap:11}}>
+        <_PxIcoBox n="share2" box={34} estado="ativo"/>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:INK,fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{socialCount} contas de rede social no pacote</div>
+          <div style={{color:MUTE,fontSize:11,marginTop:2,lineHeight:1.45}}>As quantidades abaixo são o <b style={{color:INK}}>total do mês</b>, somando todas as contas. Aumente o volume para cobrir cada uma.</div>
+        </div>
+      </div>}
+
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
         <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
+          extra={_porConta(creatives.staticCreatives)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{staticCreatives:v});});}}/>
         <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
+          extra={_porConta(creatives.editedVideos)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{editedVideos:v});});}}/>
         <_QtyControl label="Variações de vídeo" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
+          extra={_porConta(creatives.videoVariations)}
           onChange={function(v){setCreatives(function(c){return Object.assign({},c,{videoVariations:v});});}}/>
       </div>
     </div>
