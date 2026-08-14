@@ -55026,9 +55026,9 @@ async function _vpSyncSupabase(arr){
 // Produtos avulsos do portfólio — usados como sugestão rápida no modal Nova venda pontual.
 // Mantém sincronizado com PORTF_PROJETOS em 22_portfolio.jsx (entregas únicas).
 const _VP_PRODUTOS = [
-  {id:"landing",     label:"Landing Page",                    valor:1500, desc:"Página estratégica de alta conversão"},
-  {id:"gmb",         label:"Google Perfil de Empresa",        valor:1000, desc:"Otimização completa do perfil"},
-  {id:"identidade",  label:"Logo e Identidade Visual",        valor:2000, desc:"Design estratégico + manual de marca"},
+  {id:"landing",     label:"Landing Page",                    valor:2000, desc:"Página estratégica de alta conversão"},
+  {id:"gmb",         label:"Google Perfil de Empresa",        valor:1500, desc:"Otimização completa do perfil"},
+  {id:"identidade",  label:"Logo e Identidade Visual",        valor:3000, desc:"Design estratégico + manual de marca"},
   {id:"cap_diaria",  label:"Captação Audiovisual (diária)",   valor:1500, desc:"1 diária de captação de vídeos"},
   {id:"cap_extra",   label:"Diária extra de captação",        valor:1000, desc:"Diária adicional após a 1ª"},
   {id:"projeto",     label:"Projeto pontual (custom)",         valor:0,    desc:""},
@@ -58325,13 +58325,13 @@ const PRICE_CONFIG = {
     metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle" },
   },
   oneTimeProjects: [
-    { id:"landingPage",          label:"Landing Page",                 price:1500,  fixo:true,  ico:"layout"   },
-    { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1000,  fixo:true,  ico:"mappin", brand:"google" },
-    { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:2000,  fixo:true,  ico:"pentool"  },
+    { id:"landingPage",          label:"Landing Page",                 price:2000,  fixo:false, ico:"layout"   },
+    { id:"googleBusinessProfile",label:"Google Perfil de Empresa",     price:1500,  fixo:true,  ico:"mappin", brand:"google" },
+    { id:"logoIdentity",         label:"Logo e Identidade Visual",     price:3000,  fixo:true,  ico:"pentool"  },
     { id:"starter90Days",        label:"Starter 90 dias",              price:10500, fixo:true,  destaque:true, ico:"rocket" },
-    { id:"aiLandingPage",        label:"Sites / Landing Pages com IA", price:2500,  fixo:false, ico:"sparkles" },
-    { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:2500,  fixo:false, ico:"bot"      },
-    { id:"customSystems",        label:"Sistemas personalizados",      price:7000,  fixo:false, ico:"cpu"      },
+    { id:"aiLandingPage",        label:"Sites / Landing Pages com IA", price:3000,  fixo:false, ico:"sparkles" },
+    { id:"chatbotAutomation",    label:"Chatbot / Automações",         price:3000,  fixo:false, ico:"bot"      },
+    { id:"customSystems",        label:"Sistemas personalizados com IA",price:12000, fixo:false, ico:"cpu"      },
   ],
 };
 
@@ -58458,8 +58458,8 @@ const PORTF_PROJETOS = [
     short:"Página de alta conversão pra captar leads.",
     long:"Página estratégica de alta conversão para captar leads e apresentar sua marca.",
     entregas:["Estrutura estratégica","Copy comercial","Design responsivo","Integração com WhatsApp e pixels"],
-    valor:"R$ 1.500",
-    resumo:"Landing Page — R$ 1.500. Página estratégica de alta conversão para captar leads.",
+    valor:"A partir de R$ 2.000",
+    resumo:"Landing Page — a partir de R$ 2.000. Página estratégica de alta conversão para captar leads.",
   },
   {
     id:"gmb", icon:"building",
@@ -58468,8 +58468,8 @@ const PORTF_PROJETOS = [
     short:"Otimização completa pra visibilidade local.",
     long:"Otimização completa do perfil para visibilidade local e credibilidade.",
     entregas:["Cadastro e verificação","Categorias e atributos","Fotos e publicações iniciais","Otimização SEO local"],
-    valor:"R$ 1.000",
-    resumo:"Google Perfil de Empresa — R$ 1.000. Otimização completa pra visibilidade local e credibilidade.",
+    valor:"R$ 1.500",
+    resumo:"Google Perfil de Empresa — R$ 1.500. Otimização completa pra visibilidade local e credibilidade.",
   },
   {
     id:"identidade", icon:"sparkles",
@@ -58478,8 +58478,8 @@ const PORTF_PROJETOS = [
     short:"Design que traduz o posicionamento da marca.",
     long:"Design estratégico que traduz o posicionamento da marca em linguagem visual.",
     entregas:["Briefing estratégico","Logo principal e variações","Paleta e tipografia","Manual de marca"],
-    valor:"R$ 2.000",
-    resumo:"Logo e Identidade Visual — R$ 2.000. Design estratégico que traduz o posicionamento da marca em linguagem visual.",
+    valor:"R$ 3.000",
+    resumo:"Logo e Identidade Visual — R$ 3.000. Design estratégico que traduz o posicionamento da marca em linguagem visual.",
   },
 ];
 
@@ -58598,8 +58598,8 @@ const PORTF_IA = [
     short:"Painéis, áreas do cliente e dashboards próprios.",
     long:"Painéis, sistemas internos e áreas do cliente que organizam processos, dados e operação — saindo das planilhas soltas para uma estrutura própria.",
     entregas:["Gestão interna e painéis de demandas","Área do cliente e controle de produção","Dashboards comerciais e indicadores","Automações e integração com IA"],
-    valor:"A partir de R$ 7.000",
-    resumo:"Aplicativos e Sistemas Personalizados — A partir de R$ 7.000. Painéis, sistemas internos, área do cliente, dashboards e automações com IA.",
+    valor:"A partir de R$ 12.000",
+    resumo:"Aplicativos e Sistemas Personalizados — A partir de R$ 12.000. Painéis, sistemas internos, área do cliente, dashboards e automações com IA.",
   },
   {
     id:"site", icon:"globe",
@@ -58608,8 +58608,8 @@ const PORTF_IA = [
     short:"Páginas com foco em posicionamento e conversão.",
     long:"Páginas institucionais e comerciais com foco em posicionamento, autoridade e conversão. Estrutura, copy e design pensados para vender.",
     entregas:["Estrutura estratégica de conversão","Copy comercial e design responsivo","Integração com WhatsApp","Pixels, tags e campanhas"],
-    valor:"A partir de R$ 2.500",
-    resumo:"Sites Profissionais e Landing Pages — A partir de R$ 2.500. Estrutura estratégica de conversão, copy comercial, integração com WhatsApp.",
+    valor:"A partir de R$ 3.000",
+    resumo:"Sites Profissionais e Landing Pages — A partir de R$ 3.000. Estrutura estratégica de conversão, copy comercial, integração com WhatsApp.",
   },
   {
     id:"bot", icon:"message",
@@ -58618,8 +58618,8 @@ const PORTF_IA = [
     short:"Atendimento automatizado e qualificação de leads.",
     long:"Atendimento automatizado, qualificação de leads e fluxos inteligentes que reduzem trabalho manual e aceleram o comercial.",
     entregas:["Chatbot para WhatsApp","Qualificação automática de leads","Integração com formulários","Fluxos personalizados ao negócio"],
-    valor:"A partir de R$ 2.500",
-    resumo:"Chatbots e Automações com IA — A partir de R$ 2.500. Chatbot WhatsApp, qualificação automática de leads, fluxos personalizados.",
+    valor:"A partir de R$ 3.000",
+    resumo:"Chatbots e Automações com IA — A partir de R$ 3.000. Chatbot WhatsApp, qualificação automática de leads, fluxos personalizados.",
   },
 ];
 
@@ -58695,6 +58695,56 @@ function _PxBrandBox(props){
   return <div style={{width:dupla?box+16:box,height:box,borderRadius:Math.round(box*0.30),background:ativo?"#fff":"#f6f7fa",border:"1px solid "+(ativo?"#e4d4fd":"#eceef3"),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",filter:ativo?"none":"grayscale(1) opacity(.55)"}}>
     <_PxBrand n={props.n} size={Math.round(box*0.46)}/>
   </div>;
+}
+
+/* ═══ Botao de navegacao do wizard — Voltar / Avancar ═══ */
+function _PxNavBtn(props){
+  const dir = props.dir || "next";       // next | prev
+  const disabled = !!props.disabled;
+  const [hv,setHv] = useState(false);
+  const isNext = dir==="next";
+  const seta = isNext
+    ? <polyline points="9 18 15 12 9 6"/>
+    : <polyline points="15 18 9 12 15 6"/>;
+
+  const base = {
+    borderRadius:14,
+    padding: isNext ? "13px 24px" : "13px 20px",
+    fontSize:13.5, fontWeight:800, letterSpacing:-.25,
+    display:"inline-flex", alignItems:"center", gap:9,
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition:"transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s, background .18s, border-color .18s",
+    fontFamily:_PORTF_FF, lineHeight:1, whiteSpace:"nowrap",
+    transform: (hv && !disabled) ? "translateY(-2px)" : "translateY(0)",
+  };
+
+  const estilo = isNext
+    ? Object.assign({}, base, {
+        background: disabled ? "#f1f3f7" : "linear-gradient(135deg,#ab5cf8 0%,#9F43F6 48%,#7534e0 100%)",
+        color: disabled ? "#c3cad6" : "#fff",
+        border: "none",
+        boxShadow: disabled ? "none"
+          : (hv ? "0 12px 26px rgba(139,47,224,.36), inset 0 1px 0 rgba(255,255,255,.34)"
+                : "0 6px 16px rgba(139,47,224,.26), inset 0 1px 0 rgba(255,255,255,.28)"),
+      })
+    : Object.assign({}, base, {
+        background: disabled ? "#fafbfc" : (hv ? "#faf7ff" : "#fff"),
+        color: disabled ? "#cfd6e0" : (hv ? "#7c3aed" : "#64748b"),
+        border: "1.5px solid " + (disabled ? "#eef0f5" : (hv ? "#e4d4fd" : "#e8ebf1")),
+        boxShadow: (hv && !disabled) ? "0 6px 16px rgba(88,64,166,.10)" : "0 1px 2px rgba(15,23,42,.04)",
+      });
+
+  return <button type="button" disabled={disabled} onClick={props.onClick} style={estilo}
+    onMouseEnter={function(){ if(!disabled) setHv(true); }}
+    onMouseLeave={function(){ setHv(false); }}>
+    {!isNext && <span style={{display:"inline-flex",transition:"transform .18s",transform:(hv&&!disabled)?"translateX(-3px)":"translateX(0)"}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">{seta}</svg>
+    </span>}
+    {props.label}
+    {isNext && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:disabled?"transparent":"rgba(255,255,255,.20)",transition:"transform .18s, background .18s",transform:(hv&&!disabled)?"translateX(3px)":"translateX(0)"}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{seta}</svg>
+    </span>}
+  </button>;
 }
 
 /* Container de icone padrao — 3 estados: ativo (roxo), concluido (verde), neutro */
@@ -59622,17 +59672,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
         {/* Navegação entre etapas */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <button type="button" disabled={stepSafe===0} onClick={function(){goStep(stepSafe-1);}}
-            style={{background:"#fff",color:stepSafe===0?"#cbd5e1":MUTE,border:"1px solid "+BORD,borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:stepSafe===0?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",gap:7}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Voltar
-          </button>
-          <div style={{color:SOFT,fontSize:11.5,fontWeight:700}}>Etapa {stepSafe+1} de {STEPS.length}</div>
-          <button type="button" disabled={stepSafe===STEPS.length-1} onClick={function(){goStep(stepSafe+1);}}
-            style={{background:stepSafe===STEPS.length-1?"#f1f5f9":"linear-gradient(135deg,#9F43F6,#7c3aed)",color:stepSafe===STEPS.length-1?"#cbd5e1":"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:800,cursor:stepSafe===STEPS.length-1?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",gap:7,boxShadow:stepSafe===STEPS.length-1?"none":"0 6px 16px rgba(159,67,246,.28)"}}>
-            Avançar
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+          <_PxNavBtn dir="prev" label="Voltar" disabled={stepSafe===0} onClick={function(){goStep(stepSafe-1);}}/>
+          <div style={{color:SOFT,fontSize:11.5,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>Etapa {stepSafe+1} de {STEPS.length}</div>
+          <_PxNavBtn dir="next" label="Avançar" disabled={stepSafe===STEPS.length-1} onClick={function(){goStep(stepSafe+1);}}/>
         </div>
 
         {/* Resumo repetido embaixo no mobile */}
@@ -59792,6 +59834,7 @@ function PagePortfolio(props){
   // Contador de sessao da calculadora: muda a key e forca remontagem, entao
   // toda vez que a aba Calculadora e aberta ela volta zerada.
   const [calcRun, setCalcRun] = useState(0);
+  const [logoOk, setLogoOk] = useState(true); // fallback se /logo-pixels.png nao existir
   function irParaTab(id){
     if(id==="calculadora" && view!=="calculadora") setCalcRun(function(n){return n+1;});
     setView(id);
@@ -59840,10 +59883,17 @@ function PagePortfolio(props){
     {/* ════ HEADER LIMPO ════ */}
     <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 26px",fontFamily:_PORTF_FF}}>
       <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:13}}>
-          <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(159,67,246,0.30)"}}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
-          </div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          {/* Logo da Pixels — cai no emblema roxo se o arquivo nao carregar */}
+          {logoOk
+            ? <img src="/logo-pixels.png" alt="Pixels Marketing Digital"
+                onError={function(){ setLogoOk(false); }}
+                style={{height:38,width:"auto",maxWidth:168,objectFit:"contain",objectPosition:"left center",display:"block",flexShrink:0}}/>
+            : <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(159,67,246,0.30)",flexShrink:0}}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              </div>}
+          {/* Divisor sutil entre a marca e o titulo da pagina */}
+          <div style={{width:1,height:36,background:"linear-gradient(180deg,transparent,#e6e9ef 22%,#e6e9ef 78%,transparent)",flexShrink:0}}/>
           <div>
             <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Portfólio Pixels</div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,lineHeight:1.2,marginTop:2,fontFamily:_PORTF_FF}}>Portfólio Comercial</div>
@@ -59868,9 +59918,9 @@ function PagePortfolio(props){
     {/* ════ VISÃO GERAL ════ */}
     {view==="overview" && <section style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14,fontFamily:_PORTF_FF}}>
       <_OverviewCard icon="rotate"   ac="#9F43F6" title="Serviços Recorrentes" sub="Mensalidades pra construir presença, demanda e crescimento previsível." tabId="recorrentes" count={PORTF_RECORRENTES.length} footer="A partir de R$ 2.000/mês"/>
-      <_OverviewCard icon="layers"   ac="#7c3aed" title="Projetos"             sub="Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados." tabId="projetos"    count={PORTF_PROJETOS.length}    footer="A partir de R$ 1.000"/>
+      <_OverviewCard icon="layers"   ac="#7c3aed" title="Projetos"             sub="Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados." tabId="projetos"    count={PORTF_PROJETOS.length}    footer="A partir de R$ 1.500"/>
       <_OverviewCard icon="play"     ac="#0f172a" title="Projeto Starter"      sub="Solução completa em 90 dias pra posicionamento e início de escala."                  tabId="starter"     count="90 dias"                  footer="R$ 3.500/mês"/>
-      <_OverviewCard icon="sparkles" ac="#6366f1" title="Soluções IA"          sub="Sistemas, sites e chatbots sob medida pra destravar gargalos e escalar."             tabId="ia"          count={PORTF_IA.length}          footer="A partir de R$ 2.500"/>
+      <_OverviewCard icon="sparkles" ac="#6366f1" title="Soluções IA"          sub="Sistemas, sites e chatbots sob medida pra destravar gargalos e escalar."             tabId="ia"          count={PORTF_IA.length}          footer="A partir de R$ 3.000"/>
     </section>}
 
     {/* ════ RECORRENTES ════ */}
