@@ -902,6 +902,31 @@ const KANBAN_COLS = [
    podem ter URLs no formato antigo no JSON (files, comments, timeline).
    Esta função reescreve em runtime pra evitar 404 em cards históricos.
 ─────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   pxFinalFiles — FONTE UNICA da entrega final de um card.
+   Usada no card, no Portal do Cliente e nas Aprovacoes pra que
+   os tres mostrem exatamente os mesmos arquivos, na mesma ordem.
+
+   Exclui: anotacoes, referencias do briefing, materiais brutos,
+   anexos de "Solicitar ajuste" (isRef) e uploads em andamento.
+
+   A ORDEM do array E a ordem definida no drag&drop da aba Arquivos.
+   Nunca reordenar por data/tipo — isso quebra o carrossel do Instagram.
+═══════════════════════════════════════════════════════════════ */
+function pxFinalFiles(task){
+  const arr = (task && task.files) || [];
+  if(!Array.isArray(arr)) return [];
+  return arr.filter(function(f){
+    if(!f || !f.url) return false;
+    if(f.uploading) return false;
+    if(f.isAnnotation) return false;
+    if(f.tipo === "referencia" || f.tipo === "material") return false;
+    if(f.isRef) return false;                       // anexo de "Solicitar ajuste"
+    return !f.tipo || f.tipo === "final";
+  });
+}
+if(typeof window!=="undefined") window.pxFinalFiles = pxFinalFiles;
+
 function fixLegacyUrl(u){
   if(!u||typeof u!=="string")return u;
   // /storage/v1/object/(public/)?pixels-files/... → agency-files
@@ -23109,17 +23134,28 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // Reportado pelo Vinicius 2026-06: card "Figurinha da Copa Biodigestor" mostrava
   // a imagem na PageAprovacoes mas dava "Sem imagem" ao abrir Anotar ajustes.
   // Aceita imagem OU vídeo (Frame.io style precisa dos vídeos aqui pro modal renderizar player)
-  const isFinalImg=(f)=>!f.isAnnotation&&(f.type?.startsWith("image/")||f.type?.startsWith("video/")||_isVideoUrl(f.url))&&(!f.tipo||f.tipo==="final");
+  // !f.isRef exclui anexos de "Solicitar ajuste" — antes vazavam pra galeria de aprovacao.
+  const isFinalImg=(f)=>!f.isAnnotation&&!f.isRef&&f.tipo!=="referencia"&&f.tipo!=="material"&&(f.type?.startsWith("image/")||f.type?.startsWith("video/")||_isVideoUrl(f.url))&&(!f.tipo||f.tipo==="final");
   const isAnyImg=(f)=>!f.isAnnotation&&(f.type?.startsWith("image/")||f.type?.startsWith("video/")||_isVideoUrl(f.url));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
   const _fixUrlA=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
   const _strict=(task.files||[]).filter(isFinalImg).map(f=>_fixUrlA(f.url));
   const _perm  =_strict.length>0?_strict:(task.files||[]).filter(isAnyImg).map(f=>_fixUrlA(f.url));
-  const allImgs=[
+  // ORDEM DO CARROSSEL — mesma fonte e mesma ordem do drag&drop da aba Arquivos.
+  // Antes: finalMedia (legado, nem existe mais no banco) vinha primeiro e a cover
+  // era SEMPRE anexada no fim (o `!undefined?.includes()` resolve pra true),
+  // duplicando a capa e bagunçando a sequencia definida no card.
+  // Agora: pxFinalFiles manda; finalMedia/cover so entram se nao houver arquivo final.
+  const _ordenados=(typeof pxFinalFiles==="function")
+    ? pxFinalFiles(task).map(function(f){return _fixUrlA(f.url);})
+    : [];
+  const _fallback=[
     ...(task.finalMedia||[]).map(_fixUrlA),
-    ..._perm,
-    ...(task.cover&&!task.finalMedia?.includes(task.cover)?[_fixUrlA(task.cover)]:[]),
+    ...((task.cover&&typeof task.cover==="string"&&!task.cover.startsWith("#"))?[_fixUrlA(task.cover)]:[]),
   ].filter(Boolean);
+  const allImgs=(_ordenados.length>0?_ordenados:(_perm.length>0?_perm:_fallback))
+    .filter(Boolean)
+    .filter(function(u,i,arr){return arr.indexOf(u)===i;});   // dedup preservando a ordem
 
   const [activeIdx,setActiveIdx]=useState(0);
   // Store one canvas drawing per image index
@@ -47602,10 +47638,11 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   // Array de mídias — carrossel mostra várias, arte única mostra 1
   const allMedias=(function(){
     if(!current)return [];
-    // 1) Files válidos (não-annotation, com URL) — aceita qualquer mídia (imagem OU vídeo)
-    const _all = (current.files||[]).filter(function(f){ return f && f.url && !f.isAnnotation; });
-    // Preferência: files marcados como tipo="final" (entrega, não referência)
-    const finais = _all.filter(function(f){ return !f.tipo || f.tipo==="final"; });
+    // Usa a MESMA fonte do card (pxFinalFiles): mesma lista, mesma ordem.
+    // Antes o portal so excluia isAnnotation — os anexos de "Solicitar ajuste"
+    // (isRef) vazavam pro cliente e ainda bagunçavam a ordem do carrossel.
+    const finais = (typeof pxFinalFiles==="function") ? pxFinalFiles(current) : [];
+    const _all = (current.files||[]).filter(function(f){ return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material"; });
     const pool = finais.length>0 ? finais : _all;
     // Mapeia pra {url, isVideo}
     const items = pool.map(function(f){
@@ -50766,13 +50803,16 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
   useEffect(function(){
     if(!window._sb){ setLoading(false); return; }
     let alive = true;
-    window._sb.from("team_data").select("data").eq("tipo","portal_playbook").maybeSingle()
+    // A coluna da tabela team_data se chama "dados" (nao "data").
+    // Estava lendo/gravando em "data" — coluna inexistente — entao o Playbook
+    // nunca chegava no Supabase e vivia so no localStorage de cada navegador.
+    window._sb.from("team_data").select("dados").eq("tipo","portal_playbook").maybeSingle()
       .then(function(r){
         if(!alive) return;
         if(r && r.error){ console.warn("[portal_playbook load]", r.error.message||r.error); setLoading(false); return; }
-        if(r && r.data && r.data.data && Array.isArray(r.data.data.sections)){
+        if(r && r.data && r.data.dados && Array.isArray(r.data.dados.sections)){
           // Migration v1→v2: sections sem category ganham "Produção" como default
-          const _migrated = r.data.data.sections.map(function(s){
+          const _migrated = r.data.dados.sections.map(function(s){
             return Object.assign({}, s, {category: s.category || "Produção"});
           });
           setSections(_migrated);
@@ -50796,7 +50836,7 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
         return;
       }
       // Persist EXPLICITO com toast de erro visivel se falhar
-      window._sb.from("team_data").upsert({tipo:"portal_playbook", data:{sections:sections}}, {onConflict:"tipo"})
+      window._sb.from("team_data").upsert({tipo:"portal_playbook", dados:{sections:sections}, updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER?CURRENT_USER.name:null), updated_at:new Date().toISOString()}, {onConflict:"tipo"})
         .then(function(r){
           if(r && r.error){
             console.error("[portal_playbook save] Falha:", r.error);
