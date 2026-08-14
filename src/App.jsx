@@ -59295,7 +59295,7 @@ function _CalculadoraModular({isMob}){
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
   const [stepIdx,setStepIdx] = useState(0);
-  // 7) Pacote de prêmios — cartas ficam viradas até clicar em "Revelar prêmios"
+  // 7) Pacote de bônus — cartas ficam viradas até clicar em "Revelar bônus"
   const [packOpen,setPackOpen] = useState(false);
   const [confete,setConfete]   = useState(false);
   const [copiado,setCopiado]   = useState(false);
@@ -60196,10 +60196,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
         <div style={{textAlign:"center",position:"relative"}}>
           <div style={{color:ok?"#fff":"#8b95a3",fontWeight:900,fontSize:13,letterSpacing:-.35}}>
-            {ok ? "Prêmio disponível" : "Prêmio bloqueado"}
+            {ok ? "Bônus disponível" : "Bônus bloqueado"}
           </div>
           <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:11,fontWeight:700,marginTop:5}}>
-            {ok ? "Clique em Revelar prêmios" : "Requisito: "+fmt(b.min)+" de recorrência"}
+            {ok ? "Clique em Revelar bônus" : "Requisito: "+fmt(b.min)+" de recorrência"}
           </div>
         </div>
       </div>
@@ -60284,7 +60284,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.animation="none";}}
         onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.animation=unlockedBonuses.length>0?"pxPulse 2.1s ease-in-out infinite":"none";}}>
         <_PxIco n="gift" size={20} color={unlockedBonuses.length>0?"#ffd868":"#b3bcc9"} strokeWidth={2.1}/>
-        <span style={{color:unlockedBonuses.length>0?"#fff":"#a3adbb",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Revelar prêmios</span>
+        <span style={{color:unlockedBonuses.length>0?"#fff":"#a3adbb",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Revelar bônus</span>
         {unlockedBonuses.length>0&&<span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:10,fontWeight:900,padding:"4px 11px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>
           {unlockedBonuses.length} liberado{unlockedBonuses.length>1?"s":""}
         </span>}
