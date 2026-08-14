@@ -52667,19 +52667,19 @@ function ComModal({title,subtitle,children,onClose,maxWidth}){
    ═══════════════════════════════════════════════════════════════ */
 function PageComercial({isMob, perms, effectiveUser}){
   const {store,update,log}=useComercialStore();
-  const [tab,setTab]=useState("dashboard");
+  const [tab,setTab]=useState("portfolio"); // Comercial abre direto no Portfolio
   const isSocio=(effectiveUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null))?.level===1;
   const myPerms=perms||{};
   const canEdit=isSocio||myPerms.editarComercial;
 
   const SUBTABS=[
+    {id:"portfolio", label:"Portfólio"},
     {id:"dashboard", label:"Dashboard"},
     {id:"prospects", label:"Kanban de prospects"},
     {id:"oportun",   label:"Oportunidades / upsell"},
     {id:"propostas", label:"Propostas"},
     {id:"followups", label:"Follow-ups"},
     {id:"scripts",   label:"Scripts"},
-    {id:"portfolio", label:"Portfólio"},
     // Vendas: registro de vendas pontuais por cliente (Captação, projetos avulsos, extras).
     // Alimenta o Financeiro (soma automática ao MRR do mês).
     ...(isSocio?[{id:"vendas", label:"Vendas pontuais"}]:[]),
