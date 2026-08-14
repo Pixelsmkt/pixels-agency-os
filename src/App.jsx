@@ -35393,14 +35393,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
             {/* ── ÚLTIMA ENTREGA — player grande do arquivo final mais recente ──
-                 O que o sócio quer ver primeiro ao abrir o card: a entrega, grande,
-                 com data e hora de quando subiu. Os demais ficam em thumbs abaixo. */}
+                 O que o sócio quer ver primeiro ao abrir o card: SÓ a última entrega,
+                 grande, com data e hora. Versões anteriores ficam na aba Arquivos. */}
             {finItems.length>0&&(()=>{
               const _last   = _pxLastFile(finItems) || finItems[finItems.length-1];
-              const _lastIdx= finItems.findIndex(function(x){return x.id===_last.id;});
               const _isV    = isVid(_last);
               const _when   = _pxFileWhen(_last);
-              const _outros = finItems.filter(function(x){return x.id!==_last.id;});
               const _mb     = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
               const _noTopo = _pxEntregaNoTopo(finItems, task);
               return <div style={{order:_noTopo?1:2,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
@@ -35413,7 +35411,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   <div style={{minWidth:0,flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                       <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>{_isV?"Última entrega":"Entrega"}</span>
-                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?("#"+(_lastIdx+1)+" de "+finItems.length):(finItems.length+" artes")}</span>}
+                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?(finItems.length+"ª versão"):(finItems.length+" artes")}</span>}
                       {_isV&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
                       {_noTopo&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
                     </div>
@@ -35466,29 +35464,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       })}
                     </div>}
 
-                {/* thumbs das demais entregas */}
-                {_isV&&_outros.length>0&&<div style={{padding:"10px 14px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:7,overflowX:"auto"}}>
-                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,flexShrink:0,marginRight:2}}>Outras</span>
-                  {_outros.slice(0,8).map(function(a){
-                    const _v=isVid(a);
-                    const _i=finItems.findIndex(function(x){return x.id===a.id;});
-                    return <div key={a.id} onClick={function(e){
-                        e.stopPropagation();
-                        if(_v){ setActiveTab("files"); }
-                        else { setLightbox({url:a.url,name:a.name,storagePath:a.storagePath}); }
-                      }} title={(a.name||("#"+(_i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")}
-                      style={{position:"relative",width:46,height:46,borderRadius:8,overflow:"hidden",border:"1px solid #e2e8f0",background:_v?"#0f172a":"#f8fafc",cursor:"pointer",flexShrink:0,transition:"transform .12s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.06)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}>
-                      {_v
-                        ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
-                        : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
-                      <div style={{position:"absolute",top:2,left:2,background:"rgba(15,23,42,0.75)",color:"#fff",fontSize:8.5,fontWeight:700,padding:"1px 4px",borderRadius:4,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>#{_i+1}</div>
-                    </div>;
-                  })}
-                  {_outros.length>8&&<div onClick={function(){setActiveTab("files");}}
-                    style={{width:46,height:46,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+{_outros.length-8}</div>}
-                </div>}
               </div>;
             })()}
 
@@ -58489,21 +58464,31 @@ const PRICE_CONFIG = {
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
   bonusUnlocks: [
-    { id:"kit", ico:"video", min:7000,
+    { id:"kit", ico:"mic", min:7000,
       nome:"Kit de Gravação Profissional",
       tagline:"Equipamento profissional de brinde",
+      // Em 10k o kit dobra — a carta sobe de nível.
+      upgrade:{ min:10000, nome:"Kit de Gravação em Dobro", tagline:"Dois kits completos, de brinde", selo:"×2" },
       itens:[
         { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
         { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
         { ico:"sun",    label:"Iluminação LED",              detalhe:"Kit de luz contínua" },
       ] },
-    { id:"capbi", ico:"trophy", min:10000,
+    { id:"capbi", ico:"video", min:7000,
       nome:"Captação Bimestral",
       tagline:"Nossa equipe em campo, por nossa conta",
       itens:[
         { ico:"video",  label:"1 diária de captação a cada 2 meses", detalhe:"Cinegrafista + equipamento" },
         { ico:"palette",label:"Direção de conteúdo na diária",       detalhe:"Roteiro e condução no set" },
-        { ico:"drone",  label:"Imagens aéreas com drone",     detalhe:"Tomadas de drone na diária" },
+        { ico:"drone",  label:"Imagens aéreas com drone",            detalhe:"Tomadas de drone na diária" },
+      ] },
+    { id:"estrategia", ico:"users", min:10000,
+      nome:"Sessão Estratégica com os Sócios",
+      tagline:"Acesso direto a quem decide",
+      itens:[
+        { ico:"users",     label:"Reunião trimestral de 1h",      detalhe:"Direto com Vinicius e Gustavo" },
+        { ico:"chart",     label:"Análise dos resultados",        detalhe:"Números, aprendizados e gargalos" },
+        { ico:"lightbulb", label:"Plano do próximo trimestre",    detalhe:"Prioridades definidas em conjunto" },
       ] },
   ],
   oneTimeProjects: [
@@ -58871,6 +58856,80 @@ const _PORTF_FF = "'Inter',system-ui,-apple-system,sans-serif";
    depender do pacote lucide-react (que nao esta no bundle do app).
    Uso: <_PxIco n="share2" size={24} color="#9F43F6"/>
 ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   _pxSomConfete — estouro de papel picado sintetizado na hora.
+   Sem arquivo de áudio, sem dependência externa.
+
+   Três camadas, todas baseadas em RUÍDO (nada de oscilador melódico,
+   que soava a videogame):
+     1. transiente — estalo seco de 10ms, banda larga
+     2. corpo      — ruído grave (<260Hz) que dá peso ao estouro
+     3. crepitação — micro-impulsos agudos = papel batendo no ar
+     4. cauda + brilho — sustentam a sensação de festa (~1,4s)
+═══════════════════════════════════════════════════════════════ */
+function _pxSomConfete(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    const ctx = new AC();
+    const t0  = ctx.currentTime;
+    const sr  = ctx.sampleRate;
+
+    function _bufDe(dur, preencher){
+      const n = Math.max(1, Math.ceil(sr*dur));
+      const b = ctx.createBuffer(1, n, sr);
+      preencher(b.getChannelData(0), n);
+      return b;
+    }
+    function _tocar(buf, quando, ganho, filtro){
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const g   = ctx.createGain(); g.gain.value = ganho;
+      let no = src;
+      if(filtro){
+        const f = ctx.createBiquadFilter();
+        f.type = filtro.tipo; f.frequency.value = filtro.freq;
+        if(filtro.q) f.Q.value = filtro.q;
+        src.connect(f); no = f;
+      }
+      no.connect(g); g.connect(ctx.destination);
+      src.start(t0 + quando);
+    }
+
+    // 1) TRANSIENTE — o estalo
+    _tocar(_bufDe(0.010, function(d,n){
+      for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.exp(-(i/n)*9);
+    }), 0, 0.95, null);
+
+    // 2) CORPO — peso grave do estouro
+    _tocar(_bufDe(0.09, function(d,n){
+      for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.exp(-(i/n)*7);
+    }), 0, 0.85, {tipo:"lowpass", freq:260});
+
+    // 3) CREPITAÇÃO — papel batendo, longa e densa (versão festa)
+    _tocar(_bufDe(1.30, function(d,n){
+      const L = Math.floor(sr*0.004);
+      for(let k=0;k<990;k++){
+        const pos = Math.floor(Math.pow(Math.random(),1.9)*(n-L));
+        const amp = 0.25 + Math.random()*0.75;
+        for(let i=0;i<L;i++) d[pos+i] += (Math.random()*2-1)*Math.exp(-(i/L)*11)*amp;
+      }
+      for(let i=0;i<n;i++) d[i] *= Math.pow(1-(i/n), 1.5);
+    }), 0.008, 0.62, {tipo:"highpass", freq:1800});
+
+    // 4) CAUDA — sopro que sustenta a festa
+    _tocar(_bufDe(1.40, function(d,n){
+      for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1-(i/n), 2.6);
+    }), 0.02, 0.24, {tipo:"highpass", freq:2600});
+
+    // 5) BRILHO — camada bem aguda que dá o ar festivo
+    _tocar(_bufDe(1.20, function(d,n){
+      for(let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1-(i/n), 3.4);
+    }), 0.05, 0.16, {tipo:"highpass", freq:6000});
+
+    setTimeout(function(){ try{ ctx.close(); }catch(_){} }, 2800);
+  }catch(_){ /* som e opcional — nunca quebra a UI */ }
+}
+
 function _PxIco(props){
   const n  = props.n;
   const sz = props.size || 22;
@@ -58896,6 +58955,7 @@ function _PxIco(props){
     barchart:    <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
     dollar:      <g><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>,
     drone:       <g><circle cx="12" cy="12" r="2.6"/><path d="M10.2 10.2 7.1 7.1"/><path d="M13.8 10.2 16.9 7.1"/><path d="M10.2 13.8 7.1 16.9"/><path d="M13.8 13.8 16.9 16.9"/><circle cx="5.4" cy="5.4" r="2.3"/><circle cx="18.6" cy="5.4" r="2.3"/><circle cx="5.4" cy="18.6" r="2.3"/><circle cx="18.6" cy="18.6" r="2.3"/></g>,
+    users:       <g><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></g>,
     mic:         <g><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></g>,
     tripod:      <g><rect x="9" y="2" width="6" height="10" rx="1.5"/><path d="M12 12v4"/><path d="m12 16-4.5 6"/><path d="m12 16 4.5 6"/><path d="M12 16v6"/></g>,
     sun:         <g><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></g>,
@@ -59229,7 +59289,7 @@ function _CalculadoraModular({isMob}){
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
   const [stepIdx,setStepIdx] = useState(0);
-  // 7) Pacote de prêmios — cartas ficam viradas até clicar em "Checar prêmios"
+  // 7) Pacote de prêmios — cartas ficam viradas até clicar em "Revelar prêmios"
   const [packOpen,setPackOpen] = useState(false);
   const [confete,setConfete]   = useState(false);
   const _prevUnlocked = useRef(0);
@@ -59257,10 +59317,11 @@ function _CalculadoraModular({isMob}){
   },[]);
   // Abre o pacote e dispara o confete
   function abrirPacote(){
+    _pxSomConfete();
     setPackOpen(true);
     setConfete(false);
     setTimeout(function(){ setConfete(true); }, 20);
-    setTimeout(function(){ setConfete(false); }, 3200);
+    setTimeout(function(){ setConfete(false); }, 3600);
   }
   // 8) Modo foco — expande a calculadora e esconde a sidebar do app
   const [focusMode,setFocusMode] = useState(false);
@@ -59994,8 +60055,14 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   function _BonusCard({b}){
     const ok    = monthlyRecurring >= b.min;
-    const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
-    const falta = Math.max(0, b.min - monthlyRecurring);
+    // Carta com upgrade: depois de liberada, a barra passa a mirar o próximo nível.
+    const temUp = !!b.upgrade;
+    const upOk  = temUp && monthlyRecurring >= b.upgrade.min;
+    const alvo  = (temUp && ok && !upOk) ? b.upgrade.min : b.min;
+    const nome  = upOk ? b.upgrade.nome    : b.nome;
+    const tag   = upOk ? b.upgrade.tagline : b.tagline;
+    const pct   = Math.round(bonusProgress(monthlyRecurring, alvo)*100);
+    const falta = Math.max(0, alvo - monthlyRecurring);
     const OURO  = "#f0b429";
     const OURO2 = "#ffd868";
 
@@ -60033,7 +60100,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
           <div>
             <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:8.5,fontWeight:900,letterSpacing:1.1,textTransform:"uppercase"}}>Requisito</div>
-            <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:20,letterSpacing:-.8,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(b.min)}</div>
+            <div style={{color:ok?OURO2:"#7a8494",fontWeight:900,fontSize:20,letterSpacing:-.8,fontFeatureSettings:"'tnum'",lineHeight:1.1,marginTop:2,textShadow:ok?"0 2px 14px rgba(240,180,41,.45)":"none"}}>{fmt(upOk?b.upgrade.min:b.min)}</div>
             <div style={{color:ok?"rgba(255,255,255,.42)":"#b3bcc9",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>recorrência mensal</div>
           </div>
           {ok
@@ -60063,8 +60130,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
         {/* nome */}
         <div style={{textAlign:"center",position:"relative"}}>
-          <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:13.5,letterSpacing:-.35,lineHeight:1.25,textShadow:ok?"0 2px 12px rgba(0,0,0,.30)":"none"}}>{b.nome}</div>
-          <div style={{color:ok?"rgba(255,216,104,.78)":"#a3adbb",fontSize:9.5,fontWeight:700,marginTop:4,letterSpacing:.15,lineHeight:1.35}}>{b.tagline}</div>
+          <div style={{color:ok?"#fff":"#7a8494",fontWeight:900,fontSize:13.5,letterSpacing:-.35,lineHeight:1.25,textShadow:ok?"0 2px 12px rgba(0,0,0,.30)":"none"}}>{nome}{upOk&&<span style={{marginLeft:6,background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:9.5,fontWeight:900,padding:"2px 8px",borderRadius:99,letterSpacing:.4,verticalAlign:"middle"}}>{b.upgrade.selo}</span>}</div>
+          <div style={{color:ok?"rgba(255,216,104,.78)":"#a3adbb",fontSize:9.5,fontWeight:700,marginTop:4,letterSpacing:.15,lineHeight:1.35}}>{tag}</div>
           {/* divisor com losango central */}
           <div style={{display:"flex",alignItems:"center",gap:7,marginTop:9}}>
             <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,"+(ok?"rgba(240,180,41,.45)":"#e2e6ee")+")"}}/>
@@ -60092,14 +60159,14 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{marginTop:"auto",position:"relative"}}>
           <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
             <span style={{color:ok?"rgba(255,216,104,.9)":MUTE,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
-              {ok ? "Conquistado" : "Progresso"}
+              {upOk ? "Nível máximo" : (temUp&&ok ? "Rumo ao 2º kit" : (ok ? "Conquistado" : "Progresso"))}
             </span>
             <span style={{color:ok?OURO2:PX_DK,fontSize:12.5,fontWeight:900,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{pct}%</span>
           </div>
           <div style={{height:7,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
-            <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
+            <div style={{width:pct+"%",height:"100%",background:(pct>=100)?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:(pct>=100)?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
           </div>
-          {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
+          {falta>0 && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> {(temUp&&ok)?"pro 2º kit":"de recorrência"}</div>}
         </div>
       </div>
     </div>;
@@ -60131,7 +60198,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             {ok ? "Prêmio disponível" : "Prêmio bloqueado"}
           </div>
           <div style={{color:ok?"rgba(255,216,104,.8)":"#a3adbb",fontSize:11,fontWeight:700,marginTop:5}}>
-            {ok ? "Clique em Checar prêmios pra revelar" : "Requisito: "+fmt(b.min)+" de recorrência"}
+            {ok ? "Clique em Revelar prêmios" : "Requisito: "+fmt(b.min)+" de recorrência"}
           </div>
         </div>
       </div>
@@ -60224,7 +60291,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.animation="none";}}
         onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.animation=unlockedBonuses.length>0?"pxPulse 2.1s ease-in-out infinite":"none";}}>
         <_PxIco n="gift" size={20} color={unlockedBonuses.length>0?"#ffd868":"#b3bcc9"} strokeWidth={2.1}/>
-        <span style={{color:unlockedBonuses.length>0?"#fff":"#a3adbb",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Checar prêmios</span>
+        <span style={{color:unlockedBonuses.length>0?"#fff":"#a3adbb",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Revelar prêmios</span>
         {unlockedBonuses.length>0&&<span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:10,fontWeight:900,padding:"4px 11px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>
           {unlockedBonuses.length} liberado{unlockedBonuses.length>1?"s":""}
         </span>}
@@ -60476,7 +60543,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
 
@@ -60487,7 +60554,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
     </div>
@@ -60507,7 +60574,7 @@ function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
     captureActive, captureDailies, capturePrice, cfg,
-    oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
+    oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   const [copied,setCopied] = useState(false);
 
@@ -60612,6 +60679,8 @@ function _ResumoBox(p){
 
     {/* Bonus conquistados */}
     {(function(){
+      // Só revela no resumo depois que o pacote foi aberto na etapa de Bônus.
+      if(!packOpen) return null;
       const bns = calculateUnlockedBonuses(monthlyRecurring);
       if(!bns.length) return null;
       return <div style={{marginTop:16,paddingTop:15,borderTop:"1px solid #f2f3f7"}}>
@@ -60636,10 +60705,10 @@ function _ResumoBox(p){
     {/* CTA copiar */}
     <button onClick={_handleCopy} disabled={!hasAny}
       title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
-      style={{marginTop:18,width:"100%",background:!hasAny?"#fafbfc":(copied?"linear-gradient(135deg,#22c55e,#16a34a)":"#0f172a"),color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?"#eef0f5":(copied?"#16a34a":"#0f172a")),borderRadius:12,padding:"12px 14px",fontWeight:800,fontSize:13,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.2,transition:"all .18s",boxShadow:copied?"0 6px 18px rgba(34,197,94,.28)":"none"}}
+      style={{marginTop:16,width:"100%",background:!hasAny?"#fafbfc":(copied?"linear-gradient(135deg,#22c55e,#16a34a)":"#0f172a"),color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?"#eef0f5":(copied?"#16a34a":"#0f172a")),borderRadius:10,padding:"9px 12px",fontWeight:700,fontSize:11.5,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.2,transition:"all .18s",boxShadow:copied?"0 6px 18px rgba(34,197,94,.28)":"none"}}
       onMouseEnter={function(e){if(hasAny && !copied){e.currentTarget.style.background="#1e293b";}}}
       onMouseLeave={function(e){if(hasAny && !copied){e.currentTarget.style.background="#0f172a";}}}>
-      <_PxIco n={copied?"check":"copy"} size={15} color="currentColor" strokeWidth={copied?3.2:2.2}/>
+      <_PxIco n={copied?"check":"copy"} size={13} color="currentColor" strokeWidth={copied?3.2:2.2}/>
       {copied ? "Resumo copiado" : "Copiar resumo"}
     </button>
     <div style={{color:SOFT,fontSize:10.5,marginTop:10,lineHeight:1.5,textAlign:"center"}}>Cola no WhatsApp ou e-mail — texto formatado pra cliente.</div>
