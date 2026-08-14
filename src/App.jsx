@@ -32891,6 +32891,35 @@ const RADAR_ORIGENS = {
   portal:              { label:"Portal",       icon:"🟢", color:"#22c55e" },
 };
 
+// ═══ Helpers de data/hora dos arquivos enviados ═══════════════════
+// addedAtIso e ISO; addedAt e string BR ("26/05/2026 14:32"). Nunca usar
+// new Date(str) direto em formato BR — ambiguidade DD/MM vs MM/DD.
+function _pxParseTs(v){
+  if(!v) return 0;
+  const str=String(v);
+  if(/^\d{4}-\d{2}-\d{2}T/.test(str)){ const d=new Date(str); return isNaN(d.getTime())?0:d.getTime(); }
+  const m=str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+  if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
+  return 0;
+}
+function _pxFileTs(f){ return _pxParseTs(f&&f.addedAtIso) || _pxParseTs(f&&f.addedAt) || 0; }
+function _pxFileWhen(f){
+  const ts=_pxFileTs(f);
+  if(!ts) return (f&&f.addedAt)||"";
+  const d=new Date(ts);
+  const data=d.toLocaleDateString("pt-BR");
+  const hora=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  return hora==="00:00" ? data : (data+" às "+hora);
+}
+// Item mais recente de uma lista de arquivos (fallback: ultimo do array)
+function _pxLastFile(list){
+  const arr=(list||[]).slice();
+  if(!arr.length) return null;
+  let best=arr[0], bestTs=_pxFileTs(arr[0]);
+  arr.forEach(function(f){ const t=_pxFileTs(f); if(t>=bestTs){ bestTs=t; best=f; } });
+  return best;
+}
+
 function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
 
 const FLUXO_COLS = [
@@ -35332,44 +35361,85 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* DESC */}
           {activeTab==="desc"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
 
-            {/* ── ENTREGA COMPACTA — thumbs dos arquivos finais no topo do Briefing ──
-                 Aparece quando ja tem entrega. Deixa socio ver o resultado sem trocar de aba. */}
+            {/* ── ÚLTIMA ENTREGA — player grande do arquivo final mais recente ──
+                 O que o sócio quer ver primeiro ao abrir o card: a entrega, grande,
+                 com data e hora de quando subiu. Os demais ficam em thumbs abaixo. */}
             {finItems.length>0&&(()=>{
-              const _MAX=6;
-              const _shown=finItems.slice(0,_MAX);
-              const _rest=Math.max(0, finItems.length-_MAX);
-              return <div style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11,fontWeight:700,letterSpacing:-.05,flexShrink:0}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                  Entrega ({finItems.length})
+              const _last   = _pxLastFile(finItems) || finItems[finItems.length-1];
+              const _lastIdx= finItems.findIndex(function(x){return x.id===_last.id;});
+              const _isV    = isVid(_last);
+              const _when   = _pxFileWhen(_last);
+              const _outros = finItems.filter(function(x){return x.id!==_last.id;});
+              const _mb     = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
+              return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+
+                {/* cabecalho */}
+                <div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <div style={{width:30,height:30,borderRadius:9,background:"#f0fdf4",border:"1px solid #c9f0d4",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  </div>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                      <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>Última entrega</span>
+                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>#{_lastIdx+1} de {finItems.length}</span>}
+                      {_isV&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
+                    </div>
+                    <div style={{color:"#94a3b8",fontSize:11,marginTop:2,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                      {_when&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontWeight:600}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        {_when}
+                      </span>}
+                      {_last.addedBy&&<span>· por {_last.addedBy}</span>}
+                      {_mb&&<span>· {_mb}</span>}
+                    </div>
+                  </div>
+                  <button onClick={function(){setActiveTab("files");}} type="button"
+                    style={{background:"transparent",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    Ver todos ({finItems.length})
+                  </button>
                 </div>
-                <div style={{display:"flex",gap:5,flex:1,overflow:"hidden"}}>
-                  {_shown.map(function(a,i){
+
+                {/* player / imagem grande */}
+                <div style={{background:_isV?"#0f172a":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
+                  {_isV
+                    ? <video src={_last.url} controls preload="metadata" playsInline
+                        style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                    : <img src={_last.url} alt={_last.name||"Entrega"} referrerPolicy="no-referrer"
+                        onClick={function(){setLightbox({url:_last.url,name:_last.name,storagePath:_last.storagePath});}}
+                        onError={function(e){
+                          if(_last.storagePath && !e.currentTarget.dataset.retried){
+                            e.currentTarget.dataset.retried="1";
+                            try{const sb=window._sb; if(sb){const{data}=sb.storage.from("agency-files").getPublicUrl(_last.storagePath); if(data&&data.publicUrl&&data.publicUrl!==_last.url){e.currentTarget.src=data.publicUrl; return;}}}catch(_){}
+                          }
+                        }}
+                        style={{width:"100%",maxHeight:420,objectFit:"contain",display:"block",cursor:"zoom-in"}}/>}
+                </div>
+
+                {/* thumbs das demais entregas */}
+                {_outros.length>0&&<div style={{padding:"10px 14px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:7,overflowX:"auto"}}>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,flexShrink:0,marginRight:2}}>Outras</span>
+                  {_outros.slice(0,8).map(function(a){
                     const _v=isVid(a);
+                    const _i=finItems.findIndex(function(x){return x.id===a.id;});
                     return <div key={a.id} onClick={function(e){
                         e.stopPropagation();
                         if(_v){ setActiveTab("files"); }
                         else { setLightbox({url:a.url,name:a.name,storagePath:a.storagePath}); }
-                      }} title={"#"+(i+1)+(_v?" · video":"")+" — clique pra abrir"}
-                      style={{position:"relative",width:44,height:44,borderRadius:7,overflow:"hidden",border:"1px solid #e2e8f0",background:_v?"#0f172a":"#f8fafc",cursor:"pointer",flexShrink:0,transition:"transform .12s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";}}
+                      }} title={(a.name||("#"+(_i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")}
+                      style={{position:"relative",width:46,height:46,borderRadius:8,overflow:"hidden",border:"1px solid #e2e8f0",background:_v?"#0f172a":"#f8fafc",cursor:"pointer",flexShrink:0,transition:"transform .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.06)";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}>
                       {_v
                         ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
-                        : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                      }
-                      <div style={{position:"absolute",top:2,left:2,background:"rgba(15,23,42,0.75)",color:"#fff",fontSize:8.5,fontWeight:700,padding:"1px 4px",borderRadius:4,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>#{i+1}</div>
+                        : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+                      <div style={{position:"absolute",top:2,left:2,background:"rgba(15,23,42,0.75)",color:"#fff",fontSize:8.5,fontWeight:700,padding:"1px 4px",borderRadius:4,fontFeatureSettings:"'tnum'",pointerEvents:"none"}}>#{_i+1}</div>
                     </div>;
                   })}
-                  {_rest>0&&<div onClick={function(e){e.stopPropagation();setActiveTab("files");}} title="Ver todos os arquivos"
-                    style={{width:44,height:44,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+{_rest}</div>}
-                </div>
-                <button onClick={function(){setActiveTab("files");}} type="button"
-                  style={{background:"transparent",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",flexShrink:0}}
-                  onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
-                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-                  Ver todos
-                </button>
+                  {_outros.length>8&&<div onClick={function(){setActiveTab("files");}}
+                    style={{width:46,height:46,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",flexShrink:0}}>+{_outros.length-8}</div>}
+                </div>}
               </div>;
             })()}
 
@@ -35511,9 +35581,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
               return(
                 <div style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #f3e8ff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <div style={{padding:"9px 13px",borderBottom:"1px solid #f3e8ff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                     <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"flex",alignItems:"center",gap:8}}>
-                      <span>Solicitação de ajuste</span>
+                      <span style={{fontSize:12}}>Solicitação de ajuste</span>
                       {rounds.length>1&&<span style={{background:"#f3e8ff",color:"#7c3aed",fontSize:9.5,padding:"2px 9px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>{rounds.length} rounds</span>}
                     </div>
                     <span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"3px 10px",borderRadius:99,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pendente</span>
@@ -35564,7 +35634,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       const _cmtCount=r.comments.length;
                       return(
                         <details key={r.key} open={isLatest} style={{borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
-                          <summary style={{padding:"14px 16px",cursor:"pointer",listStyle:"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                          <summary style={{padding:"10px 13px",cursor:"pointer",listStyle:"none",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transition:"transform .2s",transform:isLatest?"rotate(90deg)":"rotate(0deg)"}} className="pixels-round-chev"><polyline points="9 18 15 12 9 6"/></svg>
                             <span style={{background:"#f1f5f9",color:"#475569",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.3,flexShrink:0}}>Round {_roundNum}</span>
                             {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={_clientPersonName||""} referrerPolicy="no-referrer" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+accent+"44",flexShrink:0,marginRight:2}}/>}
@@ -35615,7 +35685,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             <div style={{fontSize:9.5,color:accent,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>
                               {r.images.length===1?"1 imagem marcada":(r.images.length+" imagens marcadas")}
                             </div>
-                            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:7}}>
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(86px, 1fr))",gap:6}}>
                               {r.images.map(function(f,i){
                                 const fts=_fileTs(f);
                                 const fwhen=fts?_fmtDateTime(fts,_fileHasTime(f)):(f.addedAt||"");
@@ -36138,6 +36208,44 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                     <span style={{color:"#7c3aed"}}>Arraste os cards</span> pra definir a ordem exata do carrossel do Instagram.
                   </div>}
+                  {/* ═══ DESTAQUE — arquivo final mais recente, grande, com data/hora ═══ */}
+                  {finItems.length>0&&(function(){
+                    const _last = _pxLastFile(finItems) || finItems[finItems.length-1];
+                    const _li   = finItems.findIndex(function(x){return x.id===_last.id;});
+                    const _v    = isVid(_last);
+                    const _when = _pxFileWhen(_last);
+                    const _mb   = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
+                    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",marginBottom:12,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+                      <div style={{padding:"11px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:"#f0fdf4",border:"1px solid #c9f0d4",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        </div>
+                        <div style={{minWidth:0,flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                            <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Versão mais recente</span>
+                            {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>#{_li+1} de {finItems.length}</span>}
+                            {_v&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
+                          </div>
+                          <div style={{color:"#94a3b8",fontSize:11,marginTop:2,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                            {_when&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontWeight:600}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                              {_when}
+                            </span>}
+                            {_last.addedBy&&<span>· por {_last.addedBy}</span>}
+                            {_mb&&<span>· {_mb}</span>}
+                            {_last.name&&<span style={{color:"#cbd5e1"}}>· {_last.name}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{background:_v?"#0f172a":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
+                        {_v
+                          ? <video src={_last.url} controls preload="metadata" playsInline style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                          : <img src={_last.url} alt={_last.name||"Arquivo final"} referrerPolicy="no-referrer"
+                              onClick={function(){setLightbox({url:_last.url,name:_last.name,storagePath:_last.storagePath});}}
+                              style={{width:"100%",maxHeight:420,objectFit:"contain",display:"block",cursor:"zoom-in"}}/>}
+                      </div>
+                    </div>;
+                  })()}
                   {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
