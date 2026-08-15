@@ -47796,11 +47796,61 @@ function useFunnelHistory(clientId, limit){
    Pode editar a qualquer momento. Vê resumo de conversões + histórico.
 ─────────────────────────────────────────────────────────────────── */
 const _MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+/* ─── Navegador de mês da página Performance ────────────────────────
+   Seletor ÚNICO e global: o Funil Digital e o ROI de Marketing liam o
+   mesmo período em dois seletores separados, dava pra deixar os dois em
+   meses diferentes e comparar coisa com coisa. Agora o estado mora na
+   página e desce por prop. */
+function _PxMesNav({month, year, setMonth, setYear, accent, yearOpts}){
+  const cor=accent||"#7c3aed";
+  const _passo=function(d){
+    let m=month+d, y=year;
+    if(m<1){ m=12; y--; }
+    if(m>12){ m=1; y++; }
+    setMonth(m); setYear(y);
+  };
+  const _hoje=new Date();
+  const _ehAtual = month===_hoje.getMonth()+1 && year===_hoje.getFullYear();
+  const _Seta=function({dir}){
+    return <button type="button" onClick={function(){_passo(dir);}} title={dir<0?"Mês anterior":"Próximo mês"}
+      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569",flexShrink:0,padding:0,transition:"all .12s"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=cor;e.currentTarget.style.color=cor;}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+        {dir<0?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}
+      </svg>
+    </button>;
+  };
+  return <div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    <_Seta dir={-1}/>
+    <div style={{display:"flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid #e6e8ec",borderRadius:10,padding:"6px 12px",minWidth:168,justifyContent:"center"}}>
+      <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+        style={{background:"transparent",border:"none",color:"#0f172a",fontSize:13.5,fontWeight:800,outline:"none",cursor:"pointer",fontFamily:"inherit",letterSpacing:-.2}}>
+        {_MES_NAMES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+      </select>
+      <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+        style={{background:"transparent",border:"none",color:"#64748b",fontSize:13.5,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+        {(yearOpts||[year-1,year,year+1]).map(function(y){return <option key={y} value={y}>{y}</option>;})}
+      </select>
+    </div>
+    <_Seta dir={1}/>
+    {!_ehAtual&&<button type="button" onClick={function(){setMonth(_hoje.getMonth()+1);setYear(_hoje.getFullYear());}}
+      style={{background:"transparent",border:"none",color:cor,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:"0 4px"}}>Mês atual</button>}
+  </div>;
+}
+
 function PortalFunil(props){
   const cl=props.cl; const isMob=props.isMob;
   const now=new Date();
-  const [month,setMonth]=useState(now.getMonth()+1);
-  const [year,setYear]=useState(now.getFullYear());
+  // Mes/ano vem do seletor GLOBAL da pagina Performance (props). O state local
+  // so existe como fallback pra quem renderizar o funil isolado.
+  const [_mLocal,_setMLocal]=useState(now.getMonth()+1);
+  const [_yLocal,_setYLocal]=useState(now.getFullYear());
+  const _ctrl = typeof props.month==="number" && typeof props.year==="number";
+  const month = _ctrl ? props.month : _mLocal;
+  const year  = _ctrl ? props.year  : _yLocal;
+  const setMonth = _ctrl ? (props.setMonth||function(){}) : _setMLocal;
+  const setYear  = _ctrl ? (props.setYear ||function(){}) : _setYLocal;
   // Garante que todo funil começa por "Lead": se o cliente já tem essa etapa na
   // primeira posição, mantém. Senão, prepend uma virtual.
   const baseStages=getFunnelForClient(cl.id);
@@ -47863,16 +47913,7 @@ function PortalFunil(props){
           <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Registre mensalmente quantas oportunidades passaram em cada etapa.</div>
         </div>
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
-          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {_MES_NAMES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
-        </select>
-        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
-          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {yearOpts.map(function(y){return <option key={y} value={y}>{y}</option>;})}
-        </select>
-      </div>
+      <_PxMesNav month={month} year={year} setMonth={setMonth} setYear={setYear} accent={cl.color} yearOpts={yearOpts}/>
     </div>
 
     {/* Dois funis lado a lado: Meta Ads + Google Ads */}
@@ -50163,7 +50204,7 @@ const PX_MEDIDA_LABEL=function(u){ const f=PX_MEDIDA_UNIDADES.find(function(x){r
 
 const ORIGEM_LABEL_MAP={meta:"Meta Ads",google:"Google Ads",site:"Site",landing:"Landing page",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
 const ORIGEM_COLOR_MAP={meta:"#0081FB",google:"#EA4335",site:"#0f766e",landing:"#c026d3",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
-const ORIGEM_OPCOES_LISTA=["meta","google","site","landing","organico","outro"];
+const ORIGEM_OPCOES_LISTA=["meta","google","site","organico","outro"];
 
 const _PX_DP_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const _PX_DP_DOW=["D","S","T","Q","Q","S","S"];
@@ -50312,6 +50353,238 @@ function _PxDatePicker({value, onChange, accent}){
   </div>;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   MAPA DE VENDAS POR UF
+   ───────────────────────────────────────────────────────────────────
+   De onde vem a geometria: não existe pacote npm/pip com as fronteiras
+   dos estados que desse pra usar aqui, então os contornos foram DERIVADOS
+   das coordenadas dos 5.570 municípios brasileiros (lat/lon do IBGE):
+   grade de 0.07°, cada célula recebe a UF do município mais próximo,
+   fechamento morfológico pra costurar o Norte (municípios enormes e
+   esparsos), e o contorno de cada UF virou path SVG simplificado
+   (Douglas-Peucker). Precisão ~10km — mais que suficiente pra leitura
+   de cobertura comercial, e são só 17KB no bundle.
+
+   DF aparece como círculo: é 1 município cercado por Goiás, some em
+   qualquer atribuição por vizinho-mais-próximo. No mapa é um ponto mesmo.
+   ═══════════════════════════════════════════════════════════════════ */
+const _PX_BR_W=1000, _PX_BR_H=984.3;
+const _PX_BR_UF={
+  AC:{n:"Acre",r:"Norte",c:[108.7,376.1],d:"M39.7,315.9 31.8,323.8 24.7,339.1 24.7,381.9 27.0,385.5 54.1,395.4 71.5,397.9 77.9,401.2 84.6,408.2 94.6,427.9 109.7,436.9 122.4,436.2 132.0,423.9 139.9,419.3 149.4,417.3 162.2,418.8 173.3,416.1 186.0,416.6 187.6,415.2 192.0,395.0 203.9,363.7 205.0,355.5 198.7,355.1 174.9,366.1 157.4,364.1 152.6,362.0 146.6,339.1 143.1,332.2 133.5,330.5 116.1,339.3 97.0,331.1 89.0,323.5 85.9,322.4 70.0,336.5 66.8,337.6 48.7,329.2 39.7,315.9Z"},
+  AL:{n:"Alagoas",r:"Nordeste",c:[869.4,375.1],d:"M891.9,355.3 876.0,360.4 871.2,365.7 863.3,367.7 853.7,367.2 849.0,363.0 837.8,361.8 831.5,366.6 830.8,372.0 833.1,374.8 842.5,378.6 844.2,381.6 853.7,382.8 872.4,398.3 876.0,398.6 884.7,391.7 890.3,381.3 901.7,367.0 901.4,363.3 891.9,355.3Z"},
+  AM:{n:"Amazonas",r:"Norte",c:[233.6,250.1],d:"M181.2,123.1 166.9,122.7 160.6,124.7 147.5,136.6 144.0,146.5 143.9,158.0 147.7,174.5 146.6,182.7 143.5,189.3 135.1,197.9 114.5,205.3 106.1,214.0 104.3,218.9 105.6,225.5 103.7,235.4 95.0,250.2 94.5,265.0 89.8,274.9 77.9,283.5 55.6,287.7 46.1,295.8 41.1,312.7 42.6,321.0 45.4,325.9 49.3,329.6 66.8,337.6 70.0,336.5 85.9,322.4 89.0,323.5 97.0,331.1 116.1,339.3 133.5,330.5 143.1,332.2 146.6,339.1 152.6,362.0 168.5,366.2 176.5,365.8 198.7,355.1 209.9,354.2 243.2,333.9 268.7,346.5 279.8,346.0 302.1,336.0 316.4,349.7 321.1,352.0 370.8,337.4 372.3,334.1 353.5,291.3 354.2,284.7 373.6,266.2 380.0,263.0 391.1,262.4 394.3,260.8 406.2,238.7 421.7,227.1 424.7,220.6 411.8,202.0 408.6,201.4 400.6,206.0 392.7,200.1 384.7,201.5 372.0,198.0 363.3,190.9 357.7,180.5 345.0,164.6 329.1,162.2 313.2,165.3 306.8,164.9 291.7,144.8 279.8,135.3 267.1,141.9 257.6,143.9 248.0,141.9 235.3,132.9 227.3,129.7 197.1,130.8 181.2,123.1Z"},
+  AP:{n:"Amapá",r:"Norte",c:[526.0,101.5],d:"M524.6,29.3 515.1,28.9 502.4,34.2 495.6,41.1 490.5,52.7 490.5,65.8 492.5,72.4 510.7,93.8 513.9,100.4 514.9,108.6 513.9,116.9 509.3,126.7 507.5,144.8 504.4,151.4 497.6,158.4 491.3,161.7 484.9,162.6 481.2,164.6 481.2,166.2 488.1,174.8 508.7,180.1 513.5,179.4 521.5,167.6 526.2,167.1 535.8,170.3 540.4,169.5 545.3,147.6 558.6,139.9 564.6,133.3 556.2,107.0 557.7,97.1 561.8,87.2 559.9,80.6 549.7,62.5 547.3,49.4 543.7,42.2 535.8,34.2 524.6,29.3Z"},
+  BA:{n:"Bahia",r:"Nordeste",c:[759.1,447.1],d:"M809.2,351.7 804.0,353.9 799.7,360.8 787.0,358.2 786.0,368.7 783.8,371.0 773.8,370.3 772.0,367.0 772.7,358.9 767.9,358.0 758.3,360.1 752.0,369.4 739.3,369.7 733.4,376.9 725.0,380.4 722.7,378.6 721.8,372.0 717.0,370.9 711.2,378.6 712.1,388.4 701.1,395.4 686.8,400.1 678.9,410.4 677.3,410.7 670.9,404.2 656.6,404.9 649.4,424.6 649.9,439.5 661.7,455.9 662.2,469.1 669.3,492.1 675.7,492.5 691.6,485.6 696.2,477.3 697.9,476.9 697.9,490.4 707.5,497.4 723.4,496.9 736.1,507.1 752.0,506.6 755.2,514.0 759.9,517.1 772.7,516.1 779.0,520.5 792.0,521.8 793.6,525.0 792.0,531.6 787.0,541.5 782.2,543.2 778.6,549.7 778.1,558.0 775.2,564.5 777.4,566.9 783.8,567.2 791.7,573.9 796.5,581.3 806.0,584.0 814.3,569.5 814.7,556.3 813.4,551.4 814.9,543.1 822.7,525.0 821.2,513.5 822.6,506.9 819.6,490.5 821.6,472.4 835.5,451.0 841.0,445.6 850.6,440.2 855.3,435.0 856.4,431.2 854.4,427.9 844.2,424.2 831.1,414.8 827.6,403.2 829.9,401.0 834.7,402.9 836.8,401.6 836.8,395.0 839.7,385.1 831.4,373.6 829.9,368.8 819.6,367.0 815.9,357.2 810.8,357.3 809.2,351.7Z"},
+  CE:{n:"Ceará",r:"Nordeste",c:[797.1,263.2],d:"M782.2,198.8 771.1,198.8 763.1,204.1 761.8,215.6 756.1,223.8 758.7,228.8 759.6,237.0 763.8,243.6 760.9,265.0 766.3,269.4 768.1,273.2 765.3,279.8 768.2,284.7 768.6,289.7 764.0,299.6 766.3,303.1 775.8,302.6 779.0,305.3 780.3,309.4 775.6,319.3 777.4,324.3 787.0,324.9 791.7,321.9 796.5,322.2 799.7,324.2 802.4,329.2 806.7,330.8 807.6,335.4 809.2,335.9 819.4,324.2 815.4,312.7 818.6,306.1 818.8,294.7 826.8,291.3 837.9,274.9 840.3,266.6 847.8,263.3 853.9,256.8 850.6,253.1 837.8,246.0 827.5,233.7 818.8,227.9 810.8,218.8 793.3,209.4 782.2,198.8Z"},
+  DF:{n:"Distrito Federal",r:"Centro-Oeste",c:[608.0,520.9],d:"M617.0,520.9 616.3,524.3 614.4,527.3 611.4,529.2 608.0,529.9 604.5,529.2 601.6,527.3 599.7,524.3 599.0,520.9 599.7,517.4 601.6,514.5 604.5,512.6 608.0,511.9 611.4,512.6 614.4,514.5 616.3,517.4Z"},
+  ES:{n:"Espírito Santo",r:"Sudeste",c:[775.0,612.7],d:"M775.8,570.9 770.6,572.8 765.0,579.4 764.5,587.6 766.9,592.5 762.9,600.8 765.1,607.3 758.3,618.8 748.8,627.2 745.4,637.0 747.9,645.2 753.6,650.9 761.5,649.9 774.2,653.3 784.1,640.3 789.8,620.5 796.9,605.7 797.7,599.1 804.6,585.9 804.2,584.3 796.1,581.0 790.1,572.6 780.6,573.5 775.8,570.9Z"},
+  GO:{n:"Goiás",r:"Centro-Oeste",c:[574.6,524.8],d:"M551.7,450.6 548.5,450.7 541.3,455.9 536.6,465.8 537.1,469.1 545.7,483.9 546.0,488.8 539.0,494.5 529.4,493.0 523.1,493.9 520.8,503.6 526.9,515.2 525.0,521.8 519.9,527.3 511.9,520.4 508.7,527.0 503.7,526.7 503.3,531.6 505.3,536.6 502.4,549.6 491.3,553.1 485.9,561.3 494.7,566.2 496.3,571.1 495.3,579.4 497.6,585.9 509.4,589.2 508.1,604.0 513.5,604.4 521.5,596.2 523.3,597.5 524.5,607.3 526.2,608.7 539.0,603.7 553.3,601.9 555.0,599.1 552.9,594.2 553.4,590.9 559.6,589.3 569.2,583.0 575.5,586.1 583.5,580.7 602.5,585.0 612.1,583.0 621.6,578.5 623.4,574.4 619.7,569.5 619.3,564.5 621.3,553.0 625.4,544.8 622.0,536.6 617.8,531.6 618.1,525.0 624.8,521.5 632.8,527.0 637.4,526.7 634.6,511.9 637.3,506.9 637.5,501.6 640.7,499.6 651.8,499.5 658.2,497.4 665.1,493.8 667.5,490.5 662.2,469.1 662.0,457.6 659.8,455.2 647.1,455.2 639.1,457.8 634.3,453.5 628.0,458.3 615.3,460.0 607.3,458.9 597.8,462.2 588.2,456.3 580.3,458.3 573.9,454.1 564.4,460.5 551.7,450.6Z"},
+  MA:{n:"Maranhão",r:"Nordeste",c:[670.9,260.0],d:"M675.7,172.5 664.5,173.6 651.8,172.1 648.9,182.7 643.9,185.3 641.9,190.9 639.8,209.0 632.4,228.8 631.5,240.3 626.4,245.6 618.4,246.6 614.5,250.2 610.8,256.8 610.5,265.0 601.0,269.2 596.2,268.1 594.5,269.9 596.2,272.1 601.0,270.7 604.1,272.9 607.3,271.9 615.3,275.0 619.2,284.7 617.6,294.6 619.7,297.9 619.3,306.1 621.0,311.1 617.8,316.0 617.8,324.2 620.0,326.5 628.0,324.9 632.8,329.5 642.4,334.1 645.3,340.7 639.3,358.8 645.1,370.3 648.6,372.8 656.6,358.8 669.3,359.5 672.9,355.5 671.7,348.9 659.5,337.4 659.4,332.5 662.5,324.2 669.3,321.9 677.3,323.9 682.0,320.2 688.3,319.3 687.8,312.7 690.0,309.2 699.5,311.8 702.7,307.8 707.5,305.4 710.7,305.4 715.4,308.5 722.4,307.8 724.0,299.6 722.2,294.6 715.4,296.0 713.1,293.0 713.9,288.0 720.2,286.3 719.6,273.2 724.0,269.9 723.4,266.2 716.7,260.1 716.7,256.8 721.8,253.3 724.7,240.3 729.7,235.4 731.3,230.5 738.2,230.4 738.6,223.8 746.2,218.9 742.4,206.9 734.5,202.1 717.0,200.1 710.7,201.1 696.3,196.3 686.8,186.5 681.2,176.1 675.7,172.5Z"},
+  MG:{n:"Minas Gerais",r:"Sudeste",c:[683.3,583.3],d:"M697.9,476.9 696.2,477.3 691.6,485.6 680.4,490.8 674.1,492.9 667.7,492.4 651.8,499.5 638.7,500.4 634.6,511.9 637.4,526.7 632.8,527.0 624.8,521.5 618.4,524.6 617.8,531.6 622.0,536.6 625.4,544.8 621.3,553.0 619.3,564.5 619.7,569.5 623.4,574.4 621.6,578.5 612.1,583.0 602.5,585.0 583.5,580.7 575.5,586.1 569.2,583.0 559.6,589.3 553.4,590.9 552.9,594.2 555.0,599.1 553.3,601.9 542.1,603.4 539.9,605.7 540.6,615.6 550.1,614.9 561.2,616.9 564.4,619.1 570.7,617.3 578.4,620.5 578.7,627.4 593.0,623.1 602.5,624.1 612.1,620.2 624.8,619.6 626.1,622.2 621.0,628.7 625.4,635.3 624.0,640.3 626.7,643.6 628.6,651.8 637.5,653.1 639.4,655.1 636.9,661.7 637.9,666.6 636.2,674.8 640.7,679.8 643.9,687.3 650.2,688.2 656.6,685.5 658.2,681.4 666.1,682.8 685.2,674.5 697.9,674.3 705.9,668.8 715.4,668.0 718.6,669.5 721.8,665.4 726.6,665.6 737.5,661.7 737.3,651.8 744.3,640.3 748.8,627.2 758.3,618.8 765.1,607.3 762.9,599.1 766.9,592.5 764.5,587.6 765.9,577.7 774.2,570.8 780.6,573.5 785.4,573.4 787.0,571.8 783.8,567.2 775.9,566.2 775.2,562.9 778.1,558.0 778.6,549.7 782.2,543.2 787.0,541.5 792.0,531.6 793.3,523.1 791.7,521.6 779.0,520.5 772.7,516.1 759.9,517.1 755.2,514.0 752.0,506.6 736.1,507.1 723.4,496.9 707.5,497.4 697.9,490.4 697.9,476.9Z"},
+  MS:{n:"Mato Grosso do Sul",r:"Centro-Oeste",c:[441.5,636.8],d:"M448.3,549.4 437.2,549.4 414.9,570.1 394.3,562.5 388.2,562.9 388.3,582.7 380.8,595.8 383.0,609.0 381.9,617.2 376.8,626.3 360.9,638.5 357.0,643.6 352.2,656.7 352.2,663.3 355.8,674.8 360.9,681.5 367.2,686.7 375.2,690.0 384.7,689.4 400.6,692.6 407.0,695.8 415.3,704.4 422.1,722.6 428.7,729.1 438.8,735.4 451.5,726.6 457.3,717.6 467.4,712.7 468.7,706.1 472.4,701.2 472.6,694.6 480.1,684.6 486.9,681.4 491.3,675.8 497.6,676.7 507.2,672.0 510.3,656.8 515.1,653.9 518.0,646.8 524.1,640.3 521.9,632.0 527.8,630.7 535.8,624.6 539.7,613.9 539.0,605.0 534.2,605.3 527.8,608.4 524.6,607.5 524.9,602.4 521.5,596.2 513.5,604.4 508.1,604.0 509.4,589.2 497.7,585.9 494.4,577.1 484.9,577.2 475.4,569.1 465.8,566.6 456.3,552.9 448.3,549.4Z"},
+  MT:{n:"Mato Grosso",r:"Centro-Oeste",c:[431.7,446.2],d:"M400.6,333.9 373.6,336.7 322.7,351.9 320.4,355.5 320.3,370.3 318.0,378.6 303.7,384.8 298.5,390.1 295.0,398.3 295.8,408.2 308.4,410.1 324.3,401.4 332.7,409.8 335.8,414.8 336.7,423.0 348.8,437.8 345.0,455.8 332.0,462.5 326.3,483.9 306.5,497.1 306.5,511.9 314.8,524.2 325.9,532.0 330.7,532.4 346.6,528.1 360.9,532.9 367.2,539.3 372.0,548.6 387.9,562.0 394.3,562.5 414.9,570.1 437.2,549.4 446.7,549.0 456.3,552.9 465.8,566.6 475.4,569.1 484.9,577.2 492.8,576.4 496.2,572.8 494.7,566.2 486.6,562.9 486.2,559.6 491.3,553.1 502.4,549.6 505.3,536.6 503.3,531.6 503.7,526.7 508.7,527.0 511.9,520.4 519.9,527.3 525.0,521.8 526.9,515.2 520.8,503.6 523.1,493.9 540.5,494.1 546.6,487.2 536.6,465.8 539.8,457.6 548.8,449.3 551.3,439.5 558.4,427.9 560.3,416.4 557.4,406.5 561.4,391.7 555.3,383.5 546.9,380.7 528.4,358.8 515.1,354.3 505.6,347.0 481.7,343.7 443.6,351.3 435.6,351.3 411.8,341.1 400.6,333.9Z"},
+  PA:{n:"Pará",r:"Norte",c:[506.6,255.0],d:"M567.6,134.3 564.4,134.3 558.0,140.3 546.2,146.5 540.4,169.5 535.8,170.3 526.2,167.1 521.5,167.6 511.9,180.1 488.1,174.8 478.5,163.8 475.4,162.3 454.7,173.2 443.6,175.3 424.5,173.7 414.9,178.9 410.2,186.8 395.9,199.2 395.6,202.4 400.6,206.0 408.6,201.4 411.8,202.0 423.3,217.3 424.7,222.2 420.2,228.8 411.8,233.3 406.2,238.7 394.3,260.8 391.1,262.4 380.0,263.0 373.6,266.2 366.5,271.6 353.7,286.4 354.1,293.0 373.6,335.8 400.6,333.9 411.8,341.1 435.6,351.3 443.6,351.3 481.7,343.7 504.0,346.5 518.3,355.9 528.4,358.8 548.5,382.2 553.3,382.6 557.2,380.2 558.7,376.9 557.3,370.3 558.0,360.8 569.6,365.4 570.9,363.7 567.3,348.9 573.9,348.0 578.9,342.3 577.8,339.1 571.7,334.1 572.0,321.0 578.7,316.0 589.8,302.8 594.6,300.1 602.8,289.7 602.9,286.4 599.4,279.8 593.0,278.8 591.1,276.5 591.4,273.2 596.2,268.1 601.0,268.6 610.5,265.0 610.8,256.8 614.5,250.2 618.4,246.6 626.4,245.6 631.5,240.3 632.4,228.8 639.8,209.0 641.9,190.9 643.9,185.3 648.9,182.7 650.8,172.8 650.1,171.2 632.8,163.3 623.2,156.0 608.9,157.8 601.0,156.7 567.6,134.3Z"},
+  PB:{n:"Paraíba",r:"Nordeste",c:[862.3,317.4],d:"M850.6,293.5 844.2,294.3 831.5,301.9 826.7,302.6 821.9,299.1 818.8,299.7 818.2,307.8 815.4,312.7 819.4,324.2 817.0,329.2 820.3,333.1 828.3,331.8 833.1,333.1 845.8,323.2 852.1,322.4 853.4,324.2 849.9,334.1 851.5,342.3 853.7,344.7 856.9,344.7 866.5,335.5 887.1,330.5 890.4,325.9 895.1,324.0 901.4,324.5 904.6,328.9 911.0,327.8 912.7,325.9 911.7,312.7 907.8,303.0 893.5,303.7 885.5,302.1 880.8,303.5 869.6,298.2 867.2,299.6 867.8,304.5 863.3,312.4 858.5,308.3 851.2,311.1 845.7,306.1 847.4,298.0 850.8,296.3 850.6,293.5Z"},
+  PE:{n:"Pernambuco",r:"Nordeste",c:[835.9,346.2],d:"M852.1,322.4 845.8,323.2 833.1,333.1 828.3,331.8 821.9,333.8 815.6,330.6 809.2,335.9 807.6,335.4 806.7,330.8 802.4,329.2 799.7,324.2 796.5,322.2 791.7,321.9 787.0,324.9 775.8,325.6 774.0,327.5 774.0,334.1 771.1,343.9 761.5,347.4 761.2,355.5 763.1,357.5 772.7,358.9 772.4,368.7 775.8,371.1 785.4,370.2 787.0,358.2 799.7,360.8 802.9,355.1 807.6,351.7 809.6,352.2 810.8,357.3 815.6,356.7 819.6,367.0 821.9,367.8 829.9,367.4 839.4,361.8 849.0,363.0 853.7,367.2 863.3,367.7 871.2,365.7 876.0,360.4 891.9,355.3 896.7,360.0 903.0,362.9 911.3,340.7 910.9,329.2 904.6,328.9 901.4,324.5 895.1,324.0 890.4,325.9 887.1,330.5 866.5,335.5 858.9,344.0 853.7,344.7 851.5,342.3 849.9,334.1 853.4,324.2 852.1,322.4Z"},
+  PI:{n:"Piauí",r:"Nordeste",c:[720.4,323.6],d:"M759.9,205.5 744.0,207.5 745.6,220.4 738.6,223.8 738.2,230.4 731.3,230.5 729.7,235.4 724.7,240.3 721.8,253.3 716.7,256.8 716.7,260.1 723.4,266.2 724.0,269.9 719.6,273.2 720.2,286.3 713.9,288.0 713.1,293.0 715.4,296.0 722.2,294.6 724.0,299.6 722.4,307.8 715.4,308.5 710.7,305.4 707.5,305.4 702.7,307.8 699.5,311.8 690.0,309.2 687.8,312.7 688.3,319.3 682.0,320.2 677.3,323.9 667.7,322.2 661.1,325.9 659.5,337.4 671.7,348.9 673.2,353.9 669.3,359.5 656.6,358.8 649.2,373.6 649.9,385.1 655.4,395.0 656.7,403.2 672.5,404.6 677.3,410.7 678.9,410.4 686.8,400.1 701.1,395.4 712.1,388.4 710.8,380.2 715.4,371.9 718.6,370.5 721.8,372.0 722.7,378.6 725.0,380.4 733.4,376.9 740.9,369.0 753.5,368.7 755.2,363.3 761.2,357.2 761.5,347.4 771.1,343.9 774.0,334.1 773.9,327.5 776.0,324.2 775.6,319.3 780.3,309.4 777.4,303.0 767.9,303.6 764.0,299.6 768.6,289.7 768.2,284.7 765.3,279.8 768.1,273.2 766.3,269.4 760.9,265.0 763.8,243.6 759.6,237.0 758.7,228.8 756.1,223.8 762.2,214.0 762.2,207.4 759.9,205.5Z"},
+  PR:{n:"Paraná",r:"Sul",c:[518.6,730.7],d:"M516.7,677.8 513.6,678.1 511.0,681.4 507.2,680.1 502.4,682.1 496.0,678.0 491.3,682.1 484.9,682.3 480.1,684.6 472.6,694.6 472.4,701.2 468.7,706.1 467.4,712.7 456.3,718.5 452.2,725.8 440.5,735.7 447.1,748.9 451.7,773.6 465.8,770.7 475.4,766.3 483.3,768.9 499.2,768.8 515.1,775.9 521.5,777.1 531.0,775.2 534.2,768.6 540.5,768.2 542.2,765.3 550.1,761.4 558.0,763.8 562.8,762.7 573.9,765.1 581.9,762.1 586.6,755.4 591.4,760.7 599.4,762.8 602.6,762.1 609.6,753.8 609.3,748.9 601.0,738.7 591.0,739.0 585.1,730.3 580.3,732.7 577.1,732.3 574.6,716.0 571.7,711.0 567.5,694.6 559.6,689.3 550.1,687.8 545.3,689.9 529.4,681.2 523.1,681.8 516.7,677.8Z"},
+  RJ:{n:"Rio de Janeiro",r:"Sudeste",c:[727.1,678.2],d:"M745.6,640.1 737.3,651.8 736.4,656.7 737.7,661.0 735.2,663.3 721.8,665.4 718.6,669.5 715.4,668.0 707.5,668.4 697.9,674.3 686.8,674.1 682.2,676.5 683.2,679.8 690.0,681.1 691.8,684.7 681.6,689.6 677.1,696.2 682.0,708.2 685.2,709.6 705.9,699.1 715.4,697.1 731.3,698.5 744.0,696.6 752.1,691.3 756.8,682.5 771.4,663.3 773.4,656.7 771.6,653.4 767.9,651.4 752.0,650.2 745.6,640.1Z"},
+  RN:{n:"Rio Grande do Norte",r:"Nordeste",c:[872.1,282.9],d:"M925.3,255.9 912.6,263.7 904.6,265.3 888.7,261.0 871.2,262.4 855.3,258.1 840.3,266.6 837.9,274.9 834.4,278.2 829.9,287.0 826.7,291.4 818.9,294.6 818.8,297.7 826.7,302.6 833.1,301.5 844.2,294.3 850.6,293.5 850.8,296.3 846.8,299.6 846.1,307.8 852.1,311.2 855.3,308.5 858.5,308.3 863.3,312.4 867.8,304.5 867.2,299.6 869.6,298.2 880.8,303.5 885.5,302.1 893.5,303.7 906.2,302.3 908.4,299.6 907.0,293.0 908.7,283.1 912.2,274.9 918.9,267.9 928.2,263.3 925.3,255.9Z"},
+  RO:{n:"Rondônia",r:"Norte",c:[266.7,410.5],d:"M244.8,333.9 236.9,337.0 206.7,355.6 192.0,395.0 188.5,416.4 197.7,421.4 203.9,427.9 207.0,434.5 211.1,455.9 216.2,463.3 224.2,469.5 240.1,473.1 248.0,471.1 263.9,462.1 279.8,462.1 291.7,470.7 300.9,483.9 304.9,495.4 306.8,496.0 325.9,484.4 332.0,462.5 345.0,455.8 348.8,437.8 336.7,423.0 335.8,414.8 332.7,409.8 324.3,401.4 308.4,410.1 297.3,408.9 295.0,406.5 295.4,396.7 299.7,388.4 303.7,384.8 318.0,378.6 320.3,370.3 320.2,353.9 302.1,336.0 279.8,346.0 268.7,346.5 259.1,342.8 244.8,333.9Z"},
+  RR:{n:"Roraima",r:"Norte",c:[319.2,87.3],d:"M354.5,26.0 286.2,25.6 283.0,27.5 281.0,31.3 272.7,64.2 276.3,90.5 283.4,100.4 286.9,108.6 286.9,121.8 281.2,135.0 291.7,144.8 306.8,164.9 313.2,165.3 329.1,162.2 341.8,163.6 344.1,161.3 343.1,153.1 344.6,144.8 352.0,128.4 347.5,111.9 349.4,102.0 352.9,94.9 359.7,87.2 369.6,62.5 367.6,47.7 354.5,26.0Z"},
+  RS:{n:"Rio Grande do Sul",r:"Sul",c:[468.1,855.3],d:"M454.7,774.9 451.5,775.2 446.7,784.0 440.4,790.4 424.5,796.3 410.2,804.5 397.5,816.8 381.6,825.5 365.3,842.7 360.5,852.6 360.2,865.7 365.3,877.3 373.6,885.9 381.6,889.5 402.2,891.7 422.9,903.9 440.4,909.8 451.5,920.8 461.0,926.3 467.4,932.4 476.9,948.8 484.9,950.4 489.7,947.0 503.6,921.7 511.9,912.7 526.2,901.6 542.1,895.8 549.2,888.8 554.4,874.0 561.5,864.1 571.6,842.7 559.6,836.2 562.5,821.3 553.3,816.1 542.1,813.4 537.4,804.8 531.0,802.5 527.8,798.2 519.9,796.9 511.9,791.5 504.0,792.4 486.5,787.6 475.4,788.6 469.0,782.3 454.7,774.9Z"},
+  SC:{n:"Santa Catarina",r:"Sul",c:[551.2,791.3],d:"M586.6,755.4 581.9,762.1 573.9,765.1 562.8,762.7 558.0,763.8 550.1,761.4 542.2,765.3 540.5,768.2 534.2,768.6 531.0,775.2 521.5,777.1 515.1,775.9 499.2,768.8 483.3,768.9 475.4,766.3 465.8,770.7 457.9,771.6 456.3,774.5 461.0,778.8 470.6,783.3 475.4,788.6 486.5,787.6 504.0,792.4 511.9,791.5 519.9,796.9 527.8,798.2 531.0,802.5 537.4,804.8 542.1,813.4 553.3,816.1 562.5,821.3 559.6,836.2 572.3,841.7 594.6,823.7 600.0,814.7 598.6,804.8 601.6,788.4 599.1,775.2 601.0,764.5 591.4,760.7 586.6,755.4Z"},
+  SE:{n:"Sergipe",r:"Nordeste",c:[848.6,402.9],d:"M837.8,376.0 835.3,378.6 840.1,386.8 836.8,395.0 837.5,400.0 834.7,402.9 828.3,401.7 829.5,411.5 832.6,416.4 844.2,424.2 855.3,427.0 861.3,409.8 871.2,400.9 871.8,398.3 864.9,390.8 860.1,389.2 853.7,382.8 844.2,381.6 842.5,378.6 837.8,376.0Z"},
+  SP:{n:"São Paulo",r:"Sudeste",c:[593.1,676.6],d:"M551.7,615.2 539.1,617.2 535.8,624.6 527.8,630.7 521.9,632.0 524.4,638.6 523.4,641.9 518.3,646.4 515.1,653.9 510.3,656.8 507.4,671.5 499.2,676.6 499.3,681.4 502.4,682.1 507.2,680.1 511.0,681.4 515.1,677.5 523.1,681.8 529.4,681.2 545.3,689.9 550.1,687.8 559.6,689.3 568.3,696.2 571.7,711.0 574.6,716.0 577.1,732.3 580.3,732.7 585.1,730.3 586.6,734.6 591.4,739.3 601.0,738.7 612.1,751.9 617.6,748.9 624.1,737.4 635.9,727.1 651.8,718.9 682.2,712.7 683.2,711.0 677.1,696.2 681.6,689.6 690.4,686.3 691.6,682.8 678.9,677.1 666.1,682.8 658.2,681.4 656.6,685.5 650.2,688.2 643.9,687.3 640.7,679.8 636.2,674.8 637.9,666.6 636.9,661.7 639.4,655.1 637.5,653.1 628.6,651.8 626.7,643.6 624.0,640.3 625.4,635.3 621.0,628.7 626.1,622.2 624.8,619.6 612.1,620.2 602.5,624.1 593.0,623.1 578.7,627.4 578.9,622.2 577.1,619.9 569.2,617.1 564.4,619.1 561.2,616.9 551.7,615.2Z"},
+  TO:{n:"Tocantins",r:"Norte",c:[604.4,385.9],d:"M601.0,271.4 593.0,272.5 590.8,274.9 593.0,278.8 599.4,279.8 602.9,286.4 602.8,289.7 594.6,300.1 589.8,302.8 578.7,316.0 572.0,321.0 571.7,334.1 577.8,339.1 578.9,342.3 573.9,348.0 567.3,348.9 570.7,364.2 569.2,365.5 559.6,360.3 557.4,362.1 558.7,376.9 556.2,383.5 561.4,391.7 557.4,406.5 560.3,416.4 558.4,427.9 551.3,439.5 549.5,447.7 564.4,460.5 572.3,454.1 580.3,458.3 588.2,456.3 597.8,462.2 607.3,458.9 615.3,460.0 628.0,458.3 634.3,453.5 640.7,457.8 647.1,455.2 658.2,454.9 659.8,453.3 651.4,442.7 649.5,437.8 649.5,423.0 655.4,406.5 655.7,396.7 649.9,385.1 649.3,376.9 639.3,358.8 644.9,339.1 642.3,334.0 632.8,329.5 628.0,324.9 618.4,325.8 617.8,316.0 621.0,311.1 619.3,306.1 619.7,297.9 617.6,294.6 618.8,283.1 615.2,274.9 601.0,271.4Z"},
+};
+
+function PortalMapaVendas({vendas, cl, isMob, periodoLabel, periodo, setPeriodo}){
+  const [hover,setHover]=useState(null);   // uf em foco (hover ou clique)
+  const [fixo,setFixo]=useState(null);     // uf travada por clique
+
+  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+
+  // Agrega por UF: valor, nº de vendas, m³ e cidades
+  const porUF={};
+  (vendas||[]).forEach(function(v){
+    const uf=String(v.uf||"").trim().toUpperCase();
+    if(!uf||!_PX_BR_UF[uf]) return;   // sem UF ou "EX" (exterior) → fora do mapa
+    if(!porUF[uf]) porUF[uf]={uf:uf,valor:0,qtd:0,m3:0,cidades:{}};
+    const a=porUF[uf];
+    a.valor+=Number(v.value)||0;
+    a.qtd+=1;
+    if((v.size_unit||"m3")==="m3") a.m3+=Number(v.size)||0;
+    const c=String(v.city||"").trim();
+    if(c) a.cidades[c]=(a.cidades[c]||0)+1;
+  });
+  const lista=Object.keys(porUF).map(function(k){return porUF[k];}).sort(function(a,b){return b.valor-a.valor;});
+  const maxValor=lista.length?Math.max.apply(null,lista.map(function(x){return x.valor;})):0;
+  const totalValor=lista.reduce(function(s,x){return s+x.valor;},0);
+  const semUF=(vendas||[]).filter(function(v){return !String(v.uf||"").trim();}).length;
+  const exterior=(vendas||[]).filter(function(v){return String(v.uf||"").trim().toUpperCase()==="EX";});
+
+  // Intensidade do preenchimento — escala de raiz pra não achatar os menores
+  const _fill=function(uf){
+    const a=porUF[uf];
+    if(!a||maxValor<=0) return "#eef0f3";
+    const t=Math.sqrt(a.valor/maxValor);
+    const alpha=Math.round((0.18+0.82*t)*255).toString(16).padStart(2,"0");
+    return cl.color+alpha;
+  };
+
+  const foco = fixo || hover;
+  const dadoFoco = foco ? porUF[foco] : null;
+
+  // Rollup por região — leitura rápida de cobertura
+  const porRegiao={};
+  lista.forEach(function(a){
+    const r=_PX_BR_UF[a.uf].r;
+    if(!porRegiao[r]) porRegiao[r]={r:r,valor:0,qtd:0,ufs:0};
+    porRegiao[r].valor+=a.valor; porRegiao[r].qtd+=a.qtd; porRegiao[r].ufs+=1;
+  });
+  const regioes=["Norte","Nordeste","Centro-Oeste","Sudeste","Sul"].map(function(r){
+    return porRegiao[r]||{r:r,valor:0,qtd:0,ufs:0};
+  });
+
+  return <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:isMob?"18px 16px":"20px 22px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="2.6"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.25}}>Onde as vendas acontecem</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>
+            {lista.length>0 ? lista.length+(lista.length===1?" estado":" estados")+" · "+periodoLabel : "Sem vendas com UF registrada"}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"inline-flex",background:"#f4f5f7",border:"1px solid #e6e8ec",borderRadius:10,padding:3,gap:2}}>
+        {[["mes","Mês"],["ano","Ano"],["tudo","Tudo"]].map(function(p){
+          const _on=periodo===p[0];
+          return <button key={p[0]} type="button" onClick={function(){setPeriodo(p[0]);}}
+            style={{background:_on?"#fff":"transparent",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,
+              color:_on?"#0f172a":"#64748b",cursor:"pointer",fontFamily:"inherit",boxShadow:_on?"0 1px 3px rgba(15,23,42,0.10)":"none"}}>{p[1]}</button>;
+        })}
+      </div>
+    </div>
+
+    {lista.length===0
+      ? <div style={{border:"1px dashed #e2e8f0",borderRadius:12,padding:"40px 20px",textAlign:"center",background:"#fafbfc"}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>Nenhuma venda com UF preenchida ainda</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4,lineHeight:1.55,maxWidth:400,margin:"4px auto 0"}}>
+            Ao cadastrar a venda, informe cidade e UF — o mapa se monta sozinho a partir daí.
+          </div>
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.15fr 1fr",gap:18,alignItems:"start"}}>
+
+          {/* ── MAPA ── */}
+          <div style={{position:"relative"}}>
+            <svg viewBox={"0 0 "+_PX_BR_W+" "+_PX_BR_H} width="100%" style={{display:"block",maxHeight:isMob?340:430}}
+              onMouseLeave={function(){setHover(null);}}>
+              {Object.keys(_PX_BR_UF).map(function(uf){
+                const a=porUF[uf];
+                const _foco=foco===uf;
+                return <path key={uf} d={_PX_BR_UF[uf].d}
+                  fill={_fill(uf)}
+                  stroke={_foco?"#0f172a":"#fff"}
+                  strokeWidth={_foco?2.6:1.6}
+                  strokeLinejoin="round"
+                  style={{cursor:a?"pointer":"default",transition:"fill .15s"}}
+                  onMouseEnter={function(){setHover(uf);}}
+                  onClick={function(){ if(a) setFixo(fixo===uf?null:uf); }}/>;
+              })}
+              {/* Sigla só nos estados com venda — resto do mapa fica limpo */}
+              {lista.map(function(a){
+                const g=_PX_BR_UF[a.uf];
+                const _claro=Math.sqrt(a.valor/(maxValor||1))>0.55;
+                return <text key={a.uf} x={g.c[0]} y={g.c[1]+5} textAnchor="middle"
+                  style={{pointerEvents:"none",fontSize:26,fontWeight:800,fill:_claro?"#fff":"#334155",fontFamily:"inherit"}}>{a.uf}</text>;
+              })}
+            </svg>
+
+            {/* Legenda de intensidade */}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+              <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Menos</span>
+              <div style={{flex:1,height:7,borderRadius:99,background:"linear-gradient(90deg,"+cl.color+"2e,"+cl.color+")"}}/>
+              <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Mais</span>
+            </div>
+
+            {/* Detalhe do estado em foco */}
+            {dadoFoco && <div style={{marginTop:10,background:"#fafbfc",border:"1px solid #e9ebef",borderLeft:"3px solid "+cl.color,borderRadius:"0 12px 12px 0",padding:"11px 14px"}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_PX_BR_UF[dadoFoco.uf].n}</span>
+                <span style={{color:"#0f172a",fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(dadoFoco.valor)}</span>
+              </div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:3,fontWeight:500}}>
+                {dadoFoco.qtd} {dadoFoco.qtd===1?"venda":"vendas"}
+                {dadoFoco.m3>0 && " · "+dadoFoco.m3.toLocaleString("pt-BR")+" m³"}
+                {totalValor>0 && " · "+Math.round((dadoFoco.valor/totalValor)*100)+"% do total"}
+              </div>
+              {Object.keys(dadoFoco.cidades).length>0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:8}}>
+                {Object.keys(dadoFoco.cidades).sort(function(a,b){return dadoFoco.cidades[b]-dadoFoco.cidades[a];}).slice(0,6).map(function(c){
+                  return <span key={c} style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:99,padding:"3px 9px",fontSize:10.5,fontWeight:700,color:"#475569"}}>
+                    {c}{dadoFoco.cidades[c]>1?" ("+dadoFoco.cidades[c]+")":""}
+                  </span>;
+                })}
+              </div>}
+            </div>}
+          </div>
+
+          {/* ── RANKING + REGIÕES ── */}
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>Ranking por estado</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:250,overflowY:"auto",paddingRight:2}}>
+                {lista.map(function(a){
+                  const pct=maxValor>0?(a.valor/maxValor)*100:0;
+                  const _foco=foco===a.uf;
+                  return <div key={a.uf}
+                    onMouseEnter={function(){setHover(a.uf);}}
+                    onMouseLeave={function(){setHover(null);}}
+                    onClick={function(){setFixo(fixo===a.uf?null:a.uf);}}
+                    style={{cursor:"pointer",background:_foco?"#fafbfc":"transparent",border:"1px solid "+(_foco?"#e9ebef":"transparent"),borderRadius:10,padding:"7px 9px"}}>
+                    <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:7,minWidth:0}}>
+                        <span style={{background:cl.color+"18",color:cl.color,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:800,letterSpacing:.3,flexShrink:0}}>{a.uf}</span>
+                        <span style={{color:"#475569",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_PX_BR_UF[a.uf].n}</span>
+                      </span>
+                      <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_brl(a.valor)}</span>
+                    </div>
+                    <div style={{height:7,borderRadius:99,background:"#f1f3f5",overflow:"hidden"}}>
+                      <div style={{width:Math.max(3,pct)+"%",height:"100%",borderRadius:99,background:cl.color}}/>
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>
+
+            <div style={{paddingTop:14,borderTop:"1px solid #f1f3f5"}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>Por região</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {regioes.map(function(r){
+                  const pct=totalValor>0?Math.round((r.valor/totalValor)*100):0;
+                  return <div key={r.r} style={{display:"flex",alignItems:"center",gap:9}}>
+                    <span style={{color:r.valor>0?"#475569":"#cbd5e1",fontSize:11.5,fontWeight:700,width:96,flexShrink:0}}>{r.r}</span>
+                    <div style={{flex:1,height:8,borderRadius:99,background:"#f1f3f5",overflow:"hidden"}}>
+                      <div style={{width:pct+"%",height:"100%",borderRadius:99,background:r.valor>0?cl.color:"transparent"}}/>
+                    </div>
+                    <span style={{color:r.valor>0?"#0f172a":"#cbd5e1",fontSize:11,fontWeight:800,width:34,textAlign:"right",fontFeatureSettings:"'tnum'",flexShrink:0}}>{pct}%</span>
+                  </div>;
+                })}
+              </div>
+            </div>
+
+            {(semUF>0||exterior.length>0) && <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",color:"#92400e",fontSize:11,fontWeight:600,lineHeight:1.5}}>
+              {semUF>0 && <div>{semUF} {semUF===1?"venda sem UF":"vendas sem UF"} — não {semUF===1?"entra":"entram"} no mapa.</div>}
+              {exterior.length>0 && <div>{exterior.length} {exterior.length===1?"venda no exterior":"vendas no exterior"} (EX) — fora do mapa do Brasil.</div>}
+            </div>}
+          </div>
+        </div>}
+  </div>;
+}
+
 /* ─── Ícones de origem da venda ───────────────────────────────────
    Meta e Google usam o path oficial da marca (Simple Icons / brand kit).
    O resto usa ícone que representa o canal: globo pro site, página pra
@@ -50332,7 +50605,7 @@ function _PxOrigemIco({n, size}){
   const p={width:sz,height:sz,viewBox:"0 0 24 24",fill:"none",stroke:cor,strokeWidth:2.2,strokeLinecap:"round",strokeLinejoin:"round"};
   if(n==="site") return <svg {...p}><circle cx="12" cy="12" r="9.5"/><ellipse cx="12" cy="12" rx="4" ry="9.5"/><line x1="2.5" y1="12" x2="21.5" y2="12"/></svg>;
   if(n==="landing") return <svg {...p}><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><line x1="3" y1="8.5" x2="21" y2="8.5"/><line x1="7" y1="12.5" x2="15" y2="12.5"/><line x1="7" y1="16.5" x2="12" y2="16.5"/></svg>;
-  if(n==="organico") return <svg {...p}><path d="M11 20.5V12"/><path d="M11 12c0-4.5 3.5-8.5 9-9 .5 5.5-3 9.5-7 10-1 .1-2 0-2-1z"/><path d="M11 15.5c0-3-2.2-5.5-5.5-6-.4 3.7 1.7 6.3 4.2 6.6.7.1 1.3 0 1.3-.6z"/></svg>;
+  if(n==="organico") return <svg {...p}><circle cx="18" cy="5" r="2.8"/><circle cx="6" cy="12" r="2.8"/><circle cx="18" cy="19" r="2.8"/><line x1="8.6" y1="10.7" x2="15.4" y2="6.3"/><line x1="8.6" y1="13.3" x2="15.4" y2="17.7"/></svg>;
   return <svg {...p}><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="2.2" fill={cor} stroke="none"/></svg>;
 }
 
@@ -50478,18 +50751,34 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
   </div>;
 }
 
-function PortalFaturamentoROI({cl, selUnit, isMob}){
+/* Aba Performance — dona do período. Funil e ROI recebem month/year por prop,
+   então o seletor único do topo governa a página inteira. */
+function PortalPerformance({cl, selUnit, isMob, unitId}){
+  const _hoje=new Date();
+  const [mes,setMes]=useState(_hoje.getMonth()+1);
+  const [ano,setAno]=useState(_hoje.getFullYear());
+  return <div style={{display:"flex",flexDirection:"column",gap:28}}>
+    <PortalFunil cl={cl} isMob={isMob} unitId={unitId}
+      month={mes} year={ano} setMonth={setMes} setYear={setAno}/>
+    <PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob} month={mes} year={ano}/>
+  </div>;
+}
+
+function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
   const _now=new Date();
-  const [year,setYear]=useState(_now.getFullYear());
-  const [month,setMonth]=useState(_now.getMonth()+1);
   const [midia,setMidia]=useState(0);
   const [pixelsServ,setPixelsServ]=useState(0);
   const [sales,setSales]=useState([]); // [{id,lead_name,product,value,date,origin}]
   const [historico,setHistorico]=useState([]); // ultimos 12 meses
+  const [vendasHistorico,setVendasHistorico]=useState([]); // {year,month,sales[]} — alimenta o mapa
+  const [mapaPeriodo,setMapaPeriodo]=useState("ano");
+  const [_logoPixelsOk,_setLogoPixelsOk]=useState(true);
   const [loading,setLoading]=useState(true);
   const [dirty,setDirty]=useState(false);
   const [saving,setSaving]=useState(false);
   const [editVenda,setEditVenda]=useState(null); // {mode:"new"|"edit", data}
+  // Guarda pra nao fechar o modal quando o arrasto comeca dentro e termina fora
+  const _vendaOverlayDown=useRef(false);
   // ── Produtos do cliente (Estratégia › Produtos) ──────────────────
   // Fonte: tabela `playbooks`, 1 linha por client_id, coluna `data` (jsonb),
   // campo `produtos` — o MESMO array que a aba Estratégia edita. Assim o
@@ -50575,8 +50864,11 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           .eq("client_id",effectiveClientId)
           .order("year",{ascending:true}).order("month",{ascending:true});
         if(!active||!data)return;
+        if(active) setVendasHistorico(data.map(function(r){
+          return {year:r.year, month:r.month, sales:Array.isArray(r.sales)?r.sales:[]};
+        }));
         const hist=data.map(function(r){
-          const vendido=(Array.isArray(r.sales)?r.sales:[]).reduce(function(s,v){return s+Number(v.value||0);},0);
+          const vendido=(Array.isArray(r.sales)?r.sales:[]).reduce(function(s,v){return s+(Number(v.value)||0);},0);
           const investido=Number(r.midia_spend||0)+Number(r.pixels_service||0);
           const roi=investido>0?Math.round(((vendido-investido)/investido)*1000)/10:0;
           return {year:r.year,month:r.month,vendido:vendido,investido:investido,roi:roi};
@@ -50684,6 +50976,23 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
 
   const _lucro=totalVendido-totalInvestido;
 
+  // Vendas que alimentam o mapa. "mes" usa o state vivo (inclui o que ainda
+  // nao foi salvo); "ano"/"tudo" vem do historico e substituem o mes corrente
+  // pelo state vivo, senao uma venda recem-adicionada sumiria do mapa.
+  const _vendasMapa=(function(){
+    if(mapaPeriodo==="mes") return sales;
+    const out=[];
+    (vendasHistorico||[]).forEach(function(r){
+      if(r.year===year && r.month===month) return;
+      if(mapaPeriodo==="ano" && r.year!==year) return;
+      out.push.apply(out, r.sales||[]);
+    });
+    return out.concat(sales);
+  })();
+  const _mapaLabel = mapaPeriodo==="mes" ? (MESES[month-1]+" de "+year)
+                   : mapaPeriodo==="ano" ? ("ano de "+year)
+                   : "histórico completo";
+
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
     {/* ══════════ CABEÇALHO GRAFITE — os 3 números que importam ══════════
@@ -50708,14 +51017,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           <span style={{background:selo.color==="#15803d"?"rgba(34,197,94,0.16)":selo.color==="#b91c1c"?"rgba(239,68,68,0.16)":"rgba(245,158,11,0.16)",
             color:selo.color==="#15803d"?"#4ade80":selo.color==="#b91c1c"?"#f87171":"#fbbf24",
             border:"1px solid rgba(255,255,255,0.10)",borderRadius:99,padding:"5px 12px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{selo.label}</span>
-          <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 11px",color:"#fff",fontSize:12.5,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
-            {MESES.map(function(n,i){return <option key={i} value={i+1} style={{color:"#0f172a"}}>{n}</option>;})}
-          </select>
-          <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 11px",color:"#fff",fontSize:12.5,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
-            {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y} style={{color:"#0f172a"}}>{y}</option>;})}
-          </select>
+          <span style={{color:"rgba(255,255,255,0.55)",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap"}}>{MESES[month-1]} · {year}</span>
         </div>
       </div>
 
@@ -50778,129 +51080,176 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
       </div>
     </div>}
 
-    {/* ══════════ GRÁFICOS GRANDES ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.55fr 1fr",gap:14}}>
-
-      {/* ── Evolução do ROI — área grande com grade e eixo ── */}
-      <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:6,flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:9}}>
-            <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <Ico n="chart" size={14} color="#475569"/>
-            </div>
-            <div>
-              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Evolução do ROI</div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Últimos {historico.length||0} meses com dados cadastrados</div>
-            </div>
-          </div>
-          {historico.length>=2&&<div style={{textAlign:"right"}}>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Mês atual</div>
-            <div style={{color:roiPct>=0?"#16a34a":"#dc2626",fontSize:18,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{(roiPct>=0?"+":"")+roiPct}%</div>
-          </div>}
-        </div>
-        {historico.length>=2?(function(){
-          const W=560,H=250;
-          const padL=44,padR=16,padT=18,padB=30;
-          const xs=W-padL-padR, ys=H-padT-padB;
-          const rois=historico.map(function(h){return h.roi;});
-          const maxR=Math.max.apply(null,rois.concat([10]));
-          const minR=Math.min.apply(null,rois.concat([0]));
-          const range=(maxR-minR)||1;
-          const yDe=function(v){return padT+ys-((v-minR)/range)*ys;};
-          const points=historico.map(function(h,i){
-            return {x:padL+(historico.length>1?(i/(historico.length-1))*xs:xs/2),y:yDe(h.roi),roi:h.roi,month:h.month,year:h.year};
-          });
-          const poly=points.map(function(p){return p.x+","+p.y;}).join(" ");
-          const _ultimo=points[points.length-1];
-          // 4 linhas de grade horizontais
-          const grades=[0,0.25,0.5,0.75,1].map(function(f){return minR+range*f;});
-          return <svg viewBox={"0 0 "+W+" "+H} width="100%" style={{maxHeight:280,display:"block",overflow:"visible"}}>
-            <defs>
-              <linearGradient id="pxRoiFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={cl.color} stopOpacity="0.22"/>
-                <stop offset="100%" stopColor={cl.color} stopOpacity="0"/>
-              </linearGradient>
-            </defs>
-            {grades.map(function(g,i){
-              const y=yDe(g);
-              return <g key={i}>
-                <line x1={padL} y1={y} x2={W-padR} y2={y} stroke="#f1f3f5" strokeWidth="1"/>
-                <text x={padL-8} y={y+3.5} textAnchor="end" fontSize="10" fill="#cbd5e1" fontWeight="600">{Math.round(g)}%</text>
-              </g>;
-            })}
-            {minR<0&&maxR>0&&<line x1={padL} y1={yDe(0)} x2={W-padR} y2={yDe(0)} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1.2"/>}
-            <polygon points={poly+" "+_ultimo.x+","+(padT+ys)+" "+points[0].x+","+(padT+ys)} fill="url(#pxRoiFill)"/>
-            <polyline points={poly} fill="none" stroke={cl.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
-            {points.map(function(p,i){
-              const _last=i===points.length-1;
-              return <g key={i}>
-                <circle cx={p.x} cy={p.y} r={_last?5:3.6} fill="#fff" stroke={cl.color} strokeWidth={_last?3:2.2}/>
-                <text x={p.x} y={H-9} textAnchor="middle" fontSize="10.5" fill={_last?"#0f172a":"#94a3b8"} fontWeight={_last?"800":"600"}>{_MES_CURTO[p.month-1]}</text>
-              </g>;
-            })}
-          </svg>;
-        })():<div style={{border:"1px dashed #e2e8f0",borderRadius:12,padding:"56px 20px",textAlign:"center",background:"#fafbfc",marginTop:10}}>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>Ainda sem histórico suficiente</div>
-          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Cadastre dados em ao menos 2 meses pra ver a curva.</div>
-        </div>}
-      </div>
-
-      {/* ── Vendido vs investido + composição ── */}
-      <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:18}}>
-        <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ico n="layers" size={14} color="#475569"/>
+    {/* ══════════ INVESTIDO × RETORNADO — o bloco central da página ══════════
+        Full-width e grande de propósito: é a leitura que o cliente faz em 2
+        segundos. A barra de investimento já vem segmentada em Pixels + Mídia,
+        então a composição não precisa de card separado (era um donut). */}
+    <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:18,padding:isMob?"20px 18px":"26px 30px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:isMob?20:26}}>
+        <div style={{display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:34,height:34,borderRadius:10,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="layers" size={16} color="#475569"/>
           </div>
           <div>
-            <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Vendido vs investido</div>
-            <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Proporção do mês selecionado</div>
+            <div style={{color:"#0f172a",fontSize:15.5,fontWeight:800,letterSpacing:-.3}}>Investido × retornado</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>Quanto entrou de volta em vendas a partir do que foi aplicado</div>
           </div>
         </div>
-
-        {/* Barras horizontais grandes */}
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          {[
-            {l:"Vendido",   v:totalVendido,   cor:totalVendido>=totalInvestido?"#16a34a":"#f59e0b"},
-            {l:"Investido", v:totalInvestido, cor:"#334155"},
-          ].map(function(b,i){
-            const pct=barMax>0?Math.max(b.v>0?4:0,(b.v/barMax)*100):0;
-            return <div key={i}>
-              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
-                <span style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{b.l}</span>
-                <span style={{color:b.v>0?"#0f172a":"#cbd5e1",fontSize:15,fontWeight:800,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{b.v>0?_brl(b.v):"—"}</span>
-              </div>
-              <div style={{height:14,borderRadius:99,background:"#f1f3f5",overflow:"hidden"}}>
-                <div style={{width:pct+"%",height:"100%",borderRadius:99,background:b.cor,transition:"width .3s"}}/>
-              </div>
-            </div>;
-          })}
-        </div>
-
-        {/* Composição do investimento — barra empilhada, sem donut coloridão */}
-        <div style={{paddingTop:16,borderTop:"1px solid #f1f3f5"}}>
-          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>Composição do investimento</div>
-          {totalInvestido>0?<>
-            <div style={{display:"flex",height:12,borderRadius:99,overflow:"hidden",background:"#f1f3f5"}}>
-              <div style={{width:pctPixels+"%",background:cl.color}}/>
-              <div style={{width:pctMidia+"%",background:"#94a3b8"}}/>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:11}}>
-              {[
-                {c:cl.color, l:"Serviço Pixels", p:pctPixels, v:pixelsServ},
-                {c:"#94a3b8", l:"Mídia / anúncios", p:pctMidia, v:midia},
-              ].map(function(x,i){
-                return <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:9,height:9,borderRadius:3,background:x.c,flexShrink:0}}/>
-                  <span style={{color:"#475569",fontSize:11.5,fontWeight:700,flex:1}}>{x.l}</span>
-                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{Math.round(x.p)}%</span>
-                  <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:78,textAlign:"right"}}>{_brl(x.v)}</span>
-                </div>;
-              })}
-            </div>
-          </>:<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"18px 0",fontWeight:600}}>Sem investimento informado.</div>}
-        </div>
+        <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:700}}>{MESES[month-1]} de {year}</span>
       </div>
+
+      {(function(){
+        const _max=Math.max(totalVendido,totalInvestido,1);
+        const _hBar=isMob?38:54;
+        const _pInv=(totalInvestido/_max)*100;
+        const _pVen=(totalVendido/_max)*100;
+        const _wPix=totalInvestido>0?(pixelsServ/totalInvestido)*100:0;
+        return <div style={{display:"flex",flexDirection:"column",gap:isMob?18:24}}>
+
+          {/* ── INVESTIDO (segmentado em Pixels + Mídia) ── */}
+          <div>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:9,flexWrap:"wrap"}}>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.9}}>Investido</span>
+              <span style={{color:"#0f172a",fontSize:isMob?22:28,fontWeight:800,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalInvestido)}</span>
+            </div>
+            <div style={{height:_hBar,borderRadius:12,background:"#f4f5f7",overflow:"hidden",display:"flex"}}>
+              <div style={{width:_pInv+"%",height:"100%",display:"flex",borderRadius:12,overflow:"hidden",transition:"width .35s"}}>
+                <div title={"Serviço Pixels · "+_brl(pixelsServ)} style={{width:_wPix+"%",background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                  {_wPix>16&&<span style={{color:"#fff",fontSize:isMob?10:12,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap",padding:"0 8px",overflow:"hidden",textOverflow:"ellipsis"}}>Pixels · {Math.round(_wPix)}%</span>}
+                </div>
+                <div title={"Mídia / anúncios · "+_brl(midia)} style={{flex:1,background:"#334155",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                  {(100-_wPix)>16&&<span style={{color:"#fff",fontSize:isMob?10:12,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap",padding:"0 8px",overflow:"hidden",textOverflow:"ellipsis"}}>Mídia · {Math.round(100-_wPix)}%</span>}
+                </div>
+              </div>
+            </div>
+            {/* Legenda — com a logo da Pixels no serviço */}
+            <div style={{display:"flex",gap:isMob?14:26,flexWrap:"wrap",marginTop:11}}>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                {_logoPixelsOk
+                  ? <img src="/logo-pixels.png" alt="Pixels" onError={function(){_setLogoPixelsOk(false);}}
+                      style={{height:16,width:"auto",maxWidth:70,objectFit:"contain",objectPosition:"left center",display:"block",flexShrink:0}}/>
+                  : <span style={{width:14,height:14,borderRadius:4,background:cl.color,flexShrink:0}}/>}
+                <div>
+                  <div style={{color:"#64748b",fontSize:10.5,fontWeight:700}}>Serviço Pixels</div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",marginTop:1}}>{_brl(pixelsServ)}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                <span style={{width:14,height:14,borderRadius:4,background:"#334155",flexShrink:0}}/>
+                <div>
+                  <div style={{color:"#64748b",fontSize:10.5,fontWeight:700}}>Mídia / anúncios</div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",marginTop:1}}>{_brl(midia)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── VENDIDO ── */}
+          <div>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:9,flexWrap:"wrap"}}>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.9}}>Retornou em vendas</span>
+              <span style={{color:totalVendido>0?(totalVendido>=totalInvestido?"#16a34a":"#d97706"):"#cbd5e1",fontSize:isMob?22:28,fontWeight:800,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalVendido)}</span>
+            </div>
+            <div style={{height:_hBar,borderRadius:12,background:"#f4f5f7",overflow:"hidden",position:"relative"}}>
+              {/* Marca onde está a linha do investimento — o alvo a ultrapassar */}
+              {totalInvestido>0&&totalVendido<totalInvestido&&<div style={{position:"absolute",left:_pInv+"%",top:0,bottom:0,width:2,background:"#cbd5e1"}}/>}
+              <div style={{width:Math.max(totalVendido>0?3:0,_pVen)+"%",height:"100%",borderRadius:12,
+                background:totalVendido>=totalInvestido?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,#d97706,#f59e0b)",
+                transition:"width .35s"}}/>
+              {totalVendido===0&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",paddingLeft:14,color:"#cbd5e1",fontSize:12,fontWeight:700}}>
+                Nenhuma venda registrada neste mês
+              </div>}
+              {totalInvestido>0&&totalVendido<totalInvestido&&totalVendido>0&&<div style={{position:"absolute",left:"calc("+_pInv+"% + 8px)",top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>
+                ponto de equilíbrio
+              </div>}
+            </div>
+          </div>
+
+          {/* ── FECHAMENTO: diferença + retorno por R$ 1 ── */}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:isMob?14:0,paddingTop:isMob?16:20,borderTop:"1px solid #f1f3f5"}}>
+            <div style={{paddingRight:isMob?0:24}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>{_lucro>=0?"Sobrou":"Faltou pra empatar"}</div>
+              <div style={{color:totalInvestido===0?"#cbd5e1":(_lucro>=0?"#16a34a":"#dc2626"),fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:5,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+                {_lucro>=0?"":"−"}{_brl(Math.abs(_lucro))}
+              </div>
+            </div>
+            <div style={{paddingLeft:isMob?0:24,borderLeft:isMob?"none":"1px solid #f1f3f5"}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Cada R$ 1 investido virou</div>
+              <div style={{color:totalInvestido===0?"#cbd5e1":(retornoPor1>=1?"#16a34a":"#dc2626"),fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:5,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+                R$ {retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+              </div>
+            </div>
+          </div>
+        </div>;
+      })()}
     </div>
+
+    {/* ══════════ EVOLUÇÃO DO ROI ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 22px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="chart" size={14} color="#475569"/>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Evolução do ROI</div>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Últimos {historico.length||0} meses com dados cadastrados</div>
+          </div>
+        </div>
+        {historico.length>=2&&<div style={{textAlign:"right"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Mês atual</div>
+          <div style={{color:roiPct>=0?"#16a34a":"#dc2626",fontSize:18,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{(roiPct>=0?"+":"")+roiPct}%</div>
+        </div>}
+      </div>
+      {historico.length>=2?(function(){
+        const W=1000,H=260;
+        const padL=52,padR=20,padT=20,padB=32;
+        const xs=W-padL-padR, ys=H-padT-padB;
+        const rois=historico.map(function(h){return h.roi;});
+        const maxR=Math.max.apply(null,rois.concat([10]));
+        const minR=Math.min.apply(null,rois.concat([0]));
+        const range=(maxR-minR)||1;
+        const yDe=function(v){return padT+ys-((v-minR)/range)*ys;};
+        const points=historico.map(function(h,i){
+          return {x:padL+(historico.length>1?(i/(historico.length-1))*xs:xs/2),y:yDe(h.roi),roi:h.roi,month:h.month,year:h.year};
+        });
+        const poly=points.map(function(p){return p.x+","+p.y;}).join(" ");
+        const _ultimo=points[points.length-1];
+        const grades=[0,0.25,0.5,0.75,1].map(function(f){return minR+range*f;});
+        return <svg viewBox={"0 0 "+W+" "+H} width="100%" preserveAspectRatio="none" style={{height:isMob?190:250,display:"block"}}>
+          <defs>
+            <linearGradient id="pxRoiFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor={cl.color} stopOpacity="0.22"/>
+              <stop offset="100%" stopColor={cl.color} stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          {grades.map(function(g,i){
+            const y=yDe(g);
+            return <g key={i}>
+              <line x1={padL} y1={y} x2={W-padR} y2={y} stroke="#f1f3f5" strokeWidth="1"/>
+              <text x={padL-10} y={y+4} textAnchor="end" fontSize="11" fill="#cbd5e1" fontWeight="600">{Math.round(g)}%</text>
+            </g>;
+          })}
+          {minR<0&&maxR>0&&<line x1={padL} y1={yDe(0)} x2={W-padR} y2={yDe(0)} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1.2"/>}
+          <polygon points={poly+" "+_ultimo.x+","+(padT+ys)+" "+points[0].x+","+(padT+ys)} fill="url(#pxRoiFill)"/>
+          <polyline points={poly} fill="none" stroke={cl.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+          {points.map(function(p,i){
+            const _last=i===points.length-1;
+            return <g key={i}>
+              <circle cx={p.x} cy={p.y} r={_last?5:3.6} fill="#fff" stroke={cl.color} strokeWidth={_last?3:2.2} vectorEffect="non-scaling-stroke"/>
+              <text x={p.x} y={H-10} textAnchor="middle" fontSize="11" fill={_last?"#0f172a":"#94a3b8"} fontWeight={_last?"800":"600"}>{_MES_CURTO[p.month-1]}</text>
+            </g>;
+          })}
+        </svg>;
+      })():<div style={{border:"1px dashed #e2e8f0",borderRadius:12,padding:"56px 20px",textAlign:"center",background:"#fafbfc",marginTop:10}}>
+        <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>Ainda sem histórico suficiente</div>
+        <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Cadastre dados em ao menos 2 meses pra ver a curva.</div>
+      </div>}
+    </div>
+    {/* ── MAPA DE VENDAS POR UF ── */}
+    <PortalMapaVendas vendas={_vendasMapa} cl={cl} isMob={isMob}
+      periodo={mapaPeriodo} setPeriodo={setMapaPeriodo} periodoLabel={_mapaLabel}/>
+
     {/* Investimento do mês */}
     <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px"}}>
       <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14}}>
@@ -51006,8 +51355,11 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
         Header antes era uma faixa cheia na cor do cliente — ficava um bloco
         vermelho gritando. Agora a cor do cliente entra como DETALHE: fio no
         topo, ícone e botão primário. O resto é neutro. */}
-    {editVenda&&<div onClick={function(){setEditVenda(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(10,12,16,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(5px)"}}>
-      <div onClick={function(e){e.stopPropagation();}}
+    {editVenda&&<div
+      onMouseDown={function(e){ _vendaOverlayDown.current = (e.target===e.currentTarget); }}
+      onClick={function(e){ if(e.target===e.currentTarget && _vendaOverlayDown.current) setEditVenda(null); _vendaOverlayDown.current=false; }}
+      style={{position:"fixed",inset:0,zIndex:300,background:"rgba(10,12,16,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(5px)"}}>
+      <div
         style={{background:"#fff",borderRadius:18,maxWidth:720,width:"100%",boxShadow:"0 30px 70px rgba(8,10,14,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",position:"relative"}}>
         <div style={{height:4,background:"linear-gradient(90deg,"+cl.color+","+cl.color+"66)"}}/>
         <div style={{padding:"18px 24px 16px",borderBottom:"1px solid #f1f3f5",display:"flex",alignItems:"center",gap:12}}>
@@ -51487,10 +51839,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob} selUnit={selUnit}/>}
 
     {/* ── PERFORMANCE ── funil + ROI unificados (cliente preenche etapas, vê resultado) */}
-    {tab==="performance"&&<div style={{display:"flex",flexDirection:"column",gap:28}}>
-      <PortalFunil cl={cl} isMob={isMob} unitId={isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null}/>
-      <PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob}/>
-    </div>}
+    {tab==="performance"&&<PortalPerformance cl={cl} selUnit={selUnit} isMob={isMob}
+      unitId={isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null}/>}
 
     {/* ── PUBLICAÇÕES ── grid estilo feed (cards pequenos, capa única) */}
     {tab==="publicacoes"&&(()=>{
