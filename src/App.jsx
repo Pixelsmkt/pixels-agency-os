@@ -47796,6 +47796,37 @@ function useFunnelHistory(clientId, limit){
    Pode editar a qualquer momento. Vê resumo de conversões + histórico.
 ─────────────────────────────────────────────────────────────────── */
 const _MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+/* ─── Miniatura de uma task (histórico do Portal) ───────────────────
+   Não dá pra reusar _fileIsVideo/_fileIsImage do PortalAprovacoes: eles
+   consultam `current` (o card aberto) na heurística de contentType, então
+   aplicados a outra task classificariam pelo card errado. Estes recebem o
+   arquivo e nada mais. */
+const _PX_IMG_RE=/\.(jpe?g|png|gif|webp|bmp|svg|avif|heic|heif)(\?|#|$|\/|\|)/i;
+const _PX_VID_RE=/\.(mp4|mov|webm|m4v|avi|mkv|mpe?g|3gp|ogv)(\?|#|$|\/|\|)/i;
+function _pxEhImagem(f){
+  if(!f||!f.url) return false;
+  if(f.type&&f.type.indexOf("image/")===0) return true;
+  return _PX_IMG_RE.test(String(f.name||"")+"|"+String(f.url||""));
+}
+function _pxEhVideo(f){
+  if(!f||!f.url) return false;
+  if(f.type&&f.type.indexOf("video/")===0) return true;
+  return _PX_VID_RE.test(String(f.name||"")+"|"+String(f.url||""));
+}
+function _pxThumbDaTask(tk){
+  if(!tk) return null;
+  const finais=(typeof pxFinalFiles==="function")?pxFinalFiles(tk):[];
+  const pool = finais.length>0 ? finais : (tk.files||[]).filter(function(f){
+    return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material";
+  });
+  const img=pool.filter(_pxEhImagem)[0];
+  if(img) return {url:img.url, video:false, n:pool.length};
+  const vid=pool.filter(_pxEhVideo)[0];
+  if(vid) return {url:vid.url, video:true, n:pool.length};
+  if(tk.cover) return {url:tk.cover, video:_PX_VID_RE.test(String(tk.cover)), n:pool.length||1};
+  return null;
+}
+
 /* ─── Valor editável inline ─────────────────────────────────────────
    O card "Investimento do mês" repetia Serviço Pixels e Mídia que já
    apareciam na legenda do donut — dois lugares pro mesmo número, e o de
@@ -48441,6 +48472,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
   // Regra ESTRITA: so timeline entries com type client_approved/client_rejected E clientId
   // igual ao cliente atual. Nao usar comments fallback (comments podem ser criados por
   // qualquer usuario interno — misturaria acoes internas com do cliente).
+  const [histLightbox,setHistLightbox]=useState(null);
   const _clienteHistorico = (function(){
     const _rows=[];
     (clTasks||[]).forEach(function(tk){
@@ -48457,6 +48489,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
         _rows.push({
           taskId: tk.id,
           title: tk.title || "(sem título)",
+          thumb: _pxThumbDaTask(tk),
           action: ev.type==="client_approved" ? "aprovou" : "solicitou ajuste",
           actionType: ev.type,
           atIso: ev.at || null,
@@ -48734,13 +48767,29 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
         : <div style={{maxHeight:340,overflowY:"auto"}}>
             {_clienteHistorico.map(function(r,idx){
               const _ok=r.actionType==="client_approved";
-              return <div key={r.taskId+"|"+idx} style={{display:"flex",alignItems:"flex-start",gap:11,padding:"11px 16px",borderTop:idx===0?"none":"1px solid #f8fafc"}}>
-                <div style={{width:26,height:26,borderRadius:99,background:_ok?"#dcfce7":"#fee2e2",color:_ok?"#16a34a":"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                  {_ok
-                    ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                  }
-                </div>
+              const _ico = _ok
+                ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>;
+              const _t=r.thumb;
+              return <div key={r.taskId+"|"+idx} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"11px 16px",borderTop:idx===0?"none":"1px solid #f8fafc"}}>
+                {/* Miniatura da arte, com o selo de aprovado/ajuste sobreposto.
+                    Sem arte (demanda de texto, etc) cai no selo sozinho. */}
+                {_t
+                  ? <div onClick={function(){setHistLightbox(_t.video?null:{url:_t.url,title:r.title});}}
+                      title={_t.video?r.title:"Ver em tamanho maior"}
+                      style={{position:"relative",width:52,height:52,borderRadius:9,overflow:"hidden",flexShrink:0,background:"#f1f5f9",border:"1px solid #e9ebef",cursor:_t.video?"default":"zoom-in"}}>
+                      {_t.video
+                        ? <video src={_t.url+"#t=0.5"} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"}}/>
+                        : <img src={_t.url} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+                      {_t.video&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(15,23,42,0.32)",color:"#fff",pointerEvents:"none"}}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                      </span>}
+                      {_t.n>1&&<span style={{position:"absolute",top:3,right:3,background:"rgba(15,23,42,0.72)",color:"#fff",borderRadius:5,padding:"1px 5px",fontSize:9,fontWeight:800,pointerEvents:"none"}}>{_t.n}</span>}
+                      <span style={{position:"absolute",bottom:-1,left:-1,width:19,height:19,borderRadius:"0 7px 0 8px",background:_ok?"#16a34a":"#dc2626",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>{_ico}</span>
+                    </div>
+                  : <div style={{width:52,height:52,borderRadius:9,background:_ok?"#dcfce7":"#fee2e2",color:_ok?"#16a34a":"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <span style={{transform:"scale(1.5)"}}>{_ico}</span>
+                    </div>}
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.35,wordBreak:"break-word"}}>
                     {r.title}
@@ -48758,6 +48807,20 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
           </div>
       }
     </div>
+
+    {/* Lightbox da miniatura do histórico */}
+    {histLightbox&&<div onClick={function(){setHistLightbox(null);}}
+      style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.86)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)"}}>
+      <div style={{maxWidth:"92vw",maxHeight:"92vh",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+        <img src={histLightbox.url} alt={histLightbox.title||""} onClick={function(e){e.stopPropagation();}}
+          style={{maxWidth:"92vw",maxHeight:"84vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>
+        <div style={{color:"rgba(255,255,255,0.85)",fontSize:12.5,fontWeight:600,textAlign:"center",maxWidth:600}}>{histLightbox.title||""}</div>
+      </div>
+      <button onClick={function(){setHistLightbox(null);}} title="Fechar"
+        style={{position:"fixed",top:18,right:18,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>}
 
     {/* Modal Solicitar Ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
