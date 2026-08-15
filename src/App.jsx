@@ -50623,9 +50623,19 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
 
   // Composite client ID: pra Bioter, inclui a unidade. Senao, usa cl.id direto.
   const effectiveClientId=(function(){
-    if(cl.id==="bioter"&&selUnit&&selUnit!=="grupo")return "bioter_"+selUnit;
+    // "_minhas_" caia no ramo de unidade e virava "bioter__minhas_" — id lixo.
+    if(cl.id==="bioter"&&selUnit&&selUnit!=="grupo"&&selUnit!=="_minhas_")return "bioter_"+selUnit;
     return cl.id;
   })();
+  // ── MODO GRUPO (Bioter) ────────────────────────────────────────
+  // Na aba "Grupo Bioter" os números são a SOMA do grupo + todas as unidades
+  // (pedido do user: "soma tudo de todos, tipo geral do Grupo"). A edição
+  // continua gravando na linha "bioter" (contrato do grupo); cada unidade
+  // edita os seus na própria aba. unidadesAgg = {midia,pixels,sales[]} das
+  // linhas bioter_* do mês.
+  const _grupoMode = cl.id==="bioter" && (!selUnit || selUnit==="grupo" || selUnit==="_minhas_");
+  const [unidadesAgg,setUnidadesAgg]=useState(null);
+  const [_rtTick,setRtTick]=useState(0);
 
   const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
@@ -50637,9 +50647,29 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       if(!window._sb){if(active){setLoading(false);}return;}
       try{
         // Mês atual
-        const {data}=await window._sb.from("client_roi_monthly")
-          .select("*").eq("client_id",effectiveClientId).eq("year",year).eq("month",month).maybeSingle();
-        if(!active)return;
+        let data=null;
+        if(_grupoMode){
+          const {data:rows}=await window._sb.from("client_roi_monthly")
+            .select("*").like("client_id","bioter%").eq("year",year).eq("month",month);
+          if(!active)return;
+          const _all=rows||[];
+          data=_all.find(function(r){return r.client_id==="bioter";})||null;
+          const _units=_all.filter(function(r){return r.client_id!=="bioter";});
+          setUnidadesAgg({
+            midia:_units.reduce(function(a,r){return a+(Number(r.midia_spend)||0);},0),
+            pixels:_units.reduce(function(a,r){return a+(Number(r.pixels_service)||0);},0),
+            sales:_units.reduce(function(a,r){
+              const _u=String(r.client_id).replace("bioter_","");
+              return a.concat((Array.isArray(r.sales)?r.sales:[]).map(function(v){return Object.assign({},v,{_unit:_u});}));
+            },[]),
+          });
+        }else{
+          setUnidadesAgg(null);
+          const _r=await window._sb.from("client_roi_monthly")
+            .select("*").eq("client_id",effectiveClientId).eq("year",year).eq("month",month).maybeSingle();
+          if(!active)return;
+          data=_r.data||null;
+        }
         if(data){
           setMidia(Number(data.midia_spend||0));
           setPixelsServ(Number(data.pixels_service||0));
@@ -50656,7 +50686,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       if(active)setLoading(false);
     })();
     return function(){active=false;};
-  },[effectiveClientId,year,month]);
+  },[effectiveClientId,year,month,_rtTick]);
 
   // ── REALTIME entre máquinas ───────────────────────────────────
   // Sócio A registra a venda → B vê sem recarregar (mesmo canal que o funil
@@ -50667,18 +50697,28 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
   useEffect(function(){
     if(!window._sb||!effectiveClientId) return;
     let active=true;
-    const ch=window._sb.channel("roi-rt-"+effectiveClientId)
-      .on("postgres_changes",{event:"*",schema:"public",table:"client_roi_monthly",filter:"client_id=eq."+effectiveClientId},function(payload){
+    // Modo grupo: interessa QUALQUER linha bioter* (o filtro do realtime só
+    // faz eq, então filtra no handler e recarrega tudo via _rtTick — mais
+    // simples que reagregar na mão a partir do payload).
+    const _filtro = _grupoMode ? undefined : "client_id=eq."+effectiveClientId;
+    const _opts = {event:"*",schema:"public",table:"client_roi_monthly"};
+    if(_filtro) _opts.filter=_filtro;
+    const ch=window._sb.channel("roi-rt-"+effectiveClientId+(_grupoMode?"-grp":""))
+      .on("postgres_changes",_opts,function(payload){
         if(!active) return;
-        const r=payload&&payload.new;
+        const r=(payload&&payload.new)||(payload&&payload.old);
         if(!r||r.year!==year||r.month!==month) return;
+        if(_grupoMode && String(r.client_id||"").indexOf("bioter")!==0) return;
         if(_persistPend.current) return;   // digitação local em curso
-        setMidia(Number(r.midia_spend||0));
-        setPixelsServ(Number(r.pixels_service||0));
-        setSales(Array.isArray(r.sales)?r.sales:[]);
+        if(_grupoMode){ setRtTick(function(t){return t+1;}); return; }
+        const rn=payload&&payload.new;
+        if(!rn) return;
+        setMidia(Number(rn.midia_spend||0));
+        setPixelsServ(Number(rn.pixels_service||0));
+        setSales(Array.isArray(rn.sales)?rn.sales:[]);
       }).subscribe();
     return function(){ active=false; try{window._sb.removeChannel(ch);}catch(e){} };
-  },[effectiveClientId,year,month]);
+  },[effectiveClientId,_grupoMode,year,month]);
 
   // Carrega histórico dos últimos 12 meses (pra gráfico de linha)
   useEffect(function(){
@@ -50686,12 +50726,26 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
     (async function(){
       if(!window._sb)return;
       try{
-        const {data}=await window._sb.from("client_roi_monthly")
+        let q=window._sb.from("client_roi_monthly")
           .select("year,month,midia_spend,pixels_service,sales")
-          .eq("client_id",effectiveClientId)
           .order("year",{ascending:true}).order("month",{ascending:true});
+        q=_grupoMode? q.like("client_id","bioter%") : q.eq("client_id",effectiveClientId);
+        const {data}=await q;
         if(!active||!data)return;
-        const hist=data.map(function(r){
+        // Modo grupo: várias linhas por mês (grupo + unidades) → soma por mês
+        let _rows=data;
+        if(_grupoMode){
+          const _byMes={};
+          data.forEach(function(r){
+            const k=r.year+"-"+r.month;
+            if(!_byMes[k])_byMes[k]={year:r.year,month:r.month,midia_spend:0,pixels_service:0,sales:[]};
+            _byMes[k].midia_spend+=Number(r.midia_spend)||0;
+            _byMes[k].pixels_service+=Number(r.pixels_service)||0;
+            _byMes[k].sales=_byMes[k].sales.concat(Array.isArray(r.sales)?r.sales:[]);
+          });
+          _rows=Object.keys(_byMes).sort().map(function(k){return _byMes[k];});
+        }
+        const hist=_rows.map(function(r){
           const vendido=(Array.isArray(r.sales)?r.sales:[]).reduce(function(s,v){return s+(Number(v.value)||0);},0);
           const investido=Number(r.midia_spend||0)+Number(r.pixels_service||0);
           const roi=investido>0?Math.round(((vendido-investido)/investido)*1000)/10:0;
@@ -50702,11 +50756,23 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       }catch(e){console.warn("[ROI history]",e);}
     })();
     return function(){active=false;};
-  },[effectiveClientId,year,month]);
+  },[effectiveClientId,_grupoMode,year,month,_rtTick]);
 
-  // Cálculos
-  const totalVendido=sales.reduce(function(s,v){return s+(Number(v.value)||0);},0);
-  const totalInvestido=Number(midia||0)+Number(pixelsServ||0);
+  // Cálculos — no modo grupo, TUDO soma grupo + unidades
+  const _aggVendas=(unidadesAgg&&unidadesAgg.sales)||[];
+  const _aggVendido=_aggVendas.reduce(function(s,v){return s+(Number(v.value)||0);},0);
+  const _aggInvestido=unidadesAgg?(Number(unidadesAgg.midia)||0)+(Number(unidadesAgg.pixels)||0):0;
+  const totalVendido=sales.reduce(function(s,v){return s+(Number(v.value)||0);},0)+_aggVendido;
+  const totalInvestido=Number(midia||0)+Number(pixelsServ||0)+_aggInvestido;
+  // Tabela: vendas do grupo (editáveis) + das unidades (badge, só leitura aqui)
+  const _salesView=sales.concat(_aggVendas);
+  const _unitLabel=function(uid){
+    if(typeof BIOTER_UNITS!=="undefined"){
+      const u=BIOTER_UNITS.find(function(x){return x.id===uid;});
+      if(u) return u.pickerLabel||u.label||uid;
+    }
+    return uid;
+  };
   const lucro=totalVendido-totalInvestido;
   const roiPct=totalInvestido>0?Math.round(((totalVendido-totalInvestido)/totalInvestido)*1000)/10:0;
   const retornoPor1=totalInvestido>0?Math.round((totalVendido/totalInvestido)*100)/100:0;
@@ -50812,17 +50878,13 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
     return {label:"ROI negativo",bg:"#fee2e2",color:"#b91c1c"};
   })();
 
-  // Donut: % de cada parte do investimento
-  const pctPixels=totalInvestido>0?(pixelsServ/totalInvestido)*100:0;
-  const pctMidia=totalInvestido>0?(midia/totalInvestido)*100:0;
-
-  // Bar chart: heights relative to max
-  const barMax=Math.max(totalVendido,totalInvestido,1);
-
   // Line chart: max ROI absoluto pra escala
   const _MES_CURTO=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
-  const _lucro=totalVendido-totalInvestido;
+  // Margem sobre o investimento em marketing: vendas − (serviço + mídia).
+  // NÃO é o lucro do cliente — não desconta custo do produto, imposto nem
+  // operação. Chamar de "lucro" no portal do cliente era um overclaim.
+  const _margem=totalVendido-totalInvestido;
 
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -50879,26 +50941,6 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       totalVendido={totalVendido}
       salesCount={sales.length}/>
 
-    {/* ══════════ MÉTRICAS DE APOIO — neutras, só o resultado ganha cor ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
-      {[
-        {l:"Serviço Pixels",   v:_brl(pixelsServ),  ico:"wallet", cor:null},
-        {l:"Mídia / anúncios", v:_brl(midia),       ico:"funnel", cor:null},
-        {l:"Retorno por R$ 1", v:"R$ "+retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2}), ico:"sparkles", cor:totalInvestido===0?null:(retornoPor1>=1?"#16a34a":"#dc2626")},
-        {l:_lucro>=0?"Lucro no mês":"Prejuízo no mês", v:_brl(Math.abs(_lucro)), ico:"chart", cor:totalInvestido===0?null:(_lucro>=0?"#16a34a":"#dc2626")},
-      ].map(function(k,i){
-        return <div key={i} style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:14,padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
-            <div style={{width:26,height:26,borderRadius:8,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Ico n={k.ico} size={13} color="#64748b"/>
-            </div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.2}}>{k.l}</div>
-          </div>
-          <div style={{color:k.cor||"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{k.v}</div>
-        </div>;
-      })}
-    </div>
-
     {/* ── Leitura automática — discreta, barra de acento em vez de fundo colorido ── */}
     {totalInvestido>0&&<div style={{background:"#fafbfc",border:"1px solid #e9ebef",borderLeft:"3px solid "+(roiPct>=0?"#16a34a":"#dc2626"),borderRadius:"0 14px 14px 0",padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
       <div style={{width:30,height:30,borderRadius:9,background:roiPct>=0?"#dcfce7":"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -50925,7 +50967,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
           </div>
           <div>
             <div style={{color:"#0f172a",fontSize:15.5,fontWeight:800,letterSpacing:-.3}}>Investido × retornado</div>
-            <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>Quanto do investimento já voltou em vendas</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>{_grupoMode?"Somando o grupo + todas as unidades":"Quanto do investimento já voltou em vendas"}</div>
           </div>
         </div>
         <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:700}}>{MESES[month-1]} de {year}</span>
@@ -50998,7 +51040,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
             <div style={{padding:"14px 0",borderBottom:"1px solid #f1f3f5"}}>
               <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Investido</div>
               <div style={{color:"#0f172a",fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalInvestido)}</div>
-              <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,marginTop:8}}>clique nos valores pra editar</div>
+              <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,marginTop:8}}>{_grupoMode?"clique pra editar os valores do grupo · unidades editam nas abas delas":"clique nos valores pra editar"}</div>
               <div style={{display:"flex",gap:20,flexWrap:"wrap",marginTop:7}}>
                 {/* Ícone único de cédula nos dois: ambas as linhas são GASTO —
                     o que muda é o destino, e isso o texto já diz. Ícones
@@ -51025,6 +51067,13 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
                   <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Mídia / anúncios</span>
                   <_PxValorEdit value={midia} onChange={setMidiaVal} accent={cl.color} label="mídia / anúncios"/>
                 </div>
+                {_grupoMode&&_aggInvestido>0&&<div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:22,height:22,borderRadius:7,background:"#f4f5f7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/></svg>
+                  </span>
+                  <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Unidades</span>
+                  <span title={"Pixels "+_brl(unidadesAgg.pixels)+" · Mídia "+_brl(unidadesAgg.midia)} style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(_aggInvestido)}</span>
+                </div>}
               </div>
             </div>
 
@@ -51032,15 +51081,15 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
               <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Retornou em vendas</div>
               <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
                 <div style={{color:totalVendido>0?(_acima?"#16a34a":"#d97706"):"#cbd5e1",fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalVendido)}</div>
-                {sales.length>0&&<span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>{sales.length} {sales.length===1?"venda":"vendas"}</span>}
+                {_salesView.length>0&&<span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>{_salesView.length} {_salesView.length===1?"venda":"vendas"}</span>}
               </div>
             </div>
 
             <div style={{padding:"14px 0",display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
               <div>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>{_lucro>=0?"Sobrou":"Faltou pra empatar"}</div>
-                <div style={{color:totalInvestido===0?"#cbd5e1":(_lucro>=0?"#16a34a":"#dc2626"),fontSize:isMob?18:22,fontWeight:800,letterSpacing:-.7,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
-                  {_lucro>=0?"":"−"}{_brl(Math.abs(_lucro))}
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>{_margem>=0?"Margem no mês":"Margem negativa"}</div>
+                <div style={{color:totalInvestido===0?"#cbd5e1":(_margem>=0?"#16a34a":"#dc2626"),fontSize:isMob?18:22,fontWeight:800,letterSpacing:-.7,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+                  {_margem>=0?"":"−"}{_brl(Math.abs(_margem))}
                 </div>
               </div>
               <div>
@@ -51126,7 +51175,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
           </div>
           <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Vendas fechadas</div>
-          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>{sales.length} {sales.length===1?"venda":"vendas"} no mês · Total {_brl(totalVendido)}</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>{_salesView.length} {_salesView.length===1?"venda":"vendas"} no mês · Total {_brl(totalVendido)}{_grupoMode?" · grupo + unidades":""}</div>
           </div>
         </div>
         <button onClick={abrirNovaVenda}
@@ -51143,18 +51192,21 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Origem</div>
         <div></div>
       </div>
-      {sales.length===0&&<div style={{padding:"36px 20px",textAlign:"center"}}>
+      {_salesView.length===0&&<div style={{padding:"36px 20px",textAlign:"center"}}>
         <div style={{width:48,height:48,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
           <Ico n="chart" size={22} color="#94a3b8"/>
         </div>
         <div style={{color:"#0f172a",fontSize:13,fontWeight:700}}>Ainda não há vendas fechadas cadastradas neste mês.</div>
         <div style={{color:"#64748b",fontSize:11.5,marginTop:4,maxWidth:380,margin:"4px auto 0",lineHeight:1.5}}>Cadastre as vendas pra visualizar o retorno do marketing.</div>
       </div>}
-      {sales.map(function(v,idx){
+      {_salesView.map(function(v,idx){
         const origCfg={label:ORIGEM_LABEL[v.origin]||"Outro",color:ORIGEM_COLOR[v.origin]||"#64748b"};
-        return <div key={v.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"11px 20px",borderBottom:idx<sales.length-1?"1px solid #f5f6f8":"none",alignItems:"center"}}>
+        return <div key={v.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"11px 20px",borderBottom:idx<_salesView.length-1?"1px solid #f5f6f8":"none",alignItems:"center"}}>
           <div style={{minWidth:0}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.lead_name}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+              <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.lead_name}</span>
+              {v._unit&&<span style={{flexShrink:0,background:"#eef2f7",color:"#475569",borderRadius:6,padding:"1.5px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>{_unitLabel(v._unit)}</span>}
+            </div>
             {(v.city||v.uf)&&<div style={{display:"inline-flex",alignItems:"center",gap:4,color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2}}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="2.6"/></svg>
               {[v.city,v.uf].filter(Boolean).join(" · ")}
@@ -51170,10 +51222,14 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
           <div style={{color:"#64748b",fontSize:11.5,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_ddmm(v.date)}</div>
           <div><span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid #eef0f3",color:"#475569",borderRadius:99,padding:"3px 10px 3px 6px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}><_PxOrigemIco n={v.origin} size={12}/>{origCfg.label}</span></div>
           <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-            <button onClick={function(){abrirEditarVenda(v);}} title="Editar"
-              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#94a3b8"}}><Ico n="edit" size={14}/></button>
-            <button onClick={function(){removerVenda(v.id);}} title="Remover"
-              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#dc2626"}}><Ico n="trash" size={14}/></button>
+            {v._unit
+              ? <span title={"Venda da unidade "+_unitLabel(v._unit)+" — edite na aba dela"} style={{color:"#cbd5e1",fontSize:10,fontWeight:700,padding:4,whiteSpace:"nowrap"}}>na unidade</span>
+              : <>
+                  <button onClick={function(){abrirEditarVenda(v);}} title="Editar"
+                    style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#94a3b8"}}><Ico n="edit" size={14}/></button>
+                  <button onClick={function(){removerVenda(v.id);}} title="Remover"
+                    style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#dc2626"}}><Ico n="trash" size={14}/></button>
+                </>}
           </div>
         </div>;
       })}
