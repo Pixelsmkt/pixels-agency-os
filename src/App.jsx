@@ -50140,6 +50140,137 @@ const CLIENT_ROI_DEFAULTS = {
    - client_roi_monthly (investimento e retorno)
    ROI = (retorno - investimento_midia) / investimento_midia
 ─────────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   _PxDatePicker — calendário próprio, no lugar do <input type="date">.
+   O nativo do Chrome não aceita estilo nenhum (o ícone e o popup vêm do
+   navegador), então nunca ia combinar com o resto da tela. Este aqui
+   recebe `accent` e pinta o dia selecionado / hoje na cor do cliente.
+
+   value/onChange trabalham SEMPRE em "YYYY-MM-DD" (mesmo formato que o
+   input nativo devolvia), então nada mudou pra quem consome.
+   ═══════════════════════════════════════════════════════════════════ */
+const _PX_DP_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const _PX_DP_DOW=["D","S","T","Q","Q","S","S"];
+
+function _pxDpParse(iso){
+  if(!iso||typeof iso!=="string") return null;
+  const m=iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return null;
+  return {y:Number(m[1]), m:Number(m[2]), d:Number(m[3])};
+}
+function _pxDpIso(y,m,d){
+  return y+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+}
+function _pxDpLabel(iso){
+  const p=_pxDpParse(iso);
+  if(!p) return "";
+  return String(p.d).padStart(2,"0")+" de "+_PX_DP_MESES[p.m-1].toLowerCase().slice(0,3)+". de "+p.y;
+}
+
+function _PxDatePicker({value, onChange, accent}){
+  const cor = accent || "#7c3aed";
+  const sel = _pxDpParse(value);
+  const hoje = new Date();
+  const hojeIso = _pxDpIso(hoje.getFullYear(), hoje.getMonth()+1, hoje.getDate());
+
+  const [aberto,setAberto]=useState(false);
+  const [vY,setVY]=useState(sel?sel.y:hoje.getFullYear());
+  const [vM,setVM]=useState(sel?sel.m:hoje.getMonth()+1);
+  const ref=useRef(null);
+
+  // Quando reabre, volta pro mês da data selecionada
+  useEffect(function(){
+    if(aberto&&sel){ setVY(sel.y); setVM(sel.m); }
+  },[aberto]);
+
+  // Fecha ao clicar fora
+  useEffect(function(){
+    if(!aberto) return;
+    const fora=function(e){ if(ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    const esc=function(e){ if(e.key==="Escape") setAberto(false); };
+    document.addEventListener("mousedown",fora);
+    document.addEventListener("keydown",esc);
+    return function(){ document.removeEventListener("mousedown",fora); document.removeEventListener("keydown",esc); };
+  },[aberto]);
+
+  const primeiroDow = new Date(vY, vM-1, 1).getDay();
+  const diasNoMes   = new Date(vY, vM, 0).getDate();
+  const celulas=[];
+  for(let i=0;i<primeiroDow;i++) celulas.push(null);
+  for(let d=1;d<=diasNoMes;d++) celulas.push(d);
+
+  const navegar=function(delta){
+    let m=vM+delta, y=vY;
+    if(m<1){ m=12; y--; }
+    if(m>12){ m=1; y++; }
+    setVM(m); setVY(y);
+  };
+
+  return <div ref={ref} style={{position:"relative"}}>
+    <button type="button" onClick={function(){setAberto(!aberto);}}
+      style={{width:"100%",background:"#fff",border:"1px solid "+(aberto?cor:"#e2e8f0"),borderRadius:11,padding:"11px 13px",
+        display:"flex",alignItems:"center",gap:9,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
+        boxShadow:aberto?"0 0 0 3px "+cor+"1f":"none",transition:"all .12s"}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={aberto?cor:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+        <rect x="3" y="4.5" width="18" height="17" rx="2.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span style={{flex:1,color:sel?"#0f172a":"#cbd5e1",fontSize:13.5,fontWeight:700,letterSpacing:-.1}}>{sel?_pxDpLabel(value):"Selecionar data"}</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:40,background:"#fff",border:"1px solid #e9ebef",borderRadius:14,boxShadow:"0 18px 44px rgba(8,10,14,0.18)",padding:14,width:278}}>
+      {/* Navegação de mês */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12}}>
+        <button type="button" onClick={function(){navegar(-1);}}
+          style={{background:"#f4f5f7",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_PX_DP_MESES[vM-1]} {vY}</div>
+        <button type="button" onClick={function(){navegar(1);}}
+          style={{background:"#f4f5f7",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      {/* Cabeçalho dos dias da semana */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+        {_PX_DP_DOW.map(function(d,i){
+          return <div key={i} style={{textAlign:"center",color:"#cbd5e1",fontSize:10,fontWeight:800,textTransform:"uppercase",padding:"4px 0"}}>{d}</div>;
+        })}
+      </div>
+
+      {/* Grade */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {celulas.map(function(d,i){
+          if(d===null) return <div key={"v"+i}/>;
+          const iso=_pxDpIso(vY,vM,d);
+          const _sel = value===iso;
+          const _hoje = hojeIso===iso;
+          return <button key={iso} type="button"
+            onClick={function(){ if(onChange) onChange(iso); setAberto(false); }}
+            style={{background:_sel?cor:"transparent",color:_sel?"#fff":(_hoje?cor:"#334155"),
+              border:_hoje&&!_sel?"1px solid "+cor+"55":"1px solid transparent",
+              borderRadius:9,height:32,cursor:"pointer",fontFamily:"inherit",
+              fontSize:12.5,fontWeight:_sel||_hoje?800:600,transition:"all .1s",padding:0,
+              boxShadow:_sel?"0 4px 10px "+cor+"55":"none"}}
+            onMouseEnter={function(e){ if(!_sel) e.currentTarget.style.background="#f4f5f7"; }}
+            onMouseLeave={function(e){ if(!_sel) e.currentTarget.style.background="transparent"; }}>
+            {d}
+          </button>;
+        })}
+      </div>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,paddingTop:11,borderTop:"1px solid #f1f3f5"}}>
+        <button type="button" onClick={function(){ if(onChange) onChange(hojeIso); setAberto(false); }}
+          style={{background:"transparent",border:"none",color:cor,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:0}}>Hoje</button>
+        <button type="button" onClick={function(){setAberto(false);}}
+          style={{background:"#f4f5f7",border:"none",borderRadius:8,padding:"6px 14px",color:"#64748b",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
+      </div>
+    </div>}
+  </div>;
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // FUNIL DO MÊS — faixa compacta no topo da aba Performance.
 // Antes esse bloco repetia Investimento / Retorno / ROI, que já aparecem
@@ -50294,6 +50425,42 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   const [dirty,setDirty]=useState(false);
   const [saving,setSaving]=useState(false);
   const [editVenda,setEditVenda]=useState(null); // {mode:"new"|"edit", data}
+  // ── Produtos do cliente (Estratégia › Produtos) ──────────────────
+  // Fonte: tabela `playbooks`, 1 linha por client_id, coluna `data` (jsonb),
+  // campo `produtos` — o MESMO array que a aba Estratégia edita. Assim o
+  // vendedor não digita produto solto: seleciona o que já está cadastrado.
+  // Bioter: cada produto tem `unidades`; produto sem unidade vale pra todas.
+  const [produtosCliente,setProdutosCliente]=useState([]);
+  const [loadingProdutos,setLoadingProdutos]=useState(true);
+  useEffect(function(){
+    let active=true;
+    if(!window._sb||!cl||!cl.id){ setLoadingProdutos(false); return; }
+    setLoadingProdutos(true);
+    window._sb.from("playbooks").select("data").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){
+        if(!active) return;
+        // maybeSingle() devolve {data: row}; a row e {data: <jsonb do playbook>}
+        const _row = (r && r.data) || null;
+        const _pb  = (_row && _row.data) || {};
+        const _prods = Array.isArray(_pb.produtos) ? _pb.produtos : [];
+        const _un=(cl.id==="bioter"&&selUnit&&selUnit!=="grupo"&&selUnit!=="_minhas_")?selUnit:null;
+        const _nomes=[];
+        _prods.forEach(function(pr){
+          if(!pr) return;
+          if(_un){
+            const u=Array.isArray(pr.unidades)?pr.unidades:[];
+            if(u.length>0 && u.indexOf(_un)===-1) return;
+          }
+          const nome=String(pr.nomePrincipalPt||pr.nome||"").trim();
+          if(nome && _nomes.indexOf(nome)===-1) _nomes.push(nome);
+        });
+        setProdutosCliente(_nomes);
+        setLoadingProdutos(false);
+      })
+      .catch(function(e){ if(active){ setLoadingProdutos(false); console.warn("[produtos cliente]",e&&e.message||e); } });
+    return function(){active=false;};
+  },[cl&&cl.id,selUnit]);
+
 
   // Composite client ID: pra Bioter, inclui a unidade. Senao, usa cl.id direto.
   const effectiveClientId=(function(){
@@ -50415,8 +50582,15 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
     setSaving(false);
   }
 
-  const ORIGEM_LABEL={meta:"Meta Ads",google:"Google Ads",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
-  const ORIGEM_COLOR={meta:"#1877F2",google:"#ea4335",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
+  // "indicacao" saiu das opcoes (nao e canal digital), mas continua no mapa
+  // pra vendas antigas ja gravadas com essa origem nao virarem "Outro".
+  // Estilos do modal de venda (evita repetir o mesmo objeto 4x)
+  const _lblStyle={color:"#64748b",fontSize:10,fontWeight:800,marginBottom:7,textTransform:"uppercase",letterSpacing:.7};
+  const _inpStyle={width:"100%",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontSize:13.5,fontWeight:600,fontFamily:"inherit",outline:"none",boxSizing:"border-box",color:"#0f172a",transition:"all .12s"};
+
+  const ORIGEM_LABEL={meta:"Meta Ads",google:"Google Ads",site:"Site",landing:"Landing page",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
+  const ORIGEM_COLOR={meta:"#1877F2",google:"#ea4335",site:"#0f766e",landing:"#c026d3",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
+  const ORIGEM_OPCOES=["meta","google","site","landing","organico","outro"];
 
   // Selo do ROI
   const selo=(function(){
@@ -50744,56 +50918,116 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
       </button>
     </div>}
 
-    {/* Modal nova/editar venda */}
-    {editVenda&&<div onClick={function(){setEditVenda(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+    {/* ══════════ MODAL NOVA / EDITAR VENDA ══════════
+        Header antes era uma faixa cheia na cor do cliente — ficava um bloco
+        vermelho gritando. Agora a cor do cliente entra como DETALHE: fio no
+        topo, ícone e botão primário. O resto é neutro. */}
+    {editVenda&&<div onClick={function(){setEditVenda(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(10,12,16,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(5px)"}}>
       <div onClick={function(e){e.stopPropagation();}}
-        style={{background:"#fff",borderRadius:14,maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"16px 22px",color:"#fff"}}>
-          <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>{editVenda.mode==="new"?"Nova venda fechada":"Editar venda"}</div>
+        style={{background:"#fff",borderRadius:18,maxWidth:560,width:"100%",boxShadow:"0 30px 70px rgba(8,10,14,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",position:"relative"}}>
+        <div style={{height:4,background:"linear-gradient(90deg,"+cl.color+","+cl.color+"66)"}}/>
+        <div style={{padding:"18px 24px 16px",borderBottom:"1px solid #f1f3f5",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:38,height:38,borderRadius:11,background:cl.color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="checkCircle" size={18} color={cl.color}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.35}}>{editVenda.mode==="new"?"Nova venda fechada":"Editar venda"}</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>{MESES[month-1]} de {year} · {cl.name}</div>
+          </div>
+          <button onClick={function(){setEditVenda(null);}} title="Fechar"
+            style={{background:"transparent",border:"none",cursor:"pointer",color:"#cbd5e1",padding:4,display:"inline-flex",flexShrink:0}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-        <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:13}}>
+
+        <div style={{padding:"20px 24px 22px",display:"flex",flexDirection:"column",gap:16,maxHeight:"70vh",overflowY:"auto"}}>
           <div>
-            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Cliente / Lead *</div>
-            <input value={editVenda.data.lead_name} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{lead_name:e.target.value})}));}}
-              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            <div style={_lblStyle}>Cliente / Lead *</div>
+            <input value={editVenda.data.lead_name} autoFocus
+              onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{lead_name:e.target.value})}));}}
+              placeholder="Nome de quem comprou"
+              style={_inpStyle}
+              onFocus={function(e){e.target.style.borderColor=cl.color;e.target.style.boxShadow="0 0 0 3px "+cl.color+"1f";}}
+              onBlur={function(e){e.target.style.borderColor="#e2e8f0";e.target.style.boxShadow="none";}}/>
           </div>
+
+          {/* ── PRODUTO / SERVIÇO — sincronizado com Estratégia > Produtos ── */}
           <div>
-            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Produto / Serviço</div>
-            <input value={editVenda.data.product} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{product:e.target.value})}));}}
-              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:7}}>
+              <div style={Object.assign({},_lblStyle,{marginBottom:0})}>Produto / Serviço</div>
+              {produtosCliente.length>0&&<span style={{color:"#cbd5e1",fontSize:10,fontWeight:700}}>{produtosCliente.length} cadastrado{produtosCliente.length===1?"":"s"}</span>}
+            </div>
+            {loadingProdutos
+              ? <div style={{color:"#cbd5e1",fontSize:12,fontWeight:600,padding:"10px 0"}}>Carregando produtos…</div>
+              : produtosCliente.length>0
+                ? <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                    {produtosCliente.map(function(nome){
+                      const _on=editVenda.data.product===nome;
+                      return <button key={nome} type="button"
+                        onClick={function(){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{product:_on?"":nome})}));}}
+                        style={{background:_on?cl.color:"#fff",color:_on?"#fff":"#475569",border:"1px solid "+(_on?cl.color:"#e2e8f0"),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",maxWidth:"100%"}}>
+                        {_on&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nome}</span>
+                      </button>;
+                    })}
+                    {/* Escape hatch: venda de algo que ainda não está no catálogo */}
+                    {editVenda.data.product&&produtosCliente.indexOf(editVenda.data.product)===-1&&
+                      <span style={{background:"#f4f5f7",color:"#475569",border:"1px dashed #cbd5e1",borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:700}}>{editVenda.data.product}</span>}
+                  </div>
+                : <>
+                    <input value={editVenda.data.product}
+                      onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{product:e.target.value})}));}}
+                      placeholder="Digite o produto ou serviço"
+                      style={_inpStyle}
+                      onFocus={function(e){e.target.style.borderColor=cl.color;e.target.style.boxShadow="0 0 0 3px "+cl.color+"1f";}}
+                      onBlur={function(e){e.target.style.borderColor="#e2e8f0";e.target.style.boxShadow="none";}}/>
+                    <div style={{color:"#94a3b8",fontSize:11,marginTop:6,lineHeight:1.5}}>
+                      Nenhum produto cadastrado em <strong style={{color:"#64748b"}}>Estratégia › Produtos</strong>. Cadastre lá e eles aparecem aqui pra selecionar.
+                    </div>
+                  </>}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
             <div>
-              <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Valor (R$)</div>
-              <input type="number" step="0.01" min="0" value={editVenda.data.value} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{value:parseFloat(e.target.value)||0})}));}}
-                style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/>
+              <div style={_lblStyle}>Valor</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"0 13px"}}>
+                <span style={{color:"#94a3b8",fontSize:13,fontWeight:800}}>R$</span>
+                <input type="number" step="0.01" min="0" value={editVenda.data.value}
+                  onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{value:parseFloat(e.target.value)||0})}));}}
+                  style={{flex:1,border:"none",background:"transparent",padding:"11px 0",fontSize:14,fontWeight:800,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'",color:"#0f172a",minWidth:0}}/>
+              </div>
             </div>
             <div>
-              <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data</div>
-              <input type="date" value={editVenda.data.date} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{date:e.target.value})}));}}
-                style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+              <div style={_lblStyle}>Data</div>
+              <_PxDatePicker
+                value={editVenda.data.date}
+                accent={cl.color}
+                onChange={function(d){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{date:d})}));}}/>
             </div>
           </div>
+
           <div>
-            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Origem</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {["meta","google","organico","indicacao","outro"].map(function(o){
+            <div style={_lblStyle}>Origem</div>
+            <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+              {ORIGEM_OPCOES.map(function(o){
                 const active=editVenda.data.origin===o;
-                return <button key={o} onClick={function(){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{origin:o})}));}}
-                  style={{background:active?ORIGEM_COLOR[o]+"15":"#fff",color:active?ORIGEM_COLOR[o]:"#64748b",border:"1px solid "+(active?ORIGEM_COLOR[o]:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                return <button key={o} type="button" onClick={function(){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{origin:o})}));}}
+                  style={{background:active?ORIGEM_COLOR[o]+"12":"#fff",color:active?ORIGEM_COLOR[o]:"#64748b",border:"1px solid "+(active?ORIGEM_COLOR[o]+"66":"#e2e8f0"),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:ORIGEM_COLOR[o],opacity:active?1:.35}}/>
                   {ORIGEM_LABEL[o]}
                 </button>;
               })}
             </div>
           </div>
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
-            <button onClick={function(){setEditVenda(null);}}
-              style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 20px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancelar</button>
-            <button onClick={salvarVenda}
-              style={{background:cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:"pointer"}}>
-              {editVenda.mode==="new"?"Adicionar":"Salvar"}
-            </button>
-          </div>
+        </div>
+
+        <div style={{padding:"14px 24px",borderTop:"1px solid #f1f3f5",background:"#fafbfc",display:"flex",gap:9,justifyContent:"flex-end"}}>
+          <button onClick={function(){setEditVenda(null);}}
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 20px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={salvarVenda}
+            style={{background:cl.color,color:"#fff",border:"none",borderRadius:11,padding:"10px 24px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 16px "+cl.color+"40"}}>
+            {editVenda.mode==="new"?"Adicionar venda":"Salvar"}
+          </button>
         </div>
       </div>
     </div>}
