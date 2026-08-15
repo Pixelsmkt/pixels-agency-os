@@ -47875,7 +47875,16 @@ function _sanitizeCaption(raw){
   return s;
 }
 
-function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
+function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels}){
+  // Quem esta operando: o proprio cliente logado no portal, ou um socio da
+  // Pixels navegando pelo portal (aprovando em nome do cliente).
+  // O historico precisa registrar isso com precisao — antes gravava sempre
+  // "Cliente: X", mesmo quando quem clicou foi a Pixels.
+  const _pxUser = (typeof CURRENT_USER!=="undefined" && CURRENT_USER) ? CURRENT_USER : null;
+  const _souPixels = !!viewerIsPixels && !!_pxUser;
+  const _autorLabel = _souPixels
+    ? (_pxUser.name + " (Pixels, em nome de " + cl.name + ")")
+    : ("Cliente: " + cl.name);
   const [ajusteModal,setAjusteModal]=useState(null); // {task, text}
   const [cardIdx,setCardIdx]=useState(0);
   const [imgIdx,setImgIdx]=useState(0);
@@ -47973,7 +47982,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
       clientName:cl.name,
       at:_nowIso(),
       atFmt:_nowFmt(),
-      user:"Cliente: "+cl.name,
+      user:_autorLabel,
       ..._clientUserMeta(),
     }]);
     const _updates = {
@@ -48029,7 +48038,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
       id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
       type:"client_request",
       text:text,
-      user:"Cliente: "+cl.name,
+      user:_autorLabel,
       clientId:cl.id,
       at:_nowIso(),
       atFmt:_nowFmt(),
@@ -48046,7 +48055,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
       text:text,
       at:_nowIso(),
       atFmt:_nowFmt(),
-      user:"Cliente: "+cl.name,
+      user:_autorLabel,
       ..._clientUserMeta(),
     };
     const _newComments = [].concat(t.comments||[], [_newComment]);
@@ -48326,6 +48335,67 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
               style={{width:"100%",background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
               <Ico n="rotate" size={16}/> Solicitar ajuste
             </button>
+
+            {/* ═══ BAIXAR — arte, carrossel completo ou video ═══ */}
+            <button type="button" title="Baixar arquivos desta entrega" onClick={async function(e){
+                e.preventDefault(); e.stopPropagation();
+                if(!current){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Nenhum card selecionado.",4000); return; }
+                try{
+                  const _arqs=(typeof pxFinalFiles==="function")?pxFinalFiles(current):[];
+                  const _urls=_arqs.map(function(f){return f.url;}).filter(Boolean);
+                  if(_urls.length===0){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum arquivo pra baixar.",3000); return; }
+                  const _multi=_urls.length>1;
+                  if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" arquivos…"):"Baixando…",2500);
+                  const _base=current.title?String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"entrega";
+                  let _ok=0;
+                  for(let i=0;i<_urls.length;i++){
+                    const _url=_urls[i];
+                    let _fname="";
+                    try{ _fname=decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                    if(!_fname||_fname.length<4){
+                      const _ext=String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
+                      _fname=_base+(_multi?("_"+(i+1)):"")+"."+(_ext?_ext[1]:"png");
+                    }else if(_multi){
+                      const _d=_fname.lastIndexOf(".");
+                      _fname=(_d>0?_fname.slice(0,_d):_fname)+"_"+(i+1)+(_d>0?_fname.slice(_d):"");
+                    }
+                    try{
+                      const _r=await fetch(_url);
+                      const _b=await _r.blob();
+                      const _u=URL.createObjectURL(_b);
+                      const _a=document.createElement("a"); _a.href=_u; _a.download=_fname;
+                      document.body.appendChild(_a); _a.click();
+                      setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
+                      _ok++;
+                      if(i<_urls.length-1) await new Promise(function(r){setTimeout(r,350);});
+                    }catch(_e2){ console.warn("[portal download]",_e2); }
+                  }
+                  if(typeof pixelsToast!=="undefined"){
+                    if(_ok===_urls.length) pixelsToast.success(_multi?("Baixados "+_ok+" arquivos ✓"):"Baixado ✓",3000);
+                    else if(_ok>0) pixelsToast.warning("Baixados "+_ok+"/"+_urls.length,4000);
+                    else pixelsToast.error("Falha no download",4000);
+                  }
+                }catch(err){
+                  console.warn("[portal download]",err);
+                  if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+((err&&err.message)||"erro"),4000);
+                }
+              }}
+              style={{width:"100%",background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 0",fontWeight:700,fontSize:12.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+              onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
+              <Ico n="download" size={15}/> Baixar {(function(){
+                const _n=(typeof pxFinalFiles==="function"&&current)?pxFinalFiles(current).length:0;
+                return _n>1?("carrossel ("+_n+")"):"arquivo";
+              })()}
+            </button>
+
+            {/* Aviso de quem esta aprovando — so aparece pra equipe Pixels */}
+            {_souPixels&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"9px 11px",display:"flex",alignItems:"flex-start",gap:8,marginTop:2}}>
+              <Ico n="alert" size={13} color="#b45309"/>
+              <div style={{color:"#92400e",fontSize:10.5,lineHeight:1.45}}>
+                Você está aprovando <b>em nome de {cl.name}</b>. Vai ficar registrado no histórico como {_pxUser?_pxUser.name:"Pixels"}.
+              </div>
+            </div>}
           </div>
         </div>
       </div>
@@ -50705,7 +50775,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     </div>
 
     {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
-    {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
+    {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} viewerIsPixels={!lockedClientId}/>}
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
