@@ -3708,6 +3708,11 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="box")       return <svg {...p}><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
   if(n==="globe")     return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
   if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+  // Faltavam no mapa: quem pedia Ico n="inbox"/"alertTriangle" recebia null
+  // (icone sumia sem erro nenhum). Ex.: KPIs "Entrada" e "Atrasadas".
+  if(n==="inbox")     return <svg {...p}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>;
+  if(n==="alert-triangle"||n==="alertTriangle") return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+  if(n==="table")     return <svg {...p}><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg>;
   if(n==="chevron-right"||n==="chevronRight") return <svg {...p}><polyline points="9 18 15 12 9 6"/></svg>;
   if(n==="chevron-left"||n==="chevronLeft")   return <svg {...p}><polyline points="15 18 9 12 15 6"/></svg>;
   if(n==="trending-up"||n==="trendingUp")     return <svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
@@ -5148,6 +5153,185 @@ const DashGestor=DashColaborador;
 const DashDesigner=DashColaborador;
 const DashEditor=DashColaborador;
 
+/* ═══════════════════════════════════════════════════════════════════════
+   AVISO DE APROVAÇÃO DO CLIENTE — destaque no topo do Meu Dashboard
+   ───────────────────────────────────────────────────────────────────────
+   De onde vem o dado: quando um cliente (ou um sócio agindo pelo Portal do
+   Cliente) clica em Aprovar / Solicitar ajuste, o handler grava um evento na
+   timeline da task com type "client_approved" ou "client_rejected", junto com
+   clientId, at (ISO) e os metadados de quem agiu (_pxClientUserMeta).
+   Aqui a gente varre TODAS as tasks, junta esses eventos, e destaca o que
+   chegou depois da última vez que este usuário deu "Marcar como visto".
+   Regra de filtro igual à do Portal (13_novidades.jsx) pra não misturar
+   movimentação interna com ação real do cliente.
+   ═══════════════════════════════════════════════════════════════════════ */
+function _pxAprovIso(v){
+  if(!v) return 0;
+  try{
+    const t = new Date(v).getTime();
+    return isNaN(t) ? 0 : t;
+  }catch(e){ return 0; }
+}
+function _pxAprovQuando(iso){
+  const t = _pxAprovIso(iso);
+  if(!t) return "";
+  const d = new Date(t), agora = new Date();
+  const hh = String(d.getHours()).padStart(2,"0"), mm = String(d.getMinutes()).padStart(2,"0");
+  const ontem = new Date(agora); ontem.setDate(agora.getDate()-1);
+  if(d.toDateString()===agora.toDateString()) return "hoje às "+hh+":"+mm;
+  if(d.toDateString()===ontem.toDateString()) return "ontem às "+hh+":"+mm;
+  const dd = String(d.getDate()).padStart(2,"0"), mo = String(d.getMonth()+1).padStart(2,"0");
+  return dd+"/"+mo+" às "+hh+":"+mm;
+}
+// Coleta os eventos de cliente das últimas N tasks. Exportado no window pra
+// outros módulos (badge da sidebar, por ex.) poderem reaproveitar.
+function pxEventosDoCliente(tasks, dias){
+  const limite = Date.now() - (dias||21)*86400000;
+  const out = [];
+  (tasks||[]).forEach(function(tk){
+    if(!tk || tk.deletedAt) return;
+    (tk.timeline||[]).forEach(function(ev){
+      if(!ev) return;
+      if(ev.type!=="client_approved" && ev.type!=="client_rejected") return;
+      // Precisa ter marcador de origem cliente (mesma regra do Portal)
+      const _doCliente = (ev.user && String(ev.user).indexOf("Cliente:")===0) || !!ev.clientId;
+      if(!_doCliente) return;
+      const t = _pxAprovIso(ev.at);
+      if(t && t < limite) return;
+      out.push({
+        taskId: tk.id,
+        title: tk.title || "(sem título)",
+        clientId: ev.clientId || tk.client || "",
+        clientName: ev.clientName || "",
+        aprovado: ev.type==="client_approved",
+        quemNome: ev.userName || "",
+        quemFoto: ev.userPhoto || "",
+        texto: ev.text || "",
+        atIso: ev.at || null,
+        at: t,
+      });
+    });
+  });
+  out.sort(function(a,b){ return b.at - a.at; });
+  return out;
+}
+if(typeof window!=="undefined") window.pxEventosDoCliente = pxEventosDoCliente;
+
+function PxAprovacoesClienteCard({tasks, isMob, userId}){
+  const _key = "pixels-cliaprov-visto-"+(userId||"me");
+  const [vistoAte, setVistoAte] = useState(function(){
+    try{ return Number(localStorage.getItem(_key)||0)||0; }catch(e){ return 0; }
+  });
+  const [aberto, setAberto] = useState(false);
+
+  const eventos = useMemo(function(){ return pxEventosDoCliente(tasks, 21); }, [tasks]);
+  const novos   = eventos.filter(function(e){ return e.at > vistoAte; });
+  const aprovNovos = novos.filter(function(e){ return e.aprovado; }).length;
+  const ajusteNovos = novos.length - aprovNovos;
+
+  const marcarVisto = function(){
+    const agora = Date.now();
+    try{ localStorage.setItem(_key, String(agora)); }catch(e){}
+    setVistoAte(agora);
+  };
+
+  // Sem nenhum movimento de cliente nas últimas 3 semanas → não polui o dash
+  if(eventos.length===0) return null;
+
+  const temNovo = novos.length>0;
+  const lista = (aberto ? eventos : (temNovo ? novos : eventos)).slice(0, aberto?12:4);
+
+  return <div style={{
+    position:"relative",overflow:"hidden",borderRadius:18,
+    background: temNovo
+      ? "linear-gradient(135deg,#062b21 0%,#06392c 45%,#04231c 100%)"
+      : "#fff",
+    border: temNovo ? "1px solid #10b98155" : "1px solid #eef0f3",
+    boxShadow: temNovo ? "0 16px 40px rgba(4,35,28,0.28)" : "0 1px 2px rgba(15,23,42,0.03)",
+    padding: isMob?"16px 16px":"18px 22px",
+  }}>
+    {temNovo && <div aria-hidden style={{position:"absolute",top:-70,right:-30,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(16,185,129,0.22) 0%,rgba(16,185,129,0) 70%)",pointerEvents:"none"}}/>}
+
+    <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:13,flexWrap:"wrap"}}>
+      <div style={{width:44,height:44,borderRadius:13,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+        background: temNovo ? "linear-gradient(135deg,#10b981,#059669)" : "#ecfdf5",
+        color: temNovo ? "#fff" : "#059669",
+        boxShadow: temNovo ? "0 8px 22px rgba(16,185,129,0.45)" : "none"}}>
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",color: temNovo?"#6ee7b7":"#94a3b8"}}>
+          Portal do cliente
+        </div>
+        <div style={{fontSize:isMob?15.5:18,fontWeight:800,letterSpacing:-.4,color: temNovo?"#fff":"#0f172a",marginTop:2,lineHeight:1.2}}>
+          {temNovo
+            ? (novos.length===1 ? "1 movimento novo do cliente" : novos.length+" movimentos novos dos clientes")
+            : "Nenhuma novidade dos clientes"}
+        </div>
+        <div style={{fontSize:12.5,fontWeight:500,marginTop:3,color: temNovo?"rgba(255,255,255,0.72)":"#64748b"}}>
+          {temNovo
+            ? [aprovNovos>0 ? (aprovNovos===1?"1 aprovação":aprovNovos+" aprovações") : null,
+               ajusteNovos>0 ? (ajusteNovos===1?"1 pedido de ajuste":ajusteNovos+" pedidos de ajuste") : null
+              ].filter(Boolean).join(" · ")
+            : "Últimos "+eventos.length+" movimentos nas 3 semanas · tudo já visto"}
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        {temNovo && <button type="button" onClick={marcarVisto}
+          style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.22)",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          Marcar como visto
+        </button>}
+        <button type="button" onClick={function(){ if(typeof window.pixelsNav==="function") window.pixelsNav("demandas_kanban"); }}
+          style={{background: temNovo?"linear-gradient(135deg,#10b981,#059669)":"#f8fafc",
+            border: temNovo?"none":"1px solid #e2e8f0",
+            color: temNovo?"#fff":"#334155",
+            borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",
+            display:"inline-flex",alignItems:"center",gap:6,
+            boxShadow: temNovo?"0 6px 18px rgba(16,185,129,0.4)":"none"}}>
+          Abrir demandas
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    {/* ── Linha do tempo curta ── */}
+    <div style={{position:"relative",zIndex:1,marginTop:14,display:"flex",flexDirection:"column",gap:7}}>
+      {lista.map(function(e,i){
+        const _cl = (typeof CLIENTS!=="undefined") ? CLIENTS.find(function(c){return c.id===e.clientId;}) : null;
+        const _nome = (_cl&&_cl.name) || e.clientName || "Cliente";
+        const _novo = e.at > vistoAte;
+        return <div key={e.taskId+"-"+i}
+          onClick={function(){ if(typeof window.pixelsNav==="function") window.pixelsNav("demandas_kanban"); }}
+          style={{display:"flex",alignItems:"center",gap:11,cursor:"pointer",
+            background: temNovo ? "rgba(255,255,255,0.06)" : "#fafbfc",
+            border: temNovo ? "1px solid rgba(255,255,255,0.08)" : "1px solid #eef0f3",
+            borderRadius:12,padding:"10px 13px"}}>
+          <span style={{width:8,height:8,borderRadius:"50%",flexShrink:0,
+            background: e.aprovado ? "#34d399" : "#fbbf24",
+            boxShadow: _novo ? "0 0 0 4px "+(e.aprovado?"rgba(52,211,153,0.20)":"rgba(251,191,36,0.20)") : "none"}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12.5,fontWeight:700,color: temNovo?"#fff":"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {e.title}
+            </div>
+            <div style={{fontSize:11,fontWeight:500,marginTop:2,color: temNovo?"rgba(255,255,255,0.62)":"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {_nome}{e.quemNome?" · "+e.quemNome:""} {e.aprovado?"aprovou":"pediu ajuste"} · {_pxAprovQuando(e.atIso)}
+            </div>
+          </div>
+          {_novo && <span style={{flexShrink:0,fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",
+            background: temNovo?"rgba(52,211,153,0.18)":"#ecfdf5", color:"#34d399", borderRadius:99, padding:"3px 8px"}}>Novo</span>}
+        </div>;
+      })}
+      {eventos.length>lista.length && <button type="button" onClick={function(){setAberto(!aberto);}}
+        style={{alignSelf:"flex-start",background:"transparent",border:"none",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",
+          fontSize:11.5,fontWeight:700,color: temNovo?"rgba(255,255,255,0.7)":"#64748b"}}>
+        {aberto ? "Mostrar menos" : "Ver histórico ("+eventos.length+")"}
+      </button>}
+    </div>
+  </div>;
+}
+
 function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile,viewingAs}){
   // Quando estamos "visualizando como" outro colaborador, trocamos TUDO pra esse user
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
@@ -5198,13 +5382,27 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     return t.status!=="aprovado"&&(t.assignees||[t.assignee]).includes(effectiveUser.id);
   }).length;
 
-  const COVER_COLORS=["#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#1e293b","#0f172a"];
-  const [coverColor,setCoverColor]=useState(()=>{
-    try{const s=localStorage.getItem("pixels-covercolor-"+effectiveUser.id);return s||effectiveUser.color||"#7c3aed";}catch{return effectiveUser.color||"#7c3aed";}
-  });
+  // ── CAPA: paleta grafite-first ─────────────────────────────────
+  // O padrao antigo era roxo (user.color). Trocado por grafite quase preto
+  // a pedido dos socios. A migracao v2 abaixo limpa a cor salva UMA vez por
+  // usuario, senao quem ja tinha o roxo em localStorage continuaria no roxo.
+  const PX_COVER_DEFAULT="#15171c";
+  const COVER_COLORS=["#15171c","#1f2430","#334155","#0f172a","#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777"];
+  const _pxCoverStored=(uid)=>{
+    try{
+      const mk="pixels-covercolor-v2-"+uid;
+      if(!localStorage.getItem(mk)){
+        localStorage.removeItem("pixels-covercolor-"+uid);
+        localStorage.setItem(mk,"1");
+        return PX_COVER_DEFAULT;
+      }
+      return localStorage.getItem("pixels-covercolor-"+uid)||PX_COVER_DEFAULT;
+    }catch{return PX_COVER_DEFAULT;}
+  };
+  const [coverColor,setCoverColor]=useState(()=>_pxCoverStored(effectiveUser.id));
   // Ao mudar o user visualizado, recarrega a cor da capa desse user
   useEffect(()=>{
-    try{const s=localStorage.getItem("pixels-covercolor-"+effectiveUser.id);setCoverColor(s||effectiveUser.color||"#7c3aed");}catch{}
+    setCoverColor(_pxCoverStored(effectiveUser.id));
   },[effectiveUser.id]);
   const [showColorPicker,setShowColorPicker]=useState(false);
   const saveCoverColor=(c)=>{
@@ -5221,16 +5419,19 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
     {/* ── CAPA: foto grande + nome + cargo + data + demandas + sino ── */}
-    <div style={{position:"relative",borderRadius:14,overflow:"hidden",background:`linear-gradient(135deg,${coverColor},${coverColor}cc)`,padding:isMob?"14px 14px":"18px 22px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap"}}>
+    <div style={{position:"relative",borderRadius:18,overflow:"hidden",background:`linear-gradient(135deg,${coverColor} 0%,${coverColor}ee 42%,${coverColor}c4 100%)`,padding:isMob?"16px 16px":"22px 26px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
+      {/* Brilho sutil no canto — da profundidade sem clarear o grafite */}
+      <div aria-hidden style={{position:"absolute",top:-90,right:-40,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.10) 0%,rgba(255,255,255,0) 70%)",pointerEvents:"none"}}/>
+      <div aria-hidden style={{position:"absolute",left:0,right:0,bottom:0,height:1,background:"linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.14) 50%,rgba(255,255,255,0) 100%)",pointerEvents:"none"}}/>
       {/* Foto grande */}
-      <div style={{width:isMob?78:108,height:isMob?78:108,borderRadius:"50%",border:"3px solid rgba(255,255,255,0.9)",overflow:"hidden",flexShrink:0,background:"rgba(0,0,0,0.15)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 24px rgba(0,0,0,0.18)"}}>
+      <div style={{position:"relative",zIndex:1,width:isMob?78:108,height:isMob?78:108,borderRadius:"50%",border:"3px solid rgba(255,255,255,0.9)",overflow:"hidden",flexShrink:0,background:"rgba(0,0,0,0.15)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 24px rgba(0,0,0,0.18)"}}>
         {photo
           ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
           :<span style={{color:"#fff",fontWeight:700,fontSize:isMob?32:46}}>{effectiveUser.av}</span>
         }
       </div>
       {/* Nome + cargo + data */}
-      <div style={{flex:1,minWidth:0}}>
+      <div style={{position:"relative",zIndex:1,flex:1,minWidth:0}}>
         <div style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{greeting} · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
         <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.6,lineHeight:1.1}}>{displayName}</div>
         <div style={{color:"rgba(255,255,255,0.78)",fontSize:13,fontWeight:500,marginTop:4}}>{displayRole}</div>
@@ -5238,7 +5439,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       {/* Demandas + sino à direita —
            Escondido pros sócios (Vinicius+Gustavo). User pediu dash limpo, sem
            números genéricos. Os dados ficam nas seções específicas do dash. */}
-      {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
+      {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<div style={{position:"relative",zIndex:1,flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
         <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
             <span style={{color:"#bbf7d0",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{conclMes}</span>
@@ -5261,6 +5462,9 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
         </button>
       </div>}
     </div>
+
+    {/* ── APROVAÇÕES / AJUSTES VINDOS DO PORTAL DO CLIENTE (destaque) ── */}
+    <PxAprovacoesClienteCard tasks={allTasks} isMob={isMob} userId={effectiveUser.id}/>
 
     {/* ── ALERTAS URGENTES — criados por admins/social media ──
          Escondido pros sócios (Vinicius+Gustavo) pra dash começar direto com metas. */}
@@ -66135,6 +66339,25 @@ function _DGKpiCard({label, value, hint, color, icon}){
 function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
   const [openCard, setOpenCard] = useState(null);
 
+  // ── Visualização (persistida): Quadro / Lista / Tabela ──────────
+  // Pedido do user: "tem como alternar visualizações, tipo Lista, como se
+  // fosse um Asana?". Quadro = kanban antigo; Lista = agrupada por etapa;
+  // Tabela = linha por demanda, densa, pra bater olho em tudo de uma vez.
+  const _VIEW_KEY = "pixels-internas-view";
+  const [view, setView] = useState(function(){
+    try{ return localStorage.getItem(_VIEW_KEY) || "quadro"; }catch(e){ return "quadro"; }
+  });
+  const _mudarView = function(v){
+    setView(v);
+    try{ localStorage.setItem(_VIEW_KEY, v); }catch(e){}
+  };
+  const [busca, setBusca] = useState("");
+  const [filtroPrio, setFiltroPrio] = useState("");
+  const [filtroResp, setFiltroResp] = useState("");
+  const [soAtrasadas, setSoAtrasadas] = useState(false);
+  const [ordem, setOrdem] = useState("prioridade");
+  const [gruposFechados, setGruposFechados] = useState({});
+
   const _internas = (allTasks||[]).filter(typeof _isDemandaInterna==="function"?_isDemandaInterna:()=>false);
   const _isSocio = user && user.level===1;
 
@@ -66157,18 +66380,50 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
   };
 
   const _PRIO_RANK = {urgente:0, alta:1, media:2, baixa:3};
-  const _pendentes = _internas
-    .filter(t => _atrasada(t) || t.status==="interno_demanda" || t.status==="interno_avaliacao")
-    .sort(function(a,b){
-      const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
-      if(_aPr!==_bPr) return _aPr - _bPr;
-      const _aA=_atrasada(a)?1:0, _bA=_atrasada(b)?1:0;
-      if(_aA!==_bA) return _bA - _aA;
-      const _aDl=a.deadline||"9999-12-31", _bDl=b.deadline||"9999-12-31";
-      if(_aDl!==_bDl) return _aDl < _bDl ? -1 : 1;
-      return 0;
-    })
-    .slice(0, 8);
+  const _createdTs = function(t){
+    const raw = t.createdAt || t.created_at || t.colEnteredAt || t.col_entered_at || t.id;
+    if(!raw) return 0;
+    if(typeof raw==="number") return raw;
+    const d = new Date(raw); const _t = d.getTime();
+    return isNaN(_t) ? (typeof raw==="string" ? raw.length : 0) : _t;
+  };
+
+  // ── Filtros aplicados em TODAS as visualizações ────────────────
+  const _filtradas = _internas.filter(function(t){
+    if(soAtrasadas && !_atrasada(t)) return false;
+    if(filtroPrio && (t.priority||"media")!==filtroPrio) return false;
+    if(filtroResp){
+      const _r = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
+      if(_r.indexOf(filtroResp)===-1) return false;
+    }
+    const q = busca.trim().toLowerCase();
+    if(q){
+      const _cl = t.client && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
+      const alvo = (t.title||"")+" "+(t.desc||"")+" "+((_cl&&_cl.name)||"");
+      if(alvo.toLowerCase().indexOf(q)===-1) return false;
+    }
+    return true;
+  });
+
+  const _ordenar = function(arr){
+    const _c = arr.slice();
+    if(ordem==="prazo"){
+      _c.sort(function(a,b){
+        const _a = a.deadline || "9999-12-31", _b = b.deadline || "9999-12-31";
+        if(_a!==_b) return _a < _b ? -1 : 1;
+        return (_PRIO_RANK[a.priority]??2) - (_PRIO_RANK[b.priority]??2);
+      });
+    } else if(ordem==="recentes"){
+      _c.sort(function(a,b){ return _createdTs(b) - _createdTs(a); });
+    } else {
+      _c.sort(function(a,b){
+        const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
+        if(_aPr!==_bPr) return _aPr - _bPr;
+        return _createdTs(b) - _createdTs(a);
+      });
+    }
+    return _c;
+  };
 
   const _saveCard = (updated) => {
     const isNew = !!updated._isNew;
@@ -66204,7 +66459,7 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
     if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("[interna deleteCard]",err));
     setOpenCard(null);
   };
-  // Mover card entre colunas do mini-kanban (drag-and-drop)
+  // Mover card entre colunas (drag-and-drop no Quadro, select na Lista/Tabela)
   const _moveCard = (taskId, newStatus) => {
     const task = (allTasks||[]).find(t=>t.id===taskId);
     if(!task || task.status===newStatus) return;
@@ -66237,18 +66492,210 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
     });
   };
 
-  const _Mini = ({label, value, color, ico}) => <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"13px 15px",display:"flex",alignItems:"center",gap:11,fontFamily:DG_INTER,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-    <div style={{width:36,height:36,borderRadius:10,background:color+"14",color:color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      <Ico n={ico} size={16} color={color}/>
+  // ── Colunas / etapas (compartilhadas pelas 3 visualizações) ────
+  const _MK_COLS = [
+    {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir",            ico:"package"},
+    {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando", ico:"zap"},
+    {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar",  ico:"clock"},
+    {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues",          ico:"check"},
+  ];
+  const _colDe = function(t){
+    if(t.status==="interno_triagem") return _MK_COLS[0];
+    return _MK_COLS.find(function(c){return c.id===t.status;}) || _MK_COLS[0];
+  };
+  const _byCol = {};
+  _MK_COLS.forEach(function(c){
+    _byCol[c.id] = _ordenar(_filtradas.filter(function(t){
+      return c.id==="interno_demanda" ? (t.status==="interno_demanda"||t.status==="interno_triagem") : t.status===c.id;
+    }));
+  });
+
+  // ── Bits visuais compartilhados ────────────────────────────────
+  const _prioDe = function(t){
+    return (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
+  };
+  const _clienteDe = function(t){
+    return (t.client && t.client!=="interno" && typeof CLIENTS!=="undefined") ? CLIENTS.find(c=>c.id===t.client) : null;
+  };
+  const _respsDe = function(t){
+    return (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
+  };
+  const _Avatares = function({ids, size}){
+    const s = size||20;
+    if(!ids || !ids.length) return null;
+    return <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
+      {ids.slice(0,3).map(function(uid,i){
+        const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
+        if(!u) return null;
+        const ph = (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || (u.profile_data&&u.profile_data.photo) || null;
+        return ph
+          ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:s,height:s,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}/>
+          : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:s*0.48,border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+      })}
+      {ids.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:s*0.45,border:"1.5px solid #fff",marginLeft:-6}}>+{ids.length-3}</span>}
+    </div>;
+  };
+  const _ChipPrazo = function({t}){
+    if(!t.deadline) return <span style={{color:"#cbd5e1",fontSize:11,fontWeight:600}}>—</span>;
+    const d = _dl(t.deadline);
+    const atr = _atrasada(t);
+    const cor = atr ? "#dc2626" : (d!==null && d<=2 ? "#d97706" : "#64748b");
+    const txt = atr ? Math.abs(d)+"d atraso" : (d===0 ? "hoje" : (d===1 ? "amanhã" : "em "+d+"d"));
+    return <span style={{display:"inline-flex",alignItems:"center",gap:4,color:cor,fontSize:11,fontWeight:atr?800:600,whiteSpace:"nowrap"}}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      {txt}
+    </span>;
+  };
+  const _ClienteInline = function({t, compacto}){
+    const _cl = _clienteDe(t);
+    if(!_cl) return <span style={{display:"inline-flex",alignItems:"center",gap:6,color:"#7c3aed",fontSize:10.5,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>
+      <span style={{width:compacto?18:22,height:compacto?18:22,borderRadius:6,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </span>
+      Interna
+    </span>;
+    var _bu = (t.bioterUnit||"").trim();
+    var _bUnit = null;
+    if(_cl.id==="bioter" && _bu && typeof BIOTER_UNITS!=="undefined") _bUnit = BIOTER_UNITS.find(function(u){return u.id===_bu;});
+    var _displayName = _bUnit ? (_cl.name+" "+_bUnit.pickerLabel) : _cl.name;
+    return <span style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0}}>
+      <span style={{width:compacto?18:22,height:compacto?18:22,borderRadius:5,background:"#fff",border:"1px solid #eef0f3",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+        {typeof ClientLogo!=="undefined"
+          ? <ClientLogo clientId={_cl.id} size="xs"/>
+          : <span style={{width:8,height:8,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
+      </span>
+      <span style={{color:"#475569",fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.05}}>{_displayName}</span>
+    </span>;
+  };
+  const _SelectEtapa = function({t}){
+    return <select value={_colDe(t).id}
+      onClick={function(e){e.stopPropagation();}}
+      onChange={function(e){e.stopPropagation(); _moveCard(t.id, e.target.value);}}
+      style={{background:_colDe(t).color+"14",color:_colDe(t).color,border:"1px solid "+_colDe(t).color+"33",borderRadius:99,padding:"3px 8px",fontSize:10.5,fontWeight:800,fontFamily:DG_INTER,cursor:"pointer",outline:"none",appearance:"none",WebkitAppearance:"none"}}>
+      {_MK_COLS.map(function(c){ return <option key={c.id} value={c.id} style={{color:"#0f172a",background:"#fff"}}>{c.label}</option>; })}
+    </select>;
+  };
+
+  const _Mini = ({label, value, color, ico, ativo, onClick}) => <div
+    onClick={onClick}
+    style={{background:ativo?color+"0f":"#fff",border:"1px solid "+(ativo?color+"55":"#eef0f3"),borderRadius:13,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,fontFamily:DG_INTER,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",cursor:onClick?"pointer":"default",transition:"all .12s",minWidth:0}}>
+    <div style={{width:34,height:34,borderRadius:10,background:color+"14",color:color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <Ico n={ico} size={15} color={color}/>
     </div>
     <div style={{minWidth:0}}>
-      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
-      <div style={{color:"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.6,lineHeight:1.1,fontFeatureSettings:"'tnum'",marginTop:2}}>{value}</div>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+      <div style={{color:"#0f172a",fontSize:21,fontWeight:900,letterSpacing:-.6,lineHeight:1.1,fontFeatureSettings:"'tnum'",marginTop:1}}>{value}</div>
     </div>
   </div>;
 
+  // ── Card do Quadro (kanban) ────────────────────────────────────
+  const _CardQuadro = function({t, col}){
+    const _pc = _prioDe(t);
+    const _isAtr = _atrasada(t);
+    const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
+    const _resps = _respsDe(t);
+    const _isConcluida = col.id==="interno_executado";
+    return <div
+      draggable
+      onDragStart={function(e){_setDragId(t.id); e.dataTransfer.effectAllowed="move";}}
+      onDragEnd={function(){_setDragId(null); _setDragOverCol(null);}}
+      onClick={function(){setOpenCard(t);}}
+      style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#e5e7eb"),borderRadius:10,padding:"9px 11px",cursor:"grab",transition:"all .12s",boxShadow:"0 1px 1.5px rgba(15,23,42,0.04)",opacity:_dragId===t.id?.4:1,position:"relative"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"55"; e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";
+        const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="1";
+      }}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#e5e7eb"; e.currentTarget.style.boxShadow="0 1px 1.5px rgba(15,23,42,0.04)";
+        const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="0";
+      }}>
+      <div data-quick-actions style={{position:"absolute",top:5,right:5,display:"flex",gap:3,opacity:0,transition:"opacity .15s",zIndex:2}}>
+        {!_isConcluida && <button title="Marcar como concluída"
+          onClick={function(e){e.stopPropagation(); _moveCard(t.id,"interno_executado");}}
+          style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#16a34a",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>}
+        <button title="Editar"
+          onClick={function(e){e.stopPropagation(); setOpenCard(t);}}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button title="Excluir"
+          onClick={function(e){e.stopPropagation(); _deleteCard(t.id);}}
+          style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+
+      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap",paddingRight:62,minHeight:_isConcluida?0:18}}>
+        {!_isConcluida && t.priority && <span style={{display:"inline-flex",alignItems:"center",gap:3,color:_pc.color,background:_pc.color+"12",border:"1px solid "+_pc.color+"33",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+          <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+        </span>}
+        {_isConcluida && <span style={{display:"inline-flex",alignItems:"center",gap:3,color:"#16a34a",background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Entregue
+        </span>}
+        {_isAtr && !_isConcluida && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          {_diasAtr}d
+        </span>}
+      </div>
+
+      <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:7}}>{t.title||"(sem título)"}</div>
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+        <div style={{minWidth:0,flex:1,overflow:"hidden"}}><_ClienteInline t={t}/></div>
+        <_Avatares ids={_resps} size={20}/>
+      </div>
+    </div>;
+  };
+
+  // ── Linha da Lista (estilo Asana) ──────────────────────────────
+  const _LinhaLista = function({t}){
+    const _pc = _prioDe(t);
+    const _isAtr = _atrasada(t);
+    const _isConcluida = t.status==="interno_executado";
+    const _isPortal = t.origem==="portal" || t.origem==="solicitacao_cliente";
+    return <div onClick={function(){setOpenCard(t);}}
+      style={{display:"flex",alignItems:"center",gap:11,padding:isMob?"10px 11px":"10px 14px",borderRadius:11,cursor:"pointer",background:"#fff",border:"1px solid "+(_isAtr?"#fde2e2":"#eef0f3"),transition:"all .12s"}}
+      onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor=_isAtr?"#fca5a5":"#dbe0e6";}}
+      onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_isAtr?"#fde2e2":"#eef0f3";}}>
+      {/* check rápido */}
+      <button title={_isConcluida?"Concluída":"Marcar como concluída"}
+        onClick={function(e){e.stopPropagation(); _moveCard(t.id, _isConcluida?"interno_execucao":"interno_executado");}}
+        style={{width:20,height:20,borderRadius:"50%",flexShrink:0,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",
+          background:_isConcluida?"#16a34a":"#fff", border:"1.8px solid "+(_isConcluida?"#16a34a":"#cbd5e1"), color:"#fff",padding:0}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={_isConcluida?"#fff":"#cbd5e1"} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+      {/* barra de prioridade */}
+      <span style={{width:3,alignSelf:"stretch",borderRadius:99,background:_pc.color,flexShrink:0,opacity:_isConcluida?.35:1}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+          <span style={{color:_isConcluida?"#94a3b8":"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:isMob?200:420,textDecoration:_isConcluida?"line-through":"none"}}>{t.title||"(sem título)"}</span>
+          {_isPortal && <span style={{background:"#0ea5e915",color:"#0284c7",borderRadius:6,padding:"1.5px 7px",fontSize:9,fontWeight:800,letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Portal
+          </span>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:4,flexWrap:"wrap"}}>
+          <_ClienteInline t={t} compacto/>
+          <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+            <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+          </span>
+          <_ChipPrazo t={t}/>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        {!isMob && <_SelectEtapa t={t}/>}
+        <_Avatares ids={_respsDe(t)} size={22}/>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>;
+  };
+
+  const _thStyle = {textAlign:"left",color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,padding:"0 10px 8px",whiteSpace:"nowrap"};
+  const _tdStyle = {padding:"10px",borderTop:"1px solid #f1f5f9",verticalAlign:"middle"};
+
   return <>
-    <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:16,fontFamily:DG_INTER}}>
+    <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:isMob?"18px 16px":"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:16,fontFamily:DG_INTER}}>
+      {/* ── Cabeçalho ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
           <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+DG_PURPLE+","+DG_PURPLE+"cc)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px "+DG_PURPLE+"35"}}>
@@ -66259,243 +66706,186 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
             <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Pedidos do Portal do Cliente + demandas internas da gestão</div>
           </div>
         </div>
-        <button onClick={_novoCard}
-          style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px "+DG_PURPLE+"35",transition:"all .15s",letterSpacing:.1,whiteSpace:"nowrap"}}
-          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px "+DG_PURPLE+"4d";}}
-          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px "+DG_PURPLE+"35";}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nova demanda
-        </button>
+        <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+          {/* Alternador de visualização */}
+          <div style={{display:"inline-flex",background:"#f4f5f7",border:"1px solid #e6e8ec",borderRadius:11,padding:3,gap:2}}>
+            {[
+              ["quadro","Quadro",<svg key="q" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="11" rx="1.5"/></svg>],
+              ["lista","Lista",<svg key="l" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill="currentColor"/><circle cx="3.5" cy="12" r="1.2" fill="currentColor"/><circle cx="3.5" cy="18" r="1.2" fill="currentColor"/></svg>],
+              ["tabela","Tabela",<svg key="t" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="10" y1="10" x2="10" y2="20"/></svg>],
+            ].map(function(v){
+              const _on = view===v[0];
+              return <button key={v[0]} type="button" onClick={function(){_mudarView(v[0]);}}
+                style={{background:_on?"#fff":"transparent",border:"none",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:_on?800:600,color:_on?"#0f172a":"#64748b",cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6,
+                  boxShadow:_on?"0 1px 3px rgba(15,23,42,0.10)":"none",transition:"all .12s"}}>
+                {v[2]}{!isMob&&v[1]}
+              </button>;
+            })}
+          </div>
+          {/* Busca */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid #e6e8ec",borderRadius:11,padding:"8px 12px",minWidth:isMob?140:190}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar demanda..."
+              style={{background:"transparent",border:"none",outline:"none",fontSize:12.5,flex:1,fontFamily:DG_INTER,color:"#0f172a",minWidth:0}}/>
+            {busca && <button type="button" onClick={function(){setBusca("");}} style={{background:"none",border:"none",cursor:"pointer",color:"#94a3b8",padding:0,display:"inline-flex"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>}
+          </div>
+          <button onClick={_novoCard}
+            style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px "+DG_PURPLE+"35",transition:"all .15s",letterSpacing:.1,whiteSpace:"nowrap"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px "+DG_PURPLE+"4d";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px "+DG_PURPLE+"35";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nova demanda
+          </button>
+        </div>
       </div>
 
+      {/* ── KPIs (clicáveis: Atrasadas vira filtro) ── */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,1fr)",gap:10}}>
         <_Mini label="Entrada"           value={kpis.entrada}         color="#9F43F6" ico="inbox"/>
         <_Mini label="Em execução"       value={kpis.execucao}        color="#f97316" ico="zap"/>
         <_Mini label="Aguard. aprovação" value={kpis.aguardandoAprov} color="#eab308" ico="check"/>
-        <_Mini label="Atrasadas"         value={kpis.atrasadas}       color="#dc2626" ico="alertTriangle"/>
+        <_Mini label="Atrasadas"         value={kpis.atrasadas}       color="#dc2626" ico="alertTriangle" ativo={soAtrasadas} onClick={function(){setSoAtrasadas(!soAtrasadas);}}/>
         <_Mini label="Concluídas no mês" value={kpis.concluidasMes}   color="#16a34a" ico="trendingUp"/>
       </div>
 
-      {/* Mini-kanban: 4 colunas com drag-and-drop pra mover entre status */}
-      {(function(){
-        const _MK_COLS = [
-          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir",            ico:"package"},
-          {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando", ico:"zap"},
-          {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar",  ico:"clock"},
-          {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues",          ico:"check"},
-        ];
-        const _byCol = {};
-        _MK_COLS.forEach(c=>{ _byCol[c.id] = _internas.filter(t=>t.status===c.id); });
-        // Triagem cai na coluna Entrada também
-        _byCol.interno_demanda = _byCol.interno_demanda.concat(_internas.filter(t=>t.status==="interno_triagem"));
-        // Ordena: URGENTE sempre no topo, depois ALTA/MÉDIA/BAIXA.
-        // Dentro de cada tier: MAIS RECENTE primeiro (novas demandas aparecem no topo).
-        const _createdTs = function(t){
-          const raw = t.createdAt || t.created_at || t.colEnteredAt || t.col_entered_at || t.id;
-          if(!raw) return 0;
-          if(typeof raw==="number") return raw;
-          const d = new Date(raw); const _t = d.getTime();
-          return isNaN(_t) ? (typeof raw==="string" ? raw.length : 0) : _t;
-        };
-        _MK_COLS.forEach(c=>{
-          _byCol[c.id] = _byCol[c.id].sort(function(a,b){
-            const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
-            if(_aPr!==_bPr) return _aPr - _bPr;
-            // Dentro do mesmo tier: mais RECENTE primeiro
-            return _createdTs(b) - _createdTs(a);
-          });
-        });
-        const _MK_LIMIT = 5;
-        return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Demandas internas</div>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
-              arraste pra mover de coluna
+      {/* ── Barra de filtros ── */}
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        {[["","Todas"],["urgente","Urgente"],["alta","Alta"],["media","Média"],["baixa","Baixa"]].map(function(p){
+          const _cfg = p[0] ? ((typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[p[0]]||{color:"#64748b"}) : {color:"#0f172a"};
+          const _on = filtroPrio===p[0];
+          return <button key={p[0]||"all"} type="button" onClick={function(){setFiltroPrio(p[0]);}}
+            style={{background:_on?_cfg.color:"#fff",border:"1px solid "+(_on?_cfg.color:"#e6e8ec"),color:_on?"#fff":"#64748b",borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:DG_INTER,transition:"all .12s"}}>
+            {p[1]}
+          </button>;
+        })}
+        <span style={{width:1,height:18,background:"#e6e8ec"}}/>
+        <button type="button" onClick={function(){setSoAtrasadas(!soAtrasadas);}}
+          style={{background:soAtrasadas?"#dc2626":"#fff",border:"1px solid "+(soAtrasadas?"#dc2626":"#e6e8ec"),color:soAtrasadas?"#fff":"#64748b",borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:soAtrasadas?800:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          Só atrasadas
+        </button>
+        <select value={filtroResp} onChange={function(e){setFiltroResp(e.target.value);}}
+          style={{background:"#fff",border:"1px solid #e6e8ec",borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:filtroResp?800:600,color:filtroResp?"#0f172a":"#64748b",cursor:"pointer",fontFamily:DG_INTER,outline:"none"}}>
+          <option value="">Todos os responsáveis</option>
+          {(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){ return <option key={u.id} value={u.id}>{u.name}</option>; })}
+        </select>
+        <div style={{flex:1}}/>
+        <select value={ordem} onChange={function(e){setOrdem(e.target.value);}}
+          style={{background:"#fff",border:"1px solid #e6e8ec",borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:600,color:"#64748b",cursor:"pointer",fontFamily:DG_INTER,outline:"none"}}>
+          <option value="prioridade">Ordenar: prioridade</option>
+          <option value="prazo">Ordenar: prazo</option>
+          <option value="recentes">Ordenar: mais recentes</option>
+        </select>
+        <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap"}}>{_filtradas.length} demanda{_filtradas.length===1?"":"s"}</span>
+      </div>
+
+      {/* ══════════ QUADRO ══════════ */}
+      {view==="quadro" && <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end"}}>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+            arraste pra mover de coluna
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:10}}>
+          {_MK_COLS.map(function(col){
+            const _tasks = _byCol[col.id] || [];
+            const _isTarget = _dragOverCol===col.id;
+            return <div key={col.id}
+              onDragOver={function(e){e.preventDefault(); _setDragOverCol(col.id);}}
+              onDragLeave={function(e){if(!e.currentTarget.contains(e.relatedTarget)) _setDragOverCol(null);}}
+              onDrop={function(e){e.preventDefault(); _setDragOverCol(null); if(_dragId)_moveCard(_dragId,col.id); _setDragId(null);}}
+              style={{background:_isTarget?col.color+"10":"#f4f5f7",border:"1px solid "+(_isTarget?col.color+"66":"#e6e8ec"),borderRadius:12,padding:9,display:"flex",flexDirection:"column",gap:6,minHeight:120,transition:"all .12s"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:7,borderBottom:"1px solid "+col.color+"22"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                  <span style={{width:22,height:22,borderRadius:7,background:col.color+"18",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Ico n={col.ico} size={12} color={col.color}/>
+                  </span>
+                  <div style={{minWidth:0,overflow:"hidden"}}>
+                    <div style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
+                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                  </div>
+                </div>
+                <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:5,flex:1,maxHeight:560,overflowY:"auto",overflowX:"hidden",paddingRight:2,scrollbarWidth:"thin"}}>
+                {_tasks.length===0
+                  ? <div style={{color:"#cbd5e1",fontSize:11,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 8px"}}>Vazio</div>
+                  : _tasks.map(function(t){ return <_CardQuadro key={t.id} t={t} col={col}/>; })}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* ══════════ LISTA (agrupada por etapa, estilo Asana) ══════════ */}
+      {view==="lista" && <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {_MK_COLS.map(function(col){
+          const _tasks = _byCol[col.id] || [];
+          const _fechado = !!gruposFechados[col.id];
+          return <div key={col.id} style={{display:"flex",flexDirection:"column",gap:7}}>
+            <div onClick={function(){setGruposFechados(Object.assign({},gruposFechados,{[col.id]:!_fechado}));}}
+              style={{display:"flex",alignItems:"center",gap:9,cursor:"pointer",userSelect:"none",padding:"2px 0"}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                style={{transform:_fechado?"rotate(-90deg)":"none",transition:"transform .15s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+              <span style={{width:20,height:20,borderRadius:6,background:col.color+"18",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n={col.ico} size={11} color={col.color}/>
+              </span>
+              <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{col.label}</span>
+              <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:800}}>{_tasks.length}</span>
+              <span style={{color:"#cbd5e1",fontSize:11,fontWeight:500}}>{col.hint}</span>
             </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:10}}>
-            {_MK_COLS.map(function(col){
-              const _tasks = _byCol[col.id] || [];
-              const _isTarget = _dragOverCol===col.id;
-              return <div key={col.id}
-                onDragOver={function(e){e.preventDefault(); _setDragOverCol(col.id);}}
-                onDragLeave={function(e){if(!e.currentTarget.contains(e.relatedTarget)) _setDragOverCol(null);}}
-                onDrop={function(e){e.preventDefault(); _setDragOverCol(null); if(_dragId)_moveCard(_dragId,col.id); _setDragId(null);}}
-                style={{background:_isTarget?col.color+"10":"#eef0f3",border:"1px solid "+(_isTarget?col.color+"66":"#d8dce2"),borderRadius:10,padding:8,display:"flex",flexDirection:"column",gap:6,minHeight:120,transition:"all .12s"}}>
-                {/* Header da coluna */}
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:6,borderBottom:"1px solid "+col.color+"22"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                    {/* Ícone moderno por coluna em vez da bolinha */}
-                    <span style={{width:22,height:22,borderRadius:7,background:col.color+"18",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      <Ico n={col.ico} size={12} color={col.color}/>
-                    </span>
-                    <div style={{minWidth:0,overflow:"hidden"}}>
-                      <div style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
-                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
-                    </div>
-                  </div>
-                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
-                </div>
-                {/* Cards compactos — scroll interno quando passa dos 5 */}
-                <div style={{display:"flex",flexDirection:"column",gap:5,flex:1,maxHeight:560,overflowY:"auto",overflowX:"hidden",paddingRight:2,scrollbarWidth:"thin"}}>
-                  {_tasks.length===0
-                    ? <div style={{color:"#cbd5e1",fontSize:11,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 8px"}}>Vazio</div>
-                    : _tasks.map(function(t){
-                        const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
-                        const _isAtr = _atrasada(t);
-                        const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
-                        const _cl = t.client && t.client!=="interno" && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
-                        const _resps = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
-                        const _isConcluida = col.id==="interno_executado";
-                        return <div key={t.id}
-                          draggable
-                          onDragStart={function(e){_setDragId(t.id); e.dataTransfer.effectAllowed="move";}}
-                          onDragEnd={function(){_setDragId(null); _setDragOverCol(null);}}
-                          onClick={function(){setOpenCard(t);}}
-                          style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#e5e7eb"),borderRadius:10,padding:"9px 11px",cursor:"grab",transition:"all .12s",boxShadow:"0 1px 1.5px rgba(15,23,42,0.04)",opacity:_dragId===t.id?.4:1,position:"relative"}}
-                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"55"; e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";
-                            const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="1";
-                          }}
-                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#e5e7eb"; e.currentTarget.style.boxShadow="0 1px 1.5px rgba(15,23,42,0.04)";
-                            const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="0";
-                          }}>
-                          {/* Quick actions na capa (aparecem no hover) */}
-                          <div data-quick-actions style={{position:"absolute",top:5,right:5,display:"flex",gap:3,opacity:0,transition:"opacity .15s",zIndex:2}}>
-                            {!_isConcluida && <button title="Marcar como concluída"
-                              onClick={function(e){e.stopPropagation(); _moveCard(t.id,"interno_executado");}}
-                              style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#16a34a",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
-                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";}}
-                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#16a34a";e.currentTarget.style.borderColor="#bbf7d0";}}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>}
-                            <button title="Editar"
-                              onClick={function(e){e.stopPropagation(); setOpenCard(t);}}
-                              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
-                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
-                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button title="Excluir"
-                              onClick={function(e){e.stopPropagation(); _deleteCard(t.id);}}
-                              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
-                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
-                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                          </div>
+            {!_fechado && (_tasks.length===0
+              ? <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:500,fontStyle:"italic",padding:"8px 0 8px 30px"}}>Nada nesta etapa.</div>
+              : <div style={{display:"flex",flexDirection:"column",gap:5,paddingLeft:isMob?0:20}}>
+                  {_tasks.map(function(t){ return <_LinhaLista key={t.id} t={t}/>; })}
+                </div>)}
+          </div>;
+        })}
+      </div>}
 
-                          {/* Linha de tags: Prioridade + Atraso (com ícone de relógio) */}
-                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap",paddingRight:62,minHeight:_isConcluida?0:18}}>
-                            {!_isConcluida && t.priority && <span style={{display:"inline-flex",alignItems:"center",gap:3,color:_pc.color,background:_pc.color+"12",border:"1px solid "+_pc.color+"33",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
-                              <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
-                            </span>}
-                            {_isConcluida && <span style={{display:"inline-flex",alignItems:"center",gap:3,color:"#16a34a",background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                              Entregue
-                            </span>}
-                            {_isAtr && !_isConcluida && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-                              {_diasAtr}d
-                            </span>}
-                          </div>
-
-                          {/* Título */}
-                          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:7}}>{t.title||"(sem título)"}</div>
-
-                          {/* Footer: logo cliente + responsáveis (compactos) */}
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
-                            {_cl
-                              ? (function(){
-                                  // Nome com unidade Bioter quando aplicável (ex: "Bioter Chapecó")
-                                  var _bu = (t.bioterUnit||"").trim();
-                                  var _bUnit = null;
-                                  if(_cl.id==="bioter" && _bu && typeof BIOTER_UNITS!=="undefined"){
-                                    _bUnit = BIOTER_UNITS.find(function(u){return u.id===_bu;});
-                                  }
-                                  var _displayName = _bUnit ? (_cl.name+" "+_bUnit.pickerLabel) : _cl.name;
-                                  return <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
-                                    <div style={{width:22,height:22,borderRadius:5,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-                                      {typeof ClientLogo!=="undefined"
-                                        ? <ClientLogo clientId={_cl.id} size="xs"/>
-                                        : <span style={{width:8,height:8,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
-                                    </div>
-                                    <span style={{color:"#475569",fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.05}}>{_displayName}</span>
-                                  </div>;
-                                })()
-                              : <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
-                                  <div style={{width:22,height:22,borderRadius:6,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff",boxShadow:"0 2px 5px rgba(124,58,237,0.28)"}}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                                  </div>
-                                  <span style={{color:"#7c3aed",fontSize:10.5,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>Interna</span>
-                                </div>}
-                            {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
-                              {_resps.slice(0,3).map(function(uid,i){
-                                const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
-                                if(!u) return null;
-                                const ph = (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || (u.profile_data&&u.profile_data.photo) || null;
-                                return ph
-                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}/>
-                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9.5,border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
-                              })}
-                              {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:9,border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)"}}>+{_resps.length-3}</span>}
-                            </div>}
-                          </div>
-                        </div>;
-                      })}
-                </div>
-              </div>;
-            })}
-          </div>
-        </div>;
-      })()}
-      {false && _pendentes.length===0
-        ? null
-        : <div style={{display:"none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Precisam de decisão sua <span style={{color:"#94a3b8",fontWeight:600}}>· {_pendentes.length}</span></div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>atrasadas → entrada → aguardando aprovação</div>
-            </div>
-            {_pendentes.map(function(t){
-              const _col = (typeof INTERNO_COLS!=="undefined"?INTERNO_COLS:[]).find(c=>c.id===t.status) || {label:t.status,color:"#94a3b8"};
-              const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
-              const _isAtr = _atrasada(t);
-              const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
-              const _cl = t.client && t.client!=="interno" && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
-              const _isPortal = t.origem==="portal" || t.origem==="solicitacao_cliente";
-              const _resps = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
-              return <div key={t.id} onClick={()=>setOpenCard(t)}
-                style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.02)"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.borderColor=_isAtr?"#dc2626":DG_PURPLE+"55";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.06)";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.02)";}}>
-                <div style={{background:_col.color+"18",color:_col.color,borderRadius:8,padding:"4px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,whiteSpace:"nowrap",flexShrink:0}}>{_col.label}</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
-                    <span style={{color:"#0f172a",fontSize:13.5,fontWeight:600,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:380}}>{t.title||"(sem título)"}</span>
-                    {_isPortal && <span style={{background:"#0ea5e918",color:"#0ea5e9",borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:3}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Portal</span>}
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:9,color:"#64748b",fontSize:11,fontWeight:500,flexWrap:"wrap"}}>
-                    {_cl && <span style={{display:"inline-flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>{_cl.name}</span>}
-                    <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,fontWeight:700}}><span style={{width:6,height:6,borderRadius:"50%",background:_pc.color}}/>{_pc.label}</span>
-                    {t.deadline && <span style={{color:_isAtr?"#dc2626":"#64748b",fontWeight:_isAtr?700:500}}>{_isAtr?_diasAtr+"d atraso":"Vence em "+(_dl(t.deadline)||0)+"d"}</span>}
-                  </div>
-                </div>
-                {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
-                  {_resps.slice(0,3).map(function(uid,i){
-                    const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
-                    if(!u) return null;
-                    const ph = (u.profile_data&&u.profile_data.photo) || (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || null;
-                    return ph
-                      ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:24,height:24,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",marginLeft:i===0?0:-7}}/>
-                      : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9.5,border:"2px solid #fff",marginLeft:i===0?0:-7}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
-                  })}
-                  {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:9.5,border:"2px solid #fff",marginLeft:-7}}>+{_resps.length-3}</span>}
-                </div>}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
-              </div>;
-            })}
-          </div>
-      }
+      {/* ══════════ TABELA ══════════ */}
+      {view==="tabela" && <div style={{overflowX:"auto",border:"1px solid #eef0f3",borderRadius:13}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontFamily:DG_INTER,minWidth:760}}>
+          <thead>
+            <tr style={{background:"#fafbfc"}}>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Demanda</th>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Cliente</th>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Etapa</th>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Prioridade</th>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Prazo</th>
+              <th style={Object.assign({},_thStyle,{paddingTop:11})}>Responsáveis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {_ordenar(_filtradas).length===0
+              ? <tr><td colSpan={6} style={{padding:"26px 12px",textAlign:"center",color:"#cbd5e1",fontSize:12.5,fontWeight:500,fontStyle:"italic"}}>Nenhuma demanda com esses filtros.</td></tr>
+              : _ordenar(_filtradas).map(function(t){
+                  const _pc = _prioDe(t);
+                  const _isConcluida = t.status==="interno_executado";
+                  return <tr key={t.id} onClick={function(){setOpenCard(t);}}
+                    style={{cursor:"pointer",background:"#fff",transition:"background .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+                    <td style={Object.assign({},_tdStyle,{maxWidth:340})}>
+                      <div style={{color:_isConcluida?"#94a3b8":"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isConcluida?"line-through":"none"}}>{t.title||"(sem título)"}</div>
+                    </td>
+                    <td style={_tdStyle}><_ClienteInline t={t} compacto/></td>
+                    <td style={_tdStyle}><_SelectEtapa t={t}/></td>
+                    <td style={_tdStyle}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+                      </span>
+                    </td>
+                    <td style={_tdStyle}><_ChipPrazo t={t}/></td>
+                    <td style={_tdStyle}><_Avatares ids={_respsDe(t)} size={22}/></td>
+                  </tr>;
+                })}
+          </tbody>
+        </table>
+      </div>}
     </section>
     {openCard && typeof CardModalInterno!=="undefined" && <CardModalInterno card={openCard} onClose={()=>setOpenCard(null)} onSave={_saveCard} onDelete={_deleteCard} isSocio={_isSocio}/>}
   </>;
