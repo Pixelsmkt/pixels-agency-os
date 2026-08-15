@@ -50960,8 +50960,20 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
               <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Investido</div>
               <div style={{color:"#0f172a",fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalInvestido)}</div>
               <div style={{display:"flex",gap:20,flexWrap:"wrap",marginTop:10}}>
+                {/* Ícones no lugar dos quadradinhos de cor: o donut virou um
+                    anel único, então o swatch não codificava mais nada — era
+                    decoração. Aperto de mão = parceria (serviço da Pixels),
+                    megafone = tráfego/anúncios. */}
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:11,height:11,borderRadius:4,background:cl.color,flexShrink:0}}/>
+                  <span style={{width:22,height:22,borderRadius:7,background:cl.color+"16",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cl.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m11 17 2 2a1 1 0 1 0 3-3"/>
+                      <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/>
+                      <path d="m21 3 1 11h-2"/>
+                      <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/>
+                      <path d="M3 4h8"/>
+                    </svg>
+                  </span>
                   {_logoPixelsOk
                     ? <img src="/logo-pixels.png" alt="Pixels" onError={function(){_setLogoPixelsOk(false);}}
                         style={{height:14,width:"auto",maxWidth:62,objectFit:"contain",objectPosition:"left center",display:"block"}}/>
@@ -50969,7 +50981,12 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(pixelsServ)}</span>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:11,height:11,borderRadius:4,background:"#334155",flexShrink:0}}/>
+                  <span style={{width:22,height:22,borderRadius:7,background:"#33415514",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m3 11 18-5v12L3 14v-3z"/>
+                      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+                    </svg>
+                  </span>
                   <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Mídia / anúncios</span>
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(midia)}</span>
                 </div>
