@@ -50619,6 +50619,28 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
     return function(){active=false;};
   },[effectiveClientId,year,month]);
 
+  // ── REALTIME entre máquinas ───────────────────────────────────
+  // Sócio A registra a venda → B vê sem recarregar (mesmo canal que o funil
+  // usa). Se ESTA máquina tem edição pendente no debounce, ignora o evento —
+  // senão o eco do próprio save (ou o save do outro) atropelava o que o
+  // usuário está digitando. O debounce persiste em seguida e o novo evento
+  // realtime realinha geral.
+  useEffect(function(){
+    if(!window._sb||!effectiveClientId) return;
+    let active=true;
+    const ch=window._sb.channel("roi-rt-"+effectiveClientId)
+      .on("postgres_changes",{event:"*",schema:"public",table:"client_roi_monthly",filter:"client_id=eq."+effectiveClientId},function(payload){
+        if(!active) return;
+        const r=payload&&payload.new;
+        if(!r||r.year!==year||r.month!==month) return;
+        if(_persistPend.current) return;   // digitação local em curso
+        setMidia(Number(r.midia_spend||0));
+        setPixelsServ(Number(r.pixels_service||0));
+        setSales(Array.isArray(r.sales)?r.sales:[]);
+      }).subscribe();
+    return function(){ active=false; try{window._sb.removeChannel(ch);}catch(e){} };
+  },[effectiveClientId,year,month]);
+
   // Carrega histórico dos últimos 12 meses (pra gráfico de linha)
   useEffect(function(){
     let active=true;
@@ -50654,9 +50676,51 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
   const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
   const _ddmm=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");if(isNaN(d.getTime()))return s;return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
 
-  // Mudanças marcam dirty
-  function setMidiaVal(v){setMidia(v);setDirty(true);}
-  function setPixelsServVal(v){setPixelsServ(v);setDirty(true);}
+  // ── AUTO-SAVE ─────────────────────────────────────────────────
+  // O fluxo antigo exigia clicar em "Salvar alterações": quem trocava de aba
+  // antes perdia a venda ("quando vou pra outra aba, não salva"). Agora TODA
+  // mutação persiste sozinha no Supabase:
+  //   · venda adicionada/editada/removida → upsert imediato
+  //   · inputs de investimento → upsert com debounce de 900ms
+  // _persistROI recebe overrides explícitos (nunca lê o state async) e captura
+  // year/month NA CHAMADA — sem isso, trocar de mês durante o debounce salvava
+  // os valores no mês errado.
+  const _persistTimer=useRef(null);
+  const _persistPend=useRef(false);
+  async function _persistROI(ov){
+    if(!window._sb) return false;
+    _persistPend.current=false;
+    setSaving(true);
+    try{
+      const payload={
+        client_id:effectiveClientId,
+        year:(ov&&ov.year)||year, month:(ov&&ov.month)||month,
+        midia_spend:Number((ov&&ov.midia!==undefined)?ov.midia:midia)||0,
+        pixels_service:Number((ov&&ov.pixelsServ!==undefined)?ov.pixelsServ:pixelsServ)||0,
+        sales:(ov&&ov.sales)||sales,
+        updated_at:new Date().toISOString(),
+        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Cliente: "+cl.name,
+      };
+      const {error}=await window._sb.from("client_roi_monthly")
+        .upsert(payload,{onConflict:"client_id,year,month"});
+      if(error)throw error;
+      setDirty(false);
+      setSaving(false);
+      return true;
+    }catch(e){
+      setSaving(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Não foi possível salvar: "+(e.message||e)+". Confira a conexão.",6000);
+      return false;
+    }
+  }
+  function _persistDebounce(ov){
+    _persistPend.current=true;
+    if(_persistTimer.current) clearTimeout(_persistTimer.current);
+    const _y=year,_m=month;   // captura o mês de AGORA, não o do disparo
+    _persistTimer.current=setTimeout(function(){ _persistROI(Object.assign({year:_y,month:_m},ov)); },900);
+  }
+  function setMidiaVal(v){setMidia(v);setDirty(true);_persistDebounce({midia:v});}
+  function setPixelsServVal(v){setPixelsServ(v);setDirty(true);_persistDebounce({pixelsServ:v});}
 
   function abrirNovaVenda(){
     // size/size_unit: tamanho do produto (Bioter vende por m³). city/uf: onde
@@ -50676,41 +50740,23 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       city:  String(v.city||"").trim(),
       uf:    String(v.uf||"").trim(),
     });
-    if(editVenda.mode==="new"){
-      setSales(function(p){return [].concat(p,[_v]);});
-    }else{
-      setSales(function(p){return p.map(function(x){return x.id===_v.id?_v:x;});});
-    }
+    const _novaLista = editVenda.mode==="new"
+      ? [].concat(sales,[_v])
+      : sales.map(function(x){return x.id===_v.id?_v:x;});
+    setSales(_novaLista);
     setEditVenda(null);
-    setDirty(true);
+    _persistROI({sales:_novaLista}).then(function(ok){
+      if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Venda salva.",2500);
+    });
   }
   function removerVenda(id){
-    setSales(function(p){return p.filter(function(v){return v.id!==id;});});
-    setDirty(true);
+    const _novaLista=sales.filter(function(v){return v.id!==id;});
+    setSales(_novaLista);
+    _persistROI({sales:_novaLista}).then(function(ok){
+      if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Venda removida.",2500);
+    });
   }
 
-  async function handleSave(){
-    if(!window._sb||saving)return;
-    setSaving(true);
-    try{
-      const payload={
-        client_id:effectiveClientId, year:year, month:month,
-        midia_spend:Number(midia)||0,
-        pixels_service:Number(pixelsServ)||0,
-        sales:sales,
-        updated_at:new Date().toISOString(),
-        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Cliente: "+cl.name,
-      };
-      const {error}=await window._sb.from("client_roi_monthly")
-        .upsert(payload,{onConflict:"client_id,year,month"});
-      if(error)throw error;
-      setDirty(false);
-      if(typeof pixelsToast!=="undefined")pixelsToast.success("Dados salvos.",3000);
-    }catch(e){
-      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar: "+(e.message||e),5000);
-    }
-    setSaving(false);
-  }
 
   // Estilos do modal de venda (evita repetir o mesmo objeto 4x)
   const _lblStyle={color:"#64748b",fontSize:10,fontWeight:800,marginBottom:7,textTransform:"uppercase",letterSpacing:.7};
@@ -51112,12 +51158,11 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       })}
     </div>
 
-    {/* Botão salvar (só aparece se houver mudanças) */}
-    {dirty&&<div style={{display:"flex",justifyContent:"flex-end"}}>
-      <button onClick={handleSave} disabled={saving}
-        style={{background:saving?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:10,padding:"11px 24px",fontWeight:800,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1}}>
-        {saving?"Salvando...":"Salvar alterações"}
-      </button>
+    {/* Indicador de salvamento automático (o botão "Salvar alterações" saiu —
+        tudo persiste sozinho; ver comentário do AUTO-SAVE) */}
+    {(saving||dirty)&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:7,color:"#94a3b8",fontSize:11.5,fontWeight:600}}>
+      <span style={{width:7,height:7,borderRadius:"50%",background:saving?"#f59e0b":"#cbd5e1",flexShrink:0}}/>
+      {saving?"Salvando...":"Alterações pendentes..."}
     </div>}
 
     {/* ══════════ MODAL NOVA / EDITAR VENDA ══════════
