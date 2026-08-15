@@ -1418,16 +1418,50 @@ function smartFormatTitle(input){
 }
 
 /* ─── DESIGNER PAYMENTS ─── */
+// Tabela BASE — vigente até 08/2026.
 const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
-// Overrides por designer — combinados individualmente. Maria: Ajuste de template = R$ 25.
+
+// ── Reajustes datados ────────────────────────────────────────────────────
+// O pagamento é calculado sob demanda a partir das tasks do mês. Se a gente
+// simplesmente trocasse o valor na tabela base, TODO o histórico (e o mês que
+// ainda vai ser pago) seria recalculado com o preço novo — agosto viraria R$25
+// retroativo. Por isso o reajuste tem data: cada task é precificada pelo mês
+// EM QUE ELA CAIU (referenceMonth/publishDate/... — ver effectiveMonth abaixo).
+// Pra reajustar de novo: acrescente uma entrada aqui, NÃO edite DESIGNER_PRICES.
+const DESIGNER_PRICE_SCHEDULE = [
+  { from: "2026-09", prices: { fotoObra: 25 } },   // Ajuste de template R$20 → R$25
+];
+
+// Overrides por designer — acordos individuais, aplicados por ÚLTIMO (ganham do
+// reajuste). Maria já vinha em R$25 no Ajuste de template desde antes; a partir
+// de 09/2026 isso vira o padrão de todo mundo e o override fica redundante —
+// mantido pra não alterar o cálculo dos meses anteriores dela.
 const DESIGNER_PRICE_OVERRIDES = {
   maria: { fotoObra: 25 },
 };
-// Retorna preços mesclando defaults + override do designer (se houver).
-function _pricesFor(designerId){
-  const _ov = (DESIGNER_PRICE_OVERRIDES && DESIGNER_PRICE_OVERRIDES[designerId]) || {};
-  return Object.assign({}, DESIGNER_PRICES, _ov);
+
+function _mesIsoAtual(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 }
+// Preços de um designer NO MÊS pedido: base → reajustes vigentes → override.
+function _pricesFor(designerId, refMonth){
+  const _mes = refMonth || _mesIsoAtual();
+  const _p = Object.assign({}, DESIGNER_PRICES);
+  (DESIGNER_PRICE_SCHEDULE||[]).forEach(function(r){
+    if(r && r.from && String(_mes) >= r.from) Object.assign(_p, r.prices||{});
+  });
+  const _ov = (DESIGNER_PRICE_OVERRIDES && DESIGNER_PRICE_OVERRIDES[designerId]) || {};
+  return Object.assign(_p, _ov);
+}
+// contentType → [chave de contagem, chave da lista de tasks]
+const _CT_BUCKET = {
+  foto:["fotoObra","tasksFotoObra"], arte:["arte","tasksArte"],
+  carrossel:["carrossel","tasksCarrossel"], folder:["folder","tasksFolder"],
+  video:["video","tasksVideo"], corte:["corte","tasksCorte"],
+  video_complexo:["videoComplexo","tasksVideoComplexo"],
+  video_feira:["videoFeira","tasksVideoFeira"],
+};
 // "reprovado" entra porque o material foi produzido — paga igual.
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
 const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
@@ -1467,27 +1501,16 @@ function calcDesignerPayments(tasks, designerId, refMonth){
       || _isoMonth(t.updated_at||t.updatedAt)
       || _isoMonth(t.createdAt||t.created_at);
     if(refMonth&&effectiveMonth!==refMonth)return;
-    if(t.contentType==="foto"){out.fotoObra++;out.tasksFotoObra.push(t);}
-    else if(t.contentType==="carrossel"){out.carrossel++;out.tasksCarrossel.push(t);}
-    else if(t.contentType==="folder"){out.folder++;out.tasksFolder.push(t);}
-    else if(t.contentType==="arte"){out.arte++;out.tasksArte.push(t);}
-    else if(t.contentType==="video"){out.video++;out.tasksVideo.push(t);}
-    else if(t.contentType==="corte"){out.corte++;out.tasksCorte.push(t);}
-    else if(t.contentType==="video_complexo"){out.videoComplexo++;out.tasksVideoComplexo.push(t);}
-    else if(t.contentType==="video_feira"){out.videoFeira++;out.tasksVideoFeira.push(t);}
-    else {out.naoClassificado++;out.tasksOutros.push(t);}
+    const _b=_CT_BUCKET[t.contentType];
+    if(_b){
+      out[_b[0]]++; out[_b[1]].push(t);
+      // Preço do mês DA TASK — sem isso, "Todos os meses" somaria tudo pela
+      // tabela vigente hoje e o reajuste de 09/2026 vazaria pro passado.
+      out.total += Number(_pricesFor(designerId, effectiveMonth)[_b[0]])||0;
+    } else { out.naoClassificado++; out.tasksOutros.push(t); }
   });
-  // Preços específicos deste designer (aplica overrides se houver)
-  const _prices = _pricesFor(designerId);
-  out._prices = _prices; // expõe pros consumers renderizarem o preço certo
-  out.total = out.fotoObra*_prices.fotoObra
-            + out.arte*_prices.arte
-            + out.carrossel*_prices.carrossel
-            + out.folder*_prices.folder
-            + out.video*_prices.video
-            + out.corte*_prices.corte
-            + out.videoComplexo*_prices.videoComplexo
-            + out.videoFeira*_prices.videoFeira;
+  // Preços de referência pra UI (mês selecionado; sem seleção, o mês corrente)
+  out._prices = _pricesFor(designerId, refMonth);
   return out;
 }
 function formatRefMonth(refMonth){
@@ -1668,9 +1691,10 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         // No Financeiro forca verde uniforme; fora dele mantem cor pessoal
         const accent=compact?_BRAND:(fr.color||"#7c3aed");
         const photo=(fr&&fr.profile_data&&fr.profile_data.photo)||((typeof getProfilePhoto!=="undefined")?getProfilePhoto(fr.id):null);
+        const _pc=c._prices||DESIGNER_PRICES;   // preços do mês/designer, não a tabela base
         const items=r.isEditor
-          ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. básico",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
-          :[{l:"Ajuste de template",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte única",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
+          ?[{l:"Vídeo",n:c.video,p:_pc.video},{l:"Corte",n:c.corte,p:_pc.corte},{l:"V. dinâmico",n:c.videoComplexo,p:_pc.videoComplexo},{l:"V. básico",n:c.videoFeira,p:_pc.videoFeira}]
+          :[{l:"Ajuste de template",n:c.fotoObra,p:_pc.fotoObra},{l:"Arte única",n:c.arte,p:_pc.arte},{l:"Carrossel",n:c.carrossel,p:_pc.carrossel},{l:"Folder",n:c.folder,p:_pc.folder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
         return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%, #fff 60%)",border:"1px solid "+accent+"22",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
@@ -1850,15 +1874,16 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       const _dm=_detalheModal;
       const _ac=_dm.accent;
       const _c=_dm.calc;
+      const _pd=(_c&&_c._prices)||DESIGNER_PRICES;
       const _CAT=[
-        {key:"tasksFotoObra",  label:"Ajuste de template",  price:DESIGNER_PRICES.fotoObra,      color:"#ec4899"},
-        {key:"tasksArte",      label:"Arte única",          price:DESIGNER_PRICES.arte,          color:"#a140ff"},
-        {key:"tasksCarrossel", label:"Carrossel",           price:DESIGNER_PRICES.carrossel,     color:"#7c3aed"},
-        {key:"tasksFolder",    label:"Folder",              price:DESIGNER_PRICES.folder,        color:"#0891b2"},
-        {key:"tasksVideo",     label:"Vídeo",               price:DESIGNER_PRICES.video,         color:"#2563eb"},
-        {key:"tasksCorte",     label:"Corte de vídeo",      price:DESIGNER_PRICES.corte,         color:"#0284c7"},
-        {key:"tasksVideoComplexo",label:"Vídeo dinâmico",   price:DESIGNER_PRICES.videoComplexo, color:"#7e22ce"},
-        {key:"tasksVideoFeira",label:"Vídeo básico",        price:DESIGNER_PRICES.videoFeira,    color:"#0369a1"},
+        {key:"tasksFotoObra",  label:"Ajuste de template",  price:_pd.fotoObra,      color:"#ec4899"},
+        {key:"tasksArte",      label:"Arte única",          price:_pd.arte,          color:"#a140ff"},
+        {key:"tasksCarrossel", label:"Carrossel",           price:_pd.carrossel,     color:"#7c3aed"},
+        {key:"tasksFolder",    label:"Folder",              price:_pd.folder,        color:"#0891b2"},
+        {key:"tasksVideo",     label:"Vídeo",               price:_pd.video,         color:"#2563eb"},
+        {key:"tasksCorte",     label:"Corte de vídeo",      price:_pd.corte,         color:"#0284c7"},
+        {key:"tasksVideoComplexo",label:"Vídeo dinâmico",   price:_pd.videoComplexo, color:"#7e22ce"},
+        {key:"tasksVideoFeira",label:"Vídeo básico",        price:_pd.videoFeira,    color:"#0369a1"},
         {key:"tasksOutros",    label:"Não classificado",    price:0,                             color:"#64748b"},
       ];
       const _statusLabel={demanda:"Copys",alteracao_copy:"Alteração",recebida:"Demanda",execucao:"Execução",avaliacao:"Avaliação",aprovado:"Aprovado",aprovacao_final:"Aprovado pelo cliente",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado",reprovado:"Reprovado",ajustes:"Ajustes",rascunhos:"Rascunho"};
@@ -51470,6 +51495,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   //   "toledo,paraguay,uberlandia" → cliente vê só essas unidades (regional, Marcelo)
   //   "grupo" → vê tudo do Bioter (todas unidades)
   //   "" ou null → cliente não-Bioter (sem filtro de unidade)
+  const [pubLightbox,setPubLightbox]=useState(null);
   const _lockedUnits = (lockedUnit && lockedUnit!=="grupo")
     ? String(lockedUnit).split(",").map(function(s){return s.trim();}).filter(Boolean)
     : [];
@@ -51798,7 +51824,24 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
     {/* ── PUBLICAÇÕES ── grid estilo feed (cards pequenos, capa única) */}
     {tab==="publicacoes"&&(()=>{
-      const pub=clTasks.filter(t=>["agendado","publicado"].includes(t.status)&&(t.caption||((t.files||[]).some(f=>!f.isAnnotation&&(f.type?.startsWith("image/")||f.type?.startsWith("video/"))))));
+      const _hojeIso=(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
+      const _temMidia=function(t){
+        if(t.caption) return true;
+        return (t.files||[]).some(function(f){
+          return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material";
+        });
+      };
+      // Elegíveis: já publicadas + as FUTURAS que o cliente já aprovou.
+      // Aprovadas SEM data ficam de fora de propósito — são templates e peças
+      // avulsas (Template 1..6, Lower third), não posts programados; entrariam
+      // no feed do cliente sem data nem contexto.
+      const _elegivel=function(t){
+        if(!_temMidia(t)) return false;
+        if(t.status==="publicado") return true;
+        if(["agendado","aprovado","aprovacao_final"].indexOf(t.status)>=0) return !!t.publishDate;
+        return false;
+      };
+      const pub=clTasks.filter(_elegivel);
       if(pub.length===0)return(
         <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"50px 36px",textAlign:"center"}}>
           <div style={{width:60,height:60,borderRadius:"50%",background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
@@ -51808,43 +51851,119 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
           <div style={{color:"#64748b",fontSize:12.5,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.5}}>Os materiais aprovados para publicação aparecerão aqui.</div>
         </div>
       );
-      const ordenadas=pub.slice().sort((a,b)=>(b.publishDate||"").localeCompare(a.publishDate||""));
+      const _futuras=pub.filter(function(t){return (t.publishDate||"")>_hojeIso;})
+        .sort(function(a,b){return (a.publishDate||"").localeCompare(b.publishDate||"");});
+      const _passadas=pub.filter(function(t){return !((t.publishDate||"")>_hojeIso);})
+        .sort(function(a,b){return (b.publishDate||"").localeCompare(a.publishDate||"");});
+
+      const _DOW=["dom","seg","ter","qua","qui","sex","sáb"];
+      const _dataLabel=function(t){
+        if(!t.publishDate) return "";
+        const d=new Date(t.publishDate+"T12:00:00");
+        if(isNaN(d.getTime())) return "";
+        return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      };
+      const _quandoSai=function(t){
+        if(!t.publishDate) return "";
+        const d=new Date(t.publishDate+"T12:00:00");
+        const hoje=new Date(); hoje.setHours(12,0,0,0);
+        const dias=Math.round((d-hoje)/86400000);
+        if(dias<=0) return "hoje";
+        if(dias===1) return "amanhã";
+        if(dias<=6) return _DOW[d.getDay()]+", "+dias+" dias";
+        return "em "+dias+" dias";
+      };
+
+      const _Card=function({t, futura}){
+        const _th=(typeof _pxThumbDaTask==="function")?_pxThumbDaTask(t):null;
+        const _cover=(_th&&_th.url)||t.cover||null;
+        const _ehVideo=!!(_th&&_th.video);
+        return <div
+          onClick={function(){ if(_cover&&!_ehVideo) setPubLightbox({url:_cover,title:t.title||""}); }}
+          style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:(_cover&&!_ehVideo)?"zoom-in":"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"88";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor=futura?cl.color+"55":"#e2e8f0";}}>
+          <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+            {_cover
+              ? (_ehVideo
+                  // Vídeo: renderiza o frame real. Antes a busca da capa só
+                  // aceitava type image/*, então post de vídeo ficava em branco.
+                  ? <video src={_cover+"#t=0.5"} preload="metadata" muted playsInline
+                      style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>
+                  : <img src={_cover} alt={t.title||""} loading="lazy" referrerPolicy="no-referrer"
+                      style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>)
+              : <Ico n="image" size={28} color="#cbd5e1"/>}
+
+            {_ehVideo&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+              <span style={{width:38,height:38,borderRadius:"50%",background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+            </span>}
+
+            {_th&&_th.n>1&&<div style={{position:"absolute",top:7,left:7,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:6,display:"inline-flex",alignItems:"center",gap:4}}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"><rect x="8" y="3" width="13" height="13" rx="2"/><path d="M3 8v11a2 2 0 0 0 2 2h11"/></svg>
+              {_th.n}
+            </div>}
+
+            {_dataLabel(t)&&<div style={{position:"absolute",top:7,right:7,background:futura?cl.color:"rgba(0,0,0,0.65)",color:"#fff",fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",letterSpacing:.2}}>
+              {_dataLabel(t)}
+            </div>}
+
+            {futura&&<div style={{position:"absolute",left:0,right:0,bottom:0,background:"linear-gradient(180deg,rgba(15,23,42,0) 0%,rgba(15,23,42,0.72) 100%)",padding:"16px 9px 7px",display:"flex",alignItems:"center",gap:5}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+              <span style={{color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.2}}>{_quandoSai(t)}</span>
+            </div>}
+          </div>
+        </div>;
+      };
+
+      const _Grid=function({itens, futura}){
+        return <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
+          {itens.map(function(t){ return <_Card key={t.id} t={t} futura={futura}/>; })}
+        </div>;
+      };
+
       return(
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-            <div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Publicações</div>
-              <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{ordenadas.length} {ordenadas.length===1?"publicação":"publicações"} · do mais recente ao mais antigo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:20}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Publicações</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:2}}>
+              {_futuras.length>0 ? _futuras.length+(_futuras.length===1?" agendada":" agendadas")+" · " : ""}
+              {_passadas.length} {_passadas.length===1?"publicada":"publicadas"}
             </div>
           </div>
-          {/* Grid estilo Instagram — 4 colunas desktop, 2 mobile */}
-          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
-            {ordenadas.map(function(t){
-              const img=(t.files||[]).slice().reverse().find(function(f){return f&&f.url&&!f.isAnnotation&&(f.type||"").startsWith("image/");});
-              const cover=t.cover||(img?img.url:null);
-              const dataPub=t.publishDate?new Date(t.publishDate+"T12:00:00"):null;
-              const dataLabel=dataPub?String(dataPub.getDate()).padStart(2,"0")+"/"+String(dataPub.getMonth()+1).padStart(2,"0"):"";
-              return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column"}}
-                onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"66";}}
-                onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                {/* Imagem capa estilo Instagram vertical (4:5 = 1080x1350) — não corta posts verticais */}
-                <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                  {cover
-                    ?<img src={cover} alt={t.title||""} loading="lazy" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>
-                    :<Ico n="image" size={28} color="#cbd5e1"/>
-                  }
-                  {/* Badge data no canto */}
-                  {dataLabel&&<div style={{position:"absolute",top:7,right:7,background:"rgba(0,0,0,0.65)",color:"#fff",fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",letterSpacing:.2}}>
-                    {dataLabel}
-                  </div>}
-                </div>
-                {/* Título removido (Vinicius 2026-06: cliente vê só a arte + data da capa) */}
-              </div>;
-            })}
-          </div>
+
+          {_futuras.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:cl.color}}/>
+              <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>Próximas</span>
+              <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:500}}>aprovadas e agendadas</span>
+            </div>
+            <_Grid itens={_futuras} futura={true}/>
+          </div>}
+
+          {_passadas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:"#cbd5e1"}}/>
+              <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>Publicadas</span>
+              <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:500}}>do mais recente ao mais antigo</span>
+            </div>
+            <_Grid itens={_passadas} futura={false}/>
+          </div>}
         </div>
       );
     })()}
+
+    {/* Lightbox das Publicações */}
+    {pubLightbox&&<div onClick={function(){setPubLightbox(null);}}
+      style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.86)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)"}}>
+      <img src={pubLightbox.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
+        style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>
+      <button onClick={function(){setPubLightbox(null);}} title="Fechar"
+        style={{position:"fixed",top:18,right:18,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>}
 
     {/* ── CHAT ── */}
     {tab==="chat"&&(
@@ -59994,6 +60113,66 @@ function calculateOneTimeTotal(selectedIds){
   return calculateOneTimeProjects(selectedIds);
 }
 function _calcFmtBRL(n){ return "R$ "+Number(n||0).toLocaleString("pt-BR"); }
+function _PortfIncluiList({titulo, cor, itens, ico}){
+  const _c=cor||"#7c3aed";
+  return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,.035)",height:"100%",display:"flex",flexDirection:"column",boxSizing:"border-box"}}>
+    {ico && <div style={{marginBottom:12}}><_PxIcoBox n={ico} box={42} estado="ativo"/></div>}
+    <div style={{color:_c,fontSize:10.5,fontWeight:800,letterSpacing:.55,textTransform:"uppercase",marginBottom:11,lineHeight:1.35}}>{titulo}</div>
+    <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:9}}>
+      {itens.map(function(it,i){
+        return <li key={i} style={{color:"#334155",fontSize:12.5,lineHeight:1.5,display:"flex",gap:9,alignItems:"flex-start"}}>
+          <span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1.5}}>
+            <_PxIco n="check" size={9} color="#9F43F6" strokeWidth={3.4}/>
+          </span>
+          <span>{it}</span>
+        </li>;
+      })}
+    </ul>
+  </div>;
+}
+
+// ── GROWTH (agora produto próprio: Consultoria → Plano; saiu da calculadora) ──
+// Blocos usados na aba Growth do Portfólio.
+const GROWTH_BLOCOS = [
+  { ico:"compass", titulo:"Diagnóstico e Funil", itens:[
+    "Mapeamento do funil completo: topo, meio e fundo",
+    "Definição da métrica principal e dos indicadores de apoio",
+    "Análise de concorrentes e referências do mercado",
+    "Identificação dos gargalos que travam o crescimento",
+  ]},
+  { ico:"sliders", titulo:"Experimentação", itens:[
+    "Roadmap mensal de experimentos priorizados",
+    "Testes A/B de páginas, ofertas e criativos",
+    "Validação de novos canais e públicos",
+    "Registro dos aprendizados de cada teste",
+  ]},
+  { ico:"target", titulo:"Conversão e Retenção", itens:[
+    "Otimização das páginas de conversão (CRO)",
+    "Revisão de oferta, copy e chamadas para ação",
+    "Automações de nutrição e recuperação de leads",
+    "Ações de reativação da base de clientes",
+  ]},
+  { ico:"chart", titulo:"Dados e Acompanhamento", itens:[
+    "Dashboard de indicadores em tempo real",
+    "Rastreamento de eventos e integração das ferramentas",
+    "Relatório mensal com leitura estratégica",
+    "Reunião quinzenal de growth com a equipe",
+  ]},
+  // 5º pilar — é ele que separa Growth de "performance + CRO + dashboard".
+  // Sem falar de receita, o serviço não sustenta a promessa de faturamento.
+  { ico:"dollar", titulo:"Receita e Comercial", itens:[
+    "Acompanhamento da geração de oportunidades e vendas",
+    "Análise das taxas de conversão do comercial",
+    "Integração entre marketing, CRM e equipe de vendas",
+    "Oportunidades de upsell, cross-sell e recompra",
+    "Análise de CAC, ticket médio, LTV e retorno por canal",
+    "Estratégias para aumentar o faturamento pelo canal digital",
+  ]},
+];
+// Jornada que o Growth cobre — usada no selo da etapa e no resumo copiado.
+const GROWTH_JORNADA = ["Aquisição","Conversão","Venda","Retenção","Receita","Experimentação"];
+const GROWTH_PITCH = "Growth não é fazer mais marketing. É encontrar, testar e escalar oportunidades de crescimento em toda a jornada do cliente.";
+
 const PORTF_RECORRENTES = [
   {
     id:"social", icon:"users",
@@ -60037,14 +60216,14 @@ const PORTF_RECORRENTES = [
 const PORTF_PROJETOS = [
   {
     id:"starter", icon:"layers", destaque:true,
-    title:"Projeto Starter",
+    title:"Basic 3 Meses",
     prazo:"90 dias",
     short:"Posicionamento e início de escala em 90 dias.",
     long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
     entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
     valor:"R$ 3.500",
     unidade:"/mês",
-    resumo:"Projeto Starter — 90 dias por R$ 3.500/mês. Posicionamento, construção de presença e início de escala.",
+    resumo:"Basic 3 Meses — R$ 3.500/mês (total R$ 10.500). Posicionamento, construção de presença e início de escala.",
   },
   {
     id:"landing", icon:"globe",
@@ -60654,7 +60833,6 @@ function _CalculadoraModular({isMob}){
   // 3) Tráfego pago
   const [trafficKey,setTrafficKey] = useState("none");
   // 3.5) Growth — pacote fechado, liga/desliga
-  const [growthOn,setGrowthOn] = useState(false);
   // 4) Captação audiovisual (diárias/mês)
   const [captureDailies,setCaptureDailies] = useState(0);
   // 5) Projetos pontuais
@@ -60716,17 +60894,15 @@ function _CalculadoraModular({isMob}){
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
   // Módulo Captação audiovisual ativo = diárias > 0
   const captureActive = captureDailies > 0;
-  const growthActive  = !!growthOn;
 
   // ═══ Cálculos ═══
   const _socialState = { channels: socialChannels, postsPerWeek: socialPosts };
   const socialPrice   = calculateSocialManagementPrice(_socialState);
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
-  const growthPrice    = calculateGrowthPrice(growthOn);
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, false);
 
   // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
   // pra o vendedor abrir na frente do cliente.
@@ -60791,32 +60967,6 @@ function _CalculadoraModular({isMob}){
     "Entrega dos arquivos brutos pra edição",
   ];
   // Entregaveis do Growth — 4 frentes.
-  const GROWTH_BLOCOS = [
-    { ico:"compass", titulo:"Diagnóstico e Funil", itens:[
-      "Mapeamento do funil completo: topo, meio e fundo",
-      "Definição da métrica principal e dos indicadores de apoio",
-      "Análise de concorrentes e referências do mercado",
-      "Identificação dos gargalos que travam o crescimento",
-    ]},
-    { ico:"sliders", titulo:"Experimentação", itens:[
-      "Roadmap mensal de experimentos priorizados",
-      "Testes A/B de páginas, ofertas e criativos",
-      "Validação de novos canais e públicos",
-      "Registro dos aprendizados de cada teste",
-    ]},
-    { ico:"target", titulo:"Conversão e Retenção", itens:[
-      "Otimização das páginas de conversão (CRO)",
-      "Revisão de oferta, copy e chamadas para ação",
-      "Automações de nutrição e recuperação de leads",
-      "Ações de reativação da base de clientes",
-    ]},
-    { ico:"chart", titulo:"Dados e Acompanhamento", itens:[
-      "Dashboard de indicadores em tempo real",
-      "Rastreamento de eventos e integração das ferramentas",
-      "Relatório mensal com leitura estratégica",
-      "Reunião quinzenal de growth com a equipe",
-    ]},
-  ];
   const TRAFFIC_BLOCOS = [
     { titulo:"Diagnóstico e Estratégia", itens:[
       "Diagnóstico do funil digital e posicionamento atual",
@@ -60895,14 +61045,6 @@ function _CalculadoraModular({isMob}){
       TRAFFIC_BLOCOS.forEach(b => b.itens.forEach(it => lines.push("- " + it)));
 lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       lines.push("Observação: verba de anúncios não inclusa");
-      lines.push("");
-    }
-    if(growthActive){
-      lines.push("Growth");
-      lines.push("Pacote fechado mensal — crescimento orientado a dados.");
-      lines.push("Inclui:");
-      GROWTH_BLOCOS.forEach(function(b){ b.itens.forEach(function(it){ lines.push("- " + it); }); });
-      lines.push("Valor: " + fmt(growthPrice) + "/mês");
       lines.push("");
     }
     if(oneItems.length>0){
@@ -61032,7 +61174,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>;
   }
 
-  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   const socialCount = countSocialChannels(socialChannels);
   // Criativos que já vêm no pacote (redes + tráfego). Criativos Extras são só o excedente.
   const inclusos = calculateIncludedCreatives(socialChannels, trafficKey);
@@ -61047,7 +61189,6 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     { id:"social",    ico:"share2",       label:"Redes Sociais", done:socialActive,        price:socialPrice },
     { id:"creatives", ico:"palette",      label:"Criativos Extras", done:creativesActive,  price:creativesPrice },
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
-    { id:"growth",    ico:"chart",        label:"Growth",        done:growthActive,        price:growthPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
@@ -61368,49 +61509,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </>}
   </div>;
 
-  // ── ETAPA 4 — GROWTH ──
-  const _stepGrowth = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="4" ico="chart" active={growthActive}
-      title="Growth"
-      subtitle="Crescimento orientado a dados: funil, testes e otimização contínua."
-      versaoLabel={growthActive?"Incluso":"Não selecionado"}
-      nivelLabel="Sênior"/>
-
-    {/* ═══ ATIVAÇÃO — pacote fechado ═══ */}
-    <div onClick={function(){setGrowthOn(!growthOn);}}
-      style={{background:growthActive?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff",border:"1.5px solid "+(growthActive?PX:"#eef0f5"),borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:15,transition:"all .18s",boxShadow:growthActive?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
-      onMouseEnter={function(e){ if(!growthActive) e.currentTarget.style.borderColor=PX_BD; }}
-      onMouseLeave={function(e){ if(!growthActive) e.currentTarget.style.borderColor="#eef0f5"; }}>
-      <_PxIcoBox n="chart" box={48} estado={growthActive?"ativo":"neutro"}/>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{color:growthActive?INK:"#7a8494",fontSize:14.5,fontWeight:800,letterSpacing:-.3}}>Incluir Growth no pacote</div>
-        <div style={{color:MUTE,fontSize:11.5,marginTop:3,lineHeight:1.45}}>Pacote fechado mensal — estratégia, experimentação e otimização do funil inteiro.</div>
-      </div>
-      <div style={{textAlign:"right",flexShrink:0}}>
-        <div style={{color:growthActive?PX_DK:"#9aa4b2",fontWeight:900,fontSize:19,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{fmt(cfg.growth.price)}</div>
-        <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>/mês</div>
-      </div>
-      <div style={{width:24,height:24,borderRadius:"50%",background:growthActive?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:growthActive?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
-        {growthActive && <_PxIco n="check" size={14} color="#fff" strokeWidth={3.4}/>}
-      </div>
-    </div>
-
-    {growthActive && <>
-      <div>
-        <_BlocoTitulo titulo="O que está incluso no Growth"/>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
-          {GROWTH_BLOCOS.map(function(b){
-            return <_IncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
-          })}
-        </div>
-      </div>
-      <_ValorModulo price={growthPrice}/>
-    </>}
-  </div>;
 
   // ── ETAPA 5 — CAPTAÇÃO AUDIOVISUAL ──
   const _stepCapture = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="5" ico="video" active={captureActive}
+    <_ModuleHeader num="4" ico="video" active={captureActive}
       title="Captação Audiovisual"
       subtitle="Diárias de captação com equipamento e equipe."
       versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
@@ -61460,7 +61562,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   // ── ETAPA 6 — PROJETOS PONTUAIS ──
   const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="folderkanban" active={oneTimeIds.length>0}
+    <_ModuleHeader num="5" ico="folderkanban" active={oneTimeIds.length>0}
       title="Projetos Pontuais"
       subtitle="Investimento único, separado do mensal."
       versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
@@ -61697,7 +61799,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="7" ico="gift" active={unlockedBonuses.length>0} semPills
+    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
       subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
@@ -61749,7 +61851,6 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
               socialActive&&{ico:"share2",lbl:"Redes Sociais"},
               creativesActive&&{ico:"palette",lbl:"Criativos"},
               (trafficKey!=="none"&&cfg.traffic[trafficKey].price>0)&&{ico:"target",lbl:cfg.traffic[trafficKey].label},
-              growthActive&&{ico:"chart",lbl:"Growth"},
               captureActive&&{ico:"video",lbl:"Captação"},
               oneTimeIds.length>0&&{ico:"folderkanban",lbl:oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")},
             ].filter(Boolean).map(function(c,i){
@@ -61841,7 +61942,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="8" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="7" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -61885,11 +61986,6 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             config="Gestão de campanhas · verba de mídia não inclusa"
             preco={trafficPrice}
             blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
-
-          {growthActive&&<_ResumoModulo ico="chart" titulo="Growth"
-            config="Pacote fechado — funil, experimentação e otimização contínua"
-            preco={growthPrice}
-            blocos={GROWTH_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
 
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
             config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
@@ -61949,7 +62045,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    growth:_stepGrowth, capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
+    capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -62051,7 +62147,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
@@ -62062,7 +62158,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -62082,9 +62178,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
-    captureActive, captureDailies, capturePrice, growthActive, growthPrice, cfg,
+    captureActive, captureDailies, capturePrice, cfg,
     oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
-  const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
   if(socialActive){
@@ -62103,9 +62199,6 @@ function _ResumoBox(p){
   }
   if(trafficKey!=="none" && cfg.traffic[trafficKey].price>0){
     itens.push({ico:"target", nome:cfg.traffic[trafficKey].label, linhas:["Verba de mídia não inclusa"], valor:trafficPrice});
-  }
-  if(growthActive){
-    itens.push({ico:"chart", nome:"Growth", linhas:["Funil, experimentação e otimização"], valor:growthPrice});
   }
   if(captureActive){
     itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
@@ -62212,7 +62305,7 @@ function _ResumoBox(p){
 /* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
 function PagePortfolio(props){
   const isMob = props.isMob;
-  const [view, setView] = useState("calculadora"); // abre direto na Calculadora | overview | recorrentes | projetos | ia | starter
+  const [view, setView] = useState("calculadora"); // calculadora | projetos | starter(=Basic 3 Meses) | growth
   const [modalItem, setModalItem] = useState(null);
   // Contador de sessao da calculadora: muda a key e forca remontagem, entao
   // toda vez que a aba Calculadora e aberta ela volta zerada.
@@ -62223,42 +62316,18 @@ function PagePortfolio(props){
     setView(id);
   }
 
+  // Enxugado (15/08): Visão geral e Recorrentes saíram (a calculadora já cobre);
+  // Soluções IA virou parte de Projetos; Starter renomeado pra Basic 3 Meses;
+  // Growth ganhou aba própria (Consultoria → Plano).
   const TABS = [
     {id:"calculadora", label:"Calculadora"},
-    {id:"overview",    label:"Visão geral"},
-    {id:"recorrentes", label:"Recorrentes"},
     {id:"projetos",    label:"Projetos"},
-    {id:"ia",          label:"Soluções IA"},
-    {id:"starter",     label:"Starter 90 dias"},
+    {id:"starter",     label:"Basic 3 Meses"},
+    {id:"growth",      label:"Growth"},
   ];
 
   // (Calculadora moderna extraída em _CalculadoraModular abaixo)
 
-  /* ───── Visão geral: 4 cards de categoria ───── */
-  function _OverviewCard({icon, ac, title, sub, tabId, count, footer}){
-    return <div onClick={function(){irParaTab(tabId);}}
-      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 22px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .18s",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}
-      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 16px 36px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=ac+"55";}}
-      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-        <div style={{width:44,height:44,borderRadius:11,background:ac+"15",border:"1px solid "+ac+"30",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Ico n={icon} size={21} color={ac}/>
-        </div>
-        {count!=null && <span style={{background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:99,fontFamily:_PORTF_FF}}>{count}</span>}
-      </div>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2,fontFamily:_PORTF_FF}}>{title}</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:5,lineHeight:1.5,fontFamily:_PORTF_FF}}>{sub}</div>
-      </div>
-      <div style={{marginTop:"auto",paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFamily:_PORTF_FF}}>{footer}</span>
-        <span style={{color:ac,fontSize:12,fontWeight:800,display:"inline-flex",alignItems:"center",gap:3,fontFamily:_PORTF_FF}}>
-          Explorar
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </span>
-      </div>
-    </div>;
-  }
 
   /* ───── Renderização ───── */
   return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_PORTF_FF,width:"100%"}}>
@@ -62299,72 +62368,58 @@ function PagePortfolio(props){
     </div>
 
     {/* ════ VISÃO GERAL ════ */}
-    {view==="overview" && <section style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14,fontFamily:_PORTF_FF}}>
-      <_OverviewCard icon="rotate"   ac="#9F43F6" title="Serviços Recorrentes" sub="Mensalidades pra construir presença, demanda e crescimento previsível." tabId="recorrentes" count={PORTF_RECORRENTES.length} footer="A partir de R$ 2.000/mês"/>
-      <_OverviewCard icon="layers"   ac="#7c3aed" title="Projetos"             sub="Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados." tabId="projetos"    count={PORTF_PROJETOS.length}    footer="A partir de R$ 1.500"/>
-      <_OverviewCard icon="play"     ac="#0f172a" title="Projeto Starter"      sub="Solução completa em 90 dias pra posicionamento e início de escala."                  tabId="starter"     count="90 dias"                  footer="R$ 3.500/mês"/>
-      <_OverviewCard icon="sparkles" ac="#6366f1" title="Soluções IA"          sub="Sistemas, sites e chatbots sob medida pra destravar gargalos e escalar."             tabId="ia"          count={PORTF_IA.length}          footer="A partir de R$ 3.000"/>
-    </section>}
-
-    {/* ════ RECORRENTES ════ */}
-    {view==="recorrentes" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Serviços Recorrentes</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Mensalidades que constroem presença, demanda e crescimento previsível.</div>
-        </div>
-        <span style={{background:"#f5f0fe",color:"#9F43F6",border:"1px solid #ede9fe",fontSize:10.5,fontWeight:800,padding:"4px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Contrato Trimestral</span>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-        {PORTF_RECORRENTES.map(function(s){
-          return <_PortfCard key={s.id} item={s} dark={!!s.destaque} accent="#9F43F6" onClick={function(){setModalItem(s);}}/>;
-        })}
-      </div>
-    </section>}
 
     {/* ════ PROJETOS ════ */}
     {view==="projetos" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Projetos</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados.</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Entregas com começo, meio e fim — os mesmos itens da calculadora, incluindo as soluções com IA.</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-        {PORTF_PROJETOS.map(function(p){
-          return <_PortfCard key={p.id} item={p} dark={!!p.destaque} accent="#7c3aed" onClick={function(){
-            if(p.id==="starter") setView("starter");
-            else setModalItem(p);
-          }}/>;
+      {/* Fonte única: PRICE_CONFIG.oneTimeProjects (a mesma da etapa Projetos
+          da calculadora). Editar preço/entrega lá reflete aqui na hora. */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+        {PRICE_CONFIG.oneTimeProjects.map(function(pr){
+          return <div key={pr.id} onClick={function(){setModalItem({
+              id:pr.id, icon:pr.ico||"folderkanban", title:pr.label, categoria:"Projeto",
+              long:pr.short||"", entregas:pr.entregas||[],
+              valor:(pr.fixo?"":"a partir de ")+"R$ "+Number(pr.price).toLocaleString("pt-BR"),
+            });}}
+            style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .16s",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}
+            onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor="#c9b3f5";e.currentTarget.style.boxShadow="0 12px 28px rgba(124,58,237,.12)";}}
+            onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e9ebef";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              {pr.brand ? <_PxBrandBox n={pr.brand} box={44} ativo={true}/> : <_PxIcoBox n={pr.ico||"folderkanban"} box={44} estado="ativo"/>}
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{pr.label}</div>
+                <div style={{color:"#9F43F6",fontSize:12.5,fontWeight:800,marginTop:3,fontFeatureSettings:"'tnum'"}}>{(pr.fixo?"":"a partir de ")+"R$ "+Number(pr.price).toLocaleString("pt-BR")}</div>
+              </div>
+            </div>
+            {pr.short&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.5}}>{pr.short}</div>}
+            <div style={{color:"#9aa4b2",fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5,marginTop:"auto"}}>
+              Ver entregáveis
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </div>
+          </div>;
         })}
       </div>
     </section>}
 
     {/* ════ SOLUÇÕES IA ════ */}
-    {view==="ia" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Soluções com IA</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Sistemas, sites, automações e chatbots sob medida — conectando marketing, tecnologia, operação e vendas.</div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
-        {PORTF_IA.map(function(p){
-          return <_PortfCard key={p.id} item={p} accent="#6366f1" onClick={function(){setModalItem(p);}}/>;
-        })}
-      </div>
-    </section>}
 
-    {/* ════ STARTER 90 DIAS — seção dedicada ════ */}
+    {/* ════ BASIC 3 MESES (ex-Starter 90 dias) — seção dedicada ════ */}
     {view==="starter" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
       {/* Header dark elegante — sem glow neon (removido a pedido do Gustavo) */}
       <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:16,padding:"28px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)",fontFamily:_PORTF_FF}}>
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
           <div>
             <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Proposta detalhada</div>
-            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Projeto Starter — 90 dias</div>
+            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Basic — 3 meses</div>
             <div style={{fontSize:13,opacity:.82,marginTop:6,maxWidth:600,lineHeight:1.5,fontFamily:_PORTF_FF}}>Solução estruturada para posicionamento, construção de presença e início de escala.</div>
           </div>
           <div style={{textAlign:"right",fontFamily:_PORTF_FF}}>
             <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento</div>
             <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 3.500<span style={{fontSize:14,fontWeight:600,color:"#cbd5e1",marginLeft:2}}>/mês</span></div>
-            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>Total em 90 dias: R$ 10.500</div>
+            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>Total nos 3 meses: R$ 10.500</div>
           </div>
         </div>
       </div>
@@ -62517,7 +62572,7 @@ function PagePortfolio(props){
         <button onClick={function(){_portfCopiar(PORTF_PROJETOS[0].resumo);}}
           style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          Copiar resumo do Starter
+          Copiar resumo do Basic
         </button>
       </div>
     </section>}
@@ -62526,6 +62581,167 @@ function PagePortfolio(props){
     {view==="calculadora" && <_CalculadoraModular key={"calc-"+calcRun} isMob={isMob}/>}
 
         {/* DRAWER */}
+    {/* ════ GROWTH — Consultoria (3 meses) → Plano Growth ════
+        Saiu da calculadora (15/08): deixou de ser módulo avulso de R$7k e virou
+        uma jornada em 2 fases. Preços/regras conferidos com o Vinicius:
+        Consultoria = R$21.000 total (3× R$7.000), Plano = comissão de 5%. */}
+    {view==="growth" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
+
+      {/* Header dark — mesma linguagem do Basic */}
+      <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:16,padding:"28px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)",fontFamily:_PORTF_FF}}>
+        <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+          <div style={{minWidth:0,maxWidth:640}}>
+            <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Jornada em 2 fases</div>
+            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Growth</div>
+            <div style={{fontSize:13,opacity:.82,marginTop:6,lineHeight:1.55,fontFamily:_PORTF_FF}}>
+              Growth não é fazer mais marketing. É encontrar, testar e escalar oportunidades de crescimento em toda a jornada do cliente — estando junto, entendendo a operação e fazendo crescer o digital e o faturamento.
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",alignSelf:"center"}}>
+            {GROWTH_JORNADA.map(function(et,i){
+              return <span key={et} style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                <span style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.16)",color:"#e9d5ff",borderRadius:99,padding:"4px 11px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{et}</span>
+                {i<GROWTH_JORNADA.length-1&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>}
+              </span>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── FASE 1 · Consultoria Growth ── */}
+      <div style={{background:"#fff",border:"1.5px solid #e9ebef",borderRadius:16,padding:isMob?"20px 18px":"24px 28px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+            <_PxIcoBox n="compass" box={48} estado="ativo"/>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#9F43F6",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Fase 1 · 3 meses</div>
+              <div style={{color:"#0f172a",fontSize:18,fontWeight:900,letterSpacing:-.5,marginTop:2}}>Consultoria Growth</div>
+              <div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5,maxWidth:520}}>
+                O Basic completo — com 4 artes e 4 vídeos por mês — somado a tudo de Growth: diagnóstico, experimentação, conversão, dados e receita. É a imersão que prepara a operação pro Plano Growth.
+              </div>
+            </div>
+          </div>
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento</div>
+            <div style={{color:"#0f172a",fontWeight:900,fontSize:24,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3}}>R$ 21.000</div>
+            <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:2}}>R$ 7.000/mês · 3 meses</div>
+          </div>
+        </div>
+
+        {/* Produção inclusa */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:18}}>
+          {[
+            {ico:"palette", l:"4 artes",       d:"por mês"},
+            {ico:"video",   l:"4 vídeos",      d:"por mês"},
+            {ico:"messages",l:"Acompanhamento",d:"reunião quinzenal"},
+            {ico:"chart",   l:"Dashboard",     d:"indicadores ao vivo"},
+          ].map(function(x){
+            return <div key={x.l} style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <_PxIco n={x.ico} size={17} color="#9F43F6"/>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+                <div style={{color:"#9aa4b2",fontSize:10.5,fontWeight:600}}>{x.d}</div>
+              </div>
+            </div>;
+          })}
+        </div>
+
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:12}}>Tudo de Growth incluso</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+          {GROWTH_BLOCOS.map(function(b){
+            return <_PortfIncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor="#7c3aed" itens={b.itens}/>;
+          })}
+        </div>
+      </div>
+
+      {/* Conector visual */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:"2px 0"}}>
+        <div style={{flex:1,height:1,background:"linear-gradient(90deg,transparent,#d8cef2)"}}/>
+        <span style={{color:"#7c3aed",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+          após os 3 meses
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </span>
+        <div style={{flex:1,height:1,background:"linear-gradient(90deg,#d8cef2,transparent)"}}/>
+      </div>
+
+      {/* ── FASE 2 · Plano Growth ── */}
+      <div style={{background:"linear-gradient(135deg,#15171c 0%,#1e2229 55%,#141619 100%)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:isMob?"20px 18px":"26px 28px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
+        <div aria-hidden style={{position:"absolute",top:-90,right:-40,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.20) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
+        <div style={{position:"relative",zIndex:1}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap",marginBottom:18}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+              <div style={{width:48,height:48,borderRadius:13,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <_PxIco n="rocket" size={22} color="#e9d5ff"/>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#c4b5fd",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Fase 2 · contínuo</div>
+                <div style={{fontSize:18,fontWeight:900,letterSpacing:-.5,marginTop:2,display:"inline-flex",alignItems:"center",gap:9}}>
+                  Plano Growth
+                  <span style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pacote topo</span>
+                </div>
+                <div style={{color:"rgba(255,255,255,0.65)",fontSize:12.5,marginTop:4,lineHeight:1.55,maxWidth:560}}>
+                  Entramos junto no risco: a Pixels banca o serviço e o orçamento de anúncios, e ganha só quando o cliente vende. Objetivos 100% alinhados — crescemos quando você cresce.
+                </div>
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Remuneração</div>
+              <div style={{fontWeight:900,fontSize:24,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,color:"#4ade80"}}>5%</div>
+              <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:2}}>das vendas geradas pelo digital</div>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+            {[
+              {ico:"dollar",  l:"Serviço sem mensalidade",     d:"a Pixels entra com o trabalho — remuneração só via comissão"},
+              {ico:"target",  l:"Verba de anúncios da Pixels", d:"investimos nosso próprio orçamento de mídia na operação"},
+              {ico:"trophy",  l:"Risco compartilhado",         d:"só ganhamos quando as vendas acontecem — pele em jogo"},
+              {ico:"users",   l:"Objetivos alinhados",         d:"metas, funil e comercial definidos e acompanhados juntos"},
+            ].map(function(x){
+              return <div key={x.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:12,padding:"13px 15px",display:"flex",alignItems:"flex-start",gap:11}}>
+                <span style={{width:30,height:30,borderRadius:9,background:"rgba(159,67,246,0.22)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <_PxIco n={x.ico} size={15} color="#e9d5ff"/>
+                </span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+                  <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.45}}>{x.d}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+
+          <div style={{marginTop:14,padding:"10px 14px",background:"rgba(159,67,246,0.10)",border:"1px solid rgba(159,67,246,0.28)",borderRadius:10,color:"#e9d5ff",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
+            Acesso exclusivo: o Plano Growth é liberado após a Consultoria Growth — os 3 meses de imersão são o que garantem que a operação está pronta pra escalar com risco compartilhado.
+          </div>
+        </div>
+      </div>
+
+      {/* CTA copiar resumo */}
+      <div style={{display:"flex",justifyContent:"flex-end",fontFamily:_PORTF_FF}}>
+        <button onClick={function(){_portfCopiar([
+            "Growth — jornada em 2 fases",
+            GROWTH_PITCH,
+            "Jornada: "+GROWTH_JORNADA.join(" > "),
+            "",
+            "FASE 1 · Consultoria Growth (3 meses) — R$ 21.000 (R$ 7.000/mês)",
+            "Basic completo: 4 artes + 4 vídeos/mês, acompanhamento quinzenal, dashboard.",
+            "Tudo de Growth incluso:",
+          ].concat(GROWTH_BLOCOS.map(function(b){return "- "+b.titulo+": "+b.itens.join("; ");}))
+           .concat([
+            "",
+            "FASE 2 · Plano Growth (após a consultoria)",
+            "Serviço sem mensalidade + verba de anúncios da Pixels.",
+            "Remuneração: 5% das vendas geradas pelo digital.",
+            "Risco compartilhado e objetivos alinhados.",
+          ]).join("\n"));}}
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar resumo do Growth
+        </button>
+      </div>
+    </section>}
+
     {modalItem && <_PortfDrawer item={modalItem} onClose={function(){setModalItem(null);}} isMob={isMob}/>}
 
   </div>;
