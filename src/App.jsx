@@ -47875,7 +47875,29 @@ function _sanitizeCaption(raw){
   return s;
 }
 
-function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels}){
+/* ═══════════════════════════════════════════════════════════════
+   _pxClientUserMeta — metadados de quem agiu no Portal do Cliente.
+
+   BUG HISTORICO: essa funcao era declarada dentro de PagePortalCliente
+   mas chamada dentro de PortalAprovacoes e PortalDemandasCliente, que
+   sao componentes irmaos e nao enxergam aquele escopo. Resultado:
+   ReferenceError ao clicar em Aprovar. Como handleAprovar e async, a
+   excecao virava Promise rejeitada e o try/catch do clique (sem await)
+   nao pegava — o botao simplesmente nao fazia nada, sem erro na tela.
+═══════════════════════════════════════════════════════════════ */
+function _pxClientUserMeta(cu){
+  const u  = cu || {};
+  const pd = u.profile_data || {};
+  return {
+    userId:    u.id || u.user_id || "",
+    userName:  u.name || pd.name || "",
+    userPhoto: pd.photo || u.photo || "",
+    userEmail: pd.email || u.email || "",
+  };
+}
+
+function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, currentClientUser}){
+  const _clientUserMeta = function(){ return _pxClientUserMeta(currentClientUser); };
   // Quem esta operando: o proprio cliente logado no portal, ou um socio da
   // Pixels navegando pelo portal (aprovando em nome do cliente).
   // O historico precisa registrar isso com precisao — antes gravava sempre
@@ -48322,7 +48344,10 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels}){
                 e.preventDefault(); e.stopPropagation();
                 console.log("[Aprovar CLICK] current:", current && current.id);
                 if(!current){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Nenhum card selecionado.",4000); return; }
-                try{ handleAprovar(current); }catch(err){ console.error("[Aprovar CLICK] erro sincrono:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(err.message||err),5000); }
+                // handleAprovar e async: erro vira Promise rejeitada e o try/catch
+                // sincrono NAO pega (foi exatamente isso que fez o botao "nao fazer nada").
+                // Por isso o .catch() explicito abaixo.
+                try{ Promise.resolve(handleAprovar(current)).catch(function(err){ console.error("[Aprovar CLICK] erro async:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao aprovar: "+((err&&err.message)||err),6000); }); }catch(err){ console.error("[Aprovar CLICK] erro sincrono:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+((err&&err.message)||err),5000); }
               }}
               style={{width:"100%",background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #05966933",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
               <Ico n="check" size={16}/> Aprovar
@@ -48681,7 +48706,8 @@ const TIPOS_DEMANDA_CLIENTE = [
 const _LEGACY_TIPO_DEMANDA_MAP = {folder:"material", feira:"material", comercial:"material"};
 function _normalizarTipoDemanda(id){ return _LEGACY_TIPO_DEMANDA_MAP[id]||id||"outro"; }
 
-function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
+function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}){
+  const _clientUserMeta = function(){ return _pxClientUserMeta(currentClientUser); };
   const [ajusteModal,setAjusteModal]=useState(null);
   const [cfg,setCfg]=useState(null);
   const [registrarEntregaOpen,setRegistrarEntregaOpen]=useState(false);
@@ -49284,7 +49310,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
               <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                 <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
                 {isAcionavel&&<>
-                  <button onClick={function(){handleAprovar(t);}}
+                  <button onClick={function(){ Promise.resolve(handleAprovar(t)).catch(function(err){ console.error("[Aprovar lista] erro async:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao aprovar: "+((err&&err.message)||err),6000); }); }}
                     title="Aprovar"
                     style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>
                     <Ico n="check" size={11}/> Aprovar
@@ -50499,16 +50525,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
 
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit, currentClientUser}){
   // Helper: extrai dados do cliente logado pra anexar nas ações (comentários/timeline)
-  const _clientUserMeta=function(){
-    const cu=currentClientUser||{};
-    const pd=cu.profile_data||{};
-    return {
-      userId:cu.id||cu.user_id||"",
-      userName:cu.name||pd.name||"",
-      userPhoto:pd.photo||cu.photo||"",
-      userEmail:pd.email||cu.email||"",
-    };
-  };
+  const _clientUserMeta=function(){ return _pxClientUserMeta(currentClientUser); };
   // lockedUnit: passado pelo Painel quando cliente Bioter loga.
   //   "chapeco" / "toledo" / etc → cliente só vê dados daquela unidade
   //   "toledo,paraguay,uberlandia" → cliente vê só essas unidades (regional, Marcelo)
@@ -50775,10 +50792,10 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     </div>
 
     {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
-    {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} viewerIsPixels={!lockedClientId}/>}
+    {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} viewerIsPixels={!lockedClientId} currentClientUser={currentClientUser}/>}
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
-    {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
+    {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} currentClientUser={currentClientUser}/>}
     {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
       // Briefing no portal: CLIENTE + gestor Pixels podem editar (cliente conhece a propria empresa melhor que ninguem).
       // Bioter: passa unitId pra isolar briefing por unidade.
