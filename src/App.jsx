@@ -50589,7 +50589,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   },[effectiveClientId,year,month]);
 
   // Cálculos
-  const totalVendido=sales.reduce(function(s,v){return s+Number(v.value||0);},0);
+  const totalVendido=sales.reduce(function(s,v){return s+(Number(v.value)||0);},0);
   const totalInvestido=Number(midia||0)+Number(pixelsServ||0);
   const lucro=totalVendido-totalInvestido;
   const roiPct=totalInvestido>0?Math.round(((totalVendido-totalInvestido)/totalInvestido)*1000)/10:0;
@@ -50613,10 +50613,18 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
     if(!editVenda)return;
     const v=editVenda.data;
     if(!v.lead_name.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Informe o nome do cliente/lead.",3500);return;}
+    // Normaliza o que veio como string dos inputs (o state guarda cru pra
+    // deixar o campo apagavel — ver fix do "nao consigo apagar o 0").
+    const _v=Object.assign({},v,{
+      value: Number(v.value)||0,
+      size:  (String(v.size||"").trim()==="") ? "" : (Number(v.size)||0),
+      city:  String(v.city||"").trim(),
+      uf:    String(v.uf||"").trim(),
+    });
     if(editVenda.mode==="new"){
-      setSales(function(p){return [].concat(p,[v]);});
+      setSales(function(p){return [].concat(p,[_v]);});
     }else{
-      setSales(function(p){return p.map(function(x){return x.id===v.id?v:x;});});
+      setSales(function(p){return p.map(function(x){return x.id===_v.id?_v:x;});});
     }
     setEditVenda(null);
     setDirty(true);
@@ -50909,7 +50917,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Mídia / anúncios</div>
           <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
             <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
-            <input type="number" step="0.01" min="0" value={midia} onChange={function(e){setMidiaVal(parseFloat(e.target.value)||0);}}
+            <input type="number" step="0.01" min="0" placeholder="0,00" value={midia} onChange={function(e){setMidiaVal(e.target.value);}}
               style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
           </div>
         </div>
@@ -50917,7 +50925,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Serviço da Pixels</div>
           <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
             <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
-            <input type="number" step="0.01" min="0" value={pixelsServ} onChange={function(e){setPixelsServVal(parseFloat(e.target.value)||0);}}
+            <input type="number" step="0.01" min="0" placeholder="0,00" value={pixelsServ} onChange={function(e){setPixelsServVal(e.target.value);}}
               style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
           </div>
         </div>
@@ -50943,8 +50951,8 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
       </div>
       {/* Header */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"8px 20px",background:"#fafbfc",borderBottom:"1px solid #f1f5f9"}}>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Cliente / Lead</div>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Produto / Serviço</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Cliente / Lead · Local</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Produto · Medida</div>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Valor</div>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>Data</div>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Origem</div>
@@ -50959,9 +50967,20 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
       </div>}
       {sales.map(function(v,idx){
         const origCfg={label:ORIGEM_LABEL[v.origin]||"Outro",color:ORIGEM_COLOR[v.origin]||"#64748b"};
-        return <div key={v.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"10px 20px",borderBottom:idx<sales.length-1?"1px solid #f5f6f8":"none",alignItems:"center"}}>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>{v.lead_name}</div>
-          <div style={{color:"#64748b",fontSize:12}}>{v.product||"—"}</div>
+        return <div key={v.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"11px 20px",borderBottom:idx<sales.length-1?"1px solid #f5f6f8":"none",alignItems:"center"}}>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.lead_name}</div>
+            {(v.city||v.uf)&&<div style={{display:"inline-flex",alignItems:"center",gap:4,color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="2.6"/></svg>
+              {[v.city,v.uf].filter(Boolean).join(" · ")}
+            </div>}
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#64748b",fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v.product||"—"}</div>
+            {(v.size!==""&&v.size!==null&&v.size!==undefined)&&<span style={{display:"inline-block",marginTop:3,background:"#f4f5f7",color:"#475569",borderRadius:6,padding:"1.5px 7px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>
+              {Number(v.size).toLocaleString("pt-BR")} {PX_MEDIDA_LABEL(v.size_unit)}
+            </span>}
+          </div>
           <div style={{color:"#16a34a",fontSize:12.5,fontWeight:700,textAlign:"right",fontFeatureSettings:"'tnum'"}}>{_brl(v.value)}</div>
           <div style={{color:"#64748b",fontSize:11.5,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_ddmm(v.date)}</div>
           <div><span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid #eef0f3",color:"#475569",borderRadius:99,padding:"3px 10px 3px 6px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}><_PxOrigemIco n={v.origin} size={12}/>{origCfg.label}</span></div>
@@ -51057,8 +51076,9 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
               <div style={_lblStyle}>Valor</div>
               <div style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"0 13px"}}>
                 <span style={{color:"#94a3b8",fontSize:13,fontWeight:800}}>R$</span>
-                <input type="number" step="0.01" min="0" value={editVenda.data.value}
-                  onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{value:parseFloat(e.target.value)||0})}));}}
+                <input type="number" step="0.01" min="0" placeholder="0,00"
+                  value={editVenda.data.value===0&&editVenda.mode==="new"?"":editVenda.data.value}
+                  onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{value:e.target.value})}));}}
                   style={{flex:1,border:"none",background:"transparent",padding:"11px 0",fontSize:14,fontWeight:800,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'",color:"#0f172a",minWidth:0}}/>
               </div>
             </div>
@@ -51068,6 +51088,41 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
                 value={editVenda.data.date}
                 accent={cl.color}
                 onChange={function(d){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{date:d})}));}}/>
+            </div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"0.85fr 1.6fr 0.6fr",gap:14}}>
+            <div>
+              <div style={_lblStyle}>Medida</div>
+              <div style={{display:"flex",alignItems:"center",gap:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,paddingLeft:13}}>
+                <input type="number" step="0.01" min="0" placeholder="0"
+                  value={editVenda.data.size||""}
+                  onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{size:e.target.value})}));}}
+                  style={{flex:1,minWidth:0,border:"none",background:"transparent",padding:"11px 0",fontSize:14,fontWeight:800,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'",color:"#0f172a"}}/>
+                <select value={editVenda.data.size_unit||"m3"}
+                  onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{size_unit:e.target.value})}));}}
+                  style={{border:"none",borderLeft:"1px solid #eef0f3",background:"#fafbfc",padding:"11px 8px",fontSize:12.5,fontWeight:800,color:"#475569",outline:"none",cursor:"pointer",fontFamily:"inherit",borderRadius:"0 10px 10px 0",alignSelf:"stretch"}}>
+                  {PX_MEDIDA_UNIDADES.map(function(u){return <option key={u[0]} value={u[0]}>{u[1]}</option>;})}
+                </select>
+              </div>
+            </div>
+            <div>
+              <div style={_lblStyle}>Cidade</div>
+              <input value={editVenda.data.city||""}
+                onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{city:e.target.value})}));}}
+                placeholder="Onde foi a venda"
+                style={_inpStyle}
+                onFocus={function(e){e.target.style.borderColor=cl.color;e.target.style.boxShadow="0 0 0 3px "+cl.color+"1f";}}
+                onBlur={function(e){e.target.style.borderColor="#e2e8f0";e.target.style.boxShadow="none";}}/>
+            </div>
+            <div>
+              <div style={_lblStyle}>UF</div>
+              <select value={editVenda.data.uf||""}
+                onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{uf:e.target.value})}));}}
+                style={Object.assign({},_inpStyle,{cursor:"pointer",color:editVenda.data.uf?"#0f172a":"#cbd5e1",fontWeight:800})}>
+                <option value="">—</option>
+                {PX_UF_LISTA.map(function(u){return <option key={u} value={u} style={{color:"#0f172a"}}>{u==="EX"?"EX (exterior)":u}</option>;})}
+              </select>
             </div>
           </div>
 
