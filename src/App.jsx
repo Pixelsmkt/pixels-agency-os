@@ -50149,6 +50149,22 @@ const CLIENT_ROI_DEFAULTS = {
    value/onChange trabalham SEMPRE em "YYYY-MM-DD" (mesmo formato que o
    input nativo devolvia), então nada mudou pra quem consome.
    ═══════════════════════════════════════════════════════════════════ */
+/* Origens de venda — no escopo do módulo porque _PxOrigemIco (declarado
+   fora do componente) precisa da cor. "indicacao" saiu das OPÇÕES (não é
+   canal digital) mas segue nos mapas: venda antiga gravada com ela
+   continua mostrando "Indicação" na tabela em vez de virar "Outro". */
+/* UFs + EX (exterior) — o Bioter tem unidade no Paraguai, sem EX a venda
+   de lá ficaria sem forma de registrar o local. */
+const PX_UF_LISTA=["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO","EX"];
+/* Unidade de medida do produto. m³ é o padrão (pedido do Bioter), mas as
+   outras cobrem clientes que não vendem por volume. */
+const PX_MEDIDA_UNIDADES=[["m3","m³"],["m2","m²"],["m","m"],["L","L"],["ton","ton"],["un","un"]];
+const PX_MEDIDA_LABEL=function(u){ const f=PX_MEDIDA_UNIDADES.find(function(x){return x[0]===(u||"m3");}); return f?f[1]:"m³"; };
+
+const ORIGEM_LABEL_MAP={meta:"Meta Ads",google:"Google Ads",site:"Site",landing:"Landing page",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
+const ORIGEM_COLOR_MAP={meta:"#0081FB",google:"#EA4335",site:"#0f766e",landing:"#c026d3",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
+const ORIGEM_OPCOES_LISTA=["meta","google","site","landing","organico","outro"];
+
 const _PX_DP_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const _PX_DP_DOW=["D","S","T","Q","Q","S","S"];
 
@@ -50174,23 +50190,51 @@ function _PxDatePicker({value, onChange, accent}){
   const hojeIso = _pxDpIso(hoje.getFullYear(), hoje.getMonth()+1, hoje.getDate());
 
   const [aberto,setAberto]=useState(false);
+  const [pos,setPos]=useState(null); // {left,top} em coordenadas de viewport
   const [vY,setVY]=useState(sel?sel.y:hoje.getFullYear());
   const [vM,setVM]=useState(sel?sel.m:hoje.getMonth()+1);
   const ref=useRef(null);
+  const popRef=useRef(null);
 
-  // Quando reabre, volta pro mês da data selecionada
-  useEffect(function(){
-    if(aberto&&sel){ setVY(sel.y); setVM(sel.m); }
-  },[aberto]);
+  const POP_W=252, POP_H=318;
 
-  // Fecha ao clicar fora
+  // O calendário vive dentro de um container com overflow-y:auto (corpo do
+  // modal). Se ficasse position:absolute, ele empurrava a largura e criava
+  // barra horizontal — foi o que aconteceu. Com position:fixed ele escapa do
+  // container e a gente ancora na posição real do botão.
+  const _recalc=function(){
+    const el=ref.current;
+    if(!el) return;
+    const r=el.getBoundingClientRect();
+    const vw=window.innerWidth, vh=window.innerHeight;
+    let left=r.left;
+    if(left+POP_W>vw-10) left=Math.max(10, r.right-POP_W); // alinha à direita
+    if(left<10) left=10;
+    let top=r.bottom+6;
+    if(top+POP_H>vh-10) top=Math.max(10, r.top-POP_H-6);   // abre pra cima
+    setPos({left:left, top:top});
+  };
+
   useEffect(function(){
     if(!aberto) return;
-    const fora=function(e){ if(ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    if(sel){ setVY(sel.y); setVM(sel.m); }
+    _recalc();
+    const fora=function(e){
+      if(ref.current&&ref.current.contains(e.target)) return;
+      if(popRef.current&&popRef.current.contains(e.target)) return;
+      setAberto(false);
+    };
     const esc=function(e){ if(e.key==="Escape") setAberto(false); };
     document.addEventListener("mousedown",fora);
     document.addEventListener("keydown",esc);
-    return function(){ document.removeEventListener("mousedown",fora); document.removeEventListener("keydown",esc); };
+    window.addEventListener("resize",_recalc);
+    window.addEventListener("scroll",_recalc,true);
+    return function(){
+      document.removeEventListener("mousedown",fora);
+      document.removeEventListener("keydown",esc);
+      window.removeEventListener("resize",_recalc);
+      window.removeEventListener("scroll",_recalc,true);
+    };
   },[aberto]);
 
   const primeiroDow = new Date(vY, vM-1, 1).getDay();
@@ -50214,34 +50258,32 @@ function _PxDatePicker({value, onChange, accent}){
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={aberto?cor:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
         <rect x="3" y="4.5" width="18" height="17" rx="2.5"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
-      <span style={{flex:1,color:sel?"#0f172a":"#cbd5e1",fontSize:13.5,fontWeight:700,letterSpacing:-.1}}>{sel?_pxDpLabel(value):"Selecionar data"}</span>
+      <span style={{flex:1,color:sel?"#0f172a":"#cbd5e1",fontSize:13.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sel?_pxDpLabel(value):"Selecionar data"}</span>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
         style={{flexShrink:0,transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
     </button>
 
-    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:40,background:"#fff",border:"1px solid #e9ebef",borderRadius:14,boxShadow:"0 18px 44px rgba(8,10,14,0.18)",padding:14,width:278}}>
-      {/* Navegação de mês */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12}}>
+    {aberto&&pos&&<div ref={popRef} style={{position:"fixed",left:pos.left,top:pos.top,zIndex:400,width:POP_W,
+      background:"#fff",border:"1px solid #e9ebef",borderRadius:14,boxShadow:"0 18px 44px rgba(8,10,14,0.20)",padding:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:9}}>
         <button type="button" onClick={function(){navegar(-1);}}
-          style={{background:"#f4f5f7",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          style={{background:"#f4f5f7",border:"none",borderRadius:7,width:25,height:25,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569",padding:0}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_PX_DP_MESES[vM-1]} {vY}</div>
+        <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{_PX_DP_MESES[vM-1]} {vY}</div>
         <button type="button" onClick={function(){navegar(1);}}
-          style={{background:"#f4f5f7",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          style={{background:"#f4f5f7",border:"none",borderRadius:7,width:25,height:25,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#475569",padding:0}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
 
-      {/* Cabeçalho dos dias da semana */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,marginBottom:2}}>
         {_PX_DP_DOW.map(function(d,i){
-          return <div key={i} style={{textAlign:"center",color:"#cbd5e1",fontSize:10,fontWeight:800,textTransform:"uppercase",padding:"4px 0"}}>{d}</div>;
+          return <div key={i} style={{textAlign:"center",color:"#cbd5e1",fontSize:9.5,fontWeight:800,textTransform:"uppercase",padding:"3px 0"}}>{d}</div>;
         })}
       </div>
 
-      {/* Grade */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1}}>
         {celulas.map(function(d,i){
           if(d===null) return <div key={"v"+i}/>;
           const iso=_pxDpIso(vY,vM,d);
@@ -50251,9 +50293,8 @@ function _PxDatePicker({value, onChange, accent}){
             onClick={function(){ if(onChange) onChange(iso); setAberto(false); }}
             style={{background:_sel?cor:"transparent",color:_sel?"#fff":(_hoje?cor:"#334155"),
               border:_hoje&&!_sel?"1px solid "+cor+"55":"1px solid transparent",
-              borderRadius:9,height:32,cursor:"pointer",fontFamily:"inherit",
-              fontSize:12.5,fontWeight:_sel||_hoje?800:600,transition:"all .1s",padding:0,
-              boxShadow:_sel?"0 4px 10px "+cor+"55":"none"}}
+              borderRadius:8,height:28,cursor:"pointer",fontFamily:"inherit",
+              fontSize:11.5,fontWeight:_sel||_hoje?800:600,transition:"background .1s",padding:0}}
             onMouseEnter={function(e){ if(!_sel) e.currentTarget.style.background="#f4f5f7"; }}
             onMouseLeave={function(e){ if(!_sel) e.currentTarget.style.background="transparent"; }}>
             {d}
@@ -50261,14 +50302,38 @@ function _PxDatePicker({value, onChange, accent}){
         })}
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,paddingTop:11,borderTop:"1px solid #f1f3f5"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:9,paddingTop:9,borderTop:"1px solid #f1f3f5"}}>
         <button type="button" onClick={function(){ if(onChange) onChange(hojeIso); setAberto(false); }}
-          style={{background:"transparent",border:"none",color:cor,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:0}}>Hoje</button>
+          style={{background:"transparent",border:"none",color:cor,fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",padding:0}}>Hoje</button>
         <button type="button" onClick={function(){setAberto(false);}}
-          style={{background:"#f4f5f7",border:"none",borderRadius:8,padding:"6px 14px",color:"#64748b",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
+          style={{background:"#f4f5f7",border:"none",borderRadius:7,padding:"5px 12px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
       </div>
     </div>}
   </div>;
+}
+
+/* ─── Ícones de origem da venda ───────────────────────────────────
+   Meta e Google usam o path oficial da marca (Simple Icons / brand kit).
+   O resto usa ícone que representa o canal: globo pro site, página pra
+   landing, broto pro orgânico. lucide-react não está no bundle — tudo
+   inline. */
+function _PxOrigemIco({n, size}){
+  const sz = size || 14;
+  if(n==="meta") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="#0081FB">
+    <path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.061.1.121.196.183.3l2.152 3.595c.724 1.21 1.665 2.556 2.47 3.314 1.046.987 1.992 1.22 3.06 1.22 1.075 0 1.876-.355 2.455-.843a3.743 3.743 0 0 0 .81-.973c.542-.939.861-2.127.861-3.745 0-2.72-.681-5.357-2.084-7.45-1.282-1.912-2.957-2.93-4.716-2.93-1.047 0-2.088.467-3.053 1.308-.652.57-1.257 1.29-1.82 2.05-.69-.875-1.335-1.547-1.958-2.056-1.182-.966-2.315-1.303-3.454-1.303zm10.16 2.053c1.147 0 2.188.758 2.992 1.999 1.132 1.748 1.647 4.195 1.647 6.4 0 1.548-.368 2.9-1.839 2.9-.58 0-1.027-.23-1.664-1.004-.496-.601-1.343-1.878-2.832-4.358l-.617-1.028a44.908 44.908 0 0 0-1.255-1.98c.07-.109.141-.224.211-.327 1.12-1.667 2.118-2.602 3.358-2.602zm-10.201.553c1.265 0 2.058.791 2.675 1.446.307.327 1.132 1.303 1.132 1.303l-.909 1.402c-1.286 1.986-2.006 3.106-2.616 4.045-1.279 1.968-1.845 2.556-2.847 2.556-1.033 0-1.586-.887-1.586-2.816 0-2.373.681-4.997 1.856-6.777.679-1.03 1.508-1.16 2.295-1.16z"/>
+  </svg>;
+  if(n==="google") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none">
+    <path fill="#4285F4" d="M23.06 12.25c0-.85-.08-1.67-.22-2.45H12v4.64h6.2a5.3 5.3 0 0 1-2.3 3.48v2.9h3.72c2.18-2 3.44-4.96 3.44-8.57z"/>
+    <path fill="#34A853" d="M12 23.5c3.11 0 5.72-1.03 7.62-2.79l-3.72-2.89c-1.03.69-2.35 1.1-3.9 1.1-3 0-5.54-2.03-6.45-4.75H1.7v2.98A11.5 11.5 0 0 0 12 23.5z"/>
+    <path fill="#FBBC05" d="M5.55 14.17a6.9 6.9 0 0 1 0-4.41V6.78H1.7a11.5 11.5 0 0 0 0 10.37l3.85-2.98z"/>
+    <path fill="#EA4335" d="M12 5.02c1.69 0 3.2.58 4.4 1.72l3.3-3.3C17.72 1.55 15.11.5 12 .5A11.5 11.5 0 0 0 1.7 6.78l3.85 2.98C6.46 7.05 9 5.02 12 5.02z"/>
+  </svg>;
+  const cor = ORIGEM_COLOR_MAP[n] || "#64748b";
+  const p={width:sz,height:sz,viewBox:"0 0 24 24",fill:"none",stroke:cor,strokeWidth:2.2,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(n==="site") return <svg {...p}><circle cx="12" cy="12" r="9.5"/><ellipse cx="12" cy="12" rx="4" ry="9.5"/><line x1="2.5" y1="12" x2="21.5" y2="12"/></svg>;
+  if(n==="landing") return <svg {...p}><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><line x1="3" y1="8.5" x2="21" y2="8.5"/><line x1="7" y1="12.5" x2="15" y2="12.5"/><line x1="7" y1="16.5" x2="12" y2="16.5"/></svg>;
+  if(n==="organico") return <svg {...p}><path d="M11 20.5V12"/><path d="M11 12c0-4.5 3.5-8.5 9-9 .5 5.5-3 9.5-7 10-1 .1-2 0-2-1z"/><path d="M11 15.5c0-3-2.2-5.5-5.5-6-.4 3.7 1.7 6.3 4.2 6.6.7.1 1.3 0 1.3-.6z"/></svg>;
+  return <svg {...p}><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="2.2" fill={cor} stroke="none"/></svg>;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -50539,7 +50604,9 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   function setPixelsServVal(v){setPixelsServ(v);setDirty(true);}
 
   function abrirNovaVenda(){
-    setEditVenda({mode:"new",data:{id:"v-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),lead_name:"",product:"",value:0,date:year+"-"+String(month).padStart(2,"0")+"-15",origin:"meta"}});
+    // size/size_unit: tamanho do produto (Bioter vende por m³). city/uf: onde
+    // a venda aconteceu — vira base pra mapa de cobertura depois.
+    setEditVenda({mode:"new",data:{id:"v-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),lead_name:"",product:"",value:0,date:year+"-"+String(month).padStart(2,"0")+"-15",origin:"meta",size:"",size_unit:"m3",city:"",uf:""}});
   }
   function abrirEditarVenda(v){setEditVenda({mode:"edit",data:Object.assign({},v)});}
   function salvarVenda(){
@@ -50582,15 +50649,13 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
     setSaving(false);
   }
 
-  // "indicacao" saiu das opcoes (nao e canal digital), mas continua no mapa
-  // pra vendas antigas ja gravadas com essa origem nao virarem "Outro".
   // Estilos do modal de venda (evita repetir o mesmo objeto 4x)
   const _lblStyle={color:"#64748b",fontSize:10,fontWeight:800,marginBottom:7,textTransform:"uppercase",letterSpacing:.7};
   const _inpStyle={width:"100%",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontSize:13.5,fontWeight:600,fontFamily:"inherit",outline:"none",boxSizing:"border-box",color:"#0f172a",transition:"all .12s"};
 
-  const ORIGEM_LABEL={meta:"Meta Ads",google:"Google Ads",site:"Site",landing:"Landing page",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
-  const ORIGEM_COLOR={meta:"#1877F2",google:"#ea4335",site:"#0f766e",landing:"#c026d3",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
-  const ORIGEM_OPCOES=["meta","google","site","landing","organico","outro"];
+  const ORIGEM_LABEL=ORIGEM_LABEL_MAP;
+  const ORIGEM_COLOR=ORIGEM_COLOR_MAP;
+  const ORIGEM_OPCOES=ORIGEM_OPCOES_LISTA;
 
   // Selo do ROI
   const selo=(function(){
@@ -50899,7 +50964,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           <div style={{color:"#64748b",fontSize:12}}>{v.product||"—"}</div>
           <div style={{color:"#16a34a",fontSize:12.5,fontWeight:700,textAlign:"right",fontFeatureSettings:"'tnum'"}}>{_brl(v.value)}</div>
           <div style={{color:"#64748b",fontSize:11.5,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_ddmm(v.date)}</div>
-          <div><span style={{background:origCfg.color+"15",color:origCfg.color,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{origCfg.label}</span></div>
+          <div><span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid #eef0f3",color:"#475569",borderRadius:99,padding:"3px 10px 3px 6px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}><_PxOrigemIco n={v.origin} size={12}/>{origCfg.label}</span></div>
           <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
             <button onClick={function(){abrirEditarVenda(v);}} title="Editar"
               style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#94a3b8"}}><Ico n="edit" size={14}/></button>
@@ -50924,7 +50989,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
         topo, ícone e botão primário. O resto é neutro. */}
     {editVenda&&<div onClick={function(){setEditVenda(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(10,12,16,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(5px)"}}>
       <div onClick={function(e){e.stopPropagation();}}
-        style={{background:"#fff",borderRadius:18,maxWidth:560,width:"100%",boxShadow:"0 30px 70px rgba(8,10,14,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",position:"relative"}}>
+        style={{background:"#fff",borderRadius:18,maxWidth:720,width:"100%",boxShadow:"0 30px 70px rgba(8,10,14,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",position:"relative"}}>
         <div style={{height:4,background:"linear-gradient(90deg,"+cl.color+","+cl.color+"66)"}}/>
         <div style={{padding:"18px 24px 16px",borderBottom:"1px solid #f1f3f5",display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:38,height:38,borderRadius:11,background:cl.color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -50940,7 +51005,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
           </button>
         </div>
 
-        <div style={{padding:"20px 24px 22px",display:"flex",flexDirection:"column",gap:16,maxHeight:"70vh",overflowY:"auto"}}>
+        <div style={{padding:"20px 26px 22px",display:"flex",flexDirection:"column",gap:17,maxHeight:"72vh",overflowY:"auto",overflowX:"hidden"}}>
           <div>
             <div style={_lblStyle}>Cliente / Lead *</div>
             <input value={editVenda.data.lead_name} autoFocus
@@ -51012,8 +51077,10 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
               {ORIGEM_OPCOES.map(function(o){
                 const active=editVenda.data.origin===o;
                 return <button key={o} type="button" onClick={function(){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{origin:o})}));}}
-                  style={{background:active?ORIGEM_COLOR[o]+"12":"#fff",color:active?ORIGEM_COLOR[o]:"#64748b",border:"1px solid "+(active?ORIGEM_COLOR[o]+"66":"#e2e8f0"),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:ORIGEM_COLOR[o],opacity:active?1:.35}}/>
+                  style={{background:active?ORIGEM_COLOR[o]+"10":"#fff",color:active?"#0f172a":"#64748b",border:"1px solid "+(active?ORIGEM_COLOR[o]+"77":"#e2e8f0"),borderRadius:11,padding:"9px 14px",fontSize:12.5,fontWeight:active?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,transition:"all .12s"}}>
+                  <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,flexShrink:0,filter:active?"none":"saturate(.5)",opacity:active?1:.75}}>
+                    <_PxOrigemIco n={o} size={16}/>
+                  </span>
                   {ORIGEM_LABEL[o]}
                 </button>;
               })}
