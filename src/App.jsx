@@ -46976,6 +46976,7 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"planejamento",ico:"layers",      label:"Planejamento"},
+  {id:"performance", ico:"trendingUp",  label:"Performance"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
   {id:"demandas",    ico:"zap",         label:"Demandas"},
   {id:"briefing",    ico:"fileText",    label:"Briefing"},
@@ -46984,7 +46985,6 @@ const PORTAL_ALL_TABS=[
   {id:"metas",       ico:"target",      label:"Metas"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicações"},
-  {id:"performance", ico:"chart",       label:"Performance"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"parcerias",   ico:"users",       label:"Parcerias"},
   {id:"concorrencia",ico:"eye",         label:"Concorrência"},
@@ -50140,6 +50140,13 @@ const CLIENT_ROI_DEFAULTS = {
    - client_roi_monthly (investimento e retorno)
    ROI = (retorno - investimento_midia) / investimento_midia
 ─────────────────────────────────────────────────────────────────────── */
+// ═══════════════════════════════════════════════════════════════════
+// FUNIL DO MÊS — faixa compacta no topo da aba Performance.
+// Antes esse bloco repetia Investimento / Retorno / ROI, que já aparecem
+// no cabeçalho do ROI de Marketing logo abaixo. Agora ele mostra só o que
+// é exclusivo do funil: as etapas, as taxas de conversão entre elas e os
+// custos unitários (por lead e por venda) — informação nova, sem eco.
+// ═══════════════════════════════════════════════════════════════════
 function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, salesCount}){
   const [funnelEntry,setFunnelEntry]=useState(null);
   const [loading,setLoading]=useState(true);
@@ -50152,7 +50159,6 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
       .eq("client_id",clientId).eq("year",year).eq("month",month).maybeSingle()
       .then(function(r){if(active){setFunnelEntry(r.data||null);setLoading(false);}})
       .catch(function(e){if(active)setLoading(false);console.warn("[retorno digital]",e?.message||e);});
-    // Realtime: atualiza quando funil for atualizado
     const ch=window._sb.channel("retdig-"+clientId+"-"+year+"-"+month)
       .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){
         window._sb.from("media_funnel_entries").select("*")
@@ -50162,15 +50168,13 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
     return function(){active=false;try{window._sb.removeChannel(ch);}catch(e){}};
   },[clientId,year,month]);
 
-  // Extrai dados (mesma logica de _mGetClientFunilData em 17_gestao_midia)
   const stages=(funnelEntry&&Array.isArray(funnelEntry.stages))?funnelEntry.stages:[];
   const leads=stages.length>0?Number(stages[0].quantity||0):0;
   const vendasFunil=stages.length>0?Number(stages[stages.length-1].quantity||0):0;
   const oportunidades=stages.length>=2?Number(stages[stages.length-2].quantity||0):0;
   const vendasDisplay=vendasFunil>0?vendasFunil:(Number(salesCount)||0);
   const inv=Number(midiaSpend)||0;
-  const retorno=Number(totalVendido)||0;
-  const roi=inv>0?Math.round(((retorno-inv)/inv)*1000)/10:null;
+
   let funilStatus="pendente";
   if(funnelEntry){
     const algumaPreenchida=stages.some(function(s){return Number(s.quantity||0)>0;});
@@ -50179,84 +50183,102 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
     else if(algumaPreenchida)funilStatus="incompleto";
   }
   const lastUpd=funnelEntry?.updated_at||funnelEntry?.submitted_at||null;
-  const lastUpdLabel=lastUpd?new Date(lastUpd).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):null;
+  const lastUpdLabel=lastUpd?new Date(lastUpd).toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}):null;
   const fdSt=({
-    atualizado:{label:"Atualizado",color:"#16a34a",bg:"#dcfce7"},
-    incompleto:{label:"Incompleto",color:"#f97316",bg:"#fff7ed"},
-    pendente:  {label:"Pendente",  color:"#ef4444",bg:"#fef2f2"},
-  })[funilStatus]||{label:"Pendente",color:"#ef4444",bg:"#fef2f2"};
-  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+    atualizado:{label:"Atualizado",color:"#16a34a",dot:"#22c55e"},
+    incompleto:{label:"Incompleto",color:"#b45309",dot:"#f59e0b"},
+    pendente:  {label:"Pendente",  color:"#b91c1c",dot:"#ef4444"},
+  })[funilStatus]||{label:"Pendente",color:"#b91c1c",dot:"#ef4444"};
 
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
-    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+  const _brl2=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
+  const _num=function(n){return Number(n||0).toLocaleString("pt-BR");};
+  const custoLead  = (inv>0&&leads>0) ? inv/leads : null;
+  const custoVenda = (inv>0&&vendasDisplay>0) ? inv/vendasDisplay : null;
+  const convLeadOpp  = (leads>0&&oportunidades>0) ? Math.round((oportunidades/leads)*100) : null;
+  const convOppVenda = (oportunidades>0&&vendasDisplay>0) ? Math.round((vendasDisplay/oportunidades)*100) : null;
+
+  const _vazio = leads===0 && oportunidades===0 && vendasDisplay===0;
+
+  const _Etapa=function({label, valor, ico}){
+    return <div style={{flex:1,minWidth:96,display:"flex",flexDirection:"column",gap:5}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,color:"#94a3b8"}}>
+        <Ico n={ico} size={12} color="#94a3b8"/>
+        <span style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{label}</span>
+      </div>
+      <div style={{color:valor>0?"#0f172a":"#cbd5e1",fontSize:24,fontWeight:800,letterSpacing:-.8,lineHeight:1,fontFeatureSettings:"'tnum'"}}>
+        {valor>0?_num(valor):"—"}
+      </div>
+    </div>;
+  };
+  const _Seta=function({pct}){
+    return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flexShrink:0,padding:"0 4px"}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      <span style={{fontSize:9.5,fontWeight:800,color:pct===null?"#e2e8f0":"#64748b",fontFeatureSettings:"'tnum'"}}>{pct===null?"—":pct+"%"}</span>
+    </div>;
+  };
+
+  return <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:16,flexWrap:"wrap"}}>
       <div style={{display:"flex",alignItems:"center",gap:11}}>
-        <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Ico n="trending-up" size={17} color="#fff"/>
+        <div style={{width:34,height:34,borderRadius:10,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n="funnel" size={16} color="#475569"/>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Retorno do investimento</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>Quanto sua mídia paga retornou no mês — calculado a partir do funil acima.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.25}}>Funil do mês</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>Etapas preenchidas acima, com conversão e custo por etapa.</div>
         </div>
       </div>
-      <span style={{background:fdSt.bg,color:fdSt.color,borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{fdSt.label}</span>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {lastUpdLabel&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>atualizado {lastUpdLabel}</span>}
+        <span style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px solid #e9ebef",color:fdSt.color,borderRadius:99,padding:"5px 12px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:fdSt.dot}}/>{fdSt.label}
+        </span>
+      </div>
     </div>
 
-    {(inv===0&&retorno===0&&leads===0&&vendasDisplay===0)?<div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"28px 18px",textAlign:"center"}}>
-      <div style={{display:"inline-flex",width:44,height:44,borderRadius:11,background:"#9F43F614",alignItems:"center",justifyContent:"center",marginBottom:10}}>
-        <Ico n="funnel" size={20} color="#9F43F6"/>
-      </div>
-      <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:4}}>Aguardando preenchimento do funil</div>
-      <div style={{color:"#64748b",fontSize:11.5,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
-        Preencha as etapas do funil acima e clique em Salvar — o cálculo de retorno e ROI aparece aqui automaticamente.
-      </div>
-    </div>:<>
-      {/* Linha de KPIs principais */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:14}}>
-        <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"12px 13px"}}>
-          <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento</div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>{_brl(inv)}</div>
-        </div>
-        <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"12px 13px"}}>
-          <div style={{color:"#16a34a",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Retorno</div>
-          <div style={{color:retorno>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>{retorno>0?_brl(retorno):"—"}</div>
-        </div>
-        <div style={{background:roi===null?"#f8fafc":roi>=0?"#f0fdf4":"#fef2f2",border:`1px solid ${roi===null?"#e2e8f0":roi>=0?"#bbf7d0":"#fecaca"}`,borderRadius:10,padding:"12px 13px"}}>
-          <div style={{color:roi===null?"#64748b":roi>=0?"#16a34a":"#dc2626",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>ROI do mês</div>
-          <div style={{color:roi===null?"#94a3b8":roi>=0?"#16a34a":"#dc2626",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>
-            {roi===null?"—":(roi>=0?"+":"")+roi.toFixed(1)+"%"}
+    {_vazio
+      ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:12,padding:"26px 18px",textAlign:"center"}}>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:4}}>Funil ainda não preenchido neste mês</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,maxWidth:400,margin:"0 auto",lineHeight:1.55}}>
+            Preencha as etapas do funil acima e clique em Salvar — conversão e custo por lead aparecem aqui automaticamente.
           </div>
         </div>
-        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 13px"}}>
-          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Atualizado em</div>
-          <div style={{color:lastUpdLabel?"#0f172a":"#94a3b8",fontWeight:700,fontSize:12.5,marginTop:5,fontStyle:lastUpdLabel?"normal":"italic"}}>{lastUpdLabel||"Não preenchido"}</div>
-        </div>
-      </div>
+      : <>
+          <div style={{display:"flex",alignItems:"flex-end",gap:6,flexWrap:"wrap"}}>
+            <_Etapa label="Leads recebidos" valor={leads} ico="users"/>
+            <_Seta pct={convLeadOpp}/>
+            <_Etapa label="Oportunidades" valor={oportunidades} ico="target"/>
+            <_Seta pct={convOppVenda}/>
+            <_Etapa label="Vendas" valor={vendasDisplay} ico="checkCircle"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,marginTop:16,paddingTop:14,borderTop:"1px solid #f1f3f5"}}>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Custo por lead</div>
+              <div style={{color:custoLead===null?"#cbd5e1":"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,marginTop:3,fontFeatureSettings:"'tnum'"}}>{custoLead===null?"—":_brl2(custoLead)}</div>
+            </div>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Custo por venda</div>
+              <div style={{color:custoVenda===null?"#cbd5e1":"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,marginTop:3,fontFeatureSettings:"'tnum'"}}>{custoVenda===null?"—":_brl2(custoVenda)}</div>
+            </div>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Ticket médio</div>
+              <div style={{color:(vendasDisplay>0&&totalVendido>0)?"#0f172a":"#cbd5e1",fontSize:15,fontWeight:800,letterSpacing:-.3,marginTop:3,fontFeatureSettings:"'tnum'"}}>
+                {(vendasDisplay>0&&Number(totalVendido)>0)?_brl2(Number(totalVendido)/vendasDisplay):"—"}
+              </div>
+            </div>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Conversão total</div>
+              <div style={{color:(leads>0&&vendasDisplay>0)?"#0f172a":"#cbd5e1",fontSize:15,fontWeight:800,letterSpacing:-.3,marginTop:3,fontFeatureSettings:"'tnum'"}}>
+                {(leads>0&&vendasDisplay>0)?(Math.round((vendasDisplay/leads)*1000)/10)+"%":"—"}
+              </div>
+            </div>
+          </div>
+        </>}
 
-      {/* Funil — leads / oportunidades / vendas */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
-          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Leads recebidos</div>
-          <div style={{color:leads>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{leads>0?leads.toLocaleString("pt-BR"):"—"}</div>
-        </div>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
-          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Oportunidades</div>
-          <div style={{color:oportunidades>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{oportunidades>0?oportunidades.toLocaleString("pt-BR"):"—"}</div>
-        </div>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
-          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Vendas</div>
-          <div style={{color:vendasDisplay>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{vendasDisplay>0?vendasDisplay.toLocaleString("pt-BR"):"—"}</div>
-        </div>
-      </div>
-
-      {funilStatus==="incompleto"&&<div style={{marginTop:12,padding:"9px 12px",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,fontSize:11.5,color:"#9a3412",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
-        <Ico n="alert" size={12} color="#f97316"/>
-        Funil Digital está incompleto. Preencha todas as etapas para um cálculo mais preciso.
-      </div>}
-      {funilStatus==="pendente"&&<div style={{marginTop:12,padding:"9px 12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,fontSize:11.5,color:"#7f1d1d",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
-        <Ico n="alert" size={12} color="#ef4444"/>
-        Funil Digital ainda não foi preenchido neste mês.
-      </div>}
-    </>}
+    {funilStatus==="incompleto"&&<div style={{marginTop:14,padding:"10px 13px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,fontSize:11.5,color:"#92400e",fontWeight:600,display:"flex",alignItems:"center",gap:8}}>
+      <Ico n="alert" size={13} color="#f59e0b"/>
+      Funil incompleto — preencha todas as etapas pra um cálculo mais preciso.
+    </div>}
   </div>;
 }
 
@@ -50413,9 +50435,62 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   // Line chart: max ROI absoluto pra escala
   const _MES_CURTO=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
+  const _lucro=totalVendido-totalInvestido;
+
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* ── Retorno do Investimento Digital (sincronizado com Funil Digital + Gestão de mídia) ── */}
+    {/* ══════════ CABEÇALHO GRAFITE — os 3 números que importam ══════════
+        Antes o topo tinha um card "Retorno do investimento" repetindo
+        Investimento / Retorno / ROI, e logo abaixo 6 KPIs coloridos com os
+        mesmos valores. Unificado aqui: um lugar só, sem eco, sem arco-íris. */}
+    <div style={{position:"relative",overflow:"hidden",borderRadius:20,background:"linear-gradient(135deg,#15171c 0%,#1e2229 55%,#141619 100%)",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 18px 44px rgba(8,10,14,0.28)",padding:isMob?"20px 18px":"24px 28px",color:"#fff"}}>
+      <div aria-hidden style={{position:"absolute",top:-110,right:-50,width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,"+cl.color+"33 0%,rgba(255,255,255,0) 70%)",pointerEvents:"none"}}/>
+
+      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="trending-up" size={20} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:10,fontWeight:800,letterSpacing:1,textTransform:"uppercase",color:"rgba(255,255,255,0.5)"}}>Performance</div>
+            <div style={{fontSize:isMob?18:21,fontWeight:800,letterSpacing:-.5,lineHeight:1.15,marginTop:2}}>Retorno do marketing</div>
+            <div style={{fontSize:12,fontWeight:500,color:"rgba(255,255,255,0.55)",marginTop:3}}>Serviço da Pixels + anúncios do mês, comparados às vendas fechadas.</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+          <span style={{background:selo.color==="#15803d"?"rgba(34,197,94,0.16)":selo.color==="#b91c1c"?"rgba(239,68,68,0.16)":"rgba(245,158,11,0.16)",
+            color:selo.color==="#15803d"?"#4ade80":selo.color==="#b91c1c"?"#f87171":"#fbbf24",
+            border:"1px solid rgba(255,255,255,0.10)",borderRadius:99,padding:"5px 12px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{selo.label}</span>
+          <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 11px",color:"#fff",fontSize:12.5,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+            {MESES.map(function(n,i){return <option key={i} value={i+1} style={{color:"#0f172a"}}>{n}</option>;})}
+          </select>
+          <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 11px",color:"#fff",fontSize:12.5,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+            {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y} style={{color:"#0f172a"}}>{y}</option>;})}
+          </select>
+        </div>
+      </div>
+
+      {/* 3 números grandes */}
+      <div style={{position:"relative",zIndex:1,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:isMob?14:0,marginTop:22,paddingTop:20,borderTop:"1px solid rgba(255,255,255,0.09)"}}>
+        {[
+          {l:"Investido no mês", v:_brl(totalInvestido), c:"#fff",     ico:"wallet"},
+          {l:"Vendas geradas",   v:_brl(totalVendido),   c:totalVendido>0?"#4ade80":"rgba(255,255,255,0.35)", ico:"chart"},
+          {l:"ROI do mês",       v:(roiPct>=0?"+":"")+roiPct+"%",      c:totalInvestido===0?"rgba(255,255,255,0.35)":(roiPct>=0?"#4ade80":"#f87171"), ico:roiPct>=0?"checkCircle":"alert"},
+        ].map(function(k,i){
+          return <div key={i} style={{padding:isMob?0:"0 22px",borderLeft:(!isMob&&i>0)?"1px solid rgba(255,255,255,0.09)":"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,color:"rgba(255,255,255,0.5)"}}>
+              <Ico n={k.ico} size={12} color="rgba(255,255,255,0.5)"/>
+              <span style={{fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>{k.l}</span>
+            </div>
+            <div style={{color:k.c,fontSize:isMob?26:32,fontWeight:800,letterSpacing:-1.2,lineHeight:1.05,marginTop:7,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
+          </div>;
+        })}
+      </div>
+    </div>
+
+    {/* ── Funil do mês (etapas, conversão, custo por lead) ── */}
     <PortalRetornoDigital
       clientId={effectiveClientId}
       year={year} month={month}
@@ -50423,180 +50498,173 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
       totalVendido={totalVendido}
       salesCount={sales.length}/>
 
-    {/* Header + selo + filtros */}
-    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"flex-start",gap:12,minWidth:0}}>
-        <div style={{width:42,height:42,borderRadius:10,background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <Ico n="wallet" size={22} color={cl.color}/>
-        </div>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>ROI de Marketing</div>
-            <span style={{background:selo.bg,color:selo.color,borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{selo.label}</span>
-          </div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Veja se o investimento em marketing está voltando em vendas.</div>
-        </div>
-      </div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
-          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
-        </select>
-        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
-          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
-        </select>
-      </div>
-    </div>
-
-    {/* Explicação simples */}
-    <div style={{background:"#f8fafc",borderLeft:"3px solid "+cl.color,borderRadius:"0 10px 10px 0",padding:"12px 16px",color:"#475569",fontSize:12.5,lineHeight:1.55}}>
-      Esta área mostra <strong style={{color:"#0f172a"}}>quanto voltou em vendas a partir do investimento em marketing</strong>. Somamos o valor do serviço da Pixels + o valor investido em anúncios no mês, e comparamos com as vendas fechadas no período.
-    </div>
-
-    {/* Cards KPI com ícones */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(6,1fr)",gap:10}}>
+    {/* ══════════ MÉTRICAS DE APOIO — neutras, só o resultado ganha cor ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
       {[
-        {l:"Total vendido",     v:_brl(totalVendido),     c:"#16a34a", ico:"chart"},
-        {l:"Serviço Pixels",    v:_brl(pixelsServ),       c:cl.color,  ico:"wallet"},
-        {l:"Mídia/anúncios",    v:_brl(midia),            c:"#0284c7", ico:"funnel"},
-        {l:"Investimento total",v:_brl(totalInvestido),   c:"#475569", ico:"layers"},
-        {l:"ROI de Marketing",  v:roiPct+"%",             c:roiPct>=0?"#16a34a":"#dc2626", ico:roiPct>=0?"checkCircle":"alert"},
-        {l:"Retorno por R$ 1",  v:"R$ "+retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2}), c:roiPct>=0?"#16a34a":"#dc2626", ico:"sparkles"},
+        {l:"Serviço Pixels",   v:_brl(pixelsServ),  ico:"wallet", cor:null},
+        {l:"Mídia / anúncios", v:_brl(midia),       ico:"funnel", cor:null},
+        {l:"Retorno por R$ 1", v:"R$ "+retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2}), ico:"sparkles", cor:totalInvestido===0?null:(retornoPor1>=1?"#16a34a":"#dc2626")},
+        {l:_lucro>=0?"Lucro no mês":"Prejuízo no mês", v:_brl(Math.abs(_lucro)), ico:"chart", cor:totalInvestido===0?null:(_lucro>=0?"#16a34a":"#dc2626")},
       ].map(function(k,i){
-        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 14px",display:"flex",flexDirection:"column",gap:6}}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <div style={{width:28,height:28,borderRadius:8,background:k.c+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Ico n={k.ico} size={14} color={k.c}/>
+        return <div key={i} style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:14,padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:9}}>
+            <div style={{width:26,height:26,borderRadius:8,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ico n={k.ico} size={13} color="#64748b"/>
             </div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,lineHeight:1.2}}>{k.l}</div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.2}}>{k.l}</div>
           </div>
-          <div style={{color:k.c,fontWeight:800,fontSize:18,letterSpacing:-.4,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{k.v}</div>
+          <div style={{color:k.cor||"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{k.v}</div>
         </div>;
       })}
     </div>
 
-    {/* Caixa de interpretação automática */}
-    {totalInvestido>0&&<div style={{background:roiPct>=0?"#f0fdf4":"#fef2f2",border:"1px solid "+(roiPct>=0?"#bbf7d0":"#fecaca"),borderRadius:12,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
-      <div style={{width:36,height:36,borderRadius:10,background:roiPct>=0?"#dcfce7":"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <Ico n={roiPct>=0?"checkCircle":"alert"} size={20} color={roiPct>=0?"#16a34a":"#dc2626"}/>
+    {/* ── Leitura automática — discreta, barra de acento em vez de fundo colorido ── */}
+    {totalInvestido>0&&<div style={{background:"#fafbfc",border:"1px solid #e9ebef",borderLeft:"3px solid "+(roiPct>=0?"#16a34a":"#dc2626"),borderRadius:"0 14px 14px 0",padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
+      <div style={{width:30,height:30,borderRadius:9,background:roiPct>=0?"#dcfce7":"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n={roiPct>=0?"checkCircle":"alert"} size={16} color={roiPct>=0?"#16a34a":"#dc2626"}/>
       </div>
-      <div style={{color:roiPct>=0?"#14532d":"#7f1d1d",fontSize:13.5,lineHeight:1.55}}>
+      <div style={{color:"#475569",fontSize:13,lineHeight:1.55}}>
         {roiPct>=0
-          ?<><strong style={{display:"block",fontSize:14,marginBottom:3}}>Seu investimento em marketing gerou retorno acima do valor investido.</strong>Neste mês, para cada R$ 1 investido em marketing, voltaram <strong>R$ {retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong> em vendas.</>
-          :<><strong style={{display:"block",fontSize:14,marginBottom:3}}>Neste mês, o valor investido ainda não retornou em vendas suficientes.</strong>Pode ser necessário avaliar campanha, atendimento, orçamento ou prazo de decisão do cliente.</>
+          ?<><strong style={{display:"block",color:"#0f172a",fontSize:13.5,marginBottom:3}}>O investimento em marketing voltou acima do que foi aplicado.</strong>Para cada R$ 1 investido no mês, voltaram <strong style={{color:"#16a34a"}}>R$ {retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2})}</strong> em vendas.</>
+          :<><strong style={{display:"block",color:"#0f172a",fontSize:13.5,marginBottom:3}}>O valor investido ainda não retornou em vendas suficientes neste mês.</strong>Vale revisar campanha, atendimento, orçamento ou o prazo de decisão do cliente.</>
         }
       </div>
     </div>}
 
-    {/* Gráficos visuais — 3 caixas lado a lado em desktop */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:14}}>
+    {/* ══════════ GRÁFICOS GRANDES ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.55fr 1fr",gap:14}}>
 
-      {/* Gráfico 1: Bar — Vendido vs Investido */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>Vendido vs Investido</div>
-        <svg viewBox="0 0 200 130" width="100%" style={{maxHeight:160}}>
-          {/* Bar Vendido */}
-          {(function(){
-            const h=totalVendido>0?Math.max(8,(totalVendido/barMax)*95):0;
-            return <g>
-              <rect x="32" y={120-h} width="50" height={h} fill="#16a34a" rx="5"/>
-              <text x="57" y={120-h-6} textAnchor="middle" fontSize="10" fontWeight="800" fill="#16a34a">{totalVendido>0?_brl(totalVendido).replace("R$ ",""):""}</text>
-            </g>;
-          })()}
-          {(function(){
-            const h=totalInvestido>0?Math.max(8,(totalInvestido/barMax)*95):0;
-            return <g>
-              <rect x="118" y={120-h} width="50" height={h} fill="#94a3b8" rx="5"/>
-              <text x="143" y={120-h-6} textAnchor="middle" fontSize="10" fontWeight="800" fill="#475569">{totalInvestido>0?_brl(totalInvestido).replace("R$ ",""):""}</text>
-            </g>;
-          })()}
-          <text x="57" y="128" textAnchor="middle" fontSize="9" fill="#64748b" fontWeight="600">Vendido</text>
-          <text x="143" y="128" textAnchor="middle" fontSize="9" fill="#64748b" fontWeight="600">Investido</text>
-        </svg>
-      </div>
-
-      {/* Gráfico 2: Donut — Pixels vs Mídia */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>Composição do investimento</div>
-        {totalInvestido>0?<div style={{display:"flex",alignItems:"center",gap:14}}>
-          {(function(){
-            const circ=2*Math.PI*44;
-            return <svg viewBox="0 0 110 110" width="100" height="100" style={{flexShrink:0}}>
-              <circle cx="55" cy="55" r="44" fill="none" stroke="#f1f5f9" strokeWidth="14"/>
-              <circle cx="55" cy="55" r="44" fill="none" stroke={cl.color} strokeWidth="14"
-                strokeDasharray={(pctPixels/100*circ)+" "+circ}
-                strokeLinecap="round" transform="rotate(-90 55 55)"/>
-              <circle cx="55" cy="55" r="44" fill="none" stroke="#0284c7" strokeWidth="14"
-                strokeDasharray={(pctMidia/100*circ)+" "+circ}
-                strokeDashoffset={-(pctPixels/100*circ)}
-                strokeLinecap="round" transform="rotate(-90 55 55)"/>
-              <text x="55" y="58" textAnchor="middle" fontSize="13" fontWeight="800" fill="#0f172a">{_brl(totalInvestido).replace("R$ ","R$")}</text>
-            </svg>;
-          })()}
-          <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}>
-              <div style={{width:10,height:10,borderRadius:3,background:cl.color}}/>
-              <div style={{flex:1,fontSize:11}}>
-                <div style={{color:"#0f172a",fontWeight:700}}>Pixels {Math.round(pctPixels)}%</div>
-                <div style={{color:"#64748b",fontFeatureSettings:"'tnum'"}}>{_brl(pixelsServ)}</div>
-              </div>
+      {/* ── Evolução do ROI — área grande com grade e eixo ── */}
+      <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:6,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="chart" size={14} color="#475569"/>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:7}}>
-              <div style={{width:10,height:10,borderRadius:3,background:"#0284c7"}}/>
-              <div style={{flex:1,fontSize:11}}>
-                <div style={{color:"#0f172a",fontWeight:700}}>Mídia {Math.round(pctMidia)}%</div>
-                <div style={{color:"#64748b",fontFeatureSettings:"'tnum'"}}>{_brl(midia)}</div>
-              </div>
+            <div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Evolução do ROI</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Últimos {historico.length||0} meses com dados cadastrados</div>
             </div>
           </div>
-        </div>:<div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"30px 0"}}>Sem investimento informado.</div>}
-      </div>
-
-      {/* Gráfico 3: Line — Evolução do ROI */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:14}}>Evolução do ROI (últimos meses)</div>
+          {historico.length>=2&&<div style={{textAlign:"right"}}>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Mês atual</div>
+            <div style={{color:roiPct>=0?"#16a34a":"#dc2626",fontSize:18,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{(roiPct>=0?"+":"")+roiPct}%</div>
+          </div>}
+        </div>
         {historico.length>=2?(function(){
-          const W=240,H=130;
-          const padL=20,padR=10,padT=10,padB=22;
-          const xs=W-padL-padR;
-          const ys=H-padT-padB;
+          const W=560,H=250;
+          const padL=44,padR=16,padT=18,padB=30;
+          const xs=W-padL-padR, ys=H-padT-padB;
           const rois=historico.map(function(h){return h.roi;});
           const maxR=Math.max.apply(null,rois.concat([10]));
           const minR=Math.min.apply(null,rois.concat([0]));
-          const range=maxR-minR||1;
+          const range=(maxR-minR)||1;
+          const yDe=function(v){return padT+ys-((v-minR)/range)*ys;};
           const points=historico.map(function(h,i){
-            const x=padL+(historico.length>1?(i/(historico.length-1))*xs:xs/2);
-            const y=padT+ys-((h.roi-minR)/range)*ys;
-            return {x:x,y:y,roi:h.roi,month:h.month,year:h.year};
+            return {x:padL+(historico.length>1?(i/(historico.length-1))*xs:xs/2),y:yDe(h.roi),roi:h.roi,month:h.month,year:h.year};
           });
           const poly=points.map(function(p){return p.x+","+p.y;}).join(" ");
-          return <svg viewBox={"0 0 "+W+" "+H} width="100%" style={{maxHeight:160}}>
-            {/* Linha zero (referência) */}
-            {minR<0&&maxR>0&&(function(){
-              const y0=padT+ys-((0-minR)/range)*ys;
-              return <line x1={padL} y1={y0} x2={W-padR} y2={y0} stroke="#cbd5e1" strokeDasharray="3 3" strokeWidth="1"/>;
-            })()}
-            {/* Polyline da linha */}
-            <polyline points={poly} fill="none" stroke={cl.color} strokeWidth="2"/>
-            {/* Área sob a curva */}
-            <polygon points={poly+" "+points[points.length-1].x+","+(padT+ys)+" "+points[0].x+","+(padT+ys)}
-              fill={cl.color} opacity="0.1"/>
-            {/* Pontos */}
-            {points.map(function(p,i){
+          const _ultimo=points[points.length-1];
+          // 4 linhas de grade horizontais
+          const grades=[0,0.25,0.5,0.75,1].map(function(f){return minR+range*f;});
+          return <svg viewBox={"0 0 "+W+" "+H} width="100%" style={{maxHeight:280,display:"block",overflow:"visible"}}>
+            <defs>
+              <linearGradient id="pxRoiFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={cl.color} stopOpacity="0.22"/>
+                <stop offset="100%" stopColor={cl.color} stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            {grades.map(function(g,i){
+              const y=yDe(g);
               return <g key={i}>
-                <circle cx={p.x} cy={p.y} r="3.5" fill="#fff" stroke={cl.color} strokeWidth="2"/>
-                <text x={p.x} y={H-7} textAnchor="middle" fontSize="9" fill="#64748b" fontWeight="600">{_MES_CURTO[p.month-1]}</text>
+                <line x1={padL} y1={y} x2={W-padR} y2={y} stroke="#f1f3f5" strokeWidth="1"/>
+                <text x={padL-8} y={y+3.5} textAnchor="end" fontSize="10" fill="#cbd5e1" fontWeight="600">{Math.round(g)}%</text>
+              </g>;
+            })}
+            {minR<0&&maxR>0&&<line x1={padL} y1={yDe(0)} x2={W-padR} y2={yDe(0)} stroke="#cbd5e1" strokeDasharray="4 4" strokeWidth="1.2"/>}
+            <polygon points={poly+" "+_ultimo.x+","+(padT+ys)+" "+points[0].x+","+(padT+ys)} fill="url(#pxRoiFill)"/>
+            <polyline points={poly} fill="none" stroke={cl.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/>
+            {points.map(function(p,i){
+              const _last=i===points.length-1;
+              return <g key={i}>
+                <circle cx={p.x} cy={p.y} r={_last?5:3.6} fill="#fff" stroke={cl.color} strokeWidth={_last?3:2.2}/>
+                <text x={p.x} y={H-9} textAnchor="middle" fontSize="10.5" fill={_last?"#0f172a":"#94a3b8"} fontWeight={_last?"800":"600"}>{_MES_CURTO[p.month-1]}</text>
               </g>;
             })}
           </svg>;
-        })():<div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"30px 0"}}>Cadastre dados em ao menos 2 meses pra ver a evolução.</div>}
+        })():<div style={{border:"1px dashed #e2e8f0",borderRadius:12,padding:"56px 20px",textAlign:"center",background:"#fafbfc",marginTop:10}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>Ainda sem histórico suficiente</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Cadastre dados em ao menos 2 meses pra ver a curva.</div>
+        </div>}
+      </div>
+
+      {/* ── Vendido vs investido + composição ── */}
+      <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:18}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="layers" size={14} color="#475569"/>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Vendido vs investido</div>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Proporção do mês selecionado</div>
+          </div>
+        </div>
+
+        {/* Barras horizontais grandes */}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {[
+            {l:"Vendido",   v:totalVendido,   cor:totalVendido>=totalInvestido?"#16a34a":"#f59e0b"},
+            {l:"Investido", v:totalInvestido, cor:"#334155"},
+          ].map(function(b,i){
+            const pct=barMax>0?Math.max(b.v>0?4:0,(b.v/barMax)*100):0;
+            return <div key={i}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
+                <span style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{b.l}</span>
+                <span style={{color:b.v>0?"#0f172a":"#cbd5e1",fontSize:15,fontWeight:800,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{b.v>0?_brl(b.v):"—"}</span>
+              </div>
+              <div style={{height:14,borderRadius:99,background:"#f1f3f5",overflow:"hidden"}}>
+                <div style={{width:pct+"%",height:"100%",borderRadius:99,background:b.cor,transition:"width .3s"}}/>
+              </div>
+            </div>;
+          })}
+        </div>
+
+        {/* Composição do investimento — barra empilhada, sem donut coloridão */}
+        <div style={{paddingTop:16,borderTop:"1px solid #f1f3f5"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>Composição do investimento</div>
+          {totalInvestido>0?<>
+            <div style={{display:"flex",height:12,borderRadius:99,overflow:"hidden",background:"#f1f3f5"}}>
+              <div style={{width:pctPixels+"%",background:cl.color}}/>
+              <div style={{width:pctMidia+"%",background:"#94a3b8"}}/>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:11}}>
+              {[
+                {c:cl.color, l:"Serviço Pixels", p:pctPixels, v:pixelsServ},
+                {c:"#94a3b8", l:"Mídia / anúncios", p:pctMidia, v:midia},
+              ].map(function(x,i){
+                return <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:9,height:9,borderRadius:3,background:x.c,flexShrink:0}}/>
+                  <span style={{color:"#475569",fontSize:11.5,fontWeight:700,flex:1}}>{x.l}</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{Math.round(x.p)}%</span>
+                  <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:78,textAlign:"right"}}>{_brl(x.v)}</span>
+                </div>;
+              })}
+            </div>
+          </>:<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"18px 0",fontWeight:600}}>Sem investimento informado.</div>}
+        </div>
       </div>
     </div>
-
     {/* Investimento do mês */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 20px"}}>
-      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:14,letterSpacing:-.1}}>Investimento do mês</div>
+    <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14}}>
+        <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="wallet" size={14} color="#475569"/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Investimento do mês</div>
+          <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Alimenta todos os cálculos acima</div>
+        </div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
         <div>
           <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Mídia / anúncios</div>
@@ -50618,11 +50686,16 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
     </div>
 
     {/* Vendas fechadas (tabela) */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-      <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1}}>Vendas fechadas</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>{sales.length} {sales.length===1?"venda":"vendas"} no mês · Total {_brl(totalVendido)}</div>
+    <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,overflow:"hidden"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f3f5",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="checkCircle" size={14} color="#475569"/>
+          </div>
+          <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Vendas fechadas</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>{sales.length} {sales.length===1?"venda":"vendas"} no mês · Total {_brl(totalVendido)}</div>
+          </div>
         </div>
         <button onClick={abrirNovaVenda}
           style={{background:cl.color,color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
