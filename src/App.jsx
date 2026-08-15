@@ -50828,12 +50828,10 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
     </div>}
 
     {/* ══════════ INVESTIDO × RETORNADO — donut central da página ══════════
-        Anel de fora = quanto do investimento já voltou em vendas (break-even
-        no topo, volta completa = empatou; verde acima, âmbar abaixo).
-        Anel de dentro = composição do investimento (Pixels na cor do cliente,
-        Mídia em grafite neutro — o acento pertence à marca, não ao canal).
-        Identidade nunca é só cor: gap branco entre segmentos, legenda com
-        valores e logo, e o número-herói no centro. */}
+        UM anel só, grosso: % do investimento que voltou em vendas.
+        Break-even = volta completa (tick no topo); verde quando recupera,
+        âmbar abaixo. A composição Pixels/Mídia mora na legenda do painel —
+        já teve anel interno + volta excedente e ficou em camadas demais. */}
     <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:18,padding:isMob?"20px 16px":"26px 30px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:isMob?6:10}}>
         <div style={{display:"flex",alignItems:"center",gap:11}}>
@@ -50851,11 +50849,10 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
       {(function(){
         const _pct = totalInvestido>0 ? totalVendido/totalInvestido : 0;   // 1 = empatou
         const _acima = _pct>=1;
-        const _corArco = totalVendido<=0 ? "#e2e8f0" : (_acima ? "#16a34a" : "#d97706");
         const _pctVis = Math.min(_pct,1);
 
         // Geometria: arcos por coordenada polar (começa no topo, sentido horário)
-        const CX=170, CY=170, R_EXT=138, W_EXT=30, R_INT=100, W_INT=15;
+        const CX=170, CY=170, R_EXT=122, W_EXT=52;
         const _pol=function(r,frac){ const a=(frac*360-90)*Math.PI/180; return [CX+r*Math.cos(a), CY+r*Math.sin(a)]; };
         const _arc=function(r,f0,f1){
           const d=f1-f0;
@@ -50871,52 +50868,38 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
             +" A"+r+" "+r+" 0 "+(d>0.5?1:0)+" 1 "+p1[0].toFixed(1)+" "+p1[1].toFixed(1);
         };
 
-        // Anel interno: composição com gap de 2% entre segmentos
-        const _fPix = totalInvestido>0 ? pixelsServ/totalInvestido : 0;
-        const GAP=0.011;
-        const _temDois = _fPix>0.001 && _fPix<0.999;
-
         const _retLabel = totalVendido<=0 ? "Sem vendas no mês"
-          : _acima ? "Investimento recuperado" : Math.round(_pct*100)+"% do investido recuperado";
+          : _pct>1.001 ? "Recuperado · +"+Math.round((_pct-1)*100)+"% além"
+          : _acima ? "Investimento recuperado"
+          : Math.round(_pct*100)+"% do investido recuperado";
 
         return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"auto 1fr",gap:isMob?18:36,alignItems:"center",justifyItems:isMob?"center":"start"}}>
 
           {/* ── DONUT ── */}
           <div style={{position:"relative",width:isMob?280:380,maxWidth:"100%"}}>
             <svg viewBox="0 0 340 340" width="100%" style={{display:"block"}}>
-              {/* trilho externo */}
+              <defs>
+                <linearGradient id="pxDonutVerde" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#16a34a"/><stop offset="100%" stopColor="#4ade80"/>
+                </linearGradient>
+                <linearGradient id="pxDonutAmbar" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#b45309"/><stop offset="100%" stopColor="#f59e0b"/>
+                </linearGradient>
+              </defs>
+              {/* trilho */}
               <circle cx={CX} cy={CY} r={R_EXT} fill="none" stroke="#f1f3f5" strokeWidth={W_EXT}/>
-              {/* progresso do retorno */}
+              {/* progresso do retorno — um anel só, grosso */}
               {totalVendido>0&&<path d={_arc(R_EXT,0,Math.max(_pctVis,0.02))} fill="none"
-                stroke={_corArco} strokeWidth={W_EXT} strokeLinecap="round">
+                stroke={_acima?"url(#pxDonutVerde)":"url(#pxDonutAmbar)"} strokeWidth={W_EXT} strokeLinecap="round">
                 <title>{"Retornou "+_brl(totalVendido)+" de "+_brl(totalInvestido)+" investidos"}</title>
               </path>}
-              {/* excedente além do empate: segunda volta fina por fora */}
-              {_pct>1.001&&<path d={_arc(R_EXT+W_EXT/2+5, 0, Math.min(_pct-1,1))} fill="none"
-                stroke="#15803d" strokeWidth={5} strokeLinecap="round" opacity="0.9">
-                <title>{"Excedente: "+_brl(totalVendido-totalInvestido)+" além do investido"}</title>
-              </path>}
               {/* marca do break-even no topo */}
-              <line x1={CX} y1={CY-R_EXT-W_EXT/2-3} x2={CX} y2={CY-R_EXT+W_EXT/2+3}
+              <line x1={CX} y1={CY-R_EXT-W_EXT/2-4} x2={CX} y2={CY-R_EXT+W_EXT/2+4}
                 stroke="#94a3b8" strokeWidth="2" strokeDasharray="3 3"/>
-
-              {/* anel interno — composição do investimento */}
-              {totalInvestido>0
-                ? (_temDois
-                    ? <g>
-                        <path d={_arc(R_INT, GAP/2, _fPix-GAP/2)} fill="none" stroke={cl.color} strokeWidth={W_INT} strokeLinecap="round">
-                          <title>{"Serviço Pixels · "+_brl(pixelsServ)+" ("+Math.round(_fPix*100)+"%)"}</title>
-                        </path>
-                        <path d={_arc(R_INT, _fPix+GAP/2, 1-GAP/2)} fill="none" stroke="#334155" strokeWidth={W_INT} strokeLinecap="round">
-                          <title>{"Mídia / anúncios · "+_brl(midia)+" ("+Math.round((1-_fPix)*100)+"%)"}</title>
-                        </path>
-                      </g>
-                    : <path d={_arc(R_INT,0,1)} fill="none" stroke={_fPix>0.5?cl.color:"#334155"} strokeWidth={W_INT}/>)
-                : <circle cx={CX} cy={CY} r={R_INT} fill="none" stroke="#f1f3f5" strokeWidth={W_INT}/>}
             </svg>
 
             {/* centro — número-herói */}
-            <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",pointerEvents:"none",padding:"0 56px"}}>
+            <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",pointerEvents:"none",padding:"0 78px"}}>
               <div style={{color:"#94a3b8",fontSize:isMob?9:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.9}}>Cada R$ 1 virou</div>
               <div style={{color:totalInvestido===0?"#cbd5e1":(retornoPor1>=1?"#16a34a":"#d97706"),fontSize:isMob?34:46,fontWeight:800,letterSpacing:-2,lineHeight:1.05,marginTop:4,fontFeatureSettings:"'tnum'"}}>
                 {"R$ "+retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2})}
