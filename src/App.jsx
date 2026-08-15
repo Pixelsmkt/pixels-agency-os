@@ -59920,9 +59920,11 @@ const PRICE_CONFIG = {
   },
   traffic: {
     none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[], brand:null },
-    meta:       { id:"meta",       label:"Meta Ads",         price:2500, channels:["Facebook","Instagram"], brand:"meta", inclusos:{estaticos:3, videos:3} },
+    // edicaoCriativos: EDIÇÃO (adaptação pra anúncio) de até N criativos/mês
+    // inclusa na gestão — não é criação de peça nova (isso é Redes/Extras).
+    meta:       { id:"meta",       label:"Meta Ads",         price:2500, channels:["Facebook","Instagram"], brand:"meta", edicaoCriativos:3 },
     google:     { id:"google",     label:"Google Ads",       price:2500, channels:["Search","Display"], brand:"google" },
-    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle", inclusos:{estaticos:3, videos:3} },
+    metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle", edicaoCriativos:3 },
   },
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
@@ -60062,7 +60064,8 @@ function calculateIncludedCreatives(socialChannels, trafficKey){
     vid += (inc.videos||0) * q;
   });
   const t = PRICE_CONFIG.traffic[trafficKey];
-  if(t && t.inclusos){ est += t.inclusos.estaticos||0; vid += t.inclusos.videos||0; }
+  // Tráfego NÃO soma mais aqui: o que ele inclui é EDIÇÃO de criativos
+  // existentes (edicaoCriativos), não criação — contava 3+3 a mais.
   return { estaticos:est, videos:vid };
 }
 function calculateCreativesPrice(state){
@@ -61043,7 +61046,8 @@ function _CalculadoraModular({isMob}){
       lines.push("Canais: " + trafObj.label);
       lines.push("Inclui:");
       TRAFFIC_BLOCOS.forEach(b => b.itens.forEach(it => lines.push("- " + it)));
-lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
+      if(trafObj.edicaoCriativos>0) lines.push("- Edição de até " + trafObj.edicaoCriativos + " criativos/mês inclusa");
+      lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       lines.push("Observação: verba de anúncios não inclusa");
       lines.push("");
     }
@@ -61486,6 +61490,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
               {t.price===0?"sem custo de gestão":fmt(t.price)}
               {t.price>0 && <span style={{color:SOFT,fontSize:11.5,fontWeight:600,marginLeft:4,letterSpacing:0}}>/mês</span>}
             </div>
+            {t.edicaoCriativos>0&&<div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:7,background:sel?"#f0fdf4":"#f6f8f6",border:"1px solid "+(sel?"#bbf7d0":"#e5eae5"),borderRadius:99,padding:"3px 10px",color:sel?"#15803d":"#6b7c6f",fontSize:10,fontWeight:800,letterSpacing:.1}}>
+              <_PxIco n="pentool" size={10} color={sel?"#16a34a":"#8a9a8e"}/>
+              Edição de até {t.edicaoCriativos} criativos/mês inclusa
+            </div>}
           </div>
 
           <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
@@ -61504,6 +61512,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       <div style={{padding:"10px 14px",background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,color:"#a16207",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         Valor de gestão. Verba de anúncios não inclusa.
+        {cfg.traffic[trafficKey]&&cfg.traffic[trafficKey].edicaoCriativos>0&&<span style={{color:"#15803d",fontWeight:700}}>· Edição de até {cfg.traffic[trafficKey].edicaoCriativos} criativos/mês inclusa.</span>}
       </div>
       <_ValorModulo price={trafficPrice}/>
     </>}
@@ -61983,9 +61992,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             preco={creativesPrice} blocos={CREATIVES_INCLUSOS}/>}
 
           {trafficKey!=="none"&&cfg.traffic[trafficKey].price>0&&<_ResumoModulo ico="target" titulo={cfg.traffic[trafficKey].label}
-            config="Gestão de campanhas · verba de mídia não inclusa"
+            config={"Gestão de campanhas · verba de mídia não inclusa"+(cfg.traffic[trafficKey].edicaoCriativos>0?" · edição de até "+cfg.traffic[trafficKey].edicaoCriativos+" criativos/mês":"")}
             preco={trafficPrice}
-            blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[])}/>}
+            blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[]).concat(cfg.traffic[trafficKey].edicaoCriativos>0?["Edição de até "+cfg.traffic[trafficKey].edicaoCriativos+" criativos/mês inclusa"]:[])}/>}
 
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
             config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
@@ -62306,7 +62315,7 @@ function _ResumoBox(p){
 function PagePortfolio(props){
   const isMob = props.isMob;
   const [view, setView] = useState("calculadora"); // calculadora | projetos | starter(=Basic 3 Meses) | growth
-  const [modalItem, setModalItem] = useState(null);
+  const [projOpen, setProjOpen] = useState(null); // projeto expandido na aba Projetos
   // Contador de sessao da calculadora: muda a key e forca remontagem, entao
   // toda vez que a aba Calculadora e aberta ela volta zerada.
   const [calcRun, setCalcRun] = useState(0);
@@ -62377,16 +62386,15 @@ function PagePortfolio(props){
       </div>
       {/* Fonte única: PRICE_CONFIG.oneTimeProjects (a mesma da etapa Projetos
           da calculadora). Editar preço/entrega lá reflete aqui na hora. */}
+      {/* Clique NÃO abre drawer lateral (feio, saiu): expande um painel
+          full-width logo abaixo do grid, com os entregáveis. */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
         {PRICE_CONFIG.oneTimeProjects.map(function(pr){
-          return <div key={pr.id} onClick={function(){setModalItem({
-              id:pr.id, icon:pr.ico||"folderkanban", title:pr.label, categoria:"Projeto",
-              long:pr.short||"", entregas:pr.entregas||[],
-              valor:(pr.fixo?"":"a partir de ")+"R$ "+Number(pr.price).toLocaleString("pt-BR"),
-            });}}
-            style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .16s",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}
-            onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor="#c9b3f5";e.currentTarget.style.boxShadow="0 12px 28px rgba(124,58,237,.12)";}}
-            onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e9ebef";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
+          const _aberto = projOpen===pr.id;
+          return <div key={pr.id} onClick={function(){setProjOpen(_aberto?null:pr.id);}}
+            style={{background:_aberto?"linear-gradient(135deg,#faf7ff,#fff)":"#fff",border:"1.5px solid "+(_aberto?"#9F43F6":"#e9ebef"),borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .16s",boxShadow:_aberto?"0 10px 26px rgba(159,67,246,.14)":"0 1px 2px rgba(15,23,42,.03)"}}
+            onMouseEnter={function(e){if(!_aberto){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.borderColor="#c9b3f5";e.currentTarget.style.boxShadow="0 12px 28px rgba(124,58,237,.12)";}}}
+            onMouseLeave={function(e){if(!_aberto){e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e9ebef";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               {pr.brand ? <_PxBrandBox n={pr.brand} box={44} ativo={true}/> : <_PxIcoBox n={pr.ico||"folderkanban"} box={44} estado="ativo"/>}
               <div style={{minWidth:0,flex:1}}>
@@ -62395,13 +62403,64 @@ function PagePortfolio(props){
               </div>
             </div>
             {pr.short&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.5}}>{pr.short}</div>}
-            <div style={{color:"#9aa4b2",fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5,marginTop:"auto"}}>
-              Ver entregáveis
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <div style={{color:_aberto?"#9F43F6":"#9aa4b2",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:5,marginTop:"auto"}}>
+              {_aberto?"Fechar":"Ver entregáveis"}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
+                style={{transform:_aberto?"rotate(-90deg)":"rotate(90deg)",transition:"transform .15s"}}><polyline points="9 18 15 12 9 6"/></svg>
             </div>
           </div>;
         })}
       </div>
+
+      {/* Painel expandido do projeto selecionado */}
+      {(function(){
+        const pr=PRICE_CONFIG.oneTimeProjects.find(function(x){return x.id===projOpen;});
+        if(!pr) return null;
+        return <div style={{background:"#fff",border:"1.5px solid #e9d8fe",borderRadius:18,overflow:"hidden",boxShadow:"0 14px 34px rgba(124,58,237,.10)"}}>
+          <div style={{height:4,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
+          <div style={{padding:isMob?"18px 18px":"24px 28px"}}>
+            <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap",marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+                {pr.brand ? <_PxBrandBox n={pr.brand} box={52} ativo={true}/> : <_PxIcoBox n={pr.ico||"folderkanban"} box={52} estado="ativo"/>}
+                <div style={{minWidth:0}}>
+                  <div style={{color:"#9F43F6",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Projeto</div>
+                  <div style={{color:"#0f172a",fontSize:19,fontWeight:900,letterSpacing:-.5,marginTop:2,lineHeight:1.2}}>{pr.label}</div>
+                  {pr.short&&<div style={{color:"#64748b",fontSize:12.5,marginTop:4,lineHeight:1.5,maxWidth:560}}>{pr.short}</div>}
+                </div>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento</div>
+                <div style={{color:"#0f172a",fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",marginTop:3}}>
+                  {pr.fixo?"":<span style={{fontSize:12,fontWeight:700,color:"#64748b",marginRight:5}}>a partir de</span>}
+                  {"R$ "+Number(pr.price).toLocaleString("pt-BR")}
+                </div>
+              </div>
+            </div>
+            {(pr.entregas||[]).length>0&&<>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:11}}>O que está incluso</div>
+              <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"9px 22px"}}>
+                {pr.entregas.map(function(en,i){
+                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,color:"#334155",fontSize:12.5,lineHeight:1.5}}>
+                    <span style={{width:16,height:16,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                      <_PxIco n="check" size={10} color="#9F43F6" strokeWidth={3.4}/>
+                    </span>
+                    <span>{en}</span>
+                  </div>;
+                })}
+              </div>
+            </>}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:9,marginTop:18,paddingTop:16,borderTop:"1px solid #f1f3f5"}}>
+              <button onClick={function(e){e.stopPropagation();setProjOpen(null);}}
+                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 18px",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:_PORTF_FF}}>Fechar</button>
+              <button onClick={function(e){e.stopPropagation();_portfCopiar(
+                  pr.label+" — "+(pr.fixo?"":"a partir de ")+"R$ "+Number(pr.price).toLocaleString("pt-BR")+"\n"
+                  +(pr.short?pr.short+"\n":"")+"Inclui:\n"
+                  +(pr.entregas||[]).map(function(en){return "- "+en;}).join("\n"));}}
+                style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,.30)"}}>Copiar resumo</button>
+            </div>
+          </div>
+        </div>;
+      })()}
     </section>}
 
     {/* ════ SOLUÇÕES IA ════ */}
@@ -62666,17 +62725,18 @@ function PagePortfolio(props){
       </div>
 
       {/* ── FASE 2 · Plano Growth ── */}
-      <div style={{background:"linear-gradient(135deg,#15171c 0%,#1e2229 55%,#141619 100%)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:16,padding:isMob?"20px 18px":"26px 28px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
-        <div aria-hidden style={{position:"absolute",top:-90,right:-40,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.20) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
+      <div style={{background:"linear-gradient(135deg,#15171c 0%,#1e2229 55%,#141619 100%)",border:"1px solid rgba(159,67,246,0.30)",borderRadius:18,padding:isMob?"24px 20px":"34px 36px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 22px 54px rgba(8,10,14,0.40)"}}>
+        <div aria-hidden style={{position:"absolute",top:-110,right:-50,width:360,height:360,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.26) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
+        <div aria-hidden style={{position:"absolute",bottom:-130,left:-60,width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.10) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1}}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap",marginBottom:18}}>
             <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-              <div style={{width:48,height:48,borderRadius:13,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <_PxIco n="rocket" size={22} color="#e9d5ff"/>
+              <div style={{width:62,height:62,borderRadius:17,background:"linear-gradient(135deg,rgba(159,67,246,0.35),rgba(124,58,237,0.18))",border:"1px solid rgba(159,67,246,0.45)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 10px 26px rgba(159,67,246,0.30)"}}>
+                <_PxIco n="rocket" size={30} color="#e9d5ff"/>
               </div>
               <div style={{minWidth:0}}>
                 <div style={{color:"#c4b5fd",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Fase 2 · contínuo</div>
-                <div style={{fontSize:18,fontWeight:900,letterSpacing:-.5,marginTop:2,display:"inline-flex",alignItems:"center",gap:9}}>
+                <div style={{fontSize:isMob?21:26,fontWeight:900,letterSpacing:-.8,marginTop:2,display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   Plano Growth
                   <span style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pacote topo</span>
                 </div>
@@ -62687,32 +62747,56 @@ function PagePortfolio(props){
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Remuneração</div>
-              <div style={{fontWeight:900,fontSize:24,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,color:"#4ade80"}}>5%</div>
+              <div style={{fontWeight:900,fontSize:isMob?34:44,letterSpacing:-1.6,fontFeatureSettings:"'tnum'",marginTop:2,color:"#4ade80",lineHeight:1,textShadow:"0 0 34px rgba(74,222,128,0.35)"}}>5%</div>
               <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:2}}>das vendas geradas pelo digital</div>
             </div>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14}}>
             {[
-              {ico:"dollar",  l:"Serviço sem mensalidade",     d:"a Pixels entra com o trabalho — remuneração só via comissão"},
-              {ico:"target",  l:"Verba de anúncios da Pixels", d:"investimos nosso próprio orçamento de mídia na operação"},
-              {ico:"trophy",  l:"Risco compartilhado",         d:"só ganhamos quando as vendas acontecem — pele em jogo"},
-              {ico:"users",   l:"Objetivos alinhados",         d:"metas, funil e comercial definidos e acompanhados juntos"},
+              {ico:"dollar",  cor:"#4ade80", l:"Serviço sem mensalidade",
+               d:"O trabalho da Pixels inteiro — estratégia, criativos, tráfego e growth — sem custo fixo mensal. A remuneração vem só da comissão sobre o que vendemos juntos."},
+              {ico:"target",  cor:"#a78bfa", l:"Verba de anúncios da Pixels",
+               d:"Nós investimos o nosso próprio orçamento de mídia na sua operação. Se o anúncio não vende, o prejuízo é nosso — por isso só entramos onde acreditamos."},
+              {ico:"trophy",  cor:"#fbbf24", l:"Risco compartilhado",
+               d:"Pele em jogo de verdade: a Pixels só ganha quando a venda acontece. Nenhum incentivo pra entregar relatório bonito — o único resultado que paga é faturamento."},
+              {ico:"users",   cor:"#38bdf8", l:"Objetivos 100% alinhados",
+               d:"Metas, funil e comercial definidos e acompanhados juntos, com dashboard aberto. Crescemos quando você cresce — literalmente."},
             ].map(function(x){
-              return <div key={x.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:12,padding:"13px 15px",display:"flex",alignItems:"flex-start",gap:11}}>
-                <span style={{width:30,height:30,borderRadius:9,background:"rgba(159,67,246,0.22)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <_PxIco n={x.ico} size={15} color="#e9d5ff"/>
-                </span>
-                <div style={{minWidth:0}}>
-                  <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
-                  <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.45}}>{x.d}</div>
+              return <div key={x.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:16,padding:isMob?"16px 15px":"20px 20px",display:"flex",flexDirection:"column",gap:12,transition:"all .18s"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.borderColor=x.cor+"66";e.currentTarget.style.transform="translateY(-2px)";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.05)";e.currentTarget.style.borderColor="rgba(255,255,255,0.10)";e.currentTarget.style.transform="";}}>
+                <div style={{width:52,height:52,borderRadius:14,background:x.cor+"1f",border:"1px solid "+x.cor+"44",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <_PxIco n={x.ico} size={25} color={x.cor}/>
+                </div>
+                <div>
+                  <div style={{fontSize:15,fontWeight:800,letterSpacing:-.3}}>{x.l}</div>
+                  <div style={{color:"rgba(255,255,255,0.60)",fontSize:12,marginTop:6,lineHeight:1.6}}>{x.d}</div>
                 </div>
               </div>;
             })}
           </div>
 
-          <div style={{marginTop:14,padding:"10px 14px",background:"rgba(159,67,246,0.10)",border:"1px solid rgba(159,67,246,0.28)",borderRadius:10,color:"#e9d5ff",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
-            Acesso exclusivo: o Plano Growth é liberado após a Consultoria Growth — os 3 meses de imersão são o que garantem que a operação está pronta pra escalar com risco compartilhado.
+          {/* Como funciona a remuneração — a régua do modelo */}
+          <div style={{marginTop:14,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+            {[
+              {n:"1", l:"A Pixels investe", d:"serviço completo + verba de anúncios, do nosso bolso"},
+              {n:"2", l:"O digital vende",  d:"vendas rastreadas no funil que montamos juntos"},
+              {n:"3", l:"Dividimos o ganho",d:"5% do que foi vendido pelo digital vai pra Pixels"},
+            ].map(function(x,i){
+              return <div key={x.n} style={{background:"rgba(159,67,246,0.08)",border:"1px solid rgba(159,67,246,0.22)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
+                <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0,boxShadow:"0 4px 12px rgba(159,67,246,0.40)"}}>{x.n}</span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+                  <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+
+          <div style={{marginTop:14,padding:"13px 16px",background:"rgba(159,67,246,0.10)",border:"1px solid rgba(159,67,246,0.28)",borderRadius:12,color:"#e9d5ff",fontSize:12,fontWeight:600,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
+            <_PxIco n="lock" size={16} color="#c4b5fd"/>
+            <span><strong style={{color:"#fff"}}>Acesso exclusivo:</strong> o Plano Growth é liberado após a Consultoria Growth — os 3 meses de imersão garantem que a operação está pronta pra escalar com risco compartilhado.</span>
           </div>
         </div>
       </div>
@@ -62742,7 +62826,6 @@ function PagePortfolio(props){
       </div>
     </section>}
 
-    {modalItem && <_PortfDrawer item={modalItem} onClose={function(){setModalItem(null);}} isMob={isMob}/>}
 
   </div>;
 }
