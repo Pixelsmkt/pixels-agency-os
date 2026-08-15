@@ -47796,6 +47796,45 @@ function useFunnelHistory(clientId, limit){
    Pode editar a qualquer momento. Vê resumo de conversões + histórico.
 ─────────────────────────────────────────────────────────────────── */
 const _MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+/* ─── Valor editável inline ─────────────────────────────────────────
+   O card "Investimento do mês" repetia Serviço Pixels e Mídia que já
+   apareciam na legenda do donut — dois lugares pro mesmo número, e o de
+   cima era só leitura. Agora a legenda É o campo: clica no valor e edita
+   ali mesmo. Salva sozinho (o onChange cai no debounce do auto-save).
+   Guarda a string crua enquanto edita — nunca coage pra número no
+   onChange, senão não dá pra apagar o zero. */
+function _PxValorEdit({value, onChange, accent, label}){
+  const cor=accent||"#7c3aed";
+  const [editando,setEditando]=useState(false);
+  const ref=useRef(null);
+  useEffect(function(){
+    if(editando&&ref.current){ ref.current.focus(); ref.current.select(); }
+  },[editando]);
+  const _fmt="R$ "+Number(value||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(editando){
+    return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fff",border:"1px solid "+cor,borderRadius:8,padding:"1px 8px",boxShadow:"0 0 0 3px "+cor+"1f"}}>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:800}}>R$</span>
+      <input ref={ref} type="number" step="0.01" min="0" placeholder="0,00"
+        value={value}
+        onChange={function(e){ onChange(e.target.value); }}
+        onBlur={function(){ setEditando(false); }}
+        onKeyDown={function(e){ if(e.key==="Enter"||e.key==="Escape") setEditando(false); }}
+        style={{width:88,border:"none",background:"transparent",padding:"4px 0",fontSize:12.5,fontWeight:800,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'",color:"#0f172a"}}/>
+    </span>;
+  }
+  return <button type="button" title={"Editar "+(label||"valor")} onClick={function(){setEditando(true);}}
+    style={{background:"transparent",border:"none",padding:"2px 0",cursor:"text",fontFamily:"inherit",
+      display:"inline-flex",alignItems:"center",gap:5,color:"#0f172a",fontSize:12.5,fontWeight:800,
+      fontFeatureSettings:"'tnum'",borderBottom:"1px dashed #cbd5e1",lineHeight:1.4}}
+    onMouseEnter={function(e){e.currentTarget.style.borderBottomColor=cor;}}
+    onMouseLeave={function(e){e.currentTarget.style.borderBottomColor="#cbd5e1";}}>
+    {_fmt}
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  </button>;
+}
+
 /* ─── Navegador de mês da página Performance ────────────────────────
    Seletor ÚNICO e global: o Funil Digital e o ROI de Marketing liam o
    mesmo período em dois seletores separados, dava pra deixar os dois em
@@ -50959,36 +50998,32 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
             <div style={{padding:"14px 0",borderBottom:"1px solid #f1f3f5"}}>
               <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Investido</div>
               <div style={{color:"#0f172a",fontSize:isMob?24:30,fontWeight:800,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalInvestido)}</div>
-              <div style={{display:"flex",gap:20,flexWrap:"wrap",marginTop:10}}>
-                {/* Ícones no lugar dos quadradinhos de cor: o donut virou um
-                    anel único, então o swatch não codificava mais nada — era
-                    decoração. Aperto de mão = parceria (serviço da Pixels),
-                    megafone = tráfego/anúncios. */}
+              <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,marginTop:8}}>clique nos valores pra editar</div>
+              <div style={{display:"flex",gap:20,flexWrap:"wrap",marginTop:7}}>
+                {/* Ícone único de cédula nos dois: ambas as linhas são GASTO —
+                    o que muda é o destino, e isso o texto já diz. Ícones
+                    diferentes (aperto de mão / megafone) sugeriam categorias
+                    distintas e o desenho não lia bem a 14px. */}
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:22,height:22,borderRadius:7,background:cl.color+"16",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cl.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m11 17 2 2a1 1 0 1 0 3-3"/>
-                      <path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/>
-                      <path d="m21 3 1 11h-2"/>
-                      <path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/>
-                      <path d="M3 4h8"/>
+                  <span style={{width:22,height:22,borderRadius:7,background:"#f4f5f7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.4"/><path d="M6 12h.01M18 12h.01"/>
                     </svg>
                   </span>
                   {_logoPixelsOk
                     ? <img src="/logo-pixels.png" alt="Pixels" onError={function(){_setLogoPixelsOk(false);}}
                         style={{height:14,width:"auto",maxWidth:62,objectFit:"contain",objectPosition:"left center",display:"block"}}/>
                     : <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Serviço Pixels</span>}
-                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(pixelsServ)}</span>
+                  <_PxValorEdit value={pixelsServ} onChange={setPixelsServVal} accent={cl.color} label="serviço da Pixels"/>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:22,height:22,borderRadius:7,background:"#33415514",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m3 11 18-5v12L3 14v-3z"/>
-                      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
+                  <span style={{width:22,height:22,borderRadius:7,background:"#f4f5f7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.4"/><path d="M6 12h.01M18 12h.01"/>
                     </svg>
                   </span>
                   <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Mídia / anúncios</span>
-                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brl(midia)}</span>
+                  <_PxValorEdit value={midia} onChange={setMidiaVal} accent={cl.color} label="mídia / anúncios"/>
                 </div>
               </div>
             </div>
@@ -51082,37 +51117,6 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
         <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Cadastre dados em ao menos 2 meses pra ver a curva.</div>
       </div>}
     </div>
-    {/* Investimento do mês */}
-    <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,padding:"18px 20px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14}}>
-        <div style={{width:28,height:28,borderRadius:9,background:"#f4f5f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Ico n="wallet" size={14} color="#475569"/>
-        </div>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Investimento do mês</div>
-          <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:1}}>Alimenta todos os cálculos acima</div>
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
-        <div>
-          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Mídia / anúncios</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
-            <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
-            <input type="number" step="0.01" min="0" placeholder="0,00" value={midia} onChange={function(e){setMidiaVal(e.target.value);}}
-              style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
-          </div>
-        </div>
-        <div>
-          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Serviço da Pixels</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
-            <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
-            <input type="number" step="0.01" min="0" placeholder="0,00" value={pixelsServ} onChange={function(e){setPixelsServVal(e.target.value);}}
-              style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
-          </div>
-        </div>
-      </div>
-    </div>
-
     {/* Vendas fechadas (tabela) */}
     <div style={{background:"#fff",border:"1px solid #e9ebef",borderRadius:16,overflow:"hidden"}}>
       <div style={{padding:"16px 20px",borderBottom:"1px solid #f1f3f5",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
