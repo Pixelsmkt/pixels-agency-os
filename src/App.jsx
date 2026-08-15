@@ -60224,9 +60224,9 @@ const PORTF_PROJETOS = [
     short:"Posicionamento e início de escala em 90 dias.",
     long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
     entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
-    valor:"R$ 3.500",
+    valor:"R$ 4.000",
     unidade:"/mês",
-    resumo:"Basic 3 Meses — R$ 3.500/mês (total R$ 10.500). Posicionamento, construção de presença e início de escala.",
+    resumo:"Basic 3 Meses: R$ 4.000/mês (total R$ 12.000). Posicionamento, construção de presença e início de escala.",
   },
   {
     id:"landing", icon:"globe",
@@ -62472,13 +62472,13 @@ function PagePortfolio(props){
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
           <div>
             <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Proposta detalhada</div>
-            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Basic — 3 meses</div>
+            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Basic 3 Meses</div>
             <div style={{fontSize:13,opacity:.82,marginTop:6,maxWidth:600,lineHeight:1.5,fontFamily:_PORTF_FF}}>Solução estruturada para posicionamento, construção de presença e início de escala.</div>
           </div>
           <div style={{textAlign:"right",fontFamily:_PORTF_FF}}>
             <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento</div>
-            <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 3.500<span style={{fontSize:14,fontWeight:600,color:"#cbd5e1",marginLeft:2}}>/mês</span></div>
-            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>Total nos 3 meses: R$ 10.500</div>
+            <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 4.000<span style={{fontSize:14,fontWeight:600,color:"#cbd5e1",marginLeft:2}}>/mês</span></div>
+            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>Total nos 3 meses: R$ 12.000</div>
           </div>
         </div>
       </div>
@@ -62646,24 +62646,64 @@ function PagePortfolio(props){
         Consultoria = R$21.000 total (3× R$7.000), Plano = comissão de 5%. */}
     {view==="growth" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
 
-      {/* Header dark — mesma linguagem do Basic */}
-      <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:16,padding:"28px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)",fontFamily:_PORTF_FF}}>
-        <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
-          <div style={{minWidth:0,maxWidth:640}}>
-            <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Jornada em 2 fases</div>
-            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Growth</div>
-            <div style={{fontSize:13,opacity:.82,marginTop:6,lineHeight:1.55,fontFamily:_PORTF_FF}}>
-              Growth não é fazer mais marketing. É encontrar, testar e escalar oportunidades de crescimento em toda a jornada do cliente — estando junto, entendendo a operação e fazendo crescer o digital e o faturamento.
+      {/* Header — ícone-símbolo grande (seta de crescimento) + stepper da
+          jornada com ícone por etapa. Versão anterior era texto + chips
+          minúsculos espremidos na direita ("tosco", user). */}
+      <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 70%,#251a55 100%)",borderRadius:18,padding:isMob?"24px 20px":"32px 34px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 18px 44px rgba(15,23,42,0.35)",fontFamily:_PORTF_FF}}>
+        <div aria-hidden style={{position:"absolute",top:-120,right:-60,width:380,height:380,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.22) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
+        <div aria-hidden style={{position:"absolute",bottom:-140,left:-80,width:340,height:340,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.08) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
+
+        <div style={{position:"relative",zIndex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:isMob?16:22,marginBottom:isMob?20:26}}>
+            {/* Símbolo: seta de crescimento saindo de barras — sucesso/escala */}
+            <div style={{width:isMob?64:76,height:isMob?64:76,borderRadius:20,background:"linear-gradient(135deg,#9F43F6 0%,#7c3aed 60%,#5b21b6 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 14px 34px rgba(159,67,246,0.45), inset 0 1px 0 rgba(255,255,255,0.25)"}}>
+              <svg width={isMob?34:42} height={isMob?34:42} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20v-5"/><path d="M9 20v-9"/><path d="M14 20v-6"/>
+                <path d="M6 9.5 12 4l3 2.8L21 2"/><path d="M16.2 2H21v4.8"/>
+              </svg>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Jornada em 2 fases</div>
+              <div style={{fontSize:isMob?26:34,fontWeight:900,letterSpacing:-1.2,lineHeight:1.05,marginTop:3}}>Growth</div>
+              <div style={{fontSize:isMob?12:13.5,color:"rgba(255,255,255,0.72)",marginTop:7,lineHeight:1.55,maxWidth:760}}>
+                Growth não é fazer mais marketing. É encontrar, testar e escalar oportunidades de crescimento em toda a jornada do cliente — estando junto, entendendo a operação e fazendo crescer o digital e o faturamento.
+              </div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",alignSelf:"center"}}>
-            {GROWTH_JORNADA.map(function(et,i){
-              return <span key={et} style={{display:"inline-flex",alignItems:"center",gap:6}}>
-                <span style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.16)",color:"#e9d5ff",borderRadius:99,padding:"4px 11px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{et}</span>
-                {i<GROWTH_JORNADA.length-1&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>}
-              </span>;
-            })}
-          </div>
+
+          {/* Stepper da jornada — 6 etapas com ícone, ligadas por trilho */}
+          {(function(){
+            const ETAPAS=[
+              {l:"Aquisição",      ico:<g><circle cx="9" cy="7" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 8h6M19 5v6"/></g>},
+              {l:"Conversão",      ico:<g><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></g>},
+              {l:"Venda",          ico:<g><line x1="12" y1="2.5" x2="12" y2="21.5"/><path d="M16.5 5.5H9.8a3.2 3.2 0 0 0 0 6.4h4.4a3.2 3.2 0 0 1 0 6.4H7"/></g>},
+              {l:"Retenção",       ico:<g><path d="M19.5 13.6 12 21l-7.5-7.4A5 5 0 1 1 12 7a5 5 0 1 1 7.5 6.6z"/></g>},
+              {l:"Receita",        ico:<g><path d="M3 17l6-6 4 4 8-8"/><path d="M16 7h5v5"/></g>},
+              {l:"Experimentação", ico:<g><path d="M10 2.5v6L4.5 18a2.4 2.4 0 0 0 2.1 3.5h10.8a2.4 2.4 0 0 0 2.1-3.5L14 8.5v-6"/><path d="M8 2.5h8"/><path d="M7 15h10"/></g>},
+            ];
+            return <div style={{position:"relative"}}>
+              {!isMob&&<div aria-hidden style={{position:"absolute",top:26,left:"8.33%",right:"8.33%",height:2,background:"linear-gradient(90deg,rgba(159,67,246,0.15),rgba(159,67,246,0.55),rgba(74,222,128,0.55))",borderRadius:99}}/>}
+              <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:isMob?"16px 8px":"0"}}>
+                {ETAPAS.map(function(e,i){
+                  const _ultima=i===ETAPAS.length-1;
+                  return <div key={e.l} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:9,position:"relative"}}>
+                    <div style={{width:52,height:52,borderRadius:"50%",
+                      background:_ultima?"linear-gradient(135deg,rgba(74,222,128,0.25),rgba(74,222,128,0.10))":"rgba(255,255,255,0.06)",
+                      border:"1.5px solid "+(_ultima?"rgba(74,222,128,0.55)":"rgba(159,67,246,0.45)"),
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      boxShadow:_ultima?"0 8px 22px rgba(74,222,128,0.25)":"0 6px 18px rgba(159,67,246,0.20)",
+                      backdropFilter:"blur(4px)"}}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={_ultima?"#4ade80":"#d8b4fe"} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{e.ico}</svg>
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{color:"rgba(255,255,255,0.4)",fontSize:8.5,fontWeight:800,letterSpacing:.6,fontFeatureSettings:"'tnum'"}}>{"0"+(i+1)}</div>
+                      <div style={{color:_ultima?"#86efac":"#e9d5ff",fontSize:isMob?10.5:12,fontWeight:800,letterSpacing:-.1,marginTop:1,whiteSpace:"nowrap"}}>{e.l}</div>
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })()}
         </div>
       </div>
 
@@ -62704,6 +62744,44 @@ function PagePortfolio(props){
               </div>
             </div>;
           })}
+        </div>
+
+        {/* CRM Pixels — implantado JÁ na fase 1 e mantido no Plano (fase 2).
+            É ele que rastreia as vendas e permite a comissão transparente. */}
+        <div style={{background:"linear-gradient(135deg,#f5f0fe,#ffffff)",border:"1.5px solid #d8c6f8",borderRadius:16,padding:isMob?"16px 15px":"18px 20px",marginBottom:18}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+            <div style={{width:52,height:52,borderRadius:14,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 22px rgba(159,67,246,0.35)"}}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <ellipse cx="12" cy="5.5" rx="8" ry="3"/>
+                <path d="M4 5.5V12c0 1.66 3.58 3 8 3s8-1.34 8-3V5.5"/>
+                <path d="M4 12v6.5c0 1.66 3.58 3 8 3s8-1.34 8-3V12"/>
+              </svg>
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{color:"#0f172a",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Implantação do CRM Pixels</span>
+                <span style={{background:"#9F43F6",color:"#fff",borderRadius:99,padding:"2.5px 9px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Já na fase 1</span>
+              </div>
+              <div style={{color:"#64748b",fontSize:12.5,marginTop:5,lineHeight:1.6,maxWidth:620}}>
+                Todo lead que o marketing gera cai direto num funil de vendas organizado: histórico de cada contato, etapa a etapa, do primeiro clique ao fechamento. Marketing e comercial olhando pro mesmo número — e é esse rastreio que torna possível a comissão transparente do Plano Growth.
+              </div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:"7px 18px",marginTop:13,paddingTop:13,borderTop:"1px solid #e9dcfb"}}>
+            {[
+              "Nenhum lead perdido no WhatsApp ou em planilha",
+              "Taxas de conversão visíveis em cada etapa do funil",
+              "Histórico completo de cada cliente em um lugar só",
+              "Base pronta pro cálculo da comissão na fase 2",
+            ].map(function(b,i){
+              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9,color:"#334155",fontSize:12,lineHeight:1.5}}>
+                <span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                  <_PxIco n="check" size={9} color="#9F43F6" strokeWidth={3.4}/>
+                </span>
+                <span>{b}</span>
+              </div>;
+            })}
+          </div>
         </div>
 
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:12}}>Tudo de Growth incluso</div>
@@ -62747,7 +62825,7 @@ function PagePortfolio(props){
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Remuneração</div>
-              <div style={{fontWeight:900,fontSize:isMob?34:44,letterSpacing:-1.6,fontFeatureSettings:"'tnum'",marginTop:2,color:"#4ade80",lineHeight:1,textShadow:"0 0 34px rgba(74,222,128,0.35)"}}>5%</div>
+              <div style={{fontWeight:900,fontSize:isMob?34:44,letterSpacing:-1.6,fontFeatureSettings:"'tnum'",marginTop:2,color:"#4ade80",lineHeight:1}}>5%</div>
               <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:2}}>das vendas geradas pelo digital</div>
             </div>
           </div>
@@ -62761,7 +62839,7 @@ function PagePortfolio(props){
               {ico:"trophy",  cor:"#fbbf24", l:"Risco compartilhado",
                d:"Pele em jogo de verdade: a Pixels só ganha quando a venda acontece. Nenhum incentivo pra entregar relatório bonito — o único resultado que paga é faturamento."},
               {ico:"users",   cor:"#38bdf8", l:"Objetivos 100% alinhados",
-               d:"Metas, funil e comercial definidos e acompanhados juntos, com dashboard aberto. Crescemos quando você cresce — literalmente."},
+               d:"Metas, funil e comercial acompanhados juntos no CRM Pixels e no dashboard aberto — que seguem inclusos no plano. Crescemos quando você cresce — literalmente."},
             ].map(function(x){
               return <div key={x.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:16,padding:isMob?"16px 15px":"20px 20px",display:"flex",flexDirection:"column",gap:12,transition:"all .18s"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.borderColor=x.cor+"66";e.currentTarget.style.transform="translateY(-2px)";}}
@@ -62781,7 +62859,7 @@ function PagePortfolio(props){
           <div style={{marginTop:14,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
             {[
               {n:"1", l:"A Pixels investe", d:"serviço completo + verba de anúncios, do nosso bolso"},
-              {n:"2", l:"O digital vende",  d:"vendas rastreadas no funil que montamos juntos"},
+              {n:"2", l:"O digital vende",  d:"vendas rastreadas no CRM Pixels implantado na consultoria"},
               {n:"3", l:"Dividimos o ganho",d:"5% do que foi vendido pelo digital vai pra Pixels"},
             ].map(function(x,i){
               return <div key={x.n} style={{background:"rgba(159,67,246,0.08)",border:"1px solid rgba(159,67,246,0.22)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
@@ -62801,6 +62879,133 @@ function PagePortfolio(props){
         </div>
       </div>
 
+      {/* ══ O COCKPIT DO PLANO GROWTH — dashboard ilustrativo ══
+          Pedido do user: "algo mais gráfico, tipo um dashboard de empresa
+          digital moderno e avançado". Dados FICTÍCIOS (rotulados) — a ideia é
+          o cliente VER o que vai acompanhar ao vivo quando entrar no plano. */}
+      <div style={{background:"linear-gradient(135deg,#0b0d11 0%,#12151b 60%,#0b0d11 100%)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:18,padding:isMob?"22px 18px":"30px 34px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 22px 54px rgba(8,10,14,0.45)"}}>
+        <div aria-hidden style={{position:"absolute",top:-120,left:"30%",width:420,height:420,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.07) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
+
+        <div style={{position:"relative",zIndex:1}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:22}}>
+            <div style={{display:"flex",alignItems:"center",gap:13}}>
+              <div style={{width:44,height:44,borderRadius:12,background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.30)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <_PxIco n="chart" size={21} color="#4ade80"/>
+              </div>
+              <div>
+                <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Dentro do Plano Growth</div>
+                <div style={{fontSize:isMob?17:20,fontWeight:900,letterSpacing:-.5,marginTop:2}}>O cockpit que o cliente acompanha ao vivo</div>
+              </div>
+            </div>
+            <span style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:99,padding:"5px 12px",color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+              <span style={{width:6,height:6,borderRadius:"50%",background:"#4ade80"}}/>
+              dados ilustrativos
+            </span>
+          </div>
+
+          {/* KPIs */}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:14}}>
+            {[
+              {l:"Faturamento pelo digital", v:"R$ 148k", d:"+32% vs mês anterior", cor:"#4ade80", up:true},
+              {l:"Vendas no mês",            v:"37",      d:"+9 vs mês anterior",   cor:"#38bdf8", up:true},
+              {l:"Retorno por R$ 1",         v:"R$ 4,10", d:"verba + serviço",      cor:"#a78bfa", up:true},
+              {l:"Comissão Pixels (5%)",     v:"R$ 7,4k", d:"só porque vendeu",     cor:"#fbbf24", up:null},
+            ].map(function(k){
+              return <div key={k.l} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"14px 16px"}}>
+                <div style={{color:"rgba(255,255,255,0.45)",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.3}}>{k.l}</div>
+                <div style={{color:"#fff",fontSize:isMob?20:24,fontWeight:900,letterSpacing:-.8,marginTop:6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
+                <div style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:7,color:k.cor,fontSize:10.5,fontWeight:700}}>
+                  {k.up&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>}
+                  {k.d}
+                </div>
+              </div>;
+            })}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:12}}>
+            {/* Curva de faturamento — 8 meses ilustrativos */}
+            <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"16px 18px"}}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:10}}>
+                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Faturamento pelo digital</div>
+                <div style={{color:"#4ade80",fontSize:11.5,fontWeight:800}}>consultoria → plano</div>
+              </div>
+              {(function(){
+                const W=560,H=190,padL=8,padR=8,padT=14,padB=24;
+                const vals=[38,44,52,61,78,96,121,148];   // k — ilustrativo
+                const labs=["m1","m2","m3","m4","m5","m6","m7","m8"];
+                const max=160, xs=W-padL-padR, ys=H-padT-padB;
+                const pts=vals.map(function(v,i){
+                  return [padL+(i/(vals.length-1))*xs, padT+ys-(v/max)*ys];
+                });
+                const poly=pts.map(function(p){return p[0].toFixed(1)+","+p[1].toFixed(1);}).join(" ");
+                const xDiv=padL+(2/(vals.length-1))*xs;  // fim da consultoria (m3)
+                return <svg viewBox={"0 0 "+W+" "+H} width="100%" preserveAspectRatio="none" style={{height:isMob?140:180,display:"block"}}>
+                  <defs>
+                    <linearGradient id="pxCockFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4ade80" stopOpacity="0.28"/>
+                      <stop offset="100%" stopColor="#4ade80" stopOpacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  {[0.25,0.5,0.75].map(function(f,i){
+                    const y=padT+ys*(1-f);
+                    return <line key={i} x1={padL} y1={y} x2={W-padR} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>;
+                  })}
+                  {/* divisa consultoria/plano */}
+                  <line x1={xDiv} y1={padT-4} x2={xDiv} y2={padT+ys} stroke="rgba(167,139,250,0.5)" strokeWidth="1.4" strokeDasharray="4 4"/>
+                  <polygon points={poly+" "+pts[pts.length-1][0]+","+(padT+ys)+" "+pts[0][0]+","+(padT+ys)} fill="url(#pxCockFill)"/>
+                  <polyline points={poly} fill="none" stroke="#4ade80" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+                  {pts.map(function(p,i){
+                    const last=i===pts.length-1;
+                    return <g key={i}>
+                      <circle cx={p[0]} cy={p[1]} r={last?4.6:3} fill="#0b0d11" stroke="#4ade80" strokeWidth={last?2.8:2} vectorEffect="non-scaling-stroke"/>
+                      <text x={p[0]} y={H-7} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.35)" fontWeight="700">{labs[i]}</text>
+                    </g>;
+                  })}
+                  <text x={pts[7][0]-6} y={pts[7][1]-10} textAnchor="end" fontSize="12" fill="#4ade80" fontWeight="800">R$ 148k</text>
+                  <text x={xDiv+6} y={padT+8} fontSize="9.5" fill="rgba(167,139,250,0.85)" fontWeight="800">PLANO GROWTH →</text>
+                </svg>;
+              })()}
+            </div>
+
+            {/* Funil + comissão */}
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"16px 18px",flex:1}}>
+                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:12}}>Funil do mês</div>
+                {[
+                  {l:"Leads",         v:412, pct:100, cor:"#38bdf8"},
+                  {l:"Oportunidades", v:118, pct:62,  cor:"#a78bfa"},
+                  {l:"Vendas",        v:37,  pct:30,  cor:"#4ade80"},
+                ].map(function(f){
+                  return <div key={f.l} style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                      <span style={{color:"rgba(255,255,255,0.65)",fontSize:11,fontWeight:700}}>{f.l}</span>
+                      <span style={{color:"#fff",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{f.v}</span>
+                    </div>
+                    <div style={{height:9,borderRadius:99,background:"rgba(255,255,255,0.06)",overflow:"hidden"}}>
+                      <div style={{width:f.pct+"%",height:"100%",borderRadius:99,background:f.cor}}/>
+                    </div>
+                  </div>;
+                })}
+              </div>
+              <div style={{background:"rgba(74,222,128,0.07)",border:"1px solid rgba(74,222,128,0.25)",borderRadius:14,padding:"14px 18px"}}>
+                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Divisão do resultado</div>
+                <div style={{display:"flex",height:12,borderRadius:99,overflow:"hidden",background:"rgba(255,255,255,0.06)",marginTop:10}}>
+                  <div style={{width:"95%",background:"rgba(255,255,255,0.28)"}}/>
+                  <div style={{width:"5%",background:"#4ade80"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
+                  <span style={{color:"rgba(255,255,255,0.65)",fontSize:10.5,fontWeight:700}}>Cliente fica com 95%</span>
+                  <span style={{color:"#4ade80",fontSize:10.5,fontWeight:800}}>Pixels 5%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{marginTop:14,color:"rgba(255,255,255,0.35)",fontSize:10.5,fontWeight:600,lineHeight:1.5}}>
+            Números ilustrativos, pra mostrar o formato do acompanhamento — no plano, o cliente vê os dele em tempo real: faturamento, funil, retorno por real investido e a comissão calculada na transparência.
+          </div>
+        </div>
+      </div>
       {/* CTA copiar resumo */}
       <div style={{display:"flex",justifyContent:"flex-end",fontFamily:_PORTF_FF}}>
         <button onClick={function(){_portfCopiar([
@@ -62810,12 +63015,14 @@ function PagePortfolio(props){
             "",
             "FASE 1 · Consultoria Growth (3 meses) — R$ 21.000 (R$ 7.000/mês)",
             "Basic completo: 4 artes + 4 vídeos/mês, acompanhamento quinzenal, dashboard.",
+            "Implantação do CRM Pixels já na fase 1: funil de vendas organizado, histórico de cada lead, marketing e comercial no mesmo número.",
             "Tudo de Growth incluso:",
           ].concat(GROWTH_BLOCOS.map(function(b){return "- "+b.titulo+": "+b.itens.join("; ");}))
            .concat([
             "",
             "FASE 2 · Plano Growth (após a consultoria)",
             "Serviço sem mensalidade + verba de anúncios da Pixels.",
+            "CRM Pixels segue incluso — é nele que as vendas do digital são rastreadas pra comissão transparente.",
             "Remuneração: 5% das vendas geradas pelo digital.",
             "Risco compartilhado e objetivos alinhados.",
           ]).join("\n"));}}
