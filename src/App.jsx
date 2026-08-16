@@ -62746,49 +62746,93 @@ function PagePortfolio(props){
           })}
         </div>
 
-        {/* CRM Pixels — implantado JÁ na fase 1 e mantido no Plano (fase 2).
-            É ele que rastreia as vendas e permite a comissão transparente. */}
-        <div style={{background:"linear-gradient(135deg,#f5f0fe,#ffffff)",border:"1.5px solid #d8c6f8",borderRadius:16,padding:isMob?"16px 15px":"18px 20px",marginBottom:18}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
-            <div style={{width:52,height:52,borderRadius:14,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 22px rgba(159,67,246,0.35)"}}>
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                <ellipse cx="12" cy="5.5" rx="8" ry="3"/>
-                <path d="M4 5.5V12c0 1.66 3.58 3 8 3s8-1.34 8-3V5.5"/>
-                <path d="M4 12v6.5c0 1.66 3.58 3 8 3s8-1.34 8-3V12"/>
-              </svg>
-            </div>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{color:"#0f172a",fontSize:15,fontWeight:900,letterSpacing:-.3}}>Implantação do CRM Pixels</span>
-                <span style={{background:"#9F43F6",color:"#fff",borderRadius:99,padding:"2.5px 9px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Já na fase 1</span>
-              </div>
-              <div style={{color:"#64748b",fontSize:12.5,marginTop:5,lineHeight:1.6,maxWidth:620}}>
-                Todo lead que o marketing gera cai direto num funil de vendas organizado: histórico de cada contato, etapa a etapa, do primeiro clique ao fechamento. Marketing e comercial olhando pro mesmo número — e é esse rastreio que torna possível a comissão transparente do Plano Growth.
-              </div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:"7px 18px",marginTop:13,paddingTop:13,borderTop:"1px solid #e9dcfb"}}>
-            {[
-              "Nenhum lead perdido no WhatsApp ou em planilha",
-              "Taxas de conversão visíveis em cada etapa do funil",
-              "Histórico completo de cada cliente em um lugar só",
-              "Base pronta pro cálculo da comissão na fase 2",
-            ].map(function(b,i){
-              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9,color:"#334155",fontSize:12,lineHeight:1.5}}>
-                <span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                  <_PxIco n="check" size={9} color="#9F43F6" strokeWidth={3.4}/>
-                </span>
-                <span>{b}</span>
-              </div>;
-            })}
-          </div>
-        </div>
-
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:12}}>Tudo de Growth incluso</div>
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
           {GROWTH_BLOCOS.map(function(b){
             return <_PortfIncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor="#7c3aed" itens={b.itens}/>;
           })}
+        </div>
+
+        {/* ── CRM PIXELS — fecho da fase 1 ─────────────────────────────
+            Painel escuro dentro do card claro (destaque deliberado). Explica
+            o que É um CRM em linguagem de dono de empresa + funil ilustrativo
+            em mini-kanban. Sem glow — mesma regra do cockpit. */}
+        <div style={{marginTop:18,background:"linear-gradient(150deg,#170f2b 0%,#221342 60%,#190f31 100%)",border:"1px solid rgba(159,67,246,0.35)",borderRadius:16,padding:isMob?"20px 16px":"24px 26px",color:"#fff",overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+              <div style={{width:54,height:54,borderRadius:15,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.25)"}}>
+                <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 4h18l-6.5 7.5V19l-5 2v-9.5z"/>
+                </svg>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:isMob?18:21,fontWeight:900,letterSpacing:-.5,lineHeight:1.1}}>CRM Pixels</div>
+                <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:3}}>O comercial inteiro numa tela só</div>
+              </div>
+            </div>
+            <span style={{background:"rgba(255,255,255,0.10)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:99,padding:"5px 13px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#e9d5ff",whiteSpace:"nowrap"}}>
+            Implantado já na fase 1
+            </span>
+          </div>
+
+          <div style={{color:"rgba(255,255,255,0.75)",fontSize:isMob?12:13,lineHeight:1.65,maxWidth:720,marginBottom:16}}>
+            CRM é o sistema que organiza a área comercial: <strong style={{color:"#fff"}}>cada pessoa que chega vira um card num funil visual</strong>, andando etapa por etapa — do primeiro contato ao fechamento. Em vez das vendas viverem na memória e no WhatsApp de cada vendedor, o dono enxerga a operação inteira: quantos negócios estão abertos, quanto valem e onde estão travando.
+          </div>
+
+          {/* Funil ilustrativo — mini-kanban explica o CRM sem precisar de texto */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:isMob?6:10,marginBottom:16}}>
+            {[
+              {l:"Novo lead",   n:8, cards:3, cor:"#60a5fa"},
+              {l:"Em conversa", n:5, cards:2, cor:"#a78bfa"},
+              {l:"Proposta",    n:3, cards:2, cor:"#fbbf24"},
+              {l:"Fechado",     n:2, cards:1, cor:"#34d399"},
+            ].map(function(c,i){
+              return <div key={c.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",borderTop:"3px solid "+c.cor,borderRadius:11,padding:isMob?"9px 8px":"11px 12px"}}>
+                <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:6,marginBottom:8}}>
+                  <span style={{color:"rgba(255,255,255,0.65)",fontSize:isMob?9:10.5,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.l}</span>
+                  <span style={{color:"#fff",fontSize:isMob?11:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{c.n}</span>
+                </div>
+                {Array.from({length:c.cards}).map(function(_,j){
+                  return <div key={j} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:6,height:isMob?14:18,marginBottom:5,display:"flex",alignItems:"center",gap:5,padding:"0 6px"}}>
+                    <span style={{width:5,height:5,borderRadius:"50%",background:c.cor,flexShrink:0,opacity:.9}}/>
+                    <span style={{flex:1,height:3,borderRadius:99,background:"rgba(255,255,255,0.14)"}}/>
+                  </div>;
+                })}
+              </div>;
+            })}
+          </div>
+
+          {/* O que o dono ganha */}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+            {[
+              {cor:"#60a5fa", l:"Visão de dono",
+               d:"Quantos negócios abertos, quanto valem e a previsão do mês — num relance, sem depender de ninguém pra te contar.",
+               ico:<g><circle cx="12" cy="12" r="3.2"/><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/></g>},
+              {cor:"#a78bfa", l:"Nenhum lead esquecido",
+               d:"Todo contato que o anúncio gera entra no funil na hora — nada morre no WhatsApp nem some em planilha.",
+               ico:<g><path d="M12 21s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7.6 4.5 4.5 0 0 1 19.5 11c0 5.4-7.5 10-7.5 10z"/><path d="M9 11.2l2 2 4-4"/></g>},
+              {cor:"#fbbf24", l:"Onde trava, aparece",
+               d:"A etapa em que os clientes desistem fica visível — aí dá pra corrigir a oferta, o preço ou o atendimento com dado, não com achismo.",
+               ico:<g><path d="M3 4h18l-6.5 7.5V19l-5 2v-9.5z"/></g>},
+              {cor:"#34d399", l:"Base da comissão de 5%",
+               d:"Cada venda fica registrada com origem e valor — é daqui que sai o cálculo transparente do Plano Growth.",
+               ico:<g><line x1="12" y1="2.5" x2="12" y2="21.5"/><path d="M16.5 5.5H9.8a3.2 3.2 0 0 0 0 6.4h4.4a3.2 3.2 0 0 1 0 6.4H7"/></g>},
+            ].map(function(b){
+              return <div key={b.l} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.09)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
+                <span style={{width:38,height:38,borderRadius:11,background:b.cor+"1c",border:"1px solid "+b.cor+"3d",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={b.cor} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{b.ico}</svg>
+                </span>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-.2}}>{b.l}</div>
+                  <div style={{color:"rgba(255,255,255,0.58)",fontSize:11.5,marginTop:4,lineHeight:1.55}}>{b.d}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+
+          <div style={{marginTop:13,color:"rgba(255,255,255,0.45)",fontSize:11,fontWeight:600,lineHeight:1.5}}>
+            Implantado e configurado durante a consultoria — e segue seu no Plano Growth, sem custo à parte.
+          </div>
         </div>
       </div>
 
@@ -62880,130 +62924,137 @@ function PagePortfolio(props){
       </div>
 
       {/* ══ O COCKPIT DO PLANO GROWTH — dashboard ilustrativo ══
-          Pedido do user: "algo mais gráfico, tipo um dashboard de empresa
-          digital moderno e avançado". Dados FICTÍCIOS (rotulados) — a ideia é
-          o cliente VER o que vai acompanhar ao vivo quando entrar no plano. */}
-      <div style={{background:"linear-gradient(135deg,#0b0d11 0%,#12151b 60%,#0b0d11 100%)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:18,padding:isMob?"22px 18px":"30px 34px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 22px 54px rgba(8,10,14,0.45)"}}>
-        <div aria-hidden style={{position:"absolute",top:-120,left:"30%",width:420,height:420,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.07) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
+          v2: gráfico de COLUNAS em divs (o de linha em SVG esticava os rótulos
+          junto com a curva — preserveAspectRatio:none deforma texto). Sem
+          glow/neon: superfície chapada, cor só nos dados. Fase codificada por
+          cor: consultoria em cinza, plano em verde. Dados FICTÍCIOS rotulados. */}
+      <div style={{background:"#0e1013",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,padding:isMob?"22px 18px":"28px 32px",color:"#fff",fontFamily:_PORTF_FF}}>
 
-        <div style={{position:"relative",zIndex:1}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:22}}>
-            <div style={{display:"flex",alignItems:"center",gap:13}}>
-              <div style={{width:44,height:44,borderRadius:12,background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.30)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <_PxIco n="chart" size={21} color="#4ade80"/>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:40,height:40,borderRadius:11,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.10)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n="chart" size={19} color="#94a3b8"/>
+            </div>
+            <div>
+              <div style={{color:"rgba(255,255,255,0.40)",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Dentro do Plano Growth</div>
+              <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:-.4,marginTop:2}}>O cockpit que o cliente acompanha ao vivo</div>
+            </div>
+          </div>
+          <span style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:8,padding:"5px 11px",color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>
+            dados ilustrativos
+          </span>
+        </div>
+
+        {/* KPIs — planos, sem brilho; delta pequeno e discreto */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:12}}>
+          {[
+            {l:"Faturamento pelo digital", v:"R$ 148k", d:"+32% no mês"},
+            {l:"Vendas no mês",            v:"37",      d:"+9 no mês"},
+            {l:"Retorno por R$ 1",         v:"R$ 4,10", d:"verba + serviço"},
+            {l:"Comissão Pixels · 5%",     v:"R$ 7,4k", d:"só porque vendeu"},
+          ].map(function(k,i){
+            return <div key={k.l} style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"15px 17px"}}>
+              <div style={{color:"rgba(255,255,255,0.42)",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k.l}</div>
+              <div style={{color:"#fff",fontSize:isMob?20:25,fontWeight:800,letterSpacing:-.8,marginTop:7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
+              <div style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:7,color:i<2?"#34d399":"rgba(255,255,255,0.40)",fontSize:10.5,fontWeight:600}}>
+                {i<2&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>}
+                {k.d}
               </div>
-              <div>
-                <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Dentro do Plano Growth</div>
-                <div style={{fontSize:isMob?17:20,fontWeight:900,letterSpacing:-.5,marginTop:2}}>O cockpit que o cliente acompanha ao vivo</div>
+            </div>;
+          })}
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:10}}>
+
+          {/* ── Colunas de faturamento — divs, sem SVG, sem distorção ── */}
+          <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:isMob?"16px 15px":"18px 20px",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:16}}>
+              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Faturamento pelo digital · mês a mês</div>
+              <div style={{display:"inline-flex",alignItems:"center",gap:14}}>
+                <span style={{display:"inline-flex",alignItems:"center",gap:6,color:"rgba(255,255,255,0.50)",fontSize:10.5,fontWeight:600}}>
+                  <span style={{width:9,height:9,borderRadius:3,background:"#3d4450"}}/>Consultoria
+                </span>
+                <span style={{display:"inline-flex",alignItems:"center",gap:6,color:"rgba(255,255,255,0.50)",fontSize:10.5,fontWeight:600}}>
+                  <span style={{width:9,height:9,borderRadius:3,background:"#34d399"}}/>Plano Growth
+                </span>
               </div>
             </div>
-            <span style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:99,padding:"5px 12px",color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
-              <span style={{width:6,height:6,borderRadius:"50%",background:"#4ade80"}}/>
-              dados ilustrativos
-            </span>
-          </div>
-
-          {/* KPIs */}
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:14}}>
-            {[
-              {l:"Faturamento pelo digital", v:"R$ 148k", d:"+32% vs mês anterior", cor:"#4ade80", up:true},
-              {l:"Vendas no mês",            v:"37",      d:"+9 vs mês anterior",   cor:"#38bdf8", up:true},
-              {l:"Retorno por R$ 1",         v:"R$ 4,10", d:"verba + serviço",      cor:"#a78bfa", up:true},
-              {l:"Comissão Pixels (5%)",     v:"R$ 7,4k", d:"só porque vendeu",     cor:"#fbbf24", up:null},
-            ].map(function(k){
-              return <div key={k.l} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"14px 16px"}}>
-                <div style={{color:"rgba(255,255,255,0.45)",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.3}}>{k.l}</div>
-                <div style={{color:"#fff",fontSize:isMob?20:24,fontWeight:900,letterSpacing:-.8,marginTop:6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
-                <div style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:7,color:k.cor,fontSize:10.5,fontWeight:700}}>
-                  {k.up&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>}
-                  {k.d}
-                </div>
-              </div>;
-            })}
-          </div>
-
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:12}}>
-            {/* Curva de faturamento — 8 meses ilustrativos */}
-            <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"16px 18px"}}>
-              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,marginBottom:10}}>
-                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Faturamento pelo digital</div>
-                <div style={{color:"#4ade80",fontSize:11.5,fontWeight:800}}>consultoria → plano</div>
-              </div>
-              {(function(){
-                const W=560,H=190,padL=8,padR=8,padT=14,padB=24;
-                const vals=[38,44,52,61,78,96,121,148];   // k — ilustrativo
-                const labs=["m1","m2","m3","m4","m5","m6","m7","m8"];
-                const max=160, xs=W-padL-padR, ys=H-padT-padB;
-                const pts=vals.map(function(v,i){
-                  return [padL+(i/(vals.length-1))*xs, padT+ys-(v/max)*ys];
-                });
-                const poly=pts.map(function(p){return p[0].toFixed(1)+","+p[1].toFixed(1);}).join(" ");
-                const xDiv=padL+(2/(vals.length-1))*xs;  // fim da consultoria (m3)
-                return <svg viewBox={"0 0 "+W+" "+H} width="100%" preserveAspectRatio="none" style={{height:isMob?140:180,display:"block"}}>
-                  <defs>
-                    <linearGradient id="pxCockFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#4ade80" stopOpacity="0.28"/>
-                      <stop offset="100%" stopColor="#4ade80" stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  {[0.25,0.5,0.75].map(function(f,i){
-                    const y=padT+ys*(1-f);
-                    return <line key={i} x1={padL} y1={y} x2={W-padR} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>;
-                  })}
-                  {/* divisa consultoria/plano */}
-                  <line x1={xDiv} y1={padT-4} x2={xDiv} y2={padT+ys} stroke="rgba(167,139,250,0.5)" strokeWidth="1.4" strokeDasharray="4 4"/>
-                  <polygon points={poly+" "+pts[pts.length-1][0]+","+(padT+ys)+" "+pts[0][0]+","+(padT+ys)} fill="url(#pxCockFill)"/>
-                  <polyline points={poly} fill="none" stroke="#4ade80" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
-                  {pts.map(function(p,i){
-                    const last=i===pts.length-1;
-                    return <g key={i}>
-                      <circle cx={p[0]} cy={p[1]} r={last?4.6:3} fill="#0b0d11" stroke="#4ade80" strokeWidth={last?2.8:2} vectorEffect="non-scaling-stroke"/>
-                      <text x={p[0]} y={H-7} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.35)" fontWeight="700">{labs[i]}</text>
-                    </g>;
-                  })}
-                  <text x={pts[7][0]-6} y={pts[7][1]-10} textAnchor="end" fontSize="12" fill="#4ade80" fontWeight="800">R$ 148k</text>
-                  <text x={xDiv+6} y={padT+8} fontSize="9.5" fill="rgba(167,139,250,0.85)" fontWeight="800">PLANO GROWTH →</text>
-                </svg>;
-              })()}
-            </div>
-
-            {/* Funil + comissão */}
-            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"16px 18px",flex:1}}>
-                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:12}}>Funil do mês</div>
-                {[
-                  {l:"Leads",         v:412, pct:100, cor:"#38bdf8"},
-                  {l:"Oportunidades", v:118, pct:62,  cor:"#a78bfa"},
-                  {l:"Vendas",        v:37,  pct:30,  cor:"#4ade80"},
-                ].map(function(f){
-                  return <div key={f.l} style={{marginBottom:10}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
-                      <span style={{color:"rgba(255,255,255,0.65)",fontSize:11,fontWeight:700}}>{f.l}</span>
-                      <span style={{color:"#fff",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{f.v}</span>
+            {(function(){
+              const DATA=[
+                {m:"m1",v:38},{m:"m2",v:44},{m:"m3",v:52},          // consultoria
+                {m:"m4",v:61},{m:"m5",v:78},{m:"m6",v:96},{m:"m7",v:121},{m:"m8",v:148}, // plano
+              ];
+              const MAX=160, H=isMob?150:190;
+              return <div style={{flex:1,display:"flex",alignItems:"flex-end",gap:isMob?7:12,height:H,borderBottom:"1px solid rgba(255,255,255,0.08)",paddingBottom:0,position:"relative"}}>
+                {/* grade recessiva */}
+                {[0.33,0.66].map(function(f){
+                  return <div key={f} aria-hidden style={{position:"absolute",left:0,right:0,bottom:H*f,height:1,background:"rgba(255,255,255,0.045)",pointerEvents:"none"}}/>;
+                })}
+                {DATA.map(function(d,i){
+                  const _plano=i>=3;
+                  const _last=i===DATA.length-1;
+                  const hpx=Math.max(10, Math.round((d.v/MAX)*(H-30)));
+                  return <div key={d.m} title={"R$ "+d.v+"k"} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:6,height:"100%"}}>
+                    <div style={{color:_last?"#fff":"rgba(255,255,255,0.35)",fontSize:_last?12:10,fontWeight:_last?800:600,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+                      {_last?"R$ 148k":d.v}
                     </div>
-                    <div style={{height:9,borderRadius:99,background:"rgba(255,255,255,0.06)",overflow:"hidden"}}>
-                      <div style={{width:f.pct+"%",height:"100%",borderRadius:99,background:f.cor}}/>
-                    </div>
+                    <div style={{width:"100%",maxWidth:44,height:hpx,borderRadius:"6px 6px 0 0",
+                      background:_plano?"#34d399":"#3d4450",
+                      opacity:_plano?(_last?1:0.88):1,
+                      transition:"height .3s"}}/>
                   </div>;
                 })}
-              </div>
-              <div style={{background:"rgba(74,222,128,0.07)",border:"1px solid rgba(74,222,128,0.25)",borderRadius:14,padding:"14px 18px"}}>
-                <div style={{color:"rgba(255,255,255,0.55)",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Divisão do resultado</div>
-                <div style={{display:"flex",height:12,borderRadius:99,overflow:"hidden",background:"rgba(255,255,255,0.06)",marginTop:10}}>
-                  <div style={{width:"95%",background:"rgba(255,255,255,0.28)"}}/>
-                  <div style={{width:"5%",background:"#4ade80"}}/>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
-                  <span style={{color:"rgba(255,255,255,0.65)",fontSize:10.5,fontWeight:700}}>Cliente fica com 95%</span>
-                  <span style={{color:"#4ade80",fontSize:10.5,fontWeight:800}}>Pixels 5%</span>
-                </div>
-              </div>
+              </div>;
+            })()}
+            <div style={{display:"flex",gap:isMob?7:12,marginTop:8}}>
+              {["m1","m2","m3","m4","m5","m6","m7","m8"].map(function(m,i){
+                return <div key={m} style={{flex:1,textAlign:"center",color:i===7?"rgba(255,255,255,0.70)":"rgba(255,255,255,0.30)",fontSize:10,fontWeight:i===7?700:600}}>{m}</div>;
+              })}
+            </div>
+            <div style={{color:"rgba(255,255,255,0.35)",fontSize:10.5,fontWeight:500,marginTop:12,lineHeight:1.5}}>
+              Os 3 primeiros meses são a Consultoria estruturando a base — o salto vem quando o Plano entra com verba e otimização contínua.
             </div>
           </div>
 
-          <div style={{marginTop:14,color:"rgba(255,255,255,0.35)",fontSize:10.5,fontWeight:600,lineHeight:1.5}}>
-            Números ilustrativos, pra mostrar o formato do acompanhamento — no plano, o cliente vê os dele em tempo real: faturamento, funil, retorno por real investido e a comissão calculada na transparência.
+          {/* ── Funil + divisão ── */}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"17px 19px",flex:1}}>
+              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Funil do mês</div>
+              {[
+                {l:"Leads",         v:"412", pct:100, cor:"#60a5fa", conv:null},
+                {l:"Oportunidades", v:"118", pct:62,  cor:"#a78bfa", conv:"29%"},
+                {l:"Vendas",        v:"37",  pct:30,  cor:"#34d399", conv:"31%"},
+              ].map(function(f,i){
+                return <div key={f.l} style={{marginBottom:i<2?13:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+                    <span style={{color:"rgba(255,255,255,0.60)",fontSize:11.5,fontWeight:600}}>
+                      {f.l}{f.conv&&<span style={{color:"rgba(255,255,255,0.32)",fontSize:10,fontWeight:600,marginLeft:7}}>{f.conv} da etapa anterior</span>}
+                    </span>
+                    <span style={{color:"#fff",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{f.v}</span>
+                  </div>
+                  <div style={{height:8,borderRadius:99,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
+                    <div style={{width:f.pct+"%",height:"100%",borderRadius:99,background:f.cor}}/>
+                  </div>
+                </div>;
+              })}
+            </div>
+
+            <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"17px 19px"}}>
+              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Divisão do resultado</div>
+              <div style={{display:"flex",gap:2,height:10,borderRadius:99,overflow:"hidden",marginTop:12}}>
+                <div style={{width:"95%",background:"#3d4450",borderRadius:"99px 0 0 99px"}}/>
+                <div style={{width:"5%",background:"#34d399",borderRadius:"0 99px 99px 0"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:9}}>
+                <span style={{color:"rgba(255,255,255,0.60)",fontSize:11,fontWeight:600}}>Cliente <strong style={{color:"#fff"}}>95%</strong></span>
+                <span style={{color:"rgba(255,255,255,0.60)",fontSize:11,fontWeight:600}}>Pixels <strong style={{color:"#34d399"}}>5%</strong></span>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div style={{marginTop:14,color:"rgba(255,255,255,0.32)",fontSize:10.5,fontWeight:500,lineHeight:1.5}}>
+          Números ilustrativos, pra mostrar o formato do acompanhamento — no plano, o cliente vê os dele em tempo real: faturamento, funil, retorno por real investido e a comissão calculada na transparência.
         </div>
       </div>
       {/* CTA copiar resumo */}
@@ -63015,7 +63066,7 @@ function PagePortfolio(props){
             "",
             "FASE 1 · Consultoria Growth (3 meses) — R$ 21.000 (R$ 7.000/mês)",
             "Basic completo: 4 artes + 4 vídeos/mês, acompanhamento quinzenal, dashboard.",
-            "Implantação do CRM Pixels já na fase 1: funil de vendas organizado, histórico de cada lead, marketing e comercial no mesmo número.",
+            "CRM Pixels implantado já na fase 1: cada lead vira um card num funil visual — o dono enxerga negócios abertos, valores e onde trava. Segue incluso no Plano Growth.",
             "Tudo de Growth incluso:",
           ].concat(GROWTH_BLOCOS.map(function(b){return "- "+b.titulo+": "+b.itens.join("; ");}))
            .concat([
