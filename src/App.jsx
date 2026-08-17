@@ -59912,7 +59912,9 @@ const PRICE_CONFIG = {
     videoVariation: 50,  // por variação de vídeo
   },
   // Growth — pacote fechado mensal de crescimento orientado a dados.
-  growth: { price: 7000 },
+  // Modulo Growth da calculadora (mensal, avulso). A Consultoria Growth
+  // (aba Growth, 3 meses, R$36k) e outro produto - nao confundir os precos.
+  growth: { price: 3500 },
   audiovisualCapture: {
     firstDaily:     1500, // primeira diária/mês
     additionalDaily:1000, // cada diária adicional
@@ -60116,6 +60118,130 @@ function calculateOneTimeTotal(selectedIds){
   return calculateOneTimeProjects(selectedIds);
 }
 function _calcFmtBRL(n){ return "R$ "+Number(n||0).toLocaleString("pt-BR"); }
+/* ─── Cartinhas de bônus da aba Growth ─────────────────────────────────
+   Mesma mecânica da etapa Bônus da calculadora (verso → clique → revela com
+   confete e som), mas componente próprio: os _BonusCard/_BonusVerso da
+   calculadora vivem dentro dela e dependem de monthlyRecurring/consts locais.
+   Aqui os bônus são fixos — quem contrata a Consultoria (R$7.000/mês) já
+   entra na faixa que libera os dois. */
+function _PortfBonusGrowth({isMob}){
+  const [aberto,setAberto]=useState(false);
+  const BONUS=(PRICE_CONFIG.bonusUnlocks||[]).filter(function(b){ return b.min<=7000; });
+
+  // Confete: peças sorteadas uma vez (Math.random no render causaria repaint
+  // diferente a cada frame de re-render).
+  const PECAS=useMemo(function(){
+    const CORES=["#f0b429","#ffd868","#9F43F6","#c4b5fd","#34d399","#fff"];
+    const ANIM=["pxConfA","pxConfB","pxConfC"];
+    const arr=[];
+    for(let i=0;i<46;i++){
+      arr.push({i:i,left:Math.random()*100,w:5+Math.random()*6,h:8+Math.random()*8,
+        cor:CORES[i%CORES.length],raio:Math.random()>0.6?"50%":"2px",
+        rot:Math.random()*360,anim:ANIM[i%3],dur:1.5+Math.random()*1.1,delay:Math.random()*0.35});
+    }
+    return arr;
+  },[]);
+
+  function abrir(){
+    setAberto(true);
+    try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(e){}
+  }
+
+  const OURO="#f0b429", OURO2="#ffd868";
+
+  return <div style={{background:"linear-gradient(160deg,#1a1030 0%,#241546 55%,#180e2c 100%)",border:"1px solid rgba(240,180,41,0.30)",borderRadius:18,padding:isMob?"22px 18px":"30px 32px",color:"#fff",overflow:"hidden",fontFamily:_PORTF_FF}}>
+    <style>{"@keyframes pxGReveal{from{opacity:0;transform:translateY(18px) scale(.92)}to{opacity:1;transform:none}}"
+      +"@keyframes pxGFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}"}</style>
+
+    <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:18,flexWrap:"wrap"}}>
+      <div style={{width:52,height:52,borderRadius:15,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+        <_PxIco n="gift" size={25} color="#3d2a05"/>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:OURO2,fontSize:10,fontWeight:800,letterSpacing:.9,textTransform:"uppercase"}}>Brindes da jornada</div>
+        <div style={{fontSize:isMob?18:21,fontWeight:900,letterSpacing:-.5,marginTop:2}}>Bônus liberados no Growth</div>
+        <div style={{color:"rgba(255,255,255,0.58)",fontSize:12,marginTop:4,lineHeight:1.55,maxWidth:560}}>
+          Quem entra na Consultoria Growth já desbloqueia os dois — equipamento e captação por nossa conta, sem custo adicional.
+        </div>
+      </div>
+    </div>
+
+    <div style={{position:"relative"}}>
+      {/* Confete */}
+      {aberto&&<div style={{position:"absolute",left:0,right:0,top:-50,bottom:-50,pointerEvents:"none",overflow:"hidden",zIndex:9}}>
+        {PECAS.map(function(c){
+          return <div key={c.i} style={{position:"absolute",left:c.left+"%",top:0,width:c.w,height:c.h,background:c.cor,borderRadius:c.raio,transform:"rotate("+c.rot+"deg)",opacity:0,animation:c.anim+" "+c.dur+"s cubic-bezier(.18,.62,.42,1) "+c.delay+"s both"}}/>;
+        })}
+      </div>}
+
+      {!aberto
+        ? <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16}}>
+            {/* Versos */}
+            <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
+              {BONUS.map(function(b,i){
+                return <div key={b.id} style={{width:isMob?128:150,height:isMob?176:206,borderRadius:14,
+                  background:"linear-gradient(150deg,#2d1a52 0%,#1d1036 55%,#2d1a52 100%)",
+                  border:"1.5px solid rgba(240,180,41,0.35)",
+                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,
+                  animation:"pxGFloat 3.4s ease-in-out infinite "+(i*0.45)+"s"}}>
+                  <div style={{width:46,height:46,borderRadius:"50%",border:"1.5px dashed rgba(240,180,41,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <_PxIco n="gift" size={22} color={OURO}/>
+                  </div>
+                  <div style={{color:"rgba(255,255,255,0.35)",fontSize:9.5,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase"}}>Bônus</div>
+                </div>;
+              })}
+            </div>
+            <button type="button" onClick={abrir}
+              style={{background:"linear-gradient(135deg,"+OURO2+","+OURO+")",border:"none",borderRadius:12,padding:isMob?"12px 22px":"14px 30px",color:"#3d2a05",fontWeight:900,fontSize:isMob?13:14.5,letterSpacing:-.2,cursor:"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:9}}>
+              <_PxIco n="gift" size={17} color="#3d2a05"/>
+              Revelar os bônus
+            </button>
+          </div>
+        : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
+            {BONUS.map(function(b,i){
+              return <div key={b.id} style={{animation:"pxGReveal .55s cubic-bezier(.34,1.28,.5,1) both "+(i*200)+"ms"}}>
+                <div style={{background:"linear-gradient(160deg,rgba(240,180,41,0.10),rgba(255,255,255,0.03))",border:"1.5px solid rgba(240,180,41,0.38)",borderRadius:16,padding:isMob?"18px 16px":"20px 20px",height:"100%",display:"flex",flexDirection:"column",gap:14}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+                      <_PxIco n={b.ico||"gift"} size={22} color="#3d2a05"/>
+                    </div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:15,fontWeight:900,letterSpacing:-.3,lineHeight:1.2}}>{b.nome}</div>
+                      <div style={{color:OURO2,fontSize:11,fontWeight:700,marginTop:2}}>{b.tagline}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                    {(b.itens||[]).map(function(it,j){
+                      return <div key={j} style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                        <span style={{width:28,height:28,borderRadius:9,background:"rgba(240,180,41,0.14)",border:"1px solid rgba(240,180,41,0.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <_PxIco n={it.ico||"check"} size={14} color={OURO2}/>
+                        </span>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,letterSpacing:-.1,lineHeight:1.35}}>{it.label}</div>
+                          {it.detalhe&&<div style={{color:"rgba(255,255,255,0.45)",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{it.detalhe}</div>}
+                        </div>
+                      </div>;
+                    })}
+                  </div>
+                  <div style={{marginTop:"auto",paddingTop:12,borderTop:"1px solid rgba(240,180,41,0.20)",display:"flex",alignItems:"center",gap:7}}>
+                    <_PxIco n="check" size={13} color={OURO} strokeWidth={3.2}/>
+                    <span style={{color:OURO2,fontSize:11,fontWeight:800,letterSpacing:.2}}>Incluso · sem custo adicional</span>
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>}
+    </div>
+
+    {aberto&&<div style={{display:"flex",justifyContent:"center",marginTop:16}}>
+      <button type="button" onClick={function(){setAberto(false);}}
+        style={{background:"transparent",border:"1px solid rgba(255,255,255,0.16)",borderRadius:10,padding:"8px 18px",color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_PORTF_FF}}>
+        Fechar as cartas
+      </button>
+    </div>}
+  </div>;
+}
+
 function _PortfIncluiList({titulo, cor, itens, ico}){
   const _c=cor||"#7c3aed";
   return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,.035)",height:"100%",display:"flex",flexDirection:"column",boxSizing:"border-box"}}>
@@ -60170,6 +60296,12 @@ const GROWTH_BLOCOS = [
     "Oportunidades de upsell, cross-sell e recompra",
     "Análise de CAC, ticket médio, LTV e retorno por canal",
     "Estratégias para aumentar o faturamento pelo canal digital",
+  ]},
+  { ico:"users", titulo:"Presença e Campo", itens:[
+    "Imersão com a equipe comercial no dia a dia da operação",
+    "Mapeamento das alavancas de crescimento do negócio",
+    "Presença em feiras e eventos estratégicos do setor",
+    "Rituais de alinhamento entre marketing e comercial",
   ]},
 ];
 // Jornada que o Growth cobre — usada no selo da etapa e no resumo copiado.
@@ -60838,6 +60970,7 @@ function _CalculadoraModular({isMob}){
   // 3.5) Growth — pacote fechado, liga/desliga
   // 4) Captação audiovisual (diárias/mês)
   const [captureDailies,setCaptureDailies] = useState(0);
+  const [growthOn,setGrowthOn] = useState(false); // modulo Growth mensal (R$3.500)
   // 5) Projetos pontuais
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
@@ -60897,6 +61030,7 @@ function _CalculadoraModular({isMob}){
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
   // Módulo Captação audiovisual ativo = diárias > 0
   const captureActive = captureDailies > 0;
+  const growthActive  = !!growthOn;
 
   // ═══ Cálculos ═══
   const _socialState = { channels: socialChannels, postsPerWeek: socialPosts };
@@ -60904,8 +61038,9 @@ function _CalculadoraModular({isMob}){
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
+  const growthPrice    = calculateGrowthPrice(growthOn);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, false);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn);
 
   // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
   // pra o vendedor abrir na frente do cliente.
@@ -61051,6 +61186,14 @@ function _CalculadoraModular({isMob}){
       lines.push("Observação: verba de anúncios não inclusa");
       lines.push("");
     }
+    if(growthActive){
+      lines.push("Growth");
+      lines.push(GROWTH_PITCH);
+      lines.push("Inclui:");
+      GROWTH_BLOCOS.forEach(function(b){ b.itens.forEach(function(it){ lines.push("- " + it); }); });
+      lines.push("Valor: " + fmt(growthPrice) + "/mês");
+      lines.push("");
+    }
     if(oneItems.length>0){
       lines.push("Projetos pontuais:");
       oneItems.forEach(function(p){ lines.push("- " + p.label + ": " + (p.fixo?"":"a partir de ") + fmt(p.price)); });
@@ -61178,7 +61321,7 @@ function _CalculadoraModular({isMob}){
     </div>;
   }
 
-  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
   const socialCount = countSocialChannels(socialChannels);
   // Criativos que já vêm no pacote (redes + tráfego). Criativos Extras são só o excedente.
   const inclusos = calculateIncludedCreatives(socialChannels, trafficKey);
@@ -61193,6 +61336,7 @@ function _CalculadoraModular({isMob}){
     { id:"social",    ico:"share2",       label:"Redes Sociais", done:socialActive,        price:socialPrice },
     { id:"creatives", ico:"palette",      label:"Criativos Extras", done:creativesActive,  price:creativesPrice },
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
+    { id:"growth",    ico:"chart",        label:"Growth",        done:growthActive,        price:growthPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
@@ -61520,8 +61664,49 @@ function _CalculadoraModular({isMob}){
 
 
   // ── ETAPA 5 — CAPTAÇÃO AUDIOVISUAL ──
+  // ── ETAPA 4 — GROWTH (mensal, R$3.500) ──────────────────────────
+  // Modulo avulso da calculadora. NAO e a Consultoria Growth (36k/3 meses):
+  // aqui e o acompanhamento mensal continuo, com os mesmos 6 pilares.
+  const _stepGrowth = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="4" ico="chart" active={growthActive}
+      title="Growth"
+      subtitle="Estar junto, entender a operação e fazer crescer o digital e o faturamento."
+      versaoLabel={growthActive?"Incluso":"Não selecionado"}
+      nivelLabel="Sênior"/>
+
+    <div onClick={function(){setGrowthOn(!growthOn);}}
+      style={{background:growthActive?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff",border:"1.5px solid "+(growthActive?PX:"#eef0f5"),borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:15,transition:"all .18s",boxShadow:growthActive?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
+      onMouseEnter={function(e){ if(!growthActive) e.currentTarget.style.borderColor=PX_BD; }}
+      onMouseLeave={function(e){ if(!growthActive) e.currentTarget.style.borderColor="#eef0f5"; }}>
+      <_PxIcoBox n="chart" box={48} estado={growthActive?"ativo":"neutro"}/>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:growthActive?INK:"#7a8494",fontSize:14.5,fontWeight:800,letterSpacing:-.3}}>Incluir Growth no pacote</div>
+        <div style={{color:MUTE,fontSize:11.5,marginTop:3,lineHeight:1.45}}>Acompanhamento mensal — diagnóstico, experimentação, comercial junto e presença em campo.</div>
+      </div>
+      <div style={{textAlign:"right",flexShrink:0}}>
+        <div style={{color:growthActive?PX_DK:"#9aa4b2",fontWeight:900,fontSize:19,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{fmt(cfg.growth.price)}</div>
+        <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>/mês</div>
+      </div>
+      <div style={{width:24,height:24,borderRadius:"50%",background:growthActive?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:growthActive?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+        {growthActive && <_PxIco n="check" size={14} color="#fff" strokeWidth={3.4}/>}
+      </div>
+    </div>
+
+    {growthActive && <>
+      <div>
+        <_BlocoTitulo titulo="O que está incluso no Growth"/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
+          {GROWTH_BLOCOS.map(function(b){
+            return <_IncluiList key={b.titulo} ico={b.ico} titulo={b.titulo} cor={PX_DK} itens={b.itens}/>;
+          })}
+        </div>
+      </div>
+      <_ValorModulo price={growthPrice}/>
+    </>}
+  </div>;
+
   const _stepCapture = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="4" ico="video" active={captureActive}
+    <_ModuleHeader num="5" ico="video" active={captureActive}
       title="Captação Audiovisual"
       subtitle="Diárias de captação com equipamento e equipe."
       versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
@@ -61571,7 +61756,7 @@ function _CalculadoraModular({isMob}){
 
   // ── ETAPA 6 — PROJETOS PONTUAIS ──
   const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="5" ico="folderkanban" active={oneTimeIds.length>0}
+    <_ModuleHeader num="6" ico="folderkanban" active={oneTimeIds.length>0}
       title="Projetos Pontuais"
       subtitle="Investimento único, separado do mensal."
       versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
@@ -61808,7 +61993,7 @@ function _CalculadoraModular({isMob}){
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="gift" active={unlockedBonuses.length>0} semPills
+    <_ModuleHeader num="7" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
       subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
@@ -61860,6 +62045,7 @@ function _CalculadoraModular({isMob}){
               socialActive&&{ico:"share2",lbl:"Redes Sociais"},
               creativesActive&&{ico:"palette",lbl:"Criativos"},
               (trafficKey!=="none"&&cfg.traffic[trafficKey].price>0)&&{ico:"target",lbl:cfg.traffic[trafficKey].label},
+              growthActive&&{ico:"chart",lbl:"Growth"},
               captureActive&&{ico:"video",lbl:"Captação"},
               oneTimeIds.length>0&&{ico:"folderkanban",lbl:oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")},
             ].filter(Boolean).map(function(c,i){
@@ -61951,7 +62137,7 @@ function _CalculadoraModular({isMob}){
   }
 
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="7" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="8" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -61995,6 +62181,11 @@ function _CalculadoraModular({isMob}){
             config={"Gestão de campanhas · verba de mídia não inclusa"+(cfg.traffic[trafficKey].edicaoCriativos>0?" · edição de até "+cfg.traffic[trafficKey].edicaoCriativos+" criativos/mês":"")}
             preco={trafficPrice}
             blocos={TRAFFIC_BLOCOS.reduce(function(acc,b){return acc.concat(b.itens);},[]).concat(cfg.traffic[trafficKey].edicaoCriativos>0?["Edição de até "+cfg.traffic[trafficKey].edicaoCriativos+" criativos/mês inclusa"]:[])}/>}
+
+          {growthActive&&<_ResumoModulo ico="chart" titulo="Growth"
+            config="Acompanhamento mensal — 6 pilares, do diagnóstico à presença em campo"
+            preco={growthPrice}
+            blocos={GROWTH_BLOCOS.map(function(b){return b.titulo;})}/>}
 
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
             config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
@@ -62054,7 +62245,7 @@ function _CalculadoraModular({isMob}){
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
+    growth:_stepGrowth, capture:_stepCapture, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -62156,7 +62347,7 @@ function _CalculadoraModular({isMob}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
@@ -62167,7 +62358,7 @@ function _CalculadoraModular({isMob}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -62187,9 +62378,9 @@ function _CalculadoraModular({isMob}){
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
-    captureActive, captureDailies, capturePrice, cfg,
+    captureActive, captureDailies, capturePrice, growthActive, growthPrice, cfg,
     oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
-  const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
   if(socialActive){
@@ -62208,6 +62399,9 @@ function _ResumoBox(p){
   }
   if(trafficKey!=="none" && cfg.traffic[trafficKey].price>0){
     itens.push({ico:"target", nome:cfg.traffic[trafficKey].label, linhas:["Verba de mídia não inclusa"], valor:trafficPrice});
+  }
+  if(growthActive){
+    itens.push({ico:"chart", nome:"Growth", linhas:["6 pilares · presença em campo"], valor:growthPrice});
   }
   if(captureActive){
     itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
@@ -62643,7 +62837,7 @@ function PagePortfolio(props){
     {/* ════ GROWTH — Consultoria (3 meses) → Plano Growth ════
         Saiu da calculadora (15/08): deixou de ser módulo avulso de R$7k e virou
         uma jornada em 2 fases. Preços/regras conferidos com o Vinicius:
-        Consultoria = R$21.000 total (3× R$7.000); comissão do Plano: percentual
+        Consultoria = R$36.000 total (3x R$12.000); comissão do Plano: percentual
         a definir em contrato (o "5%" inicial saiu a pedido do user). */}
     {view==="growth" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
 
@@ -62651,13 +62845,11 @@ function PagePortfolio(props){
           jornada com ícone por etapa. Versão anterior era texto + chips
           minúsculos espremidos na direita ("tosco", user). */}
       <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 70%,#251a55 100%)",borderRadius:18,padding:isMob?"24px 20px":"32px 34px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 18px 44px rgba(15,23,42,0.35)",fontFamily:_PORTF_FF}}>
-        <div aria-hidden style={{position:"absolute",top:-120,right:-60,width:380,height:380,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.22) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
-        <div aria-hidden style={{position:"absolute",bottom:-140,left:-80,width:340,height:340,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.08) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
 
         <div style={{position:"relative",zIndex:1}}>
           <div style={{display:"flex",alignItems:"center",gap:isMob?16:22,marginBottom:isMob?20:26}}>
             {/* Símbolo: seta de crescimento saindo de barras — sucesso/escala */}
-            <div style={{width:isMob?64:76,height:isMob?64:76,borderRadius:20,background:"linear-gradient(135deg,#9F43F6 0%,#7c3aed 60%,#5b21b6 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 14px 34px rgba(159,67,246,0.45), inset 0 1px 0 rgba(255,255,255,0.25)"}}>
+            <div style={{width:isMob?64:76,height:isMob?64:76,borderRadius:20,background:"linear-gradient(135deg,#9F43F6 0%,#7c3aed 60%,#5b21b6 100%)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.22)"}}>
               <svg width={isMob?34:42} height={isMob?34:42} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 20v-5"/><path d="M9 20v-9"/><path d="M14 20v-6"/>
                 <path d="M6 9.5 12 4l3 2.8L21 2"/><path d="M16.2 2H21v4.8"/>
@@ -62692,7 +62884,6 @@ function PagePortfolio(props){
                       background:_ultima?"linear-gradient(135deg,rgba(74,222,128,0.25),rgba(74,222,128,0.10))":"rgba(255,255,255,0.06)",
                       border:"1.5px solid "+(_ultima?"rgba(74,222,128,0.55)":"rgba(159,67,246,0.45)"),
                       display:"flex",alignItems:"center",justifyContent:"center",
-                      boxShadow:_ultima?"0 8px 22px rgba(74,222,128,0.25)":"0 6px 18px rgba(159,67,246,0.20)",
                       backdropFilter:"blur(4px)"}}>
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={_ultima?"#4ade80":"#d8b4fe"} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{e.ico}</svg>
                     </div>
@@ -62724,8 +62915,8 @@ function PagePortfolio(props){
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento</div>
-            <div style={{color:"#0f172a",fontWeight:900,fontSize:24,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3}}>R$ 21.000</div>
-            <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:2}}>R$ 7.000/mês · 3 meses</div>
+            <div style={{color:"#0f172a",fontWeight:900,fontSize:24,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3}}>R$ 36.000</div>
+            <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:2}}>R$ 12.000/mês · 3 meses</div>
           </div>
         </div>
 
@@ -62780,62 +62971,6 @@ function PagePortfolio(props){
             CRM é o sistema que organiza a área comercial: <strong style={{color:"#fff"}}>cada pessoa que chega vira um card num funil visual</strong>, andando etapa por etapa — do primeiro contato ao fechamento. Em vez das vendas viverem na memória e no WhatsApp de cada vendedor, o dono enxerga a operação inteira: quantos negócios estão abertos, quanto valem e onde estão travando.
           </div>
 
-          {/* Funil ilustrativo — mini-CRM com cards de cliente (nomes genéricos).
-              A versão anterior tinha barrinhas fantasma e ficou ilegível: o
-              cliente não entendia que aquilo era um card de negociação. */}
-          <div style={{background:"rgba(0,0,0,0.22)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,padding:isMob?"12px 10px":"16px 16px",marginBottom:16}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12,flexWrap:"wrap"}}>
-              <div style={{display:"flex",alignItems:"center",gap:7}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:"#34d399"}}/>
-                <span style={{color:"rgba(255,255,255,0.55)",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Funil de vendas · exemplo</span>
-              </div>
-              <span style={{color:"rgba(255,255,255,0.32)",fontSize:10,fontWeight:600}}>arraste o card conforme a negociação avança</span>
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:isMob?8:10}}>
-              {[
-                {l:"Novo lead",   cor:"#60a5fa", total:"R$ 46k",
-                 cards:[{n:"Construtora Lima",   i:"CL", v:"R$ 18k", t:"Meta Ads"},
-                        {n:"Marcos Andrade",     i:"MA", v:"R$ 6k",  t:"Google"},
-                        {n:"Distribuidora Sul",  i:"DS", v:"R$ 22k", t:"Meta Ads"}]},
-                {l:"Em conversa", cor:"#a78bfa", total:"R$ 31k",
-                 cards:[{n:"Agro Verde",         i:"AV", v:"R$ 24k", t:"Google"},
-                        {n:"Joana Ribeiro",      i:"JR", v:"R$ 7k",  t:"Indicação"}]},
-                {l:"Proposta",    cor:"#fbbf24", total:"R$ 39k",
-                 cards:[{n:"Metalúrgica Ativa",  i:"MA", v:"R$ 27k", t:"Meta Ads"},
-                        {n:"Pedro Hoffmann",     i:"PH", v:"R$ 12k", t:"Site"}]},
-                {l:"Fechado",     cor:"#34d399", total:"R$ 33k",
-                 cards:[{n:"Transportes Vale",   i:"TV", v:"R$ 33k", t:"Meta Ads"}]},
-              ].map(function(col){
-                return <div key={col.l} style={{display:"flex",flexDirection:"column",gap:7,minWidth:0}}>
-                  {/* Header da coluna */}
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:8,borderBottom:"2px solid "+col.cor+"55"}}>
-                    <span style={{color:"#fff",fontSize:isMob?10:11,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{col.l}</span>
-                    <span style={{background:col.cor+"22",color:col.cor,borderRadius:99,padding:"1.5px 7px",fontSize:9,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{col.cards.length}</span>
-                  </div>
-                  {/* Cards */}
-                  {col.cards.map(function(c,j){
-                    return <div key={j} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.09)",borderLeft:"2.5px solid "+col.cor,borderRadius:9,padding:isMob?"8px 8px":"9px 10px",display:"flex",flexDirection:"column",gap:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
-                        <span style={{width:20,height:20,borderRadius:"50%",background:col.cor+"2e",border:"1px solid "+col.cor+"4d",color:col.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,flexShrink:0,letterSpacing:-.2}}>{c.i}</span>
-                        <span style={{color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{c.n}</span>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:5}}>
-                        <span style={{color:"rgba(255,255,255,0.34)",fontSize:8.5,fontWeight:700,letterSpacing:.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.t}</span>
-                        <span style={{color:"rgba(255,255,255,0.82)",fontSize:isMob?9.5:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{c.v}</span>
-                      </div>
-                    </div>;
-                  })}
-                  {/* Total da etapa */}
-                  <div style={{marginTop:"auto",paddingTop:7,borderTop:"1px dashed rgba(255,255,255,0.10)",display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:5}}>
-                    <span style={{color:"rgba(255,255,255,0.30)",fontSize:8.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>etapa</span>
-                    <span style={{color:col.cor,fontSize:isMob?10:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{col.total}</span>
-                  </div>
-                </div>;
-              })}
-            </div>
-          </div>
-
           {/* O que o dono ganha */}
           <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
             {[
@@ -62882,12 +63017,10 @@ function PagePortfolio(props){
 
       {/* ── FASE 2 · Plano Growth ── */}
       <div style={{background:"linear-gradient(135deg,#15171c 0%,#1e2229 55%,#141619 100%)",border:"1px solid rgba(159,67,246,0.30)",borderRadius:18,padding:isMob?"24px 20px":"34px 36px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 22px 54px rgba(8,10,14,0.40)"}}>
-        <div aria-hidden style={{position:"absolute",top:-110,right:-50,width:360,height:360,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.26) 0%,rgba(159,67,246,0) 70%)",pointerEvents:"none"}}/>
-        <div aria-hidden style={{position:"absolute",bottom:-130,left:-60,width:320,height:320,borderRadius:"50%",background:"radial-gradient(circle,rgba(74,222,128,0.10) 0%,rgba(74,222,128,0) 70%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1}}>
           <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap",marginBottom:18}}>
             <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-              <div style={{width:62,height:62,borderRadius:17,background:"linear-gradient(135deg,rgba(159,67,246,0.35),rgba(124,58,237,0.18))",border:"1px solid rgba(159,67,246,0.45)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 10px 26px rgba(159,67,246,0.30)"}}>
+              <div style={{width:62,height:62,borderRadius:17,background:"linear-gradient(135deg,rgba(159,67,246,0.35),rgba(124,58,237,0.18))",border:"1px solid rgba(159,67,246,0.45)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <_PxIco n="rocket" size={30} color="#e9d5ff"/>
               </div>
               <div style={{minWidth:0}}>
@@ -62941,7 +63074,7 @@ function PagePortfolio(props){
               {n:"3", l:"Dividimos o ganho",d:"um percentual combinado em contrato vai pra Pixels — só sobre o que vendeu"},
             ].map(function(x,i){
               return <div key={x.n} style={{background:"rgba(159,67,246,0.08)",border:"1px solid rgba(159,67,246,0.22)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
-                <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0,boxShadow:"0 4px 12px rgba(159,67,246,0.40)"}}>{x.n}</span>
+                <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0}}>{x.n}</span>
                 <div style={{minWidth:0}}>
                   <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
                   <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
@@ -62957,139 +63090,9 @@ function PagePortfolio(props){
         </div>
       </div>
 
-      {/* ══ O COCKPIT DO PLANO GROWTH — dashboard ilustrativo ══
-          v2: gráfico de COLUNAS em divs (o de linha em SVG esticava os rótulos
-          junto com a curva — preserveAspectRatio:none deforma texto). Sem
-          glow/neon: superfície chapada, cor só nos dados. Fase codificada por
-          cor: consultoria em cinza, plano em verde. Dados FICTÍCIOS rotulados. */}
-      <div style={{background:"#0e1013",border:"1px solid rgba(255,255,255,0.07)",borderRadius:18,padding:isMob?"22px 18px":"28px 32px",color:"#fff",fontFamily:_PORTF_FF}}>
+      {/* Cartinhas de bônus — fecho da aba */}
+      <_PortfBonusGrowth isMob={isMob}/>
 
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:20}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:40,height:40,borderRadius:11,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.10)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <_PxIco n="chart" size={19} color="#94a3b8"/>
-            </div>
-            <div>
-              <div style={{color:"rgba(255,255,255,0.40)",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Dentro do Plano Growth</div>
-              <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:-.4,marginTop:2}}>O cockpit que o cliente acompanha ao vivo</div>
-            </div>
-          </div>
-          <span style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:8,padding:"5px 11px",color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>
-            dados ilustrativos
-          </span>
-        </div>
-
-        {/* KPIs — planos, sem brilho; delta pequeno e discreto */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10,marginBottom:12}}>
-          {[
-            {l:"Faturamento pelo digital", v:"R$ 148k", d:"+32% no mês"},
-            {l:"Vendas no mês",            v:"37",      d:"+9 no mês"},
-            {l:"Retorno por R$ 1",         v:"R$ 4,10", d:"verba + serviço"},
-          ].map(function(k,i){
-            return <div key={k.l} style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"15px 17px"}}>
-              <div style={{color:"rgba(255,255,255,0.42)",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k.l}</div>
-              <div style={{color:"#fff",fontSize:isMob?20:25,fontWeight:800,letterSpacing:-.8,marginTop:7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
-              <div style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:7,color:i<2?"#34d399":"rgba(255,255,255,0.40)",fontSize:10.5,fontWeight:600}}>
-                {i<2&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>}
-                {k.d}
-              </div>
-            </div>;
-          })}
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:10}}>
-
-          {/* ── Colunas de faturamento — divs, sem SVG, sem distorção ── */}
-          <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:isMob?"16px 15px":"18px 20px",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:16}}>
-              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Faturamento pelo digital · mês a mês</div>
-              <div style={{display:"inline-flex",alignItems:"center",gap:14}}>
-                <span style={{display:"inline-flex",alignItems:"center",gap:6,color:"rgba(255,255,255,0.50)",fontSize:10.5,fontWeight:600}}>
-                  <span style={{width:9,height:9,borderRadius:3,background:"#3d4450"}}/>Consultoria
-                </span>
-                <span style={{display:"inline-flex",alignItems:"center",gap:6,color:"rgba(255,255,255,0.50)",fontSize:10.5,fontWeight:600}}>
-                  <span style={{width:9,height:9,borderRadius:3,background:"#34d399"}}/>Plano Growth
-                </span>
-              </div>
-            </div>
-            {(function(){
-              const DATA=[
-                {m:"m1",v:38},{m:"m2",v:44},{m:"m3",v:52},          // consultoria
-                {m:"m4",v:61},{m:"m5",v:78},{m:"m6",v:96},{m:"m7",v:121},{m:"m8",v:148}, // plano
-              ];
-              const MAX=160, H=isMob?150:190;
-              return <div style={{flex:1,display:"flex",alignItems:"flex-end",gap:isMob?7:12,height:H,borderBottom:"1px solid rgba(255,255,255,0.08)",paddingBottom:0,position:"relative"}}>
-                {/* grade recessiva */}
-                {[0.33,0.66].map(function(f){
-                  return <div key={f} aria-hidden style={{position:"absolute",left:0,right:0,bottom:H*f,height:1,background:"rgba(255,255,255,0.045)",pointerEvents:"none"}}/>;
-                })}
-                {DATA.map(function(d,i){
-                  const _plano=i>=3;
-                  const _last=i===DATA.length-1;
-                  const hpx=Math.max(10, Math.round((d.v/MAX)*(H-30)));
-                  return <div key={d.m} title={"R$ "+d.v+"k"} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:6,height:"100%"}}>
-                    <div style={{color:_last?"#fff":"rgba(255,255,255,0.35)",fontSize:_last?12:10,fontWeight:_last?800:600,fontFeatureSettings:"'tnum'",lineHeight:1}}>
-                      {_last?"R$ 148k":d.v}
-                    </div>
-                    <div style={{width:"100%",maxWidth:44,height:hpx,borderRadius:"6px 6px 0 0",
-                      background:_plano?"#34d399":"#3d4450",
-                      opacity:_plano?(_last?1:0.88):1,
-                      transition:"height .3s"}}/>
-                  </div>;
-                })}
-              </div>;
-            })()}
-            <div style={{display:"flex",gap:isMob?7:12,marginTop:8}}>
-              {["m1","m2","m3","m4","m5","m6","m7","m8"].map(function(m,i){
-                return <div key={m} style={{flex:1,textAlign:"center",color:i===7?"rgba(255,255,255,0.70)":"rgba(255,255,255,0.30)",fontSize:10,fontWeight:i===7?700:600}}>{m}</div>;
-              })}
-            </div>
-            <div style={{color:"rgba(255,255,255,0.35)",fontSize:10.5,fontWeight:500,marginTop:12,lineHeight:1.5}}>
-              Os 3 primeiros meses são a Consultoria estruturando a base — o salto vem quando o Plano entra com verba e otimização contínua.
-            </div>
-          </div>
-
-          {/* ── Funil + divisão ── */}
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"17px 19px",flex:1}}>
-              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:14}}>Funil do mês</div>
-              {[
-                {l:"Leads",         v:"412", pct:100, cor:"#60a5fa", conv:null},
-                {l:"Oportunidades", v:"118", pct:62,  cor:"#a78bfa", conv:"29%"},
-                {l:"Vendas",        v:"37",  pct:30,  cor:"#34d399", conv:"31%"},
-              ].map(function(f,i){
-                return <div key={f.l} style={{marginBottom:i<2?13:0}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
-                    <span style={{color:"rgba(255,255,255,0.60)",fontSize:11.5,fontWeight:600}}>
-                      {f.l}{f.conv&&<span style={{color:"rgba(255,255,255,0.32)",fontSize:10,fontWeight:600,marginLeft:7}}>{f.conv} da etapa anterior</span>}
-                    </span>
-                    <span style={{color:"#fff",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{f.v}</span>
-                  </div>
-                  <div style={{height:8,borderRadius:99,background:"rgba(255,255,255,0.05)",overflow:"hidden"}}>
-                    <div style={{width:f.pct+"%",height:"100%",borderRadius:99,background:f.cor}}/>
-                  </div>
-                </div>;
-              })}
-            </div>
-
-            <div style={{background:"#14171c",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,padding:"17px 19px"}}>
-              <div style={{color:"rgba(255,255,255,0.42)",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Divisão do resultado</div>
-              <div style={{display:"flex",gap:2,height:10,borderRadius:99,overflow:"hidden",marginTop:12}}>
-                <div style={{flex:1,background:"#3d4450",borderRadius:"99px 0 0 99px"}}/>
-                <div style={{width:34,background:"#34d399",borderRadius:"0 99px 99px 0"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:9}}>
-                <span style={{color:"rgba(255,255,255,0.60)",fontSize:11,fontWeight:600}}>Cliente fica com a maior parte</span>
-                <span style={{color:"#34d399",fontSize:11,fontWeight:700}}>Pixels · % em contrato</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{marginTop:14,color:"rgba(255,255,255,0.32)",fontSize:10.5,fontWeight:500,lineHeight:1.5}}>
-          Números ilustrativos, pra mostrar o formato do acompanhamento — no plano, o cliente vê os dele em tempo real: faturamento vindo do digital, funil completo e retorno por real investido.
-        </div>
-      </div>
       {/* CTA copiar resumo */}
       <div style={{display:"flex",justifyContent:"flex-end",fontFamily:_PORTF_FF}}>
         <button onClick={function(){_portfCopiar([
@@ -63097,7 +63100,7 @@ function PagePortfolio(props){
             GROWTH_PITCH,
             "Jornada: "+GROWTH_JORNADA.join(" > "),
             "",
-            "FASE 1 · Consultoria Growth (3 meses) — R$ 21.000 (R$ 7.000/mês)",
+            "FASE 1 · Consultoria Growth (3 meses) — R$ 36.000 (R$ 12.000/mês)",
             "Basic completo: 4 artes + 4 vídeos/mês, acompanhamento quinzenal, dashboard.",
             "CRM Pixels implantado já na fase 1: cada lead vira um card num funil visual — o dono enxerga negócios abertos, valores e onde trava. Segue incluso no Plano Growth.",
             "Tudo de Growth incluso:",
