@@ -51657,7 +51657,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   // as respostas são salvas no Supabase (tabela portal_calculadora).
   const PORTAL_CALC_CLIENTS=["lerofibras"];
   if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
-    TABS.push({id:"calculadora", ico:"package", label:"Monte seu pacote"});
+    TABS.unshift({id:"calculadora", ico:"package", label:"Monte seu pacote"});
   }
 
   // Se ainda nao carregou o cliente dinamico, mostra loading em vez de "nao disponivel"
@@ -51750,8 +51750,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       </button>}
     </div>}
 
-    {/* Tabs — sempre em 1 linha. Se nao couber, scroll horizontal (padrao SaaS moderno pra muitas tabs). */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
+    {/* Tabs — quebram em várias linhas. Sem barra de rolagem horizontal:
+        o cliente ficava sem ver as últimas abas e precisava arrastar. */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap",rowGap:2}}>
       {TABS.map(function(t){
         const active=tab===t.id;
         return <button key={t.id} onClick={function(){setTab(t.id);}}
