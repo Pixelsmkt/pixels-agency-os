@@ -61017,7 +61017,6 @@ function _CalculadoraModular({isMob, persistClientId}){
   const [captureDailies,setCaptureDailies] = useState(0);
   const [growthOn,setGrowthOn] = useState(false); // modulo Growth mensal (R$3.500)
   const [graficosKey,setGraficosKey] = useState("none"); // none | avulso | recorrente
-  const [ofertaInteresse,setOfertaInteresse] = useState(false); // "Tenho interesse" no Plano Growth (etapa Oferta)
   // 5) Projetos pontuais
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
@@ -61092,7 +61091,6 @@ function _CalculadoraModular({isMob, persistClientId}){
             if(typeof pl.graficosKey==="string") setGraficosKey(pl.graficosKey);
             if(typeof pl.captureDailies==="number") setCaptureDailies(pl.captureDailies);
             if(Array.isArray(pl.oneTimeIds)) setOneTimeIds(pl.oneTimeIds);
-            setOfertaInteresse(!!pl.ofertaInteresse);
           }catch(e){}
         }
         _calcHydratedRef.current=true;
@@ -61141,7 +61139,7 @@ function _CalculadoraModular({isMob, persistClientId}){
       const payload = {
         socialChannels:socialChannels, socialPosts:socialPosts, creatives:creatives,
         trafficKey:trafficKey, growthOn:!!growthOn, graficosKey:graficosKey,
-        captureDailies:captureDailies, oneTimeIds:oneTimeIds, ofertaInteresse:!!ofertaInteresse,
+        captureDailies:captureDailies, oneTimeIds:oneTimeIds,
         totals:{ monthlyRecurring:monthlyRecurring, oneTimePrice:oneTimePrice },
       };
       window._sb.from("portal_calculadora")
@@ -61150,7 +61148,7 @@ function _CalculadoraModular({isMob, persistClientId}){
         .catch(function(e){ console.warn("portal_calculadora save:",e); });
     },900);
     return function(){ if(_calcSaveTimerRef.current) clearTimeout(_calcSaveTimerRef.current); };
-  },[persistClientId,socialChannels,socialPosts,creatives,trafficKey,growthOn,graficosKey,captureDailies,oneTimeIds,ofertaInteresse]);
+  },[persistClientId,socialChannels,socialPosts,creatives,trafficKey,growthOn,graficosKey,captureDailies,oneTimeIds]);
 
   // ═══ Textos comuns ═══
   // Entregaveis da Gestao de Redes Sociais — 4 frentes de trabalho.
@@ -61322,7 +61320,6 @@ function _CalculadoraModular({isMob, persistClientId}){
     }
     lines.push("Resumo:");
     lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
-    if(ofertaInteresse) lines.push("Interesse registrado no Plano Growth — cumprindo os requisitos, o mensal vai a R$ 0 (comissão a negociar).");
     if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
     lines.push("");
     lines.push("Observação:");
@@ -61451,7 +61448,6 @@ function _CalculadoraModular({isMob, persistClientId}){
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:graficosKey!=="none", price:graficosPrice, subLabel:graficosKey==="avulso"?"avulso · sob demanda":undefined },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
-    { id:"oferta",    ico:"trophy",       label:"Oferta",        done:ofertaInteresse, price:0, subLabel:ofertaInteresse?"interesse registrado":"Plano Growth" },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
     { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
   ];
@@ -61996,137 +61992,6 @@ function _CalculadoraModular({isMob, persistClientId}){
         </div>}
   </div>;
 
-  // ── ETAPA 8 — OFERTA (Plano Growth resumido, dourado) ───────────
-  // Etapa informativa de fechamento: apresenta o Plano Growth (skin in the
-  // game) antes dos bônus. Versão completa vive na aba Growth do Portfólio.
-  const OURO_OF="#f0b429", OURO2_OF="#ffd868";
-  const _stepOferta = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="8" ico="trophy" active={false}
-      title="Oferta"
-      subtitle="O convite pro próximo nível: o Plano Growth."
-      versaoLabel="Plano Growth"
-      nivelLabel="Sócios"/>
-
-    <div style={{background:"linear-gradient(150deg,#1a1206 0%,#2b1e08 45%,#171004 100%)",border:"1.5px solid rgba(240,180,41,0.55)",borderRadius:18,padding:isMob?"22px 18px":"30px 32px",color:"#fff",overflow:"hidden",position:"relative"}}>
-      {/* fio dourado no topo */}
-      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+OURO_OF+","+OURO2_OF+","+OURO_OF+")"}}/>
-
-      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:18}}>
-        <div style={{width:60,height:60,borderRadius:16,background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
-          <_PxIco n="rocket" size={28} color="#3d2a05"/>
-        </div>
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",color:"#3d2a05",borderRadius:99,padding:"4px 13px",fontSize:10,fontWeight:900,letterSpacing:1,textTransform:"uppercase"}}>Skin in the game</span>
-            <span style={{color:OURO2_OF,fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Pele em jogo</span>
-          </div>
-          <div style={{fontSize:isMob?21:26,fontWeight:900,letterSpacing:-.8,marginTop:6,lineHeight:1.1}}>Plano Growth</div>
-          <div style={{color:"rgba(255,255,255,0.72)",fontSize:12.5,marginTop:5,lineHeight:1.6,maxWidth:640}}>
-            <strong style={{color:"#fff"}}>Não cobramos serviço nem orçamento de anúncios — você não gasta nada, nós investimos.</strong> A Pixels entra com o trabalho e com o dinheiro, e só ganha quando você vende.
-          </div>
-        </div>
-      </div>
-
-      {/* Confete ao registrar interesse (peças determinísticas — sem Math.random no render) */}
-      {ofertaInteresse&&<div style={{position:"absolute",left:0,right:0,top:0,bottom:0,pointerEvents:"none",overflow:"hidden",zIndex:6}}>
-        <style>{"@keyframes pxOfConfA{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(-60px,480px) rotate(640deg)}}"
-          +"@keyframes pxOfConfB{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(55px,520px) rotate(-560deg)}}"
-          +"@keyframes pxOfConfC{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(-15px,450px) rotate(760deg)}}"}</style>
-        {Array.from({length:34}).map(function(_x,i){
-          const CORES=["#f0b429","#ffd868","#fff7e0","#9F43F6","#c4b5fd","#fff"];
-          return <div key={i} style={{position:"absolute",left:((i*29)%100)+"%",top:0,width:5+(i%3)*2,height:8+(i%4)*3,background:CORES[i%CORES.length],borderRadius:(i%5===0)?"50%":"2px",opacity:0,animation:"pxOfConf"+["A","B","C"][i%3]+" "+(1.5+(i%5)*0.22)+"s cubic-bezier(.18,.62,.42,1) "+((i%7)*0.06)+"s both"}}/>;
-        })}
-      </div>}
-
-      {/* Requisitos — explícitos: o que precisa estar de pé antes do plano */}
-      <div style={{marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <_PxIco n="clipboard" size={14} color={OURO2_OF}/>
-          <span style={{color:OURO2_OF,fontSize:10.5,fontWeight:900,letterSpacing:.9,textTransform:"uppercase"}}>Requisitos para entrar no plano</span>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
-          {[
-            {ico:"folderkanban", l:"CRM Pixels implantado", d:"funil de vendas rodando no CRM, com follow-up em dia"},
-            {ico:"chart",        l:"Canal de vendas digital rodando", d:"tráfego e captação gerando leads de forma consistente"},
-            {ico:"target",       l:"Treinamento de vendas concluído", d:"equipe comercial preparada pra converter os leads"},
-            {ico:"rocket",       l:"Consultoria Growth concluída", d:"3 meses de estrutura — a base que sustenta o plano"},
-          ].map(function(x){
-            return <div key={x.l} style={{background:"rgba(240,180,41,0.08)",border:"1px solid rgba(240,180,41,0.28)",borderRadius:13,padding:"13px 15px",display:"flex",alignItems:"flex-start",gap:11}}>
-              <span style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <_PxIco n={x.ico} size={15} color="#3d2a05"/>
-              </span>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
-                <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
-              </div>
-            </div>;
-          })}
-        </div>
-      </div>
-
-      {/* Depois da base pronta — como funciona */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10,marginBottom:16}}>
-        {[
-          {ico:"dollar", l:"Entramos com o dinheiro", d:"serviço completo + verba de anúncios, por nossa conta — seu mensal vai a R$ 0"},
-          {ico:"trophy", l:"Comissão sobre vendas", d:"valor a negociar — só ganhamos quando a venda acontece"},
-        ].map(function(x){
-          return <div key={x.l} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(240,180,41,0.20)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
-            <span style={{width:26,height:26,borderRadius:"50%",border:"1.5px solid "+OURO_OF,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <_PxIco n={x.ico} size={13} color={OURO2_OF}/>
-            </span>
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
-              <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
-            </div>
-          </div>;
-        })}
-      </div>
-
-      {/* Tenho interesse — registra a intenção e zera o mensal no resumo */}
-      <div style={{marginBottom:16}}>
-        <button type="button"
-          onClick={function(){ const nv=!ofertaInteresse; setOfertaInteresse(nv); if(nv){ try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(e){} } }}
-          style={{width:"100%",background:ofertaInteresse?"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")":"rgba(240,180,41,0.10)",border:"1.5px solid "+(ofertaInteresse?OURO2_OF:"rgba(240,180,41,0.45)"),borderRadius:14,padding:isMob?"15px 16px":"17px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,fontFamily:_PORTF_FF,transition:"all .2s",boxShadow:ofertaInteresse?"0 10px 26px rgba(240,180,41,0.35)":"none"}}>
-          <span style={{width:24,height:24,borderRadius:8,background:ofertaInteresse?"#3d2a05":"transparent",border:"2px solid "+(ofertaInteresse?"#3d2a05":OURO_OF),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
-            {ofertaInteresse&&<_PxIco n="check" size={14} color={OURO2_OF} strokeWidth={3.6}/>}
-          </span>
-          <span style={{textAlign:"left",minWidth:0,flex:1}}>
-            <span style={{display:"block",color:ofertaInteresse?"#3d2a05":"#fff",fontSize:isMob?13.5:15,fontWeight:900,letterSpacing:-.3}}>
-              {ofertaInteresse?"Interesse registrado no Plano Growth":"Tenho interesse no Plano Growth"}
-            </span>
-            <span style={{display:"block",color:ofertaInteresse?"rgba(61,42,5,0.75)":"rgba(255,255,255,0.55)",fontSize:11,fontWeight:600,marginTop:3,lineHeight:1.45}}>
-              {ofertaInteresse?"Interesse registrado — cumprindo os requisitos, o mensal vai a R$ 0.":"Marque pra ver o que acontece com o valor mensal do pacote."}
-            </span>
-          </span>
-          <_PxIco n={ofertaInteresse?"gift":"trophy"} size={20} color={ofertaInteresse?"#3d2a05":OURO_OF}/>
-        </button>
-      </div>
-
-      {/* O que acontece com o mensal — só aqui na Oferta (o resumo mantém o valor real) */}
-      {ofertaInteresse&&<div style={{background:"rgba(240,180,41,0.10)",border:"1.5px solid rgba(240,180,41,0.45)",borderRadius:14,padding:isMob?"16px 16px":"18px 22px",marginBottom:16}}>
-        <style>{"@keyframes pxOfZero{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
-        <div style={{color:"rgba(255,255,255,0.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Mensal recorrente no Plano Growth</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
-          <span style={{color:"rgba(255,255,255,0.40)",fontWeight:800,fontSize:18,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
-          <span style={{display:"inline-block",color:OURO2_OF,fontWeight:900,fontSize:34,letterSpacing:-1.4,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZero .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"rgba(255,216,104,0.6)",fontSize:14,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
-        </div>
-        <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,fontWeight:600,marginTop:8,lineHeight:1.5}}>Válido após cumprir os requisitos acima — a Pixels investe o serviço e os anúncios; remuneração por comissão, valor a negociar.</div>
-      </div>}
-
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",paddingTop:14,borderTop:"1px solid rgba(240,180,41,0.22)"}}>
-        <div style={{display:"inline-flex",alignItems:"center",gap:9,color:"rgba(255,255,255,0.60)",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
-          <_PxIco n="lock" size={14} color={OURO_OF}/>
-          Liberação após reunião de alinhamento
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{color:"rgba(255,255,255,0.45)",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Remuneração</div>
-          <div style={{color:OURO2_OF,fontSize:16,fontWeight:900,letterSpacing:-.3}}>Comissão · valor a negociar</div>
-        </div>
-      </div>
-    </div>
-  </div>;
-
-
   const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="7" ico="folderkanban" active={oneTimeIds.length>0}
       title="Projetos Pontuais"
@@ -62210,7 +62075,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     </div>}
   </div>;
 
-  // ── ETAPA 7 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
+  // ── ETAPA 8 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
   const _pctTotal = bonusTopo>0 ? Math.max(0, Math.min(1, monthlyRecurring/bonusTopo)) : 0;
 
   /* Carta de bônus — formato chanfrado + medalhão hexagonal */
@@ -62361,7 +62226,7 @@ function _CalculadoraModular({isMob, persistClientId}){
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="9" ico="gift" active={unlockedBonuses.length>0} semPills
+    <_ModuleHeader num="8" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
       subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
@@ -62477,7 +62342,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     </div>
   </div>;
 
-  // ── ETAPA 8 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
+  // ── ETAPA 9 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
   function _ResumoModulo({ico, titulo, config, preco, blocos, sufixo, aPartir}){
     return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px",boxShadow:"0 1px 2px rgba(15,23,42,.035)"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12,paddingBottom:13,borderBottom:"1px solid #f2f3f7"}}>
@@ -62505,7 +62370,7 @@ function _CalculadoraModular({isMob, persistClientId}){
   }
 
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="10" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="9" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -62618,7 +62483,7 @@ function _CalculadoraModular({isMob, persistClientId}){
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    growth:_stepGrowth, capture:_stepCapture, graficos:_stepGraficos, projects:_stepProjects, oferta:_stepOferta, bonus:_stepBonus, resumo:_stepResumo,
+    growth:_stepGrowth, capture:_stepCapture, graficos:_stepGraficos, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -62629,7 +62494,6 @@ function _CalculadoraModular({isMob, persistClientId}){
     setTrafficKey("none");
     setGrowthOn(false);
     setGraficosKey("none");
-    setOfertaInteresse(false);
     setCaptureDailies(0);
     setOneTimeIds([]);
     setStepIdx(0);
@@ -62723,7 +62587,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} ofertaInteresse={ofertaInteresse} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
 
@@ -62734,7 +62598,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} ofertaInteresse={ofertaInteresse} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
     </div>
@@ -62754,7 +62618,7 @@ function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
     captureActive, captureDailies, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
-    oneTimeIds, ofertaInteresse, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
+    oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
