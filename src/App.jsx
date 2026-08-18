@@ -60690,6 +60690,7 @@ function _PxIco(props){
     bot:         <g><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></g>,
     cpu:         <g><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></g>,
     xcircle:     <g><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></g>,
+    handshake:   <g><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></g>,
     sliders:     <g><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></g>,
   };
   return <svg {...base}>{P[n] || P.check}</svg>;
@@ -61144,8 +61145,7 @@ function _CalculadoraModular({isMob, persistClientId}){
         setOrcSalvando(false);
         if(res&&res.error){ console.warn("portal_calculadora enviar:",res.error.message); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); return; }
         setOrcSalvoEm(agora);
-        setTelaObrigado(true);
-        try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(e){}
+        setTelaObrigado(true);   // sem som aqui: o confete basta
       })
       .catch(function(e){ setOrcSalvando(false); console.warn("portal_calculadora enviar:",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); });
   }
@@ -62550,13 +62550,25 @@ function _CalculadoraModular({isMob, persistClientId}){
   }
 
   /* ═══ TELA DE OBRIGADO — fecha o fluxo depois de salvar o orçamento ═══ */
+  // Logos: CLIENT_LOGOS guarda os data-urls (pixels fixo; clientes dinâmicos
+  // sincronizados do Supabase). Se faltar, cai pra iniciais/wordmark.
+  const _clObr    = (typeof CLIENTS!=="undefined" && CLIENTS) ? (CLIENTS.find(function(c){return c.id===persistClientId;})||null) : null;
+  const _logoPx   = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS) ? (CLIENT_LOGOS.pixels||null) : null;
+  const _logoCl   = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS[persistClientId]) || (_clObr && _clObr.logoUrl) || null;
+  const _nomeCl   = (_clObr && _clObr.name) || "";
+  const _corCl    = (_clObr && _clObr.color) || "#3a6489";
+  const _iniCl    = (_nomeCl||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
+  const _cardLogo = {background:"#fff",borderRadius:16,width:isMob?116:140,height:isMob?62:74,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 14px",boxShadow:"0 10px 26px rgba(0,0,0,.28)",flexShrink:0};
+
   const _telaObrigado = <section style={{background:BG_PAGE,borderRadius:focusMode?0:18,padding:isMob?"18px 14px":"26px 30px",fontFamily:_PORTF_FF,color:INK,minHeight:focusMode?"100%":"auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{width:"100%",maxWidth:760,background:"linear-gradient(160deg,#2d1058 0%,#43197e 48%,#1c0a3a 100%)",borderRadius:22,padding:isMob?"30px 20px":"46px 44px",position:"relative",overflow:"hidden",color:"#fff",boxShadow:"0 24px 60px rgba(43,16,85,.30)"}}>
-      <style>{"@keyframes pxObrIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}"
+    <div style={{width:"100%",maxWidth:780,background:"linear-gradient(165deg,#2b1055 0%,#43197e 46%,#1b0937 100%)",borderRadius:26,padding:isMob?"30px 20px 26px":"48px 46px 40px",position:"relative",overflow:"hidden",color:"#fff",boxShadow:"0 30px 70px rgba(43,16,85,.34)"}}>
+      <style>{"@keyframes pxObrIn{from{opacity:0;transform:translateY(22px) scale(.96)}to{opacity:1;transform:none}}"
         +"@keyframes pxObrConfA{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(-70px,620px) rotate(680deg)}}"
         +"@keyframes pxObrConfB{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(70px,660px) rotate(-620deg)}}"
         +"@keyframes pxObrConfC{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(-10px,580px) rotate(780deg)}}"}</style>
 
+      {/* brilho de fundo */}
+      <div style={{position:"absolute",top:-140,left:"50%",transform:"translateX(-50%)",width:520,height:340,background:"radial-gradient(ellipse at center,rgba(168,85,247,.30) 0%,rgba(168,85,247,0) 70%)",pointerEvents:"none"}}/>
       {/* confete */}
       <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
         {Array.from({length:42}).map(function(_x,i){
@@ -62565,40 +62577,76 @@ function _CalculadoraModular({isMob, persistClientId}){
         })}
       </div>
 
-      <div style={{position:"relative",textAlign:"center",animation:"pxObrIn .6s cubic-bezier(.34,1.28,.5,1) both"}}>
-        <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 14px 34px rgba(240,180,41,.42), inset 0 1px 0 rgba(255,255,255,.4)",marginBottom:18}}>
-          <_PxIco n="check" size={38} color="#3d2a05" strokeWidth={3.4}/>
-        </div>
+      <div style={{position:"relative",animation:"pxObrIn .6s cubic-bezier(.34,1.28,.5,1) both"}}>
 
-        <div style={{color:"rgba(255,216,104,.9)",fontSize:10.5,fontWeight:900,letterSpacing:1.2,textTransform:"uppercase"}}>Orçamento recebido</div>
-        <div style={{fontSize:isMob?30:42,fontWeight:900,letterSpacing:-1.6,lineHeight:1.05,marginTop:8}}>Obrigado!</div>
-        <div style={{color:"rgba(255,255,255,.86)",fontSize:isMob?14:16.5,fontWeight:700,marginTop:14,lineHeight:1.5,letterSpacing:-.2}}>
-          A Pixels Marketing agradece a parceria.
-        </div>
-        <div style={{color:"rgba(255,255,255,.62)",fontSize:isMob?13:14.5,marginTop:8,lineHeight:1.6,maxWidth:520,marginLeft:"auto",marginRight:"auto"}}>
-          Estamos animados para tirar esse projeto do papel!
-        </div>
-
-        {/* resumo do que foi enviado */}
-        <div style={{display:"grid",gridTemplateColumns:(oneTimePrice>0&&!isMob)?"1fr 1fr":"1fr",gap:12,marginTop:26,textAlign:"left"}}>
-          <div style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.12)",borderRadius:14,padding:"16px 18px"}}>
-            <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Mensal recorrente</div>
-            <div style={{fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}<span style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+        {/* ── lockup de parceria: Pixels + mãos dadas + cliente ── */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMob?10:16,flexWrap:"nowrap"}}>
+          <div style={_cardLogo}>
+            {_logoPx
+              ? <img src={_logoPx} alt="Pixels" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+              : <span style={{color:"#7c3aed",fontWeight:900,fontSize:16,letterSpacing:-.4}}>Pixels</span>}
           </div>
-          {oneTimePrice>0&&<div style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.12)",borderRadius:14,padding:"16px 18px"}}>
-            <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Investimento pontual</div>
-            <div style={{fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)}<span style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:700,marginLeft:5}}>único</span></div>
+
+          <div style={{display:"flex",alignItems:"center",gap:isMob?4:7,flexShrink:0}}>
+            <span style={{width:isMob?10:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>
+            <span style={{width:isMob?46:54,height:isMob?46:54,borderRadius:"50%",background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 26px rgba(240,180,41,.45), inset 0 1px 0 rgba(255,255,255,.45)"}}>
+              <_PxIco n="handshake" size={isMob?23:27} color="#3d2a05" strokeWidth={2}/>
+            </span>
+            <span style={{width:isMob?10:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>
+          </div>
+
+          <div style={_cardLogo}>
+            {_logoCl
+              ? <img src={_logoCl} alt={_nomeCl} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+              : <span style={{color:_corCl,fontWeight:900,fontSize:20,letterSpacing:-.6}}>{_iniCl}</span>}
+          </div>
+        </div>
+
+        {/* ── texto ── */}
+        <div style={{textAlign:"center",marginTop:26}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(52,211,153,.14)",border:"1px solid rgba(52,211,153,.35)",borderRadius:99,padding:"5px 14px"}}>
+            <_PxIco n="check" size={12} color="#34d399" strokeWidth={3.4}/>
+            <span style={{color:"#6ee7b7",fontSize:10,fontWeight:900,letterSpacing:1,textTransform:"uppercase"}}>Orçamento recebido</span>
+          </div>
+          <div style={{fontSize:isMob?32:46,fontWeight:900,letterSpacing:-2,lineHeight:1.02,marginTop:14}}>Obrigado!</div>
+          <div style={{color:"#fff",fontSize:isMob?14.5:17,fontWeight:700,marginTop:14,lineHeight:1.5,letterSpacing:-.3}}>
+            A Pixels Marketing agradece a parceria{_nomeCl?(" com a "+_nomeCl):""}.
+          </div>
+          <div style={{color:"rgba(255,255,255,.60)",fontSize:isMob?13:14.5,marginTop:8,lineHeight:1.6,maxWidth:500,marginLeft:"auto",marginRight:"auto"}}>
+            Estamos animados para tirar esse projeto do papel!
+          </div>
+        </div>
+
+        {/* ── resumo do que foi enviado ── */}
+        <div style={{display:"grid",gridTemplateColumns:(oneTimePrice>0&&!isMob)?"1fr 1fr":"1fr",gap:12,marginTop:28}}>
+          <div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.11)",borderRadius:16,padding:"16px 20px",display:"flex",alignItems:"center",gap:13}}>
+            <span style={{width:38,height:38,borderRadius:12,background:"rgba(168,85,247,.22)",border:"1px solid rgba(196,181,253,.30)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n="calendar" size={17} color="#c4b5fd"/>
+            </span>
+            <div style={{minWidth:0}}>
+              <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Mensal recorrente</div>
+              <div style={{fontWeight:900,fontSize:24,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{fmt(monthlyRecurring)}<span style={{color:"rgba(255,255,255,.45)",fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+            </div>
+          </div>
+          {oneTimePrice>0&&<div style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.11)",borderRadius:16,padding:"16px 20px",display:"flex",alignItems:"center",gap:13}}>
+            <span style={{width:38,height:38,borderRadius:12,background:"rgba(240,180,41,.18)",border:"1px solid rgba(240,180,41,.32)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n="folderkanban" size={17} color="#ffd868"/>
+            </span>
+            <div style={{minWidth:0}}>
+              <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Investimento pontual</div>
+              <div style={{fontWeight:900,fontSize:24,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{fmt(oneTimePrice)}<span style={{color:"rgba(255,255,255,.45)",fontSize:12,fontWeight:700,marginLeft:5}}>único</span></div>
+            </div>
           </div>}
         </div>
 
-        <div style={{display:"inline-flex",alignItems:"flex-start",gap:9,color:"rgba(255,255,255,.55)",fontSize:12,lineHeight:1.55,marginTop:18,textAlign:"left",maxWidth:520}}>
-          <_PxIco n="check" size={14} color="#34d399" strokeWidth={3}/>
-          <span>Recebemos o seu pacote. Nosso time vai revisar e falar com você pra alinhar os próximos passos.</span>
-        </div>
-
-        <div style={{marginTop:26}}>
+        {/* ── rodapé ── */}
+        <div style={{marginTop:22,paddingTop:20,borderTop:"1px solid rgba(255,255,255,.10)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:9,color:"rgba(255,255,255,.52)",fontSize:12,lineHeight:1.55,maxWidth:420,minWidth:0}}>
+            <_PxIco n="messages" size={15} color="rgba(255,255,255,.42)"/>
+            <span>Recebemos o seu pacote. Nosso time vai revisar e falar com você pra alinhar os próximos passos.</span>
+          </div>
           <button type="button" onClick={function(){ setTelaObrigado(false); }}
-            style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.22)",borderRadius:12,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,transition:"all .16s"}}
+            style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.22)",borderRadius:12,padding:"11px 20px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,transition:"all .16s",flexShrink:0}}
             onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,.18)";}}
             onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.10)";}}>
             <_PxIco n="clipboard" size={14} color="#fff" strokeWidth={2.3}/>
