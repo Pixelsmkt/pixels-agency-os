@@ -59928,6 +59928,14 @@ const PRICE_CONFIG = {
     google:     { id:"google",     label:"Google Ads",       price:2500, channels:["Search","Display"], brand:"google" },
     metaGoogle: { id:"metaGoogle", label:"Meta + Google",    price:4500, channels:["Facebook","Instagram","Search","Display"], combo:true, brand:"metagoogle", edicaoCriativos:3 },
   },
+  // Materiais graficos: 2 formatos. Avulso nao entra na recorrencia;
+  // o plano mensal entra. Proporcao: 1 novo (400) = 2 ajustes (200),
+  // entao o plano de 5 novos equivale a ate 10 ajustes, combinaveis.
+  graficos: {
+    avulsoNovo: 400,
+    avulsoAjuste: 200,
+    recorrente: { price: 1500, novos: 5, ajustes: 10 },
+  },
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
   bonusUnlocks: [
@@ -60107,11 +60115,12 @@ function calculateOneTimeProjects(selectedIds){
     .filter(p => selectedIds.indexOf(p.id) >= 0)
     .reduce((s,p) => s + p.price, 0);
 }
-function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies, growthOn){
+function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies, growthOn, graficosRec){
   return calculateSocialManagementPrice(socialState)
        + calculateCreativesPrice(creativesState)
        + calculateTrafficPrice(trafficKey)
        + calculateGrowthPrice(growthOn)
+       + (graficosRec ? PRICE_CONFIG.graficos.recorrente.price : 0)
        + calculateAudiovisualCapturePrice(captureDailies);
 }
 function calculateOneTimeTotal(selectedIds){
@@ -60971,6 +60980,7 @@ function _CalculadoraModular({isMob}){
   // 4) Captação audiovisual (diárias/mês)
   const [captureDailies,setCaptureDailies] = useState(0);
   const [growthOn,setGrowthOn] = useState(false); // modulo Growth mensal (R$3.500)
+  const [graficosKey,setGraficosKey] = useState("none"); // none | avulso | recorrente
   // 5) Projetos pontuais
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
@@ -61039,8 +61049,10 @@ function _CalculadoraModular({isMob}){
   const trafficPrice   = calculateTrafficPrice(trafficKey);
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
   const growthPrice    = calculateGrowthPrice(growthOn);
+  const graficosRec    = graficosKey==="recorrente";
+  const graficosPrice  = graficosRec ? cfg.graficos.recorrente.price : 0;
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn, graficosRec);
 
   // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
   // pra o vendedor abrir na frente do cliente.
@@ -61194,11 +61206,17 @@ function _CalculadoraModular({isMob}){
       lines.push("Valor: " + fmt(growthPrice) + "/mês");
       lines.push("");
     }
-    lines.push("Materiais gráficos (avulso, sob demanda — não entra no mensal):");
-    lines.push("- Material novo: R$ 400 por peça");
-    lines.push("- Ajuste de material pronto: R$ 200 por peça");
-    lines.push("- Peças únicas: folder, banner, cartaz, manual, catálogo, materiais de feira");
-    lines.push("");
+    if(graficosKey==="recorrente"){
+      lines.push("Materiais gráficos — plano mensal: " + fmt(cfg.graficos.recorrente.price) + "/mês");
+      lines.push("- Até " + cfg.graficos.recorrente.novos + " materiais novos ou " + cfg.graficos.recorrente.ajustes + " ajustes por mês (1 novo = 2 ajustes, combináveis)");
+      lines.push("- Excedente na tabela avulsa: R$ 400 novo · R$ 200 ajuste");
+      lines.push("");
+    } else if(graficosKey==="avulso"){
+      lines.push("Materiais gráficos (avulso, sob demanda — não entra no mensal):");
+      lines.push("- Material novo: R$ 400 por peça · Ajuste: R$ 200 por peça");
+      lines.push("- Peças únicas: folder, banner, cartaz, manual, catálogo, materiais de feira");
+      lines.push("");
+    }
     if(oneItems.length>0){
       lines.push("Projetos pontuais:");
       oneItems.forEach(function(p){ lines.push("- " + p.label + ": " + (p.fixo?"":"a partir de ") + fmt(p.price)); });
@@ -61325,7 +61343,7 @@ function _CalculadoraModular({isMob}){
     </div>;
   }
 
-  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   const socialCount = countSocialChannels(socialChannels);
   // Criativos que já vêm no pacote (redes + tráfego). Criativos Extras são só o excedente.
   const inclusos = calculateIncludedCreatives(socialChannels, trafficKey);
@@ -61342,8 +61360,9 @@ function _CalculadoraModular({isMob}){
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
     { id:"growth",    ico:"chart",        label:"Growth",        done:growthActive,        price:growthPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
-    { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:false, price:0, isInfo:true },
+    { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:graficosKey!=="none", price:graficosPrice, subLabel:graficosKey==="avulso"?"avulso · sob demanda":undefined },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
+    { id:"oferta",    ico:"trophy",       label:"Oferta",        done:false, price:0, subLabel:"Plano Growth" },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
     { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
   ];
@@ -61387,8 +61406,8 @@ function _CalculadoraModular({isMob}){
         const bdChip = isCur ? PX_BD : (isDone ? "#dcf2e3" : "transparent");
         const lblCol = isCur ? "#4c1d95" : (isDone ? "#15803d" : "#98a2b0");
         const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c3cad6");
-        const sub = st.isInfo
-          ? "sob demanda"
+        const sub = st.subLabel
+          ? st.subLabel
           : st.isBonus
           ? (unlockedBonuses.length>0 ? unlockedBonuses.length+" de "+BONUS_LIST.length+" liberados" : (isCur?"em edição":"nenhum ainda"))
           : (isDone && st.price>0 ? fmt(st.price) : (isCur ? "em edição" : "não incluso"));
@@ -61761,54 +61780,95 @@ function _CalculadoraModular({isMob}){
     {captureActive && <_ValorModulo price={capturePrice}/>}
   </div>;
 
-  // ── ETAPA 6 — PROJETOS PONTUAIS ──
   // ── ETAPA 6 — MATERIAIS GRÁFICOS ────────────────────────────────
-  // Etapa EXPLICATIVA: não entra no total nem tem seleção. Existe pra deixar
-  // claro na reunião que material gráfico é avulso, sob demanda — evita o
-  // cliente achar que "peça impressa" está inclusa na recorrência.
+  // Dois formatos selecionáveis: AVULSO (sob demanda, fora da recorrência)
+  // ou PLANO MENSAL (R$1.500, entra na recorrência). Proporção do plano:
+  // 1 novo (R$400) = 2 ajustes (R$200) → 5 novos ≈ 10 ajustes, combináveis.
   const _stepGraficos = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="6" ico="shapes" active={false}
+    <_ModuleHeader num="6" ico="shapes" active={graficosKey!=="none"}
       title="Materiais Gráficos"
-      subtitle="Peças avulsas, cobradas por demanda — não entram na recorrência."
-      versaoLabel="Sob demanda"
-      nivelLabel="Avulso"/>
+      subtitle="Folder, banner, cartaz, manual, catálogo, materiais de feira e afins."
+      versaoLabel={graficosKey==="none"?"Não selecionado":graficosKey==="avulso"?"Avulso":"Plano mensal"}
+      nivelLabel="Design"/>
 
-    <div style={{background:"linear-gradient(135deg,#fffbeb,#ffffff)",border:"1.5px solid #fde68a",borderRadius:16,padding:isMob?"16px 15px":"18px 20px",display:"flex",alignItems:"flex-start",gap:13}}>
-      <div style={{width:40,height:40,borderRadius:12,background:"#fef3c7",border:"1px solid #fde68a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <_PxIco n="lightbulb" size={19} color="#b45309"/>
-      </div>
-      <div style={{minWidth:0}}>
-        <div style={{color:"#92400e",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Não é mensalidade — é conforme a necessidade</div>
-        <div style={{color:"#a16207",fontSize:12.5,marginTop:5,lineHeight:1.6}}>
-          Material gráfico não entra no valor recorrente. Cada peça é orçada e cobrada quando surge a demanda — numa feira, num evento, no lançamento de um produto. Tem mês que não precisa de nenhuma; tem mês que precisa de cinco.
-        </div>
-      </div>
-    </div>
-
-    {/* Tabela de preços */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
+    {/* ═══ ESCOLHA DO FORMATO ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
       {[
-        {v:400, l:"Material novo", d:"Criação do zero: conceito, diagramação e arte final prontos pra impressão.", ico:"pentool", cor:"#9F43F6"},
-        {v:200, l:"Ajuste de material pronto", d:"Alteração em peça já existente: trocar texto, data, foto, preço ou adaptar formato.", ico:"sliders", cor:"#0891b2"},
-      ].map(function(x){
-        return <div key={x.l} style={{background:"#fff",border:"1.5px solid #eef0f5",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
+        {key:"avulso", ico:"pentool", titulo:"Avulso · sob demanda",
+         precoLabel:"R$ 400", sub:"novo · R$ 200 ajuste",
+         desc:"Sem mensalidade: cada peça é cobrada quando surge a demanda. Tem mês sem nenhuma, tem mês com cinco."},
+        {key:"recorrente", ico:"calendar", titulo:"Plano mensal",
+         precoLabel:fmt(cfg.graficos.recorrente.price), sub:"/mês · entra na recorrência",
+         desc:"Até "+cfg.graficos.recorrente.novos+" materiais novos por mês — ou até "+cfg.graficos.recorrente.ajustes+" ajustes, combináveis (1 novo = 2 ajustes)."},
+      ].map(function(op){
+        const sel = graficosKey===op.key;
+        return <button key={op.key} type="button" onClick={function(){setGraficosKey(sel?"none":op.key);}}
+          style={{background:sel?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"17px 18px",cursor:"pointer",textAlign:"left",transition:"all .18s",display:"flex",flexDirection:"column",gap:10,fontFamily:_PORTF_FF,boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
+          onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";} }}
+          onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";} }}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:12,background:x.cor+"14",border:"1px solid "+x.cor+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <_PxIco n={x.ico} size={21} color={x.cor}/>
-            </div>
+            <_PxIcoBox n={op.ico} box={44} estado={sel?"ativo":"neutro"}/>
             <div style={{minWidth:0,flex:1}}>
-              <div style={{color:INK,fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{x.l}</div>
-              <div style={{color:x.cor,fontSize:19,fontWeight:900,letterSpacing:-.6,fontFeatureSettings:"'tnum'",marginTop:2}}>
-                {fmt(x.v)}<span style={{color:SOFT,fontSize:11,fontWeight:700,marginLeft:5,letterSpacing:0}}>por peça</span>
+              <div style={{color:sel?INK:"#7a8494",fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1.25}}>{op.titulo}</div>
+              <div style={{color:sel?PX_DK:"#9aa4b2",fontWeight:800,fontSize:16,marginTop:3,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>
+                {op.precoLabel}<span style={{color:SOFT,fontSize:10.5,fontWeight:600,marginLeft:4,letterSpacing:0}}>{op.sub}</span>
               </div>
             </div>
+            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
+            </div>
           </div>
-          <div style={{color:MUTE,fontSize:12,lineHeight:1.55}}>{x.d}</div>
-        </div>;
+          <div style={{color:MUTE,fontSize:11.5,lineHeight:1.55}}>{op.desc}</div>
+        </button>;
       })}
     </div>
 
-    {/* O que é peça única */}
+    {/* ═══ DETALHE DO FORMATO ESCOLHIDO ═══ */}
+    {graficosKey==="avulso"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
+      {[
+        {v:cfg.graficos.avulsoNovo, l:"Material novo", d:"Criação do zero: conceito, diagramação e arte final prontos pra impressão.", ico:"pentool", cor:"#9F43F6"},
+        {v:cfg.graficos.avulsoAjuste, l:"Ajuste de material pronto", d:"Alteração em peça existente: trocar texto, data, foto, preço ou adaptar formato.", ico:"sliders", cor:"#0891b2"},
+      ].map(function(x){
+        return <div key={x.l} style={{background:"#fff",border:"1.5px solid #eef0f5",borderRadius:16,padding:"17px 19px",display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:42,height:42,borderRadius:12,background:x.cor+"14",border:"1px solid "+x.cor+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n={x.ico} size={20} color={x.cor}/>
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:INK,fontSize:13.5,fontWeight:800,letterSpacing:-.3}}>{x.l}</div>
+              <div style={{color:x.cor,fontSize:18,fontWeight:900,letterSpacing:-.5,fontFeatureSettings:"'tnum'",marginTop:2}}>
+                {fmt(x.v)}<span style={{color:SOFT,fontSize:10.5,fontWeight:700,marginLeft:5,letterSpacing:0}}>por peça</span>
+              </div>
+            </div>
+          </div>
+          <div style={{color:MUTE,fontSize:11.5,lineHeight:1.55}}>{x.d}</div>
+        </div>;
+      })}
+    </div>}
+
+    {graficosKey==="recorrente"&&<div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1.5px solid "+PX_BD,borderRadius:16,padding:"18px 20px"}}>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:12}}>Como funciona a franquia do mês</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+        {[
+          {l:cfg.graficos.recorrente.novos+" materiais novos", d:"usando só criações do zero", ico:"pentool"},
+          {l:cfg.graficos.recorrente.ajustes+" ajustes", d:"usando só alterações em peças prontas", ico:"sliders"},
+          {l:"Ou combinado", d:"1 novo = 2 ajustes · ex.: 3 novos + 4 ajustes", ico:"shapes"},
+        ].map(function(x){
+          return <div key={x.l} style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:12,padding:"13px 15px",display:"flex",alignItems:"center",gap:11}}>
+            <_PxIco n={x.ico} size={18} color={PX}/>
+            <div style={{minWidth:0}}>
+              <div style={{color:INK,fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+              <div style={{color:"#9aa4b2",fontSize:10.5,fontWeight:600,marginTop:1,lineHeight:1.35}}>{x.d}</div>
+            </div>
+          </div>;
+        })}
+      </div>
+      <div style={{color:MUTE,fontSize:11.5,lineHeight:1.55,marginTop:12,paddingTop:12,borderTop:"1px solid #efe9fb"}}>
+        Excedeu a franquia? As peças extras saem na tabela avulsa ({fmt(cfg.graficos.avulsoNovo)} novo · {fmt(cfg.graficos.avulsoAjuste)} ajuste).
+      </div>
+    </div>}
+
+    {/* Que tipo de peça entra aqui */}
     <div>
       <_BlocoTitulo titulo="Que tipo de peça entra aqui"/>
       <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"18px 20px"}}>
@@ -61817,7 +61877,7 @@ function _CalculadoraModular({isMob}){
             {l:"Folder",   ico:"folderkanban"},
             {l:"Banner",   ico:"layout"},
             {l:"Manual",   ico:"clipboard"},
-            {l:"Catálogo",  ico:"copy"},
+            {l:"Catálogo", ico:"copy"},
           ].map(function(x){
             return <div key={x.l} style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"13px 14px",display:"flex",alignItems:"center",gap:10}}>
               <_PxIco n={x.ico} size={17} color={PX}/>
@@ -61837,11 +61897,77 @@ function _CalculadoraModular({isMob}){
       </div>
     </div>
 
-    <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"12px 16px",color:MUTE,fontSize:11.5,lineHeight:1.55,display:"flex",alignItems:"center",gap:9}}>
-      <_PxIco n="lock" size={14} color={SOFT}/>
-      Etapa informativa: nada aqui entra no total do pacote — a cobrança acontece só quando a peça é solicitada.
+    {graficosKey==="recorrente"
+      ? <_ValorModulo price={graficosPrice}/>
+      : <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"12px 16px",color:MUTE,fontSize:11.5,lineHeight:1.55,display:"flex",alignItems:"center",gap:9}}>
+          <_PxIco n="lightbulb" size={14} color={SOFT}/>
+          {graficosKey==="avulso"
+            ? "Formato avulso: nada entra na recorrência — a cobrança acontece por peça, quando solicitada."
+            : "Escolha um formato acima — ou siga sem materiais gráficos no pacote."}
+        </div>}
+  </div>;
+
+  // ── ETAPA 8 — OFERTA (Plano Growth resumido, dourado) ───────────
+  // Etapa informativa de fechamento: apresenta o Plano Growth (skin in the
+  // game) antes dos bônus. Versão completa vive na aba Growth do Portfólio.
+  const OURO_OF="#f0b429", OURO2_OF="#ffd868";
+  const _stepOferta = <div style={{display:"flex",flexDirection:"column",gap:22}}>
+    <_ModuleHeader num="8" ico="trophy" active={false}
+      title="Oferta"
+      subtitle="O convite pro próximo nível: o Plano Growth."
+      versaoLabel="Plano Growth"
+      nivelLabel="Sócios"/>
+
+    <div style={{background:"linear-gradient(150deg,#1a1206 0%,#2b1e08 45%,#171004 100%)",border:"1.5px solid rgba(240,180,41,0.55)",borderRadius:18,padding:isMob?"22px 18px":"30px 32px",color:"#fff",overflow:"hidden",position:"relative"}}>
+      {/* fio dourado no topo */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+OURO_OF+","+OURO2_OF+","+OURO_OF+")"}}/>
+
+      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",marginBottom:18}}>
+        <div style={{width:60,height:60,borderRadius:16,background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 1px 0 rgba(255,255,255,0.35)"}}>
+          <_PxIco n="rocket" size={28} color="#3d2a05"/>
+        </div>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",color:"#3d2a05",borderRadius:99,padding:"4px 13px",fontSize:10,fontWeight:900,letterSpacing:1,textTransform:"uppercase"}}>Skin in the game</span>
+            <span style={{color:OURO2_OF,fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Pele em jogo</span>
+          </div>
+          <div style={{fontSize:isMob?21:26,fontWeight:900,letterSpacing:-.8,marginTop:6,lineHeight:1.1}}>Plano Growth</div>
+          <div style={{color:"rgba(255,255,255,0.72)",fontSize:12.5,marginTop:5,lineHeight:1.6,maxWidth:640}}>
+            <strong style={{color:"#fff"}}>Não cobramos serviço nem orçamento de anúncios — você não gasta nada, nós investimos.</strong> A Pixels entra com o trabalho e com o dinheiro, e só ganha quando você vende.
+          </div>
+        </div>
+      </div>
+
+      {/* Como chega lá — 3 passos */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10,marginBottom:16}}>
+        {[
+          {n:"1", l:"Estrutura primeiro", d:"canal de vendas rodando e CRM implantado — a base que a consultoria constrói"},
+          {n:"2", l:"Entramos com o dinheiro", d:"serviço completo + verba de anúncios, por nossa conta"},
+          {n:"3", l:"Comissão sobre vendas", d:"valor a negociar — só ganhamos quando a venda acontece"},
+        ].map(function(x){
+          return <div key={x.n} style={{background:"rgba(240,180,41,0.08)",border:"1px solid rgba(240,180,41,0.28)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
+            <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",color:"#3d2a05",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0}}>{x.n}</span>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+              <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
+            </div>
+          </div>;
+        })}
+      </div>
+
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",paddingTop:14,borderTop:"1px solid rgba(240,180,41,0.22)"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:9,color:"rgba(255,255,255,0.60)",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
+          <_PxIco n="lock" size={14} color={OURO_OF}/>
+          Liberado após a Consultoria Growth — detalhes completos na aba Growth do Portfólio.
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"rgba(255,255,255,0.45)",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Remuneração</div>
+          <div style={{color:OURO2_OF,fontSize:16,fontWeight:900,letterSpacing:-.3}}>Comissão · valor a negociar</div>
+        </div>
+      </div>
     </div>
   </div>;
+
 
   const _stepProjects = <div style={{display:"flex",flexDirection:"column",gap:22}}>
     <_ModuleHeader num="7" ico="folderkanban" active={oneTimeIds.length>0}
@@ -62077,7 +62203,7 @@ function _CalculadoraModular({isMob}){
   }
 
   const _stepBonus = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="8" ico="gift" active={unlockedBonuses.length>0} semPills
+    <_ModuleHeader num="9" ico="gift" active={unlockedBonuses.length>0} semPills
       title="Bônus por recorrência"
       subtitle="Quanto maior o pacote mensal, mais equipamento e serviço entram de cortesia."/>
 
@@ -62194,7 +62320,7 @@ function _CalculadoraModular({isMob}){
   </div>;
 
   // ── ETAPA 8 — RESUMO COMPLETO (módulos + entregáveis + bônus) ──
-  function _ResumoModulo({ico, titulo, config, preco, blocos, sufixo}){
+  function _ResumoModulo({ico, titulo, config, preco, blocos, sufixo, aPartir}){
     return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:"17px 18px",boxShadow:"0 1px 2px rgba(15,23,42,.035)"}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12,paddingBottom:13,borderBottom:"1px solid #f2f3f7"}}>
         <_PxIcoBox n={ico} box={40} estado="ativo"/>
@@ -62203,7 +62329,7 @@ function _CalculadoraModular({isMob}){
           {config&&<div style={{color:MUTE,fontSize:11.5,marginTop:3,lineHeight:1.45}}>{config}</div>}
         </div>
         <div style={{textAlign:"right",flexShrink:0}}>
-          <div style={{color:INK,fontWeight:900,fontSize:16,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.2}}>{fmt(preco)}</div>
+          <div style={{color:INK,fontWeight:900,fontSize:16,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.2}}>{aPartir&&<span style={{color:SOFT,fontSize:10,fontWeight:700,marginRight:4}}>a partir de</span>}{fmt(preco)}</div>
           <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>{sufixo||"/mês"}</div>
         </div>
       </div>
@@ -62221,7 +62347,7 @@ function _CalculadoraModular({isMob}){
   }
 
   const _stepResumo = <div style={{display:"flex",flexDirection:"column",gap:22}}>
-    <_ModuleHeader num="9" ico="clipboard" active={hasAnySelection}
+    <_ModuleHeader num="10" ico="clipboard" active={hasAnySelection}
       title="Resumo do escopo"
       subtitle="Confira o pacote montado e copie pro cliente."
       versaoLabel={hasAnySelection?"Pronto":"Vazio"}
@@ -62271,6 +62397,11 @@ function _CalculadoraModular({isMob}){
             preco={growthPrice}
             blocos={GROWTH_BLOCOS.map(function(b){return b.titulo;})}/>}
 
+          {graficosRec&&<_ResumoModulo ico="shapes" titulo="Materiais Gráficos — plano mensal"
+            config={"Até "+cfg.graficos.recorrente.novos+" materiais novos ou "+cfg.graficos.recorrente.ajustes+" ajustes/mês (1 novo = 2 ajustes)"}
+            preco={graficosPrice}
+            blocos={["Franquia mensal combinável de novos e ajustes","Excedente na tabela avulsa (R$ 400 novo · R$ 200 ajuste)"]}/>}
+
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
             config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
             preco={capturePrice} blocos={CAPTURE_INCLUSOS}/>}
@@ -62285,7 +62416,7 @@ function _CalculadoraModular({isMob}){
             const pr=cfg.oneTimeProjects.find(function(x){return x.id===id;});
             if(!pr) return null;
             return <_ResumoModulo key={id} ico={pr.ico||"folderkanban"} titulo={pr.label}
-              config={pr.short} preco={pr.price} sufixo={pr.fixo?"único":"a partir de"}
+              config={pr.short} preco={pr.price} sufixo={pr.fixo?"único":"por projeto"} aPartir={!pr.fixo}
               blocos={pr.entregas||[]}/>;
           })}
         </div>
@@ -62329,7 +62460,7 @@ function _CalculadoraModular({isMob}){
 
   const STEP_BODIES = {
     social:_stepSocial, creatives:_stepCreatives, traffic:_stepTraffic,
-    growth:_stepGrowth, capture:_stepCapture, graficos:_stepGraficos, projects:_stepProjects, bonus:_stepBonus, resumo:_stepResumo,
+    growth:_stepGrowth, capture:_stepCapture, graficos:_stepGraficos, projects:_stepProjects, oferta:_stepOferta, bonus:_stepBonus, resumo:_stepResumo,
   };
 
   /* ═══ Zerar a calculadora ═══ */
@@ -62339,6 +62470,7 @@ function _CalculadoraModular({isMob}){
     setCreatives({ staticCreatives:0, editedVideos:0, videoVariations:0 });
     setTrafficKey("none");
     setGrowthOn(false);
+    setGraficosKey("none");
     setCaptureDailies(0);
     setOneTimeIds([]);
     setStepIdx(0);
@@ -62431,7 +62563,7 @@ function _CalculadoraModular({isMob}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
@@ -62442,7 +62574,7 @@ function _CalculadoraModular({isMob}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -62462,9 +62594,9 @@ function _CalculadoraModular({isMob}){
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
-    captureActive, captureDailies, capturePrice, growthActive, growthPrice, cfg,
+    captureActive, captureDailies, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
     oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
-  const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || oneTimeIds.length>0;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
   if(socialActive){
@@ -62486,6 +62618,9 @@ function _ResumoBox(p){
   }
   if(growthActive){
     itens.push({ico:"chart", nome:"Growth", linhas:["6 pilares · presença em campo"], valor:growthPrice});
+  }
+  if(graficosRec){
+    itens.push({ico:"shapes", nome:"Materiais Gráficos", linhas:["até 5 novos ou 10 ajustes/mês"], valor:graficosPrice});
   }
   if(captureActive){
     itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
@@ -63110,17 +63245,18 @@ function PagePortfolio(props){
                 <div style={{color:"#c4b5fd",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Fase 2 · contínuo</div>
                 <div style={{fontSize:isMob?21:26,fontWeight:900,letterSpacing:-.8,marginTop:2,display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   Plano Growth
-                  <span style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pacote topo</span>
+                  <span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#3d2a05",borderRadius:99,padding:"4px 12px",fontSize:10,fontWeight:900,letterSpacing:.8,textTransform:"uppercase"}}>Skin in the game</span>
+                  <span style={{color:"#ffd868",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Pele em jogo</span>
                 </div>
                 <div style={{color:"rgba(255,255,255,0.65)",fontSize:12.5,marginTop:4,lineHeight:1.55,maxWidth:560}}>
-                  Entramos junto no risco: a Pixels banca o serviço e o orçamento de anúncios, e ganha só quando o cliente vende. Objetivos 100% alinhados — crescemos quando você cresce.
+                  Não cobramos serviço nem orçamento de anúncios — você não gasta nada, nós investimos. Depois que o canal de vendas e o CRM estão estruturados, a Pixels entra com o dinheiro e só ganha quando você vende.
                 </div>
               </div>
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
               <div style={{color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Remuneração</div>
-              <div style={{fontWeight:900,fontSize:isMob?34:44,letterSpacing:-1.6,marginTop:2,color:"#4ade80",lineHeight:1}}>%</div>
-              <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:4,maxWidth:180,lineHeight:1.45}}>comissão sobre as vendas do digital · percentual definido em contrato</div>
+              <div style={{fontWeight:900,fontSize:isMob?26:34,letterSpacing:-1.2,marginTop:2,color:"#ffd868",lineHeight:1}}>%</div>
+              <div style={{color:"rgba(255,255,255,0.55)",fontSize:11.5,fontWeight:600,marginTop:4,maxWidth:180,lineHeight:1.45}}>comissão sobre as vendas do digital · valor a negociar</div>
             </div>
           </div>
 
@@ -63154,7 +63290,7 @@ function PagePortfolio(props){
             {[
               {n:"1", l:"A Pixels investe", d:"serviço completo + verba de anúncios, do nosso bolso"},
               {n:"2", l:"O digital vende",  d:"vendas rastreadas no CRM Pixels implantado na consultoria"},
-              {n:"3", l:"Dividimos o ganho",d:"um percentual combinado em contrato vai pra Pixels — só sobre o que vendeu"},
+              {n:"3", l:"Dividimos o ganho",d:"comissão com valor a negociar — só sobre o que vendeu"},
             ].map(function(x,i){
               return <div key={x.n} style={{background:"rgba(159,67,246,0.08)",border:"1px solid rgba(159,67,246,0.22)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
                 <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0}}>{x.n}</span>
@@ -63193,7 +63329,7 @@ function PagePortfolio(props){
             "FASE 2 · Plano Growth (após a consultoria)",
             "Serviço sem mensalidade + verba de anúncios da Pixels.",
             "CRM Pixels segue incluso — é nele que as vendas do digital são rastreadas pra comissão transparente.",
-            "Remuneração: comissão sobre as vendas geradas pelo digital — percentual definido em contrato.",
+            "Skin in the game: não cobramos serviço nem orçamento — a Pixels investe e só ganha na comissão (valor a negociar).",
             "Risco compartilhado e objetivos alinhados.",
           ]).join("\n"));}}
           style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
