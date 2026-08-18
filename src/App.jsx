@@ -51653,6 +51653,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     return true;
   };
   const TABS=ALL_TABS.filter(t=>tabEnabled(t.id));
+  // Calculadora no portal â clientes liberados montam o próprio pacote;
+  // as respostas são salvas no Supabase (tabela portal_calculadora).
+  const PORTAL_CALC_CLIENTS=["lerofibras"];
+  if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
+    TABS.push({id:"calculadora", ico:"package", label:"Monte seu pacote"});
+  }
 
   // Se ainda nao carregou o cliente dinamico, mostra loading em vez de "nao disponivel"
   if(!clResolved){
@@ -51761,6 +51767,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} currentClientUser={currentClientUser}/>}
+
+    {/* ── MONTE SEU PACOTE ── calculadora comercial com autosave por cliente */}
+    {tab==="calculadora"&&typeof _CalculadoraModular==="function"&&<_CalculadoraModular isMob={isMob} persistClientId={selCl}/>}
     {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
       // Briefing no portal: CLIENTE + gestor Pixels podem editar (cliente conhece a propria empresa melhor que ninguem).
       // Bioter: passa unitId pra isolar briefing por unidade.
@@ -60980,7 +60989,7 @@ function _PortfDrawer(props){
    Módulos empilhados: Gestão de Redes Sociais → Criativos → Tráfego
    → Projetos Pontuais → Resumo. Resumo sticky à direita no desktop.
 ═══════════════════════════════════════════════════════════════ */
-function _CalculadoraModular({isMob}){
+function _CalculadoraModular({isMob, persistClientId}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
   const PX_BG = "#f5f0ff";
@@ -61062,6 +61071,36 @@ function _CalculadoraModular({isMob}){
       document.body.style.overflow = _prevOverflow;
     };
   },[focusMode]);
+  // âââ PersistÃªncia no Supabase (portal do cliente) âââ
+  // Com persistClientId setado (ex.: portal do Lero Fibras), o pacote montado
+  // Ã© hidratado do Supabase no mount e salvo com debounce a cada mudanÃ§a.
+  const _calcHydratedRef = useRef(!persistClientId);
+  useEffect(function(){
+    if(!persistClientId || typeof window==="undefined" || !window._sb){ _calcHydratedRef.current=true; return undefined; }
+    let alive=true;
+    window._sb.from("portal_calculadora").select("payload").eq("client_id",persistClientId).maybeSingle()
+      .then(function(res){
+        if(!alive) return;
+        const pl = res && res.data && res.data.payload;
+        if(pl && typeof pl==="object"){
+          try{
+            if(pl.socialChannels && typeof pl.socialChannels==="object") setSocialChannels(pl.socialChannels);
+            if(typeof pl.socialPosts==="number") setSocialPosts(pl.socialPosts);
+            if(pl.creatives && typeof pl.creatives==="object") setCreatives(pl.creatives);
+            if(typeof pl.trafficKey==="string") setTrafficKey(pl.trafficKey);
+            setGrowthOn(!!pl.growthOn);
+            if(typeof pl.graficosKey==="string") setGraficosKey(pl.graficosKey);
+            if(typeof pl.captureDailies==="number") setCaptureDailies(pl.captureDailies);
+            if(Array.isArray(pl.oneTimeIds)) setOneTimeIds(pl.oneTimeIds);
+            setOfertaInteresse(!!pl.ofertaInteresse);
+          }catch(e){}
+        }
+        _calcHydratedRef.current=true;
+      })
+      .catch(function(){ _calcHydratedRef.current=true; });
+    return function(){ alive=false; };
+  },[persistClientId]);
+
   // Estado do módulo Gestão ativo/inativo (depende de ter algum canal)
   const socialActive = countSocialChannels(socialChannels) > 0;
   // Módulo Criativos ativo = alguma quantidade > 0
@@ -61091,6 +61130,27 @@ function _CalculadoraModular({isMob}){
     if(n > _prevUnlocked.current) setPackOpen(false);
     _prevUnlocked.current = n;
   },[monthlyRecurring]);
+
+  // Autosave do pacote no Supabase (debounce 900ms) â sÃ³ com persistClientId
+  const _calcSaveTimerRef = useRef(null);
+  useEffect(function(){
+    if(!persistClientId || typeof window==="undefined" || !window._sb) return undefined;
+    if(!_calcHydratedRef.current) return undefined;
+    if(_calcSaveTimerRef.current) clearTimeout(_calcSaveTimerRef.current);
+    _calcSaveTimerRef.current = setTimeout(function(){
+      const payload = {
+        socialChannels:socialChannels, socialPosts:socialPosts, creatives:creatives,
+        trafficKey:trafficKey, growthOn:!!growthOn, graficosKey:graficosKey,
+        captureDailies:captureDailies, oneTimeIds:oneTimeIds, ofertaInteresse:!!ofertaInteresse,
+        totals:{ monthlyRecurring:monthlyRecurring, oneTimePrice:oneTimePrice },
+      };
+      window._sb.from("portal_calculadora")
+        .upsert({client_id:persistClientId, payload:payload, updated_at:new Date().toISOString(), updated_by:"portal"},{onConflict:"client_id"})
+        .then(function(res){ if(res&&res.error) console.warn("portal_calculadora save:",res.error.message); })
+        .catch(function(e){ console.warn("portal_calculadora save:",e); });
+    },900);
+    return function(){ if(_calcSaveTimerRef.current) clearTimeout(_calcSaveTimerRef.current); };
+  },[persistClientId,socialChannels,socialPosts,creatives,trafficKey,growthOn,graficosKey,captureDailies,oneTimeIds,ofertaInteresse]);
 
   // ═══ Textos comuns ═══
   // Entregaveis da Gestao de Redes Sociais — 4 frentes de trabalho.
@@ -61261,12 +61321,8 @@ function _CalculadoraModular({isMob}){
       });
     }
     lines.push("Resumo:");
-    if(ofertaInteresse){
-      lines.push("Mensal recorrente: R$ 0/mês — Plano Growth (interesse registrado)");
-      lines.push("A Pixels investe o serviço e a verba de anúncios; remuneração por comissão, valor a negociar.");
-    } else {
-      lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
-    }
+    lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
+    if(ofertaInteresse) lines.push("Interesse registrado no Plano Growth — cumprindo os requisitos, o mensal vai a R$ 0 (comissão a negociar).");
     if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
     lines.push("");
     lines.push("Observação:");
@@ -62039,17 +62095,28 @@ function _CalculadoraModular({isMob}){
               {ofertaInteresse?"Interesse registrado no Plano Growth":"Tenho interesse no Plano Growth"}
             </span>
             <span style={{display:"block",color:ofertaInteresse?"rgba(61,42,5,0.75)":"rgba(255,255,255,0.55)",fontSize:11,fontWeight:600,marginTop:3,lineHeight:1.45}}>
-              {ofertaInteresse?"O mensal recorrente foi zerado no resumo — a Pixels investe.":"Marque pra ver o que acontece com o valor mensal do pacote."}
+              {ofertaInteresse?"Interesse registrado — cumprindo os requisitos, o mensal vai a R$ 0.":"Marque pra ver o que acontece com o valor mensal do pacote."}
             </span>
           </span>
           <_PxIco n={ofertaInteresse?"gift":"trophy"} size={20} color={ofertaInteresse?"#3d2a05":OURO_OF}/>
         </button>
       </div>
 
+      {/* O que acontece com o mensal — só aqui na Oferta (o resumo mantém o valor real) */}
+      {ofertaInteresse&&<div style={{background:"rgba(240,180,41,0.10)",border:"1.5px solid rgba(240,180,41,0.45)",borderRadius:14,padding:isMob?"16px 16px":"18px 22px",marginBottom:16}}>
+        <style>{"@keyframes pxOfZero{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
+        <div style={{color:"rgba(255,255,255,0.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Mensal recorrente no Plano Growth</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
+          <span style={{color:"rgba(255,255,255,0.40)",fontWeight:800,fontSize:18,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
+          <span style={{display:"inline-block",color:OURO2_OF,fontWeight:900,fontSize:34,letterSpacing:-1.4,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZero .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"rgba(255,216,104,0.6)",fontSize:14,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
+        </div>
+        <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,fontWeight:600,marginTop:8,lineHeight:1.5}}>Válido após cumprir os requisitos acima — a Pixels investe o serviço e os anúncios; remuneração por comissão, valor a negociar.</div>
+      </div>}
+
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",paddingTop:14,borderTop:"1px solid rgba(240,180,41,0.22)"}}>
         <div style={{display:"inline-flex",alignItems:"center",gap:9,color:"rgba(255,255,255,0.60)",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
           <_PxIco n="lock" size={14} color={OURO_OF}/>
-          Liberado após a Consultoria Growth — detalhes completos na aba Growth do Portfólio.
+          Liberação após reunião de alinhamento
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{color:"rgba(255,255,255,0.45)",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Remuneração</div>
@@ -62454,16 +62521,7 @@ function _CalculadoraModular({isMob}){
         <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
           <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
-          {ofertaInteresse
-            ? <div style={{marginTop:4}}>
-                <style>{"@keyframes pxOfZero{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
-                <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
-                  <span style={{color:SOFT,fontWeight:800,fontSize:16,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
-                  <span style={{display:"inline-block",color:"#b7791f",fontWeight:900,fontSize:30,letterSpacing:-1.3,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZero .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"#c9a227",fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
-                </div>
-                <div style={{color:"#8a5a09",fontSize:10.5,fontWeight:800,marginTop:6,letterSpacing:.2}}>Plano Growth · a Pixels investe — comissão a negociar</div>
-              </div>
-            : <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></div>}
+          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></div>
         </div>
         {oneTimePrice>0&&<div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:16,padding:"18px 20px"}}>
           <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Investimento pontual</div>
@@ -62742,18 +62800,9 @@ function _ResumoBox(p){
     <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
       <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
-      {ofertaInteresse
-        ? <div style={{marginTop:4}}>
-            <style>{"@keyframes pxOfZeroSb{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
-            <div style={{display:"flex",alignItems:"baseline",gap:9,flexWrap:"wrap"}}>
-              <span style={{color:SOFT,fontWeight:800,fontSize:15,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
-              <span style={{display:"inline-block",color:"#b7791f",fontWeight:900,fontSize:32,letterSpacing:-1.4,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZeroSb .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"#c9a227",fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
-            </div>
-            <div style={{color:"#8a5a09",fontSize:10,fontWeight:800,marginTop:6,letterSpacing:.2}}>Plano Growth · a Pixels investe — comissão a negociar</div>
-          </div>
-        : <div style={{color:INK,fontWeight:900,fontSize:32,letterSpacing:-1.4,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
-            {fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span>
-          </div>}
+      <div style={{color:INK,fontWeight:900,fontSize:32,letterSpacing:-1.4,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+        {fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span>
+      </div>
     </div>
 
     {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:14,padding:"14px 16px",marginTop:10}}>
