@@ -6,6 +6,11 @@ import React from 'react';
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
 // Dados dos clientes: contratos, métricas, metas, contatos, logos
+// ─── Helper global de mobile ───────────────────────────────────────────
+// Avaliado a cada render (celular não muda de largura no meio do uso).
+// Usado nos gridTemplateColumns dos módulos que não recebem isMob por prop.
+function _pxMob(){ try{ return window.innerWidth<768; }catch(e){ return false; } }
+
 // Depende de: 00_globals.jsx
 // Usado por: 01_dashboard, 02_clientes, 03_clientes2 e outros
 
@@ -926,6 +931,56 @@ function pxFinalFiles(task){
   });
 }
 if(typeof window!=="undefined") window.pxFinalFiles = pxFinalFiles;
+
+/* ═══════════════════════════════════════════════════════════════
+   pxFinalFilesVersoes — separa a ENTREGA ATUAL das versões antigas.
+
+   Quando o card volta pra ajuste, o designer sobe a arte corrigida sem
+   apagar a anterior. Resultado: aprovação e portal mostravam um "carrossel"
+   com v1 + v2 do mesmo post (reportado 18/08/2026 — 2 vídeos do mesmo take).
+
+   Regra: arquivos subidos na mesma leva = mesma versão. Um intervalo maior
+   que 6h entre uploads marca uma versão nova (carrossel de verdade sobe
+   junto; versão nova vem dias depois, atrás de um pedido de ajuste).
+   Sem data em algum arquivo (cards legados) → não versiona, devolve tudo.
+   A ORDEM original (drag&drop da aba Arquivos) é sempre preservada.
+═══════════════════════════════════════════════════════════════ */
+function _pxFileTsSimples(f){
+  const v = (f && (f.addedAtIso || f.addedAt)) || "";
+  const str = String(v);
+  if(!str) return 0;
+  if(/^\d{4}-\d{2}-\d{2}T/.test(str)){ const d=new Date(str); return isNaN(d.getTime())?0:d.getTime(); }
+  const m = str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+  if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
+  return 0;
+}
+function pxFinalFilesVersoes(task){
+  const todos = pxFinalFiles(task);
+  const vazio = { atuais:todos, anteriores:[], versoes:1 };
+  if(todos.length<=1) return vazio;
+  if(todos.some(function(f){ return !_pxFileTsSimples(f); })) return vazio;  // legado sem data
+  const GAP = 6*60*60*1000;
+  const ord = todos.slice().sort(function(a,b){ return _pxFileTsSimples(a)-_pxFileTsSimples(b); });
+  let corte = 0, versoes = 1;
+  for(let i=1;i<ord.length;i++){
+    if(_pxFileTsSimples(ord[i]) - _pxFileTsSimples(ord[i-1]) > GAP){ corte = i; versoes++; }
+  }
+  if(corte===0) return vazio;
+  const _chave = function(f){ return String(f.id||"")+"|"+String(f.url||""); };
+  const atuaisSet = {};
+  ord.slice(corte).forEach(function(f){ atuaisSet[_chave(f)] = true; });
+  return {
+    atuais:     todos.filter(function(f){ return atuaisSet[_chave(f)]; }),
+    anteriores: todos.filter(function(f){ return !atuaisSet[_chave(f)]; }),
+    versoes:    versoes,
+  };
+}
+// Atalho: só a entrega mais recente (aprovações e portal usam esta)
+function pxFinalFilesAtuais(task){ return pxFinalFilesVersoes(task).atuais; }
+if(typeof window!=="undefined"){
+  window.pxFinalFilesVersoes = pxFinalFilesVersoes;
+  window.pxFinalFilesAtuais  = pxFinalFilesAtuais;
+}
 
 function fixLegacyUrl(u){
   if(!u||typeof u!=="string")return u;
@@ -3316,7 +3371,7 @@ function _LoginsCardsView(props){
   const microHint = {color:"#94a3b8",fontSize:11,marginTop:4};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:12,alignItems:"stretch"}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(2,minmax(0,1fr))",gap:12,alignItems:"stretch"}}>
       {SERVICES.map(function(svc){
         const uv = get(svc.userField) || "";
         const pv = get(svc.passField) || "";
@@ -3331,7 +3386,7 @@ function _LoginsCardsView(props){
             <div style={{fontSize:13.5,fontWeight:800,color:"#0f172a",letterSpacing:-.15,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{svc.name}</div>
             {filled && <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",flexShrink:0}} title="Preenchido"/>}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
             <div style={{minWidth:0}}>
               <div style={microLbl}>{svc.userLabel}</div>
               <input type="text" value={uv} disabled={!canEdit} spellCheck={false} autoComplete="off"
@@ -4581,7 +4636,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             </div>;
           })}
           {/* Mini totais */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:2}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:6,marginTop:2}}>
             <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
               <div style={{color:"#0f172a",fontWeight:600,fontSize:16}}>{myTasks.length}</div>
               <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Minhas</div>
@@ -5841,7 +5896,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
           <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:16}}>
             {clientModal.mode==="dashboard"&&<>
               {/* KPIs */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(2,1fr)",gap:10}}>
                 {[
                   {l:"Saúde",v:cl.health+"%",c:cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd,t:`NPS ${cl.nps}`},
                   {l:"MRR",v:"R$ "+cl.contract.toLocaleString("pt-BR"),c:C.gr,t:"contrato mensal"},
@@ -5854,14 +5909,14 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
                 </div>)}
               </div>
               {/* Meta vs Google */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
                 {[{icon:"📘",label:"Meta Ads",color:"#1877f2",data:cl.meta},{icon:"🔍",label:"Google Ads",color:"#34a853",data:cl.google}].map(ch=>(
                   <div key={ch.label} style={{background:C.card,borderRadius:12,padding:"14px 16px",boxShadow:"0 1px 3px rgba(0,0,0,0.10)",borderTop:`2px solid ${ch.color}`}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                       <span style={{fontSize:18}}>{ch.icon}</span>
                       <span style={{color:C.tx,fontWeight:700,fontSize:13}}>{ch.label}</span>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:6}}>
                       {[{l:"ROAS",v:ch.data.roas+"x",c:ch.data.roas>=4?C.gr:C.yw},{l:"Leads",v:ch.data.leads,c:C.bl},{l:"CPC",v:"R$"+ch.data.cpc,c:C.ts},{l:"CTR",v:ch.data.ctr+"%",c:C.ts}].map(s=>(
                         <div key={s.l} style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
                           <div style={{color:s.c,fontWeight:900,fontSize:14}}>{s.v}</div>
@@ -5882,7 +5937,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
                 ))}
               </div>
               {/* demandas */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8}}>
                 {[{l:"Abertas",v:open.length,c:cl.color},{l:"Aprovadas",v:done.length,c:C.gr},{l:"Atrasadas",v:late.length,c:late.length>0?C.rd:C.td}].map(s=>(
                   <div key={s.l} style={{background:`${s.c}18`,border:`1px solid ${s.c}33`,borderRadius:12,padding:"12px",textAlign:"center"}}>
                     <div style={{color:s.c,fontWeight:900,fontSize:24}}>{s.v}</div>
@@ -5898,7 +5953,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
             </>}
 
             {clientModal.mode==="info"&&<>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
                 {[
                   {l:"Setor",v:cl.sector,i:"🏢"},
                   {l:"Status",v:cl.status,i:"●"},
@@ -5997,7 +6052,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
             </div>}
 
             {/* stats */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8}}>
               {[
                 {l:"Abertas",  v:open.length,  c:cl.color},
                 {l:"Aprovadas",v:done.length,  c:C.gr},
@@ -6031,7 +6086,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
               </div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",borderTop:`1px solid ${cl.color}22`}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",borderTop:`1px solid ${cl.color}22`}}>
             {[
               {icon:"📊",label:"Dashboard",mode:"dashboard"},
               {icon:"🧠",label:"Mapa Mental",mode:"mindmap"},
@@ -7338,7 +7393,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
       </div>
 
       {/* Leads + ROAS trend */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Leads por Semana</div>
           <ResponsiveContainer width="100%" height={160}>
@@ -7367,7 +7422,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
       </div>
 
       {/* Funnel + Distribution */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>Funil de Conversão</div>
           <FunnelViz data={meta.funnel} color="#1877f2"/>
@@ -7387,7 +7442,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
       </div>
 
       {/* Demographics + Devices */}
-      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Faixa Etária por Gênero</div>
           <ResponsiveContainer width="100%" height={150}>
@@ -7465,7 +7520,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
         <KpiCard label="CPL" value={"R$"+(cl.google.leads>0?(cl.google.spend/cl.google.leads).toFixed(0):"—")} sub="custo/lead" trend="-5%" color="#34a853" good={true}/>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Leads + Impressões</div>
           <ResponsiveContainer width="100%" height={160}>
@@ -7521,7 +7576,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>Funil de Conversão</div>
           <FunnelViz data={google.funnel} color="#34a853"/>
@@ -7563,7 +7618,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
         <KpiCard label="CPM" value={"R$"+(cl.meta.spend/Math.max(1,cl.meta.leads)*3.2).toFixed(2)} sub="custo/mil imp." trend="-4%" color="#1877f2" good={true}/>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>Alcance Orgânico vs Pago</div>
           <ResponsiveContainer width="100%" height={160}>
@@ -7593,7 +7648,7 @@ function ClienteDashboard({cl,tab,setTab,isMob}){
         </div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{background:C.card,borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>Tipos de Reação</div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -7759,7 +7814,7 @@ function ClienteInfo({cl}){
     {groups.map(g=>(
       <div key={g.title} style={{background:C.card,borderRadius:14,overflow:"hidden",border:"1px solid "+C.b1}}>
         <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,color:C.tx,fontWeight:700,fontSize:13}}>{g.title}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr"}}>
           {g.items.map((r,i)=>(
             <div key={r.l} style={{padding:"11px 18px",borderBottom:i<g.items.length-2?`1px solid ${C.b1}`:"none",borderRight:i%2===0?`1px solid ${C.b1}`:"none"}}>
               <div style={{color:C.td,fontSize:10,marginBottom:3}}>{r.l}</div>
@@ -8299,7 +8354,7 @@ function _ConcCompModal({accent,initial,onClose,onSave}){
         <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>@ handle</div>
           <input value={handle} onChange={function(e){setHandle(e.target.value);}} placeholder="@agrotechbr"
             style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Seguidores</div>
             <input type="number" value={followers} onChange={function(e){setFollowers(e.target.value);}} placeholder="0"
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
@@ -8364,7 +8419,7 @@ function _ConcPostModal({accent,initial,competitors,postTypes,onClose,onSave}){
       <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{initial.id?"Editar post viral":"Registrar post viral"}</div>
       <div style={{fontSize:12,color:"#94a3b8",marginBottom:18,fontWeight:500}}>Preencha os dados que conseguir extrair do post da concorrência</div>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Concorrente *</div>
             <select value={competitorId} onChange={function(e){setCompetitorId(e.target.value);}}
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",background:"#fff",cursor:"pointer"}}>
@@ -8384,7 +8439,7 @@ function _ConcPostModal({accent,initial,competitors,postTypes,onClose,onSave}){
         <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título / legenda curta *</div>
           <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Produtividade leiteira +40% com tecnologia"
             style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr 1fr",gap:8}}>
           <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Curtidas</div>
             <input type="number" value={likes} onChange={function(e){setLikes(e.target.value);}} placeholder="0"
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
@@ -8398,7 +8453,7 @@ function _ConcPostModal({accent,initial,competitors,postTypes,onClose,onSave}){
             <input type="number" value={shares} onChange={function(e){setShares(e.target.value);}} placeholder="0"
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 2fr",gap:10}}>
           <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Data do post</div>
             <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
               style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
@@ -8485,7 +8540,7 @@ function ROIChannelCard({channel,color,icon,invest,setInvest,roas,setRoas,receit
         <div style={{color,fontWeight:800,fontSize:13}}>{channelLabel}</div>
         {liveData&&<div style={{marginLeft:"auto",color:C.td,fontSize:9}}>atual: R${(liveData.spend||0).toLocaleString("pt-BR")} · ROAS {liveData.roas||"—"}x</div>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
         <div><label style={lbl}>Investimento R$</label><input value={invest} onChange={e=>setInvest(e.target.value)} placeholder="Ex: 5000" style={{...inp,borderColor:invest?color+"55":C.b1}}/></div>
         <div><label style={lbl}>ROAS esperado</label><input value={roas} onChange={e=>setRoas(e.target.value)} placeholder="Ex: 4.5" style={inp}/></div>
         <div><label style={lbl}>Receita real R$ (opt)</label><input value={receita} onChange={e=>setReceita(e.target.value)} placeholder="Substitui ROAS" style={inp}/></div>
@@ -8501,7 +8556,7 @@ function ROIChannelCard({channel,color,icon,invest,setInvest,roas,setRoas,receit
       </div>
       {result&&(
         <div style={{background:color+"0d",border:"1px solid "+color+"33",borderRadius:10,padding:"10px 12px",marginTop:4}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:6}}>
             <div><div style={{color:C.td,fontSize:8}}>RECEITA</div><div style={{color,fontWeight:900,fontSize:15}}>R${Math.round(result.receita).toLocaleString("pt-BR")}</div></div>
             <div><div style={{color:C.td,fontSize:8}}>LUCRO LÍQ.</div><div style={{color:result.lucroLiq>=0?"#16a34a":"#dc2626",fontWeight:900,fontSize:15}}>R${Math.round(result.lucroLiq).toLocaleString("pt-BR")}</div></div>
             <div><div style={{color:C.td,fontSize:8}}>ROAS REAL</div><div style={{color,fontWeight:700,fontSize:12}}>{result.roas.toFixed(2)}x</div></div>
@@ -8672,11 +8727,11 @@ function CFerramentas({cl,onMindmap}){
 
         {/* ══ GRID 4 COLUNAS ══ */}
         {(channels.meta||channels.google)&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,alignItems:"start"}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr 1fr",gap:12,alignItems:"start"}}>
 
             {/* Meta Ads — span 2 rows */}
             {channels.meta&&(
-              <div style={{gridColumn:bothCh?"1":"1/3",gridRow:"1/3"}}>
+              <div style={{gridColumn:_pxMob()?"auto":(bothCh?"1":"1/3"),gridRow:_pxMob()?"auto":"1/3"}}>
                 <ROIChannelCard channel="meta" color="#1877f2" icon="📘"
                   invest={investMetaA} setInvest={setInvestMetaA}
                   roas={roasMetaA} setRoas={setRoasMetaA}
@@ -8692,7 +8747,7 @@ function CFerramentas({cl,onMindmap}){
 
             {/* Google Ads — span 2 rows */}
             {channels.google&&(
-              <div style={{gridColumn:bothCh?"2":"1/3",gridRow:"1/3"}}>
+              <div style={{gridColumn:_pxMob()?"auto":(bothCh?"2":"1/3"),gridRow:_pxMob()?"auto":"1/3"}}>
                 <ROIChannelCard channel="google" color="#34a853" icon="🔍"
                   invest={investGoogA} setInvest={setInvestGoogA}
                   roas={roasGoogA} setRoas={setRoasGoogA}
@@ -8708,7 +8763,7 @@ function CFerramentas({cl,onMindmap}){
 
             {/* 4 Previsões — cols 3-4, rows 1-2 */}
             {FORECASTS.length>0?FORECASTS.map((f,i)=>(
-              <div key={f.id} style={{gridColumn:i%2===0?"3":"4",gridRow:i<2?"1":"2"}}>
+              <div key={f.id} style={{gridColumn:_pxMob()?"auto":(i%2===0?"3":"4"),gridRow:_pxMob()?"auto":(i<2?"1":"2")}}>
                 <div style={{background:f.color+"10",border:"1px solid "+f.color+"44",borderRadius:12,padding:"13px",height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:6}}>
                   {/* Header */}
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
@@ -8729,7 +8784,7 @@ function CFerramentas({cl,onMindmap}){
                     <div style={{color:f.lucroLiq>=0?"#16a34a":"#dc2626",fontWeight:900,fontSize:16,letterSpacing:-0.5}}>{fmtR(f.lucroLiq)}</div>
                   </div>
                   {/* ROI + VS ATUAL */}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:5}}>
                     <div style={{background:"rgba(255,255,255,0.65)",borderRadius:7,padding:"5px 7px",textAlign:"center"}}>
                       <div style={{color:"var(--ts,#94a3b8)",fontSize:7}}>ROI</div>
                       <div style={{color:f.roi>=0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12}}>{f.roi.toFixed(0)}%</div>
@@ -8756,7 +8811,7 @@ function CFerramentas({cl,onMindmap}){
               </div>
             )):(
               /* Placeholder quando sem resultado ainda */
-              <div style={{gridColumn:"3/5",gridRow:"1/3",display:"flex",alignItems:"center",justifyContent:"center",background:C.s1,borderRadius:12,border:"1px dashed "+C.b1,minHeight:180}}>
+              <div style={{gridColumn:_pxMob()?"auto":"3/5",gridRow:_pxMob()?"auto":"1/3",display:"flex",alignItems:"center",justifyContent:"center",background:C.s1,borderRadius:12,border:"1px dashed "+C.b1,minHeight:180}}>
                 <div style={{textAlign:"center",color:C.td,fontSize:12,padding:20}}>
                   <div style={{fontSize:28,marginBottom:8}}>📊</div>
                   Preencha o investimento e o ROAS<br/>para ver as 4 previsões
@@ -8770,7 +8825,7 @@ function CFerramentas({cl,onMindmap}){
         {FORECASTS.length>0&&(<>
           <div style={{background:"linear-gradient(135deg,#4f46e818,#16a34a18)",border:"1px solid #4f46e833",borderRadius:12,padding:"14px 18px"}}>
             <div style={{color:C.tx,fontWeight:700,fontSize:12,marginBottom:10}}>📅 Projeção anual (12 meses) · âncora ROAS {baseRoas.toFixed(2)}x</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
               {FORECASTS.map(f=>(
                 <div key={f.id} style={{textAlign:"center",background:"rgba(255,255,255,0.55)",borderRadius:10,padding:"12px 8px"}}>
                   <div style={{fontSize:18,marginBottom:4}}>{f.emoji}</div>
@@ -9174,7 +9229,7 @@ function CFerramentas({cl,onMindmap}){
                       {FORECASTS.length>0&&(
                         <div>
                           <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,color:"#64748b",marginBottom:14}}>🎯 Projeções de Crescimento — Margem {margOtim}%</div>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+                          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:12}}>
                             {FORECASTS.map(f=>(
                               <div key={f.id} style={{background:f.color+"0e",border:"2px solid "+f.color+"44",borderRadius:14,padding:"18px",textAlign:"center"}}>
                                 <div style={{fontSize:28,marginBottom:8}}>{f.emoji}</div>
@@ -9185,7 +9240,7 @@ function CFerramentas({cl,onMindmap}){
                                   <div style={{color:"#94a3b8",fontSize:9}}>LUCRO LÍQ.</div>
                                   <div style={{color:f.lucroLiq>=0?"#16a34a":"#dc2626",fontWeight:800,fontSize:15}}>{fmtRAp(f.lucroLiq)}</div>
                                 </div>
-                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:5}}>
                                   <div style={{background:f.color+"18",borderRadius:7,padding:"6px"}}>
                                     <div style={{color:"#94a3b8",fontSize:8}}>ROAS</div>
                                     <div style={{color:f.color,fontWeight:800,fontSize:13}}>{f.roas.toFixed(2)}x</div>
@@ -9205,7 +9260,7 @@ function CFerramentas({cl,onMindmap}){
                       {FORECASTS.length>0&&(
                         <div>
                           <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,color:"#64748b",marginBottom:14}}>📅 Projeção Anual (12 meses) · ROAS âncora {baseRoas.toFixed(2)}x</div>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+                          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:12}}>
                             {FORECASTS.map(f=>(
                               <div key={f.id} style={{background:"linear-gradient(135deg,"+f.color+"18,"+f.color+"06)",borderRadius:14,padding:"18px",border:"1px solid "+f.color+"33",textAlign:"center"}}>
                                 <div style={{fontSize:22,marginBottom:6}}>{f.emoji}</div>
@@ -9327,7 +9382,7 @@ function CMetricas({cl}){
     </div>
     <div>
       <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>📋 Contrato {"&"} Indicadores</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
         <div><span style={lbl}>Mensalidade (R$)</span><input type="number" value={contract} style={ninp} onChange={e=>setContract(e.target.value)}/></div>
         <div><span style={lbl}>Saúde (0-100)</span><input type="number" value={health} style={ninp} onChange={e=>setHealth(e.target.value)}/></div>
         <div><span style={lbl}>NPS (0-100)</span><input type="number" value={nps} style={ninp} onChange={e=>setNps(e.target.value)}/></div>
@@ -9335,21 +9390,21 @@ function CMetricas({cl}){
     </div>
     <div>
       <div style={{color:"#1877f2",fontWeight:700,fontSize:13,marginBottom:12}}>📘 Meta Ads</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
         {F("Investimento (R$)",meta.spend,setMeta,"spend")}{F("Budget (R$)",meta.budget,setMeta,"budget")}{F("ROAS",meta.roas,setMeta,"roas")}
         {F("Leads",meta.leads,setMeta,"leads")}{F("CPC (R$)",meta.cpc,setMeta,"cpc")}{F("CTR (%)",meta.ctr,setMeta,"ctr")}
       </div>
     </div>
     <div>
       <div style={{color:"#34a853",fontWeight:700,fontSize:13,marginBottom:12}}>🔍 Google Ads</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
         {F("Investimento (R$)",google.spend,setGoogle,"spend")}{F("Budget (R$)",google.budget,setGoogle,"budget")}{F("ROAS",google.roas,setGoogle,"roas")}
         {F("Leads",google.leads,setGoogle,"leads")}{F("CPC (R$)",google.cpc,setGoogle,"cpc")}{F("CTR (%)",google.ctr,setGoogle,"ctr")}
       </div>
     </div>
     <div>
       <div style={{color:"#c13584",fontWeight:700,fontSize:13,marginBottom:12}}>📱 Social Media</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
         {F("Seguidores",social.followers,setSocial,"followers")}{F("Crescimento (%)",social.growth,setSocial,"growth")}{F("Alcance",social.reach,setSocial,"reach")}
         {F("Engajamento (%)",social.eng,setSocial,"eng")}{F("Posts/mês",social.posts,setSocial,"posts")}
       </div>
@@ -9692,7 +9747,7 @@ function CContatos({cl}){
 
     {adding&&(<div style={{background:C.card,borderRadius:14,padding:"16px",border:"1px solid "+C.b1,display:"flex",flexDirection:"column",gap:10}}>
       <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>{editing!==null?"Editar contato":"Novo contato"}</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
         {[{k:"name",p:"Nome *"},{k:"role",p:"Cargo"},{k:"phone",p:"WhatsApp"},{k:"email",p:"E-mail"},{k:"birthday",p:"Aniversário (DD/MM)"},{k:"photo",p:"URL da foto (opcional)"}].map(function(f){
           return(<div key={f.k}>
             <div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div>
@@ -9954,7 +10009,7 @@ function CTimeline({cl}){
       <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
 
         {/* Type + Date */}
-        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:10}}>
           <div>
             <div style={{color:C.td,fontSize:10,marginBottom:4}}>Tipo de registro</div>
             <select value={form.type} onChange={e=>setForm(function(p){return{...p,type:e.target.value};})} style={inp}>
@@ -10495,7 +10550,7 @@ function COrientacoes({cl, sections}){
             else setData(function(p){return {...p,[key]:val};});
           }
         };
-        return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        return <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
           {[
             {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",isRede:false},
             {key:"driveUrl",label:"Pasta no Drive",placeholder:"https://drive.google.com/...",isRede:false},
@@ -10803,7 +10858,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             </span>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
             <div>
               <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Atual</div>
               <div style={{position:"relative"}}>
@@ -11484,7 +11539,7 @@ function CDrive({cl}){
     {/* Dados cadastrais */}
     <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
       <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:13}}>Dados Cadastrais</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr"}}>
         {[{l:"Setor",v:cl.sector},{l:"Status",v:cl.status},{l:"Na Pixels desde",v:cl.since||"—"},{l:"Gestor",v:(TEAM.find(function(u){return u.id===cl.manager;})||{}).name||cl.manager},{l:"MRR",v:"R$ "+cl.contract.toLocaleString("pt-BR")},{l:"NPS",v:(cl.nps||0)+"/100"},{l:"Meta Account ID",v:cl.metaId||"—"},{l:"Google Account ID",v:cl.googleId||"—"}].map(function(r,i){
           return(<div key={r.l} style={{padding:"11px 18px",borderBottom:i<6?"1px solid "+C.b1:"none",borderRight:i%2===0?"1px solid "+C.b1:"none"}}>
             <div style={{color:C.td,fontSize:10,marginBottom:3}}>{r.l}</div>
@@ -11829,7 +11884,7 @@ function NovoClienteModal({onClose,onSave}){
               </span>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Meta Ads</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
               <div><LBL t="Investimento (R$)"/><input type="number" value={metaSpend} onChange={function(e){setMetaSpend(e.target.value);}} style={inp} placeholder="5000"/></div>
               <div><LBL t="Budget (R$)"/><input type="number" value={metaBudget} onChange={function(e){setMetaBudget(e.target.value);}} style={inp} placeholder="6000"/></div>
               <div><LBL t="ROAS"/><input type="number" step="0.1" value={metaRoas} onChange={function(e){setMetaRoas(e.target.value);}} style={inp} placeholder="4.2"/></div>
@@ -11846,7 +11901,7 @@ function NovoClienteModal({onClose,onSave}){
               </span>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Google Ads</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
               <div><LBL t="Investimento (R$)"/><input type="number" value={googleSpend} onChange={function(e){setGoogleSpend(e.target.value);}} style={inp} placeholder="3000"/></div>
               <div><LBL t="Budget (R$)"/><input type="number" value={googleBudget} onChange={function(e){setGoogleBudget(e.target.value);}} style={inp} placeholder="3500"/></div>
               <div><LBL t="ROAS"/><input type="number" step="0.1" value={googleRoas} onChange={function(e){setGoogleRoas(e.target.value);}} style={inp} placeholder="4.5"/></div>
@@ -11897,7 +11952,7 @@ function NovoClienteModal({onClose,onSave}){
           {/* Números */}
           <div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:12}}>Números atuais</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
               <div><LBL t="Seguidores"/><input type="number" value={followers} onChange={function(e){setFollowers(e.target.value);}} style={inp} placeholder="12500"/></div>
               <div><LBL t="Alcance mensal"/><input type="number" value={reach} onChange={function(e){setReach(e.target.value);}} style={inp} placeholder="48000"/></div>
               <div><LBL t="Engajamento (%)"/><input type="number" step="0.1" value={eng} onChange={function(e){setEng(e.target.value);}} style={inp} placeholder="4.2"/></div>
@@ -12317,7 +12372,7 @@ function EditarClienteModal({cl, onClose}){
               setSinceLabel(novo);
             }
             const _selStyle = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,color:"#0f172a",outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",fontWeight:500,cursor:"pointer",appearance:"none",backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center",paddingRight:32};
-            return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            return <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               <select value={_mes} onChange={function(e){_atualiza(e.target.value, _ano);}} style={_selStyle}>
                 <option value="">Mês</option>
                 {MESES.map(function(m){return <option key={m.v} value={m.v}>{m.l}</option>;})}
@@ -12332,7 +12387,7 @@ function EditarClienteModal({cl, onClose}){
         </div>
 
         {/* Cidade / UF */}
-        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:12}}>
           <div>
             <LBL t="Cidade"/>
             <input value={cidade} onChange={function(e){setCidade(e.target.value.replace(/[\\/\-]/g,""));}} placeholder="Ex: Cruzeiro do Sul (sem barra, sem UF)" style={inp}/>
@@ -12346,7 +12401,7 @@ function EditarClienteModal({cl, onClose}){
         {/* Status do contrato — Ativo / Encerrado */}
         <div>
           <LBL t="Status do contrato"/>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
             <button type="button" onClick={function(){setStatus("ativo");}}
               style={{background:status==="ativo"?"linear-gradient(135deg,#dcfce7 0%,#f0fdf4 100%)":"#fff",color:status==="ativo"?"#15803d":"#64748b",border:"1px solid "+(status==="ativo"?"#86efac":"#e2e8f0"),borderRadius:10,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s"}}>
               <span style={{width:8,height:8,borderRadius:"50%",background:status==="ativo"?"#16a34a":"#cbd5e1",boxShadow:status==="ativo"?"0 0 0 3px rgba(22,163,74,0.15)":"none",transition:"all .15s"}}/>
@@ -13921,7 +13976,7 @@ function MilestoneForm({cl,onClose,onSaved}){
             );})}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div>
             <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Data</div>
             <input type="date" value={date} onChange={function(e){setDate(e.target.value);}} style={{width:"100%",padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box"}}/>
@@ -14001,7 +14056,7 @@ function MetricsForm({cl,existing,onClose,onSaved}){
         <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Período</div>
         <input type="month" value={period} onChange={function(e){setPeriod(e.target.value);}} style={{padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12}}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10,marginBottom:14}}>
         {[
           {label:"Instagram",v:ig,set:setIg,ph:"5000",hint:"seguidores"},
           {label:"Facebook",v:fb,set:setFb,ph:"3200",hint:"seguidores"},
@@ -14033,7 +14088,7 @@ function MetricsForm({cl,existing,onClose,onSaved}){
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>resultado</div>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div>
             <div style={{fontSize:10.5,color:"#475569",fontWeight:700,letterSpacing:.2,marginBottom:5}}>Interações</div>
             <input value={interactions} onChange={e=>setInteractions(e.target.value)} placeholder="curtidas + comentários + saves" style={{width:"100%",padding:"9px 12px",border:"1px solid #e9d5ff",borderRadius:9,fontSize:13.5,boxSizing:"border-box",fontFamily:"inherit",outline:"none",background:"#fff"}}/>
@@ -14859,7 +14914,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         placeholder="Adicionar título do evento" autoFocus
         style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:11,fontSize:14,fontWeight:600,boxSizing:"border-box",outline:"none",fontFamily:"inherit",letterSpacing:-.15,marginBottom:14}}/>
       {/* Data + Hora — barrinhas inteiras clicáveis (estilo moderno) */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 160px",gap:10,marginBottom:8}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 160px",gap:10,marginBottom:8}}>
         <div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
             <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{endDate&&endDate>date?"De":"Data"}</div>
@@ -15077,7 +15132,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_units.length>0){
               _blocks.push(<div key="grp-bioter" style={{display:"flex",flexDirection:"column",gap:5}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Agrupadores Bioter</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
+                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(2, 1fr)",gap:6}}>
                   {(function(){
                     const _grupoFully = _allUnitIds.length>0 && _allUnitIds.every(function(uid){return clientIds.indexOf(uid)>=0;});
                     return <>
@@ -15093,7 +15148,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_units.length>0){
               _blocks.push(<div key="grp-unidades" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Unidades Bioter</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6}}>
+                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:6}}>
                   {_units.map(function(u){
                     return _renderPill({id:u.id, name:u.name, color:_bioterCor, _isUnit:true});
                   })}
@@ -15105,7 +15160,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_outros.length>0){
               _blocks.push(<div key="grp-outros" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Outros clientes</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6}}>
+                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:6}}>
                   {_outros.map(_renderPill)}
                 </div>
               </div>);
@@ -18290,7 +18345,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
         </div>
 
         {/* Prioridade + Prazo */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
           <div>
             <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎯 Prioridade</div>
             <select value={priority} onChange={e=>setPriority(e.target.value)}
@@ -18485,7 +18540,7 @@ function ScanModal({tasks,onClose,onFilter}){
       {phase==="ready"&&(<div style={{padding:"24px 28px",display:"flex",flexDirection:"column",gap:24}}>
 
         {/* ── ROW 1: Donut + Status cards ── */}
-        <div style={{display:"grid",gridTemplateColumns:"180px 1fr",gap:20,alignItems:"center"}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"180px 1fr",gap:20,alignItems:"center"}}>
           {/* Donut */}
           <div style={{position:"relative",flexShrink:0}}>
             <svg width="180" height="180" viewBox="0 0 180 180" style={{animation:"fadeUp .6s ease both"}}>
@@ -18506,7 +18561,7 @@ function ScanModal({tasks,onClose,onFilter}){
           </div>
 
           {/* Status cards grid */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
             {segments.map((s,i)=>{
               const pct=Math.round((s.count/total)*100);
               const isActive=activeId===s.id;
@@ -19449,7 +19504,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       <div style={{background:"#fff",borderRadius:18,padding:"24px 26px 20px",maxWidth:460,width:"100%",boxShadow:"0 24px 60px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9"}}>
         <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.2,marginBottom:4}}>Onde criar a demanda?</div>
         <div style={{color:"#94a3b8",fontSize:12,marginBottom:18}}>Escolha em qual coluna o cartão deve aparecer.</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
           {[
             {id:"rascunhos",label:"Rascunhos",desc:"Esboço inicial",color:"#64748b",bg:"#f8fafc",bd:"#e2e8f0"},
             {id:"demanda",label:"Copys",desc:"Escrever copy",color:"#7c3aed",bg:"#f5f3ff",bd:"#ddd6fe"},
@@ -20450,7 +20505,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
           {/* Tipo de demanda — grid 3×N com ícones coloridos */}
           <div>
             {_lab("Tipo de demanda")}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8}}>
               {INTERNO_TIPOS.map(t=>{
                 const a = internoTipo===t.id;
                 const tc = _tipoColor(t.id);
@@ -20466,7 +20521,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
           {/* Prioridade — 4 cards (define prazo + sprint automático) */}
           <div>
             {_lab("Prioridade", "(define o prazo e o sprint automaticamente)")}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
               {Object.entries(PRIO_CFG).map(([k,conf])=>{
                 const a = priority===k;
                 const dias = _PRIO_DIAS[k] || 14;
@@ -20491,7 +20546,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
           </div>
 
           {/* Prazo + Horário em linha — Status removido (gerencia só via kanban) */}
-          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:12}}>
             <div>
               {_lab("Prazo")}
               <div style={{display:"flex",alignItems:"center",gap:0,background:"#fafbfc",border:"1.5px solid #e2e8f0",borderRadius:10,padding:2}}>
@@ -20673,7 +20728,7 @@ function DrawerInterno({ task, onClose, onEdit, onDelete, onMove, isSocio, canMo
         {/* Corpo */}
         <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:18,flex:1}}>
           {/* Cards-resumo: Cliente, Tipo, Sprint */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
             <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`}}>
               <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Cliente</div>
               {cl?<div style={{display:"flex",alignItems:"center",gap:7}}><div style={{width:8,height:8,borderRadius:"50%",background:cl.color}}/><span style={{color:C.tx,fontSize:13,fontWeight:700}}>{cl.name}</span></div>:<span style={{color:C.td,fontSize:13,fontWeight:600}}>Sem cliente (interno)</span>}
@@ -20959,7 +21014,7 @@ function ListaInterno({ tasks, onOpen }) {
   });
 
   return(
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden",fontFamily:INTERNO_INTER}}>
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden",overflowX:"auto",WebkitOverflowScrolling:"touch",fontFamily:INTERNO_INTER}}>
       <div style={{padding:"10px 14px",background:C.s1,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
         <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginRight:"auto"}}>Ordenar por:</div>
         {[["urgency","Urgência + prazo"],["deadline","Prazo"],["priority","Prioridade"],["status","Status"]].map(([k,l])=>(
@@ -20967,7 +21022,7 @@ function ListaInterno({ tasks, onOpen }) {
             style={{background:sortBy===k?PIXELS_PURPLE+"15":"transparent",border:`1px solid ${sortBy===k?PIXELS_PURPLE:C.b1}`,borderRadius:8,padding:"5px 11px",color:sortBy===k?PIXELS_PURPLE:C.ts,fontSize:11,fontWeight:sortBy===k?700:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",gap:0,padding:"10px 14px",background:"#fafbfc",borderBottom:`1px solid ${C.b1}`,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,color:C.td}}>
+      <div style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",minWidth:920,gap:0,padding:"10px 14px",background:"#fafbfc",borderBottom:`1px solid ${C.b1}`,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,color:C.td}}>
         <div/>
         <div>Demanda</div>
         <div>Cliente</div>
@@ -20989,7 +21044,7 @@ function ListaInterno({ tasks, onOpen }) {
         const dlC=dl===null?C.td:dl<0?"#ef4444":dl<=2?"#f97316":C.ts;
         return(
           <div key={t.id} onClick={()=>onOpen(t)}
-            style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",gap:0,padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",alignItems:"center",fontSize:12.5,transition:"background .12s"}}
+            style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",minWidth:920,gap:0,padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",alignItems:"center",fontSize:12.5,transition:"background .12s"}}
             onMouseEnter={e=>e.currentTarget.style.background=C.s1}
             onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
             <div title={`Prioridade: ${pc.label}`}><div style={{width:8,height:8,borderRadius:"50%",background:pc.color,boxShadow:`0 0 0 2px ${pc.color}25`}}/></div>
@@ -23368,15 +23423,21 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const isAnyImg=(f)=>!f.isAnnotation&&(f.type?.startsWith("image/")||f.type?.startsWith("video/")||_isVideoUrl(f.url));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
   const _fixUrlA=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
-  const _strict=(task.files||[]).filter(isFinalImg).map(f=>_fixUrlA(f.url));
-  const _perm  =_strict.length>0?_strict:(task.files||[]).filter(isAnyImg).map(f=>_fixUrlA(f.url));
+  // Só a ENTREGA ATUAL: versões antigas (arte refeita depois de um ajuste)
+  // não podem virar lâmina de carrossel na hora de anotar.
+  const _vsA=(typeof pxFinalFilesVersoes==="function")?pxFinalFilesVersoes(task):null;
+  const _kA=function(f){return String(f&&f.id||"")+"|"+String(f&&f.url||"");};
+  const _velhasA={}; if(_vsA) _vsA.anteriores.forEach(function(f){ _velhasA[_kA(f)]=true; });
+  const _filesA=(task.files||[]).filter(function(f){ return !_velhasA[_kA(f)]; });
+  const _strict=_filesA.filter(isFinalImg).map(f=>_fixUrlA(f.url));
+  const _perm  =_strict.length>0?_strict:_filesA.filter(isAnyImg).map(f=>_fixUrlA(f.url));
   // ORDEM DO CARROSSEL — mesma fonte e mesma ordem do drag&drop da aba Arquivos.
   // Antes: finalMedia (legado, nem existe mais no banco) vinha primeiro e a cover
   // era SEMPRE anexada no fim (o `!undefined?.includes()` resolve pra true),
   // duplicando a capa e bagunçando a sequencia definida no card.
   // Agora: pxFinalFiles manda; finalMedia/cover so entram se nao houver arquivo final.
-  const _ordenados=(typeof pxFinalFiles==="function")
-    ? pxFinalFiles(task).map(function(f){return _fixUrlA(f.url);})
+  const _ordenados=(typeof pxFinalFilesAtuais==="function")
+    ? pxFinalFilesAtuais(task).map(function(f){return _fixUrlA(f.url);})
     : [];
   const _fallback=[
     ...(task.finalMedia||[]).map(_fixUrlA),
@@ -23638,7 +23699,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
         const{error}=await sb.storage.from("agency-files").upload(path,f,{upsert:false,contentType:f.type});
         if(error){console.warn("[ref-upload]",error);continue;}
         const{data}=sb.storage.from("agency-files").getPublicUrl(path);
-        out.push({id:Date.now()+Math.random(),name:f.name,type:f.type,url:data.publicUrl,storagePath:path,size:f.size});
+        // laminaIdx: a referência fica amarrada à lâmina que estava aberta no upload
+        out.push({id:Date.now()+Math.random(),name:f.name,type:f.type,url:data.publicUrl,storagePath:path,size:f.size,laminaIdx:activeIdx,laminaTotal:allImgs.length});
       }
       if(out.length>0)setRefImages(p=>[...p,...out]);
     }catch(e){
@@ -23937,6 +23999,13 @@ function PublicacaoEditModal({task, onClose, onReject}){
   };
 
   const currentSrc=allImgs[activeIdx]||null;
+  // ═══ Referências por lâmina ═══
+  // Cada anexo carrega laminaIdx (a lâmina aberta no momento do upload). O painel
+  // mostra só as da lâmina atual; refs antigas (sem laminaIdx) caem na lâmina 0.
+  const _isCarrossel = allImgs.length > 1;
+  const _laminaDaRef = function(r){ return typeof r.laminaIdx==="number" ? r.laminaIdx : 0; };
+  const _refsDaLamina = _isCarrossel ? refImages.filter(function(r){ return _laminaDaRef(r)===activeIdx; }) : refImages;
+  const _refsOutras   = _isCarrossel ? refImages.length - _refsDaLamina.length : 0;
 
   return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.78)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px 12px",overflowY:"auto"}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:1100,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.4)",fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
@@ -23959,7 +24028,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
         </button>
       </div>
 
-      <div style={{display:"flex",minHeight:0}}>
+      <div style={{display:"flex",minHeight:0,flexDirection:_pxMob()?"column":"row"}}>
         {/* Left — thumbnails strip (vertical) */}
         {allImgs.length>1&&<div style={{width:74,background:C.s1,borderRight:`1px solid ${C.b1}`,padding:"12px 8px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
           {allImgs.map((src,i)=>{
@@ -24200,7 +24269,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
         </div>
 
         {/* Right — feedback panel (redesign moderno 2026-06: Linear/Notion style) */}
-        <div style={{width:480,flexShrink:0,background:"#fff",borderLeft:"1px solid #e5e7eb",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{width:_pxMob()?"100%":480,flexShrink:0,background:"#fff",borderLeft:_pxMob()?"none":"1px solid #e5e7eb",borderTop:_pxMob()?"1px solid #e5e7eb":"none",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
           {/* Conteúdo scrollável */}
           <div style={{flex:1,overflowY:"auto",padding:"24px 24px 20px",display:"flex",flexDirection:"column",gap:22}}>
 
@@ -24316,21 +24385,28 @@ function PublicacaoEditModal({task, onClose, onReject}){
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
                 Solte pra anexar
               </div>}
-              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
-                <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Referências</label>
-                {refImages.length>0&&(function(){
-                  const _nV=refImages.filter(function(r){return r.type&&r.type.startsWith("video/");}).length;
-                  const _nI=refImages.length-_nV;
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+                <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>
+                  Referências
+                  {_isCarrossel&&<span style={{color:"#a140ff",fontSize:11,fontWeight:700,marginLeft:7}}>· lâmina {activeIdx+1}</span>}
+                </label>
+                {_refsDaLamina.length>0&&(function(){
+                  const _nV=_refsDaLamina.filter(function(r){return r.type&&r.type.startsWith("video/");}).length;
+                  const _nI=_refsDaLamina.length-_nV;
                   const _parts=[];
                   if(_nI>0)_parts.push(_nI+" "+(_nI===1?"imagem":"imagens"));
                   if(_nV>0)_parts.push(_nV+" "+(_nV===1?"vídeo":"vídeos"));
                   return <span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>{_parts.join(" + ")}</span>;
                 })()}
               </div>
+              {_isCarrossel&&<div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45,marginBottom:8,marginTop:-2}}>
+                O que você anexar aqui fica amarrado à <b style={{color:"#7c3aed"}}>lâmina {activeIdx+1}</b> — o designer vê a referência junto do ajuste dela.
+                {_refsOutras>0&&<span> Você já anexou {_refsOutras} em outra{_refsOutras>1?"s":""} lâmina{_refsOutras>1?"s":""}.</span>}
+              </div>}
               <input ref={refFileInputRef} type="file" accept="image/*,video/*" multiple
                 onChange={e=>{const _fs=Array.from(e.target.files||[]);e.target.value="";if(_fs.length>0)handleRefUpload(_fs);}}
                 style={{display:"none"}}/>
-              {refImages.length===0
+              {_refsDaLamina.length===0
                 ?<button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading} type="button"
                   style={{width:"100%",background:"#fafafa",color:"#64748b",border:"1px dashed #d4d4d8",borderRadius:10,padding:"22px 16px",fontWeight:500,fontSize:13,cursor:refUploading?"not-allowed":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,transition:"all .15s",fontFamily:"inherit"}}
                   onMouseEnter={e=>{if(!refUploading){e.currentTarget.style.background="#f5f5f5";e.currentTarget.style.borderColor="#a140ff";e.currentTarget.style.color="#a140ff";}}}
@@ -24340,8 +24416,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
                     :<><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span style={{fontSize:13}}>Anexar imagens ou vídeos</span></>}
                 </button>
                 :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-                    {refImages.map(function(r){
+                  <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8}}>
+                    {_refsDaLamina.map(function(r){
                       const _isVid = r.type && r.type.startsWith("video/");
                       return <div key={r.id} style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #e5e7eb",background:"#0f172a",aspectRatio:"1 / 1"}}>
                         {_isVid
@@ -25004,29 +25080,37 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // ORDEM DO CARROSSEL = ordem do array files (drag&drop da aba Arquivos do card).
   // Tinha um .reverse() aqui que exibia tudo de tras pra frente.
   const _extractImgs=(files,fn)=>(files||[]).filter(fn).map(f=>_fixUrl(f.url)).filter(_isValidUrl);
+  // ═══ SÓ A VERSÃO MAIS RECENTE ═══
+  // Quando o card volta pra ajuste, o designer sobe a arte nova sem apagar a
+  // antiga — a avaliação mostrava as duas como se fossem lâminas de carrossel.
+  const _vs=(current&&typeof pxFinalFilesVersoes==="function")?pxFinalFilesVersoes(current):null;
+  const _kf=function(f){return String(f&&f.id||"")+"|"+String(f&&f.url||"");};
+  const _velhas={}; if(_vs) _vs.anteriores.forEach(function(f){ _velhas[_kf(f)]=true; });
+  const _versoesOcultas=_vs?_vs.anteriores.length:0;
+  const _filesAtuais=((current&&current.files)||[]).filter(function(f){ return !_velhas[_kf(f)]; });
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
-    let _vids=_extractImgs(current?.files,isFinalVideo);
-    if(_vids.length===0)_vids=_extractImgs(current?.files,isAnyVideo);
-    let _imgs=_extractImgs(current?.files,isFinalImg);
-    if(_imgs.length===0)_imgs=_extractImgs(current?.files,isAnyImg);
+    let _vids=_extractImgs(_filesAtuais,isFinalVideo);
+    if(_vids.length===0)_vids=_extractImgs(_filesAtuais,isAnyVideo);
+    let _imgs=_extractImgs(_filesAtuais,isFinalImg);
+    if(_imgs.length===0)_imgs=_extractImgs(_filesAtuais,isAnyImg);
     _filesDesc=[..._vids,..._imgs];
   }else if(tab==="publicacao"){
     // Carrossel/Arte única podem misturar imagens e vídeos (ex: post carrossel com vídeo).
     // Renderiza vídeos junto com imagens pra editor/designer verem tudo.
-    let _imgs=_extractImgs(current?.files,isFinalImg);
-    if(_imgs.length===0)_imgs=_extractImgs(current?.files,isAnyImg);
-    let _vids=_extractImgs(current?.files,isFinalVideo);
-    if(_vids.length===0)_vids=_extractImgs(current?.files,isAnyVideo);
+    let _imgs=_extractImgs(_filesAtuais,isFinalImg);
+    if(_imgs.length===0)_imgs=_extractImgs(_filesAtuais,isAnyImg);
+    let _vids=_extractImgs(_filesAtuais,isFinalVideo);
+    if(_vids.length===0)_vids=_extractImgs(_filesAtuais,isAnyVideo);
     _filesDesc=[..._imgs,..._vids];
   }else{
     // Aba "copys" e outras: mostra imagens + vídeos como referências
     // (Hellen precisa ver os vídeos anexados antes de aprovar a copy)
-    let _imgs=_extractImgs(current?.files,isFinalImg);
-    if(_imgs.length===0)_imgs=_extractImgs(current?.files,isAnyImg);
-    let _vids=_extractImgs(current?.files,isFinalVideo);
-    if(_vids.length===0)_vids=_extractImgs(current?.files,isAnyVideo);
+    let _imgs=_extractImgs(_filesAtuais,isFinalImg);
+    if(_imgs.length===0)_imgs=_extractImgs(_filesAtuais,isAnyImg);
+    let _vids=_extractImgs(_filesAtuais,isFinalVideo);
+    if(_vids.length===0)_vids=_extractImgs(_filesAtuais,isAnyVideo);
     _filesDesc=[..._imgs,..._vids];
   }
   const _coverFixed=_fixUrl(current?.cover);
@@ -25444,6 +25528,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             <div style={{position:"absolute",top:16,left:0,right:0,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 24px",zIndex:2}}>
               <div style={{color:"#fff",fontSize:13,fontWeight:600,background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",padding:"6px 12px",borderRadius:20}}>
                 {imgIdx+1} / {allImgs.length}
+                {_versoesOcultas>0&&<span title={_versoesOcultas+" arquivo(s) de versões anteriores estão ocultos"} style={{marginLeft:8,paddingLeft:8,borderLeft:"1px solid rgba(255,255,255,0.25)",fontSize:11,fontWeight:700,opacity:.85}}>versão atual</span>}
               </div>
               <button onClick={(e)=>{e.stopPropagation();setImgZoom(false);}}
                 title="Fechar (ESC)"
@@ -27067,19 +27152,19 @@ function FinMRRContratos({store,update,canEdit}){
 function FinContratoModal({c,onClose,onSave}){
   const [f,setF]=useState(c);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <FinModal title={c.clienteNome?"Editar contrato":"Novo contrato"} onClose={onClose} maxWidth={640}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.clienteNome||""} onChange={function(e){set("clienteNome",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.clienteNome||""} onChange={function(e){set("clienteNome",e.target.value);}} style={_FIN_INP} autoFocus/></div>
       <div><div style={_FIN_LBL}>Grupo econômico (opcional)</div><input value={f.grupo||""} onChange={function(e){set("grupo",e.target.value);}} style={_FIN_INP} placeholder="Ex: bioter"/></div>
       <div><div style={_FIN_LBL}>Unidade / filial</div><input value={f.unidade||""} onChange={function(e){set("unidade",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Valor mensal (R$)</div><input type="number" value={f.valorMensal||0} onChange={function(e){set("valorMensal",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Custo estimado (R$)</div><input type="number" value={f.custoEstimado||0} onChange={function(e){set("custoEstimado",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Serviços contratados</div><textarea rows={2} value={f.servicos||""} onChange={function(e){set("servicos",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:50})}/></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Serviços contratados</div><textarea rows={2} value={f.servicos||""} onChange={function(e){set("servicos",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:50})}/></div>
       <div><div style={_FIN_LBL}>Data de início</div><input type="date" value={f.dataInicio||""} onChange={function(e){set("dataInicio",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Data de revisão</div><input type="date" value={f.dataRevisao||""} onChange={function(e){set("dataRevisao",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Status do contrato</div><select value={f.statusContrato||"ativo"} onChange={function(e){set("statusContrato",e.target.value);}} style={_FIN_INP}>{FIN_CONTRATO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
       <div><div style={_FIN_LBL}>Status do pagamento</div><select value={f.statusPagamento||"em_dia"} onChange={function(e){set("statusPagamento",e.target.value);}} style={_FIN_INP}>{FIN_PAGAMENTO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Responsável interno</div><select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Responsável interno</div><select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
       <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
@@ -27119,8 +27204,8 @@ function FinReceitaPontual({store,update,canEdit}){
 function FinPontualModal({p,onClose,onSave}){
   const [f,setF]=useState(p);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <FinModal title={p.projeto?"Editar projeto":"Novo projeto pontual"} onClose={onClose} maxWidth={640}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Nome do projeto</div><input value={f.projeto||""} onChange={function(e){set("projeto",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Nome do projeto</div><input value={f.projeto||""} onChange={function(e){set("projeto",e.target.value);}} style={_FIN_INP} autoFocus/></div>
       <div><div style={_FIN_LBL}>Cliente</div><input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Tipo</div><select value={f.tipo||"Landing Page"} onChange={function(e){set("tipo",e.target.value);}} style={_FIN_INP}>{FIN_TIPOS_PROJETO.map(function(t){return <option key={t} value={t}>{t}</option>;})}</select></div>
       <div><div style={_FIN_LBL}>Valor (R$)</div><input type="number" value={f.valor||0} onChange={function(e){set("valor",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
@@ -27129,7 +27214,7 @@ function FinPontualModal({p,onClose,onSave}){
       <div><div style={_FIN_LBL}>Data da venda</div><input type="date" value={f.dataVenda||""} onChange={function(e){set("dataVenda",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Data prevista de entrega</div><input type="date" value={f.dataEntrega||""} onChange={function(e){set("dataEntrega",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Responsável</div><select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
       <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
@@ -27220,14 +27305,14 @@ function FinStatus({store,update,canEdit}){
 function FinCobrancaModal({c,onClose,onSave}){
   const [f,setF]=useState(c);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <FinModal title={c.cliente?"Editar cobrança":"Nova cobrança"} onClose={onClose}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_FIN_INP} autoFocus/></div>
       <div><div style={_FIN_LBL}>Valor (R$)</div><input type="number" value={f.valor||0} onChange={function(e){set("valor",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Vencimento</div><input type="date" value={f.vencimento||""} onChange={function(e){set("vencimento",e.target.value);}} style={_FIN_INP}/></div>
       <div><div style={_FIN_LBL}>Tipo</div><select value={f.tipo||"recorrente"} onChange={function(e){set("tipo",e.target.value);}} style={_FIN_INP}><option value="recorrente">Recorrente</option><option value="pontual">Pontual</option></select></div>
       <div><div style={_FIN_LBL}>Status</div><select value={f.statusPagamento||"em_aberto"} onChange={function(e){set("statusPagamento",e.target.value);}} style={_FIN_INP}>{FIN_PAGAMENTO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Responsável pela cobrança</div><select value={f.responsavelCobranca||""} onChange={function(e){set("responsavelCobranca",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
-      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Responsável pela cobrança</div><select value={f.responsavelCobranca||""} onChange={function(e){set("responsavelCobranca",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
+      <div style={{gridColumn:_pxMob()?"auto":"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
       <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
@@ -27940,7 +28025,7 @@ function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose
       <div style={{padding:22,display:"flex",flexDirection:"column",gap:14}}>
 
         {/* Valor + Dia de pagamento — linha */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div>
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Valor mensal (R$)</div>
             <input type="number" min="0" step="100" value={d.valor||0}
@@ -28797,7 +28882,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
       </div>
 
       {/* Quick stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,padding:"16px 24px 0"}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:10,padding:"16px 24px 0"}}>
         {[
           {l:"Demandas",v:tasks.length,c:user.color},
           {l:"Abertas",v:open.length,c:C.yw},
@@ -29070,7 +29155,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
 
         <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
 
-          {activeTab==="dados"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {activeTab==="dados"&&(<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
             <div><LBL t="Nome completo"/><input value={nome} onChange={e=>setNome(e.target.value)} style={inp} placeholder="Nome completo"/></div>
             <div><LBL t="Função / Cargo"/><input value={funcao} onChange={e=>setFuncao(e.target.value)} style={inp} placeholder="Ex: Designer, Editor..."/></div>
             <div><LBL t="Telefone / WhatsApp"/><input value={telefone} onChange={e=>setTelefone(e.target.value)} style={inp} placeholder="(49) 9 9900-0000"/></div>
@@ -29078,7 +29163,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
             <div style={{gridColumn:"1/-1"}}><LBL t="E-mail profissional"/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inp} placeholder="email@pixelsmarketing.com.br"/></div>
           </div>)}
 
-          {activeTab==="pessoal"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {activeTab==="pessoal"&&(<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
             <div><LBL t="Cidade onde mora"/><input value={cidade} onChange={e=>setCidade(e.target.value)} style={inp} placeholder="Ex: Chapeco"/></div>
             <div><LBL t="Estado"/><select value={estado} onChange={e=>setEstado(e.target.value)} style={inp}>
               <option value="">Selecionar...</option>
@@ -29114,12 +29199,12 @@ function CollabProfilePage({user,profile,onSave,onClose}){
                 </div>))}
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
               <div><LBL t="Bebida favorita"/><input value={bebida} onChange={e=>setBebida(e.target.value)} style={inp} placeholder="Ex: Cafe, Suco de laranja..."/></div>
               <div><LBL t="Estilo musical"/><input value={musica} onChange={e=>setMusica(e.target.value)} style={inp} placeholder="Ex: Sertanejo, Rock, Funk..."/></div>
             </div>
             <div><LBL t="Principais hobbies"/><textarea value={hobbies} onChange={e=>setHobbies(e.target.value)} rows={2} placeholder="Ex: Jogar videogame, academia, pesca, leitura..." style={{...inp,resize:"vertical",lineHeight:1.6}}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
               <div><LBL t="Series que assiste"/><input value={series} onChange={e=>setSeries(e.target.value)} style={inp} placeholder="Ex: Breaking Bad..."/></div>
               <div><LBL t="Filmes favoritos"/><input value={filmes} onChange={e=>setFilmes(e.target.value)} style={inp} placeholder="Ex: Interestelar..."/></div>
             </div>
@@ -29133,7 +29218,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
                 <div style={{color:user.color,fontWeight:800,fontSize:12}}>{"Pet #"+(i+1)}</div>
                 {pets.length>1&&(<button onClick={()=>removePet(i)} style={{background:"#ff3d6b18",border:"1px solid #ff3d6b44",borderRadius:8,padding:"3px 10px",color:"#ff3d6b",fontSize:11,fontWeight:700,cursor:"pointer"}}>Remover</button>)}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
                 <div><LBL t="Você tem pet?"/><select value={pet.tem} onChange={e=>setPetField(i,"tem",e.target.value)} style={inp}>
                   <option value="">Selecionar...</option>
                   <option value="sim">Sim, tenho!</option>
@@ -29157,7 +29242,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
           </div>)}
 
           {activeTab==="curiosidades"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
               <div><LBL t="Tem algum medo ou fobia?"/><input value={medoOuFobia} onChange={e=>setMedoOuFobia(e.target.value)} style={inp} placeholder="Ex: Aranhas, altura..."/></div>
               <div><LBL t="Se tivesse um superpoder?"/><input value={superpoder} onChange={e=>setSuperpoder(e.target.value)} style={inp} placeholder="Ex: Teleporte..."/></div>
               <div><LBL t="Um talento secreto seu?"/><input value={talento} onChange={e=>setTalento(e.target.value)} style={inp} placeholder="Ex: Imitar vozes..."/></div>
@@ -29732,7 +29817,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               <input value={novoColab.name} onChange={e=>setNovoColab(p=>({...p,name:e.target.value,av:p.av||e.target.value[0]?.toUpperCase()||""}))} placeholder="Maria Clara Luz do Nascimento" style={inp}/>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               {/* Email */}
               <div>
                 <div style={lbl}>E-mail (login)</div>
@@ -29745,7 +29830,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               </div>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               {/* ID curto */}
               <div>
                 <div style={lbl}>ID curto (team_id)</div>
@@ -29759,7 +29844,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               </div>
             </div>
 
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               {/* Dash */}
               <div>
                 <div style={lbl}>Tipo de dashboard</div>
@@ -30024,7 +30109,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             })()}
 
             {/* Email + Senha em grid */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               <div>
                 <div style={lbl}>Email do cliente *</div>
                 <input type="email" autoComplete="off" value={novoCliente.email} onChange={e=>setNovoCliente(p=>({...p,email:e.target.value}))}
@@ -30675,7 +30760,7 @@ function ToolsVault({user}){
             </div>}
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
             <div>
               <div style={_lbl}>E-mail / usuário</div>
               <input value={editing.username||""} onChange={function(e){setEditing(Object.assign({},editing,{username:e.target.value}));}}
@@ -30940,7 +31025,7 @@ function PasswordVault({user}){
               </select>
             </div>
             {/* Usuário + Senha */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               <div>
                 <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Usuário/Email</div>
                 <input value={editing.username} onChange={e=>setEditing(p=>({...p,username:e.target.value}))} placeholder="exemplo@cliente.com"
@@ -31516,7 +31601,7 @@ function _ArmazenamentoPanel({tasks}){
         <div style={{width:_uso.pct+"%",height:"100%",background:_uso.pct>=80?"linear-gradient(90deg,#dc2626,#b91c1c)":_uso.pct>=60?"linear-gradient(90deg,#f59e0b,#d97706)":"linear-gradient(90deg,#16a34a,#15803d)",borderRadius:99,transition:"width .4s"}}/>
       </div>
       {/* 3 mini-stats abaixo */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:12,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
         <div>
           <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:3}}>Livre</div>
           <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{_uso.freeLabel}</div>
@@ -31567,7 +31652,7 @@ function _ArmazenamentoPanel({tasks}){
       </div>
 
     {/* Preview */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:10,marginBottom:14}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:10,marginBottom:14}}>
       <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
         <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Cards elegíveis</div>
         <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.cards.length}</div>
@@ -31734,7 +31819,7 @@ function CalendarioInterno({tasks}){
       </button>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:16}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 300px",gap:16}}>
       <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",borderBottom:"1px solid "+C.b1}}>
           <button onClick={()=>setCurrentDate(new Date(year,month-1,1))} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,width:32,height:32,cursor:"pointer",color:C.ts,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
@@ -31876,7 +31961,7 @@ function PageConexoes({isMob}){
         <span style={{color:C.tx,fontWeight:700}}>Credenciais da Agência</span>
         <button onClick={()=>setAdding(true)} style={{background:C.a+"18",color:C.a,border:"1px solid "+C.a+"33",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>+ Adicionar</button>
       </div>
-      {adding&&(<div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      {adding&&(<div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
         {CRED_FIELDS.map(f=>(
           <div key={f.k}><div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div>
             <input value={form[f.k]} onChange={e=>setForm(prev=>({...prev,[f.k]:e.target.value}))} style={inp}/></div>
@@ -32339,7 +32424,7 @@ function PageMapeamento(){
             {selected.data?(
               <>
                 {/* KPIs */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
+                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10,marginBottom:18}}>
                   {[
                     {l:"Vendas",v:(selected.data.vendas||0).toLocaleString("pt-BR"),c:"#15803d"},
                     {l:"Receita",v:"R$"+((selected.data.valor||0)/1000).toFixed(0)+"k",c:C.gr},
@@ -32663,7 +32748,7 @@ function PagePontuacao({tasks}){
           </div>
 
           {/* Stats grid */}
-          <div style={{padding:"0 18px 16px",display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+          <div style={{padding:"0 18px 16px",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(2,1fr)",gap:8}}>
             {[
               {l:"Total demandas",v:sel.score.totalTasks,c:C.tx},
               {l:"Aprovadas",v:sel.score.done,c:C.gr},
@@ -32889,7 +32974,7 @@ function PagePontuacao({tasks}){
               <div style={{color:roiColor,fontSize:11,fontWeight:600}}>{roiLabel}</div>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",borderBottom:"1px solid "+C.b1}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",borderBottom:"1px solid "+C.b1}}>
             {[
               {l:"Salario Mensal",v:"R$"+salario.toLocaleString("pt-BR"),c:C.rd},
               {l:"Producao Estimada",v:"R$"+valorProduzido.toLocaleString("pt-BR"),c:C.gr},
@@ -33178,7 +33263,7 @@ function PageContagemEquipe({isMob}){
         <div style={{fontSize:18,fontWeight:600,color:"#0f172a"}}>{drill.user.name}</div>
         <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{drill.user.role} · {monthLabel}</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
         <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px"}}>
           <div style={{fontSize:10,color:"#64748b",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Total</div>
           <div style={{fontSize:28,fontWeight:600,color:"#0f172a"}}>{drill.total}</div>
@@ -33752,7 +33837,7 @@ function PageRadarEntrega({ tasks, isMob }) {
       </div>
 
       {/* 3 cards do topo */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.5fr",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1.5fr",gap:10}}>
         <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#6366f1"}}/>
           <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Publicações / Conteúdos</div>
@@ -35984,7 +36069,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <video src={_last.url} controls preload="metadata" playsInline
                         style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
                     </div>
-                  : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                  : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
                       {finItems.map(function(a,i){
                         const _av=isVid(a);
                         return <div key={a.id} onClick={function(e){
@@ -36821,7 +36906,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     </div>;
                   })()}
-                  {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                  {finItems.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
                     {finItems.map(function(a,i){
                       const _isVideo = isVid(a);
                       const _isDraggedOver = _dragOverItemId===a.id;
@@ -36927,10 +37012,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       Baixar tudo
                     </button>}
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
                     {adjItems.map(function(a,i){
                       const _isVideo=isVid(a);
                       const _who=a.addedBy||"";
+                      // Referência amarrada a uma lâmina do carrossel (vem do modal de ajuste)
+                      const _lam=(typeof a.laminaIdx==="number" && a.laminaTotal>1) ? a : null;
                       return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #fed7aa",aspectRatio:"1",background:"#fff7ed"}}>
                         {_isVideo
                           ? <video src={a.url} preload="metadata" muted playsInline
@@ -36945,6 +37032,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           ajuste #{i+1}
                         </div>
+                        {_lam&&<div title={"Referência da lâmina "+(_lam.laminaIdx+1)+" de "+_lam.laminaTotal}
+                          style={{position:"absolute",top:6,right:canEdit?32:6,background:"#7c3aed",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+                          lâmina {_lam.laminaIdx+1}
+                        </div>}
                         {_who&&<div title={"Anexado por "+_who} style={{position:"absolute",bottom:6,left:6,background:"rgba(15,23,42,0.65)",color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:600,pointerEvents:"none",backdropFilter:"blur(4px)",maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_who.split(" ")[0]}</div>}
                         {canEdit&&<button onClick={function(e){e.stopPropagation();removeAttachment(a.id);}} title="Excluir anexo"
                           style={{position:"absolute",top:6,right:6,background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"4px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}}
@@ -37016,7 +37108,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{_matCanEdit?"Nenhum material ainda":"Sem materiais nesse cartão"}</div>
                     <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{_matCanEdit?"Arraste takes brutos, fotos originais ou clique em Adicionar":"O responsável ainda não subiu materiais base."}</div>
                   </div>)}
-                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
+                  {imgMat.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8,marginBottom:vidMat.length>0?12:0}}>
                     {imgMat.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",aspectRatio:"1",background:"#ecfeff"}}>
                         <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
@@ -37048,7 +37140,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{vidMat.map(a=>{
+                  {vidMat.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>{vidMat.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
                     return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
@@ -37138,7 +37230,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1,marginBottom:4}}>{canEditRef?"Nenhuma referência ainda":"Sem referências pra esse cartão"}</div>
                     <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,letterSpacing:-.05}}>{canEditRef?"Arraste imagens aqui ou clique em Adicionar":"O criador do cartão ainda não subiu exemplos."}</div>
                   </div>)}
-                  {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
+                  {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
                     {imgRef.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
                         <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
@@ -37193,7 +37285,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{vidRef.map(a=>{
+                  {vidRef.length>0&&<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>{vidRef.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
                     return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.18)";}}
@@ -37384,7 +37476,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     </svg>
                   </button>;
                 };
-                return <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6,position:"relative"}}>
+                return <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:6,position:"relative"}}>
                   <div style={{position:"relative"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                       {canEdit&&<ArrowP dir="prev"/>}
@@ -37543,7 +37635,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           {/* Presets */}
                           <div style={{borderTop:"1px solid #f1f5f9",paddingTop:10}}>
                             <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Horários frequentes</div>
-                            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+                            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:4}}>
                               {_PRESETS.map(function(p){
                                 const _sel=publishTime===p;
                                 return <button key={p} type="button" onClick={function(){setPublishTime(p);setShowPubTime(false);}}
@@ -37755,7 +37847,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                       <div style={{borderTop:"1px solid #f1f5f9",paddingTop:10}}>
                         <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Horários frequentes</div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+                        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:4}}>
                           {_PRESETS.map(function(p){
                             const _sel=publishTime===p;
                             return <button key={p} type="button" onClick={function(){setPublishTime(p);setShowPubTime(false);}}
@@ -37870,7 +37962,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   <span>Unidades Bioter</span>
                   <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>marque uma ou mais</span>
                 </label>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:5}}>
                   {/* Grupo Bioter — todas as unidades incluindo Paraguay */}
                   {(function(){
                     const isSel=selectedUnits.includes("grupo");
@@ -37918,7 +38010,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="image" size={12} color="#94a3b8"/> Tipo de conteúdo</span>
               {!canEditContentType&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios e edição</span>}
             </label>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:4}}>
               {[
                 /* Linha 1: Design — Ajuste de template, Arte única, Carrossel, Folder */
                 {id:"foto",label:"Ajuste de template",icon:"camera"},
@@ -37991,7 +38083,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <label style={LB}><Ico n="flame" size={12} color="#94a3b8"/> Prioridade</label>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:6}}>
                 {[
                   {id:"baixa",label:"Baixa",dot:"#16a34a",bg:"#f0fdf4",bd:"#bbf7d0",fg:"#15803d"},
                   {id:"media",label:"Média",dot:"#eab308",bg:"#fefce8",bd:"#fef08a",fg:"#854d0e"},
@@ -38925,7 +39017,7 @@ function ContagemMiniWidget({user,onSeeMore}){
       <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Contagem do mês</div>
       <span style={{fontSize:9,color:"#7c3aed"}}>{monthLabel}</span>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8,marginBottom:10}}>
       <div style={{textAlign:"center",padding:"10px 4px",background:"#f8fafc",borderRadius:6}}>
         <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:4,fontWeight:500}}>Total</div>
         <div style={{fontSize:22,fontWeight:600,color:"#0f172a",lineHeight:1}}>{stats.loading?"…":stats.total}</div>
@@ -41841,7 +41933,7 @@ function MediaClientCard({client,onOpen,onNovaDemanda,isMob,funilData}){
       <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
         <div style={{color:"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Performance</div>
         {hasPerformance?<>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:3}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:8,marginTop:3}}>
             <div>
               <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.leads.toLocaleString("pt-BR")}</div>
               <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Leads</div>
@@ -42040,7 +42132,7 @@ function MediaTabDashboard({data,store,update,addHistory,canEdit}){
           Salvar
         </button>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div>
           <label style={MLB}>O que está funcionando</label>
           <textarea value={diag.funcionando} onChange={e=>setDiag({...diag,funcionando:e.target.value})} disabled={!canEdit}
@@ -42234,7 +42326,7 @@ function MediaFunnelView({clientId, clientName, canEdit}){
     </div>}
 
     {/* Conversão total + última atualização */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
       <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:10,padding:"12px 14px",border:"1px solid #ddd6fe"}}>
         <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Conversão total</div>
         <div style={{color:"#7c3aed",fontWeight:800,fontSize:22,marginTop:3}}>{conv.total}%</div>
@@ -42336,7 +42428,7 @@ function MediaTabBriefing({data,store,update,addHistory,canEdit}){
           Salvar
         </button>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:14}}>
         {FIELDS.map(f=>(
           <div key={f.k} style={{gridColumn:["objetivo","observacoes"].includes(f.k)?"span 2":"span 1"}}>
             <label style={MLB}>{f.l}</label>
@@ -42488,7 +42580,7 @@ function MediaTabCampanhas({data,store,update,addHistory,canEdit}){
         <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>{editing?"Editar campanha":"Nova campanha"}</div>
         <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:4}}><Ico n="x" size={16}/></button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"span 2"}}>
           <label style={MLB}>Nome da campanha</label>
           <input value={f.nome} onChange={e=>setF({...f,nome:e.target.value})} placeholder="Ex: Construschorr - Conversões - Out/26" style={MSI}/>
@@ -42632,7 +42724,7 @@ function MediaTabDemandas({data,store,update,addHistory,canEdit}){
     </div>
 
     {showForm&&<div style={MCARD}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         <div style={{gridColumn:"span 2"}}>
           <label style={MLB}>Título</label>
           <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} placeholder="Ex: Subir 3 criativos novos pra campanha de obras" style={MSI}/>
@@ -42863,7 +42955,7 @@ function MediaTabRelatorios({data,store,update,addHistory,canEdit}){
     </div>
 
     {showForm&&<div style={MCARD}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:12}}>
         <div><label style={MLB}>Mês</label><input type="month" value={f.mes} onChange={e=>setF({...f,mes:e.target.value})} style={MSI}/></div>
         <div><label style={MLB}>Data do relatório</label><input type="date" value={f.data} onChange={e=>setF({...f,data:e.target.value})} style={MSI}/></div>
         <div><label style={MLB}>Status</label>
@@ -42904,7 +42996,7 @@ function MediaTabRelatorios({data,store,update,addHistory,canEdit}){
               {r.enviado?"Desmarcar":"Marcar enviado"}
             </button>}
           </div>
-          {(r.resultados||r.atencao||r.proximas)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,fontSize:11}}>
+          {(r.resultados||r.atencao||r.proximas)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:12,fontSize:11}}>
             {r.resultados&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Resultados</div><div style={{color:"#475569",lineHeight:1.5}}>{r.resultados}</div></div>}
             {r.atencao&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Atenção</div><div style={{color:"#475569",lineHeight:1.5}}>{r.atencao}</div></div>}
             {r.proximas&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próximas ações</div><div style={{color:"#475569",lineHeight:1.5}}>{r.proximas}</div></div>}
@@ -42965,7 +43057,7 @@ function MediaTabContas({data,store,update,addHistory,canEdit}){
           Salvar
         </button>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
         {ROWS.map(r=>(
           <div key={r.k}>
             <label style={MLB}>{r.l}</label>
@@ -43054,7 +43146,7 @@ function MediaNovoClienteModal({store,update,addHistory,onClose}){
     onClose();
   };
   return <ModalShell onClose={onClose} title="Novo cliente de mídia">
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <label style={MLB}>Cliente</label>
         <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value})} style={MSI}>
@@ -43139,7 +43231,7 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose,initialTask,pres
     onClose();
   };
   return <ModalShell onClose={onClose} title={isEdit?"Editar demanda de mídia":"Nova demanda de mídia"}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <label style={MLB}>Cliente</label>
         <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value,unidade:""})} style={MSI} disabled={isEdit}>
@@ -45290,7 +45382,7 @@ function _ParcInfluencersView({data, accent, canEdit, onEdit, onDelete, sort, se
             </div>
             <span style={{background:st.bg,color:st.color,fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:6,textTransform:"uppercase",letterSpacing:.3,whiteSpace:"nowrap"}}>{st.label}</span>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:8,padding:"8px 10px",background:"#f8fafc",borderRadius:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:8,padding:"8px 10px",background:"#f8fafc",borderRadius:8}}>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Seguidores</div><div style={{fontSize:13,fontWeight:800,color:"#0f172a",marginTop:2}}>{_fmtNum(i.followers)}</div></div>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Engaj.</div><div style={{fontSize:13,fontWeight:800,color:"#0f172a",marginTop:2}}>{i.engagement?i.engagement.toFixed(1)+"%":"—"}</div></div>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Custo</div><div style={{fontSize:13,fontWeight:800,color:"#0f172a",marginTop:2}}>{i.cost?"R$ "+_fmtNum(i.cost):"—"}</div></div>
@@ -45356,7 +45448,7 @@ function _ParcEventosView({data, accent, canEdit, onEdit, onDelete, sort, setSor
             </div>
             <span style={{background:st.bg,color:st.color,fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:6,textTransform:"uppercase",letterSpacing:.3,whiteSpace:"nowrap"}}>{st.label}</span>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:8,padding:"8px 10px",background:"#f8fafc",borderRadius:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:8,padding:"8px 10px",background:"#f8fafc",borderRadius:8}}>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Data</div><div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginTop:2}}>{dt}{dtEnd}</div></div>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Público</div><div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginTop:2}}>{e.publico?_fmtNum(e.publico):"—"}</div></div>
             <div><div style={{fontSize:9.5,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>Custo</div><div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginTop:2}}>{e.cost?"R$ "+_fmtNum(e.cost):"—"}</div></div>
@@ -45400,19 +45492,19 @@ function _InfluencerModal({infl, accent, onSave, onClose}){
       </div>
       <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:12}}>
         <_Field label="Nome"><input value={f.name||""} onChange={function(e){up("name",e.target.value);}} placeholder="Ex: Ana Silva" style={_INP}/></_Field>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <_Field label="@ handle"><input value={f.handle||""} onChange={function(e){up("handle",e.target.value);}} placeholder="@ana.silva" style={_INP}/></_Field>
           <_Field label="Rede social"><select value={f.network||"Instagram"} onChange={function(e){up("network",e.target.value);}} style={_INP}>
             <option>Instagram</option><option>TikTok</option><option>YouTube</option><option>Facebook</option><option>LinkedIn</option><option>Twitter/X</option>
           </select></_Field>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
           <_Field label="Seguidores"><input value={f.followers||""} onChange={function(e){up("followers",e.target.value);}} placeholder="15000" style={_INP}/></_Field>
           <_Field label="Engajamento %"><input value={f.engagement||""} onChange={function(e){up("engagement",e.target.value);}} placeholder="3.5" style={_INP}/></_Field>
           <_Field label="Custo estimado R$"><input value={f.cost||""} onChange={function(e){up("cost",e.target.value);}} placeholder="500" style={_INP}/></_Field>
         </div>
         <_Field label="Nicho / especialidade"><input value={f.niche||""} onChange={function(e){up("niche",e.target.value);}} placeholder="Ex: Moda, Fitness, Gastronomia" style={_INP}/></_Field>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <_Field label="Status"><select value={f.status||"prospeccao"} onChange={function(e){up("status",e.target.value);}} style={_INP}>
             <option value="prospeccao">Prospecção</option>
             <option value="contato">Em contato</option>
@@ -45461,25 +45553,25 @@ function _EventoModal({evt, accent, onSave, onClose}){
       </div>
       <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:12}}>
         <_Field label="Nome do evento"><input value={f.name||""} onChange={function(e){up("name",e.target.value);}} placeholder="Ex: Feira de Agricultura 2026" style={_INP}/></_Field>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 2fr",gap:10}}>
           <_Field label="Tipo"><select value={f.type||"Feira"} onChange={function(e){up("type",e.target.value);}} style={_INP}>
             <option>Feira</option><option>Congresso</option><option>Workshop</option><option>Meetup</option><option>Palestra</option><option>Ação local</option><option>Patrocínio</option><option>Outro</option>
           </select></_Field>
           <_Field label="Link"><input value={f.link||""} onChange={function(e){up("link",e.target.value);}} placeholder="https://..." style={_INP}/></_Field>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <_Field label="Data início"><input type="date" value={f.dateStart||""} onChange={function(e){up("dateStart",e.target.value);}} style={_INP}/></_Field>
           <_Field label="Data fim (opcional)"><input type="date" value={f.dateEnd||""} onChange={function(e){up("dateEnd",e.target.value);}} style={_INP}/></_Field>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"2fr 1fr",gap:10}}>
           <_Field label="Cidade"><input value={f.city||""} onChange={function(e){up("city",e.target.value);}} placeholder="Chapecó" style={_INP}/></_Field>
           <_Field label="UF"><input value={f.state||""} onChange={function(e){up("state",e.target.value.toUpperCase().slice(0,2));}} placeholder="SC" style={_INP}/></_Field>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <_Field label="Custo estimado R$"><input value={f.cost||""} onChange={function(e){up("cost",e.target.value);}} placeholder="2500" style={_INP}/></_Field>
           <_Field label="Público esperado"><input value={f.publico||""} onChange={function(e){up("publico",e.target.value);}} placeholder="500" style={_INP}/></_Field>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <_Field label="Status"><select value={f.status||"mapeado"} onChange={function(e){up("status",e.target.value);}} style={_INP}>
             <option value="mapeado">Mapeado</option>
             <option value="avaliando">Avaliando</option>
@@ -45657,12 +45749,12 @@ function PageSprint({isMob, tasks}){
       })}
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:16,alignItems:"start"}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 320px",gap:16,alignItems:"start"}}>
 
       {/* Weekly calendar */}
       <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
         <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:13}}>Entregas da Semana</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)"}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"repeat(2,1fr)":"repeat(5,1fr)"}}>
           {tasksByDay.map(({day,tasks:dt},i)=>{
             const isToday = day.toDateString()===today.toDateString();
             const isPast = day < today && !isToday;
@@ -46125,7 +46217,7 @@ function PageAnalitico({isMob, tasks, initTab}){
     {tab==="overview"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
 
       {/* Two-col layout */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:16}}>
 
         {/* Production chart */}
         <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
@@ -46188,7 +46280,7 @@ function PageAnalitico({isMob, tasks, initTab}){
       </div>
 
       {/* Bottom row — Donut summary + quick team */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:16}}>
         {/* ROI donut */}
         <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"18px"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>ROI Geral</div>
@@ -46245,7 +46337,7 @@ function PageAnalitico({isMob, tasks, initTab}){
     </div>)}
 
     {/* ══ CLIENTES ══ */}
-    {tab==="clientes"&&(<div style={{display:"grid",gridTemplateColumns:selClient?"1fr 340px":"1fr",gap:16,alignItems:"start"}}>
+    {tab==="clientes"&&(<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":(selClient?"1fr 340px":"1fr"),gap:16,alignItems:"start"}}>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {clientData.sort((a,b)=>b.health-a.health).map((cl,i)=>{
           const isSel=selCl===cl.id;
@@ -46253,7 +46345,7 @@ function PageAnalitico({isMob, tasks, initTab}){
             onClick={()=>setSelCl(isSel?null:cl.id)}
             style={{background:C.card,borderRadius:16,border:"1px solid "+(isSel?cl.healthColor:C.b1),cursor:"pointer",overflow:"hidden",transition:"border .2s"}}
             onMouseEnter={e=>{if(!isSel)e.currentTarget.style.borderColor=C.a+"66";}} onMouseLeave={e=>{if(!isSel)e.currentTarget.style.borderColor=C.b1;}}>
-            <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"40px 1fr 120px 80px 80px 80px 60px 80px",gap:12,alignItems:"center"}}>
+            <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"40px 1fr 120px 80px 80px 80px 60px 80px",minWidth:_pxMob()?680:0,gap:12,alignItems:"center"}}>
               {/* Avatar */}
               <div style={{width:36,height:36,borderRadius:10,background:cl.color+"22",border:"1px solid "+cl.color+"44",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,color:cl.color}}>{cl.name.slice(0,2).toUpperCase()}</div>
               {/* Name + sparkline */}
@@ -46297,7 +46389,7 @@ function PageAnalitico({isMob, tasks, initTab}){
             <Donut value={selClient.health} max={100} color={selClient.healthColor} size={100} stroke={14} label="health" animated={animated}/>
           </div>
           {/* Detail metrics */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
             {[
               {l:"Demandas",v:selClient.ct,c:C.tx},
               {l:"Entregues",v:selClient.done,c:C.gr},
@@ -46341,7 +46433,7 @@ function PageAnalitico({isMob, tasks, initTab}){
       {teamData.sort((a,b)=>b.efficiency-a.efficiency).map((u,i)=>{
         const effColor=u.efficiency>=80?C.gr:u.efficiency>=60?C.yw:C.rd;
         return(<div key={u.id} style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"48px 1fr 100px 80px 80px 80px 100px 80px",gap:12,alignItems:"center"}}>
+          <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"48px 1fr 100px 80px 80px 80px 100px 80px",minWidth:_pxMob()?680:0,gap:12,alignItems:"center"}}>
             <div style={{width:40,height:40,borderRadius:13,background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:18,boxShadow:"0 4px 10px "+u.color+"44"}}>{u.av}</div>
             <div>
               <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{u.name}</div>
@@ -46427,7 +46519,7 @@ function PageAnalitico({isMob, tasks, initTab}){
 
     {/* ══ PRODUÇÃO ══ */}
     {tab==="producao"&&(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:16}}>
         {/* Area chart - all 6 months */}
         <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"18px"}}>
           <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:4}}>Demandas Entregues — 6 meses</div>
@@ -46657,7 +46749,7 @@ function GanttView({tasks}){
       </div>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"200px 1fr",overflow:"hidden"}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"200px 1fr",overflow:"hidden"}}>
       {/* Labels */}
       <div style={{borderRight:"1px solid "+C.b1}}>
         <div style={{height:40,borderBottom:"1px solid "+C.b1,background:C.s1}}/>
@@ -46796,7 +46888,7 @@ function PageAvaliacao360(){
       <div style={{color:C.td,fontSize:11,marginTop:2}}>Avalie seus colegas — feedback anônimo e construtivo</div>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,alignItems:"start"}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:16,alignItems:"start"}}>
 
       {/* Form */}
       <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"20px"}}>
@@ -46932,7 +47024,7 @@ function PageCarreira(){
     {/* Add form */}
     {showAdd&&(<div style={{background:C.card,borderRadius:14,border:"2px solid "+C.a+"44",padding:"16px 18px"}}>
       <div style={{color:C.a,fontWeight:700,fontSize:13,marginBottom:12}}>Registrar Marco</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
         <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Tipo</div>
           <select value={form.tipo} onChange={e=>setForm(p=>({...p,tipo:e.target.value}))} style={inp}>
             {Object.entries(TIPO_CONFIG).map(([k,v])=><option key={k} value={k}>{v.icon} {v.label}</option>)}
@@ -47843,7 +47935,7 @@ function _pxEhVideo(f){
 }
 function _pxThumbDaTask(tk){
   if(!tk) return null;
-  const finais=(typeof pxFinalFiles==="function")?pxFinalFiles(tk):[];
+  const finais=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(tk):[];
   const pool = finais.length>0 ? finais : (tk.files||[]).filter(function(f){
     return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material";
   });
@@ -48098,7 +48190,7 @@ function PortalFunil(props){
     <div style={{background:"#fff",borderRadius:14,padding:"18px 22px",border:"1px solid #e2e8f0"}}>
       <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14}}>Quantidade por etapa</div>
       {/* Cabeçalho da tabela */}
-      <div style={{display:"grid",gridTemplateColumns:"minmax(180px,1fr) 120px 120px",gap:12,padding:"6px 10px",alignItems:"center",maxWidth:580}}>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"minmax(0,1fr) 84px 84px":"minmax(180px,1fr) 120px 120px",gap:12,padding:"6px 10px",alignItems:"center",maxWidth:580}}>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Etapa</div>
         <div style={{color:"#1877F2",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
           <svg viewBox="0 0 24 24" width="13" height="13"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -48119,7 +48211,7 @@ function PortalFunil(props){
         {stages.map(function(s,i){
           const m=(form[s.id]&&form[s.id].meta)||0;
           const g=(form[s.id]&&form[s.id].google)||0;
-          return <div key={s.id} style={{display:"grid",gridTemplateColumns:"minmax(180px,1fr) 120px 120px",gap:12,alignItems:"center",padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,maxWidth:580}}>
+          return <div key={s.id} style={{display:"grid",gridTemplateColumns:_pxMob()?"minmax(0,1fr) 84px 84px":"minmax(180px,1fr) 120px 120px",gap:12,alignItems:"center",padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,maxWidth:580}}>
             <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
               <span style={{width:22,height:22,borderRadius:6,background:cl.color+"15",color:cl.color,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{i+1}</span>
               <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</span>
@@ -48302,7 +48394,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
     // Usa a MESMA fonte do card (pxFinalFiles): mesma lista, mesma ordem.
     // Antes o portal so excluia isAnnotation — os anexos de "Solicitar ajuste"
     // (isRef) vazavam pro cliente e ainda bagunçavam a ordem do carrossel.
-    const finais = (typeof pxFinalFiles==="function") ? pxFinalFiles(current) : [];
+    const finais = (typeof pxFinalFilesAtuais==="function") ? pxFinalFilesAtuais(current) : [];
     const _all = (current.files||[]).filter(function(f){ return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material"; });
     const pool = finais.length>0 ? finais : _all;
     // Mapeia pra {url, isVideo}
@@ -48711,7 +48803,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
                 e.preventDefault(); e.stopPropagation();
                 if(!current){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Nenhum card selecionado.",4000); return; }
                 try{
-                  const _arqs=(typeof pxFinalFiles==="function")?pxFinalFiles(current):[];
+                  const _arqs=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(current):[];
                   const _urls=_arqs.map(function(f){return f.url;}).filter(Boolean);
                   if(_urls.length===0){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum arquivo pra baixar.",3000); return; }
                   const _multi=_urls.length>1;
@@ -48754,7 +48846,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
               onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}
               onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
               <Ico n="download" size={15}/> Baixar {(function(){
-                const _n=(typeof pxFinalFiles==="function"&&current)?pxFinalFiles(current).length:0;
+                const _n=(typeof pxFinalFilesAtuais==="function"&&current)?pxFinalFilesAtuais(current).length:0;
                 return _n>1?("carrossel ("+_n+")"):"arquivo";
               })()}
             </button>
@@ -51176,7 +51268,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
               </div>
             </div>
 
-            <div style={{padding:"14px 0",display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={{padding:"14px 0",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:16}}>
               <div>
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>{_margem>=0?"Margem no mês":"Margem negativa"}</div>
                 <div style={{color:totalInvestido===0?"#cbd5e1":(_margem>=0?"#16a34a":"#dc2626"),fontSize:isMob?18:22,fontWeight:800,letterSpacing:-.7,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
@@ -51759,9 +51851,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       </button>}
     </div>}
 
-    {/* Tabs — quebram em várias linhas. Sem barra de rolagem horizontal:
-        o cliente ficava sem ver as últimas abas e precisava arrastar. */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap",rowGap:2}}>
+    {/* Tabs — desktop quebra em linhas (sem barra de rolagem); mobile desliza
+        no dedo com a scrollbar escondida (padrão de app touch). */}
+    <style>{".pxPortalTabs::-webkit-scrollbar{display:none}"}</style>
+    <div className="pxPortalTabs" style={isMob
+      ? {display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}
+      : {display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap",rowGap:2}}>
       {TABS.map(function(t){
         const active=tab===t.id;
         return <button key={t.id} onClick={function(){setTab(t.id);}}
@@ -52562,7 +52657,7 @@ function _PortalPlaybookEditModal({section, accent, catSuggestions, onSave, onCl
           </div>
           {(sec.images||[]).length===0
             ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"24px 12px",textAlign:"center",color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Nenhuma mídia anexada ainda</div>
-            : <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+            : <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(2,1fr)",gap:10}}>
                 {(sec.images||[]).map(function(m,i){
                   const _isVid = m.type && m.type.startsWith("video/");
                   function _setCap(v){
@@ -52864,7 +52959,7 @@ function PageContratos({tasks}){
             </div>);
           })}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:16}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:12,marginTop:16}}>
           {[
             {l:"Garantido este mes",v:"R$"+receitaGarantida.toLocaleString("pt-BR"),c:C.gr},
             {l:"Garantido 6 meses",v:"R$"+(forecast.slice(0,6).reduce((s,f)=>s+f.receita,0)/1000).toFixed(0)+"k",c:C.a},
@@ -53677,7 +53772,7 @@ PROMPT DE IMAGEM:
           {/* CAMPO 3A — Categoria */}
           <div>
             <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Categoria *</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:6}}>
               {CATEGORIAS.map(cat=>{
                 const isActive=gen.categoria===cat;
                 const cor=CAT_COLORS[cat]||C.a;
@@ -53951,7 +54046,7 @@ PROMPT DE IMAGEM:
     {/* ══ CHURN ══ */}
     {tab==="churn"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{background:C.a+"08",borderRadius:12,padding:"12px 16px",border:"1px solid "+C.a+"33",display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:16}}>⚡</span><div style={{color:C.tx,fontSize:12}}>Predição de churn em tempo real baseada em atrasos, retrabalhos, score e NPS.</div></div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{l:"Risco Alto",v:churnAlerts.filter(c=>c.riskLevel==="alto").length,c:C.rd},{l:"Risco Medio",v:churnAlerts.filter(c=>c.riskLevel==="medio").length,c:C.yw},{l:"Saudaveis",v:churnAlerts.filter(c=>c.riskLevel==="baixo").length,c:C.gr}].map((k,i)=>(<div key={i} style={{background:C.card,borderRadius:12,padding:"14px",border:"1px solid "+C.b1,textAlign:"center"}}><div style={{color:k.c,fontWeight:900,fontSize:28}}>{k.v}</div><div style={{color:C.td,fontSize:10,marginTop:3}}>{k.l}</div></div>))}</div>
+      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:12}}>{[{l:"Risco Alto",v:churnAlerts.filter(c=>c.riskLevel==="alto").length,c:C.rd},{l:"Risco Medio",v:churnAlerts.filter(c=>c.riskLevel==="medio").length,c:C.yw},{l:"Saudaveis",v:churnAlerts.filter(c=>c.riskLevel==="baixo").length,c:C.gr}].map((k,i)=>(<div key={i} style={{background:C.card,borderRadius:12,padding:"14px",border:"1px solid "+C.b1,textAlign:"center"}}><div style={{color:k.c,fontWeight:900,fontSize:28}}>{k.v}</div><div style={{color:C.td,fontSize:10,marginTop:3}}>{k.l}</div></div>))}</div>
       {churnAlerts.map(cl=>(<div key={cl.id} style={{background:C.card,borderRadius:16,border:"1px solid "+(cl.riskLevel==="alto"?C.rd+"44":cl.riskLevel==="medio"?C.yw+"44":C.b1),overflow:"hidden"}}>
         <div style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:44,height:44,borderRadius:13,background:(cl.color||C.a)+"22",border:"1px solid "+(cl.color||C.a)+"44",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,color:cl.color||C.a,flexShrink:0}}>{cl.name.slice(0,2).toUpperCase()}</div>
@@ -53968,7 +54063,7 @@ PROMPT DE IMAGEM:
       <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setShowAddPb(true)} style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Novo playbook</button></div>
       {showAddPb&&(<div style={{background:C.card,borderRadius:14,border:"2px solid "+C.a+"44",padding:"18px"}}>
         <div style={{color:C.a,fontWeight:700,fontSize:13,marginBottom:12}}>Novo Playbook</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Setor</div><select value={pbForm.setor} onChange={e=>setPbForm(p=>({...p,setor:e.target.value}))} style={inp}>{SETORES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select></div>
           <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Título *</div><input value={pbForm.titulo} onChange={e=>setPbForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
           <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Etapas</div><textarea value={pbForm.etapas} onChange={e=>setPbForm(p=>({...p,etapas:e.target.value}))} style={{...inp,minHeight:70,resize:"vertical"}}/></div>
@@ -53985,7 +54080,7 @@ PROMPT DE IMAGEM:
           <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{background:C.a+"18",color:C.a,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>{pb.setor}</span><span style={{color:C.tx,fontWeight:700,fontSize:13}}>{pb.titulo}</span></div>
           {pb.id&&<button onClick={()=>savePlaybooks(playbooks.filter(x=>x.id!==pb.id))} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:16}}>×</button>}
         </div>
-        <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 200px",gap:14}}>
+        <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 200px",gap:14}}>
           <div><div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>Etapas</div><div style={{color:C.tx,fontSize:11,lineHeight:1.7,whiteSpace:"pre-line"}}>{pb.etapas}</div></div>
           <div><div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>KPIs</div><div style={{background:C.gr+"10",border:"1px solid "+C.gr+"33",borderRadius:8,padding:"8px 10px",color:C.gr,fontSize:11,fontWeight:600}}>{pb.kpis}</div></div>
         </div>
@@ -54081,7 +54176,7 @@ PROMPT DE IMAGEM:
       <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setShowAddBib(true)} style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Registrar aprendizado</button></div>
       {showAddBib&&(<div style={{background:C.card,borderRadius:14,border:"2px solid "+C.a+"44",padding:"18px"}}>
         <div style={{color:C.a,fontWeight:700,fontSize:13,marginBottom:12}}>Novo Aprendizado</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Tipo</div><select value={bibForm.tipo} onChange={e=>setBibForm(p=>({...p,tipo:e.target.value}))} style={inp}>{Object.entries(TIPO_BIB).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
           <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Cliente</div><select value={bibForm.clientId} onChange={e=>setBibForm(p=>({...p,clientId:e.target.value}))} style={inp}><option value="">Geral</option>{CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Título *</div><input value={bibForm.titulo} onChange={e=>setBibForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
@@ -54584,7 +54679,7 @@ function ComProspectModal({prospect,onClose,onSave}){
   const [f,setF]=useState(prospect);
   const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <ComModal title={prospect.empresa?"Editar prospect":"Novo prospect"} onClose={onClose} maxWidth={640}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <div style={_COM_LBL}>Empresa / prospect</div>
         <input value={f.empresa||""} onChange={function(e){set("empresa",e.target.value);}} style={_COM_INP} placeholder="Nome da empresa" autoFocus/>
@@ -54614,7 +54709,7 @@ function ComProspectModal({prospect,onClose,onSave}){
       {/* Origem — botoes com icone, full-width, boxes maiores e simetricos */}
       <div style={{gridColumn:"span 2"}}>
         <div style={_COM_LBL}>Origem</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:7}}>
           {COMERCIAL_ORIGENS.map(function(o){
             const act=(f.origem||"")===o.id;
             return <button key={o.id} type="button" onClick={function(){set("origem",act?"":o.id);}}
@@ -54937,7 +55032,7 @@ function ComOpportunidadeModal({opp,onClose,onSave}){
   const [f,setF]=useState(opp);
   const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <ComModal title={opp.oferta?"Editar oportunidade":"Nova oportunidade / upsell"} onClose={onClose} maxWidth={640}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div>
         <div style={_COM_LBL}>Cliente atual</div>
         <select value={f.clienteId||""} onChange={function(e){const id=e.target.value;const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===id;});setF(Object.assign({},f,{clienteId:id,cliente:cl?cl.name:f.cliente,grupo:cl?cl.name:f.grupo}));}} style={_COM_INP}>
@@ -55604,7 +55699,7 @@ function ComPropostaModal({prop,onClose,onSave}){
   const [f,setF]=useState(prop);
   const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <ComModal title={prop.nome?"Editar proposta":"Nova proposta"} onClose={onClose} maxWidth={640}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <div style={_COM_LBL}>Nome da proposta</div>
         <input value={f.nome||""} onChange={function(e){set("nome",e.target.value);}} style={_COM_INP} placeholder="Ex: Pacote Bioter 2026" autoFocus/>
@@ -55762,7 +55857,7 @@ function ComFollowUpModal({fu,onClose,onSave}){
   const [f,setF]=useState(fu);
   const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
   return <ComModal title={fu.proximaAcao?"Editar follow-up":"Novo follow-up"} onClose={onClose}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <div style={_COM_LBL}>Prospect / cliente</div>
         <input value={f.target||""} onChange={function(e){set("target",e.target.value);}} style={_COM_INP} placeholder="Nome do alvo" autoFocus/>
@@ -57045,7 +57140,7 @@ function ComVendasPontuais({canEdit, isMob}){
           <input value={editing.descricao||""} onChange={function(e){setEditing(Object.assign({},editing,{descricao:e.target.value}));}} placeholder="Ex: Captação de vídeos SC/RS"
             style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:"inherit"}}/>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
           <div>
             <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Valor (R$)</div>
             <input type="number" step="0.01" value={editing.valor||""} onChange={function(e){setEditing(Object.assign({},editing,{valor:Number(e.target.value)||0}));}}
@@ -57084,7 +57179,7 @@ function ComVendasPontuais({canEdit, isMob}){
             })()}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
           <div>
             <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Data da venda</div>
             <_VPDatePicker
@@ -58352,7 +58447,7 @@ function PageOperacional(props){
               </div>}
             </div>
             {/* Indicadores — 4 boxes maiores */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
               {kpis.slice(0,4).map(function(k,i){
                 const danger = k.invert && k.v>0;
                 const col = danger?"#b91c1c":"#0f172a";
@@ -58676,7 +58771,7 @@ function _OpDrawer(props){
         </div>
         <div>
           <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,fontFamily:_OP_FF}}>Indicadores</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
             {kpis.map(function(k,i){
               const danger = k.invert && k.v>0;
               const ok = k.invert && k.v===0;
@@ -59271,7 +59366,7 @@ function ClientAlertsPanel(props){
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Alertas</div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
       {alerts.map(function(a){
         return <div key={a.k} style={{background:a.n>0?a.col+"08":"#fafbfc",border:"1px solid "+(a.n>0?a.col+"33":"#f1f5f9"),borderRadius:9,padding:"10px 12px"}}>
           <div style={{color:a.n>0?a.col:"#94a3b8",fontSize:24,fontWeight:800,letterSpacing:-1,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{a.n}</div>
@@ -59954,6 +60049,9 @@ const PRICE_CONFIG = {
     avulsoNovo: 400,
     avulsoAjuste: 200,
     recorrente: { price: 1500, novos: 5, ajustes: 10 },
+    // So entra no pacote junto da Gestao de Redes Sociais, com no minimo R$4.000
+    // de redes contratados (2 redes na base). Sozinho nao e vendido.
+    requerSocialMin: 4000,
   },
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
@@ -59965,6 +60063,14 @@ const PRICE_CONFIG = {
         { ico:"users",     label:"Reunião mensal de alinhamento", detalhe:"Você e a Pixels na mesma página" },
         { ico:"chart",     label:"Apresentação dos resultados do mês", detalhe:"O que funcionou, o que não funcionou" },
         { ico:"lightbulb", label:"Próximos passos definidos",    detalhe:"Prioridades do mês seguinte" },
+      ] },
+    { id:"garantia", ico:"check", min:6000,
+      nome:"1 Mês de Garantia",
+      tagline:"Primeiro mês com risco zero",
+      itens:[
+        { ico:"check",     label:"30 dias de garantia",            detalhe:"O primeiro mês de contrato é garantido" },
+        { ico:"sliders",   label:"Ajustes das entregas sem custo", detalhe:"Refazemos até ficar do jeito certo" },
+        { ico:"users",     label:"Acompanhamento de perto",        detalhe:"Time da Pixels junto na largada" },
       ] },
     { id:"capgratis", ico:"video", min:6000, tema:"ouro",
       nome:"Captação Grátis",
@@ -61106,8 +61212,15 @@ function _CalculadoraModular({isMob, persistClientId}){
   const trafficPrice   = calculateTrafficPrice(trafficKey);
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
   const growthPrice    = calculateGrowthPrice(growthOn);
+  // Materiais Graficos so entram junto da Gestao de Redes Sociais (min. R$4.000)
+  const _graficosMin     = cfg.graficos.requerSocialMin || 0;
+  const graficosLiberado = socialActive && socialPrice >= _graficosMin;
   const graficosRec    = graficosKey==="recorrente";
   const graficosPrice  = graficosRec ? cfg.graficos.recorrente.price : 0;
+  // Perdeu o requisito das redes? a escolha de materiais graficos cai fora sozinha
+  useEffect(function(){
+    if(!graficosLiberado && graficosKey!=="none") setGraficosKey("none");
+  },[graficosLiberado]);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
   // Projetos pontuais escolhidos (objeto completo) e se algum e "a partir de"
   const _oneTimeSel    = oneTimeIds.map(function(id){ return cfg.oneTimeProjects.find(function(x){ return x.id===id; }); }).filter(Boolean);
@@ -61354,18 +61467,18 @@ function _CalculadoraModular({isMob, persistClientId}){
 
   // Header do modulo — icone grande 52px + titulo + selo de concluido + pills
   function _ModuleHeader({num, ico, title, subtitle, active, versaoLabel, nivelLabel, badge, semPills}){
-    return <div style={{display:"flex",alignItems:"flex-start",gap:15,flexWrap:"wrap"}}>
-      <_PxIcoBox n={ico||"share2"} box={52} estado={active?"ativo":"neutro"}/>
-      <div style={{flex:1,minWidth:190}}>
+    return <div style={{display:"flex",alignItems:"flex-start",gap:isMob?11:15,flexWrap:"wrap"}}>
+      <_PxIcoBox n={ico||"share2"} box={isMob?44:52} estado={active?"ativo":"neutro"}/>
+      <div style={{flex:1,minWidth:isMob?0:190}}>
         <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
-          <div style={{color:INK,fontWeight:800,fontSize:18.5,letterSpacing:-.45,lineHeight:1.2}}>{title}</div>
+          <div style={{color:INK,fontWeight:800,fontSize:isMob?16.5:18.5,letterSpacing:-.45,lineHeight:1.2}}>{title}</div>
           {active && <span style={{background:"#faf7ff",color:"#7c3aed",border:"1px solid #e9d8fe",fontSize:10,fontWeight:800,padding:"3px 9px 3px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
             <_PxIco n="check" size={11} color="#7c3aed" strokeWidth={3.2}/>Configurado
           </span>}
         </div>
         <div style={{color:MUTE,fontSize:13,marginTop:5,lineHeight:1.5}}>{subtitle}</div>
       </div>
-      {!semPills&&<div style={{display:"flex",flexDirection:"column",gap:5,minWidth:130,flexShrink:0,alignItems:"flex-end"}}>
+      {!semPills&&!isMob&&<div style={{display:"flex",flexDirection:"column",gap:5,minWidth:130,flexShrink:0,alignItems:"flex-end"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
           <span style={{color:SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão</span>
           <span style={{background:active?PX_BG:"#f6f7fa",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:"#eceef3"),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.2,whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
@@ -61465,7 +61578,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     { id:"traffic",   ico:"target",       label:"Tráfego Pago",  done:trafficKey!=="none", price:trafficPrice },
     { id:"growth",    ico:"chart",        label:"Growth",        done:growthActive,        price:growthPrice },
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
-    { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:graficosKey!=="none", price:graficosPrice, subLabel:graficosKey==="avulso"?"avulso · sob demanda":undefined },
+    { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:graficosKey!=="none", price:graficosPrice, subLabel:!graficosLiberado?"requer redes sociais":(graficosKey==="avulso"?"avulso · sob demanda":undefined) },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
     { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
@@ -61501,7 +61614,8 @@ function _CalculadoraModular({isMob, persistClientId}){
 
   /* ═══ Stepper de serviços — ícone grande por módulo ═══ */
   function _StepRail(){
-    return <div style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+    return <><style>{".pxStepRail::-webkit-scrollbar{display:none}"}</style>
+    <div className="pxStepRail" style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
       {STEPS.map(function(st,i){
         const isCur  = i===stepSafe;
         const isDone = !!st.done;
@@ -61531,7 +61645,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           </div>
         </button>;
       })}
-    </div>;
+    </div></>;
   }
 
   /* ═══ Card de canal — apagado até selecionar, com quantidade de contas ═══ */
@@ -61892,8 +62006,23 @@ function _CalculadoraModular({isMob, persistClientId}){
     <_ModuleHeader num="6" ico="shapes" active={graficosKey!=="none"}
       title="Materiais Gráficos"
       subtitle="Folder, banner, cartaz, manual, catálogo, materiais de feira e afins."
-      versaoLabel={graficosKey==="none"?"Não selecionado":graficosKey==="avulso"?"Avulso":"Plano mensal"}
+      versaoLabel={!graficosLiberado?"Bloqueado":(graficosKey==="none"?"Não selecionado":graficosKey==="avulso"?"Avulso":"Plano mensal")}
       nivelLabel="Design"/>
+
+    {/* ═══ REQUISITO: só entra junto das redes sociais ═══ */}
+    {!graficosLiberado&&<div style={{background:"linear-gradient(135deg,#fffbeb,#ffffff)",border:"1.5px solid #fde68a",borderRadius:16,padding:isMob?"16px 15px":"18px 20px",display:"flex",alignItems:"flex-start",gap:13}}>
+      <div style={{width:40,height:40,borderRadius:12,background:"#fef3c7",border:"1px solid #fde68a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <_PxIco n="lock" size={18} color="#b45309"/>
+      </div>
+      <div style={{minWidth:0}}>
+        <div style={{color:"#92400e",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Entra junto da Gestão de Redes Sociais</div>
+        <div style={{color:"#a16207",fontSize:12.5,marginTop:5,lineHeight:1.6}}>
+          Material gráfico não é vendido sozinho: o time de design trabalha em cima da linha visual que a gestão de redes constrói.
+          Feche a <strong>Gestão de Redes Sociais a partir de {fmt(_graficosMin)}/mês</strong> na etapa 1 pra liberar esta etapa.
+          {socialActive&&socialPrice<_graficosMin&&<span> Hoje o pacote de redes está em <strong>{fmt(socialPrice)}/mês</strong>.</span>}
+        </div>
+      </div>
+    </div>}
 
     {/* ═══ ESCOLHA DO FORMATO ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:12}}>
@@ -61906,10 +62035,13 @@ function _CalculadoraModular({isMob, persistClientId}){
          desc:"Até "+cfg.graficos.recorrente.novos+" materiais novos por mês — ou até "+cfg.graficos.recorrente.ajustes+" ajustes, combináveis (1 novo = 2 ajustes)."},
       ].map(function(op){
         const sel = graficosKey===op.key;
-        return <button key={op.key} type="button" onClick={function(){setGraficosKey(sel?"none":op.key);}}
-          style={{background:sel?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff",border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"17px 18px",cursor:"pointer",textAlign:"left",transition:"all .18s",display:"flex",flexDirection:"column",gap:10,fontFamily:_PORTF_FF,boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
-          onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";} }}
-          onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";} }}>
+        const _trava = !graficosLiberado;
+        return <button key={op.key} type="button" disabled={_trava}
+          onClick={function(){ if(_trava) return; setGraficosKey(sel?"none":op.key); }}
+          title={_trava?("Disponível só com a Gestão de Redes Sociais a partir de "+fmt(_graficosMin)+"/mês"):undefined}
+          style={{background:_trava?"#fafbfc":(sel?"linear-gradient(135deg,#f8f4ff,#ffffff)":"#fff"),border:"1.5px solid "+(sel?PX:"#eef0f5"),borderRadius:16,padding:"17px 18px",cursor:_trava?"not-allowed":"pointer",opacity:_trava?.55:1,textAlign:"left",transition:"all .18s",display:"flex",flexDirection:"column",gap:10,fontFamily:_PORTF_FF,boxShadow:sel?"0 8px 22px rgba(159,67,246,.13)":"0 1px 2px rgba(15,23,42,.035)"}}
+          onMouseEnter={function(e){ if(!sel&&!_trava){e.currentTarget.style.borderColor=PX_BD;e.currentTarget.style.transform="translateY(-2px)";} }}
+          onMouseLeave={function(e){ if(!sel&&!_trava){e.currentTarget.style.borderColor="#eef0f5";e.currentTarget.style.transform="";} }}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <_PxIcoBox n={op.ico} box={44} estado={sel?"ativo":"neutro"}/>
             <div style={{minWidth:0,flex:1}}>
@@ -62005,7 +62137,9 @@ function _CalculadoraModular({isMob, persistClientId}){
       ? <_ValorModulo price={graficosPrice}/>
       : <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"12px 16px",color:MUTE,fontSize:11.5,lineHeight:1.55,display:"flex",alignItems:"center",gap:9}}>
           <_PxIco n="lightbulb" size={14} color={SOFT}/>
-          {graficosKey==="avulso"
+          {!graficosLiberado
+            ? "Etapa bloqueada: materiais gráficos entram só junto da Gestão de Redes Sociais (a partir de "+fmt(_graficosMin)+"/mês)."
+            : graficosKey==="avulso"
             ? "Formato avulso: nada entra na recorrência — a cobrança acontece por peça, quando solicitada."
             : "Escolha um formato acima — ou siga sem materiais gráficos no pacote."}
         </div>}
@@ -62580,7 +62714,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     (graficosKey==="avulso") && {ico:"shapes", l:"Materiais Gráficos", d:"Avulso · cobrado por peça, sob demanda", v:0, semValor:true},
   ].filter(Boolean);
 
-  const _cardLogo = {background:"#fff",borderRadius:16,width:isMob?116:140,height:isMob?62:74,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 14px",boxShadow:"0 10px 26px rgba(0,0,0,.28)",flexShrink:0};
+  const _cardLogo = {background:"#fff",borderRadius:isMob?13:16,width:isMob?96:140,height:isMob?54:74,display:"flex",alignItems:"center",justifyContent:"center",padding:isMob?"8px 10px":"10px 14px",boxShadow:"0 10px 26px rgba(0,0,0,.28)",flexShrink:0};
 
   const _telaObrigado = <section style={{background:BG_PAGE,borderRadius:focusMode?0:18,padding:isMob?"18px 14px":"26px 30px",fontFamily:_PORTF_FF,color:INK,minHeight:focusMode?"100%":"auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{width:"100%",maxWidth:780,background:"linear-gradient(165deg,#2b1055 0%,#43197e 46%,#1b0937 100%)",borderRadius:26,padding:isMob?"30px 20px 26px":"48px 46px 40px",position:"relative",overflow:"hidden",color:"#fff",boxShadow:"0 30px 70px rgba(43,16,85,.34)"}}>
@@ -62602,19 +62736,19 @@ function _CalculadoraModular({isMob, persistClientId}){
       <div style={{position:"relative",animation:"pxObrIn .6s cubic-bezier(.34,1.28,.5,1) both"}}>
 
         {/* ── lockup de parceria: Pixels + mãos dadas + cliente ── */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMob?10:16,flexWrap:"nowrap"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:isMob?8:16,flexWrap:"nowrap"}}>
           <div style={_cardLogo}>
             {_logoPx
               ? <img src={_logoPx} alt="Pixels" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
               : <span style={{color:"#7c3aed",fontWeight:900,fontSize:16,letterSpacing:-.4}}>Pixels</span>}
           </div>
 
-          <div style={{display:"flex",alignItems:"center",gap:isMob?4:7,flexShrink:0}}>
-            <span style={{width:isMob?10:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>
-            <span style={{width:isMob?46:54,height:isMob?46:54,borderRadius:"50%",background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 26px rgba(240,180,41,.45), inset 0 1px 0 rgba(255,255,255,.45)"}}>
-              <_PxIco n="handshake" size={isMob?23:27} color="#3d2a05" strokeWidth={2}/>
+          <div style={{display:"flex",alignItems:"center",gap:isMob?0:7,flexShrink:0}}>
+            {!isMob&&<span style={{width:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>}
+            <span style={{width:isMob?40:54,height:isMob?40:54,borderRadius:"50%",background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 26px rgba(240,180,41,.45), inset 0 1px 0 rgba(255,255,255,.45)"}}>
+              <_PxIco n="handshake" size={isMob?20:27} color="#3d2a05" strokeWidth={2}/>
             </span>
-            <span style={{width:isMob?10:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>
+            {!isMob&&<span style={{width:18,height:2,borderRadius:2,background:"rgba(255,216,104,.45)"}}/>}
           </div>
 
           <div style={_cardLogo}>
@@ -62736,13 +62870,13 @@ function _CalculadoraModular({isMob, persistClientId}){
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Montagem de escopo
         </div>
-        <div style={{color:INK,fontWeight:800,fontSize:isMob?21:27,letterSpacing:-.8,lineHeight:1.15,marginTop:10}}>Monte o pacote do cliente</div>
-        <div style={{color:MUTE,fontSize:13,marginTop:6,lineHeight:1.55,maxWidth:620}}>Passe etapa por etapa. Cada módulo acende quando você seleciona e marca o check ao concluir.</div>
+        <div style={{color:INK,fontWeight:800,fontSize:isMob?21:27,letterSpacing:-.8,lineHeight:1.15,marginTop:10}}>{persistClientId?"Monte o seu pacote":"Monte o pacote do cliente"}</div>
+        <div style={{color:MUTE,fontSize:13,marginTop:6,lineHeight:1.55,maxWidth:620}}>{persistClientId?"Passe etapa por etapa escolhendo o que faz sentido pro seu negócio — tudo é salvo automaticamente.":"Passe etapa por etapa. Cada módulo acende quando você seleciona e marca o check ao concluir."}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
-        <_CopyButton/>
-        <_FocusButton/>
+        {!isMob&&<_CopyButton/>}
+        {!isMob&&<_FocusButton/>}
       </div>
     </div>
 
@@ -62758,21 +62892,30 @@ function _CalculadoraModular({isMob, persistClientId}){
           {STEP_BODIES[curStep.id]}
         </div>
 
-        {/* Navegação entre etapas */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <_PxNavBtn dir="prev" label="Voltar" disabled={stepSafe===0} onClick={function(){goStep(stepSafe-1);}}/>
-          <div style={{textAlign:"center",minWidth:0}}>
-            <div style={{color:SOFT,fontSize:11.5,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>Etapa {stepSafe+1} de {STEPS.length}</div>
-            {persistClientId&&<div style={{color:"#a3adbb",fontSize:10,fontWeight:600,marginTop:2}}>suas escolhas são salvas automaticamente</div>}
-          </div>
-          {(stepSafe===STEPS.length-1 && persistClientId)
+        {/* Navegação entre etapas — no mobile o Salvar vira botão full-width acima */}
+        {(function(){
+          const _ultima = stepSafe===STEPS.length-1;
+          const _btnSalvar = (_ultima && persistClientId)
             ? <button type="button" onClick={salvarOrcamento} disabled={orcSalvando}
-                style={{background:orcSalvando?"#c4b5fd":"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:12,padding:"11px 20px",color:"#fff",fontSize:13,fontWeight:800,letterSpacing:-.2,cursor:orcSalvando?"default":"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 8px 20px rgba(124,58,237,.28)",transition:"all .16s",flexShrink:0}}>
+                style={{background:orcSalvando?"#c4b5fd":"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:12,padding:isMob?"14px 20px":"11px 20px",width:isMob?"100%":"auto",justifyContent:"center",color:"#fff",fontSize:isMob?14:13,fontWeight:800,letterSpacing:-.2,cursor:orcSalvando?"default":"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 8px 20px rgba(124,58,237,.28)",transition:"all .16s",flexShrink:0}}>
                 <_PxIco n="check" size={15} color="#fff" strokeWidth={3.2}/>
                 {orcSalvando ? "Salvando..." : (orcSalvoEm ? "Orçamento salvo" : "Salvar orçamento")}
               </button>
-            : <_PxNavBtn dir="next" label="Avançar" disabled={stepSafe===STEPS.length-1} onClick={function(){goStep(stepSafe+1);}}/>}
-        </div>
+            : null;
+          return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {isMob && _btnSalvar}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <_PxNavBtn dir="prev" label="Voltar" disabled={stepSafe===0} onClick={function(){goStep(stepSafe-1);}}/>
+              <div style={{textAlign:"center",minWidth:0}}>
+                <div style={{color:SOFT,fontSize:11.5,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>Etapa {stepSafe+1} de {STEPS.length}</div>
+                {persistClientId&&!isMob&&<div style={{color:"#a3adbb",fontSize:10,fontWeight:600,marginTop:2}}>suas escolhas são salvas automaticamente</div>}
+              </div>
+              {(!isMob && _btnSalvar) ? _btnSalvar
+                : <_PxNavBtn dir="next" label="Avançar" disabled={_ultima} onClick={function(){goStep(stepSafe+1);}}/>}
+            </div>
+            {persistClientId&&isMob&&<div style={{color:"#a3adbb",fontSize:10,fontWeight:600,textAlign:"center"}}>suas escolhas são salvas automaticamente</div>}
+          </div>;
+        })()}
 
         {/* Resumo repetido embaixo no mobile */}
         {isMob && <_ResumoBox
@@ -63914,7 +64057,7 @@ function PageGestaoENPS(props){
             <div style={{width:(neutros/totalResp*100)+"%",background:"#eab308",transition:"width .3s"}}/>
             <div style={{width:(detratores/totalResp*100)+"%",background:"#ef4444",transition:"width .3s"}}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10}}>
             {[{l:"Promotores", n:promotores, c:"#16a34a", bg:"#dcfce7"},
               {l:"Neutros",    n:neutros,    c:"#a16207", bg:"#fef3c7"},
               {l:"Detratores", n:detratores, c:"#dc2626", bg:"#fee2e2"}].map(function(d){
@@ -64489,7 +64632,7 @@ function _ENPSDrawer({user, rows, onClose}){
         <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#475569",fontSize:18,lineHeight:1,fontFamily:_NPS_FF}}>×</button>
       </div>
       {/* Resumo */}
-      <div style={{padding:"18px 24px",background:"#fafbfc",borderBottom:"1px solid #e2e8f0",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,fontFamily:_NPS_FF}}>
+      <div style={{padding:"18px 24px",background:"#fafbfc",borderBottom:"1px solid #e2e8f0",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:10,fontFamily:_NPS_FF}}>
         <div>
           <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Última nota</div>
           <div style={{color:lastClass?lastClass.color:"#94a3b8",fontWeight:800,fontSize:22,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{lastScore!=null?lastScore:"—"}</div>
@@ -67793,7 +67936,7 @@ function _EventoEditModal({evento, onSave, onClose}){
             <input value={ev.uf||""} onChange={function(e){_set("uf",e.target.value.toUpperCase().slice(0,2));}} style={_inp} placeholder="PR"/>
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
           <div>
             <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data início</div>
             <_EvDateField value={ev.dataIni||""} onChange={function(v){_set("dataIni",v);}} placeholder="Selecionar data"/>
@@ -68894,7 +69037,7 @@ function _DGRotinaSemanal({user, isSocio}){
     </div>
 
     {/* Grid de 5 dias — colunas Asana-style */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:_pxMob()?"repeat(2,minmax(0,1fr))":"repeat(5,minmax(0,1fr))",gap:14}}>
       {_DG_RS_DAYS.map(function(d,idx){
         const dayItems=items.filter(function(x){return x.day_of_week===d.id;}).sort(sortByHora);
         const isAdding=adding&&adding.day===d.id;
@@ -69202,7 +69345,7 @@ function _DGOKREditModal({editing, setEditing, onSaveKR, onSaveObj}){
             onKeyDown={e=>{if(e.key==="Enter" && !isObj){e.preventDefault();onSaveKR();}}}
             style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
-        {!isObj && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        {!isObj && <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:10}}>
           <div>
             <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Atual</div>
             <input type="number" value={editing.current} onChange={e=>setEditing({...editing,current:e.target.value})} style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
@@ -69898,7 +70041,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:48,textAlign:"right"}}>{weekConcluidas}/{metasWeek.length}</span>
         </div>
         {/* 3 stats principais (Total fica como subtexto) — visual mais limpo */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:metasWeek.length>0?14:0}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3,1fr)",gap:8,marginBottom:metasWeek.length>0?14:0}}>
           {[
             {l:"Concluídas", v:weekConcluidas, c:"#16a34a", bg:"#dcfce7"},
             {l:"Pendentes",  v:weekPendentes,  c:"#a16207", bg:"#fef3c7"},
@@ -70932,7 +71075,7 @@ function _DGDocumentos({user, isMob}){
             </div>
           </div>
           {/* Título + Data */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 140px",gap:10}}>
             <div>
               <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
               <input value={draft.title} onChange={e=>setDraft(p=>({...p,title:e.target.value}))} placeholder="Ex: Reunião com Meta"
@@ -71527,7 +71670,7 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
             })}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
           <div>
             <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -71702,7 +71845,7 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
           <div>
             <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
             <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
@@ -74437,7 +74580,7 @@ function _PbVisualOrientItem({item, editMode, isAdmin, color, onUpdate, onRemove
   const [tDesc,setTDesc]   = useState(item.description||"");
   useEffect(function(){ setTTitle(item.title||""); setTDesc(item.description||""); }, [item.id, item.title, item.description, editMode]);
 
-  return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",display:"grid",gridTemplateColumns:"180px 1fr",gap:0,alignItems:"stretch"}}>
+  return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"180px 1fr",gap:0,alignItems:"stretch"}}>
     {/* Imagem */}
     <div style={{background:"#fafafa",borderRight:"1px solid "+PB_BORDER2,minHeight:140,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
       {item.imgUrl
