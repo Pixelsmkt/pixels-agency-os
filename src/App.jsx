@@ -61133,6 +61133,7 @@ function _CalculadoraModular({isMob, persistClientId}){
   // Salvar o orcamento (botao da ultima etapa, no portal do cliente)
   const [orcSalvando,setOrcSalvando] = useState(false);
   const [orcSalvoEm,setOrcSalvoEm]   = useState(null);
+  const [telaObrigado,setTelaObrigado] = useState(false);
   function salvarOrcamento(){
     if(!persistClientId || typeof window==="undefined" || !window._sb) return;
     setOrcSalvando(true);
@@ -61143,7 +61144,8 @@ function _CalculadoraModular({isMob, persistClientId}){
         setOrcSalvando(false);
         if(res&&res.error){ console.warn("portal_calculadora enviar:",res.error.message); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); return; }
         setOrcSalvoEm(agora);
-        if(typeof pixelsToast!=="undefined") pixelsToast.success("Orçamento salvo! A Pixels já consegue ver o seu pacote.");
+        setTelaObrigado(true);
+        try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(e){}
       })
       .catch(function(e){ setOrcSalvando(false); console.warn("portal_calculadora enviar:",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); });
   }
@@ -62547,6 +62549,66 @@ function _CalculadoraModular({isMob, persistClientId}){
     </button>;
   }
 
+  /* ═══ TELA DE OBRIGADO — fecha o fluxo depois de salvar o orçamento ═══ */
+  const _telaObrigado = <section style={{background:BG_PAGE,borderRadius:focusMode?0:18,padding:isMob?"18px 14px":"26px 30px",fontFamily:_PORTF_FF,color:INK,minHeight:focusMode?"100%":"auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{width:"100%",maxWidth:760,background:"linear-gradient(160deg,#2d1058 0%,#43197e 48%,#1c0a3a 100%)",borderRadius:22,padding:isMob?"30px 20px":"46px 44px",position:"relative",overflow:"hidden",color:"#fff",boxShadow:"0 24px 60px rgba(43,16,85,.30)"}}>
+      <style>{"@keyframes pxObrIn{from{opacity:0;transform:translateY(20px) scale(.95)}to{opacity:1;transform:none}}"
+        +"@keyframes pxObrConfA{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(-70px,620px) rotate(680deg)}}"
+        +"@keyframes pxObrConfB{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(70px,660px) rotate(-620deg)}}"
+        +"@keyframes pxObrConfC{0%{opacity:1;transform:translate(0,-40px) rotate(0)}100%{opacity:0;transform:translate(-10px,580px) rotate(780deg)}}"}</style>
+
+      {/* confete */}
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
+        {Array.from({length:42}).map(function(_x,i){
+          const CORES=["#f0b429","#ffd868","#a855f7","#c4b5fd","#ffffff","#34d399"];
+          return <div key={i} style={{position:"absolute",left:((i*23)%100)+"%",top:0,width:5+(i%3)*2,height:9+(i%4)*3,background:CORES[i%CORES.length],borderRadius:(i%5===0)?"50%":"2px",opacity:0,animation:"pxObrConf"+["A","B","C"][i%3]+" "+(1.8+(i%5)*0.26)+"s cubic-bezier(.18,.62,.42,1) "+((i%9)*0.07)+"s both"}}/>;
+        })}
+      </div>
+
+      <div style={{position:"relative",textAlign:"center",animation:"pxObrIn .6s cubic-bezier(.34,1.28,.5,1) both"}}>
+        <div style={{width:78,height:78,borderRadius:24,background:"linear-gradient(135deg,#ffd868,#f0b429)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 14px 34px rgba(240,180,41,.42), inset 0 1px 0 rgba(255,255,255,.4)",marginBottom:18}}>
+          <_PxIco n="check" size={38} color="#3d2a05" strokeWidth={3.4}/>
+        </div>
+
+        <div style={{color:"rgba(255,216,104,.9)",fontSize:10.5,fontWeight:900,letterSpacing:1.2,textTransform:"uppercase"}}>Orçamento recebido</div>
+        <div style={{fontSize:isMob?30:42,fontWeight:900,letterSpacing:-1.6,lineHeight:1.05,marginTop:8}}>Obrigado!</div>
+        <div style={{color:"rgba(255,255,255,.86)",fontSize:isMob?14:16.5,fontWeight:700,marginTop:14,lineHeight:1.5,letterSpacing:-.2}}>
+          A Pixels Marketing agradece a parceria.
+        </div>
+        <div style={{color:"rgba(255,255,255,.62)",fontSize:isMob?13:14.5,marginTop:8,lineHeight:1.6,maxWidth:520,marginLeft:"auto",marginRight:"auto"}}>
+          Estamos animados para tirar esse projeto do papel!
+        </div>
+
+        {/* resumo do que foi enviado */}
+        <div style={{display:"grid",gridTemplateColumns:(oneTimePrice>0&&!isMob)?"1fr 1fr":"1fr",gap:12,marginTop:26,textAlign:"left"}}>
+          <div style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.12)",borderRadius:14,padding:"16px 18px"}}>
+            <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Mensal recorrente</div>
+            <div style={{fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}<span style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+          </div>
+          {oneTimePrice>0&&<div style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.12)",borderRadius:14,padding:"16px 18px"}}>
+            <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Investimento pontual</div>
+            <div style={{fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)}<span style={{color:"rgba(255,255,255,.5)",fontSize:12,fontWeight:700,marginLeft:5}}>único</span></div>
+          </div>}
+        </div>
+
+        <div style={{display:"inline-flex",alignItems:"flex-start",gap:9,color:"rgba(255,255,255,.55)",fontSize:12,lineHeight:1.55,marginTop:18,textAlign:"left",maxWidth:520}}>
+          <_PxIco n="check" size={14} color="#34d399" strokeWidth={3}/>
+          <span>Recebemos o seu pacote. Nosso time vai revisar e falar com você pra alinhar os próximos passos.</span>
+        </div>
+
+        <div style={{marginTop:26}}>
+          <button type="button" onClick={function(){ setTelaObrigado(false); }}
+            style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.22)",borderRadius:12,padding:"11px 22px",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,transition:"all .16s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,.18)";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.10)";}}>
+            <_PxIco n="clipboard" size={14} color="#fff" strokeWidth={2.3}/>
+            Revisar meu pacote
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>;
+
   /* ═══════════════ RENDER ═══════════════ */
   const _conteudo = <section style={{background:BG_PAGE,borderRadius:focusMode?0:18,padding:isMob?"18px 14px":(focusMode?"22px 28px 40px":"26px 30px"),fontFamily:_PORTF_FF,color:INK,position:"relative",minHeight:focusMode?"100%":"auto"}}>
 
@@ -62618,13 +62680,16 @@ function _CalculadoraModular({isMob, persistClientId}){
     </div>
   </section>;
 
+  // Depois de salvar o orçamento no portal, a tela de obrigado fecha o fluxo.
+  const _final = telaObrigado ? _telaObrigado : _conteudo;
+
   // Modo foco: sobrepõe a tela inteira, escondendo a sidebar do app.
   if(focusMode){
     return <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:1400,background:BG_PAGE,overflowY:"auto",overflowX:"hidden",WebkitOverflowScrolling:"touch"}}>
-      {_conteudo}
+      {_final}
     </div>;
   }
-  return _conteudo;
+  return _final;
 }
 
 /* ─── _ResumoBox — painel lateral do escopo (desktop/mobile) ─────── */
