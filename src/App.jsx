@@ -2487,6 +2487,7 @@ function NavIcon({id,size=18,color}){
   if(id==="portal_chat")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
   // ── Submenus Gestão ──
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(id==="gestao_projecao")    return <svg {...p}><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>;
   if(id==="gestao_time")        return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
@@ -2542,6 +2543,7 @@ const NAV=[
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
+    {id:"gestao_projecao",      icon:"▥", label:"Projeção financeira"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_armazenamento", icon:"⛃", label:"Armazenamento"},
@@ -27348,15 +27350,53 @@ const GF_CONTRATOS_DEFAULT = [
   {grupo:"Climaves",             cor:"#0284c7", valor:2500, clientId:"climaves",      pagDia:10, respFin:""},
 ];
 
+// Puxa TODO cliente ativo que ainda não está na lista de contratos.
+// Antes o seed era fixo: cliente novo (Acreforte, VetService, Lero, Clem…)
+// nunca aparecia em "Contratos ativos" e ficava fora do MRR. Agora a lista
+// se completa sozinha — o valor entra como 0 ("definir valor") até alguém
+// abrir o card e preencher. Quem foi arquivado à mão não volta (_gfArquivados).
+function _gfArquivados(){
+  try{
+    const raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-contratos-arquivados"):null;
+    const arr=raw?JSON.parse(raw):[];
+    return Array.isArray(arr)?arr.map(function(x){return String(x).toLowerCase();}):[];
+  }catch(_){return [];}
+}
+function _gfMergeClientesAtivos(lista){
+  const arr=Array.isArray(lista)?lista.slice():[];
+  try{
+    if(typeof CLIENTS==="undefined"||!Array.isArray(CLIENTS))return arr;
+    const jaTem={};
+    arr.forEach(function(c){ if(c&&c.clientId) jaTem[String(c.clientId).toLowerCase()]=true; });
+    const fora=_gfArquivados();
+    CLIENTS.forEach(function(cl){
+      if(!cl||!cl.id)return;
+      if(cl.id==="pixels")return;                                   // a própria agência
+      if(cl.status&&cl.status!=="ativo")return;                     // pausado/encerrado/interno
+      const id=String(cl.id).toLowerCase();
+      if(jaTem[id]||fora.indexOf(id)>=0)return;
+      arr.push({
+        grupo: cl.name||cl.id,
+        cor: cl.color||"#7c3aed",
+        valor: Number(cl.contract)||0,
+        clientId: cl.id,
+        pagDia: 10,
+        respFin: "",
+        _auto: true,   // entrou sozinho: valor ainda precisa ser conferido
+      });
+    });
+  }catch(_){}
+  return arr;
+}
 // Carrega contratos do localStorage com merge dos campos novos (pagDia, respFin) sobre o seed.
 function _gfLoadContratos(){
   try{
     const raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-contratos-ativos"):null;
-    if(!raw)return GF_CONTRATOS_DEFAULT;
+    if(!raw)return _gfMergeClientesAtivos(GF_CONTRATOS_DEFAULT);
     const parsed=JSON.parse(raw);
-    if(!Array.isArray(parsed)||parsed.length===0)return GF_CONTRATOS_DEFAULT;
-    return parsed;
-  }catch(_){return GF_CONTRATOS_DEFAULT;}
+    if(!Array.isArray(parsed)||parsed.length===0)return _gfMergeClientesAtivos(GF_CONTRATOS_DEFAULT);
+    return _gfMergeClientesAtivos(parsed);
+  }catch(_){return _gfMergeClientesAtivos(GF_CONTRATOS_DEFAULT);}
 }
 function _gfSaveContratos(arr){
   try{
@@ -28131,6 +28171,17 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const _custosProlabore = _useCustos("prolabore", dreMonth);
   const _isSocio = (typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level===1);
   const [contratos,setContratos]=useState(function(){return _gfLoadContratos();});
+  // Clientes dinâmicos chegam do Supabase depois do primeiro render — re-roda o
+  // merge pra que Acreforte/Lero/Clem apareçam sem precisar de F5.
+  useEffect(function(){
+    const t=setTimeout(function(){
+      setContratos(function(prev){
+        const next=_gfMergeClientesAtivos(prev);
+        return next.length!==prev.length ? next : prev;
+      });
+    },1500);
+    return function(){ clearTimeout(t); };
+  },[]);
   const [editContrato,setEditContrato]=useState(null); // {grupo, unitIdx?, draft}
   const _updateContratos=function(updater){
     setContratos(function(prev){
@@ -28164,7 +28215,15 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const projecao12m=mrr*12;
   const unidadesFaturadas=ativos.length;
   const clientesAtivos=_contratosSrc.length;
-  const ticketCliente=clientesAtivos>0?mrr/clientesAtivos:0;
+  // Contrato sem valor definido (cliente novo que entrou sozinho na lista) não
+  // pode diluir o ticket médio — conta só quem tem valor fechado.
+  const _valorDoContrato=function(c){
+    if(c&&c.unidades)return c.unidades.reduce(function(s,u){return s+Number(u.valor||0);},0);
+    return Number(c&&c.valor||0);
+  };
+  const clientesSemValor=_contratosSrc.filter(function(c){return _valorDoContrato(c)<=0;}).length;
+  const clientesFaturados=clientesAtivos-clientesSemValor;
+  const ticketCliente=clientesFaturados>0?mrr/clientesFaturados:0;
   const ticketUnidade=unidadesFaturadas>0?mrr/unidadesFaturadas:0;
 
   // ═══ Cálculos DRE em cascata ═══
@@ -28206,15 +28265,35 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const margemAntesImpostos=mrr>0?(mrr-cspTotal-custoFixoTotal)/mrr:0;
   const margemApos=mrr>0?resultadoOp/mrr:0;
 
-  // Meta de margem (50%) — solve for receita necessária
-  // (R - R*i - CSP - despDireta - CF) / R = 0.5
-  // 1 - i - (CSP + despDireta + CF)/R = 0.5
-  // R = (CSP + despDireta + CF) / (0.5 - i)
-  const denomMeta=1-GF_META_MARGEM_PCT-impostoPctAtual; // ex: 1 - 0.5 - 0.0769 = 0.4231
-  const mrrNecessario=denomMeta>0?(custoFixoTotal+cspTotal+despDiretaTotal)/denomMeta:0;
-  const faltaVender=mrrNecessario-mrr;
+  // ── Meta de margem 50% — modelo que ESCALA a produção junto com a receita ──
+  // O modelo antigo assumia custo parado: bastava faturar mais. Na prática cada
+  // real novo de entrega puxa mais produção (freelancers, CSP, mídia direta).
+  //   · PRODUÇÃO (CSP + despesas diretas) cresce proporcional à receita:
+  //     taxa v = (CSP + despDireta) / receita atual — é a "probabilidade" tirada
+  //     do que gastamos HOJE pra entregar o que entregamos hoje;
+  //   · ESTRUTURA (despesas operacionais) fica parada.
+  //   Margem(R) = 1 - i - v - CF/R  →  R* = CF / (1 - i - v - meta)
+  const _txProducao = mrr>0 ? (cspTotal+despDiretaTotal)/mrr : 0;
+  const _denomInt = 1 - impostoPctAtual - _txProducao - GF_META_MARGEM_PCT;
+  const metaAtingivel = _denomInt > 0.0001;
+  const mrrNecessario = metaAtingivel ? custoFixoTotal/_denomInt : 0;
+  const faltaVender = metaAtingivel ? Math.max(0, mrrNecessario-mrr) : 0;
   const gapMargem=(GF_META_MARGEM_PCT-margemApos)*100;
-  const clientesAdic=ticketCliente>0?Math.ceil(faltaVender/ticketCliente):0;
+  const clientesAdic=(metaAtingivel&&ticketCliente>0)?Math.ceil(faltaVender/ticketCliente):0;
+  // Quanto cada frente de produção cresce no cenário da meta (proporcional)
+  const _fatorEscala=(metaAtingivel&&mrr>0&&mrrNecessario>mrr)?mrrNecessario/mrr:1;
+  const custoExtraProducao=(cspTotal+despDiretaTotal)*(_fatorEscala-1);
+  const _escalaItens=(function(){
+    const itens=[];
+    ((_custosCSP&&_custosCSP.custos)||[]).forEach(function(c){
+      if(Number(c.valor)>0) itens.push({label:c.label||"Custo CSP", atual:Number(c.valor)});
+    });
+    if(freelancersTotal>0) itens.push({label:"Freelancers (pagamentos por demanda)", atual:freelancersTotal});
+    if(despDiretaTotal>0) itens.push({label:"Despesas variáveis diretas", atual:despDiretaTotal});
+    return itens.map(function(it){
+      return Object.assign({},it,{futuro:it.atual*_fatorEscala, extra:it.atual*(_fatorEscala-1)});
+    }).sort(function(a,b){return b.extra-a.extra;});
+  })();
 
   // ── Helpers visuais ──
   const Block=function(props){
@@ -28468,7 +28547,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
           </div>
           <div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Meta de margem 50%</div>
-            <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Quanto faturar pra chegar lá sem mexer nos custos atuais</div>
+            <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Quanto faturar pra chegar lá — já contando que a produção cresce junto com a entrega</div>
           </div>
         </div>
         <span style={{background:margemApos>=GF_META_MARGEM_PCT?"#dcfce7":"#fef3c7",color:margemApos>=GF_META_MARGEM_PCT?"#15803d":"#a16207",padding:"5px 12px",borderRadius:99,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+(margemApos>=GF_META_MARGEM_PCT?"#86efac":"#fde047")}}>
@@ -28506,8 +28585,8 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12,position:"relative"}}>
         <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px"}}>
           <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>MRR necessário</div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{_brl(mrrNecessario)}</div>
-          <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>por mês</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{metaAtingivel?_brl(mrrNecessario):"—"}</div>
+          <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>{metaAtingivel?"produção escalada junto":"meta não fecha só com escala"}</div>
         </div>
         <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px"}}>
           <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Falta vender</div>
@@ -28522,11 +28601,46 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
           <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>ticket médio {_brl(ticketCliente)}</div>
         </div>
       </div>
+
+      {/* ── A conta honesta: quanto a produção cresce até a meta ── */}
+      {!metaAtingivel
+        ? <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"14px 16px",display:"flex",gap:11,alignItems:"flex-start"}}>
+            <Ico n="alertTriangle" size={16} color="#b45309"/>
+            <div style={{color:"#92400e",fontSize:12,lineHeight:1.6}}>
+              <strong>Só faturar mais não chega na meta.</strong> Hoje a produção consome <strong>{_pct(_txProducao*100)}</strong> de cada real entregue
+              (+{_pct(impostoPctAtual*100)} de imposto). Sobra menos de {_pct(GF_META_MARGEM_PCT*100)} antes da estrutura — em qualquer faturamento.
+              O caminho é baratear a entrega: ticket maior pelo mesmo escopo, produção mais eficiente ou reajuste de contratos.
+            </div>
+          </div>
+        : (_fatorEscala>1.001&&_escalaItens.length>0)&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"14px 16px"}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,display:"inline-flex",alignItems:"center",gap:7}}>
+                <Ico n="users" size={13} color="#7c3aed"/> O time cresce junto — produção estimada na meta
+              </div>
+              <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+                estimativa proporcional: cada R$ 1 entregue custa {_pct(_txProducao*100)} de produção hoje
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {_escalaItens.map(function(it,i){
+                return <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#fff",border:"1px solid #f1f5f9",borderRadius:9}}>
+                  <span style={{color:"#334155",fontSize:11.5,fontWeight:700,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.label}</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{_brl(it.atual)}</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{_brl(it.futuro)}</span>
+                  <span style={{background:"#faf5ff",color:"#7c3aed",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>+{_brl(it.extra)}</span>
+                </div>;
+              })}
+            </div>
+            <div style={{color:"#64748b",fontSize:10.5,marginTop:10,lineHeight:1.55,paddingTop:9,borderTop:"1px dashed #e2e8f0"}}>
+              No MRR da meta ({_brl(mrrNecessario)}), a produção total sobe <strong style={{color:"#7c3aed"}}>+{_brl(custoExtraProducao)}/mês</strong> — a estrutura fixa ({_brl(custoFixoTotal)}) fica parada. É estimativa proporcional ao custo atual por entrega; contratação real acontece em degraus.
+            </div>
+          </div>}
     </section>
 
     {/* ════ 9. CONTRATOS ATIVOS — cards grandes coloridos com logo ════ */}
     <Block>
-      <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR "+_brl(mrrContrato)+(vendasMesTotal>0?" · +"+_brl(vendasMesTotal)+" pontuais":"")}/>
+      <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR "+_brl(mrrContrato)+(vendasMesTotal>0?" · +"+_brl(vendasMesTotal)+" pontuais":"")+(clientesSemValor>0?" · "+clientesSemValor+" sem valor definido":"")}/>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
         {contratos.map(function(c,idx){
           // Resolve cliente real pra pegar logo
@@ -28592,9 +28706,14 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               </div>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.cor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.5}}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </div>
-            <div style={{display:"flex",alignItems:"baseline",gap:6,paddingTop:6,borderTop:"1px solid "+c.cor+"1c"}}>
-              <span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
-              <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span>
+            <div style={{display:"flex",alignItems:"baseline",gap:6,paddingTop:6,borderTop:"1px solid "+c.cor+"1c",flexWrap:"wrap"}}>
+              {Number(c.valor)>0
+                ? <><span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
+                    <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span></>
+                : <span style={{background:"#fef3c7",color:"#92400e",fontSize:11,fontWeight:800,padding:"5px 11px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:6}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+                    Definir valor do contrato
+                  </span>}
             </div>
             {/* Metadados do contrato — badges modernos */}
             <div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:6,borderTop:"1px dashed "+c.cor+"1c"}}>
@@ -28620,6 +28739,185 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
       updateContratos={_updateContratos}
       onClose={function(){setEditContrato(null);}}/>}
 
+  </div>;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   PROJEÇÃO FINANCEIRA — Gestão > Projeção financeira
+   DRE simplificado 100% MANUAL: nada é puxado de lugar nenhum. A gente
+   digita receitas e gastos em cada quadradinho e a margem sai na hora.
+   Serve pra simular cenários ("e se eu fechar +2 clientes e contratar
+   1 editor?") sem tocar no Financeiro real.
+   Persistência: app_data key "projecao_financeira" (todos os PCs) com
+   espelho em localStorage pro primeiro paint.
+═══════════════════════════════════════════════════════════════════ */
+const _PROJ_SECOES=[
+  {id:"receitas", label:"Receitas",              op:"+", cor:"#16a34a", ico:"chart",
+   hint:"MRR previsto, vendas pontuais, novos contratos — o que você projeta faturar."},
+  {id:"impostos", label:"Impostos e deduções",   op:"−", cor:"#f97316", ico:"fileText",
+   hint:"Simples, taxas de meio de pagamento e afins."},
+  {id:"producao", label:"Equipe e produção",     op:"−", cor:"#84cc16", ico:"users",
+   hint:"Freelancers, novas contratações, mídia dos projetos — o custo de entregar."},
+  {id:"despesas", label:"Despesas fixas",        op:"−", cor:"#6366f1", ico:"lock",
+   hint:"Estrutura: salários fixos, softwares, contabilidade, pró-labore."},
+];
+const _PROJ_SEED={
+  receitas:[{l:"MRR projetado",v:""},{l:"Vendas pontuais",v:""}],
+  impostos:[{l:"Simples Nacional",v:""}],
+  producao:[{l:"Freelancers",v:""},{l:"Nova contratação",v:""}],
+  despesas:[{l:"Estrutura atual",v:""}],
+};
+function PageGestaoProjecao({isMob}){
+  const [dados,setDados]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-projecao-financeira-v1");
+      if(raw){ const p=JSON.parse(raw); if(p&&typeof p==="object") return Object.assign({},_PROJ_SEED,p); }
+    }catch(_){}
+    return _PROJ_SEED;
+  });
+  const [carregou,setCarregou]=useState(false);
+  const _saveT=useRef(null);
+
+  // Carrega do Supabase (app_data) — vale pra todos os PCs
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb){setCarregou(true);return;}
+    let alive=true;
+    window._sb.from("app_data").select("value").eq("key","projecao_financeira").maybeSingle()
+      .then(function(r){
+        if(!alive)return;
+        const v=r&&r.data&&r.data.value;
+        if(v&&typeof v==="object") setDados(Object.assign({},_PROJ_SEED,v));
+        setCarregou(true);
+      })
+      .catch(function(){ if(alive) setCarregou(true); });
+    return function(){alive=false;};
+  },[]);
+
+  // Salva com debounce (Supabase + espelho local)
+  function _persist(next){
+    try{localStorage.setItem("pixels-projecao-financeira-v1",JSON.stringify(next));}catch(_){}
+    if(_saveT.current)clearTimeout(_saveT.current);
+    _saveT.current=setTimeout(function(){
+      if(typeof window==="undefined"||!window._sb)return;
+      window._sb.from("app_data").upsert({key:"projecao_financeira",value:next,updated_at:new Date().toISOString(),updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||""},{onConflict:"key"})
+        .then(function(r){ if(r&&r.error)console.warn("projecao save:",r.error.message); })
+        .catch(function(e){ console.warn("projecao save:",e); });
+    },800);
+  }
+  function _mut(fn){ setDados(function(prev){ const next=fn(JSON.parse(JSON.stringify(prev))); _persist(next); return next; }); }
+
+  const _num=function(v){ const n=parseFloat(String(v==null?"":v).replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; };
+  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+  const _tot=function(sec){ return (dados[sec]||[]).reduce(function(a,it){return a+_num(it.v);},0); };
+  const receita=_tot("receitas");
+  const custos=_tot("impostos")+_tot("producao")+_tot("despesas");
+  const resultado=receita-custos;
+  const margem=receita>0?resultado/receita:0;
+  const META=(typeof GF_META_MARGEM_PCT!=="undefined")?GF_META_MARGEM_PCT:0.5;
+  const bateu=margem>=META&&receita>0;
+  // Receita necessária pra bater a meta COM esses custos digitados:
+  // considera impostos+produção proporcionais e despesas fixas paradas.
+  const _propAtual=receita>0?(_tot("impostos")+_tot("producao"))/receita:0;
+  const _denP=1-_propAtual-META;
+  const receitaMeta=(_denP>0.0001)?_tot("despesas")/_denP:0;
+
+  const _Linha=function({sec,it,idx,cor}){
+    return <div style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #eef0f5",borderRadius:10,padding:"8px 10px"}}>
+      <input value={it.l} placeholder="Descrição"
+        onChange={function(e){const v=e.target.value;_mut(function(d){d[sec][idx].l=v;return d;});}}
+        style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
+      <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
+      <input value={it.v} placeholder="0" inputMode="decimal"
+        onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");_mut(function(d){d[sec][idx].v=v;return d;});}}
+        style={{width:96,border:"none",outline:"none",fontSize:13,fontWeight:800,color:cor,textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
+      <button onClick={function(){_mut(function(d){d[sec].splice(idx,1);return d;});}} title="Remover linha"
+        style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex",borderRadius:6}}
+        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+        onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="trending-up" size={18} color="#fff"/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4}}>Projeção financeira</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Simulador manual: digite receitas e gastos do cenário — nada aqui puxa dados do Financeiro real.</div>
+        </div>
+      </div>
+      <button onClick={function(){ if(window.confirm("Zerar a projeção e voltar ao modelo inicial?")) _mut(function(){return JSON.parse(JSON.stringify(_PROJ_SEED));}); }}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Limpar cenário</button>
+    </div>
+
+    {/* Resultado no topo — margem gigante */}
+    <section style={{background:bateu?"linear-gradient(135deg,#052e16,#14532d)":"linear-gradient(135deg,#1e1b4b,#312e81)",borderRadius:16,padding:isMob?"18px 16px":"22px 26px",color:"#fff",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:isMob?14:10,alignItems:"center"}}>
+      {[
+        {l:"Receita do cenário",v:_brl(receita),c:"#86efac"},
+        {l:"Custos totais",v:_brl(custos),c:"#fca5a5"},
+        {l:"Resultado",v:_brl(resultado),c:resultado>=0?"#fff":"#fca5a5"},
+      ].map(function(k,i){
+        return <div key={i}>
+          <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.65}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:900,fontSize:isMob?18:22,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{k.v}</div>
+        </div>;
+      })}
+      <div>
+        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.65}}>Margem projetada</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:4}}>
+          <span style={{color:bateu?"#4ade80":"#fbbf24",fontWeight:900,fontSize:isMob?22:28,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{(margem*100).toFixed(1)}%</span>
+          <span style={{background:bateu?"rgba(74,222,128,.18)":"rgba(251,191,36,.15)",color:bateu?"#4ade80":"#fbbf24",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap"}}>{bateu?"meta 50% ok":"meta 50%"}</span>
+        </div>
+        <div style={{background:"rgba(255,255,255,.14)",borderRadius:99,height:5,marginTop:8,overflow:"hidden"}}>
+          <div style={{width:Math.min(100,Math.max(2,margem/META*100))+"%",height:"100%",background:bateu?"#4ade80":"#fbbf24",borderRadius:99,transition:"width .3s"}}/>
+        </div>
+      </div>
+    </section>
+
+    {/* Quadradinhos — DRE simplificado */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:14}}>
+      {_PROJ_SECOES.map(function(sec){
+        const total=_tot(sec.id);
+        return <section key={sec.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:"3px solid "+sec.cor,borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:9}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+              <span style={{width:26,height:26,borderRadius:8,background:sec.cor+"15",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                <Ico n={sec.ico} size={13} color={sec.cor}/>
+              </span>
+              <span style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>{sec.op==="+"?"":"− "}{sec.label}</span>
+            </div>
+            <span style={{color:sec.cor,fontWeight:800,fontSize:14.5,fontFeatureSettings:"'tnum'"}}>{_brl(total)}</span>
+          </div>
+          <div style={{color:"#94a3b8",fontSize:10.5,lineHeight:1.45,marginTop:-3}}>{sec.hint}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(dados[sec.id]||[]).map(function(it,idx){
+              return <_Linha key={idx} sec={sec.id} it={it} idx={idx} cor={sec.cor}/>;
+            })}
+          </div>
+          <button onClick={function(){_mut(function(d){(d[sec.id]=d[sec.id]||[]).push({l:"",v:""});return d;});}}
+            style={{background:sec.cor+"0d",border:"1px dashed "+sec.cor+"55",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:sec.cor,cursor:"pointer",fontFamily:"inherit"}}>
+            + Adicionar linha
+          </button>
+        </section>;
+      })}
+    </div>
+
+    {/* Leitura da meta com os números digitados */}
+    {receita>0&&!bateu&&receitaMeta>0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"13px 16px",color:"#64748b",fontSize:12,lineHeight:1.6,display:"flex",gap:10,alignItems:"flex-start"}}>
+      <Ico n="sparkles" size={14} color="#7c3aed"/>
+      <span>Mantendo estas proporções de impostos e produção, a meta de 50% fecha com receita de <strong style={{color:"#7c3aed"}}>{_brl(receitaMeta)}</strong>{receitaMeta>receita?" — faltam "+_brl(receitaMeta-receita)+" no cenário.":"."}</span>
+    </div>}
+    {receita>0&&!bateu&&receitaMeta<=0&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"13px 16px",color:"#92400e",fontSize:12,lineHeight:1.6}}>
+      Com impostos + produção consumindo {(_propAtual*100).toFixed(1)}% da receita, não existe faturamento que feche 50% — o cenário precisa de entrega mais barata ou preço maior.
+    </div>}
+    {!carregou&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center"}}>sincronizando…</div>}
   </div>;
 }
 
@@ -44408,6 +44706,7 @@ export default function AgencyOS(){
       case "portal_criativos":     return p.verPortal||isSocio;
       case "gestao":
       case "gestao_financeiro":    return p.verFinanceiro||isSocio;
+      case "gestao_projecao":      return p.verFinanceiro||isSocio;
       case "gestao_operacional":   return isSocio;
       case "gestao_portfolio":     return isSocio;
       case "gestao_time":          return isSocio;  // Time: só sócios podem ver
@@ -44504,6 +44803,7 @@ export default function AgencyOS(){
       case "analises":
       case "gestao":
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "gestao_projecao":       return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
@@ -51582,6 +51882,180 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
   </div>;
 }
 
+/* ═══ PortalJornadaProjeto — Pacote contratado + linha do tempo ═══════════
+   Dashboard do portal: mostra o pacote fechado (valor, desde, gestor e a
+   lista de entregáveis) e a LINHA DO TEMPO do projeto conforme o preset de
+   Onboarding — o cliente vê quais documentos chegam em quais datas (Análise
+   de Concorrência, Estudo do brief, Kickoff, Calendário, Go-live, Relatório).
+
+   Fonte: client_onboarding.items (mesma tabela do checklist interno — RLS já
+   permite o cliente LER a própria linha). Cada marco mapeia ids de itens do
+   checklist: concluído quando TODOS os ids marcados; a data vem do `due` que
+   o rescheduleAll grava. Entregáveis do pacote: items.__pacote__ (editado
+   aqui mesmo pela equipe Pixels; cliente só vê). */
+const _PJ_MARCOS=[
+  {ids:["d1_contrato_assinar"],            l:"Contrato assinado",              d:"início oficial da parceria",                    ico:"fileText",    dia:"Dia 1"},
+  {ids:["d1_portal_acesso"],               l:"Acesso ao portal liberado",      d:"seu login neste painel",                        ico:"globe",       dia:"Dia 1"},
+  {ids:["d1_reuniao_onboarding"],          l:"Reunião de onboarding",          d:"apresentação da equipe e próximos passos",      ico:"users",       dia:"Dia 1"},
+  {ids:["d2_estudo"],                      l:"Estudo do brief",                d:"imersão em produtos, público e diferenciais",   ico:"book",        dia:"Dia 2",   tab:"briefing"},
+  {ids:["d1_concorrencia"],                l:"Análise de Concorrência",        d:"estudo completo publicado na aba Concorrência", ico:"eye",         dia:"Dia 1–3", tab:"concorrencia"},
+  {ids:["d3_reuniao_kickoff"],             l:"Reunião de kickoff",             d:"plano de projeto, cronograma e funil",          ico:"zap",         dia:"Dia 3"},
+  {ids:["d37_aprovar_calendario"],         l:"Calendário editorial aprovado",  d:"pautas do mês na aba Calendário",               ico:"calendar",    dia:"Dia 3–7", tab:"calendario"},
+  {ids:["d37_aprovar_ads"],                l:"Estratégia de anúncios aprovada",d:"campanhas desenhadas pro seu funil",            ico:"target",      dia:"Dia 3–7"},
+  {ids:["d7_publicacoes","d7_campanhas"],  l:"Go-live",                        d:"publicações no ar e campanhas rodando",         ico:"flame",       dia:"Dia 7"},
+  {ids:["d14_relatorio_ads"],              l:"Primeiro relatório de tráfego",  d:"primeiros números na aba Análises",             ico:"chart",       dia:"Dia 14",  tab:"analises"},
+  {ids:["d31_reuniao","d31_relatorio"],    l:"Fechamento do onboarding",       d:"reunião de alinhamento e resultados do mês",    ico:"checkCircle", dia:"Dia 31"},
+];
+function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
+  const [onb,setOnb]=useState(null);          // client_onboarding.items
+  const [editPacote,setEditPacote]=useState(false);
+  const [draftEntregas,setDraftEntregas]=useState("");
+  const _cor=(cl&&cl.color)||"#7c3aed";
+
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb){setOnb({});return;}
+    let alive=true;
+    window._sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){ if(alive) setOnb((r&&r.data&&r.data.items)||{}); })
+      .catch(function(){ if(alive) setOnb({}); });
+    return function(){alive=false;};
+  },[cl&&cl.id]);
+
+  const items=onb||{};
+  const _hoje=(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
+  const _fmtBR=function(iso){ if(!iso)return ""; const p=String(iso).split("-"); return p.length===3?(p[2]+"/"+p[1]):""; };
+
+  const marcos=_PJ_MARCOS.map(function(m){
+    const done=m.ids.every(function(id){ return items[id]&&items[id].done; });
+    let due=""; m.ids.forEach(function(id){ const d=items[id]&&items[id].due; if(d&&(!due||d<due)) due=d; });
+    const atrasado=!done&&due&&due<_hoje;
+    return Object.assign({},m,{done:done,due:due,atrasado:atrasado});
+  });
+  const feitos=marcos.filter(function(m){return m.done;}).length;
+  const _proxIdx=marcos.findIndex(function(m){return !m.done;});
+  const pacote=(items&&items.__pacote__)||{};
+  const entregas=Array.isArray(pacote.entregas)?pacote.entregas:[];
+  const _tabOk=function(t){ return t && Array.isArray(tabsOk) && tabsOk.indexOf(t)>=0; };
+
+  function salvarPacote(){
+    const lista=draftEntregas.split("\n").map(function(x){return x.trim();}).filter(Boolean);
+    const next=Object.assign({},items,{__pacote__:Object.assign({},pacote,{entregas:lista})});
+    setOnb(next); setEditPacote(false);
+    if(typeof window!=="undefined"&&window._sb){
+      window._sb.from("client_onboarding").upsert({client_id:cl.id,items:next},{onConflict:"client_id"})
+        .then(function(r){ if(r&&r.error){ console.warn("pacote save:",r.error.message); if(typeof pixelsToast!=="undefined")pixelsToast.error("Não salvou. Tenta de novo."); } })
+        .catch(function(e){ console.warn("pacote save:",e); });
+    }
+  }
+
+  if(onb===null) return null;   // carregando — não pisca skeleton no dashboard
+
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"340px minmax(0,1fr)",gap:14,alignItems:"start"}}>
+
+    {/* ── PACOTE CONTRATADO ── */}
+    <div style={{background:"linear-gradient(160deg,"+_cor+"10,"+_cor+"04 55%,#ffffff)",border:"1px solid "+_cor+"2e",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+_cor+","+_cor+"55)"}}/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+          <span style={{width:34,height:34,borderRadius:10,background:"#fff",border:"1px solid "+_cor+"33",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="package" size={17} color={_cor}/>
+          </span>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>Pacote contratado</div>
+            {cl.since&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>cliente desde {cl.since}</div>}
+          </div>
+        </div>
+        {canEdit&&!editPacote&&<button onClick={function(){setDraftEntregas(entregas.join("\n"));setEditPacote(true);}} title="Editar entregáveis (só a equipe Pixels vê este botão)"
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="edit" size={13} color="#64748b"/>
+        </button>}
+      </div>
+
+      {Number(cl.contract)>0&&<div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:14}}>
+        <span style={{color:_cor,fontWeight:900,fontSize:26,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{"R$ "+Number(cl.contract).toLocaleString("pt-BR")}</span>
+        <span style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>/mês</span>
+      </div>}
+
+      {!editPacote
+        ? (entregas.length>0
+            ? <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:2}}>O que está incluso</div>
+                {entregas.map(function(e,i){
+                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                    <span style={{width:16,height:16,borderRadius:5,background:_cor+"18",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      <Ico n="check" size={10} color={_cor}/>
+                    </span>
+                    <span style={{color:"#334155",fontSize:12,fontWeight:600,lineHeight:1.45}}>{e}</span>
+                  </div>;
+                })}
+              </div>
+            : <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic",lineHeight:1.5}}>
+                {canEdit?"Clique no lápis e liste os entregáveis do pacote — o cliente vê aqui.":"Os entregáveis do seu pacote aparecem aqui em breve."}
+              </div>)
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={7} autoFocus
+              placeholder={"Um entregável por linha, ex.:\nGestão de redes sociais (12 posts/mês)\nTráfego pago Meta Ads\n2 vídeos editados/mês"}
+              style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none",color:"#0f172a"}}/>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={function(){setEditPacote(false);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Cancelar</button>
+              <button onClick={salvarPacote} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Salvar</button>
+            </div>
+          </div>}
+    </div>
+
+    {/* ── LINHA DO TEMPO DO PROJETO ── */}
+    <div style={{background:"#fff",border:"1px solid #e9ecf1",borderRadius:16,padding:"18px 20px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:4}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+          <span style={{width:34,height:34,borderRadius:10,background:_cor+"14",border:"1px solid "+_cor+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="trendingUp" size={17} color={_cor}/>
+          </span>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>Linha do tempo do projeto</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>o que entregamos e quando, do contrato ao primeiro mês</div>
+          </div>
+        </div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+          <div style={{width:90,height:6,background:"#eef0f5",borderRadius:99,overflow:"hidden"}}>
+            <div style={{width:Math.round(feitos/_PJ_MARCOS.length*100)+"%",height:"100%",background:_cor,borderRadius:99,transition:"width .4s"}}/>
+          </div>
+          <span style={{color:_cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{feitos}/{_PJ_MARCOS.length}</span>
+        </div>
+      </div>
+
+      <div style={{position:"relative",marginTop:12}}>
+        <div style={{position:"absolute",left:14,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
+        {marcos.map(function(m,i){
+          const _atual=i===_proxIdx;
+          const _c = m.done?_cor:(m.atrasado?"#d97706":"#a3adbb");
+          return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,position:"relative",padding:"8px 0"}}>
+            <span style={{width:30,height:30,borderRadius:"50%",flexShrink:0,background:m.done?_cor:"#fff",border:m.done?"2px solid #fff":("2px solid "+(_atual?_cor:"#e2e6ee")),boxShadow:m.done?("0 2px 8px "+_cor+"55"):(_atual?("0 0 0 4px "+_cor+"1a"):"none"),display:"inline-flex",alignItems:"center",justifyContent:"center",zIndex:1}}>
+              {m.done?<Ico n="check" size={14} color="#fff"/>:<Ico n={m.ico} size={13} color={_atual?_cor:"#a3adbb"}/>}
+            </span>
+            <div style={{minWidth:0,flex:1,paddingTop:2}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <span style={{color:m.done?"#0f172a":(_atual?"#0f172a":"#7a8494"),fontSize:12.5,fontWeight:m.done||_atual?800:700,letterSpacing:-.2}}>{m.l}</span>
+                {m.done&&<span style={{background:_cor+"14",color:_cor,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Entregue</span>}
+                {_atual&&!m.done&&<span style={{background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Em andamento</span>}
+              </div>
+              {m.d&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{m.d}</div>}
+            </div>
+            <div style={{textAlign:"right",flexShrink:0,paddingTop:3,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+              <span style={{color:m.done?_cor:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
+                {m.due?_fmtBR(m.due):m.dia}
+              </span>
+              {m.tab&&_tabOk(m.tab)&&m.done&&<button onClick={function(){onGoTab&&onGoTab(m.tab);}}
+                style={{background:"#fff",border:"1px solid "+_cor+"44",borderRadius:7,padding:"3px 9px",fontSize:9.5,fontWeight:800,color:_cor,cursor:"pointer",whiteSpace:"nowrap"}}>
+                abrir →
+              </button>}
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
+
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit, currentClientUser}){
   // Helper: extrai dados do cliente logado pra anexar nas ações (comentários/timeline)
   const _clientUserMeta=function(){ return _pxClientUserMeta(currentClientUser); };
@@ -52174,6 +52648,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             </div>;
           })}
         </div>
+
+        {/* Pacote contratado + linha do tempo do projeto (preset de onboarding) */}
+        <PortalJornadaProjeto cl={cl} isMob={isMob}
+          canEdit={!lockedClientId && typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level<=2}
+          onGoTab={setTab} tabsOk={TABS.map(function(t){return t.id;})}/>
 
         {/* Grid de cards por aba — resumo + CTA de navegação */}
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
@@ -60493,14 +60972,14 @@ const PORTF_RECORRENTES = [
 const PORTF_PROJETOS = [
   {
     id:"starter", icon:"layers", destaque:true,
-    title:"Basic 3 Meses",
+    title:"Starter 3 Meses",
     prazo:"90 dias",
     short:"Posicionamento e início de escala em 90 dias.",
     long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
     entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
     valor:"R$ 4.000",
     unidade:"/mês",
-    resumo:"Basic 3 Meses: R$ 4.000/mês (total R$ 12.000). Posicionamento, construção de presença e início de escala.",
+    resumo:"Starter 3 Meses: R$ 4.000/mês (total R$ 12.000). Posicionamento, construção de presença e início de escala.",
   },
   {
     id:"landing", icon:"globe",
@@ -63089,7 +63568,7 @@ function _ResumoBox(p){
 /* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
 function PagePortfolio(props){
   const isMob = props.isMob;
-  const [view, setView] = useState("calculadora"); // calculadora | projetos | starter(=Basic 3 Meses) | growth
+  const [view, setView] = useState("calculadora"); // calculadora | projetos | starter | growth
   const [projOpen, setProjOpen] = useState(null); // projeto expandido na aba Projetos
   // Contador de sessao da calculadora: muda a key e forca remontagem, entao
   // toda vez que a aba Calculadora e aberta ela volta zerada.
@@ -63101,12 +63580,12 @@ function PagePortfolio(props){
   }
 
   // Enxugado (15/08): Visão geral e Recorrentes saíram (a calculadora já cobre);
-  // Soluções IA virou parte de Projetos; Starter renomeado pra Basic 3 Meses;
+  // Soluções IA virou parte de Projetos; aba Starter 3 Meses;
   // Growth ganhou aba própria (Consultoria → Plano).
   const TABS = [
     {id:"calculadora", label:"Calculadora"},
     {id:"projetos",    label:"Projetos"},
-    {id:"starter",     label:"Basic 3 Meses"},
+    {id:"starter",     label:"Starter 3 Meses"},
     {id:"growth",      label:"Growth"},
   ];
 
@@ -63247,7 +63726,7 @@ function PagePortfolio(props){
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
           <div>
             <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Proposta detalhada</div>
-            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Basic 3 Meses</div>
+            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Starter 3 Meses</div>
             <div style={{fontSize:13,opacity:.82,marginTop:6,maxWidth:600,lineHeight:1.5,fontFamily:_PORTF_FF}}>Solução estruturada para posicionamento, construção de presença e início de escala.</div>
           </div>
           <div style={{textAlign:"right",fontFamily:_PORTF_FF}}>
@@ -63406,7 +63885,7 @@ function PagePortfolio(props){
         <button onClick={function(){_portfCopiar(PORTF_PROJETOS[0].resumo);}}
           style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          Copiar resumo do Basic
+          Copiar resumo do Starter
         </button>
       </div>
     </section>}
