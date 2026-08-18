@@ -59949,6 +59949,14 @@ const PRICE_CONFIG = {
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
   bonusUnlocks: [
+    { id:"capgratis", ico:"video", min:6000,
+      nome:"Captação Grátis",
+      tagline:"Uma diária por nossa conta",
+      itens:[
+        { ico:"video",  label:"1 diária de captação sem custo", detalhe:"Cinegrafista + equipamento completo" },
+        { ico:"palette",label:"Direção de conteúdo no set",     detalhe:"Roteiro e condução na gravação" },
+        { ico:"drone",  label:"Imagens aéreas com drone",         detalhe:"Tomadas de drone inclusas" },
+      ] },
     { id:"kit", ico:"mic", min:7000,
       nome:"Kit de Gravação Profissional",
       tagline:"Equipamento profissional de brinde",
@@ -60169,7 +60177,7 @@ function _calcFmtBRL(n){ return "R$ "+Number(n||0).toLocaleString("pt-BR"); }
    confete e som), mas componente próprio: os _BonusCard/_BonusVerso da
    calculadora vivem dentro dela e dependem de monthlyRecurring/consts locais.
    Aqui os bônus são fixos — quem contrata a Consultoria (R$7.000/mês) já
-   entra na faixa que libera os dois. */
+   entra na faixa que libera todas. */
 function _PortfBonusGrowth({isMob}){
   const [aberto,setAberto]=useState(false);
   const BONUS=(PRICE_CONFIG.bonusUnlocks||[]).filter(function(b){ return b.min<=7000; });
@@ -60207,7 +60215,7 @@ function _PortfBonusGrowth({isMob}){
         <div style={{color:OURO2,fontSize:10,fontWeight:800,letterSpacing:.9,textTransform:"uppercase"}}>Brindes da jornada</div>
         <div style={{fontSize:isMob?18:21,fontWeight:900,letterSpacing:-.5,marginTop:2}}>Bônus liberados no Growth</div>
         <div style={{color:"rgba(255,255,255,0.58)",fontSize:12,marginTop:4,lineHeight:1.55,maxWidth:560}}>
-          Quem entra na Consultoria Growth já desbloqueia os dois — equipamento e captação por nossa conta, sem custo adicional.
+          Quem entra na Consultoria Growth já desbloqueia todas — equipamento e captação por nossa conta, sem custo adicional.
         </div>
       </div>
     </div>
@@ -61913,7 +61921,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     {graficosKey==="avulso"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
       {[
         {v:cfg.graficos.avulsoNovo, l:"Material novo", d:"Criação do zero: conceito, diagramação e arte final prontos pra impressão.", ico:"pentool", cor:"#9F43F6"},
-        {v:cfg.graficos.avulsoAjuste, l:"Ajuste de material pronto", d:"Alteração em peça existente: trocar texto, data, foto, preço ou adaptar formato.", ico:"sliders", cor:"#0891b2"},
+        {v:cfg.graficos.avulsoAjuste, l:"Ajuste de material pronto", d:"Repaginação de um material que já produzimos: produzimos os textos e as fotos novas mantendo o mesmo layout. Se a estrutura mudar, entra como material novo.", ico:"sliders", cor:"#0891b2"},
       ].map(function(x){
         return <div key={x.l} style={{background:"#fff",border:"1.5px solid #eef0f5",borderRadius:16,padding:"17px 19px",display:"flex",flexDirection:"column",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -62087,7 +62095,6 @@ function _CalculadoraModular({isMob, persistClientId}){
   function _BonusCard({b}){
     const ok    = monthlyRecurring >= b.min;
     const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
-    const falta = Math.max(0, b.min - monthlyRecurring);
     const OURO  = "#f0b429";
     const OURO2 = "#ffd868";
 
@@ -62187,7 +62194,6 @@ function _CalculadoraModular({isMob, persistClientId}){
           <div style={{height:7,background:ok?"rgba(255,255,255,.12)":"#e4e8ef",borderRadius:99,overflow:"hidden"}}>
             <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,"+OURO+","+OURO2+")":"linear-gradient(90deg,#c084fc,#9F43F6)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:ok?"0 0 12px rgba(240,180,41,.55)":"none"}}/>
           </div>
-          {!ok && <div style={{color:SOFT,fontSize:11,marginTop:7,fontFeatureSettings:"'tnum'",textAlign:"center"}}>faltam <b style={{color:INK,fontWeight:800}}>{fmt(falta)}</b> de recorrência</div>}
         </div>
       </div>
     </div>;
@@ -62244,20 +62250,10 @@ function _CalculadoraModular({isMob, persistClientId}){
         </div>}
       </div>
 
-      <div style={{position:"relative",paddingBottom:32}}>
-        <div style={{position:"relative",height:9,background:"#eef0f5",borderRadius:99}}>
-          <div style={{position:"absolute",left:0,top:0,bottom:0,width:(_pctTotal*100)+"%",background:"linear-gradient(90deg,#9F43F6 0%,#c084fc 50%,#f0b429 100%)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)",boxShadow:"0 2px 8px rgba(159,67,246,.30)"}}/>
-          {BONUS_LIST.map(function(b){
-            const pos = bonusTopo>0 ? (b.min/bonusTopo)*100 : 0;
-            const ok  = monthlyRecurring >= b.min;
-            return <div key={b.id} style={{position:"absolute",left:pos+"%",top:"50%",transform:"translate(-50%,-50%)"}}>
-              <div style={{width:20,height:20,borderRadius:"50%",background:ok?"linear-gradient(135deg,#ffd868,#f0b429)":"#fff",border:"2.5px solid "+(ok?"#fff":"#dfe3ea"),boxShadow:ok?"0 2px 9px rgba(240,180,41,.5)":"0 1px 3px rgba(15,23,42,.10)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                {ok && <_PxIco n="check" size={10} color="#3b1670" strokeWidth={3.8}/>}
-              </div>
-              <div style={{position:"absolute",top:25,left:"50%",transform:"translateX(-50%)",color:ok?"#b7791f":"#a3adbb",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(b.min)}</div>
-            </div>;
-          })}
-        </div>
+      {/* Barra limpa — sem marcos de valor: o cliente não deve ver os degraus
+          de R$ 7.000 / R$ 10.000, só o mensal recorrente atual. */}
+      <div style={{position:"relative",height:9,background:"#eef0f5",borderRadius:99,overflow:"hidden"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,width:(_pctTotal*100)+"%",background:"linear-gradient(90deg,#9F43F6 0%,#c084fc 50%,#f0b429 100%)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)"}}/>
       </div>
     </div>
 
