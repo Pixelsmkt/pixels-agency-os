@@ -61197,7 +61197,7 @@ function _CalculadoraModular({isMob}){
     lines.push("Materiais gráficos (avulso, sob demanda — não entra no mensal):");
     lines.push("- Material novo: R$ 400 por peça");
     lines.push("- Ajuste de material pronto: R$ 200 por peça");
-    lines.push("- Peças únicas: folder, banner, cartaz, manual, materiais de feira");
+    lines.push("- Peças únicas: folder, banner, cartaz, manual, catálogo, materiais de feira");
     lines.push("");
     if(oneItems.length>0){
       lines.push("Projetos pontuais:");
@@ -61817,7 +61817,7 @@ function _CalculadoraModular({isMob}){
             {l:"Folder",   ico:"folderkanban"},
             {l:"Banner",   ico:"layout"},
             {l:"Manual",   ico:"clipboard"},
-            {l:"Feiras",   ico:"shapes"},
+            {l:"Catálogo",  ico:"copy"},
           ].map(function(x){
             return <div key={x.l} style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:12,padding:"13px 14px",display:"flex",alignItems:"center",gap:10}}>
               <_PxIco n={x.ico} size={17} color={PX}/>
@@ -61830,8 +61830,8 @@ function _CalculadoraModular({isMob}){
             <_PxIco n="check" size={9} color={PX} strokeWidth={3.4}/>
           </span>
           <span>
-            São <strong style={{color:INK}}>peças únicas</strong> — folder, banner, cartaz, manual, materiais de feira, catálogo de uma página.
-            Publicações longas (revista, livro, catálogo extenso) são orçadas à parte, por projeto.
+            São <strong style={{color:INK}}>peças únicas</strong> — folder, banner, cartaz, manual, catálogo, materiais de feira e afins.
+            Publicações longas, tipo revista ou livro, são orçadas à parte, por projeto.
           </span>
         </div>
       </div>
