@@ -59949,21 +59949,21 @@ const PRICE_CONFIG = {
   // Bonus liberados por faixa de mensal recorrente — cartas de recompensa.
   // "min" = valor de mensal recorrente que desbloqueia a carta.
   bonusUnlocks: [
-    { id:"capgratis", ico:"video", min:6000,
+    { id:"estrategia", ico:"users", min:5000,
+      nome:"Reunião de Alinhamento",
+      tagline:"Apresentação de resultados todo mês",
+      itens:[
+        { ico:"users",     label:"Reunião mensal de alinhamento", detalhe:"Você e a Pixels na mesma página" },
+        { ico:"chart",     label:"Apresentação dos resultados do mês", detalhe:"O que funcionou, o que não funcionou" },
+        { ico:"lightbulb", label:"Próximos passos definidos",    detalhe:"Prioridades do mês seguinte" },
+      ] },
+    { id:"capgratis", ico:"video", min:6000, tema:"ouro",
       nome:"Captação Grátis",
       tagline:"Uma diária por nossa conta",
       itens:[
         { ico:"video",  label:"1 diária de captação sem custo", detalhe:"Cinegrafista + equipamento completo" },
         { ico:"palette",label:"Direção de conteúdo no set",     detalhe:"Roteiro e condução na gravação" },
         { ico:"drone",  label:"Imagens aéreas com drone",         detalhe:"Tomadas de drone inclusas" },
-      ] },
-    { id:"kit", ico:"mic", min:7000,
-      nome:"Kit de Gravação Profissional",
-      tagline:"Equipamento profissional de brinde",
-      itens:[
-        { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
-        { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
-        { ico:"sun",    label:"Iluminação LED",              detalhe:"Kit de luz contínua" },
       ] },
     { id:"capbi", ico:"video", min:7000,
       nome:"Captação Bimestral",
@@ -59973,6 +59973,14 @@ const PRICE_CONFIG = {
         { ico:"palette",label:"Direção de conteúdo na diária",       detalhe:"Roteiro e condução no set" },
         { ico:"drone",  label:"Imagens aéreas com drone",            detalhe:"Tomadas de drone na diária" },
       ] },
+    { id:"kit", ico:"mic", min:7000,
+      nome:"Kit de Gravação Profissional",
+      tagline:"Equipamento profissional de brinde",
+      itens:[
+        { ico:"mic",    label:"Microfone sem fio de lapela", detalhe:"Hollyland Lark A1 Profissional" },
+        { ico:"tripod", label:"Tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
+        { ico:"sun",    label:"Iluminação LED",              detalhe:"Kit de luz contínua" },
+      ] },
     { id:"kit2", ico:"tripod", min:10000,
       nome:"Kit Adicional de Captação",
       tagline:"Segunda unidade completa do kit",
@@ -59980,14 +59988,6 @@ const PRICE_CONFIG = {
         { ico:"mic",    label:"2º microfone sem fio de lapela", detalhe:"Grave duas pessoas ao mesmo tempo" },
         { ico:"tripod", label:"2º tripé bastão para celular",   detalhe:"Ulanzi MA09 com controle remoto" },
         { ico:"sun",    label:"2º ponto de iluminação LED",     detalhe:"Cena iluminada por dois ângulos" },
-      ] },
-    { id:"estrategia", ico:"users", min:10000,
-      nome:"Sessão Estratégica com os Sócios",
-      tagline:"Encontro presencial de growth",
-      itens:[
-        { ico:"users",     label:"Encontro presencial trimestral", detalhe:"Cara a cara com Vinicius e Gustavo" },
-        { ico:"chart",     label:"Imersão de growth",              detalhe:"Onde crescer e como acelerar" },
-        { ico:"lightbulb", label:"Leitura de dados e oportunidades", detalhe:"Canais, funil e novos mercados" },
       ] },
   ],
   oneTimeProjects: [
@@ -60044,33 +60044,6 @@ const PRICE_CONFIG = {
         "Dashboards comerciais e indicadores",
         "Automações e integração com IA",
         "Treinamento da equipe e suporte inicial",
-      ] },
-    { id:"consultoriaWhatsapp", label:"Consultoria de WhatsApp", price:2000, fixo:false, ico:"messages",
-      short:"Atendimento comercial pelo WhatsApp que converte mais.",
-      entregas:[
-        "Diagnóstico do atendimento atual",
-        "Scripts de abordagem e follow-up",
-        "Organização de funil no WhatsApp Business",
-        "Etiquetas, respostas rápidas e catálogo",
-        "Treinamento da equipe de atendimento",
-      ] },
-    { id:"treinamentoVendas", label:"Treinamento de Vendas", price:2500, fixo:false, ico:"target",
-      short:"Equipe comercial preparada pra converter os leads do digital.",
-      entregas:[
-        "Imersão no processo comercial atual",
-        "Playbook de vendas do negócio",
-        "Abordagem, contorno de objeções e fechamento",
-        "Rotina de follow-up e uso do CRM",
-        "Acompanhamento pós-treinamento",
-      ] },
-    { id:"consultoriaPosicionamento", label:"Consultoria de Posicionamento Digital", price:2500, fixo:false, ico:"compass",
-      short:"Diagnóstico completo da presença digital e plano de ação.",
-      entregas:[
-        "Auditoria de redes, site e anúncios",
-        "Análise de concorrentes diretos",
-        "Proposta de valor e diferenciais",
-        "Plano de ação priorizado por impacto",
-        "Apresentação executiva com os sócios",
       ] },
   ],
 };
@@ -60176,11 +60149,11 @@ function _calcFmtBRL(n){ return "R$ "+Number(n||0).toLocaleString("pt-BR"); }
    Mesma mecânica da etapa Bônus da calculadora (verso → clique → revela com
    confete e som), mas componente próprio: os _BonusCard/_BonusVerso da
    calculadora vivem dentro dela e dependem de monthlyRecurring/consts locais.
-   Aqui os bônus são fixos — quem contrata a Consultoria (R$7.000/mês) já
+   Aqui os bônus são fixos — quem contrata a Consultoria (R$12.000/mês) já
    entra na faixa que libera todas. */
 function _PortfBonusGrowth({isMob}){
   const [aberto,setAberto]=useState(false);
-  const BONUS=(PRICE_CONFIG.bonusUnlocks||[]).filter(function(b){ return b.min<=7000; });
+  const BONUS=(PRICE_CONFIG.bonusUnlocks||[]).filter(function(b){ return b.min<=12000; });
 
   // Confete: peças sorteadas uma vez (Math.random no render causaria repaint
   // diferente a cada frame de re-render).
@@ -62085,7 +62058,6 @@ function _CalculadoraModular({isMob, persistClientId}){
   </div>;
 
   // ── ETAPA 8 — BÔNUS POR RECORRÊNCIA (cartas de recompensa) ──
-  const _pctTotal = bonusTopo>0 ? Math.max(0, Math.min(1, monthlyRecurring/bonusTopo)) : 0;
 
   /* Carta de bônus — formato chanfrado + medalhão hexagonal */
   const _CUT_OUT = "polygon(26px 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%, 0 26px)";
@@ -62097,22 +62069,32 @@ function _CalculadoraModular({isMob, persistClientId}){
     const pct   = Math.round(bonusProgress(monthlyRecurring, b.min)*100);
     const OURO  = "#f0b429";
     const OURO2 = "#ffd868";
+    // tema:"ouro" → carta com fundo dourado/bronze em vez do roxo padrão
+    const _ouro = b.tema==="ouro";
+    const _bgOk = _ouro
+      ? "linear-gradient(158deg,#6b4204 0%,#4a2c02 42%,#241501 100%)"
+      : "linear-gradient(158deg,#43197e 0%,#2d1058 42%,#180730 100%)";
+    const _miolo = _ouro
+      ? "linear-gradient(158deg,#7a4c05 0%,#3d2603 55%,#241601 100%)"
+      : "linear-gradient(158deg,#4a1d8a 0%,#2a0f52 55%,#1a0733 100%)";
+    const _somOk = _ouro ? "rgba(90,56,4,.42)" : "rgba(43,16,85,.34)";
+    const _somHv = _ouro ? "rgba(90,56,4,.52)" : "rgba(43,16,85,.44)";
 
     return <div style={{
       clipPath:_CUT_OUT, padding:"1.5px",
       background: ok
         ? "linear-gradient(150deg,rgba(255,216,104,.95) 0%,rgba(240,180,41,.55) 28%,rgba(120,60,200,.35) 62%,rgba(255,216,104,.75) 100%)"
         : "linear-gradient(150deg,#e8ebf1,#dfe3ea 55%,#e8ebf1)",
-      filter: ok ? "drop-shadow(0 18px 34px rgba(43,16,85,.34))" : "drop-shadow(0 2px 6px rgba(15,23,42,.06))",
+      filter: ok ? "drop-shadow(0 18px 34px "+_somOk+")" : "drop-shadow(0 2px 6px rgba(15,23,42,.06))",
       transition:"transform .22s cubic-bezier(.4,0,.2,1), filter .22s",
     }}
-      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-5px)";e.currentTarget.style.filter=ok?"drop-shadow(0 26px 48px rgba(43,16,85,.44))":"drop-shadow(0 10px 22px rgba(88,64,166,.13))";}}
-      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.filter=ok?"drop-shadow(0 18px 34px rgba(43,16,85,.34))":"drop-shadow(0 2px 6px rgba(15,23,42,.06))";}}>
+      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-5px)";e.currentTarget.style.filter=ok?"drop-shadow(0 26px 48px "+_somHv+")":"drop-shadow(0 10px 22px rgba(88,64,166,.13))";}}
+      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.filter=ok?"drop-shadow(0 18px 34px "+_somOk+")":"drop-shadow(0 2px 6px rgba(15,23,42,.06))";}}>
 
       <div style={{
         clipPath:_CUT_IN, position:"relative", overflow:"hidden",
         background: ok
-          ? "linear-gradient(158deg,#43197e 0%,#2d1058 42%,#180730 100%)"
+          ? _bgOk
           : "linear-gradient(158deg,#fbfcfe 0%,#f2f4f8 55%,#eaedf3 100%)",
         padding: isMob ? "17px 15px 15px" : "18px 16px 16px",
         display:"flex", flexDirection:"column", gap:11, minHeight:378,
@@ -62132,8 +62114,8 @@ function _CalculadoraModular({isMob, persistClientId}){
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10,position:"relative"}}>
           <div/>
           {ok
-            ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.7,textTransform:"uppercase",boxShadow:"0 4px 14px rgba(240,180,41,.45)"}}>
-                <_PxIco n="check" size={10} color="#2d1058" strokeWidth={3.8}/>Liberado
+            ? <div style={{display:"inline-flex",alignItems:"center",gap:5,background:"linear-gradient(135deg,"+OURO2+","+OURO+")",color:_ouro?"#3d2603":"#2d1058",fontSize:8.5,fontWeight:900,padding:"5px 11px",borderRadius:99,letterSpacing:.7,textTransform:"uppercase",boxShadow:"0 4px 14px rgba(240,180,41,.45)"}}>
+                <_PxIco n="check" size={10} color={_ouro?"#3d2603":"#2d1058"} strokeWidth={3.8}/>Liberado
               </div>
             : <div style={{width:30,height:30,borderRadius:9,background:"#fff",border:"1px solid #e4e8ef",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(15,23,42,.07)"}}>
                 <_PxIco n="lock" size={14} color="#98a2b0" strokeWidth={2.4}/>
@@ -62149,7 +62131,7 @@ function _CalculadoraModular({isMob, persistClientId}){
               background: ok ? "linear-gradient(155deg,#ffe89a 0%,"+OURO+" 40%,#a8690f 78%,#ffd868 100%)" : "linear-gradient(155deg,#e8ebf1,#d7dce5)"}}/>
             {/* miolo */}
             <div style={{position:"absolute",width:68,height:73,clipPath:_HEX,
-              background: ok ? "linear-gradient(158deg,#4a1d8a 0%,#2a0f52 55%,#1a0733 100%)" : "#fff"}}/>
+              background: ok ? _miolo : "#fff"}}/>
             <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <_PxIco n={b.ico} size={30} color={ok?OURO2:"#c3cad6"} strokeWidth={1.8}/>
             </div>
@@ -62239,7 +62221,7 @@ function _CalculadoraModular({isMob, persistClientId}){
 
     {/* ═══ TRILHA DE PROGRESSO GERAL ═══ */}
     <div style={{background:"linear-gradient(135deg,#faf7ff,#ffffff)",border:"1px solid #eceaf4",borderRadius:18,padding:isMob?"18px 16px 14px":"22px 24px 16px"}}>
-      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
         <div>
           <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase"}}>Mensal recorrente atual</div>
           <div style={{color:INK,fontWeight:900,fontSize:26,letterSpacing:-1,marginTop:3,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5,letterSpacing:0}}>/mês</span></div>
@@ -62250,11 +62232,6 @@ function _CalculadoraModular({isMob, persistClientId}){
         </div>}
       </div>
 
-      {/* Barra limpa — sem marcos de valor: o cliente não deve ver os degraus
-          de R$ 7.000 / R$ 10.000, só o mensal recorrente atual. */}
-      <div style={{position:"relative",height:9,background:"#eef0f5",borderRadius:99,overflow:"hidden"}}>
-        <div style={{position:"absolute",left:0,top:0,bottom:0,width:(_pctTotal*100)+"%",background:"linear-gradient(90deg,#9F43F6 0%,#c084fc 50%,#f0b429 100%)",borderRadius:99,transition:"width .55s cubic-bezier(.4,0,.2,1)"}}/>
-      </div>
     </div>
 
     {/* ═══ PACOTE DO CLIENTE + ABERTURA DAS CARTAS ═══ */}
