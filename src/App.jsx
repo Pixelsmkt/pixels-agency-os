@@ -46998,6 +46998,9 @@ function PageCarreira(){
 const _nowTime=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 const PORTAL_MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+// Clientes que montam o proprio pacote no portal (calculadora + save no Supabase).
+// Pra liberar pra outro cliente e so acrescentar o client_id aqui.
+const PORTAL_CALC_CLIENTS=["lerofibras"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"planejamento",ico:"layers",      label:"Planejamento"},
@@ -51512,7 +51515,13 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   useEffect(()=>{
     if(lockedClientId&&selCl!==lockedClientId)setSelCl(lockedClientId);
   },[lockedClientId]);
-  const [tab,setTab]=useState(initTab||"dashboard");
+  // Cliente com calculadora liberada abre direto em "Monte seu pacote".
+  const _abaInicial = initTab || (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0 ? "calculadora" : "dashboard");
+  const [tab,setTab]=useState(_abaInicial);
+  // Trocou pra um cliente com calculadora? cai na aba dela tambem.
+  useEffect(function(){
+    if(!initTab && PORTAL_CALC_CLIENTS.indexOf(selCl)>=0) setTab("calculadora");
+  },[selCl]);
   const [analisesSub,setAnalisesSub]=useState("trafego");
   // Portal Análises — iframe do Reportei
   // Inicializa com a unidade do cliente (se travado), senão chapeco como default
@@ -51653,9 +51662,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     return true;
   };
   const TABS=ALL_TABS.filter(t=>tabEnabled(t.id));
-  // Calculadora no portal â clientes liberados montam o próprio pacote;
+  // Calculadora no portal — clientes liberados montam o próprio pacote;
   // as respostas são salvas no Supabase (tabela portal_calculadora).
-  const PORTAL_CALC_CLIENTS=["lerofibras"];
   if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
     TABS.unshift({id:"calculadora", ico:"package", label:"Monte seu pacote"});
   }
@@ -61052,9 +61060,9 @@ function _CalculadoraModular({isMob, persistClientId}){
       document.body.style.overflow = _prevOverflow;
     };
   },[focusMode]);
-  // âââ PersistÃªncia no Supabase (portal do cliente) âââ
+  // ═══ Persistência no Supabase (portal do cliente) ═══
   // Com persistClientId setado (ex.: portal do Lero Fibras), o pacote montado
-  // Ã© hidratado do Supabase no mount e salvo com debounce a cada mudanÃ§a.
+  // é hidratado do Supabase no mount e salvo com debounce a cada mudança.
   const _calcHydratedRef = useRef(!persistClientId);
   useEffect(function(){
     if(!persistClientId || typeof window==="undefined" || !window._sb){ _calcHydratedRef.current=true; return undefined; }
@@ -61111,21 +61119,44 @@ function _CalculadoraModular({isMob, persistClientId}){
     _prevUnlocked.current = n;
   },[monthlyRecurring]);
 
-  // Autosave do pacote no Supabase (debounce 900ms) â sÃ³ com persistClientId
+  // Monta o pacote no formato salvo no Supabase (autosave e botao final)
+  function _calcPayload(extra){
+    const base = {
+      socialChannels:socialChannels, socialPosts:socialPosts, creatives:creatives,
+      trafficKey:trafficKey, growthOn:!!growthOn, graficosKey:graficosKey,
+      captureDailies:captureDailies, oneTimeIds:oneTimeIds,
+      totals:{ monthlyRecurring:monthlyRecurring, oneTimePrice:oneTimePrice },
+    };
+    if(extra) for(const k in extra) base[k]=extra[k];
+    return base;
+  }
+  // Salvar o orcamento (botao da ultima etapa, no portal do cliente)
+  const [orcSalvando,setOrcSalvando] = useState(false);
+  const [orcSalvoEm,setOrcSalvoEm]   = useState(null);
+  function salvarOrcamento(){
+    if(!persistClientId || typeof window==="undefined" || !window._sb) return;
+    setOrcSalvando(true);
+    const agora = new Date().toISOString();
+    window._sb.from("portal_calculadora")
+      .upsert({client_id:persistClientId, payload:_calcPayload({enviadoEm:agora}), updated_at:agora, updated_by:"portal"},{onConflict:"client_id"})
+      .then(function(res){
+        setOrcSalvando(false);
+        if(res&&res.error){ console.warn("portal_calculadora enviar:",res.error.message); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); return; }
+        setOrcSalvoEm(agora);
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Orçamento salvo! A Pixels já consegue ver o seu pacote.");
+      })
+      .catch(function(e){ setOrcSalvando(false); console.warn("portal_calculadora enviar:",e); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui salvar. Tenta de novo."); });
+  }
+
+  // Autosave do pacote no Supabase (debounce 900ms) — só com persistClientId
   const _calcSaveTimerRef = useRef(null);
   useEffect(function(){
     if(!persistClientId || typeof window==="undefined" || !window._sb) return undefined;
     if(!_calcHydratedRef.current) return undefined;
     if(_calcSaveTimerRef.current) clearTimeout(_calcSaveTimerRef.current);
     _calcSaveTimerRef.current = setTimeout(function(){
-      const payload = {
-        socialChannels:socialChannels, socialPosts:socialPosts, creatives:creatives,
-        trafficKey:trafficKey, growthOn:!!growthOn, graficosKey:graficosKey,
-        captureDailies:captureDailies, oneTimeIds:oneTimeIds,
-        totals:{ monthlyRecurring:monthlyRecurring, oneTimePrice:oneTimePrice },
-      };
       window._sb.from("portal_calculadora")
-        .upsert({client_id:persistClientId, payload:payload, updated_at:new Date().toISOString(), updated_by:"portal"},{onConflict:"client_id"})
+        .upsert({client_id:persistClientId, payload:_calcPayload(), updated_at:new Date().toISOString(), updated_by:"portal"},{onConflict:"client_id"})
         .then(function(res){ if(res&&res.error) console.warn("portal_calculadora save:",res.error.message); })
         .catch(function(e){ console.warn("portal_calculadora save:",e); });
     },900);
@@ -62551,8 +62582,17 @@ function _CalculadoraModular({isMob, persistClientId}){
         {/* Navegação entre etapas */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <_PxNavBtn dir="prev" label="Voltar" disabled={stepSafe===0} onClick={function(){goStep(stepSafe-1);}}/>
-          <div style={{color:SOFT,fontSize:11.5,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>Etapa {stepSafe+1} de {STEPS.length}</div>
-          <_PxNavBtn dir="next" label="Avançar" disabled={stepSafe===STEPS.length-1} onClick={function(){goStep(stepSafe+1);}}/>
+          <div style={{textAlign:"center",minWidth:0}}>
+            <div style={{color:SOFT,fontSize:11.5,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>Etapa {stepSafe+1} de {STEPS.length}</div>
+            {persistClientId&&<div style={{color:"#a3adbb",fontSize:10,fontWeight:600,marginTop:2}}>suas escolhas são salvas automaticamente</div>}
+          </div>
+          {(stepSafe===STEPS.length-1 && persistClientId)
+            ? <button type="button" onClick={salvarOrcamento} disabled={orcSalvando}
+                style={{background:orcSalvando?"#c4b5fd":"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:12,padding:"11px 20px",color:"#fff",fontSize:13,fontWeight:800,letterSpacing:-.2,cursor:orcSalvando?"default":"pointer",fontFamily:_PORTF_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 8px 20px rgba(124,58,237,.28)",transition:"all .16s",flexShrink:0}}>
+                <_PxIco n="check" size={15} color="#fff" strokeWidth={3.2}/>
+                {orcSalvando ? "Salvando..." : (orcSalvoEm ? "Orçamento salvo" : "Salvar orçamento")}
+              </button>
+            : <_PxNavBtn dir="next" label="Avançar" disabled={stepSafe===STEPS.length-1} onClick={function(){goStep(stepSafe+1);}}/>}
         </div>
 
         {/* Resumo repetido embaixo no mobile */}
