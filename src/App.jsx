@@ -12838,6 +12838,64 @@ function PageClientes({isMob, tasks}){
 }
 
 /* ─── CAnalises — Visão Geral do cliente (KPIs + lista de próximas) ─── */
+/* ─── CPacoteCalculadora — pacote que o CLIENTE montou no portal ─────────
+   "Monte seu pacote" (portal_calculadora) sincronizado pra Estratégia >
+   Clientes: mesma linha que o portal lê. Aparece só quando o cliente já
+   salvou algo; realtime mantém atualizado enquanto ele mexe. */
+function CPacoteCalculadora({cl, isMob}){
+  const [row,setRow]=useState(null);
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb) return undefined;
+    let alive=true;
+    const _load=function(){
+      window._sb.from("portal_calculadora").select("payload,updated_at,updated_by").eq("client_id",cl.id).maybeSingle()
+        .then(function(r){ if(alive) setRow(r&&r.data?r.data:null); })
+        .catch(function(){});
+    };
+    _load();
+    const ch=window._sb.channel("calc-estrategia-"+cl.id)
+      .on("postgres_changes",{event:"*",schema:"public",table:"portal_calculadora",filter:"client_id=eq."+cl.id},_load)
+      .subscribe();
+    return function(){ alive=false; try{window._sb.removeChannel(ch);}catch(_){} };
+  },[cl&&cl.id]);
+
+  if(!row||!row.payload) return null;
+  const pl=row.payload, tot=pl.totals||{};
+  if(!(Number(tot.monthlyRecurring)>0||Number(tot.oneTimePrice)>0)) return null;
+  const linhas=(typeof _pjLinhasCalculadora==="function")?_pjLinhasCalculadora(pl):[];
+  const _brl0=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
+  const _quando=(function(){ try{ const d=new Date(pl.enviadoEm||row.updated_at); return d.toLocaleDateString("pt-BR")+" às "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return ""; } })();
+  const cor=cl.color||"#7c3aed";
+
+  return <div style={{background:"linear-gradient(135deg,"+cor+"0c,#ffffff 55%)",border:"1.5px solid "+cor+"3a",borderRadius:14,padding:isMob?"14px 14px":"16px 18px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+      <div style={{display:"inline-flex",alignItems:"center",gap:9}}>
+        <span style={{width:34,height:34,borderRadius:10,background:cor+"16",border:"1px solid "+cor+"33",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="package" size={16} color={cor}/>
+        </span>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Pacote montado pelo cliente</div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>via \u201cMonte seu pacote\u201d no portal{_quando?(" · "+_quando):""}{pl.enviadoEm?" · orçamento salvo pelo cliente":""}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+        {Number(tot.monthlyRecurring)>0&&<span style={{color:cor,fontWeight:900,fontSize:19,letterSpacing:-.6,fontFeatureSettings:"'tnum'"}}>{_brl0(tot.monthlyRecurring)}<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,marginLeft:3}}>/mês</span></span>}
+        {Number(tot.oneTimePrice)>0&&<span style={{color:"#64748b",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>+ {_brl0(tot.oneTimePrice)} pontual</span>}
+      </div>
+    </div>
+    {linhas.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"5px 14px"}}>
+      {linhas.map(function(l,i){
+        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+          <span style={{width:14,height:14,borderRadius:4,background:cor+"18",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+            <Ico n="check" size={9} color={cor}/>
+          </span>
+          <span style={{color:"#334155",fontSize:11.5,fontWeight:600,lineHeight:1.4}}>{l}</span>
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+
 function CAnalises({cl,isMob,tasks}){
   const TASKS = Array.isArray(tasks) ? tasks : [];
   const clTasks = TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt;});
@@ -13135,6 +13193,9 @@ function _projectDuration(s){
   const _contractTypeLabel = ({mensal:"Mensal",trimestral:"Trimestral",anual:"Anual",interno:"Interno"})[cl.contractType] || (cl.contractType || "—");
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* Pacote montado pelo cliente no portal (Monte seu pacote) — sincronizado */}
+    <CPacoteCalculadora cl={cl} isMob={isMob}/>
 
     {/* ── INFORMAÇÕES DO PROJETO ─ card grande, moderno, sem dado financeiro ─── */}
     <div style={{background:"linear-gradient(180deg,"+((cl.color||"#7c3aed"))+"08 0%, #fff 65%)",border:"1px solid "+(cl.color||"#7c3aed")+"22",borderRadius:18,padding:isMob?"22px 22px":"28px 30px",boxShadow:"0 4px 18px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.03)",position:"relative",overflow:"hidden"}}>
@@ -28746,41 +28807,61 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
 
 /* ═══════════════════════════════════════════════════════════════════
    PROJEÇÃO FINANCEIRA — Gestão > Projeção financeira
-   DRE simplificado 100% MANUAL: nada é puxado de lugar nenhum. A gente
-   digita receitas e gastos em cada quadradinho e a margem sai na hora.
-   Serve pra simular cenários ("e se eu fechar +2 clientes e contratar
-   1 editor?") sem tocar no Financeiro real.
-   Persistência: app_data key "projecao_financeira" (todos os PCs) com
-   espelho em localStorage pro primeiro paint.
+   MESMO DRE do Financeiro (mesma cascata, mesmas cores, mesmos números),
+   mas 100% editável: serve pra simular cenários sem tocar nos dados reais.
+   Ao abrir pela primeira vez, IMPORTA os gastos já especificados no
+   Financeiro (impostos, CSP, despesas diretas, operacionais + pró-labore
+   e o MRR dos contratos) como ponto de partida — depois é tudo manual.
+   Persistência: app_data "projecao_financeira" + espelho localStorage.
 ═══════════════════════════════════════════════════════════════════ */
-const _PROJ_SECOES=[
-  {id:"receitas", label:"Receitas",              op:"+", cor:"#16a34a", ico:"chart",
-   hint:"MRR previsto, vendas pontuais, novos contratos — o que você projeta faturar."},
-  {id:"impostos", label:"Impostos e deduções",   op:"−", cor:"#f97316", ico:"fileText",
-   hint:"Simples, taxas de meio de pagamento e afins."},
-  {id:"producao", label:"Equipe e produção",     op:"−", cor:"#84cc16", ico:"users",
-   hint:"Freelancers, novas contratações, mídia dos projetos — o custo de entregar."},
-  {id:"despesas", label:"Despesas fixas",        op:"−", cor:"#6366f1", ico:"lock",
-   hint:"Estrutura: salários fixos, softwares, contabilidade, pró-labore."},
-];
-const _PROJ_SEED={
-  receitas:[{l:"MRR projetado",v:""},{l:"Vendas pontuais",v:""}],
-  impostos:[{l:"Simples Nacional",v:""}],
-  producao:[{l:"Freelancers",v:""},{l:"Nova contratação",v:""}],
-  despesas:[{l:"Estrutura atual",v:""}],
-};
+// Lê os itens de custo do Financeiro (cache localStorage sincronizado do Supabase):
+// mês atual → walk-back 12 meses → chave legada.
+function _projLerCustos(tipo){
+  try{
+    const now=new Date(); let y=now.getFullYear(), m=now.getMonth()+1;
+    for(let i=0;i<12;i++){
+      const k="pixels-custos-"+tipo+"-"+y+"-"+String(m).padStart(2,"0");
+      const raw=localStorage.getItem(k);
+      if(raw){ const arr=JSON.parse(raw); if(Array.isArray(arr)&&arr.length) return arr; }
+      m-=1; if(m<1){m=12;y-=1;}
+    }
+    const raw2=localStorage.getItem("pixels-custos-"+tipo);
+    if(raw2){ const arr=JSON.parse(raw2); if(Array.isArray(arr)) return arr; }
+  }catch(_){}
+  return [];
+}
+function _projImportarDoFinanceiro(){
+  const _map=function(arr){ return (arr||[]).filter(function(x){return x&&(x.label||Number(x.valor)>0);}).map(function(x){ return {l:String(x.label||""), v:String(Number(x.valor)||0)}; }); };
+  // Receita: contratos ativos (mesma fonte do Financeiro)
+  let mrr=0;
+  try{
+    const src=(typeof _gfLoadContratos==="function")?_gfLoadContratos():[];
+    (src||[]).forEach(function(c){
+      if(c&&c.unidades) c.unidades.forEach(function(u){ mrr+=Number(u.valor||0); });
+      else if(c) mrr+=Number(c.valor||0);
+    });
+  }catch(_){}
+  const desp=_map(_projLerCustos("despesa_operacional")).concat(
+    _map(_projLerCustos("prolabore")).map(function(x){ return {l:x.l, v:x.v}; }));
+  return {
+    receitas:[{l:"MRR dos contratos ativos", v:String(mrr||0)},{l:"Vendas pontuais", v:""}],
+    impostos: _map(_projLerCustos("imposto")),
+    csp:      _map(_projLerCustos("csp")).concat([{l:"Freelancers (estimativa)", v:""}]),
+    despDireta:_map(_projLerCustos("despesa_direta")),
+    despOp:   desp,
+  };
+}
 function PageGestaoProjecao({isMob}){
   const [dados,setDados]=useState(function(){
     try{
-      const raw=localStorage.getItem("pixels-projecao-financeira-v1");
-      if(raw){ const p=JSON.parse(raw); if(p&&typeof p==="object") return Object.assign({},_PROJ_SEED,p); }
+      const raw=localStorage.getItem("pixels-projecao-financeira-v2");
+      if(raw){ const p=JSON.parse(raw); if(p&&p.receitas) return p; }
     }catch(_){}
-    return _PROJ_SEED;
+    return _projImportarDoFinanceiro();
   });
   const [carregou,setCarregou]=useState(false);
   const _saveT=useRef(null);
 
-  // Carrega do Supabase (app_data) — vale pra todos os PCs
   useEffect(function(){
     if(typeof window==="undefined"||!window._sb){setCarregou(true);return;}
     let alive=true;
@@ -28788,16 +28869,15 @@ function PageGestaoProjecao({isMob}){
       .then(function(r){
         if(!alive)return;
         const v=r&&r.data&&r.data.value;
-        if(v&&typeof v==="object") setDados(Object.assign({},_PROJ_SEED,v));
+        if(v&&v.receitas) setDados(v);
         setCarregou(true);
       })
       .catch(function(){ if(alive) setCarregou(true); });
     return function(){alive=false;};
   },[]);
 
-  // Salva com debounce (Supabase + espelho local)
   function _persist(next){
-    try{localStorage.setItem("pixels-projecao-financeira-v1",JSON.stringify(next));}catch(_){}
+    try{localStorage.setItem("pixels-projecao-financeira-v2",JSON.stringify(next));}catch(_){}
     if(_saveT.current)clearTimeout(_saveT.current);
     _saveT.current=setTimeout(function(){
       if(typeof window==="undefined"||!window._sb)return;
@@ -28808,41 +28888,70 @@ function PageGestaoProjecao({isMob}){
   }
   function _mut(fn){ setDados(function(prev){ const next=fn(JSON.parse(JSON.stringify(prev))); _persist(next); return next; }); }
 
-  const _num=function(v){ const n=parseFloat(String(v==null?"":v).replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; };
-  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+  const _num=function(v){ const n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?0:n; };
+  const _brlF=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
   const _tot=function(sec){ return (dados[sec]||[]).reduce(function(a,it){return a+_num(it.v);},0); };
+
   const receita=_tot("receitas");
-  const custos=_tot("impostos")+_tot("producao")+_tot("despesas");
-  const resultado=receita-custos;
+  const impostosT=_tot("impostos");
+  const receitaLiq=receita-impostosT;
+  const cspT=_tot("csp");
+  const lucroBruto=receitaLiq-cspT;
+  const despDirT=_tot("despDireta");
+  const margemContrib=lucroBruto-despDirT;
+  const pctMC=receita>0?(margemContrib/receita)*100:0;
+  const despOpT=_tot("despOp");
+  const resultado=margemContrib-despOpT;
   const margem=receita>0?resultado/receita:0;
   const META=(typeof GF_META_MARGEM_PCT!=="undefined")?GF_META_MARGEM_PCT:0.5;
   const bateu=margem>=META&&receita>0;
-  // Receita necessária pra bater a meta COM esses custos digitados:
-  // considera impostos+produção proporcionais e despesas fixas paradas.
-  const _propAtual=receita>0?(_tot("impostos")+_tot("producao"))/receita:0;
-  const _denP=1-_propAtual-META;
-  const receitaMeta=(_denP>0.0001)?_tot("despesas")/_denP:0;
 
-  const _Linha=function({sec,it,idx,cor}){
-    return <div style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #eef0f5",borderRadius:10,padding:"8px 10px"}}>
-      <input value={it.l} placeholder="Descrição"
-        onChange={function(e){const v=e.target.value;_mut(function(d){d[sec][idx].l=v;return d;});}}
-        style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
-      <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
-      <input value={it.v} placeholder="0" inputMode="decimal"
-        onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");_mut(function(d){d[sec][idx].v=v;return d;});}}
-        style={{width:96,border:"none",outline:"none",fontSize:13,fontWeight:800,color:cor,textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
-      <button onClick={function(){_mut(function(d){d[sec].splice(idx,1);return d;});}} title="Remover linha"
-        style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex",borderRadius:6}}
-        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-        onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+  /* Seção editável no MESMO visual do _DRESecao do Financeiro */
+  const _ProjSecao=function({pos,label,cor,subtitle,sec}){
+    const [exp,setExp]=useState(false);
+    const total=_tot(sec);
+    return <div style={{border:"1px solid #f1f5f9",borderRadius:11,overflow:"hidden"}}>
+      <div onClick={function(){setExp(!exp);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"12px 16px",cursor:"pointer",background:exp?cor+"08":"#fff",transition:"background .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background=cor+"10";}}
+        onMouseLeave={function(e){e.currentTarget.style.background=exp?cor+"08":"#fff";}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{background:cor,color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{pos}</span>
+          <span style={{color:cor,fontWeight:800,fontSize:16,width:14,textAlign:"center",flexShrink:0}}>−</span>
+          <div>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{label}</div>
+            {subtitle&&<div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{subtitle}</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:cor,fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.6}}>{_brlF(total)}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:exp?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      {exp&&<div style={{padding:"8px 16px 14px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:6}}>
+        {(dados[sec]||[]).map(function(it,idx){
+          return <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #eef0f5",borderRadius:9,padding:"7px 10px"}}>
+            <input value={it.l} placeholder="Descrição"
+              onChange={function(e){const v=e.target.value;_mut(function(d){d[sec][idx].l=v;return d;});}}
+              style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
+            <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
+            <input value={it.v} placeholder="0" inputMode="decimal"
+              onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");_mut(function(d){d[sec][idx].v=v;return d;});}}
+              style={{width:100,border:"none",outline:"none",fontSize:13,fontWeight:800,color:cor,textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
+            <button onClick={function(){_mut(function(d){d[sec].splice(idx,1);return d;});}} title="Remover"
+              style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex"}}
+              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+              onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>;
+        })}
+        <button onClick={function(){_mut(function(d){(d[sec]=d[sec]||[]).push({l:"",v:""});return d;});}}
+          style={{background:cor+"0d",border:"1px dashed "+cor+"55",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:cor,cursor:"pointer",fontFamily:"inherit"}}>+ Adicionar item</button>
+      </div>}
     </div>;
   };
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Header */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div style={{display:"flex",alignItems:"center",gap:11}}>
         <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#6366f1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -28850,73 +28959,93 @@ function PageGestaoProjecao({isMob}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4}}>Projeção financeira</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Simulador manual: digite receitas e gastos do cenário — nada aqui puxa dados do Financeiro real.</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O mesmo DRE do Financeiro, mas de rascunho: edite qualquer número e veja a margem do cenário.</div>
         </div>
       </div>
-      <button onClick={function(){ if(window.confirm("Zerar a projeção e voltar ao modelo inicial?")) _mut(function(){return JSON.parse(JSON.stringify(_PROJ_SEED));}); }}
-        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Limpar cenário</button>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={function(){ if(window.confirm("Importar os gastos e o MRR atuais do Financeiro? A projeção atual será substituída.")) _mut(function(){return _projImportarDoFinanceiro();}); }}
+          style={{background:"#7c3aed",border:"none",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          <Ico n="download" size={12} color="#fff"/> Importar do Financeiro
+        </button>
+        <button onClick={function(){ if(window.confirm("Zerar todos os quadros da projeção?")) _mut(function(){return {receitas:[{l:"",v:""}],impostos:[],csp:[],despDireta:[],despOp:[]};}); }}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Limpar</button>
+      </div>
     </div>
 
-    {/* Resultado no topo — margem gigante */}
-    <section style={{background:bateu?"linear-gradient(135deg,#052e16,#14532d)":"linear-gradient(135deg,#1e1b4b,#312e81)",borderRadius:16,padding:isMob?"18px 16px":"22px 26px",color:"#fff",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:isMob?14:10,alignItems:"center"}}>
-      {[
-        {l:"Receita do cenário",v:_brl(receita),c:"#86efac"},
-        {l:"Custos totais",v:_brl(custos),c:"#fca5a5"},
-        {l:"Resultado",v:_brl(resultado),c:resultado>=0?"#fff":"#fca5a5"},
-      ].map(function(k,i){
-        return <div key={i}>
-          <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.65}}>{k.l}</div>
-          <div style={{color:k.c,fontWeight:900,fontSize:isMob?18:22,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{k.v}</div>
-        </div>;
-      })}
-      <div>
-        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.65}}>Margem projetada</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:8,marginTop:4}}>
-          <span style={{color:bateu?"#4ade80":"#fbbf24",fontWeight:900,fontSize:isMob?22:28,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{(margem*100).toFixed(1)}%</span>
-          <span style={{background:bateu?"rgba(74,222,128,.18)":"rgba(251,191,36,.15)",color:bateu?"#4ade80":"#fbbf24",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap"}}>{bateu?"meta 50% ok":"meta 50%"}</span>
+    {/* ═══ DRE DE CENÁRIO — mesma cascata do Financeiro ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 18px",display:"flex",flexDirection:"column",gap:10}}>
+      {/* 1 · Receita — header vermelho com linhas editáveis */}
+      <div style={{background:"linear-gradient(90deg,#ef444412,#ef444404)",border:"1px solid #ef444433",borderRadius:11,padding:"12px 16px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{background:"#ef4444",color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>1.</span>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Receita total do cenário</div>
+          </div>
+          <span style={{color:"#ef4444",fontWeight:800,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'"}}>{_brlF(receita)}</span>
         </div>
-        <div style={{background:"rgba(255,255,255,.14)",borderRadius:99,height:5,marginTop:8,overflow:"hidden"}}>
-          <div style={{width:Math.min(100,Math.max(2,margem/META*100))+"%",height:"100%",background:bateu?"#4ade80":"#fbbf24",borderRadius:99,transition:"width .3s"}}/>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {(dados.receitas||[]).map(function(it,idx){
+            return <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #fecaca55",borderRadius:9,padding:"7px 10px"}}>
+              <input value={it.l} placeholder="Descrição da receita"
+                onChange={function(e){const v=e.target.value;_mut(function(d){d.receitas[idx].l=v;return d;});}}
+                style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
+              <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
+              <input value={it.v} placeholder="0" inputMode="decimal"
+                onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");_mut(function(d){d.receitas[idx].v=v;return d;});}}
+                style={{width:110,border:"none",outline:"none",fontSize:13,fontWeight:800,color:"#ef4444",textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
+              <button onClick={function(){_mut(function(d){d.receitas.splice(idx,1);return d;});}} title="Remover"
+                style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex"}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>;
+          })}
+          <button onClick={function(){_mut(function(d){(d.receitas=d.receitas||[]).push({l:"",v:""});return d;});}}
+            style={{background:"#ef44440d",border:"1px dashed #ef444455",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:"#ef4444",cursor:"pointer",fontFamily:"inherit"}}>+ Adicionar receita</button>
+        </div>
+      </div>
+
+      <_ProjSecao pos="2." label="Impostos e deduções" cor="#f97316" sec="impostos" subtitle="Simples, taxas de pagamento e afins"/>
+      <_DRELinha kind="subtotal" pos="3." op="=" label="Receita líquida" valor={receitaLiq} cor="#f59e0b" isMob={isMob}/>
+      <_ProjSecao pos="4." label="CSP (Custo do Serviço Prestado)" cor="#84cc16" sec="csp" subtitle="Time de entrega, freelancers e produção"/>
+      <_DRELinha kind="subtotal" pos="5." op="=" label="Lucro bruto" valor={lucroBruto} cor="#14b8a6" isMob={isMob}/>
+      <_ProjSecao pos="6." label="Despesas variáveis diretas" cor="#06b6d4" sec="despDireta" subtitle="Mídia vinculada ao projeto, ferramentas, comissões"/>
+      <div style={{background:"transparent",borderTop:"1px dashed #e2e8f0",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{background:"#3b82f6",color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>7.</span>
+          <span style={{color:"#3b82f6",fontWeight:800,fontSize:16,width:14,textAlign:"center",flexShrink:0}}>=</span>
+          <div>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Margem de contribuição</div>
+            <div style={{color:pctMC>=50?"#1d4ed8":"#a16207",fontSize:11.5,fontWeight:700,marginTop:1}}>{pctMC>=50?"Saudável — acima de 50%":"Abaixo de 50% — atenção"}</div>
+          </div>
+        </div>
+        <div style={{textAlign:"right",paddingRight:26}}>
+          <div style={{color:"#3b82f6",fontWeight:800,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brlF(margemContrib)}</div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,marginTop:3,fontFeatureSettings:"'tnum'"}}>{pctMC.toFixed(2)}%</div>
+        </div>
+      </div>
+      <_ProjSecao pos="8." label="Despesas operacionais" cor="#6366f1" sec="despOp" subtitle="Salários fixos, contabilidade, softwares, pró-labore"/>
+
+      {/* 9 · Resultado — mesmo card gradiente do Financeiro + meta 50% */}
+      <div style={{background:resultado>=0?"linear-gradient(135deg,#7e22ce,#c026d3)":"linear-gradient(135deg,#0f172a,#7f1d1d)",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <span style={{background:"rgba(255,255,255,0.14)",color:"#fff",fontSize:16,fontWeight:800,width:40,height:40,borderRadius:11,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>9</span>
+          <div>
+            <div style={{color:"#fff",fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",opacity:.75}}>Resultado do cenário</div>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.3,marginTop:2}}>{resultado>=0?"Lucro projetado":"Prejuízo projetado"}</div>
+          </div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#fff",fontWeight:800,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brlF(resultado)}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,justifyContent:"flex-end"}}>
+            <span style={{color:"#fff",opacity:.75,fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{(margem*100).toFixed(1)}% margem</span>
+            <span style={{background:bateu?"rgba(74,222,128,.22)":"rgba(251,191,36,.2)",color:bateu?"#86efac":"#fde68a",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{bateu?"meta 50% batida":"meta 50%"}</span>
+          </div>
+          <div style={{background:"rgba(255,255,255,.18)",borderRadius:99,height:5,marginTop:8,overflow:"hidden",minWidth:180}}>
+            <div style={{width:Math.min(100,Math.max(2,margem/META*100))+"%",height:"100%",background:bateu?"#4ade80":"#fde68a",borderRadius:99,transition:"width .3s"}}/>
+          </div>
         </div>
       </div>
     </section>
-
-    {/* Quadradinhos — DRE simplificado */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:14}}>
-      {_PROJ_SECOES.map(function(sec){
-        const total=_tot(sec.id);
-        return <section key={sec.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:"3px solid "+sec.cor,borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:9}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-            <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
-              <span style={{width:26,height:26,borderRadius:8,background:sec.cor+"15",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                <Ico n={sec.ico} size={13} color={sec.cor}/>
-              </span>
-              <span style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>{sec.op==="+"?"":"− "}{sec.label}</span>
-            </div>
-            <span style={{color:sec.cor,fontWeight:800,fontSize:14.5,fontFeatureSettings:"'tnum'"}}>{_brl(total)}</span>
-          </div>
-          <div style={{color:"#94a3b8",fontSize:10.5,lineHeight:1.45,marginTop:-3}}>{sec.hint}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {(dados[sec.id]||[]).map(function(it,idx){
-              return <_Linha key={idx} sec={sec.id} it={it} idx={idx} cor={sec.cor}/>;
-            })}
-          </div>
-          <button onClick={function(){_mut(function(d){(d[sec.id]=d[sec.id]||[]).push({l:"",v:""});return d;});}}
-            style={{background:sec.cor+"0d",border:"1px dashed "+sec.cor+"55",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:sec.cor,cursor:"pointer",fontFamily:"inherit"}}>
-            + Adicionar linha
-          </button>
-        </section>;
-      })}
-    </div>
-
-    {/* Leitura da meta com os números digitados */}
-    {receita>0&&!bateu&&receitaMeta>0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"13px 16px",color:"#64748b",fontSize:12,lineHeight:1.6,display:"flex",gap:10,alignItems:"flex-start"}}>
-      <Ico n="sparkles" size={14} color="#7c3aed"/>
-      <span>Mantendo estas proporções de impostos e produção, a meta de 50% fecha com receita de <strong style={{color:"#7c3aed"}}>{_brl(receitaMeta)}</strong>{receitaMeta>receita?" — faltam "+_brl(receitaMeta-receita)+" no cenário.":"."}</span>
-    </div>}
-    {receita>0&&!bateu&&receitaMeta<=0&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"13px 16px",color:"#92400e",fontSize:12,lineHeight:1.6}}>
-      Com impostos + produção consumindo {(_propAtual*100).toFixed(1)}% da receita, não existe faturamento que feche 50% — o cenário precisa de entrega mais barata ou preço maior.
-    </div>}
     {!carregou&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center"}}>sincronizando…</div>}
   </div>;
 }
@@ -51894,20 +52023,70 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
    o rescheduleAll grava. Entregáveis do pacote: items.__pacote__ (editado
    aqui mesmo pela equipe Pixels; cliente só vê). */
 const _PJ_MARCOS=[
-  {ids:["d1_contrato_assinar"],            l:"Contrato assinado",              d:"início oficial da parceria",                    ico:"fileText",    dia:"Dia 1"},
-  {ids:["d1_portal_acesso"],               l:"Acesso ao portal liberado",      d:"seu login neste painel",                        ico:"globe",       dia:"Dia 1"},
-  {ids:["d1_reuniao_onboarding"],          l:"Reunião de onboarding",          d:"apresentação da equipe e próximos passos",      ico:"users",       dia:"Dia 1"},
-  {ids:["d2_estudo"],                      l:"Estudo do brief",                d:"imersão em produtos, público e diferenciais",   ico:"book",        dia:"Dia 2",   tab:"briefing"},
-  {ids:["d1_concorrencia"],                l:"Análise de Concorrência",        d:"estudo completo publicado na aba Concorrência", ico:"eye",         dia:"Dia 1–3", tab:"concorrencia"},
-  {ids:["d3_reuniao_kickoff"],             l:"Reunião de kickoff",             d:"plano de projeto, cronograma e funil",          ico:"zap",         dia:"Dia 3"},
-  {ids:["d37_aprovar_calendario"],         l:"Calendário editorial aprovado",  d:"pautas do mês na aba Calendário",               ico:"calendar",    dia:"Dia 3–7", tab:"calendario"},
-  {ids:["d37_aprovar_ads"],                l:"Estratégia de anúncios aprovada",d:"campanhas desenhadas pro seu funil",            ico:"target",      dia:"Dia 3–7"},
-  {ids:["d7_publicacoes","d7_campanhas"],  l:"Go-live",                        d:"publicações no ar e campanhas rodando",         ico:"flame",       dia:"Dia 7"},
-  {ids:["d14_relatorio_ads"],              l:"Primeiro relatório de tráfego",  d:"primeiros números na aba Análises",             ico:"chart",       dia:"Dia 14",  tab:"analises"},
-  {ids:["d31_reuniao","d31_relatorio"],    l:"Fechamento do onboarding",       d:"reunião de alinhamento e resultados do mês",    ico:"checkCircle", dia:"Dia 31"},
+  {ids:["d1_contrato_assinar"],            off:1,  l:"Contrato assinado",              d:"início oficial da parceria",                    ico:"fileText",    dia:"Dia 1"},
+  {ids:["d1_portal_acesso"],               off:1,  l:"Acesso ao portal liberado",      d:"seu login neste painel",                        ico:"globe",       dia:"Dia 1"},
+  {ids:["d1_reuniao_onboarding"],          off:1,  l:"Reunião de onboarding",          d:"apresentação da equipe e próximos passos",      ico:"users",       dia:"Dia 1"},
+  {ids:["d2_estudo"],                      off:2,  l:"Estudo do brief",                d:"imersão em produtos, público e diferenciais",   ico:"book",        dia:"Dia 2",   tab:"briefing"},
+  {ids:["d1_concorrencia"],                off:1,  l:"Análise de Concorrência",        d:"estudo completo publicado na aba Concorrência", ico:"eye",         dia:"Dia 1–3", tab:"concorrencia"},
+  {ids:["d3_reuniao_kickoff"],             off:3,  l:"Reunião de kickoff",             d:"plano de projeto, cronograma e funil",          ico:"zap",         dia:"Dia 3"},
+  {ids:["d37_aprovar_calendario"],         off:7,  l:"Calendário editorial aprovado",  d:"pautas do mês na aba Calendário",               ico:"calendar",    dia:"Dia 3–7", tab:"calendario"},
+  {ids:["d37_aprovar_ads"],                off:7,  l:"Estratégia de anúncios aprovada",d:"campanhas desenhadas pro seu funil",            ico:"target",      dia:"Dia 3–7"},
+  {ids:["d7_publicacoes","d7_campanhas"],  off:7,  l:"Go-live",                        d:"publicações no ar e campanhas rodando",         ico:"flame",       dia:"Dia 7"},
+  {ids:["d14_relatorio_ads"],              off:14, l:"Primeiro relatório de tráfego",  d:"primeiros números na aba Análises",             ico:"chart",       dia:"Dia 14",  tab:"analises"},
+  {ids:["d31_reuniao","d31_relatorio"],    off:31, l:"Fechamento do onboarding",       d:"reunião de alinhamento e resultados do mês",    ico:"checkCircle", dia:"Dia 31"},
 ];
+/* Pacotes do COMERCIAL disponíveis pra vincular ao cliente no portal.
+   Fonte única: consts do 22_portfolio (PORTF_PROJETOS/PORTF_RECORRENTES/GROWTH_BLOCOS).
+   Function declarations são hoisted no App.jsx concatenado; os consts do 22 já
+   estão avaliados quando isto roda em render. */
+function _pjPacotesComercial(){
+  const out=[];
+  try{
+    if(typeof PORTF_PROJETOS!=="undefined"){
+      const st=PORTF_PROJETOS.find(function(x){return x.id==="starter";});
+      if(st) out.push({id:"starter", label:st.title, valor:st.valor, unidade:st.unidade||"/mês", entregas:st.entregas||[]});
+    }
+    if(typeof PORTF_RECORRENTES!=="undefined"){
+      PORTF_RECORRENTES.forEach(function(x){
+        out.push({id:"rec_"+x.id, label:x.title, valor:x.valor, unidade:x.unidade||"", entregas:x.entregas||[]});
+      });
+    }
+    const _gb=(typeof GROWTH_BLOCOS!=="undefined"&&Array.isArray(GROWTH_BLOCOS))
+      ? GROWTH_BLOCOS.map(function(b){return b&&b.titulo;}).filter(Boolean) : [];
+    out.push({id:"consultoriaGrowth", label:"Consultoria Growth", valor:"R$ 12.000", unidade:"/mês · 3 meses",
+      entregas:["4 artes + 4 vídeos por mês"].concat(_gb)});
+  }catch(_){}
+  out.push({id:"custom", label:"Personalizado (escrever)", valor:"", unidade:"", entregas:[]});
+  return out;
+}
+/* Traduz o payload salvo no "Monte seu pacote" (portal_calculadora) em linhas legíveis */
+function _pjLinhasCalculadora(pl){
+  const L=[]; if(!pl) return L;
+  const q=function(v){return v===true?1:(Number(v)||0);};
+  try{
+    const ch=pl.socialChannels||{};
+    const nCh=q(ch.fbInsta)+q(ch.tiktok)+q(ch.linkedin);
+    if(nCh>0) L.push("Gestão de Redes Sociais — "+nCh+" cana"+(nCh>1?"is":"l")+" · "+(pl.socialPosts||0)+" publicações/semana");
+    const cr=pl.creatives||{};
+    const _crParts=[cr.staticCreatives>0?cr.staticCreatives+" estáticos":null, cr.editedVideos>0?cr.editedVideos+" vídeos editados":null, cr.videoVariations>0?cr.videoVariations+" variações":null].filter(Boolean);
+    if(_crParts.length) L.push("Criativos extras — "+_crParts.join(" · "));
+    if(pl.trafficKey&&pl.trafficKey!=="none"){
+      let lbl=pl.trafficKey; try{ lbl=PRICE_CONFIG.traffic[pl.trafficKey].label; }catch(_){}
+      L.push("Tráfego pago — "+lbl);
+    }
+    if(pl.growthOn) L.push("Growth — consultoria mensal de crescimento");
+    if(Number(pl.captureDailies)>0) L.push("Captação audiovisual — "+pl.captureDailies+" diária"+(pl.captureDailies>1?"s":"")+"/mês");
+    if(pl.graficosKey==="recorrente") L.push("Materiais gráficos — plano mensal");
+    if(pl.graficosKey==="avulso") L.push("Materiais gráficos — avulso, sob demanda");
+    (pl.oneTimeIds||[]).forEach(function(id){
+      try{ const pr=PRICE_CONFIG.oneTimeProjects.find(function(x){return x.id===id;}); if(pr) L.push("Projeto pontual: "+pr.label); }catch(_){}
+    });
+  }catch(_){}
+  return L;
+}
 function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   const [onb,setOnb]=useState(null);          // client_onboarding.items
+  const [calcPl,setCalcPl]=useState(null);    // portal_calculadora.payload (Monte seu pacote)
   const [editPacote,setEditPacote]=useState(false);
   const [draftEntregas,setDraftEntregas]=useState("");
   const _cor=(cl&&cl.color)||"#7c3aed";
@@ -51918,37 +52097,74 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     window._sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle()
       .then(function(r){ if(alive) setOnb((r&&r.data&&r.data.items)||{}); })
       .catch(function(){ if(alive) setOnb({}); });
+    window._sb.from("portal_calculadora").select("payload,updated_at").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){ if(alive&&r&&r.data&&r.data.payload) setCalcPl({pl:r.data.payload, em:r.data.updated_at}); })
+      .catch(function(){});
     return function(){alive=false;};
   },[cl&&cl.id]);
 
   const items=onb||{};
+  const startDate=items.__start_date__||"";
   const _hoje=(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
   const _fmtBR=function(iso){ if(!iso)return ""; const p=String(iso).split("-"); return p.length===3?(p[2]+"/"+p[1]):""; };
 
   const marcos=_PJ_MARCOS.map(function(m){
     const done=m.ids.every(function(id){ return items[id]&&items[id].done; });
+    // Data: 1) due gravado no checklist · 2) data de início + offset em DIAS ÚTEIS
+    // (mesma conta do rescheduleAll do Onboarding) · 3) rótulo "Dia N".
     let due=""; m.ids.forEach(function(id){ const d=items[id]&&items[id].due; if(d&&(!due||d<due)) due=d; });
+    if(!due && startDate && typeof _onbAddBusinessDays==="function" && typeof _onbIsoDate==="function"){
+      try{
+        const base=new Date(startDate+"T12:00:00"); base.setHours(0,0,0,0);
+        due=_onbIsoDate(_onbAddBusinessDays(base, m.off||0));
+      }catch(_){}
+    }
     const atrasado=!done&&due&&due<_hoje;
     return Object.assign({},m,{done:done,due:due,atrasado:atrasado});
   });
   const feitos=marcos.filter(function(m){return m.done;}).length;
   const _proxIdx=marcos.findIndex(function(m){return !m.done;});
-  const pacote=(items&&items.__pacote__)||{};
-  const entregas=Array.isArray(pacote.entregas)?pacote.entregas:[];
   const _tabOk=function(t){ return t && Array.isArray(tabsOk) && tabsOk.indexOf(t)>=0; };
 
-  function salvarPacote(){
-    const lista=draftEntregas.split("\n").map(function(x){return x.trim();}).filter(Boolean);
-    const next=Object.assign({},items,{__pacote__:Object.assign({},pacote,{entregas:lista})});
-    setOnb(next); setEditPacote(false);
+  // ── Pacote: 1) montado na calculadora · 2) preset do Comercial · 3) personalizado
+  const pacote=(items&&items.__pacote__)||{};
+  const _catalogo=_pjPacotesComercial();
+  const _temCalc=!!(calcPl&&calcPl.pl&&(calcPl.pl.totals&&(Number(calcPl.pl.totals.monthlyRecurring)>0||Number(calcPl.pl.totals.oneTimePrice)>0)));
+  const _preset=(pacote.presetId&&pacote.presetId!=="custom")?_catalogo.find(function(x){return x.id===pacote.presetId;}):null;
+  const _entregasCustom=Array.isArray(pacote.entregas)?pacote.entregas:[];
+  const _brl0=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
+
+  function _persistPacote(patch){
+    const next=Object.assign({},items,{__pacote__:Object.assign({},pacote,patch)});
+    setOnb(next);
     if(typeof window!=="undefined"&&window._sb){
       window._sb.from("client_onboarding").upsert({client_id:cl.id,items:next},{onConflict:"client_id"})
         .then(function(r){ if(r&&r.error){ console.warn("pacote save:",r.error.message); if(typeof pixelsToast!=="undefined")pixelsToast.error("Não salvou. Tenta de novo."); } })
         .catch(function(e){ console.warn("pacote save:",e); });
     }
   }
+  function salvarPacote(){
+    const lista=draftEntregas.split("\n").map(function(x){return x.trim();}).filter(Boolean);
+    setEditPacote(false);
+    _persistPacote({presetId:"custom", entregas:lista});
+  }
 
-  if(onb===null) return null;   // carregando — não pisca skeleton no dashboard
+  if(onb===null) return null;
+
+  // Conteúdo do card de pacote conforme a fonte
+  const _pacoteView=(function(){
+    if(_temCalc){
+      const pl=calcPl.pl, tot=pl.totals||{};
+      return {
+        origem:"Montado no \u201cMonte seu pacote\u201d",
+        valor:Number(tot.monthlyRecurring)>0?_brl0(tot.monthlyRecurring):"",
+        extraPontual:Number(tot.oneTimePrice)>0?_brl0(tot.oneTimePrice):"",
+        entregas:_pjLinhasCalculadora(pl),
+      };
+    }
+    if(_preset) return {origem:"Pacote "+_preset.label, valor:_preset.valor+(_preset.unidade?"":""), unidade:_preset.unidade, entregas:_preset.entregas};
+    return {origem:"", valor:Number(cl.contract)>0?_brl0(cl.contract):"", entregas:_entregasCustom};
+  })();
 
   return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"340px minmax(0,1fr)",gap:14,alignItems:"start"}}>
 
@@ -51965,22 +52181,28 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
             {cl.since&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>cliente desde {cl.since}</div>}
           </div>
         </div>
-        {canEdit&&!editPacote&&<button onClick={function(){setDraftEntregas(entregas.join("\n"));setEditPacote(true);}} title="Editar entregáveis (só a equipe Pixels vê este botão)"
+        {canEdit&&!_temCalc&&!editPacote&&<button onClick={function(){setDraftEntregas(_entregasCustom.join("\n"));setEditPacote(true);}} title="Vincular pacote do Comercial (só a equipe Pixels vê este botão)"
           style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
           <Ico n="edit" size={13} color="#64748b"/>
         </button>}
       </div>
 
-      {Number(cl.contract)>0&&<div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:14}}>
-        <span style={{color:_cor,fontWeight:900,fontSize:26,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{"R$ "+Number(cl.contract).toLocaleString("pt-BR")}</span>
-        <span style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>/mês</span>
+      {_pacoteView.origem&&<div style={{display:"inline-flex",alignItems:"center",gap:6,background:_cor+"12",border:"1px solid "+_cor+"2e",color:_cor,fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:99,marginBottom:10,letterSpacing:.2}}>
+        <Ico n={_temCalc?"sparkles":"package"} size={11} color={_cor}/>{_pacoteView.origem}
       </div>}
 
+      {_pacoteView.valor&&<div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:4,flexWrap:"wrap"}}>
+        <span style={{color:_cor,fontWeight:900,fontSize:26,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_pacoteView.valor}</span>
+        <span style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{_pacoteView.unidade||"/mês"}</span>
+      </div>}
+      {_pacoteView.extraPontual&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,marginBottom:10}}>+ {_pacoteView.extraPontual} em projetos pontuais</div>}
+      {!_pacoteView.extraPontual&&_pacoteView.valor&&<div style={{marginBottom:10}}/>}
+
       {!editPacote
-        ? (entregas.length>0
+        ? ((_pacoteView.entregas&&_pacoteView.entregas.length>0)
             ? <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:2}}>O que está incluso</div>
-                {entregas.map(function(e,i){
+                {_pacoteView.entregas.map(function(e,i){
                   return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
                     <span style={{width:16,height:16,borderRadius:5,background:_cor+"18",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
                       <Ico n="check" size={10} color={_cor}/>
@@ -51990,18 +52212,38 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
                 })}
               </div>
             : <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic",lineHeight:1.5}}>
-                {canEdit?"Clique no lápis e liste os entregáveis do pacote — o cliente vê aqui.":"Os entregáveis do seu pacote aparecem aqui em breve."}
+                {canEdit?"Clique no lápis e escolha o pacote do Comercial deste cliente.":"Os entregáveis do seu pacote aparecem aqui em breve."}
               </div>)
-        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={7} autoFocus
-              placeholder={"Um entregável por linha, ex.:\nGestão de redes sociais (12 posts/mês)\nTráfego pago Meta Ads\n2 vídeos editados/mês"}
-              style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none",color:"#0f172a"}}/>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button onClick={function(){setEditPacote(false);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Cancelar</button>
-              <button onClick={salvarPacote} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Salvar</button>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6}}>Pacote do Comercial</div>
+              <select value={pacote.presetId||""} onChange={function(e){
+                  const v=e.target.value;
+                  if(v==="custom"){ _persistPacote({presetId:"custom"}); }
+                  else { setEditPacote(false); _persistPacote({presetId:v}); }
+                }}
+                style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"9px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",fontFamily:"inherit",background:"#fff",outline:"none"}}>
+                <option value="">— escolher pacote —</option>
+                {_catalogo.map(function(x){
+                  return <option key={x.id} value={x.id}>{x.label}{x.valor?(" · "+x.valor+(x.unidade||"")):""}</option>;
+                })}
+              </select>
             </div>
+            {(pacote.presetId==="custom"||!pacote.presetId)&&<>
+              <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={6}
+                placeholder={"Personalizado: um entregável por linha"}
+                style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none",color:"#0f172a"}}/>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <button onClick={function(){setEditPacote(false);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Cancelar</button>
+                <button onClick={salvarPacote} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Salvar</button>
+              </div>
+            </>}
+            {pacote.presetId&&pacote.presetId!=="custom"&&<div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={function(){setEditPacote(false);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Fechar</button>
+            </div>}
           </div>}
     </div>
+
 
     {/* ── LINHA DO TEMPO DO PROJETO ── */}
     <div style={{background:"#fff",border:"1px solid #e9ecf1",borderRadius:16,padding:"18px 20px"}}>
