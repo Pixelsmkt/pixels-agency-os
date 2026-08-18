@@ -51515,12 +51515,13 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   useEffect(()=>{
     if(lockedClientId&&selCl!==lockedClientId)setSelCl(lockedClientId);
   },[lockedClientId]);
-  // Cliente com calculadora liberada abre direto em "Monte seu pacote".
-  const _abaInicial = initTab || (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0 ? "calculadora" : "dashboard");
+  // Cliente com calculadora liberada abre DIRETO em "Monte seu pacote".
+  // Tem prioridade sobre initTab: o login do cliente passa initTab="dashboard" fixo.
+  const _abaInicial = (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0) ? "calculadora" : (initTab||"dashboard");
   const [tab,setTab]=useState(_abaInicial);
   // Trocou pra um cliente com calculadora? cai na aba dela tambem.
   useEffect(function(){
-    if(!initTab && PORTAL_CALC_CLIENTS.indexOf(selCl)>=0) setTab("calculadora");
+    if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0) setTab("calculadora");
   },[selCl]);
   const [analisesSub,setAnalisesSub]=useState("trafego");
   // Portal Análises — iframe do Reportei
@@ -61108,6 +61109,9 @@ function _CalculadoraModular({isMob, persistClientId}){
   const graficosRec    = graficosKey==="recorrente";
   const graficosPrice  = graficosRec ? cfg.graficos.recorrente.price : 0;
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
+  // Projetos pontuais escolhidos (objeto completo) e se algum e "a partir de"
+  const _oneTimeSel    = oneTimeIds.map(function(id){ return cfg.oneTimeProjects.find(function(x){ return x.id===id; }); }).filter(Boolean);
+  const oneTimeAPartir = _oneTimeSel.some(function(x){ return !x.fixo; });
   const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies, growthOn, graficosRec);
 
   // Sempre que um novo bônus é liberado, o pacote volta a ficar fechado
@@ -61335,7 +61339,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     }
     lines.push("Resumo:");
     lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
-    if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
+    if(oneTimePrice>0) lines.push("Investimento pontual: " + (oneTimeAPartir?"a partir de ":"") + fmt(oneTimePrice));
     lines.push("");
     lines.push("Observação:");
 
@@ -62397,7 +62401,10 @@ function _CalculadoraModular({isMob, persistClientId}){
         </div>
         {oneTimePrice>0&&<div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:16,padding:"18px 20px"}}>
           <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Investimento pontual</div>
-          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>único</span></div>
+          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+            {oneTimeAPartir&&<span style={{color:SOFT,fontSize:12,fontWeight:700,letterSpacing:0,marginRight:6}}>a partir de</span>}
+            {fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>único</span>
+          </div>
         </div>}
       </div>
 
@@ -62558,6 +62565,21 @@ function _CalculadoraModular({isMob, persistClientId}){
   const _nomeCl   = (_clObr && _clObr.name) || "";
   const _corCl    = (_clObr && _clObr.color) || "#3a6489";
   const _iniCl    = (_nomeCl||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
+  // Itens do pacote pra listar na tela final (recorrentes e pontuais)
+  const _obrRecorrentes = [
+    socialActive && {ico:"share2", l:"Gestão de Redes Sociais", d:_selectedSocialLabels().join(" · ")+" · "+socialPosts+" publicaç"+(socialPosts>1?"ões":"ão")+"/semana", v:socialPrice},
+    creativesActive && {ico:"palette", l:"Criativos Extras", d:[
+        creatives.staticCreatives>0&&(creatives.staticCreatives+" estáticos"),
+        creatives.editedVideos>0&&(creatives.editedVideos+" vídeos editados"),
+        creatives.videoVariations>0&&(creatives.videoVariations+" variações"),
+      ].filter(Boolean).join(" · "), v:creativesPrice},
+    (trafficKey!=="none") && {ico:"target", l:cfg.traffic[trafficKey].label, d:"Gestão de tráfego pago", v:trafficPrice},
+    growthActive && {ico:"chart", l:"Growth", d:"Consultoria de crescimento junto da operação", v:growthPrice},
+    captureActive && {ico:"video", l:"Captação Audiovisual", d:captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês", v:capturePrice},
+    (graficosKey==="recorrente") && {ico:"shapes", l:"Materiais Gráficos", d:"Plano mensal · até "+cfg.graficos.recorrente.novos+" novos ou "+cfg.graficos.recorrente.ajustes+" ajustes", v:graficosPrice},
+    (graficosKey==="avulso") && {ico:"shapes", l:"Materiais Gráficos", d:"Avulso · cobrado por peça, sob demanda", v:0, semValor:true},
+  ].filter(Boolean);
+
   const _cardLogo = {background:"#fff",borderRadius:16,width:isMob?116:140,height:isMob?62:74,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 14px",boxShadow:"0 10px 26px rgba(0,0,0,.28)",flexShrink:0};
 
   const _telaObrigado = <section style={{background:BG_PAGE,borderRadius:focusMode?0:18,padding:isMob?"18px 14px":"26px 30px",fontFamily:_PORTF_FF,color:INK,minHeight:focusMode?"100%":"auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -62634,7 +62656,54 @@ function _CalculadoraModular({isMob, persistClientId}){
             </span>
             <div style={{minWidth:0}}>
               <div style={{color:"rgba(255,255,255,.5)",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Investimento pontual</div>
-              <div style={{fontWeight:900,fontSize:24,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{fmt(oneTimePrice)}<span style={{color:"rgba(255,255,255,.45)",fontSize:12,fontWeight:700,marginLeft:5}}>único</span></div>
+              <div style={{fontWeight:900,fontSize:24,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>
+                {oneTimeAPartir&&<span style={{color:"rgba(255,255,255,.45)",fontSize:11.5,fontWeight:700,marginRight:5}}>a partir de</span>}
+                {fmt(oneTimePrice)}<span style={{color:"rgba(255,255,255,.45)",fontSize:12,fontWeight:700,marginLeft:5}}>único</span>
+              </div>
+            </div>
+          </div>}
+        </div>
+
+        {/* ── o que entra no pacote ── */}
+        <div style={{display:"grid",gridTemplateColumns:(_oneTimeSel.length>0&&!isMob)?"1fr 1fr":"1fr",gap:isMob?14:16,marginTop:16}}>
+          {_obrRecorrentes.length>0&&<div style={{background:"rgba(0,0,0,.18)",border:"1px solid rgba(255,255,255,.09)",borderRadius:16,padding:"16px 18px"}}>
+            <div style={{color:"#c4b5fd",fontSize:9.5,fontWeight:900,letterSpacing:.9,textTransform:"uppercase",marginBottom:12}}>No mensal recorrente</div>
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              {_obrRecorrentes.map(function(it,i){
+                return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                  <span style={{width:26,height:26,borderRadius:8,background:"rgba(168,85,247,.18)",border:"1px solid rgba(196,181,253,.22)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <_PxIco n={it.ico} size={13} color="#c4b5fd" strokeWidth={2.2}/>
+                  </span>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{color:"#fff",fontSize:12.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.3}}>{it.l}</div>
+                    {it.d&&<div style={{color:"rgba(255,255,255,.45)",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{it.d}</div>}
+                  </div>
+                  <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,whiteSpace:"nowrap"}}>
+                    {it.semValor ? "sob demanda" : fmt(it.v)+"/mês"}
+                  </div>
+                </div>;
+              })}
+            </div>
+          </div>}
+
+          {_oneTimeSel.length>0&&<div style={{background:"rgba(0,0,0,.18)",border:"1px solid rgba(240,180,41,.18)",borderRadius:16,padding:"16px 18px"}}>
+            <div style={{color:"#ffd868",fontSize:9.5,fontWeight:900,letterSpacing:.9,textTransform:"uppercase",marginBottom:12}}>No investimento pontual</div>
+            <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              {_oneTimeSel.map(function(pr){
+                return <div key={pr.id} style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                  <span style={{width:26,height:26,borderRadius:8,background:"rgba(240,180,41,.16)",border:"1px solid rgba(240,180,41,.26)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <_PxIco n={pr.ico||"folderkanban"} size={13} color="#ffd868" strokeWidth={2.2}/>
+                  </span>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{color:"#fff",fontSize:12.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.3}}>{pr.label}</div>
+                    {pr.short&&<div style={{color:"rgba(255,255,255,.45)",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{pr.short}</div>}
+                  </div>
+                  <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,whiteSpace:"nowrap",textAlign:"right"}}>
+                    {!pr.fixo&&<span style={{display:"block",color:"rgba(255,255,255,.40)",fontSize:9,fontWeight:700}}>a partir de</span>}
+                    {fmt(pr.price)}
+                  </div>
+                </div>;
+              })}
             </div>
           </div>}
         </div>
@@ -62711,7 +62780,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} oneTimeAPartir={oneTimeAPartir} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
 
@@ -62722,7 +62791,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} oneTimeAPartir={oneTimeAPartir} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
     </div>
@@ -62745,7 +62814,7 @@ function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
     captureActive, captureDailies, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
-    oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
+    oneTimeIds, oneTimeAPartir, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
@@ -62799,6 +62868,7 @@ function _ResumoBox(p){
     {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:14,padding:"14px 16px",marginTop:10}}>
       <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.55,textTransform:"uppercase"}}>Investimento pontual</div>
       <div style={{color:INK,fontWeight:900,fontSize:21,letterSpacing:-.7,marginTop:3,fontFeatureSettings:"'tnum'"}}>
+        {oneTimeAPartir&&<span style={{color:SOFT,fontSize:11,fontWeight:700,marginRight:5}}>a partir de</span>}
         {fmt(oneTimePrice)}<span style={{color:MUTE,fontSize:11.5,fontWeight:600,marginLeft:6}}>· pagamento único</span>
       </div>
       {oneTimeIds.some(function(id){const x=cfg.oneTimeProjects.find(function(y){return y.id===id;}); return x&&!x.fixo;})&&
