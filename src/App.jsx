@@ -50875,7 +50875,7 @@ function _pxDpLabel(iso){
   return String(p.d).padStart(2,"0")+" de "+_PX_DP_MESES[p.m-1].toLowerCase().slice(0,3)+". de "+p.y;
 }
 
-function _PxDatePicker({value, onChange, accent}){
+function _PxDatePicker({value, onChange, accent, render}){
   const cor = accent || "#7c3aed";
   const sel = _pxDpParse(value);
   const hoje = new Date();
@@ -50942,8 +50942,10 @@ function _PxDatePicker({value, onChange, accent}){
     setVM(m); setVY(y);
   };
 
-  return <div ref={ref} style={{position:"relative"}}>
-    <button type="button" onClick={function(){setAberto(!aberto);}}
+  return <div ref={ref} style={{position:"relative",display:render?"inline-flex":"block"}}>
+    {render
+      ? render({abrir:function(){setAberto(!aberto);}, aberto:aberto})
+      : <button type="button" onClick={function(){setAberto(!aberto);}}
       style={{width:"100%",background:"#fff",border:"1px solid "+(aberto?cor:"#e2e8f0"),borderRadius:11,padding:"11px 13px",
         display:"flex",alignItems:"center",gap:9,cursor:"pointer",fontFamily:"inherit",textAlign:"left",
         boxShadow:aberto?"0 0 0 3px "+cor+"1f":"none",transition:"all .12s"}}>
@@ -50953,7 +50955,7 @@ function _PxDatePicker({value, onChange, accent}){
       <span style={{flex:1,color:sel?"#0f172a":"#cbd5e1",fontSize:13.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sel?_pxDpLabel(value):"Selecionar data"}</span>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
         style={{flexShrink:0,transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
-    </button>
+    </button>}
 
     {aberto&&pos&&<div ref={popRef} style={{position:"fixed",left:pos.left,top:pos.top,zIndex:400,width:POP_W,
       background:"#fff",border:"1px solid #e9ebef",borderRadius:14,boxShadow:"0 18px 44px rgba(8,10,14,0.20)",padding:12}}>
@@ -52041,22 +52043,31 @@ const _PJ_MARCOS=[
    estão avaliados quando isto roda em render. */
 function _pjPacotesComercial(){
   const out=[];
+  const _b=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
   try{
+    const cfg=(typeof PRICE_CONFIG!=="undefined")?PRICE_CONFIG:null;
+    if(cfg){
+      const fb=cfg.socialManagement.channels.fbInsta;
+      out.push({id:"social", label:"Gestão de Redes Sociais", valor:_b(fb.price), unidade:"/mês",
+        entregas:["Facebook + Instagram","4 artes + 4 vídeos inclusos por mês","8 publicações por mês","Planejamento, copys e aprovação","Relatório mensal de performance"]});
+      const t=cfg.traffic;
+      out.push({id:"trafego_meta", label:"Tráfego Pago · Meta Ads", valor:_b(t.meta.price), unidade:"/mês",
+        entregas:["Campanhas Facebook + Instagram","Públicos personalizados e lookalikes","Edição de até "+(t.meta.edicaoCriativos||3)+" criativos/mês","Otimização diária e relatório mensal"]});
+      out.push({id:"trafego_google", label:"Tráfego Pago · Google Ads", valor:_b(t.google.price), unidade:"/mês",
+        entregas:["Search, Performance Max e remarketing","Pesquisa e curadoria de palavras-chave","Otimização contínua","Relatório mensal de performance"]});
+      out.push({id:"trafego_combo", label:"Tráfego Pago · Meta + Google", valor:_b(t.metaGoogle.price), unidade:"/mês",
+        entregas:["Meta Ads + Google Ads integrados","Funil completo: demanda + captura","Edição de até "+(t.metaGoogle.edicaoCriativos||3)+" criativos/mês","Otimização diária e relatório mensal"]});
+    }
     if(typeof PORTF_PROJETOS!=="undefined"){
       const st=PORTF_PROJETOS.find(function(x){return x.id==="starter";});
       if(st) out.push({id:"starter", label:st.title, valor:st.valor, unidade:st.unidade||"/mês", entregas:st.entregas||[]});
-    }
-    if(typeof PORTF_RECORRENTES!=="undefined"){
-      PORTF_RECORRENTES.forEach(function(x){
-        out.push({id:"rec_"+x.id, label:x.title, valor:x.valor, unidade:x.unidade||"", entregas:x.entregas||[]});
-      });
     }
     const _gb=(typeof GROWTH_BLOCOS!=="undefined"&&Array.isArray(GROWTH_BLOCOS))
       ? GROWTH_BLOCOS.map(function(b){return b&&b.titulo;}).filter(Boolean) : [];
     out.push({id:"consultoriaGrowth", label:"Consultoria Growth", valor:"R$ 12.000", unidade:"/mês · 3 meses",
       entregas:["4 artes + 4 vídeos por mês"].concat(_gb)});
   }catch(_){}
-  out.push({id:"custom", label:"Personalizado (escrever)", valor:"", unidade:"", entregas:[]});
+  out.push({id:"custom", label:"Personalizado", valor:"", unidade:"", entregas:[]});
   return out;
 }
 /* Traduz o payload salvo no "Monte seu pacote" (portal_calculadora) em linhas legíveis */
@@ -52122,8 +52133,14 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     const atrasado=!done&&due&&due<_hoje;
     return Object.assign({},m,{done:done,due:due,atrasado:atrasado});
   });
-  const feitos=marcos.filter(function(m){return m.done;}).length;
-  const _proxIdx=marcos.findIndex(function(m){return !m.done;});
+  // Ordena pela data REAL resolvida (crescente); sem data mantém a ordem do preset.
+  const marcosOrd=marcos.map(function(m,i){return {m:m,i:i};}).sort(function(a,b){
+    const da=a.m.due||"9999-12-31", db=b.m.due||"9999-12-31";
+    if(da!==db) return da<db?-1:1;
+    return a.i-b.i;
+  }).map(function(x){return x.m;});
+  const feitos=marcosOrd.filter(function(m){return m.done;}).length;
+  const _proxIdx=marcosOrd.findIndex(function(m){return !m.done;});
   const _tabOk=function(t){ return t && Array.isArray(tabsOk) && tabsOk.indexOf(t)>=0; };
 
   // ── Pacote: 1) montado na calculadora · 2) preset do Comercial · 3) personalizado
@@ -52165,6 +52182,33 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     if(_preset) return {origem:"Pacote "+_preset.label, valor:_preset.valor+(_preset.unidade?"":""), unidade:_preset.unidade, entregas:_preset.entregas};
     return {origem:"", valor:Number(cl.contract)>0?_brl0(cl.contract):"", entregas:_entregasCustom};
   })();
+
+  // Uma linha da linha do tempo (compartilhada pelas 2 colunas)
+  const _marcoRow=function(m,i){
+    const _atual=i===_proxIdx;
+    return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,position:"relative",padding:"7px 0"}}>
+      <span style={{width:28,height:28,borderRadius:"50%",flexShrink:0,background:m.done?_cor:"#fff",border:m.done?"2px solid #fff":("2px solid "+(_atual?_cor:"#e2e6ee")),boxShadow:m.done?("0 2px 8px "+_cor+"55"):(_atual?("0 0 0 4px "+_cor+"1a"):"none"),display:"inline-flex",alignItems:"center",justifyContent:"center",zIndex:1}}>
+        {m.done?<Ico n="check" size={13} color="#fff"/>:<Ico n={m.ico} size={12} color={_atual?_cor:"#a3adbb"}/>}
+      </span>
+      <div style={{minWidth:0,flex:1,paddingTop:2}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+          <span style={{color:m.done||_atual?"#0f172a":"#7a8494",fontSize:12,fontWeight:m.done||_atual?800:700,letterSpacing:-.2}}>{m.l}</span>
+          {m.done&&<span style={{background:_cor+"14",color:_cor,fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Entregue</span>}
+          {_atual&&!m.done&&<span style={{background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Em andamento</span>}
+        </div>
+        {m.d&&<div style={{color:"#94a3b8",fontSize:10,marginTop:1,lineHeight:1.35}}>{m.d}</div>}
+      </div>
+      <div style={{textAlign:"right",flexShrink:0,paddingTop:3,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
+        <span style={{color:m.done?_cor:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
+          {m.due?_fmtBR(m.due):m.dia}
+        </span>
+        {m.tab&&_tabOk(m.tab)&&m.done&&<button onClick={function(){onGoTab&&onGoTab(m.tab);}}
+          style={{background:"#fff",border:"1px solid "+_cor+"44",borderRadius:7,padding:"2px 8px",fontSize:9,fontWeight:800,color:_cor,cursor:"pointer",whiteSpace:"nowrap"}}>
+          abrir →
+        </button>}
+      </div>
+    </div>;
+  };
 
   return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"340px minmax(0,1fr)",gap:14,alignItems:"start"}}>
 
@@ -52216,18 +52260,29 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
               </div>)
         : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6}}>Pacote do Comercial</div>
-              <select value={pacote.presetId||""} onChange={function(e){
-                  const v=e.target.value;
-                  if(v==="custom"){ _persistPacote({presetId:"custom"}); }
-                  else { setEditPacote(false); _persistPacote({presetId:v}); }
-                }}
-                style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"9px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",fontFamily:"inherit",background:"#fff",outline:"none"}}>
-                <option value="">— escolher pacote —</option>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Pacote do Comercial</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto",paddingRight:2}}>
                 {_catalogo.map(function(x){
-                  return <option key={x.id} value={x.id}>{x.label}{x.valor?(" · "+x.valor+(x.unidade||"")):""}</option>;
+                  const sel=pacote.presetId===x.id;
+                  return <button key={x.id} type="button"
+                    onClick={function(){
+                      if(x.id==="custom"){ _persistPacote({presetId:"custom"}); }
+                      else { setEditPacote(false); _persistPacote({presetId:x.id}); }
+                    }}
+                    style={{display:"flex",alignItems:"center",gap:10,background:sel?_cor+"10":"#fff",border:"1.5px solid "+(sel?_cor:"#e9ecf1"),borderRadius:11,padding:"10px 12px",cursor:"pointer",textAlign:"left",transition:"all .14s",fontFamily:"inherit"}}
+                    onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background="#fafbfc";} }}
+                    onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#e9ecf1";e.currentTarget.style.background="#fff";} }}>
+                    <span style={{width:17,height:17,borderRadius:"50%",flexShrink:0,border:sel?"none":"1.5px solid #d5dae2",background:sel?_cor:"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                      {sel&&<Ico n="check" size={10} color="#fff"/>}
+                    </span>
+                    <span style={{flex:1,minWidth:0}}>
+                      <span style={{display:"block",color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,lineHeight:1.3}}>{x.label}</span>
+                      {x.id==="custom"&&<span style={{display:"block",color:"#94a3b8",fontSize:10,fontWeight:600,marginTop:1}}>escrever os entregáveis à mão</span>}
+                    </span>
+                    {x.valor&&<span style={{color:sel?_cor:"#64748b",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",flexShrink:0}}>{x.valor}<span style={{color:"#a3adbb",fontSize:9.5,fontWeight:600}}>{x.unidade}</span></span>}
+                  </button>;
                 })}
-              </select>
+              </div>
             </div>
             {(pacote.presetId==="custom"||!pacote.presetId)&&<>
               <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={6}
@@ -52265,35 +52320,24 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
         </div>
       </div>
 
-      <div style={{position:"relative",marginTop:12}}>
-        <div style={{position:"absolute",left:14,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
-        {marcos.map(function(m,i){
-          const _atual=i===_proxIdx;
-          const _c = m.done?_cor:(m.atrasado?"#d97706":"#a3adbb");
-          return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:12,position:"relative",padding:"8px 0"}}>
-            <span style={{width:30,height:30,borderRadius:"50%",flexShrink:0,background:m.done?_cor:"#fff",border:m.done?"2px solid #fff":("2px solid "+(_atual?_cor:"#e2e6ee")),boxShadow:m.done?("0 2px 8px "+_cor+"55"):(_atual?("0 0 0 4px "+_cor+"1a"):"none"),display:"inline-flex",alignItems:"center",justifyContent:"center",zIndex:1}}>
-              {m.done?<Ico n="check" size={14} color="#fff"/>:<Ico n={m.ico} size={13} color={_atual?_cor:"#a3adbb"}/>}
-            </span>
-            <div style={{minWidth:0,flex:1,paddingTop:2}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <span style={{color:m.done?"#0f172a":(_atual?"#0f172a":"#7a8494"),fontSize:12.5,fontWeight:m.done||_atual?800:700,letterSpacing:-.2}}>{m.l}</span>
-                {m.done&&<span style={{background:_cor+"14",color:_cor,fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Entregue</span>}
-                {_atual&&!m.done&&<span style={{background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Em andamento</span>}
-              </div>
-              {m.d&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{m.d}</div>}
-            </div>
-            <div style={{textAlign:"right",flexShrink:0,paddingTop:3,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-              <span style={{color:m.done?_cor:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
-                {m.due?_fmtBR(m.due):m.dia}
-              </span>
-              {m.tab&&_tabOk(m.tab)&&m.done&&<button onClick={function(){onGoTab&&onGoTab(m.tab);}}
-                style={{background:"#fff",border:"1px solid "+_cor+"44",borderRadius:7,padding:"3px 9px",fontSize:9.5,fontWeight:800,color:_cor,cursor:"pointer",whiteSpace:"nowrap"}}>
-                abrir →
-              </button>}
-            </div>
-          </div>;
-        })}
-      </div>
+      {(function(){
+        // Desktop: 2 colunas (6+5) com trilho próprio — metade da altura.
+        const _metade=Math.ceil(marcosOrd.length/2);
+        const _cols=isMob?[marcosOrd]:[marcosOrd.slice(0,_metade),marcosOrd.slice(_metade)];
+        let _gIdx=-1;
+        return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:isMob?0:"0 26px",marginTop:12}}>
+          {_cols.map(function(_col,ci){
+            return <div key={ci} style={{position:"relative"}}>
+              <div style={{position:"absolute",left:13,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
+              {_col.map(function(m,i){
+                _gIdx++;
+                const _idxGlobal=_gIdx;
+                return _marcoRow(m,_idxGlobal);
+              })}
+            </div>;
+          })}
+        </div>;
+      })()}
     </div>
   </div>;
 }
@@ -60105,38 +60149,33 @@ const _ONB_RESP_IDS = ["gustavo","vinicius","ellen","ocsana","erick"];
 const _ONB_FF = "'Inter',system-ui,-apple-system,sans-serif";
 
 function _OnbDateField(props){
+  // Pill de data com o calendário CUSTOM (_PxDatePicker via render-trigger).
+  // Antes usava input date nativo + showPicker() — visual de sistema, feio.
   const accent = props.accent||"#7c3aed";
-  const inputRef = useRef(null);
-  function _open(){
-    try{
-      if(inputRef.current){
-        if(typeof inputRef.current.showPicker==="function") inputRef.current.showPicker();
-        else inputRef.current.focus();
-      }
-    }catch(e){
-      if(inputRef.current) inputRef.current.focus();
-    }
-  }
   const hasVal = !!props.value;
   const labelBR = hasVal ? (props.value.slice(8,10)+"/"+props.value.slice(5,7)+"/"+props.value.slice(0,4)) : (props.placeholder||"Selecionar data");
-  return <div onClick={function(e){e.stopPropagation();_open();}}
-    style={{display:"inline-flex",alignItems:"center",gap:7,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(hasVal?accent+"33":"#e2e8f0"),borderRadius:9,padding:"0 11px",height:32,fontSize:11.5,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:600,fontFamily:_ONB_FF,cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",minWidth:120,boxSizing:"border-box"}}
-    onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.background="#fff";}}
-    onMouseLeave={function(e){e.currentTarget.style.borderColor=hasVal?accent+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}>
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasVal?accent:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-    <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
-    {hasVal && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();props.onChange&&props.onChange("");}} title="Limpar data"
-      style={{marginLeft:"auto",background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
-      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>}
-    <input ref={inputRef} type="date" value={props.value||""} onChange={function(e){props.onChange&&props.onChange(e.target.value);}}
-      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
-  </div>;
+  return <_PxDatePicker value={props.value||""} accent={accent}
+    onChange={function(iso){ props.onChange && props.onChange(iso); }}
+    render={function(api){
+      return <div onClick={function(e){e.stopPropagation();api.abrir();}}
+        style={{display:"inline-flex",alignItems:"center",gap:7,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(api.aberto?accent:(hasVal?accent+"33":"#e2e8f0")),borderRadius:9,padding:"6px 11px",cursor:"pointer",color:hasVal?"#0f172a":"#94a3b8",fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'",transition:"all .12s",boxShadow:api.aberto?("0 0 0 3px "+accent+"1f"):"none",userSelect:"none",fontFamily:_ONB_FF}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.background="#fff";}}
+        onMouseLeave={function(e){if(!api.aberto){e.currentTarget.style.borderColor=hasVal?accent+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasVal||api.aberto?accent:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
+        {hasVal && <span role="button" title="Limpar data"
+          onClick={function(e){e.preventDefault();e.stopPropagation();props.onChange&&props.onChange("");}}
+          style={{marginLeft:2,display:"inline-flex",alignItems:"center",color:"#94a3b8",cursor:"pointer"}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </span>}
+      </div>;
+    }}/>;
 }
+
 
 function _OnbRespAvatars(props){
   const accent = props.accent||"#7c3aed";
@@ -60259,39 +60298,26 @@ function OnboardingSection(props){
 
 /* ─── Pill "Inicio:" do Onboarding — usa showPicker() pra abrir date picker de forma confiavel ─── */
 function _OnbStartDatePill({startDate, accent, onPick}){
-  const _inpRef = useRef(null);
+  // Pill "Início:" com o calendário custom — mudar a data recalcula tudo (rescheduleAll).
   const _v = startDate || "";
   const _br = _v ? _v.split("-").reverse().join("/") : "";
-  const _open = function(e){
-    e.preventDefault();
-    e.stopPropagation();
-    const _inp = _inpRef.current;
-    if(!_inp) return;
-    // showPicker() e a API moderna e confiavel. Fallback pra .click() se nao suportar.
-    try{
-      if(typeof _inp.showPicker === "function") _inp.showPicker();
-      else _inp.click();
-    }catch(_){ try{_inp.click();}catch(_){} }
-  };
-  return <div style={{position:"relative",display:"inline-flex"}}>
-    <button type="button" onClick={_open}
-      title="Data de inicio do projeto. Ao mudar, recalcula todas as datas em dias uteis."
-      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_ONB_FF,transition:"all .15s"}}
-      onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"88";e.currentTarget.style.background="#fff";}}
-      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      <span style={{color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Inicio:</span>
-      <span style={{color:_v?"#0f172a":"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",minWidth:_v?66:80}}>{_v ? _br : "escolher..."}</span>
-    </button>
-    {/* Input escondido — controlado via ref pelo botao acima. Position absolute so pra o picker abrir perto do botao. */}
-    <input ref={_inpRef} type="date" value={_v} onChange={function(e){
-        const _nv = e.target.value;
-        if(!_nv) return;
-        if(typeof onPick === "function") onPick(_nv);
-      }}
-      style={{position:"absolute",left:0,top:"100%",opacity:0,width:1,height:1,pointerEvents:"none",border:"none",padding:0,margin:0}}/>
-  </div>;
+  return <_PxDatePicker value={_v} accent={accent}
+    onChange={function(iso){ if(iso && typeof onPick==="function") onPick(iso); }}
+    render={function(api){
+      return <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();api.abrir();}}
+        title="Data de início do projeto. Ao mudar, recalcula todas as datas em dias úteis."
+        style={{background:api.aberto?"#fff":"#fafbfc",border:"1px solid "+(api.aberto?accent:"#e2e8f0"),borderRadius:10,padding:"7px 12px",display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:_ONB_FF,transition:"all .12s",boxShadow:api.aberto?("0 0 0 3px "+accent+"1f"):"none"}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"88";e.currentTarget.style.background="#fff";}}
+        onMouseLeave={function(e){if(!api.aberto){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span style={{color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Início:</span>
+        <span style={{color:_v?"#0f172a":"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",minWidth:_v?66:80,textAlign:"left"}}>{_v ? _br : "escolher..."}</span>
+      </button>;
+    }}/>;
 }
+
 
 /* ═══ ONBOARDING SCRIPTS — mensagens reutilizáveis globais ═══
    Persiste em team_data tipo='onboarding_scripts'. Placeholders substituem
