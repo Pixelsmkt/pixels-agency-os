@@ -59588,6 +59588,7 @@ const ONBOARDING_BLOCKS = [
   {
     id:"dia1", title:"Dia 1", subtitle:"Contratação e setup",
     items:[
+      {id:"d1_whatsapp_grupo", label:"Criação do grupo de WhatsApp com todos os envolvidos no projeto"},
       {id:"d1_contrato_redigir", label:"Redigir contrato no Autentique"},
       {id:"d1_contrato_assinar", label:"Assinatura do contrato"},
       {id:"d1_indicacoes", label:"Pedir indicações (no dia da assinatura)"},
@@ -59598,13 +59599,11 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_portal_criar", label:"Criação do portal do cliente no App Pixels"},
       {id:"d1_portal_acesso", label:"Criação e envio do acesso ao cliente"},
       {id:"d1_brief", label:"Brief", sub:[
-        {id:"d1_brief_template", label:"Personalização do brief no Google Forms após copiar template"},
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
         {id:"d1_brief_gpt", label:"Upload do brief no agente do GPT"},
       ]},
       {id:"d1_reuniao_op", label:"Reunião com equipe operacional sobre o projeto"},
       {id:"d1_concorrencia", label:"Análise de concorrência"},
-      {id:"d1_whatsapp_grupo", label:"Criação do grupo de WhatsApp com todos os envolvidos no projeto"},
       {id:"d1_reuniao_onboarding", label:"Reunião de onboarding"},
       {id:"d1_apresentar_equipe", label:"Apresentação da equipe"},
       {id:"d1_data_kickoff", label:"Confirmar data da reunião de kickoff"},
@@ -59612,10 +59611,8 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_templates_aprovar", label:"Aprovação dos templates"},
       {id:"d1_gpt_agente", label:"Criação do agente personalizado no ChatGPT com materiais"},
       {id:"d1_gpt_briefing_word", label:"Extrair respostas do Briefing no App Pixels, colar em Word e subir no agente do cliente no GPT"},
-      {id:"d1_drive_compartilhada", label:"Criação da pasta compartilhada no Drive"},
       {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
       {id:"d1_claude_sync", label:"Linkar Claude pra subir automático os materiais aprovados na pasta Arquivo do cliente"},
-      {id:"d1_wpp_status", label:"Envio de mensagem de atualização de status no WhatsApp"},
       {id:"d1_wpp_boasvindas_fin", label:"Envio de mensagem de boas-vindas para responsável financeiro no WhatsApp"},
       {id:"d1_gestao_midia", label:"Criação da seção no projeto \"Gestão de mídia\""},
     ],
@@ -59631,6 +59628,7 @@ const ONBOARDING_BLOCKS = [
         {id:"d2_estudo_materiais", label:"Subir estudo do brief nos materiais do projeto do cliente no Aplicativo da Pixels"},
       ]},
       {id:"d2_dados_projetos", label:"Passar dados do briefing para os projetos do cliente no Aplicativo da Pixels"},
+      {id:"d2_wpp_status", label:"Envio de mensagem de atualização de status no WhatsApp"},
     ],
   },
   {
