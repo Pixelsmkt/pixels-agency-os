@@ -60027,6 +60027,33 @@ const PRICE_CONFIG = {
         "Automações e integração com IA",
         "Treinamento da equipe e suporte inicial",
       ] },
+    { id:"consultoriaWhatsapp", label:"Consultoria de WhatsApp", price:2000, fixo:false, ico:"messages",
+      short:"Atendimento comercial pelo WhatsApp que converte mais.",
+      entregas:[
+        "Diagnóstico do atendimento atual",
+        "Scripts de abordagem e follow-up",
+        "Organização de funil no WhatsApp Business",
+        "Etiquetas, respostas rápidas e catálogo",
+        "Treinamento da equipe de atendimento",
+      ] },
+    { id:"treinamentoVendas", label:"Treinamento de Vendas", price:2500, fixo:false, ico:"target",
+      short:"Equipe comercial preparada pra converter os leads do digital.",
+      entregas:[
+        "Imersão no processo comercial atual",
+        "Playbook de vendas do negócio",
+        "Abordagem, contorno de objeções e fechamento",
+        "Rotina de follow-up e uso do CRM",
+        "Acompanhamento pós-treinamento",
+      ] },
+    { id:"consultoriaPosicionamento", label:"Consultoria de Posicionamento Digital", price:2500, fixo:false, ico:"compass",
+      short:"Diagnóstico completo da presença digital e plano de ação.",
+      entregas:[
+        "Auditoria de redes, site e anúncios",
+        "Análise de concorrentes diretos",
+        "Proposta de valor e diferenciais",
+        "Plano de ação priorizado por impacto",
+        "Apresentação executiva com os sócios",
+      ] },
   ],
 };
 
@@ -60755,7 +60782,7 @@ function _PxIcoBox(props){
   const n      = props.n;
   const cores = {
     ativo:  {bg:"#f6f0ff", bd:"#e4d4fd", ico:"#7c3aed"},
-    ok:     {bg:"#f0fdf4", bd:"#c9f0d4", ico:"#16a34a"},
+    ok:     {bg:"#faf7ff", bd:"#e9d8fe", ico:"#7c3aed"},
     neutro: {bg:"#f6f7fa", bd:"#eceef3", ico:"#a3adbb"},
   };
   const c = cores[estado] || cores.neutro;
@@ -60981,6 +61008,7 @@ function _CalculadoraModular({isMob}){
   const [captureDailies,setCaptureDailies] = useState(0);
   const [growthOn,setGrowthOn] = useState(false); // modulo Growth mensal (R$3.500)
   const [graficosKey,setGraficosKey] = useState("none"); // none | avulso | recorrente
+  const [ofertaInteresse,setOfertaInteresse] = useState(false); // "Tenho interesse" no Plano Growth (etapa Oferta)
   // 5) Projetos pontuais
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // 6) Wizard — etapa aberta por vez (0 = Redes Sociais)
@@ -61233,7 +61261,12 @@ function _CalculadoraModular({isMob}){
       });
     }
     lines.push("Resumo:");
-    lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
+    if(ofertaInteresse){
+      lines.push("Mensal recorrente: R$ 0/mês — Plano Growth (interesse registrado)");
+      lines.push("A Pixels investe o serviço e a verba de anúncios; remuneração por comissão, valor a negociar.");
+    } else {
+      lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
+    }
     if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
     lines.push("");
     lines.push("Observação:");
@@ -61254,8 +61287,8 @@ function _CalculadoraModular({isMob}){
       <div style={{flex:1,minWidth:190}}>
         <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
           <div style={{color:INK,fontWeight:800,fontSize:18.5,letterSpacing:-.45,lineHeight:1.2}}>{title}</div>
-          {active && <span style={{background:"#f0fdf4",color:"#16a34a",border:"1px solid #c9f0d4",fontSize:10,fontWeight:800,padding:"3px 9px 3px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
-            <_PxIco n="check" size={11} color="#16a34a" strokeWidth={3.2}/>Configurado
+          {active && <span style={{background:"#faf7ff",color:"#7c3aed",border:"1px solid #e9d8fe",fontSize:10,fontWeight:800,padding:"3px 9px 3px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
+            <_PxIco n="check" size={11} color="#7c3aed" strokeWidth={3.2}/>Configurado
           </span>}
         </div>
         <div style={{color:MUTE,fontSize:13,marginTop:5,lineHeight:1.5}}>{subtitle}</div>
@@ -61362,7 +61395,7 @@ function _CalculadoraModular({isMob}){
     { id:"capture",   ico:"video",        label:"Captação",      done:captureActive,       price:capturePrice },
     { id:"graficos", ico:"shapes",       label:"Materiais Gráficos", done:graficosKey!=="none", price:graficosPrice, subLabel:graficosKey==="avulso"?"avulso · sob demanda":undefined },
     { id:"projects",  ico:"folderkanban", label:"Projetos",      done:oneTimeIds.length>0, price:oneTimePrice },
-    { id:"oferta",    ico:"trophy",       label:"Oferta",        done:false, price:0, subLabel:"Plano Growth" },
+    { id:"oferta",    ico:"trophy",       label:"Oferta",        done:ofertaInteresse, price:0, subLabel:ofertaInteresse?"interesse registrado":"Plano Growth" },
     { id:"bonus",     ico:"gift",         label:"Bônus",         done:unlockedBonuses.length>0, price:0, isBonus:true },
     { id:"resumo",    ico:"clipboard",    label:"Resumo",        done:hasAnySelection,     price:monthlyRecurring },
   ];
@@ -61402,10 +61435,10 @@ function _CalculadoraModular({isMob}){
         const isCur  = i===stepSafe;
         const isDone = !!st.done;
         const estado = isCur ? "ativo" : (isDone ? "ok" : "neutro");
-        const bgChip = isCur ? "#faf7ff" : (isDone ? "#fafefb" : "transparent");
-        const bdChip = isCur ? PX_BD : (isDone ? "#dcf2e3" : "transparent");
-        const lblCol = isCur ? "#4c1d95" : (isDone ? "#15803d" : "#98a2b0");
-        const subCol = isCur ? PX : (isDone ? "#16a34a" : "#c3cad6");
+        const bgChip = isCur ? "#faf7ff" : (isDone ? "#faf7ff" : "transparent");
+        const bdChip = isCur ? PX_BD : (isDone ? "#e9d8fe" : "transparent");
+        const lblCol = isCur ? "#4c1d95" : (isDone ? "#6d28d9" : "#98a2b0");
+        const subCol = isCur ? PX : (isDone ? "#9F43F6" : "#c3cad6");
         const sub = st.subLabel
           ? st.subLabel
           : st.isBonus
@@ -61413,11 +61446,11 @@ function _CalculadoraModular({isMob}){
           : (isDone && st.price>0 ? fmt(st.price) : (isCur ? "em edição" : "não incluso"));
         return <button key={st.id} type="button" onClick={function(){goStep(i);}}
           style={{flex:"1 1 0",minWidth:isMob?146:0,background:bgChip,border:"1.5px solid "+bdChip,borderRadius:14,padding:isMob?"11px 10px":"12px 13px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",transition:"all .18s",textAlign:"left",fontFamily:_PORTF_FF,boxShadow:isCur?"0 5px 16px rgba(159,67,246,.13)":"none"}}
-          onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#f3fcf6":"#f8f9fc"; }}
+          onMouseEnter={function(e){ if(!isCur) e.currentTarget.style.background = isDone?"#f5effe":"#f8f9fc"; }}
           onMouseLeave={function(e){ e.currentTarget.style.background = bgChip; }}>
           <div style={{position:"relative",flexShrink:0}}>
             <_PxIcoBox n={st.ico} box={isMob?42:46} estado={estado}/>
-            {isDone && <div style={{position:"absolute",top:-4,right:-4,width:17,height:17,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(34,197,94,.32)"}}>
+            {isDone && <div style={{position:"absolute",top:-4,right:-4,width:17,height:17,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(34,197,94,.32)"}}>
               <_PxIco n="check" size={9} color="#fff" strokeWidth={3.6}/>
             </div>}
           </div>
@@ -61475,7 +61508,7 @@ function _CalculadoraModular({isMob}){
       </div>
 
       {/* Check verde de canal ativo */}
-      {active && <div style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#22c55e,#16a34a)",border:"2px solid #fff",boxShadow:"0 3px 8px rgba(34,197,94,.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {active && <div style={{position:"absolute",top:-7,right:-7,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",border:"2px solid #fff",boxShadow:"0 3px 8px rgba(34,197,94,.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <_CheckIcon size={12} color="#fff"/>
       </div>}
     </div>;
@@ -61660,13 +61693,13 @@ function _CalculadoraModular({isMob}){
               {t.price===0?"sem custo de gestão":fmt(t.price)}
               {t.price>0 && <span style={{color:SOFT,fontSize:11.5,fontWeight:600,marginLeft:4,letterSpacing:0}}>/mês</span>}
             </div>
-            {t.edicaoCriativos>0&&<div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:7,background:sel?"#f0fdf4":"#f6f8f6",border:"1px solid "+(sel?"#bbf7d0":"#e5eae5"),borderRadius:99,padding:"3px 10px",color:sel?"#15803d":"#6b7c6f",fontSize:10,fontWeight:800,letterSpacing:.1}}>
-              <_PxIco n="pentool" size={10} color={sel?"#16a34a":"#8a9a8e"}/>
+            {t.edicaoCriativos>0&&<div style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:7,background:sel?"#faf7ff":"#f6f8f6",border:"1px solid "+(sel?"#e9d8fe":"#e5eae5"),borderRadius:99,padding:"3px 10px",color:sel?"#6d28d9":"#6b7c6f",fontSize:10,fontWeight:800,letterSpacing:.1}}>
+              <_PxIco n="pentool" size={10} color={sel?"#9F43F6":"#8a9a8e"}/>
               Edição de até {t.edicaoCriativos} criativos/mês inclusa
             </div>}
           </div>
 
-          <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
             {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
           </div>
         </button>;
@@ -61713,7 +61746,7 @@ function _CalculadoraModular({isMob}){
         <div style={{color:growthActive?PX_DK:"#9aa4b2",fontWeight:900,fontSize:19,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{fmt(cfg.growth.price)}</div>
         <div style={{color:SOFT,fontSize:10,fontWeight:700,letterSpacing:.3}}>/mês</div>
       </div>
-      <div style={{width:24,height:24,borderRadius:"50%",background:growthActive?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:growthActive?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
+      <div style={{width:24,height:24,borderRadius:"50%",background:growthActive?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",border:growthActive?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s"}}>
         {growthActive && <_PxIco n="check" size={14} color="#fff" strokeWidth={3.4}/>}
       </div>
     </div>
@@ -61754,7 +61787,7 @@ function _CalculadoraModular({isMob}){
             <span style={{background:"linear-gradient(135deg,#ffd868,#f0b429)",color:"#2d1058",fontSize:8.5,fontWeight:900,padding:"3px 9px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase"}}>Grátis</span>
           </div>
           <div style={{color:"#a3812a",fontSize:11.5,marginTop:3,lineHeight:1.45}}>
-            É <b>adicional</b> às diárias contratadas aqui — não desconta do valor do módulo. Liberada por atingir {fmt(_cap.min)} de recorrência mensal.
+            É <b>adicional</b> às diárias contratadas aqui — não desconta do valor do módulo.
           </div>
         </div>
       </div>;
@@ -61814,7 +61847,7 @@ function _CalculadoraModular({isMob}){
                 {op.precoLabel}<span style={{color:SOFT,fontSize:10.5,fontWeight:600,marginLeft:4,letterSpacing:0}}>{op.sub}</span>
               </div>
             </div>
-            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
             </div>
           </div>
@@ -61938,21 +61971,79 @@ function _CalculadoraModular({isMob}){
         </div>
       </div>
 
-      {/* Como chega lá — 3 passos */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10,marginBottom:16}}>
+      {/* Confete ao registrar interesse (peças determinísticas — sem Math.random no render) */}
+      {ofertaInteresse&&<div style={{position:"absolute",left:0,right:0,top:0,bottom:0,pointerEvents:"none",overflow:"hidden",zIndex:6}}>
+        <style>{"@keyframes pxOfConfA{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(-60px,480px) rotate(640deg)}}"
+          +"@keyframes pxOfConfB{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(55px,520px) rotate(-560deg)}}"
+          +"@keyframes pxOfConfC{0%{opacity:1;transform:translate(0,-30px) rotate(0)}100%{opacity:0;transform:translate(-15px,450px) rotate(760deg)}}"}</style>
+        {Array.from({length:34}).map(function(_x,i){
+          const CORES=["#f0b429","#ffd868","#fff7e0","#9F43F6","#c4b5fd","#fff"];
+          return <div key={i} style={{position:"absolute",left:((i*29)%100)+"%",top:0,width:5+(i%3)*2,height:8+(i%4)*3,background:CORES[i%CORES.length],borderRadius:(i%5===0)?"50%":"2px",opacity:0,animation:"pxOfConf"+["A","B","C"][i%3]+" "+(1.5+(i%5)*0.22)+"s cubic-bezier(.18,.62,.42,1) "+((i%7)*0.06)+"s both"}}/>;
+        })}
+      </div>}
+
+      {/* Requisitos — explícitos: o que precisa estar de pé antes do plano */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <_PxIco n="clipboard" size={14} color={OURO2_OF}/>
+          <span style={{color:OURO2_OF,fontSize:10.5,fontWeight:900,letterSpacing:.9,textTransform:"uppercase"}}>Requisitos para entrar no plano</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+          {[
+            {ico:"folderkanban", l:"CRM Pixels implantado", d:"funil de vendas rodando no CRM, com follow-up em dia"},
+            {ico:"chart",        l:"Canal de vendas digital rodando", d:"tráfego e captação gerando leads de forma consistente"},
+            {ico:"target",       l:"Treinamento de vendas concluído", d:"equipe comercial preparada pra converter os leads"},
+            {ico:"rocket",       l:"Consultoria Growth concluída", d:"3 meses de estrutura — a base que sustenta o plano"},
+          ].map(function(x){
+            return <div key={x.l} style={{background:"rgba(240,180,41,0.08)",border:"1px solid rgba(240,180,41,0.28)",borderRadius:13,padding:"13px 15px",display:"flex",alignItems:"flex-start",gap:11}}>
+              <span style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <_PxIco n={x.ico} size={15} color="#3d2a05"/>
+              </span>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
+                <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+
+      {/* Depois da base pronta — como funciona */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10,marginBottom:16}}>
         {[
-          {n:"1", l:"Estrutura primeiro", d:"canal de vendas rodando e CRM implantado — a base que a consultoria constrói"},
-          {n:"2", l:"Entramos com o dinheiro", d:"serviço completo + verba de anúncios, por nossa conta"},
-          {n:"3", l:"Comissão sobre vendas", d:"valor a negociar — só ganhamos quando a venda acontece"},
+          {ico:"dollar", l:"Entramos com o dinheiro", d:"serviço completo + verba de anúncios, por nossa conta — seu mensal vai a R$ 0"},
+          {ico:"trophy", l:"Comissão sobre vendas", d:"valor a negociar — só ganhamos quando a venda acontece"},
         ].map(function(x){
-          return <div key={x.n} style={{background:"rgba(240,180,41,0.08)",border:"1px solid rgba(240,180,41,0.28)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
-            <span style={{width:26,height:26,borderRadius:"50%",background:"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")",color:"#3d2a05",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:900,flexShrink:0}}>{x.n}</span>
+          return <div key={x.l} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(240,180,41,0.20)",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
+            <span style={{width:26,height:26,borderRadius:"50%",border:"1.5px solid "+OURO_OF,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <_PxIco n={x.ico} size={13} color={OURO2_OF}/>
+            </span>
             <div style={{minWidth:0}}>
               <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{x.l}</div>
               <div style={{color:"rgba(255,255,255,0.55)",fontSize:11,marginTop:3,lineHeight:1.5}}>{x.d}</div>
             </div>
           </div>;
         })}
+      </div>
+
+      {/* Tenho interesse — registra a intenção e zera o mensal no resumo */}
+      <div style={{marginBottom:16}}>
+        <button type="button"
+          onClick={function(){ const nv=!ofertaInteresse; setOfertaInteresse(nv); if(nv){ try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(e){} } }}
+          style={{width:"100%",background:ofertaInteresse?"linear-gradient(135deg,"+OURO2_OF+","+OURO_OF+")":"rgba(240,180,41,0.10)",border:"1.5px solid "+(ofertaInteresse?OURO2_OF:"rgba(240,180,41,0.45)"),borderRadius:14,padding:isMob?"15px 16px":"17px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:14,fontFamily:_PORTF_FF,transition:"all .2s",boxShadow:ofertaInteresse?"0 10px 26px rgba(240,180,41,0.35)":"none"}}>
+          <span style={{width:24,height:24,borderRadius:8,background:ofertaInteresse?"#3d2a05":"transparent",border:"2px solid "+(ofertaInteresse?"#3d2a05":OURO_OF),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .2s"}}>
+            {ofertaInteresse&&<_PxIco n="check" size={14} color={OURO2_OF} strokeWidth={3.6}/>}
+          </span>
+          <span style={{textAlign:"left",minWidth:0,flex:1}}>
+            <span style={{display:"block",color:ofertaInteresse?"#3d2a05":"#fff",fontSize:isMob?13.5:15,fontWeight:900,letterSpacing:-.3}}>
+              {ofertaInteresse?"Interesse registrado no Plano Growth":"Tenho interesse no Plano Growth"}
+            </span>
+            <span style={{display:"block",color:ofertaInteresse?"rgba(61,42,5,0.75)":"rgba(255,255,255,0.55)",fontSize:11,fontWeight:600,marginTop:3,lineHeight:1.45}}>
+              {ofertaInteresse?"O mensal recorrente foi zerado no resumo — a Pixels investe.":"Marque pra ver o que acontece com o valor mensal do pacote."}
+            </span>
+          </span>
+          <_PxIco n={ofertaInteresse?"gift":"trophy"} size={20} color={ofertaInteresse?"#3d2a05":OURO_OF}/>
+        </button>
       </div>
 
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",paddingTop:14,borderTop:"1px solid rgba(240,180,41,0.22)"}}>
@@ -61990,7 +62081,7 @@ function _CalculadoraModular({isMob}){
             {pr.brand
               ? <_PxBrandBox n={pr.brand} box={42} ativo={sel}/>
               : <_PxIcoBox n={pr.ico||"folderkanban"} box={42} estado={sel?"ativo":"neutro"}/>}
-            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#22c55e,#16a34a)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",marginTop:2}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",border:sel?"none":"1.5px solid #e2e6ee",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .18s",marginTop:2}}>
               {sel && <_PxIco n="check" size={13} color="#fff" strokeWidth={3.4}/>}
             </div>
           </div>
@@ -62363,7 +62454,16 @@ function _CalculadoraModular({isMob}){
         <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
           <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
-          <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></div>
+          {ofertaInteresse
+            ? <div style={{marginTop:4}}>
+                <style>{"@keyframes pxOfZero{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
+                <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+                  <span style={{color:SOFT,fontWeight:800,fontSize:16,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
+                  <span style={{display:"inline-block",color:"#b7791f",fontWeight:900,fontSize:30,letterSpacing:-1.3,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZero .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"#c9a227",fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
+                </div>
+                <div style={{color:"#8a5a09",fontSize:10.5,fontWeight:800,marginTop:6,letterSpacing:.2}}>Plano Growth · a Pixels investe — comissão a negociar</div>
+              </div>
+            : <div style={{color:INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></div>}
         </div>
         {oneTimePrice>0&&<div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:16,padding:"18px 20px"}}>
           <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Investimento pontual</div>
@@ -62471,6 +62571,7 @@ function _CalculadoraModular({isMob}){
     setTrafficKey("none");
     setGrowthOn(false);
     setGraficosKey("none");
+    setOfertaInteresse(false);
     setCaptureDailies(0);
     setOneTimeIds([]);
     setStepIdx(0);
@@ -62497,7 +62598,7 @@ function _CalculadoraModular({isMob}){
     }
     return <button type="button" onClick={_copiar} disabled={!hasAnySelection}
       title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
-      style={{background:copiado?"linear-gradient(135deg,#22c55e,#16a34a)":"#fff",color:copiado?"#fff":(hasAnySelection?MUTE:"#cbd5e1"),border:"1px solid "+(copiado?"#16a34a":BORD),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:700,cursor:hasAnySelection?"pointer":"not-allowed",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0,fontFamily:_PORTF_FF,boxShadow:copiado?"0 5px 14px rgba(34,197,94,.28)":"none"}}
+      style={{background:copiado?"linear-gradient(135deg,#a855f7,#7c3aed)":"#fff",color:copiado?"#fff":(hasAnySelection?MUTE:"#cbd5e1"),border:"1px solid "+(copiado?"#7c3aed":BORD),borderRadius:10,padding:"8px 13px",fontSize:12,fontWeight:700,cursor:hasAnySelection?"pointer":"not-allowed",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0,fontFamily:_PORTF_FF,boxShadow:copiado?"0 5px 14px rgba(159,67,246,.28)":"none"}}
       onMouseEnter={function(e){if(hasAnySelection&&!copiado){e.currentTarget.style.borderColor=PX;e.currentTarget.style.color=PX_DK;}}}
       onMouseLeave={function(e){if(!copiado){e.currentTarget.style.borderColor=BORD;e.currentTarget.style.color=hasAnySelection?MUTE:"#cbd5e1";}}}>
       <_PxIco n={copiado?"check":"copy"} size={14} color="currentColor" strokeWidth={copiado?3.2:2.2}/>
@@ -62564,7 +62665,7 @@ function _CalculadoraModular({isMob}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} ofertaInteresse={ofertaInteresse} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
 
@@ -62575,7 +62676,7 @@ function _CalculadoraModular({isMob}){
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
-          oneTimeIds={oneTimeIds} onCopy={copyResumo} packOpen={packOpen}
+          oneTimeIds={oneTimeIds} ofertaInteresse={ofertaInteresse} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
     </div>
@@ -62595,7 +62696,7 @@ function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
     captureActive, captureDailies, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
-    oneTimeIds, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
+    oneTimeIds, ofertaInteresse, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
   const itens = [];
@@ -62641,9 +62742,18 @@ function _ResumoBox(p){
     <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
       <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Mensal recorrente</div>
-      <div style={{color:INK,fontWeight:900,fontSize:32,letterSpacing:-1.4,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
-        {fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span>
-      </div>
+      {ofertaInteresse
+        ? <div style={{marginTop:4}}>
+            <style>{"@keyframes pxOfZeroSb{0%{transform:scale(.55);opacity:0}60%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}"}</style>
+            <div style={{display:"flex",alignItems:"baseline",gap:9,flexWrap:"wrap"}}>
+              <span style={{color:SOFT,fontWeight:800,fontSize:15,letterSpacing:-.4,textDecoration:"line-through",fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}</span>
+              <span style={{display:"inline-block",color:"#b7791f",fontWeight:900,fontSize:32,letterSpacing:-1.4,fontFeatureSettings:"'tnum'",lineHeight:1,animation:"pxOfZeroSb .6s cubic-bezier(.34,1.4,.5,1) both"}}>R$ 0<span style={{color:"#c9a227",fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span></span>
+            </div>
+            <div style={{color:"#8a5a09",fontSize:10,fontWeight:800,marginTop:6,letterSpacing:.2}}>Plano Growth · a Pixels investe — comissão a negociar</div>
+          </div>
+        : <div style={{color:INK,fontWeight:900,fontSize:32,letterSpacing:-1.4,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>
+            {fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>/mês</span>
+          </div>}
     </div>
 
     {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid #eef0f5",borderRadius:14,padding:"14px 16px",marginTop:10}}>
