@@ -10247,18 +10247,20 @@ function CTimeline({cl}){
    CRÍTICO: top-level do módulo, NÃO redefinir dentro de componentes
    (causou bug "uma letra por vez" no input). */
 function _PlaybookSection({title, subtitle, icon, accent, children}){
-  const _accent = accent || "#7c3aed";
-  return <div style={{background:"#fff",borderRadius:14,border:"1px solid #eef0f3",padding:"18px 22px",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-    <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
-      {icon && <div style={{width:34,height:34,borderRadius:10,background:_accent+"15",border:"1px solid "+_accent+"33",color:_accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color={_accent}/>}
+  // Sub-secao do playbook — cabecalho PADRONIZADO em preto (o prop `accent`
+  // virou legado). Faixa clara + tarja preta na lateral pra separar visualmente
+  // um bloco do outro na leitura vertical longa.
+  return <div style={{background:"#fff",borderRadius:14,border:"1px solid #eef0f3",padding:0,overflow:"hidden",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px 11px 14px",background:"#fafbfc",borderBottom:"1px solid #eef0f3",borderLeft:"3px solid #0f172a"}}>
+      {icon && <div style={{width:32,height:32,borderRadius:9,background:"#0f172a0d",border:"1px solid #0f172a1f",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color="#0f172a"/>}
       </div>}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14.5,letterSpacing:-.2}}>{title}</div>
-        {subtitle&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.8,letterSpacing:-.2,lineHeight:1.25}}>{title}</div>
+        {subtitle&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
       </div>
     </div>
-    {children}
+    <div style={{padding:"15px 20px 17px"}}>{children}</div>
   </div>;
 }
 
@@ -74837,12 +74839,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Checklist com progresso */}
           <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,"+PB_PURPLE+" 0%,"+PB_PURPLE_DK+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(124,58,237,.32)"}}>
+              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,#334155 0%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(15,23,42,.28)"}}>
                 <Ico n="checkCircle" size={17} color="#fff"/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#4c1d95",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
-                <div style={{color:"#8b5cf6",fontSize:11,marginTop:1,fontWeight:600,opacity:.85}}>antes de entregar</div>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
+                <div style={{color:"#64748b",fontSize:11,marginTop:1,fontWeight:600}}>antes de entregar</div>
               </div>
             </div>
 
@@ -75238,13 +75240,13 @@ function PlaybookBlock({id, title, subtitle, icon, color, children}){
   // vertical: a faixa roxa + tarja lateral deixam obvio onde uma secao termina
   // e a proxima comeca. O prop `color` fica so por compatibilidade.
   return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:"linear-gradient(135deg,#f8f2ff 0%,#f1e6ff 100%)",borderBottom:"1px solid #e7d8fb",borderLeft:"4px solid "+PB_PURPLE_DK}}>
-      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+PB_PURPLE+" 0%,"+PB_PURPLE_DK+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px rgba(124,58,237,.35)",flexShrink:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:"linear-gradient(135deg,#f8fafc 0%,#eef1f5 100%)",borderBottom:"1px solid #e2e8f0",borderLeft:"4px solid #0f172a"}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#334155 0%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px rgba(15,23,42,.28)",flexShrink:0}}>
         <Ico n={icon} size={18} color="#fff" strokeWidth={2.3}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#4c1d95",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
-        {subtitle && <div style={{color:"#8b5cf6",fontSize:11.5,marginTop:2,fontWeight:600,opacity:.85}}>{subtitle}</div>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
+        {subtitle && <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:600}}>{subtitle}</div>}
       </div>
     </div>
     <div style={{padding:"16px 20px 18px"}}>{children}</div>
