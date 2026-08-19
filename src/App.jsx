@@ -34643,31 +34643,64 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     return h*3600 + mm*60 + ss;
   }
   // Splits text on [MM:SS] pattern → JSX com botões clicáveis (só se tem vídeo)
-  function _renderAjusteText(text, hasVideo){
-    const s = String(text||"");
-    if(!hasVideo) return s;
-    const parts = [];
-    const re = /\[(\d{1,2}(?::\d{2}){1,2})\]/g;
-    let last = 0, m;
-    while((m = re.exec(s)) !== null){
-      if(m.index > last) parts.push({t:"txt", v:s.slice(last, m.index)});
-      const secs = _parseTimestamp(m[1]);
-      if(secs != null) parts.push({t:"ts", label:m[1], secs:secs});
-      else parts.push({t:"txt", v:m[0]});
-      last = re.lastIndex;
+  /* ═══ Render do texto do ajuste ═══════════════════════════════════
+     Com ajuste POR LÂMINA o texto virava um paredão: "[Lâmina 3/6] •
+     Trocar texto: ...". Aqui a lâmina e a ação viram TAGS escuras, o
+     resto fica texto normal e os [00:23] de vídeo seguem clicáveis. */
+  const _AJ_LAM_RE = /\[\s*L[âa]mina\s*(\d+)\s*\/\s*(\d+)\s*\]/i;
+  const _AJ_ACAO_RE = /^\s*[•\-\*]\s*([^:\n]{2,42}?)\s*:\s?/;
+  function _ajTsNodes(txt, hasVideo, k){
+    if(!hasVideo) return [<span key={k}>{txt}</span>];
+    const parts=[]; const re=/\[(\d{1,2}(?::\d{2}){1,2})\]/g;
+    let last=0,m;
+    while((m=re.exec(txt))!==null){
+      if(m.index>last) parts.push({t:"txt",v:txt.slice(last,m.index)});
+      const secs=_parseTimestamp(m[1]);
+      if(secs!=null) parts.push({t:"ts",label:m[1],secs:secs}); else parts.push({t:"txt",v:m[0]});
+      last=re.lastIndex;
     }
-    if(last < s.length) parts.push({t:"txt", v:s.slice(last)});
-    if(parts.length===0) return s;
+    if(last<txt.length) parts.push({t:"txt",v:txt.slice(last)});
+    if(parts.length===0) return [<span key={k}>{txt}</span>];
     return parts.map(function(p,i){
-      if(p.t==="txt") return <span key={"t"+i}>{p.v}</span>;
-      return <button key={"b"+i} type="button" onClick={function(e){e.preventDefault(); e.stopPropagation(); _seekAjusteVideo(p.secs);}}
-        style={{background:"#a140ff",color:"#fff",border:"none",padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",fontFeatureSettings:"'tnum'",fontFamily:"'Inter',system-ui,sans-serif",margin:"3px 4px",verticalAlign:"middle",transition:"background .12s"}}
+      if(p.t==="txt") return <span key={k+"t"+i}>{p.v}</span>;
+      return <button key={k+"b"+i} type="button" onClick={function(e){e.preventDefault();e.stopPropagation();_seekAjusteVideo(p.secs);}}
+        style={{background:"#a140ff",color:"#fff",border:"none",padding:"3px 9px",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",fontFeatureSettings:"'tnum'",margin:"0 3px",verticalAlign:"baseline"}}
         onMouseEnter={function(e){e.currentTarget.style.background="#8b2fea";}}
         onMouseLeave={function(e){e.currentTarget.style.background="#a140ff";}}
         title={"Ir pra "+p.label+" no vídeo"}>
         {p.label}
       </button>;
     });
+  }
+  function _renderAjusteText(text, hasVideo){
+    let s = String(text||"");
+    if(!s) return s;
+    // "AJUSTE NECESSARIO:" é redundante — o painel inteiro já é de ajuste
+    s = s.replace(/^\s*AJUSTE\s+NECESS[AÁ]RI[OA]\s*:\s*/i,"");
+    const _tagBase = {display:"inline-flex",alignItems:"center",gap:5,color:"#fff",fontSize:10.5,fontWeight:800,letterSpacing:.2,padding:"3px 9px",borderRadius:7,verticalAlign:"middle",whiteSpace:"nowrap",lineHeight:1.35};
+    const out=[];
+    s.split("\n").forEach(function(linha,li){
+      if(li>0) out.push(<span key={"br"+li}>{"\n"}</span>);
+      let resto=linha;
+      const ml=resto.match(_AJ_LAM_RE);
+      if(ml){
+        out.push(<span key={"lam"+li} style={Object.assign({},_tagBase,{background:"#0f172a",marginRight:7})}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          Lâmina {ml[1]}/{ml[2]}
+        </span>);
+        resto=resto.replace(_AJ_LAM_RE,"");
+      }
+      const ma=resto.match(_AJ_ACAO_RE);
+      if(ma){
+        out.push(<span key={"ac"+li} style={Object.assign({},_tagBase,{background:"#334155",marginRight:7})}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {ma[1]}
+        </span>);
+        resto=resto.slice(ma[0].length);
+      }
+      if(resto) _ajTsNodes(resto, hasVideo, "n"+li).forEach(function(n){ out.push(n); });
+    });
+    return out;
   }
   const [title,setTitle]=useState(task.title||"");
   const [desc,setDesc]=useState(task.desc||"");
