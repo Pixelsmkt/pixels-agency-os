@@ -17071,8 +17071,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"10px 8px 8px",
-                background:isDropTarget?"#f5f3ff":(isToday?"linear-gradient(180deg,#faf5ff,#ffffff 55%)":hasTasks?C.bl+"06":"transparent"),
-                boxShadow:isToday?"inset 3px 0 0 #7c3aed":"none",
+                background:isDropTarget?"#f5f3ff":(isToday?"linear-gradient(165deg,#efe2ff 0%,#f7f0ff 45%,#fbf7ff 100%)":hasTasks?C.bl+"06":"transparent"),
+                boxShadow:isToday?"inset 0 0 0 2px rgba(124,58,237,.28)":"none",
                 outline:isDropTarget?"2px dashed #7c3aed":"none",
                 outlineOffset:-2,
                 transition:"background .2s, outline .15s",
@@ -30869,7 +30869,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
 
       {/* ══ CLIENTES DO PORTAL — REDESIGN MODERNO ══ */}
       {mainTab==="clientes"&&(
-        <div style={{display:"flex",flexDirection:"column",gap:18,width:"100%",maxWidth:1280}}>
+        <div style={{display:"flex",flexDirection:"column",gap:18,width:"100%"}}>
           {(()=>{
             const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno"&&c.id!=="pixels"&&String(c.name||"").trim());
             const _comAcesso=[];
@@ -31410,6 +31410,7 @@ function PasswordVault({user}){
   const [editing,setEditing] = useState(null); // null | {} pra novo, {id,...} pra editar
   const [search,setSearch] = useState("");
   const [showPwd,setShowPwd] = useState({});
+  const [catFilter,setCatFilter] = useState("");
 
   const CATS = [
     {id:"cliente", label:"Cliente",  color:"#16a34a"},
@@ -31501,93 +31502,146 @@ function PasswordVault({user}){
         || String(it.url||"").toLowerCase().includes(s);
   });
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* Aviso */}
-    <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",display:"flex",gap:9,alignItems:"flex-start"}}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a16207" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:2,flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <div style={{color:"#854d0e",fontSize:11.5,lineHeight:1.5,fontWeight:500}}>
-        <strong>Cofre de senhas — só sócios.</strong> Use pra anotar credenciais de portal, contas de cliente, serviços. Senhas ficam em texto puro no Supabase com RLS restringindo acesso a level=1.
-      </div>
-    </div>
-    {/* Header */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:13,pointerEvents:"none"}}>🔍</span>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por título, login, cliente..."
-            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 10px 7px 30px",color:C.tx,fontSize:12,outline:"none",width:280,fontFamily:"inherit"}}/>
+  const _mob=(typeof _pxMob==="function"&&_pxMob());
+  const _porCat = _filtered.filter(it=>!catFilter||String(it.category||"outro")===catFilter);
+  const _cnt = (cid)=>items.filter(it=>String(it.category||"outro")===cid).length;
+  const _dt = (v)=>{ try{ const d=new Date(v); if(isNaN(d))return""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; } };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,width:"100%"}}>
+
+    {/* ══ HERO ══ */}
+    <div style={{position:"relative",overflow:"hidden",borderRadius:18,background:"linear-gradient(135deg,#0f172a 0%,#312e81 48%,#6d28d9 100%)",padding:_mob?"18px 16px":"22px 24px",color:"#fff",boxShadow:"0 16px 38px rgba(49,46,129,.28)"}}>
+      <div style={{position:"absolute",right:-50,top:-70,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 68%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"flex",alignItems:_mob?"flex-start":"center",gap:13,flexDirection:_mob?"column":"row"}}>
+        <div style={{width:44,height:44,borderRadius:13,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><circle cx="12" cy="11" r="2.2"/><path d="M12 13.2V16"/></svg>
         </div>
-        <div style={{color:C.ts,fontSize:12}}>{_filtered.length} senha{_filtered.length===1?"":"s"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:800,fontSize:_mob?17:19,letterSpacing:-.4}}>Cofre de senhas</div>
+          <div style={{fontSize:12.5,opacity:.78,marginTop:3,fontWeight:500}}>Credenciais de portal, contas de cliente e serviços — visível só pros sócios</div>
+        </div>
+        <button onClick={_new} type="button"
+          style={{background:"#fff",border:"none",borderRadius:11,padding:"10px 16px",color:"#312e81",fontSize:12.5,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px rgba(0,0,0,.24)",flexShrink:0,fontFamily:"inherit",letterSpacing:-.1,transition:"all .15s",width:_mob?"100%":"auto"}}
+          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 9px 24px rgba(0,0,0,.32)";}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 18px rgba(0,0,0,.24)";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova senha
+        </button>
       </div>
-      <button onClick={_new}
-        style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
-        <span style={{fontSize:14,lineHeight:1}}>+</span>Nova senha
-      </button>
+      <div style={{position:"relative",marginTop:14,display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.14)",borderRadius:11,padding:"9px 12px"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fcd34d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
+        <div style={{fontSize:11.5,opacity:.85,fontWeight:500,lineHeight:1.45}}>
+          Senhas ficam em texto puro no Supabase, com RLS liberando só pra <strong style={{fontWeight:800}}>level 1</strong>. Não use pra credenciais bancárias.
+        </div>
+      </div>
     </div>
 
-    {/* Lista */}
+    {/* ══ BUSCA + FILTROS ══ */}
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",width:_mob?"100%":320}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:12,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por título, login, cliente..."
+          style={{width:"100%",background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"10px 14px 10px 35px",color:"#0f172a",fontSize:12.5,outline:"none",fontFamily:"inherit",fontWeight:500,transition:"all .15s"}}
+          onFocus={e=>{e.currentTarget.style.borderColor="#a855f7";e.currentTarget.style.boxShadow="0 0 0 3px rgba(168,85,247,.14)";}}
+          onBlur={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";}}/>
+      </div>
+      <div style={{display:"inline-flex",gap:3,background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:3,flexWrap:"wrap"}}>
+        {[{id:"",label:"Todas",color:"#0f172a"}].concat(CATS).map(c=>{
+          const _on=catFilter===c.id;
+          const _n=c.id?_cnt(c.id):items.length;
+          return <button key={c.id||"all"} type="button" onClick={()=>setCatFilter(c.id)}
+            style={{background:_on?c.color:"transparent",color:_on?"#fff":"#64748b",border:"none",borderRadius:8,padding:"7px 13px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
+            {c.label}
+            <span style={{background:_on?"rgba(255,255,255,.22)":"#f1f5f9",color:_on?"#fff":"#94a3b8",borderRadius:99,padding:"1px 6px",fontSize:10,fontWeight:800,lineHeight:1.5}}>{_n}</span>
+          </button>;
+        })}
+      </div>
+    </div>
+
+    {/* ══ LISTA (cards) ══ */}
     {loading
-      ? <div style={{textAlign:"center",color:C.td,fontSize:13,padding:"30px"}}>Carregando…</div>
-      : _filtered.length===0
-        ? <div style={{background:C.card,border:"1px dashed "+C.b1,borderRadius:14,padding:"40px 20px",textAlign:"center"}}>
-            <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma senha cadastrada ainda</div>
-            <div style={{color:C.td,fontSize:12}}>Clique em "+ Nova senha" pra começar.</div>
+      ? <div style={{textAlign:"center",color:C.td,fontSize:13,padding:"40px"}}>Carregando…</div>
+      : _porCat.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:16,padding:"48px 20px",textAlign:"center"}}>
+            <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>{(search||catFilter)?"Nada encontrado":"Nenhuma senha cadastrada ainda"}</div>
+            <div style={{color:"#94a3b8",fontSize:12}}>{(search||catFilter)?"Ajuste a busca ou o filtro.":"Clique em + Nova senha pra começar."}</div>
           </div>
-        : <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-            {_filtered.map((it,i)=>{
+        : <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(330px,1fr))",gap:12}}>
+            {_porCat.map(it=>{
               const cat=_catOf(it.category);
               const showPw=!!showPwd[it.id];
+              const _cli=(typeof CLIENTS!=="undefined"&&it.client_id)?(CLIENTS.find(c=>c.id===it.client_id)||null):null;
               return <div key={it.id}
-                style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.5fr 120px",padding:"13px 18px",borderBottom:i<_filtered.length-1?"1px solid "+C.b1+"55":"none",alignItems:"center",gap:10,transition:"background .12s"}}
-                onMouseEnter={e=>e.currentTarget.style.background=C.s1}
-                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                {/* Label + cat + url */}
-                <div style={{minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-                    <span style={{background:cat.color+"15",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{cat.label}</span>
-                    {it.client_id && <span style={{color:C.td,fontSize:10.5,fontWeight:600}}>· {it.client_id}</span>}
+                style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:15,padding:"14px 15px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s",position:"relative",overflow:"hidden"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=cat.color+"55";e.currentTarget.style.boxShadow="0 6px 18px "+cat.color+"1f";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";e.currentTarget.style.transform="";}}>
+                <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:cat.color}}/>
+                {/* topo */}
+                <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                  <div style={{width:38,height:38,borderRadius:11,background:cat.color+"14",border:"1px solid "+cat.color+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",color:cat.color,flexShrink:0,overflow:"hidden",padding:_cli?4:0}}>
+                    {_cli
+                      ? <ClientLogo clientId={_cli.id} size="sm"/>
+                      : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
                   </div>
-                  <div style={{color:C.tx,fontSize:13,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</div>
-                  {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" style={{color:C.a,fontSize:10.5,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{it.url}</a>}
-                </div>
-                {/* Username */}
-                <div style={{minWidth:0}}>
-                  <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Usuário</div>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{color:C.tx,fontSize:12,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{it.username||"—"}</span>
-                    {it.username && <button onClick={()=>_copy(it.username,"Usuário")} title="Copiar usuário"
-                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    </button>}
-                  </div>
-                </div>
-                {/* Senha */}
-                <div style={{minWidth:0}}>
-                  <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Senha</div>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
-                    <span style={{color:C.tx,fontSize:12,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{showPw?(it.password||"—"):"••••••••"}</span>
-                    {it.password && <button onClick={()=>setShowPwd(p=>({...p,[it.id]:!showPw}))} title={showPw?"Ocultar":"Mostrar"}
-                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
-                      {showPw
-                        ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                        : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      }
-                    </button>}
-                    {it.password && <button onClick={()=>_copy(it.password,"Senha")} title="Copiar senha"
-                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    </button>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
+                      <span style={{background:cat.color+"14",color:cat.color,borderRadius:6,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{cat.label}</span>
+                      {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" title={it.url}
+                        style={{color:"#94a3b8",fontSize:10.5,textDecoration:"none",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
+                        onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        {String(it.url).replace(/^https?:\/\//,"").split("/")[0]}
+                      </a>}
+                    </div>
                   </div>
                 </div>
-                {/* Ações */}
-                <div style={{display:"flex",justifyContent:"flex-end",gap:5}}>
-                  <button onClick={()=>_edit(it)} title="Editar"
-                    style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"6px 10px",color:C.ts,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                {/* usuario */}
+                <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"8px 11px",display:"flex",alignItems:"center",gap:8}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span style={{color:it.username?"#334155":"#94a3b8",fontSize:11.5,fontFamily:"monospace",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username||"—"}</span>
+                  {it.username && <button onClick={()=>_copy(it.username,"Usuário")} title="Copiar usuário" type="button"
+                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
+                    onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                  </button>}
+                </div>
+                {/* senha */}
+                <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"8px 11px",display:"flex",alignItems:"center",gap:8}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  <span style={{color:it.password?"#334155":"#94a3b8",fontSize:11.5,fontFamily:"monospace",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:showPw?"normal":".15em"}}>
+                    {it.password?(showPw?it.password:"•".repeat(Math.min(String(it.password).length,14))):"—"}
+                  </span>
+                  {it.password && <button onClick={()=>setShowPwd(p=>({...p,[it.id]:!showPw}))} title={showPw?"Ocultar":"Mostrar"} type="button"
+                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
+                    onMouseEnter={e=>e.currentTarget.style.color="#0f172a"} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
+                    {showPw
+                      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                  </button>}
+                  {it.password && <button onClick={()=>_copy(it.password,"Senha")} title="Copiar senha" type="button"
+                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
+                    onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                  </button>}
+                </div>
+                {/* rodape */}
+                <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:9,borderTop:"1px solid #f1f5f9"}}>
+                  <div style={{flex:1,minWidth:0,color:"#94a3b8",fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {it.updated_at?("Atualizado em "+_dt(it.updated_at)):""}
+                  </div>
+                  <button onClick={()=>_edit(it)} title="Editar" type="button"
+                    style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";e.currentTarget.style.color=C.a;}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.color="#475569";}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Editar
                   </button>
-                  <button onClick={()=>_delete(it)} title="Excluir"
-                    style={{background:"#fff",border:"1px solid #fecaca",borderRadius:7,padding:"6px 10px",color:"#dc2626",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-                    Excluir
+                  <button onClick={()=>_delete(it)} title="Excluir" type="button"
+                    style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"6px 10px",color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",transition:"all .12s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                   </button>
                 </div>
               </div>;
