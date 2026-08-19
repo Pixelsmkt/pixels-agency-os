@@ -918,6 +918,23 @@ const KANBAN_COLS = [
    A ORDEM do array E a ordem definida no drag&drop da aba Arquivos.
    Nunca reordenar por data/tipo — isso quebra o carrossel do Instagram.
 ═══════════════════════════════════════════════════════════════ */
+/* ═══ MÊS DE PAGAMENTO AUTOMÁTICO ═══════════════════════════════
+   Regra da casa: card criado ATÉ o dia 9 entra no pagamento do mês
+   corrente; a partir do DIA 10 já cai no mês seguinte (o fechamento
+   do mês roda dia 10). Antes a conta era ">10" (dia 10 ficava no mês
+   corrente) e só valia se um freelancer estivesse no card — por isso
+   card novo aparecia sem mês.
+   Retorna "YYYY-MM". */
+function pxMesPagamentoAuto(ref){
+  const d = ref ? new Date(ref) : new Date();
+  const off = d.getDate() >= 10 ? 1 : 0;
+  let m = d.getMonth() + 1 + off;
+  let y = d.getFullYear();
+  if(m > 12){ m -= 12; y += 1; }
+  return y + "-" + String(m).padStart(2, "0");
+}
+if(typeof window!=="undefined") window.pxMesPagamentoAuto = pxMesPagamentoAuto;
+
 function pxFinalFiles(task){
   const arr = (task && task.files) || [];
   if(!Array.isArray(arr)) return [];
@@ -16461,7 +16478,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         : null),
       // Mês de pagamento fica vazio até que um freelancer (Andre/Maria/Guilherme) seja atribuído.
       // O CardModal e o handleSave vão auto-preencher com base no dia>10 SÓ SE tiver freelancer nos responsáveis.
-      referenceMonth:"",
+      referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
@@ -18313,7 +18330,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       startDate:new Date().toISOString().split("T")[0],deadline,
       completedAt:null,score:null,tags:[...(aiResult.tags||[]),"pixels-ia"],
       comments:[{id:Date.now(),user:"Pixels IA",av:"⚡",color:C.a,text:`💡 Ideia: "${idea||"Áudio enviado"}"`,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}],
-      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",referenceMonth:(function(){const d=new Date();const off=d.getDate()>10?1:0;const m=d.getMonth()+1+off;const y=d.getFullYear()+(m>12?1:0);const mm=((m-1)%12)+1;return y+"-"+String(mm).padStart(2,"0");})(),checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
+      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
     };
     const cards=[];
     if(recipient==="ellen"||recipient==="both") cards.push({...base,id:mkId(),assignee:"ellen",title:`[Hellen] ${base.title}`,tags:[...base.tags,"social"]});
@@ -18874,7 +18891,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
       // Mês de pagamento fica vazio até que um freelancer (Andre/Maria/Guilherme) seja atribuído.
       // O CardModal e o handleSave vão auto-preencher com base no dia>10 SÓ SE tiver freelancer nos responsáveis.
-      referenceMonth:"",
+      referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
@@ -19217,12 +19234,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         return new Date(Date.now()+7*86400000).toISOString().split("T")[0];
       })(),
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
-      deletedAt:null,bioterUnit:null,referenceMonth:(function(){
-        // Só auto-set mês de pagamento se o responsável for um dos freelancers pagos por demanda (André/Maria/Guilherme)
-        const _PAY_BY_DEMAND=["andre","maria","guilherme"];
-        if(_PAY_BY_DEMAND.indexOf(respId)<0)return null;
-        const d=new Date();const off=d.getDate()>10?1:0;const m=d.getMonth()+1+off;const y=d.getFullYear()+(m>12?1:0);const mm=((m-1)%12)+1;return y+"-"+String(mm).padStart(2,"0");
-      })(),  // auto referenceMonth — só p/ freelancers
+      deletedAt:null,bioterUnit:null,
+      // Mês de pagamento já sai preenchido (dia >= 10 → mês seguinte), pra qualquer responsável.
+      referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():null),
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:activeUserName,
       timeline:[{type:"created",label:`Demanda criada por ${activeUserName} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:activeUserName}],
@@ -25492,12 +25506,20 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         const _isVid = function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(u);};
                         let _urls = [];
                         if(tab==="video"){
-                          const _videos = (current.files||[]).filter(function(f){return !f.isAnnotation && (String(f.type||"").startsWith("video/") || _isVid(f.url));}).filter(function(f){return !f.tipo || f.tipo==="final";});
+                          // SÓ a versão atual (_filesAtuais) e o arquivo MAIS RECENTE dela.
+                          // Antes pegava files[0] — que é o primeiro upload, ou seja, a versão VELHA.
+                          const _ts = function(f){ const v=(f&&(f.addedAtIso||f.addedAt))||""; const st=String(v);
+                            if(/^\d{4}-\d{2}-\d{2}T/.test(st)){ const d=new Date(st); return isNaN(d.getTime())?0:d.getTime(); }
+                            const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+                            if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
+                            return 0; };
+                          const _videos = (_filesAtuais||[]).filter(function(f){return f && !f.isAnnotation && f.url && !f.uploading && (String(f.type||"").startsWith("video/") || _isVid(f.url));})
+                            .slice().sort(function(a,b){ return _ts(b)-_ts(a); });
                           const _v = _videos[0] || (Array.isArray(allImgs)?allImgs.find(function(u){return _isVid(typeof u==="string"?u:u&&u.url);}):null);
                           const _vUrl = _v ? (typeof _v==="string"?_v:_v.url) : null;
                           if(_vUrl) _urls = [_vUrl];
                         } else {
-                          const _imgs = (current.files||[]).filter(function(f){
+                          const _imgs = (_filesAtuais||[]).filter(function(f){
                             if(!f || f.isAnnotation) return false;
                             if(f.tipo && f.tipo!=="final") return false;
                             if(String(f.type||"").startsWith("video/")) return false;
@@ -29957,6 +29979,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   // Mapa email -> senha (do team_passwords category=cliente) pra sócio consultar
   const [clientPasswordsByEmail,setClientPasswordsByEmail]=useState({});
   const [revealedPasswords,setRevealedPasswords]=useState({});
+  const [buscaCliente,setBuscaCliente]=useState("");
   const reloadClientPasswords=async()=>{
     try{
       const sb=window._sb;
@@ -30691,13 +30714,6 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
           </button>}
         </div>}
-        {mainTab==="clientes"&&<div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{color:C.ts,fontSize:12}}>{Object.values(clientAuthUsers).reduce((acc,arr)=>acc+arr.length,0)} acesso(s) ativo(s)</div>
-          {isMePartner&&<button onClick={()=>{setNovoCliente({client_id:(CLIENTS.find(c=>c.status!=="interno")||{}).id||"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
-            style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(22,163,74,.45)",fontFamily:"inherit"}}>
-            <span style={{fontSize:14,lineHeight:1}}>+</span>Novo acesso cliente
-          </button>}
-        </div>}
       </div>
 
       {/* ══ EQUIPE ══ */}
@@ -30861,39 +30877,75 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               });
               return labels.join(" + ");
             };
+            const _mob=(typeof _pxMob==="function"&&_pxMob());
+            const _q=String(buscaCliente||"").toLowerCase().trim();
+            const _visiveis=_comAcesso.filter(x=>!_q||[x.cl.name,x.user.name,x.user.email].some(v=>String(v||"").toLowerCase().includes(_q)));
+            const _semVis=_semAcesso.filter(c=>!_q||String(c.name||"").toLowerCase().includes(_q));
+            const _abrirNovo=(cid)=>{
+              const _fc=cid?{id:cid}:(_semAcesso[0]||_clientesPortal[0]||{id:""});
+              setNovoCliente({client_id:_fc.id||"",client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});
+              setNovoClienteOpen(true);
+            };
+            const _Stat=({v,l,c,ic})=>(
+              <div style={{background:"rgba(255,255,255,.09)",border:"1px solid rgba(255,255,255,.16)",borderRadius:13,padding:"11px 13px",display:"flex",alignItems:"center",gap:10,backdropFilter:"blur(4px)"}}>
+                <div style={{width:32,height:32,borderRadius:10,background:c,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(0,0,0,.22)"}}>{ic}</div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:19,fontWeight:800,lineHeight:1,letterSpacing:-.6}}>{v}</div>
+                  <div style={{fontSize:10.5,opacity:.72,fontWeight:600,marginTop:3,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l}</div>
+                </div>
+              </div>
+            );
             return <>
-              {/* Header premium */}
-              <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:6}}>
-                <div style={{width:46,height:46,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#5b21b6)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 8px 20px rgba(124,58,237,.35)",flexShrink:0}}>
-                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Acessos do portal</div>
-                  <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-                    {_comAcesso.length} {_comAcesso.length===1?"cliente ativo":"clientes ativos"}
+              {/* ══ HERO ══ */}
+              <div style={{position:"relative",overflow:"hidden",borderRadius:18,background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 46%,#7c3aed 100%)",padding:_mob?"18px 16px":"22px 24px",color:"#fff",boxShadow:"0 16px 38px rgba(76,29,149,.26)"}}>
+                <div style={{position:"absolute",right:-50,top:-70,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.16),transparent 68%)",pointerEvents:"none"}}/>
+                <div style={{position:"absolute",left:-40,bottom:-90,width:190,height:190,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,.35),transparent 70%)",pointerEvents:"none"}}/>
+                <div style={{position:"relative",display:"flex",alignItems:_mob?"flex-start":"center",gap:13,flexDirection:_mob?"column":"row"}}>
+                  <div style={{width:44,height:44,borderRadius:13,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                   </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:800,fontSize:_mob?17:19,letterSpacing:-.4}}>Acessos do portal</div>
+                    <div style={{fontSize:12.5,opacity:.78,marginTop:3,fontWeight:500}}>Contas de login que os clientes usam pra entrar no portal da Pixels</div>
+                  </div>
+                  {isPartner && <button onClick={()=>_abrirNovo("")} type="button"
+                    style={{background:"#fff",border:"none",borderRadius:11,padding:"10px 16px",color:"#4c1d95",fontSize:12.5,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px rgba(0,0,0,.22)",flexShrink:0,fontFamily:"inherit",letterSpacing:-.1,transition:"all .15s",width:_mob?"100%":"auto"}}
+                    onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 9px 24px rgba(0,0,0,.3)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 18px rgba(0,0,0,.22)";}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Novo acesso
+                  </button>}
                 </div>
-                {isPartner && <button onClick={()=>{
-                  const _firstClient=_semAcesso[0]||_clientesPortal[0]||{id:"",name:""};
-                  setNovoCliente({client_id:_firstClient.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});
-                  setNovoClienteOpen(true);
-                }} type="button"
-                  style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"9px 14px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 12px rgba(22,163,74,.32)",flexShrink:0,fontFamily:"inherit",letterSpacing:-.1,transition:"all .15s"}}
-                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 18px rgba(22,163,74,.45)";e.currentTarget.style.transform="translateY(-1px)";}}
-                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(22,163,74,.32)";e.currentTarget.style.transform="";}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Novo acesso
-                </button>}
+                <div style={{position:"relative",display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(3,minmax(0,1fr))",gap:10,marginTop:16}}>
+                  <_Stat v={_comAcesso.length} l="Acessos ativos" c="linear-gradient(135deg,#22c55e,#15803d)"
+                    ic={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}/>
+                  <_Stat v={new Set(_comAcesso.map(x=>x.cl.id)).size+"/"+_clientesPortal.length} l="Clientes com portal" c="linear-gradient(135deg,#a855f7,#6d28d9)"
+                    ic={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/></svg>}/>
+                  <_Stat v={_semAcesso.length} l="Sem acesso ainda" c="linear-gradient(135deg,#f59e0b,#b45309)"
+                    ic={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>}/>
+                </div>
               </div>
 
+              {/* ══ BUSCA ══ */}
+              {(_comAcesso.length+_semAcesso.length)>4 && <div style={{position:"relative",display:"flex",alignItems:"center",maxWidth:_mob?"100%":340}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:12,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input value={buscaCliente} onChange={e=>setBuscaCliente(e.target.value)} placeholder="Buscar cliente, nome ou e-mail..."
+                  style={{width:"100%",background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"10px 14px 10px 35px",color:"#0f172a",fontSize:12.5,outline:"none",fontFamily:"inherit",fontWeight:500,transition:"all .15s"}}
+                  onFocus={e=>{e.currentTarget.style.borderColor="#a855f7";e.currentTarget.style.boxShadow="0 0 0 3px rgba(168,85,247,.14)";}}
+                  onBlur={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";}}/>
+              </div>}
+
               {/* ═════ Bloco ATIVOS ═════ */}
-              {_comAcesso.length>0 && <div>
-                <div style={{color:"#15803d",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",boxShadow:"0 0 0 3px rgba(22,163,74,0.18)"}}/>
-                  Ativos · {_comAcesso.length}
+              {_visiveis.length>0 && <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}>
+                  <span style={{color:"#15803d",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,display:"inline-flex",alignItems:"center",gap:7}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:"#16a34a",boxShadow:"0 0 0 3px rgba(22,163,74,0.18)"}}/>
+                    Ativos · {_visiveis.length}
+                  </span>
+                  <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
-                  {_comAcesso.map(({cl,user})=>{
+                <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(330px,1fr))",gap:12}}>
+                  {_visiveis.map(({cl,user})=>{
                     const _isBioter = cl.id==="bioter";
                     // Bioter mostra unidade; outros clientes mostram o nome do cliente
                     const _unitTxt = _isBioter ? (_unitLabel(user.primary_unit)||"—") : (cl.name||"Cliente");
@@ -30995,10 +31047,49 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 </div>
               </div>}
 
+              {/* ══ SEM ACESSO — clientes que ainda não têm login ══ */}
+              {_semVis.length>0 && <div>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:11}}>
+                  <span style={{color:"#b45309",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,display:"inline-flex",alignItems:"center",gap:7}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:"#f59e0b",boxShadow:"0 0 0 3px rgba(245,158,11,0.18)"}}/>
+                    Sem acesso · {_semVis.length}
+                  </span>
+                  <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(250px,1fr))",gap:10}}>
+                  {_semVis.map(cl=>(
+                    <div key={cl.id}
+                      style={{background:"#fff",border:"1px dashed "+C.b1,borderRadius:13,padding:"11px 13px",display:"flex",alignItems:"center",gap:11,transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#f59e0b88";e.currentTarget.style.background="#fffbeb";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.background="#fff";}}>
+                      <div style={{width:38,height:38,borderRadius:10,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:4,flexShrink:0}}>
+                        <ClientLogo clientId={cl.id} size="sm"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontWeight:700,fontSize:12.8,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2}}>sem login no portal</div>
+                      </div>
+                      {isPartner && <button type="button" onClick={()=>_abrirNovo(cl.id)} title={"Criar acesso pra "+cl.name}
+                        style={{background:"#f6f0ff",border:"1px solid #e4d4fd",borderRadius:9,padding:"6px 10px",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,fontFamily:"inherit",transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#f6f0ff";e.currentTarget.style.color="#7c3aed";}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Criar
+                      </button>}
+                    </div>
+                  ))}
+                </div>
+              </div>}
+
               {/* Empty state — quando não há nenhum acesso criado */}
               {_comAcesso.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"48px 20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
                 <div style={{fontWeight:600,color:"#334155",marginBottom:6}}>Nenhum acesso criado ainda</div>
-                <div style={{fontSize:12}}>Clique em <strong style={{color:"#15803d"}}>+ Novo acesso</strong> pra liberar o portal pra um cliente.</div>
+                <div style={{fontSize:12}}>Clique em <strong style={{color:"#7c3aed"}}>+ Novo acesso</strong> pra liberar o portal pra um cliente.</div>
+              </div>}
+
+              {/* Nenhum resultado na busca */}
+              {_q && _visiveis.length===0 && _semVis.length===0 && <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"36px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>
+                Nenhum acesso encontrado pra <strong style={{color:"#334155"}}>{buscaCliente}</strong>.
               </div>}
             </>;
           })()}
@@ -35273,15 +35364,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       let _autoRefMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
       const _hadRefMonthBefore = !!(t.referenceMonth||"").trim();
       const _clearedByAdmin = isAdmin && _hadRefMonthBefore && !_autoRefMonth;
-      const _PAY_BY_DEMAND = ["andre","maria","guilherme"];
-      const _hasFreelancer = Array.isArray(assignees) && assignees.some(function(a){return _PAY_BY_DEMAND.indexOf(a)>=0;});
-      if(!_autoRefMonth && _hasFreelancer && !_clearedByAdmin){
-        const _d = new Date();
-        const _off = _d.getDate() > 10 ? 1 : 0;
-        const _m = _d.getMonth() + 1 + _off;
-        const _y = _d.getFullYear() + (_m > 12 ? 1 : 0);
-        const _mm = ((_m - 1) % 12) + 1;
-        _autoRefMonth = _y + "-" + String(_mm).padStart(2,"0");
+      // Vazio? preenche sozinho (dia >= 10 → mês seguinte), pra qualquer responsável.
+      // Respeita quando o admin zerou de propósito nesta sessão.
+      if(!_autoRefMonth && !_clearedByAdmin && typeof pxMesPagamentoAuto==="function"){
+        _autoRefMonth = pxMesPagamentoAuto();
       }
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
@@ -52459,7 +52545,13 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
             : <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic",lineHeight:1.5}}>
                 {canEdit?"Clique no lápis e escolha o pacote do Comercial deste cliente.":"Os entregáveis do seu pacote aparecem aqui em breve."}
               </div>)
-        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        : null}
+
+      {/* Painel de escolha — SÓ quando está editando.
+          Antes ele era o "else" do ternário: com pacote já escolhido a condição
+          caía no else e o painel ficava aberto pra sempre (o Concluir não fazia
+          nada visível, porque editPacote já era false). */}
+      {editPacote && <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Pacote do Comercial</div>
               <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto",paddingRight:2}}>
