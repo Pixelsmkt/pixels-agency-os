@@ -23713,6 +23713,32 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // aiLoading/aiTranscript removidos — botão "Pixels IA — Refinar" foi tirado a pedido do Vinicius
   const [isSubmitting,setIsSubmitting]=useState(false);
 
+  // ═══ Tags de ajuste — atalhos clicáveis pras instruções ═══
+  // Clicar insere/remove a linha "• Trocar foto: " no texto. A tag fica
+  // destacada enquanto a linha existir (marcável), e o texto continua livre.
+  const feedbackRef=useRef(null);
+  const _TAGS_IMG=["Trocar foto","Trocar título","Trocar texto","Corrigir ortografia","Trocar cor","Ajustar logo","Reposicionar elemento","Ajustar tamanho"];
+  const _TAGS_VID=["Trocar trecho","Cortar trecho","Ajustar legenda","Ajustar áudio","Trocar trilha","Ajustar ritmo"];
+  function _tagRe(lbl){
+    return new RegExp("^[ \\t]*•[ \\t]*"+lbl.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"[^\\n]*\\n?","m");
+  }
+  function _tagAtiva(lbl){ return _tagRe(lbl).test(feedback||""); }
+  function _toggleTag(lbl){
+    const txt=feedback||"";
+    const re=_tagRe(lbl);
+    if(re.test(txt)){
+      setFeedback(txt.replace(re,"").replace(/\n{3,}/g,"\n\n").replace(/^\n+/,""));
+      return;
+    }
+    const base=txt.replace(/\s+$/,"");
+    const novo=(base?base+"\n":"")+"• "+lbl+": ";
+    setFeedback(novo);
+    setTimeout(function(){
+      const el=feedbackRef.current;
+      if(el){ el.focus(); try{ el.selectionStart=el.selectionEnd=el.value.length; el.scrollTop=el.scrollHeight; }catch(_){} }
+    },0);
+  }
+
   const [refImages,setRefImages]=useState([]); // imagens de referência subidas no painel
   const [refUploading,setRefUploading]=useState(false);
   // Drag & drop state pras Referências (permite arrastar imagens direto pro card)
@@ -24375,8 +24401,28 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   </div>;
                 })()}
               </div>
-              <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
-                placeholder="Ex: trocar fundo verde por azul, centralizar o título, aumentar a logo Bioter no canto superior direito..."
+              {/* Tags rápidas — clique pra inserir o item no texto */}
+              {(function(){
+                const _ehVid = currentSrc && typeof _isVideoUrl==="function" && _isVideoUrl(currentSrc);
+                const _tags = _ehVid ? _TAGS_VID.concat(["Trocar texto","Corrigir ortografia"]) : _TAGS_IMG;
+                return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:9}}>
+                  {_tags.map(function(t){
+                    const on=_tagAtiva(t);
+                    return <button key={t} type="button" onClick={function(){_toggleTag(t);}}
+                      title={on?"Remover do texto":"Adicionar ao texto"}
+                      style={{background:on?"#a140ff":"#fff",border:"1px solid "+(on?"#a140ff":"#e5e7eb"),color:on?"#fff":"#475569",borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:on?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",lineHeight:1.2}}
+                      onMouseEnter={function(e){ if(!on){e.currentTarget.style.borderColor="#c9a5ff";e.currentTarget.style.color="#7c3aed";} }}
+                      onMouseLeave={function(e){ if(!on){e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.color="#475569";} }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                        {on?<polyline points="20 6 9 17 4 12"/>:<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>}
+                      </svg>
+                      {t}
+                    </button>;
+                  })}
+                </div>;
+              })()}
+              <textarea ref={feedbackRef} value={feedback} onChange={e=>setFeedback(e.target.value)}
+                placeholder="Clique nas tags acima ou escreva: trocar fundo verde por azul, centralizar o título, aumentar a logo no canto superior direito..."
                 rows={8}
                 style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13.5,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, box-shadow .15s",minHeight:180}}
                 onFocus={e=>{e.target.style.borderColor="#a140ff";e.target.style.boxShadow="0 0 0 3px rgba(161,64,255,0.1)";}}
@@ -52376,7 +52422,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
                 })}
               </div>
             </div>
-            {(pacote.presetId==="custom"||!pacote.presetId)&&<>
+            {pacote.presetId==="custom"&&<>
               <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={6}
                 placeholder={"Personalizado: um entregável por linha"}
                 style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none",color:"#0f172a"}}/>
