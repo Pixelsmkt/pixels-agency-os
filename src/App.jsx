@@ -30056,6 +30056,22 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   };
   useEffect(()=>{reloadClientAuthUsers();},[]);
 
+  // ── Registro de clientes (CLIENTS) — a pagina de Acessos nao carregava os
+  // clientes dinamicos do Supabase (Lero Fibras, Construcoes Clem...), entao
+  // so aparecia quem estava hardcoded + cache local. Carrega e re-renderiza.
+  const [,_bumpClients]=useState(0);
+  useEffect(()=>{
+    let alive=true;
+    const _bump=()=>{ if(alive) _bumpClients(n=>n+1); };
+    try{
+      if(typeof window.loadDynamicClientsFromSupabase==="function"){
+        window.loadDynamicClientsFromSupabase().then(_bump).catch(()=>{});
+      }
+    }catch(_){}
+    try{ window.addEventListener("pixels:clients-registry-updated",_bump); }catch(_){}
+    return ()=>{ alive=false; try{ window.removeEventListener("pixels:clients-registry-updated",_bump); }catch(_){} };
+  },[]);
+
   // === Excluir colaborador (Edge Function delete-collaborator) ===
   const revogarColabAcesso = async (teamId, nome) => {
     if(teamId==="vinicius"||teamId==="gustavo"){
@@ -30424,7 +30440,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     {novoClienteOpen&&(()=>{
       const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
       const lbl={color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
-      const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno");
+      const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno"&&c.id!=="pixels"&&String(c.name||"").trim());
       const _clSel=_clientesPortal.find(c=>c.id===novoCliente.client_id)||_clientesPortal[0];
       const onPickFoto=(file)=>{
         if(!file)return;
@@ -30853,9 +30869,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
 
       {/* ══ CLIENTES DO PORTAL — REDESIGN MODERNO ══ */}
       {mainTab==="clientes"&&(
-        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+        <div style={{display:"flex",flexDirection:"column",gap:18,width:"100%",maxWidth:1280}}>
           {(()=>{
-            const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno");
+            const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno"&&c.id!=="pixels"&&String(c.name||"").trim());
             const _comAcesso=[];
             const _semAcesso=[];
             _clientesPortal.forEach(cl=>{
