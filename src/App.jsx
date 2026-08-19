@@ -24129,7 +24129,11 @@ function PublicacaoEditModal({task, onClose, onReject}){
               {hasDrawing&&<div style={{position:"absolute",top:3,right:3,width:14,height:14,borderRadius:"50%",background:C.or,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
                 <Ico n="edit" size={7} color="#fff"/>
               </div>}
-              <div style={{position:"absolute",bottom:2,left:0,right:0,textAlign:"center",color:"#fff",fontSize:9,fontWeight:700,textShadow:"0 1px 2px rgba(0,0,0,0.8)"}}>{i+1}</div>
+              {/* Número da lâmina — quadradinho preto no canto, bem legível
+                  (antes era um texto branco solto que sumia em arte clara) */}
+              <div style={{position:"absolute",bottom:3,left:3,minWidth:16,height:16,padding:"0 4px",borderRadius:5,background:i===activeIdx?"#0f172a":"rgba(15,23,42,0.82)",border:"1px solid rgba(255,255,255,0.28)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 3px rgba(0,0,0,0.35)"}}>
+                <span style={{color:"#fff",fontSize:9.5,fontWeight:800,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{i+1}</span>
+              </div>
             </div>;
           })}
         </div>}
@@ -52115,12 +52119,16 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   const [draftEntregas,setDraftEntregas]=useState("");
   const _cor=(cl&&cl.color)||"#7c3aed";
 
+  const [marcos,setMarcos]=useState([]);
   useEffect(function(){
     if(!cl||!cl.id||typeof window==="undefined"||!window._sb){setOnb({});return;}
     let alive=true;
     window._sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle()
       .then(function(r){ if(alive) setOnb((r&&r.data&&r.data.items)||{}); })
       .catch(function(){ if(alive) setOnb({}); });
+    window._sb.from("client_marcos").select("*").eq("client_id",cl.id).order("date",{ascending:true})
+      .then(function(r){ if(alive) setMarcos((r&&r.data)||[]); })
+      .catch(function(){});
     window._sb.from("portal_calculadora").select("payload,updated_at").eq("client_id",cl.id).maybeSingle()
       .then(function(r){ if(alive&&r&&r.data&&r.data.payload) setCalcPl({pl:r.data.payload, em:r.data.updated_at}); })
       .catch(function(){});
@@ -52132,7 +52140,16 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   const _hoje=(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
   const _fmtBR=function(iso){ if(!iso)return ""; const p=String(iso).split("-"); return p.length===3?(p[2]+"/"+p[1]):""; };
 
-  const marcos=_PJ_MARCOS.map(function(m){
+  // Onboarding "preenchido" = tem data de início OU algum item com data/marcado.
+  // Sem isso a timeline não inventa "Dia 1, Dia 2..." — mostra só os marcos reais.
+  const _onbPreenchido=(function(){
+    if(startDate) return true;
+    return Object.keys(items||{}).some(function(k){
+      if(k.indexOf("__")===0) return false;
+      const it=items[k]; return it && (it.done || it.due);
+    });
+  })();
+  const marcosOnb=(_onbPreenchido?_PJ_MARCOS:[]).map(function(m){
     const done=m.ids.every(function(id){ return items[id]&&items[id].done; });
     // Data: 1) due gravado no checklist · 2) data de início + offset em DIAS ÚTEIS
     // (mesma conta do rescheduleAll do Onboarding) · 3) rótulo "Dia N".
@@ -52146,8 +52163,22 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     const atrasado=!done&&due&&due<_hoje;
     return Object.assign({},m,{done:done,due:due,atrasado:atrasado});
   });
+  // Marcos do projeto (aba Marcos) entram na MESMA linha do tempo, com ícone
+  // e cor do tipo. São eventos que já aconteceram → sempre "entregues".
+  const _MARCO_ICO={checkpoint:"flag",comercial:"dollar",reuniao:"users",captacao:"video",campanha:"megaphone",resultado:"award",entrega:"package"};
+  const _MARCO_COR={checkpoint:"#0d9488",comercial:"#7c3aed",reuniao:"#0ea5e9",captacao:"#ea580c",campanha:"#db2777",resultado:"#16a34a",entrega:"#475569"};
+  const _MARCO_LBL={checkpoint:"Checkpoint",comercial:"Comercial",reuniao:"Reunião",captacao:"Captação",campanha:"Campanha",resultado:"Resultado",entrega:"Entrega"};
+  const marcosProjeto=(marcos||[]).map(function(mk){
+    const tp=_MARCO_COR[mk.type]?mk.type:"entrega";
+    return {
+      l:mk.title||_MARCO_LBL[tp], d:mk.description||_MARCO_LBL[tp],
+      ico:_MARCO_ICO[tp]||"package", corTipo:_MARCO_COR[tp], tipoLbl:_MARCO_LBL[tp],
+      due:mk.date||"", done:true, atrasado:false, isMarco:true, tab:"marcos",
+    };
+  });
+  const _todos=marcosOnb.concat(marcosProjeto);
   // Ordena pela data REAL resolvida (crescente); sem data mantém a ordem do preset.
-  const marcosOrd=marcos.map(function(m,i){return {m:m,i:i};}).sort(function(a,b){
+  const marcosOrd=_todos.map(function(m,i){return {m:m,i:i};}).sort(function(a,b){
     const da=a.m.due||"9999-12-31", db=b.m.due||"9999-12-31";
     if(da!==db) return da<db?-1:1;
     return a.i-b.i;
@@ -52160,7 +52191,17 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   const pacote=(items&&items.__pacote__)||{};
   const _catalogo=_pjPacotesComercial();
   const _temCalc=!!(calcPl&&calcPl.pl&&(calcPl.pl.totals&&(Number(calcPl.pl.totals.monthlyRecurring)>0||Number(calcPl.pl.totals.oneTimePrice)>0)));
-  const _preset=(pacote.presetId&&pacote.presetId!=="custom")?_catalogo.find(function(x){return x.id===pacote.presetId;}):null;
+  // presetIds: seleção MÚLTIPLA. Compat: presetId (string) do formato antigo.
+  const _presetIds=(function(){
+    if(Array.isArray(pacote.presetIds)) return pacote.presetIds.filter(function(x){return x&&x!=="custom";});
+    if(pacote.presetId&&pacote.presetId!=="custom") return [pacote.presetId];
+    return [];
+  })();
+  const _presets=_presetIds.map(function(id){return _catalogo.find(function(x){return x.id===id;});}).filter(Boolean);
+  const _somaPresets=_presets.reduce(function(a,x){
+    const n=Number(String(x.valor||"").replace(/[^0-9]/g,""))||0;
+    return a + (String(x.unidade||"").indexOf("/mês")>=0 ? n : 0);
+  },0);
   const _entregasCustom=Array.isArray(pacote.entregas)?pacote.entregas:[];
   const _brl0=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
 
@@ -52192,31 +52233,38 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
         entregas:_pjLinhasCalculadora(pl),
       };
     }
-    if(_preset) return {origem:"Pacote "+_preset.label, valor:_preset.valor+(_preset.unidade?"":""), unidade:_preset.unidade, entregas:_preset.entregas};
+    if(_presets.length>0) return {
+      origem: _presets.length===1 ? ("Pacote "+_presets[0].label) : (_presets.length+" pacotes contratados"),
+      valor: _somaPresets>0 ? _brl0(_somaPresets) : _presets[0].valor,
+      unidade: "/mês",
+      presets: _presets,
+      entregas: [],
+    };
     return {origem:"", valor:Number(cl.contract)>0?_brl0(cl.contract):"", entregas:_entregasCustom};
   })();
 
   // Uma linha da linha do tempo (compartilhada pelas 2 colunas)
   const _marcoRow=function(m,i){
     const _atual=i===_proxIdx;
+    const _c = m.corTipo || _cor;   // marco do projeto usa a cor do tipo
     return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,position:"relative",padding:"7px 0"}}>
-      <span style={{width:28,height:28,borderRadius:"50%",flexShrink:0,background:m.done?_cor:"#fff",border:m.done?"2px solid #fff":("2px solid "+(_atual?_cor:"#e2e6ee")),boxShadow:m.done?("0 2px 8px "+_cor+"55"):(_atual?("0 0 0 4px "+_cor+"1a"):"none"),display:"inline-flex",alignItems:"center",justifyContent:"center",zIndex:1}}>
-        {m.done?<Ico n="check" size={13} color="#fff"/>:<Ico n={m.ico} size={12} color={_atual?_cor:"#a3adbb"}/>}
+      <span style={{width:28,height:28,borderRadius:"50%",flexShrink:0,background:m.done?_c:"#fff",border:m.done?"2px solid #fff":("2px solid "+(_atual?_c:"#e2e6ee")),boxShadow:m.done?("0 2px 8px "+_c+"55"):(_atual?("0 0 0 4px "+_c+"1a"):"none"),display:"inline-flex",alignItems:"center",justifyContent:"center",zIndex:1}}>
+        {m.isMarco?<Ico n={m.ico} size={13} color="#fff"/>:(m.done?<Ico n="check" size={13} color="#fff"/>:<Ico n={m.ico} size={12} color={_atual?_c:"#a3adbb"}/>)}
       </span>
       <div style={{minWidth:0,flex:1,paddingTop:2}}>
         <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
           <span style={{color:m.done||_atual?"#0f172a":"#7a8494",fontSize:12,fontWeight:m.done||_atual?800:700,letterSpacing:-.2}}>{m.l}</span>
-          {m.done&&<span style={{background:_cor+"14",color:_cor,fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Entregue</span>}
+          {m.done&&<span style={{background:_c+"14",color:_c,fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>{m.isMarco?m.tipoLbl:"Entregue"}</span>}
           {_atual&&!m.done&&<span style={{background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Em andamento</span>}
         </div>
         {m.d&&<div style={{color:"#94a3b8",fontSize:10,marginTop:1,lineHeight:1.35}}>{m.d}</div>}
       </div>
       <div style={{textAlign:"right",flexShrink:0,paddingTop:3,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-        <span style={{color:m.done?_cor:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
+        <span style={{color:m.done?_c:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>
           {m.due?_fmtBR(m.due):m.dia}
         </span>
         {m.tab&&_tabOk(m.tab)&&m.done&&<button onClick={function(){onGoTab&&onGoTab(m.tab);}}
-          style={{background:"#fff",border:"1px solid "+_cor+"44",borderRadius:7,padding:"2px 8px",fontSize:9,fontWeight:800,color:_cor,cursor:"pointer",whiteSpace:"nowrap"}}>
+          style={{background:"#fff",border:"1px solid "+_c+"44",borderRadius:7,padding:"2px 8px",fontSize:9,fontWeight:800,color:_c,cursor:"pointer",whiteSpace:"nowrap"}}>
           abrir →
         </button>}
       </div>
@@ -52255,7 +52303,33 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
       {_pacoteView.extraPontual&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,marginBottom:10}}>+ {_pacoteView.extraPontual} em projetos pontuais</div>}
       {!_pacoteView.extraPontual&&_pacoteView.valor&&<div style={{marginBottom:10}}/>}
 
-      {!editPacote
+      {!editPacote && _pacoteView.presets && _pacoteView.presets.length>0 &&
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {_pacoteView.presets.map(function(pk){
+            return <div key={pk.id}>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6,paddingBottom:5,borderBottom:"1px solid "+_cor+"22"}}>
+                <span style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2}}>{pk.label}</span>
+                {pk.valor&&<span style={{color:_cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{pk.valor}<span style={{color:"#a3adbb",fontSize:9.5,fontWeight:600}}>{pk.unidade}</span></span>}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {(pk.entregas||[]).map(function(e,i){
+                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                    <span style={{width:14,height:14,borderRadius:4,background:_cor+"18",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                      <Ico n="check" size={9} color={_cor}/>
+                    </span>
+                    <span style={{color:"#475569",fontSize:11.5,fontWeight:600,lineHeight:1.4}}>{e}</span>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
+          {_pacoteView.presets.length>1&&_somaPresets>0&&<div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,paddingTop:9,borderTop:"1.5px solid "+_cor+"33"}}>
+            <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Total mensal</span>
+            <span style={{color:_cor,fontSize:15,fontWeight:900,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{_brl0(_somaPresets)}<span style={{color:"#a3adbb",fontSize:10,fontWeight:600}}>/mês</span></span>
+          </div>}
+        </div>}
+
+      {!editPacote && !(_pacoteView.presets&&_pacoteView.presets.length>0)
         ? ((_pacoteView.entregas&&_pacoteView.entregas.length>0)
             ? <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:2}}>O que está incluso</div>
@@ -52276,16 +52350,21 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
               <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Pacote do Comercial</div>
               <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto",paddingRight:2}}>
                 {_catalogo.map(function(x){
-                  const sel=pacote.presetId===x.id;
+                  const _isCustom=x.id==="custom";
+                  const sel=_isCustom ? (pacote.presetId==="custom") : (_presetIds.indexOf(x.id)>=0);
                   return <button key={x.id} type="button"
                     onClick={function(){
-                      if(x.id==="custom"){ _persistPacote({presetId:"custom"}); }
-                      else { setEditPacote(false); _persistPacote({presetId:x.id}); }
+                      if(_isCustom){ _persistPacote({presetId:pacote.presetId==="custom"?"":"custom"}); return; }
+                      // múltipla escolha: liga/desliga sem fechar o painel
+                      const _next=_presetIds.indexOf(x.id)>=0
+                        ? _presetIds.filter(function(y){return y!==x.id;})
+                        : _presetIds.concat([x.id]);
+                      _persistPacote({presetIds:_next, presetId:""});
                     }}
                     style={{display:"flex",alignItems:"center",gap:10,background:sel?_cor+"10":"#fff",border:"1.5px solid "+(sel?_cor:"#e9ecf1"),borderRadius:11,padding:"10px 12px",cursor:"pointer",textAlign:"left",transition:"all .14s",fontFamily:"inherit"}}
                     onMouseEnter={function(e){ if(!sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background="#fafbfc";} }}
                     onMouseLeave={function(e){ if(!sel){e.currentTarget.style.borderColor="#e9ecf1";e.currentTarget.style.background="#fff";} }}>
-                    <span style={{width:17,height:17,borderRadius:"50%",flexShrink:0,border:sel?"none":"1.5px solid #d5dae2",background:sel?_cor:"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    <span style={{width:17,height:17,borderRadius:_isCustom?"50%":5,flexShrink:0,border:sel?"none":"1.5px solid #d5dae2",background:sel?_cor:"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
                       {sel&&<Ico n="check" size={10} color="#fff"/>}
                     </span>
                     <span style={{flex:1,minWidth:0}}>
@@ -52306,9 +52385,12 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
                 <button onClick={salvarPacote} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Salvar</button>
               </div>
             </>}
-            {pacote.presetId&&pacote.presetId!=="custom"&&<div style={{display:"flex",justifyContent:"flex-end"}}>
-              <button onClick={function(){setEditPacote(false);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,color:"#64748b",cursor:"pointer"}}>Fechar</button>
-            </div>}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
+                {_presetIds.length>0?(_presetIds.length+" selecionado"+(_presetIds.length>1?"s":"")+(_somaPresets>0?" · "+_brl0(_somaPresets)+"/mês":"")):"pode marcar mais de um"}
+              </span>
+              <button onClick={function(){setEditPacote(false);}} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Concluir</button>
+            </div>
           </div>}
     </div>
 
@@ -52327,13 +52409,18 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
         </div>
         <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
           <div style={{width:90,height:6,background:"#eef0f5",borderRadius:99,overflow:"hidden"}}>
-            <div style={{width:Math.round(feitos/_PJ_MARCOS.length*100)+"%",height:"100%",background:_cor,borderRadius:99,transition:"width .4s"}}/>
+            <div style={{width:(marcosOrd.length?Math.round(feitos/marcosOrd.length*100):0)+"%",height:"100%",background:_cor,borderRadius:99,transition:"width .4s"}}/>
           </div>
-          <span style={{color:_cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{feitos}/{_PJ_MARCOS.length}</span>
+          <span style={{color:_cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{feitos}/{marcosOrd.length}</span>
         </div>
       </div>
 
-      {(function(){
+      {marcosOrd.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e9ecf1",borderRadius:12,padding:"26px 20px",textAlign:"center",marginTop:12}}>
+            <div style={{color:"#94a3b8",fontSize:12.5,fontWeight:600}}>A jornada aparece aqui assim que o projeto começar.</div>
+            <div style={{color:"#cbd5e1",fontSize:11,marginTop:4}}>Entregas e marcos do onboarding entram automaticamente.</div>
+          </div>
+        : (function(){
         // Desktop: 2 colunas (6+5) com trilho próprio — metade da altura.
         const _metade=Math.ceil(marcosOrd.length/2);
         const _cols=isMob?[marcosOrd]:[marcosOrd.slice(0,_metade),marcosOrd.slice(_metade)];
@@ -59626,7 +59713,8 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_gpt_briefing_word", label:"Extrair respostas do Briefing no App Pixels, colar em Word e subir no agente do cliente no GPT"},
       {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
       {id:"d1_claude_sync", label:"Linkar Claude pra subir automático os materiais aprovados na pasta Arquivo do cliente"},
-      {id:"d1_wpp_boasvindas_fin", label:"Envio de mensagem de boas-vindas para responsável financeiro no WhatsApp"},
+      {id:"d1_wpp_boasvindas", label:"Enviar script de boas-vindas no WhatsApp"},
+      {id:"d1_wpp_boasvindas_fin", label:"Enviar script de boas-vindas financeiro no WhatsApp"},
       {id:"d1_gestao_midia", label:"Criação da seção no projeto \"Gestão de mídia\""},
     ],
   },
@@ -64695,7 +64783,7 @@ function PageGestaoENPS(props){
     return <div style={{width:sz,height:sz,borderRadius:"50%",background:u.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:Math.floor(sz*0.36),fontFamily:_NPS_FF,flexShrink:0}}>{ini}</div>;
   }
 
-  return <div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:_NPS_FF,width:"100%"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:_NPS_FF,width:"100%",maxWidth:1180,margin:"0 auto"}}>
 
     {/* ═══ HEADER ═══ */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_NPS_FF}}>
@@ -64933,40 +65021,26 @@ function PageGestaoENPS(props){
             ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.<br/><span style={{color:"#cbd5e1",fontSize:11}}>Suas respostas aparecem aqui ciclo a ciclo.</span></div>
             : (function(){
                 // Mini chart SVG — linha das notas (0-10) por mês
-                const W=720, H=180, PL=40, PR=14, PT=18, PB=36;
-                const innerW = W-PL-PR, innerH = H-PT-PB;
-                const data = minhasRows.map(function(r){return {m:r.cycle_month, score:r.score};});
-                const yScale = function(v){return PT + innerH - (v/10)*innerH;};
-                const xScale = function(i){return data.length===1 ? PL+innerW/2 : PL + (i/(data.length-1))*innerW;};
-                const path = data.map(function(d,i){return (i===0?"M":"L")+xScale(i)+","+yScale(d.score);}).join(" ");
-                return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"6px 4px 0",overflowX:"auto"}}>
-                  <svg viewBox={"0 0 "+W+" "+H} width="100%" style={{minWidth:540,display:"block"}}>
-                    {/* Grid horizontal — linhas de referência */}
-                    {[0,2,4,6,8,10].map(function(v){return <g key={v}>
-                      <line x1={PL} x2={W-PR} y1={yScale(v)} y2={yScale(v)} stroke="#f1f5f9" strokeWidth="1"/>
-                      <text x={PL-8} y={yScale(v)+4} fontSize="10" fill="#94a3b8" textAnchor="end" fontFamily="Inter,sans-serif" fontWeight="600">{v}</text>
-                    </g>;})}
-                    {/* Faixas: detrator <=6 (rosa) | neutro 7-8 (amarelo) | promotor >=9 (verde) */}
-                    <rect x={PL} y={yScale(10)} width={innerW} height={yScale(9)-yScale(10)} fill="#22c55e" opacity=".06"/>
-                    <rect x={PL} y={yScale(9)} width={innerW} height={yScale(7)-yScale(9)} fill="#eab308" opacity=".06"/>
-                    {/* Linha */}
-                    <path d={path} stroke="#9F43F6" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                    {/* Pontos */}
+                // Barras compactas (div) — nota 0..10 por ciclo. O SVG antigo
+                // esticava em telas largas e ficava desproporcional.
+                const data = minhasRows.slice(-8).map(function(r){return {m:r.cycle_month, score:r.score};});
+                const _MS=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                const _lb=function(m){const p=String(m).split("-");return (_MS[parseInt(p[1],10)-1]||"")+"/"+String(p[0]).slice(2);};
+                return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"14px 16px"}}>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:10,justifyContent:data.length<4?"flex-start":"space-between"}}>
                     {data.map(function(d,i){
-                      const cl = _npsClassify(d.score);
-                      return <g key={i}>
-                        <circle cx={xScale(i)} cy={yScale(d.score)} r="5" fill="#fff" stroke={cl.color} strokeWidth="2.5"/>
-                        <text x={xScale(i)} y={yScale(d.score)-12} fontSize="11" fill={cl.color} textAnchor="middle" fontFamily="Inter,sans-serif" fontWeight="800">{d.score}</text>
-                      </g>;
+                      const cl=_npsClassify(d.score);
+                      const alt=Math.max(4, Math.round((d.score/10)*84));
+                      return <div key={i} style={{flex:data.length<4?"0 0 74px":"1 1 0",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center"}}>
+                        <div style={{color:cl.color,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",marginBottom:4}}>{d.score}</div>
+                        <div style={{height:84,width:"100%",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+                          <div style={{width:"70%",maxWidth:34,height:alt,background:"linear-gradient(180deg,"+cl.color+","+cl.color+"cc)",borderRadius:"6px 6px 0 0",transition:"height .3s"}}/>
+                        </div>
+                        <div style={{width:"100%",height:1.5,background:"#dfe4ea"}}/>
+                        <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginTop:6,whiteSpace:"nowrap"}}>{_lb(d.m)}</div>
+                      </div>;
                     })}
-                    {/* Labels X (mês) */}
-                    {data.map(function(d,i){
-                      const parts = (d.m||"").split("-");
-                      const names = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-                      const lbl = parts.length>=2 ? (names[parseInt(parts[1],10)-1]||"")+"/"+parts[0].slice(-2) : d.m;
-                      return <text key={i} x={xScale(i)} y={H-PB+18} fontSize="10.5" fill="#64748b" textAnchor="middle" fontFamily="Inter,sans-serif" fontWeight="600">{lbl}</text>;
-                    })}
-                  </svg>
+                  </div>
                 </div>;
               })()
           }
@@ -65298,7 +65372,9 @@ function PortalNPS(props){
 
 /* ─── Componente: gráfico SVG de evolução mensal do ENPS ─── */
 function _ENPSChart({rows, socioIds}){
-  // Agrupa rows por cycle_month (filtra sócios)
+  // Barras em DIV (não SVG): o SVG com viewBox esticava até 2000px em tela
+  // larga e virava um gráfico gigante e ilegível. Aqui cada ciclo é uma
+  // coluna com altura fixa — cresce pra cima (positivo) ou pra baixo (negativo).
   const _filtered = (rows||[]).filter(function(r){return !socioIds || socioIds.indexOf(r.user_id)<0;});
   const _byMonth = {};
   _filtered.forEach(function(r){
@@ -65307,68 +65383,70 @@ function _ENPSChart({rows, socioIds}){
     _byMonth[r.cycle_month].push(r);
   });
   const months = Object.keys(_byMonth).sort();
-  if(months.length===0) return <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Ainda não há histórico mensal pra exibir.<br/><span style={{color:"#cbd5e1",fontSize:11}}>Quando os colaboradores responderem ao longo dos meses, a evolução aparece aqui.</span></div>;
-  // Pega os últimos 12 ciclos
-  const lastMonths = months.slice(-12);
-  // Calcula ENPS e nota média por mês
-  const data = lastMonths.map(function(m){
-    const arr = _byMonth[m]||[];
-    const promo = arr.filter(function(r){return r.score>=9;}).length;
-    const detr  = arr.filter(function(r){return r.score<=6;}).length;
-    const total = arr.length;
-    const enps  = total>0 ? Math.round(((promo-detr)/total)*100) : 0;
-    const avg   = total>0 ? (arr.reduce(function(s,r){return s+r.score;},0)/total) : 0;
-    return {month:m, enps:enps, avg:avg, total:total};
+  if(months.length===0) return <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"22px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Sem ciclos respondidos ainda.</div>;
+
+  const data = months.slice(-8).map(function(m){
+    const arr=_byMonth[m]||[];
+    const promo=arr.filter(function(r){return r.score>=9;}).length;
+    const detr =arr.filter(function(r){return r.score<=6;}).length;
+    const total=arr.length;
+    return {month:m, enps: total>0?Math.round(((promo-detr)/total)*100):0, total:total};
   });
-  const W = 760, H = 220, PAD_L=48, PAD_R=20, PAD_T=20, PAD_B=44;
-  const innerW = W - PAD_L - PAD_R;
-  const innerH = H - PAD_T - PAD_B;
-  // Y: ENPS -100 a 100
-  const yScale = function(v){return PAD_T + innerH - ((v+100)/200)*innerH;};
-  const xScale = function(i){return data.length===1 ? PAD_L+innerW/2 : PAD_L + (i/(data.length-1))*innerW;};
-  // Linha do zero
-  const y0 = yScale(0);
-  // Pontos pra polyline
-  const points = data.map(function(d,i){return xScale(i)+","+yScale(d.enps);}).join(" ");
-  return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"16px 18px",fontFamily:_NPS_FF}}>
-    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
-      {/* Grid horizontal */}
-      {[100,50,0,-50,-100].map(function(v,i){
-        const y = yScale(v);
-        return <g key={i}>
-          <line x1={PAD_L} y1={y} x2={W-PAD_R} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={v===0?"0":"3 4"}/>
-          <text x={PAD_L-8} y={y+4} textAnchor="end" style={{fontSize:9,fill:"#94a3b8",fontWeight:600,fontFamily:_NPS_FF}}>{v>0?"+"+v:v}</text>
-        </g>;
-      })}
-      {/* Eixo Y label */}
-      <text x={12} y={PAD_T+innerH/2} textAnchor="middle" transform={"rotate(-90 12 "+(PAD_T+innerH/2)+")"} style={{fontSize:9.5,fill:"#94a3b8",fontWeight:700,letterSpacing:.5,fontFamily:_NPS_FF}}>ENPS</text>
-      {/* Linha do ENPS */}
-      <polyline fill="none" stroke="#9F43F6" strokeWidth="2.5" points={points} strokeLinecap="round" strokeLinejoin="round"/>
-      {/* Pontos */}
+  const _MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const _lbl=function(m){ const p=String(m).split("-"); return (_MESES[parseInt(p[1],10)-1]||"")+"/"+String(p[0]).slice(2); };
+  const _cor=function(v){ return v>=50?"#16a34a":v>=0?"#ca8a04":"#dc2626"; };
+  const H=46; // altura máxima de cada metade
+  const media=Math.round(data.reduce(function(a,d){return a+d.enps;},0)/data.length);
+  const ultimo=data[data.length-1];
+  const delta=data.length>1?(ultimo.enps-data[data.length-2].enps):null;
+
+  return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"14px 16px",fontFamily:_NPS_FF}}>
+    {/* resumo compacto */}
+    <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:12}}>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Ciclo atual</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+          <span style={{color:_cor(ultimo.enps),fontSize:22,fontWeight:800,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{ultimo.enps>0?"+"+ultimo.enps:ultimo.enps}</span>
+          {delta!==null&&delta!==0&&<span style={{color:delta>0?"#16a34a":"#dc2626",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{delta>0?"▲ +":"▼ "}{delta}</span>}
+        </div>
+      </div>
+      <div style={{width:1,height:26,background:"#e9edf2"}}/>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Média dos ciclos</div>
+        <div style={{color:"#0f172a",fontSize:15,fontWeight:800,fontFeatureSettings:"'tnum'",lineHeight:1.3}}>{media>0?"+"+media:media}</div>
+      </div>
+      <span style={{marginLeft:"auto",color:"#a3adbb",fontSize:10.5,fontWeight:600}}>últimos {data.length} ciclo{data.length===1?"":"s"}</span>
+    </div>
+
+    {/* colunas */}
+    <div style={{display:"flex",alignItems:"stretch",gap:10,justifyContent:data.length<4?"flex-start":"space-between"}}>
       {data.map(function(d,i){
-        const x = xScale(i), y = yScale(d.enps);
-        const cor = d.enps>=50?"#16a34a":d.enps>=0?"#a16207":"#dc2626";
-        return <g key={i}>
-          <circle cx={x} cy={y} r="5" fill="#fff" stroke={cor} strokeWidth="2.5"/>
-          <text x={x} y={y-12} textAnchor="middle" style={{fontSize:10,fill:cor,fontWeight:800,fontFamily:_NPS_FF}}>{d.enps>0?"+"+d.enps:d.enps}</text>
-        </g>;
+        const alt=Math.max(3, Math.round(Math.abs(d.enps)/100*H));
+        const pos=d.enps>=0;
+        const c=_cor(d.enps);
+        return <div key={i} title={d.total+" resposta"+(d.total===1?"":"s")+" em "+_lbl(d.month)}
+          style={{flex:data.length<4?"0 0 74px":"1 1 0",minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+          {/* valor */}
+          <div style={{color:c,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",height:16,lineHeight:"16px"}}>{d.enps>0?"+"+d.enps:d.enps}</div>
+          {/* metade positiva */}
+          <div style={{height:H,width:"100%",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+            {pos&&<div style={{width:"70%",maxWidth:34,height:alt,background:"linear-gradient(180deg,"+c+","+c+"cc)",borderRadius:"6px 6px 0 0",transition:"height .3s"}}/>}
+          </div>
+          {/* linha do zero */}
+          <div style={{width:"100%",height:1.5,background:"#dfe4ea"}}/>
+          {/* metade negativa */}
+          <div style={{height:H,width:"100%",display:"flex",alignItems:"flex-start",justifyContent:"center"}}>
+            {!pos&&<div style={{width:"70%",maxWidth:34,height:alt,background:"linear-gradient(0deg,"+c+","+c+"cc)",borderRadius:"0 0 6px 6px",transition:"height .3s"}}/>}
+          </div>
+          {/* rótulo */}
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginTop:6,whiteSpace:"nowrap"}}>{_lbl(d.month)}</div>
+          <div style={{color:"#cbd5e1",fontSize:9,fontWeight:600,marginTop:1}}>{d.total} resp.</div>
+        </div>;
       })}
-      {/* X labels */}
-      {data.map(function(d,i){
-        return <text key={i} x={xScale(i)} y={H-PAD_B+18} textAnchor="middle" style={{fontSize:9.5,fill:"#64748b",fontWeight:600,fontFamily:_NPS_FF}}>{d.month.slice(5,7)+"/"+d.month.slice(2,4)}</text>;
-      })}
-      {/* X labels secundários: total respostas */}
-      {data.map(function(d,i){
-        return <text key={i} x={xScale(i)} y={H-PAD_B+32} textAnchor="middle" style={{fontSize:8.5,fill:"#94a3b8",fontWeight:500,fontFamily:_NPS_FF}}>{d.total} resp.</text>;
-      })}
-    </svg>
-    {/* Legenda */}
-    <div style={{display:"flex",gap:14,marginTop:6,fontSize:11,color:"#64748b",fontFamily:_NPS_FF,flexWrap:"wrap"}}>
-      <span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:14,height:3,background:"#9F43F6",borderRadius:2,display:"inline-block"}}/>ENPS por mês</span>
-      <span style={{color:"#94a3b8"}}>· últimos {data.length} ciclo{data.length===1?"":"s"}</span>
     </div>
   </div>;
 }
+
 
 /* ─── Drawer: histórico de uma pessoa específica ─── */
 function _ENPSDrawer({user, rows, onClose}){
