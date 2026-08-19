@@ -17054,7 +17054,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"10px 8px 8px",
-                background:isDropTarget?"#f5f3ff":(isToday?C.ag:hasTasks?C.bl+"06":"transparent"),
+                background:isDropTarget?"#f5f3ff":(isToday?"linear-gradient(180deg,#faf5ff,#ffffff 55%)":hasTasks?C.bl+"06":"transparent"),
+                boxShadow:isToday?"inset 3px 0 0 #7c3aed":"none",
                 outline:isDropTarget?"2px dashed #7c3aed":"none",
                 outlineOffset:-2,
                 transition:"background .2s, outline .15s",
@@ -17065,19 +17066,28 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 position:"relative",
               }}>
                 {day&&(<>
-                  {/* Número do dia */}
-                  <div style={{
-                    color:isToday?"#fff":C.ts,
-                    fontWeight:isToday?900:500,
-                    fontSize:13,
-                    marginBottom:5,
-                    width:isToday?24:undefined,
-                    height:isToday?24:undefined,
-                    background:isToday?C.a:undefined,
-                    borderRadius:isToday?"50%":undefined,
-                    display:"flex",alignItems:"center",
-                    justifyContent:isToday?"center":undefined,
-                  }}>{day.getDate()}</div>
+                  {/* Número do dia — hoje ganha um selo arredondado (squircle) roxo
+                      com sombra e a palavra HOJE. O círculo antigo se perdia
+                      no meio dos cards coloridos. */}
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                    <div style={{
+                      color:isToday?"#fff":C.ts,
+                      fontWeight:isToday?900:600,
+                      fontSize:isToday?14:13,
+                      lineHeight:1,
+                      minWidth:isToday?30:undefined,
+                      height:isToday?30:undefined,
+                      padding:isToday?"0 8px":undefined,
+                      background:isToday?"linear-gradient(135deg,#a855f7,#7c3aed)":undefined,
+                      borderRadius:isToday?10:undefined,
+                      boxShadow:isToday?"0 4px 12px rgba(124,58,237,.38), inset 0 1px 0 rgba(255,255,255,.25)":undefined,
+                      display:"flex",alignItems:"center",
+                      justifyContent:isToday?"center":undefined,
+                      fontFeatureSettings:"'tnum'",
+                      letterSpacing:isToday?-.3:0,
+                    }}>{day.getDate()}</div>
+                    {isToday&&<span style={{background:"#f3e8ff",color:"#7c3aed",fontSize:8.5,fontWeight:900,letterSpacing:.7,textTransform:"uppercase",padding:"3px 7px",borderRadius:6,lineHeight:1}}>Hoje</span>}
+                  </div>
 
                   {/* Eventos sinalizados pelo cliente (cards amarelos com selo DO CLIENTE) */}
                   {(function(){
@@ -48044,25 +48054,33 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
             borderRight:"1px solid #e2e8f0",
             borderBottom:"1px solid #e2e8f0",
             padding:"8px 6px 6px",
-            background:isToday?cl.color+"14":hasTasks?cl.color+"06":"transparent",
+            background:isToday?("linear-gradient(180deg,"+cl.color+"12,#ffffff 55%)"):hasTasks?cl.color+"06":"transparent",
+            boxShadow:isToday?("inset 3px 0 0 "+cl.color):"none",
             display:"flex",
             flexDirection:"column",
             overflow:"hidden",
           }}>
             {day&&<>
-              {/* Numero do dia */}
-              <div style={{
-                color:isToday?"#fff":"#64748b",
-                fontWeight:isToday?900:500,
-                fontSize:13,
-                marginBottom:5,
-                width:isToday?24:undefined,
-                height:isToday?24:undefined,
-                background:isToday?cl.color:undefined,
-                borderRadius:isToday?"50%":undefined,
-                display:"flex",alignItems:"center",
-                justifyContent:isToday?"center":undefined,
-              }}>{day.getDate()}</div>
+              {/* Numero do dia — hoje vira selo arredondado na cor do cliente */}
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <div style={{
+                  color:isToday?"#fff":"#64748b",
+                  fontWeight:isToday?900:600,
+                  fontSize:isToday?14:13,
+                  lineHeight:1,
+                  minWidth:isToday?30:undefined,
+                  height:isToday?30:undefined,
+                  padding:isToday?"0 8px":undefined,
+                  background:isToday?("linear-gradient(135deg,"+cl.color+"ee,"+cl.color+")"):undefined,
+                  borderRadius:isToday?10:undefined,
+                  boxShadow:isToday?("0 4px 12px "+cl.color+"55, inset 0 1px 0 rgba(255,255,255,.25)"):undefined,
+                  display:"flex",alignItems:"center",
+                  justifyContent:isToday?"center":undefined,
+                  fontFeatureSettings:"'tnum'",
+                  letterSpacing:isToday?-.3:0,
+                }}>{day.getDate()}</div>
+                {isToday&&<span style={{background:cl.color+"18",color:cl.color,fontSize:8.5,fontWeight:900,letterSpacing:.7,textTransform:"uppercase",padding:"3px 7px",borderRadius:6,lineHeight:1}}>Hoje</span>}
+              </div>
               {/* Eventos sinalizados pelo cliente — visual de CARD igual os de publicação */}
               {day&&eventsByDay(day).map(function(ev){
                 return <div key={ev.id} title={ev.title+(ev.description?"\n\n"+ev.description:"")}
