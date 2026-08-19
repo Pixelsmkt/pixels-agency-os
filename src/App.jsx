@@ -74258,7 +74258,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:14,alignItems:"start"}}>
 
         {/* ───── COLUNA PRINCIPAL ───── */}
-        <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+        <div style={{display:"flex",flexDirection:"column",gap:22,minWidth:0}}>
 
           {/* Sobre a empresa */}
           <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
@@ -74837,12 +74837,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Checklist com progresso */}
           <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg, #16a34a 0%, #15803d 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(22,163,74,.32)"}}>
+              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,"+PB_PURPLE+" 0%,"+PB_PURPLE_DK+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(124,58,237,.32)"}}>
                 <Ico n="checkCircle" size={17} color="#fff"/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
-                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>antes de entregar</div>
+                <div style={{color:"#4c1d95",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
+                <div style={{color:"#8b5cf6",fontSize:11,marginTop:1,fontWeight:600,opacity:.85}}>antes de entregar</div>
               </div>
             </div>
 
@@ -75234,17 +75234,20 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
 // ─── Bloco genérico (com id pra ancora + subtitle) ──────────
 function PlaybookBlock({id, title, subtitle, icon, color, children}){
-  return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:"18px 20px",fontFamily:PB_INTER,boxShadow:"0 2px 8px rgba(15,23,42,.03)",scrollMarginTop:80}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2}}>
-      <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg, "+color+" 0%, "+_pbDarken(color)+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+color+"40",flexShrink:0}}>
-        <Ico n={icon} size={20} color="#fff" strokeWidth={2.2}/>
+  // Cabecalho PADRONIZADO em roxo pra todas as secoes. O playbook e muito
+  // vertical: a faixa roxa + tarja lateral deixam obvio onde uma secao termina
+  // e a proxima comeca. O prop `color` fica so por compatibilidade.
+  return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:"linear-gradient(135deg,#f8f2ff 0%,#f1e6ff 100%)",borderBottom:"1px solid #e7d8fb",borderLeft:"4px solid "+PB_PURPLE_DK}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+PB_PURPLE+" 0%,"+PB_PURPLE_DK+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px rgba(124,58,237,.35)",flexShrink:0}}>
+        <Ico n={icon} size={18} color="#fff" strokeWidth={2.3}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:PB_INK,fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>{title}</div>
-        {subtitle && <div style={{color:PB_MUTE,fontSize:11.5,marginTop:2,fontWeight:500}}>{subtitle}</div>}
+        <div style={{color:"#4c1d95",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
+        {subtitle && <div style={{color:"#8b5cf6",fontSize:11.5,marginTop:2,fontWeight:600,opacity:.85}}>{subtitle}</div>}
       </div>
     </div>
-    {children}
+    <div style={{padding:"16px 20px 18px"}}>{children}</div>
   </div>;
 }
 
