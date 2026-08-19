@@ -939,10 +939,17 @@ if(typeof window!=="undefined") window.pxFinalFiles = pxFinalFiles;
    apagar a anterior. Resultado: aprovação e portal mostravam um "carrossel"
    com v1 + v2 do mesmo post (reportado 18/08/2026 — 2 vídeos do mesmo take).
 
-   Regra: arquivos subidos na mesma leva = mesma versão. Um intervalo maior
-   que 6h entre uploads marca uma versão nova (carrossel de verdade sobe
-   junto; versão nova vem dias depois, atrás de um pedido de ajuste).
-   Sem data em algum arquivo (cards legados) → não versiona, devolve tudo.
+   REGRA (v2): versão nova só existe se houve PEDIDO DE AJUSTE no meio.
+   Arquivos posteriores ao último ajuste = entrega atual; anteriores = antigos.
+   A 1ª versão (clustering por tempo) quebrava carrossel de verdade — as 6
+   lâminas subidas ao longo do dia viravam "versões" e a tira lateral sumia.
+
+   Salvaguardas — devolve tudo (não versiona) quando:
+     · não houve nenhum pedido de ajuste no card;
+     · algum arquivo não tem data (cards legados);
+     · nada foi subido depois do ajuste (designer ainda não reenviou);
+     · a leva nova tem MENOS arquivos que a antiga (reenvio parcial de
+       carrossel — as lâminas não reenviadas continuam valendo).
    A ORDEM original (drag&drop da aba Arquivos) é sempre preservada.
 ═══════════════════════════════════════════════════════════════ */
 function _pxFileTsSimples(f){
@@ -954,26 +961,32 @@ function _pxFileTsSimples(f){
   if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
   return 0;
 }
+// Timestamp do último pedido de ajuste (comentário de feedback/áudio/cliente ou anotação)
+function _pxUltimoAjusteTsSafe(task){
+  let mx=0;
+  ((task&&task.comments)||[]).forEach(function(c){
+    if(c && (c.type==="feedback"||c.type==="audio"||c.type==="client_request")){
+      const t=_pxFileTsSimples({addedAtIso:c.at, addedAt:c.atFmt||c.time});
+      if(t>mx) mx=t;
+    }
+  });
+  ((task&&task.files)||[]).forEach(function(f){
+    if(f && f.isAnnotation){ const t=_pxFileTsSimples(f); if(t>mx) mx=t; }
+  });
+  return mx;
+}
 function pxFinalFilesVersoes(task){
   const todos = pxFinalFiles(task);
   const vazio = { atuais:todos, anteriores:[], versoes:1 };
   if(todos.length<=1) return vazio;
+  const tsAjuste = _pxUltimoAjusteTsSafe(task);
+  if(!tsAjuste) return vazio;                                               // nunca voltou pra ajuste
   if(todos.some(function(f){ return !_pxFileTsSimples(f); })) return vazio;  // legado sem data
-  const GAP = 6*60*60*1000;
-  const ord = todos.slice().sort(function(a,b){ return _pxFileTsSimples(a)-_pxFileTsSimples(b); });
-  let corte = 0, versoes = 1;
-  for(let i=1;i<ord.length;i++){
-    if(_pxFileTsSimples(ord[i]) - _pxFileTsSimples(ord[i-1]) > GAP){ corte = i; versoes++; }
-  }
-  if(corte===0) return vazio;
-  const _chave = function(f){ return String(f.id||"")+"|"+String(f.url||""); };
-  const atuaisSet = {};
-  ord.slice(corte).forEach(function(f){ atuaisSet[_chave(f)] = true; });
-  return {
-    atuais:     todos.filter(function(f){ return atuaisSet[_chave(f)]; }),
-    anteriores: todos.filter(function(f){ return !atuaisSet[_chave(f)]; }),
-    versoes:    versoes,
-  };
+  const novos = todos.filter(function(f){ return _pxFileTsSimples(f) >  tsAjuste; });
+  const velhos= todos.filter(function(f){ return _pxFileTsSimples(f) <= tsAjuste; });
+  if(novos.length===0 || velhos.length===0) return vazio;                   // não há 2 versões
+  if(novos.length < velhos.length) return vazio;                            // reenvio parcial
+  return { atuais:novos, anteriores:velhos, versoes:2 };
 }
 // Atalho: só a entrega mais recente (aprovações e portal usam esta)
 function pxFinalFilesAtuais(task){ return pxFinalFilesVersoes(task).atuais; }
@@ -63616,7 +63629,10 @@ function _CalculadoraModular({isMob, persistClientId}){
           Montagem de escopo
         </div>
         <div style={{color:INK,fontWeight:800,fontSize:isMob?21:27,letterSpacing:-.8,lineHeight:1.15,marginTop:10}}>{persistClientId?"Monte o seu pacote":"Monte o pacote do cliente"}</div>
-        <div style={{color:MUTE,fontSize:13,marginTop:6,lineHeight:1.55,maxWidth:620}}>{persistClientId?"Passe etapa por etapa escolhendo o que faz sentido pro seu negócio — tudo é salvo automaticamente.":"Passe etapa por etapa. Cada módulo acende quando você seleciona e marca o check ao concluir."}</div>
+        <div style={{color:MUTE,fontSize:13,marginTop:6,lineHeight:1.55,maxWidth:620}}>{persistClientId
+            ? <><strong style={{color:INK,fontWeight:800}}>Na Pixels, seu plano não vem pronto. Ele é construído com você.</strong><br/>
+                Você escolhe os serviços que fazem sentido para o momento da sua empresa. Depois, em uma reunião rápida, analisamos a composição, esclarecemos dúvidas e definimos juntos a melhor estratégia para os seus objetivos.</>
+            : "Passe etapa por etapa. Cada módulo acende quando você seleciona e marca o check ao concluir."}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,paddingTop:4}}>
         <_ResetButton/>
