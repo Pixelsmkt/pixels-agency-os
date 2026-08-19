@@ -60724,19 +60724,29 @@ function _OnbScriptsSubstitute(txt, cl, startDate){
 
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
 function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl}){
+  // Box do titulo usa a cor do cliente selecionado no portal. Tinta (texto) troca
+  // pra escuro quando a cor do cliente e clara demais (Climaves, Arabuta...).
+  const _cor = (cl && cl.color) || "#7c3aed";
+  const _hx  = String(_cor).replace("#","");
+  const _r   = parseInt(_hx.substring(0,2),16)||0;
+  const _g   = parseInt(_hx.substring(2,4),16)||0;
+  const _b   = parseInt(_hx.substring(4,6),16)||0;
+  const _lum = (0.299*_r + 0.587*_g + 0.114*_b)/255;
+  const _ink = _lum>0.62 ? "#0f172a" : "#ffffff";
+  const _sub = _lum>0.62 ? "rgba(15,23,42,.55)" : "rgba(255,255,255,.72)";
   return <div style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
-    {/* TITULO — editavel com icone de lapis visivel do lado */}
+    {/* TITULO — box colorido com a cor do cliente; clique renomeia */}
     {_editing
       ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
           autoFocus onBlur={function(){setEditingId(null);}}
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
-          style={Object.assign({},_INP,{fontWeight:700,fontSize:13})}/>
+          style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
       : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
-          style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.15,cursor:"pointer",padding:"1px 0",display:"inline-flex",alignItems:"center",gap:7,alignSelf:"flex-start",borderRadius:6,transition:"background .12s"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-          <span>{s.titulo||"(sem título)"}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",boxShadow:"0 3px 10px "+_cor+"38",lineHeight:1.3}}
+          onMouseEnter={function(e){e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
+          onMouseLeave={function(e){e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
+          <span style={{flex:1,minWidth:0}}>{s.titulo||"(sem título)"}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
