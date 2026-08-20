@@ -13853,99 +13853,39 @@ function _projectDuration(s){
     })()}
   </div>;
 }
-/* ─── Seletor de troca rapida de cliente (header do detalhe) ───────────
-   Reusa CLIENTS e ClientLogo. Fecha no clique fora e no ESC.           */
+/* ─── Troca rapida de cliente (header do detalhe) ──────────────────────
+   Fila SEMPRE ABERTA de chips simetricos — 1 clique troca o cliente sem
+   voltar pra lista. O atual ganha a borda na cor dele.                  */
 function _TrocarClienteSeletor({cl, onTrocar, isMob}){
-  const [aberto,setAberto]=useState(false);
-  const [busca,setBusca]=useState("");
-  const _ref=useRef(null);
-
-  useEffect(function(){
-    if(!aberto) return;
-    function _fora(e){ if(_ref.current && !_ref.current.contains(e.target)) setAberto(false); }
-    function _esc(e){ if(e.key==="Escape") setAberto(false); }
-    document.addEventListener("mousedown",_fora);
-    document.addEventListener("keydown",_esc);
-    return function(){
-      document.removeEventListener("mousedown",_fora);
-      document.removeEventListener("keydown",_esc);
-    };
-  },[aberto]);
-
   const _todos=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){
     return c && c.id!=="pixels" && String(c.name||"").trim();
   });
-  const _q=String(busca||"").toLowerCase().trim();
-  const _lista=_todos.filter(function(c){
-    return !_q || String(c.name||"").toLowerCase().indexOf(_q)>=0 || String(c.sector||"").toLowerCase().indexOf(_q)>=0;
-  });
+  if(_todos.length<2) return null;
+  const _S = isMob ? 40 : 46;   // lado do chip — todos iguais, simetria garantida
 
-  return <div ref={_ref} style={{position:"relative",flexShrink:0,width:isMob?"100%":"auto"}}>
-    <button type="button" onClick={function(){ setAberto(!aberto); setBusca(""); }}
-      title="Trocar de cliente"
-      style={{background:"#fff",border:"1px solid "+(aberto?cl.color:"#e2e8f0"),borderRadius:10,
-        padding:"8px 12px",color:"#475569",fontSize:12,fontWeight:700,cursor:"pointer",
-        display:"inline-flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"all .15s",
-        width:isMob?"100%":"auto",justifyContent:isMob?"space-between":"flex-start",
-        boxShadow:aberto?("0 0 0 3px "+cl.color+"1f"):"none"}}
-      onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.borderColor=cl.color+"77"; }}
-      onMouseLeave={function(e){ if(!aberto) e.currentTarget.style.borderColor="#e2e8f0"; }}>
-      <span style={{display:"inline-flex",alignItems:"center",gap:7,minWidth:0}}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={cl.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-          <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
-        </svg>
-        Trocar cliente
-      </span>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-        style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
-    </button>
-
-    {aberto && <div style={{position:"absolute",top:"calc(100% + 6px)",right:isMob?"auto":0,left:isMob?0:"auto",
-      width:isMob?"100%":290,background:"#fff",border:"1px solid #e2e8f0",borderRadius:13,
-      boxShadow:"0 16px 40px rgba(15,23,42,.16)",zIndex:60,overflow:"hidden",fontFamily:"inherit"}}>
-
-      <div style={{padding:"9px 10px",borderBottom:"1px solid #f1f5f9"}}>
-        <div style={{position:"relative",display:"flex",alignItems:"center"}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:10,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input autoFocus value={busca} onChange={function(e){setBusca(e.target.value);}}
-            placeholder="Buscar cliente..."
-            style={{width:"100%",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,
-              padding:"7px 11px 7px 30px",fontSize:12,fontWeight:600,color:"#0f172a",outline:"none",
-              fontFamily:"inherit",boxSizing:"border-box"}}/>
-        </div>
-      </div>
-
-      <div style={{maxHeight:300,overflowY:"auto",padding:6}}>
-        {_lista.length===0
-          ? <div style={{padding:"18px 12px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Nenhum cliente encontrado.</div>
-          : _lista.map(function(c){
-              const _atual=c.id===cl.id;
-              return <button key={c.id} type="button"
-                onClick={function(){ setAberto(false); if(!_atual) onTrocar(c); }}
-                style={{width:"100%",background:_atual?(c.color+"12"):"transparent",border:"none",
-                  borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:10,
-                  cursor:_atual?"default":"pointer",fontFamily:"inherit",textAlign:"left",transition:"background .12s"}}
-                onMouseEnter={function(e){ if(!_atual) e.currentTarget.style.background="#f8fafc"; }}
-                onMouseLeave={function(e){ e.currentTarget.style.background=_atual?(c.color+"12"):"transparent"; }}>
-                <div style={{width:30,height:30,borderRadius:8,background:"#fff",border:"1px solid #eef0f3",
-                  display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:3,flexShrink:0}}>
-                  {typeof ClientLogo==="function"
-                    ? <ClientLogo clientId={c.id} size="sm"/>
-                    : <span style={{color:c.color,fontWeight:900,fontSize:10}}>{c.abbr}</span>}
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:_atual?c.color:"#0f172a",fontWeight:_atual?800:700,fontSize:12.5,
-                    letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
-                  {c.sector && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1,
-                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.sector}</div>}
-                </div>
-                {_atual && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
-              </button>;
-            })}
-      </div>
-    </div>}
+  return <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0,flexWrap:"wrap",
+    width:isMob?"100%":"auto",justifyContent:isMob?"flex-start":"flex-end"}}>
+    {_todos.map(function(c){
+      const _atual=c.id===cl.id;
+      const _cor=c.color||"#7c3aed";
+      return <button key={c.id} type="button" title={c.name}
+        onClick={function(){ if(!_atual) onTrocar(c); }}
+        style={{width:_S,height:_S,borderRadius:12,padding:5,boxSizing:"border-box",
+          background:"#fff",
+          border:_atual?("2px solid "+_cor):"1px solid #e2e8f0",
+          boxShadow:_atual?("0 4px 12px "+_cor+"33"):"0 1px 2px rgba(15,23,42,.04)",
+          cursor:_atual?"default":"pointer",display:"inline-flex",alignItems:"center",
+          justifyContent:"center",overflow:"hidden",flexShrink:0,
+          opacity:_atual?1:.82,transition:"all .15s",fontFamily:"inherit",position:"relative"}}
+        onMouseEnter={function(e){ if(!_atual){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=_cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 14px "+_cor+"26"; } }}
+        onMouseLeave={function(e){ if(!_atual){ e.currentTarget.style.opacity=".82"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
+        {typeof ClientLogo==="function"
+          ? <ClientLogo clientId={c.id} size="sm"/>
+          : <span style={{color:_cor,fontWeight:900,fontSize:11}}>{c.abbr}</span>}
+        {_atual && <span style={{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",
+          width:14,height:3,borderRadius:99,background:_cor}}/>}
+      </button>;
+    })}
   </div>;
 }
 
