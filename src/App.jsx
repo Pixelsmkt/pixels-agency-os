@@ -12870,6 +12870,200 @@ function PageClientes({isMob, tasks}){
 }
 
 /* ─── CAnalises — Visão Geral do cliente (KPIs + lista de próximas) ─── */
+/* ─── CScriptsTab — aba Scripts em Estrategia > Clientes ────────────────
+   Reusa _OnboardingScripts e _OngoingScripts do modulo de onboarding. Os dois
+   ja persistem em team_data (tipo 'onboarding_scripts' / 'ongoing_scripts'),
+   que e uma linha unica global — entao editar aqui e o mesmo que editar na aba
+   Onboarding: mesma fonte, mesma ordem, mesmo texto. A unica coisa que muda por
+   cliente e a substituicao dos placeholders ({{cliente}}, {{data_inicio}}...)
+   na hora de copiar.                                                       */
+function CScriptsTab({cl, isMob}){
+  const _cor=(cl&&cl.color)||"#7c3aed";
+  // Data de inicio do projeto — alimenta o placeholder {{data_inicio}}
+  const [startDate,setStartDate]=useState("");
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb) return;
+    let alive=true;
+    window._sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){
+        if(!alive) return;
+        const it=(r&&r.data&&r.data.items)||{};
+        setStartDate(it.__start_date__||"");
+      })
+      .catch(function(){});
+    return function(){ alive=false; };
+  },[cl&&cl.id]);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Aviso de que os scripts sao globais — evita achar que sao do cliente */}
+    <div style={{background:_cor+"0b",border:"1px solid "+_cor+"26",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <div style={{color:"#475569",fontSize:11.5,lineHeight:1.55,fontWeight:500}}>
+        Os scripts são <strong style={{color:"#0f172a"}}>compartilhados entre todos os clientes</strong> e ficam sincronizados com a aba Onboarding — editar aqui muda lá, e vice-versa.
+        Ao copiar, os campos <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{cliente}}"}</code> e <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{data_inicio}}"}</code> já saem preenchidos com os dados de <strong style={{color:"#0f172a"}}>{(cl&&cl.name)||"este cliente"}</strong>.
+      </div>
+    </div>
+
+    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent={_cor}/>}
+    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent={_cor}/>}
+  </div>;
+}
+
+/* ─── COnboardingResumo — espelho do onboarding no Dashboard da agencia ───
+   Le a MESMA fonte do checklist (client_onboarding.items) e do portal do
+   cliente, entao qualquer marcacao feita na aba Onboarding aparece aqui na
+   hora. Mostra progresso, fase atual, atrasados e proximos passos.        */
+function COnboardingResumo({cl, isMob, onGoTab}){
+  const [items,setItems]=useState(null);
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb){ setItems({}); return; }
+    let alive=true;
+    window._sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){ if(alive) setItems((r&&r.data&&r.data.items)||{}); })
+      .catch(function(){ if(alive) setItems({}); });
+    return function(){ alive=false; };
+  },[cl&&cl.id]);
+
+  const _cor=(cl&&cl.color)||"#7c3aed";
+  const _it=items||{};
+  const _blocos=(typeof ONBOARDING_BLOCKS!=="undefined")?ONBOARDING_BLOCKS:[];
+  const _hoje=(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
+
+  // Onboarding so conta como "preenchido" se tem data de inicio ou alguma marcacao
+  const _preenchido=(function(){
+    if(_it.__start_date__) return true;
+    return Object.keys(_it).some(function(k){
+      if(k.indexOf("__")===0) return false;
+      const x=_it[k]; return x && (x.done || x.due);
+    });
+  })();
+
+  // Percorre o preset contando feitos/total por bloco e juntando atrasados
+  let _tot=0,_ok=0;
+  const _porBloco=[];
+  const _atrasados=[];
+  const _proximos=[];
+  _blocos.forEach(function(b){
+    let bt=0,bo=0;
+    const _conta=function(x){
+      bt++; _tot++;
+      const _r=_it[x.id]||{};
+      if(_r.done){ bo++; _ok++; }
+      else {
+        if(_r.due && _r.due < _hoje) _atrasados.push({label:x.label, due:_r.due, bloco:b.title});
+        else if(_proximos.length<4) _proximos.push({label:x.label, due:_r.due||"", bloco:b.title});
+      }
+    };
+    (b.items||[]).forEach(function(x){ _conta(x); if(x.sub) x.sub.forEach(_conta); });
+    _porBloco.push({id:b.id, title:b.title, subtitle:b.subtitle, feitos:bo, total:bt});
+  });
+  const _pct=_tot>0?Math.round(_ok/_tot*100):0;
+  // Fase atual = primeiro bloco que ainda nao fechou
+  const _fase=_porBloco.find(function(b){ return b.feitos < b.total; }) || _porBloco[_porBloco.length-1] || null;
+  const _fim=_tot>0 && _ok===_tot;
+  const _fmtBR=function(iso){ if(!iso) return ""; const p=String(iso).split("-"); return p.length===3?(p[2]+"/"+p[1]):""; };
+
+  if(items===null) return null;
+
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"18px 18px":"20px 24px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:15}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{width:36,height:36,borderRadius:10,background:_cor+"15",border:"1px solid "+_cor+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n="checkCircle" size={17} color={_cor}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>
+          {_preenchido ? "Sincronizado com a aba Onboarding e com o portal do cliente" : "Ainda não iniciado"}
+        </div>
+      </div>
+      {onGoTab && <button type="button" onClick={function(){onGoTab("onboarding");}}
+        style={{background:"#fff",border:"1px solid "+_cor+"44",borderRadius:9,padding:"7px 13px",color:_cor,fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background=_cor+"10";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+        Abrir checklist
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>}
+    </div>
+
+    {!_preenchido
+      ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:12,padding:"22px 18px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>
+          Defina a data de início na aba <strong style={{color:"#475569"}}>Onboarding</strong> — o progresso e a linha do tempo aparecem aqui automaticamente.
+        </div>
+      : <>
+          {/* Progresso geral */}
+          <div style={{display:"flex",alignItems:"center",gap:13,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:180}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:7}}>
+                <span style={{color:_fim?"#16a34a":_cor,fontSize:26,fontWeight:800,letterSpacing:-.8,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_pct}%</span>
+                <span style={{color:"#64748b",fontSize:12,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_ok} de {_tot} etapas</span>
+                {_fim && <span style={{background:"#dcfce7",color:"#15803d",fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4}}>Concluído</span>}
+              </div>
+              <div style={{background:"#f1f5f9",borderRadius:99,height:8,overflow:"hidden"}}>
+                <div style={{width:_pct+"%",height:"100%",background:_fim?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_cor+","+_cor+"aa)",borderRadius:99,transition:"width .35s ease"}}/>
+              </div>
+            </div>
+            {_fase && !_fim && <div style={{background:_cor+"0e",border:"1px solid "+_cor+"2e",borderRadius:11,padding:"9px 14px",minWidth:150}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Fase atual</div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,marginTop:2}}>{_fase.title}</div>
+              <div style={{color:"#64748b",fontSize:11,fontWeight:600,marginTop:1,fontFeatureSettings:"'tnum'"}}>{_fase.feitos}/{_fase.total} · {_fase.subtitle||""}</div>
+            </div>}
+          </div>
+
+          {/* Trilha de blocos — barrinhas por dia */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {_porBloco.map(function(b){
+              const _p=b.total>0?Math.round(b.feitos/b.total*100):0;
+              const _full=b.total>0&&b.feitos===b.total;
+              return <div key={b.id} title={b.title+" — "+b.feitos+"/"+b.total}
+                style={{flex:"1 1 62px",minWidth:62,background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:9,padding:"7px 8px"}}>
+                <div style={{color:"#475569",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.title}</div>
+                <div style={{background:"#e2e8f0",borderRadius:99,height:4,overflow:"hidden",margin:"5px 0 3px"}}>
+                  <div style={{width:_p+"%",height:"100%",background:_full?"#16a34a":_cor,borderRadius:99}}/>
+                </div>
+                <div style={{color:_full?"#16a34a":"#94a3b8",fontSize:9,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{b.feitos}/{b.total}</div>
+              </div>;
+            })}
+          </div>
+
+          {/* Atrasados + proximos */}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:11}}>
+            <div style={{background:_atrasados.length?"#fef2f2":"#f8fafc",border:"1px solid "+(_atrasados.length?"#fecaca":"#eef0f3"),borderRadius:11,padding:"11px 13px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:_atrasados.length?8:0}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_atrasados.length?"#dc2626":"#94a3b8"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                <span style={{color:_atrasados.length?"#dc2626":"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>
+                  {_atrasados.length?("Atrasados · "+_atrasados.length):"Nada atrasado"}
+                </span>
+              </div>
+              {_atrasados.slice(0,4).map(function(a,i){
+                return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:i?6:0}}>
+                  <span style={{background:"#dc2626",color:"#fff",fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:99,flexShrink:0,marginTop:1,fontFeatureSettings:"'tnum'"}}>{_fmtBR(a.due)}</span>
+                  <span style={{color:"#7f1d1d",fontSize:11.5,fontWeight:600,lineHeight:1.35,flex:1,minWidth:0}}>{a.label}</span>
+                </div>;
+              })}
+              {_atrasados.length>4 && <div style={{color:"#dc2626",fontSize:10.5,fontWeight:700,marginTop:7}}>+{_atrasados.length-4} outro(s)</div>}
+            </div>
+            <div style={{background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 13px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:_proximos.length?8:0}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                <span style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>
+                  {_proximos.length?"Próximos passos":"Tudo em dia"}
+                </span>
+              </div>
+              {_proximos.map(function(p,i){
+                return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7,marginTop:i?6:0}}>
+                  <span style={{width:5,height:5,borderRadius:"50%",background:_cor,flexShrink:0,marginTop:6}}/>
+                  <span style={{color:"#334155",fontSize:11.5,fontWeight:600,lineHeight:1.35,flex:1,minWidth:0}}>{p.label}</span>
+                  {p.due && <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{_fmtBR(p.due)}</span>}
+                </div>;
+              })}
+            </div>
+          </div>
+        </>
+    }
+  </div>;
+}
+
 /* ─── CPacoteCalculadora — pacote que o CLIENTE montou no portal ─────────
    "Monte seu pacote" (portal_calculadora) sincronizado pra Estratégia >
    Clientes: mesma linha que o portal lê. Aparece só quando o cliente já
@@ -12928,7 +13122,7 @@ function CPacoteCalculadora({cl, isMob}){
   </div>;
 }
 
-function CAnalises({cl,isMob,tasks}){
+function CAnalises({cl,isMob,tasks,onGoTab}){
   const TASKS = Array.isArray(tasks) ? tasks : [];
   const clTasks = TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt;});
 
@@ -13210,13 +13404,8 @@ function _projectDuration(s){
     if(mo===0) return y+" "+(y===1?"ano":"anos");
     return y+" "+(y===1?"ano":"anos")+" e "+mo+" "+(mo===1?"mês":"meses");
   }
-  const _hasSocial = !!(cl.social && ((cl.social.posts||0)>0 || (cl.social.followers||0)>0));
-  const _hasMeta   = !!(cl.meta && ((cl.meta.spend||0)>0 || (cl.meta.budget||0)>0));
-  const _hasGoogle = !!(cl.google && ((cl.google.spend||0)>0 || (cl.google.budget||0)>0));
-  const _pacotes = [];
-  if(_hasSocial) _pacotes.push({l:"Social Media",                 color:"#a855f7", ico:"sparkles", desc:"Conteúdo, gestão de Instagram e redes"});
-  if(_hasMeta)   _pacotes.push({l:"Gestão de mídia · Meta Ads",   color:"#1877F2", ico:"target",   desc:"Campanhas Facebook e Instagram"});
-  if(_hasGoogle) _pacotes.push({l:"Gestão de mídia · Google Ads", color:"#0d9488", ico:"target",   desc:"Search, Display, YouTube e Perf. Max"});
+  // Pacotes deixaram de ser inferidos de cl.social/meta/google: agora quem manda
+  // e o PortalJornadaProjeto (preset do Comercial ou "Monte seu pacote" do portal).
   const _sinceDate = _parseSince(cl.since);
   const _sinceLabel = _sinceDate
     ? _sinceDate.toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
@@ -13228,6 +13417,14 @@ function _projectDuration(s){
 
     {/* Pacote montado pelo cliente no portal (Monte seu pacote) — sincronizado */}
     <CPacoteCalculadora cl={cl} isMob={isMob}/>
+
+    {/* Espelho do onboarding — mesma fonte da aba Onboarding e do portal */}
+    <COnboardingResumo cl={cl} isMob={isMob} onGoTab={onGoTab}/>
+
+    {/* Pacote contratado + linha do tempo — MESMO componente do portal do cliente,
+        lendo client_onboarding / client_marcos / portal_calculadora. canEdit liga a
+        edicao do pacote, que so a equipe Pixels enxerga. */}
+    {typeof PortalJornadaProjeto==="function" && <PortalJornadaProjeto cl={cl} isMob={isMob} canEdit={true}/>}
 
     {/* ── INFORMAÇÕES DO PROJETO ─ card grande, moderno, sem dado financeiro ─── */}
     <div style={{background:"linear-gradient(180deg,"+((cl.color||"#7c3aed"))+"08 0%, #fff 65%)",border:"1px solid "+(cl.color||"#7c3aed")+"22",borderRadius:18,padding:isMob?"22px 22px":"28px 30px",boxShadow:"0 4px 18px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.03)",position:"relative",overflow:"hidden"}}>
@@ -13241,35 +13438,9 @@ function _projectDuration(s){
         </div>
         <div style={{minWidth:0,flex:1}}>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5,lineHeight:1.1}}>Informações do projeto</div>
-          <div style={{color:"#64748b",fontSize:13,marginTop:4,fontWeight:500}}>Pacotes contratados e dados gerais</div>
+          <div style={{color:"#64748b",fontSize:13,marginTop:4,fontWeight:500}}>Dados gerais do contrato</div>
         </div>
       </div>
-
-      {/* PACOTES — cards grandes, um ao lado do outro */}
-      <div style={{marginBottom:24}}>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:11}}>Pacotes contratados</div>
-        {_pacotes.length===0
-          ? <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic",padding:"18px 0"}}>Nenhum pacote identificado.</div>
-          : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:11}}>
-              {_pacotes.map(function(p,i){
-                return <div key={i} style={{background:"#fff",border:"1px solid "+p.color+"33",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,transition:"all .15s",boxShadow:"0 2px 8px "+p.color+"10"}}
-                  onMouseEnter={function(e){e.currentTarget.style.borderColor=p.color+"66";e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px "+p.color+"22";}}
-                  onMouseLeave={function(e){e.currentTarget.style.borderColor=p.color+"33";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+p.color+"10";}}>
-                  <div style={{width:38,height:38,borderRadius:10,background:p.color+"15",border:"1px solid "+p.color+"33",color:p.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <Ico n={p.ico} size={17} color={p.color}/>
-                  </div>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{color:p.color,fontSize:13.5,fontWeight:800,letterSpacing:-.1,lineHeight:1.2}}>{p.l}</div>
-                    <div style={{color:"#64748b",fontSize:11,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</div>
-                  </div>
-                </div>;
-              })}
-            </div>
-        }
-      </div>
-
-      {/* DIVISOR sutil */}
-      <div style={{height:1,background:"linear-gradient(90deg,transparent,#e2e8f0 20%,#e2e8f0 80%,transparent)",margin:"0 0 22px"}}></div>
 
       {/* Grid 3 dados gerais (sem mensalidade) — cards grandes */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
@@ -13678,6 +13849,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"producao",      label:"Produção",            ico:"target"},
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
+    {id:"scripts",       label:"Scripts",             ico:"fileText"},
     {id:"marcos",        label:"Marcos",              ico:"flame"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"metas",         label:"Metas",               ico:"target"},
@@ -13798,8 +13970,9 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTEÚDO */}
-    {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
+    {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks} onGoTab={setTab}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
+    {tab==="scripts"&&<CScriptsTab cl={cl} isMob={isMob}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
     {tab==="marcos"&&<CMarcos cl={cl} canEdit={canEditarBriefing}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
@@ -27490,22 +27663,23 @@ function FinCobrancaModal({c,onClose,onSave}){
 
 // Contratos por grupo econômico
 // Estado padrão dos contratos — usado como seed se não houver dados salvos.
-// IMPORTANTE: campos `pagDia` (dia do mês) e `respFin` (responsável financeiro nome) por contrato/unidade.
+// IMPORTANTE: campo `pagDia` (dia do vencimento) por contrato/unidade.
+// Campos de cobranca (envios[], contatoNome/Email/Whats) sao preenchidos pelo modal.
 const GF_CONTRATOS_DEFAULT = [
   {
     grupo:"Bioter", grupoEcon:true, cor:"#166534", clientId:"bioter",
     unidades:[
-      {nome:"Chapecó",            valor:3000, unitId:"chapeco",    pagDia:5,  respFin:""},
-      {nome:"Toledo",             valor:2000, unitId:"toledo",     pagDia:5,  respFin:""},
-      {nome:"Castro",             valor:2500, unitId:"castro",     pagDia:5,  respFin:""},
-      {nome:"Glória de Dourados", valor:500,  unitId:"gloria",     pagDia:5,  respFin:""},
-      {nome:"Uberlândia",         valor:500,  unitId:"uberlandia", pagDia:5,  respFin:""},
-      {nome:"Paraguay",           valor:0,    unitId:"paraguay",   pagDia:5,  respFin:""},
+      {nome:"Chapecó",            valor:3000, unitId:"chapeco",    pagDia:5},
+      {nome:"Toledo",             valor:2000, unitId:"toledo",     pagDia:5},
+      {nome:"Castro",             valor:2500, unitId:"castro",     pagDia:5},
+      {nome:"Glória de Dourados", valor:500,  unitId:"gloria",     pagDia:5},
+      {nome:"Uberlândia",         valor:500,  unitId:"uberlandia", pagDia:5},
+      {nome:"Paraguay",           valor:0,    unitId:"paraguay",   pagDia:5},
     ],
   },
-  {grupo:"Construschorr",        cor:"#dc2626", valor:4000, clientId:"construschorr", pagDia:10, respFin:""},
-  {grupo:"Arabutã Pré-Moldados", cor:"#d97706", valor:4500, clientId:"arabuta",       pagDia:10, respFin:""},
-  {grupo:"Climaves",             cor:"#0284c7", valor:2500, clientId:"climaves",      pagDia:10, respFin:""},
+  {grupo:"Construschorr",        cor:"#dc2626", valor:4000, clientId:"construschorr", pagDia:10},
+  {grupo:"Arabutã Pré-Moldados", cor:"#d97706", valor:4500, clientId:"arabuta",       pagDia:10},
+  {grupo:"Climaves",             cor:"#0284c7", valor:2500, clientId:"climaves",      pagDia:10},
 ];
 
 // Puxa TODO cliente ativo que ainda não está na lista de contratos.
@@ -27539,14 +27713,13 @@ function _gfMergeClientesAtivos(lista){
         valor: Number(cl.contract)||0,
         clientId: cl.id,
         pagDia: 10,
-        respFin: "",
         _auto: true,   // entrou sozinho: valor ainda precisa ser conferido
       });
     });
   }catch(_){}
   return arr;
 }
-// Carrega contratos do localStorage com merge dos campos novos (pagDia, respFin) sobre o seed.
+// Carrega contratos do localStorage com merge dos campos novos (pagDia, envios, contato) sobre o seed.
 function _gfLoadContratos(){
   try{
     const raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-contratos-ativos"):null;
@@ -27564,10 +27737,10 @@ function _gfSaveContratos(arr){
     (arr||[]).forEach(function(c){
       if(c.grupoEcon&&Array.isArray(c.unidades)){
         c.unidades.forEach(function(u){
-          if(c.clientId&&u.unitId)flat[c.clientId+"_"+u.unitId]={valor:u.valor||0,pagDia:u.pagDia||c.pagDia||5,respFin:u.respFin||c.respFin||""};
+          if(c.clientId&&u.unitId)flat[c.clientId+"_"+u.unitId]={valor:u.valor||0,pagDia:u.pagDia||c.pagDia||5};
         });
       } else if(c.clientId){
-        flat[c.clientId]={valor:c.valor||0,pagDia:c.pagDia||5,respFin:c.respFin||""};
+        flat[c.clientId]={valor:c.valor||0,pagDia:c.pagDia||5};
       }
     });
     if(typeof localStorage!=="undefined")localStorage.setItem("pixels-contratos-ativos-flat",JSON.stringify(flat));
@@ -27575,7 +27748,7 @@ function _gfSaveContratos(arr){
     try{
       if(typeof window!=="undefined"&&window._sb){
         window._sb.from("contratos_ativos").upsert(
-          (arr||[]).map(function(c){return {id:c.clientId||c.grupo,grupo:c.grupo,cor:c.cor,client_id:c.clientId||null,grupo_econ:!!c.grupoEcon,valor:c.valor||0,pag_dia:c.pagDia||5,resp_fin:c.respFin||"",unidades:Array.isArray(c.unidades)?c.unidades:null,updated_at:new Date().toISOString()};}),
+          (arr||[]).map(function(c){return {id:c.clientId||c.grupo,grupo:c.grupo,cor:c.cor,client_id:c.clientId||null,grupo_econ:!!c.grupoEcon,valor:c.valor||0,pag_dia:c.pagDia||5,unidades:Array.isArray(c.unidades)?c.unidades:null,updated_at:new Date().toISOString()};}),
           {onConflict:"id"}
         ).then(function(){}).catch(function(_){});
       }
@@ -28164,22 +28337,58 @@ function _DREEvolucaoChart({dreMonth, cores, isMob}){
 
 
 /* ═══ MODAL EDITAR CONTRATO — Gestao > Financeiro > Contratos ativos ═══
-   Fields: valor, pagDia, respFin (Vinicius/Gustavo), nfAsaas (bool),
-           metodoPag (PIX/Boleto/Cartao), dataInicio, observacoes. */
+   Fields: valor, pagDia, metodoPag (PIX/Boleto/Cartao), dataInicio,
+           envios[] (quando disparar cobranca + NFSe), contatoNome/Email/Whats,
+           observacoes.
+   Removidos 08/2026: respFin (responsavel financeiro) e nfAsaas (NF pelo Asaas). */
+
+// Quando enviar a cobranca e a NFSe. Multipla escolha — o financeiro pode
+// mandar lembrete antes e a nota no dia, por exemplo.
+const _GF_ENVIO_OPTS = [
+  {id:"venc",   label:"No dia do vencimento",        off:0},
+  {id:"5dias",  label:"5 dias antes do vencimento",  off:5},
+  {id:"10dias", label:"10 dias antes do vencimento", off:10},
+  {id:"dia1",   label:"1º dia do mês do vencimento", off:null},
+];
+
+// Mascara leve de telefone BR — (49) 99999-9999
+function _gfFmtWhats(v){
+  const n = String(v||"").replace(/\D/g,"").slice(0,11);
+  if(n.length<=2)  return n;
+  if(n.length<=6)  return "("+n.slice(0,2)+") "+n.slice(2);
+  if(n.length<=10) return "("+n.slice(0,2)+") "+n.slice(2,6)+"-"+n.slice(6);
+  return "("+n.slice(0,2)+") "+n.slice(2,7)+"-"+n.slice(7);
+}
+
 function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose}){
   const _c = editContrato;
   const _isUnit = _c.unitIdx !== null && _c.unitIdx !== undefined;
   const _initDraft = _c.draft || {};
   const [d, setD] = useState({
-    valor:      _initDraft.valor      || 0,
-    pagDia:     _initDraft.pagDia     || 10,
-    respFin:    _initDraft.respFin    || "",
-    nfAsaas:    _initDraft.nfAsaas    === undefined ? false : _initDraft.nfAsaas,
-    metodoPag:  _initDraft.metodoPag  || "PIX",
-    dataInicio: _initDraft.dataInicio || "",
-    observacoes:_initDraft.observacoes|| "",
+    valor:       _initDraft.valor       || 0,
+    pagDia:      _initDraft.pagDia      || 10,
+    metodoPag:   _initDraft.metodoPag   || "PIX",
+    dataInicio:  _initDraft.dataInicio  || "",
+    envios:      Array.isArray(_initDraft.envios) ? _initDraft.envios.slice() : [],
+    contatoNome: _initDraft.contatoNome || "",
+    contatoEmail:_initDraft.contatoEmail|| "",
+    contatoWhats:_initDraft.contatoWhats|| "",
+    observacoes: _initDraft.observacoes || "",
   });
   const set = function(k,v){ setD(function(p){return Object.assign({},p,{[k]:v});}); };
+  const _toggleEnvio = function(id){
+    setD(function(p){
+      const _cur = Array.isArray(p.envios)?p.envios:[];
+      const _next = _cur.indexOf(id)>=0 ? _cur.filter(function(x){return x!==id;}) : _cur.concat([id]);
+      return Object.assign({},p,{envios:_next});
+    });
+  };
+  // Mostra em que dia do mes cada opcao cai, a partir do dia do vencimento
+  const _diaDe = function(o){
+    if(o.off===null) return "dia 1";
+    const _r = (Number(d.pagDia)||10) - o.off;
+    return _r>=1 ? ("dia "+_r) : "mês anterior";
+  };
 
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
@@ -28199,110 +28408,178 @@ function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose
     onClose();
   }
 
-  const _RESP_OPTS = [
-    {id:"Vinicius", name:"Vinicius"},
-    {id:"Gustavo",  name:"Gustavo"},
+  const _MET_OPTS = [
+    {id:"PIX",    ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l4.5 4.5L12 11 7.5 6.5z"/><path d="M12 13l4.5 4.5L12 22l-4.5-4.5z"/><path d="M2 12l4.5-4.5L11 12l-4.5 4.5z"/><path d="M13 12l4.5-4.5L22 12l-4.5 4.5z"/></svg>},
+    {id:"Boleto", ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="4" x2="4" y2="20"/><line x1="8" y1="4" x2="8" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="16" y1="4" x2="16" y2="20"/><line x1="20" y1="4" x2="20" y2="20"/></svg>},
+    {id:"Cartão", ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>},
   ];
-  const _MET_OPTS = ["PIX","Boleto","Cartão"];
 
   const _title = _isUnit
     ? "Editar unidade — "+_c.grupo+" · "+(_initDraft.nome||"")
     : "Editar contrato — "+_c.grupo;
 
+  const _mob = _pxMob();
+  const _LBL = {color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6};
+  const _INP = {width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",fontFamily:"inherit",boxSizing:"border-box",transition:"all .12s"};
+  const _foco = function(e){ e.currentTarget.style.borderColor="#a855f7"; e.currentTarget.style.boxShadow="0 0 0 3px rgba(168,85,247,.13)"; };
+  const _blur = function(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.boxShadow="none"; };
+  // Cabecalho de secao — divisor + rotulo, mesmo padrao do resto do app
+  const _Sec = function(p){
+    return <div style={{display:"flex",alignItems:"center",gap:9,marginTop:p.first?0:6}}>
+      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:7,background:"#f5f3ff",color:"#7c3aed",flexShrink:0}}>{p.ico}</span>
+      <span style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.1,whiteSpace:"nowrap"}}>{p.label}</span>
+      <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+    </div>;
+  };
+
   return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
     style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
     <div onMouseDown={function(e){e.stopPropagation();}}
-      style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
-      <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>{_title}</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:3}}>Dados financeiros do contrato ativo.</div>
+      style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:600,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
+
+      {/* ── Header ── */}
+      <div style={{background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 52%,#7c3aed 100%)",padding:"18px 22px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-40,top:-60,width:180,height:180,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:12,position:"relative",minWidth:0}}>
+          <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis"}}>{_title}</div>
+            <div style={{fontSize:11.5,opacity:.78,marginTop:2,fontWeight:500}}>Valores, cobrança e contato financeiro</div>
+          </div>
         </div>
-        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
+        <button onClick={onClose} title="Fechar"
+          style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.2)",borderRadius:9,width:30,height:30,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative",transition:"background .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,.26)";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.14)";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
-      <div style={{padding:22,display:"flex",flexDirection:"column",gap:14}}>
 
-        {/* Valor + Dia de pagamento — linha */}
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
+      <div style={{padding:"20px 22px 22px",display:"flex",flexDirection:"column",gap:13}}>
+
+        {/* ══ CONTRATO ══ */}
+        <_Sec first label="Contrato" ico={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}/>
+
+        <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"1fr 1fr",gap:10}}>
           <div>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Valor mensal (R$)</div>
-            <input type="number" min="0" step="100" value={d.valor||0}
-              onChange={function(e){set("valor", Number(e.target.value)||0);}}
-              style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+            <div style={_LBL}>Valor mensal</div>
+            <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+              <span style={{position:"absolute",left:13,color:"#94a3b8",fontSize:13,fontWeight:700,pointerEvents:"none"}}>R$</span>
+              <input type="number" min="0" step="100" value={d.valor||0}
+                onChange={function(e){set("valor", Number(e.target.value)||0);}}
+                onFocus={_foco} onBlur={_blur}
+                style={Object.assign({},_INP,{paddingLeft:37,fontSize:15,fontWeight:800,fontFeatureSettings:"'tnum'"})}/>
+            </div>
           </div>
           <div>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Dia do pagamento</div>
-            <input type="number" min="1" max="31" value={d.pagDia||10}
-              onChange={function(e){set("pagDia", Math.max(1,Math.min(31, Number(e.target.value)||10)));}}
-              style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:14,fontWeight:600,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+            <div style={_LBL}>Dia do vencimento</div>
+            <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+              <input type="number" min="1" max="31" value={d.pagDia||10}
+                onChange={function(e){set("pagDia", Math.max(1,Math.min(31, Number(e.target.value)||10)));}}
+                onFocus={_foco} onBlur={_blur}
+                style={Object.assign({},_INP,{paddingRight:96,fontSize:15,fontWeight:800,fontFeatureSettings:"'tnum'"})}/>
+              <span style={{position:"absolute",right:13,color:"#94a3b8",fontSize:11.5,fontWeight:600,pointerEvents:"none"}}>de cada mês</span>
+            </div>
           </div>
         </div>
 
-        {/* Responsavel financeiro — chips clicaveis */}
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Responsável financeiro</div>
-          <div style={{display:"flex",gap:6}}>
-            {_RESP_OPTS.map(function(o){
-              const _sel = d.respFin===o.id;
-              return <button key={o.id} onClick={function(){set("respFin", _sel?"":o.id);}}
-                style={{flex:1,background:_sel?"#7c3aed":"#f8fafc",color:_sel?"#fff":"#475569",border:"1px solid "+(_sel?"#7c3aed":"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
-                {o.name}
-              </button>;
-            })}
+        <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"1fr 1fr",gap:10}}>
+          <div>
+            <div style={_LBL}>Método de pagamento</div>
+            <div style={{display:"flex",gap:5}}>
+              {_MET_OPTS.map(function(m){
+                const _sel = d.metodoPag===m.id;
+                return <button key={m.id} onClick={function(){set("metodoPag", m.id);}} type="button"
+                  style={{flex:1,background:_sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"#fff",color:_sel?"#fff":"#64748b",border:"1px solid "+(_sel?"#7c3aed":"#e2e8f0"),borderRadius:10,padding:"9px 8px",fontSize:11.5,fontWeight:_sel?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,boxShadow:_sel?"0 4px 12px rgba(124,58,237,.28)":"none"}}>
+                  {m.ico}{m.id}
+                </button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={_LBL}>Início do contrato</div>
+            <input type="date" value={d.dataInicio||""}
+              onChange={function(e){set("dataInicio", e.target.value);}}
+              onFocus={_foco} onBlur={_blur}
+              style={Object.assign({},_INP,{fontWeight:600})}/>
           </div>
         </div>
 
-        {/* NF automatizada Asaas — toggle grande */}
+        {/* ══ ENVIO DA COBRANCA E NFSe ══ */}
+        <_Sec label="Data de envio da cobrança e NFSe" ico={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>}/>
+        <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"1fr 1fr",gap:8}}>
+          {_GF_ENVIO_OPTS.map(function(o){
+            const _on = (d.envios||[]).indexOf(o.id)>=0;
+            return <button key={o.id} type="button" onClick={function(){_toggleEnvio(o.id);}}
+              style={{background:_on?"#f5f3ff":"#fff",border:"1px solid "+(_on?"#a855f7":"#e2e8f0"),borderRadius:11,padding:"11px 13px",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:10,textAlign:"left",transition:"all .12s",boxShadow:_on?"0 0 0 3px rgba(168,85,247,.10)":"none"}}
+              onMouseEnter={function(e){if(!_on)e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={function(e){if(!_on)e.currentTarget.style.borderColor="#e2e8f0";}}>
+              <span style={{width:18,height:18,borderRadius:6,border:"1.5px solid "+(_on?"#7c3aed":"#cbd5e1"),background:_on?"#7c3aed":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
+                {_on && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </span>
+              <span style={{flex:1,minWidth:0,color:_on?"#0f172a":"#475569",fontSize:12,fontWeight:_on?700:600,lineHeight:1.35}}>{o.label}</span>
+              <span style={{background:_on?"#ede9fe":"#f8fafc",color:_on?"#6d28d9":"#94a3b8",fontSize:9.5,fontWeight:800,padding:"3px 7px",borderRadius:99,flexShrink:0,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{_diaDe(o)}</span>
+            </button>;
+          })}
+        </div>
+
+        {/* ══ CONTATO FINANCEIRO ══ */}
+        <_Sec label="Contato financeiro" ico={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>}/>
         <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Nota fiscal automatizada pelo Asaas?</div>
-          <div style={{display:"flex",gap:6}}>
-            {[{v:true,lbl:"Sim, automática",bg:"#dcfce7",fg:"#166534",bd:"#86efac"},{v:false,lbl:"Não, manual",bg:"#fef3c7",fg:"#92400e",bd:"#fde68a"}].map(function(o){
-              const _sel = d.nfAsaas===o.v;
-              return <button key={String(o.v)} onClick={function(){set("nfAsaas", o.v);}}
-                style={{flex:1,background:_sel?o.bg:"#f8fafc",color:_sel?o.fg:"#475569",border:"1px solid "+(_sel?o.bd:"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:_sel?700:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
-                {o.lbl}
-              </button>;
-            })}
+          <div style={_LBL}>Nome do contato</div>
+          <input type="text" value={d.contatoNome||""} placeholder="Quem recebe a cobrança"
+            onChange={function(e){set("contatoNome", e.target.value);}}
+            onFocus={_foco} onBlur={_blur} style={_INP}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"1fr 1fr",gap:10}}>
+          <div>
+            <div style={_LBL}>E-mail</div>
+            <input type="email" value={d.contatoEmail||""} placeholder="financeiro@empresa.com.br"
+              onChange={function(e){set("contatoEmail", e.target.value);}}
+              onFocus={_foco} onBlur={_blur} style={Object.assign({},_INP,{fontWeight:500})}/>
+          </div>
+          <div>
+            <div style={_LBL}>WhatsApp</div>
+            <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+              <input type="tel" value={d.contatoWhats||""} placeholder="(49) 99999-9999"
+                onChange={function(e){set("contatoWhats", _gfFmtWhats(e.target.value));}}
+                onFocus={_foco} onBlur={_blur}
+                style={Object.assign({},_INP,{fontWeight:600,fontFeatureSettings:"'tnum'",paddingRight:String(d.contatoWhats||"").replace(/\D/g,"").length>=10?38:13})}/>
+              {String(d.contatoWhats||"").replace(/\D/g,"").length>=10 &&
+                <a href={"https://wa.me/55"+String(d.contatoWhats||"").replace(/\D/g,"")} target="_blank" rel="noreferrer" title="Abrir conversa no WhatsApp"
+                  style={{position:"absolute",right:9,display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:7,background:"#dcfce7",color:"#16a34a",textDecoration:"none",transition:"background .12s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#bbf7d0";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="#dcfce7";}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.47 14.38c-.3-.15-1.74-.86-2.01-.96-.27-.1-.47-.15-.66.15-.2.3-.76.96-.93 1.15-.17.2-.34.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.65-2.05-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.66-1.6-.9-2.18-.24-.57-.48-.5-.66-.5h-.56c-.2 0-.52.07-.79.37-.27.3-1.03 1.01-1.03 2.46s1.06 2.86 1.2 3.06c.15.2 2.08 3.18 5.04 4.46.7.3 1.25.48 1.68.62.7.22 1.35.19 1.86.12.57-.09 1.74-.71 1.99-1.4.25-.69.25-1.28.17-1.4-.07-.13-.27-.2-.57-.35zM12 2a10 10 0 00-8.6 15.07L2 22l5.07-1.33A10 10 0 1012 2z"/></svg>
+                </a>}
+            </div>
           </div>
         </div>
 
-        {/* Metodo de pagamento — chips */}
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Método de pagamento</div>
-          <div style={{display:"flex",gap:6}}>
-            {_MET_OPTS.map(function(m){
-              const _sel = d.metodoPag===m;
-              return <button key={m} onClick={function(){set("metodoPag", m);}}
-                style={{flex:1,background:_sel?"#1d4ed8":"#f8fafc",color:_sel?"#fff":"#475569",border:"1px solid "+(_sel?"#1d4ed8":"#e2e8f0"),borderRadius:9,padding:"9px 12px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
-                {m}
-              </button>;
-            })}
-          </div>
-        </div>
-
-        {/* Data de inicio */}
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Data de início do contrato</div>
-          <input type="date" value={d.dataInicio||""}
-            onChange={function(e){set("dataInicio", e.target.value);}}
-            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
-        </div>
-
-        {/* Observacoes */}
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Observações</div>
-          <textarea rows={3} value={d.observacoes||""}
-            onChange={function(e){set("observacoes", e.target.value);}}
-            placeholder="Notas internas: renegociar em Nov, tem desconto de fidelidade, etc."
-            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical",minHeight:70,lineHeight:1.5}}/>
-        </div>
+        {/* ══ OBSERVACOES ══ */}
+        <_Sec label="Observações" ico={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>}/>
+        <textarea rows={3} value={d.observacoes||""}
+          onChange={function(e){set("observacoes", e.target.value);}}
+          onFocus={_foco} onBlur={_blur}
+          placeholder="Notas internas: renegociar em Nov, tem desconto de fidelidade, etc."
+          style={Object.assign({},_INP,{fontSize:12.5,fontWeight:500,resize:"vertical",minHeight:72,lineHeight:1.55})}/>
 
       </div>
+
       <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
-        <button onClick={onClose}
-          style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={_save}
-          style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar contrato</button>
+        <button onClick={onClose} type="button"
+          style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>Cancelar</button>
+        <button onClick={_save} type="button"
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 16px rgba(124,58,237,.32)",display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Salvar contrato
+        </button>
       </div>
     </div>
   </div>;
@@ -28841,7 +29118,6 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
                       <div style={{width:6,height:6,borderRadius:"50%",background:u.valor>0?c.cor:"#cbd5e1",flexShrink:0}}/>
                       <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.nome}</span>
                       {u.pagDia&&u.valor>0&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>· dia {u.pagDia}</span>}
-                      {u.respFin&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>· {u.respFin}</span>}
                       {u.valor===0&&<span style={{background:"#f1f5f9",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>—</span>}
                     </div>
                     <div style={{color:u.valor>0?"#0f172a":"#94a3b8",fontWeight:700,fontSize:12,fontFeatureSettings:"'tnum'"}}>{u.valor>0?_brl(u.valor):"—"}</div>
@@ -28879,11 +29155,16 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 dia {c.pagDia}</span>}
               {c.metodoPag&&<span style={{background:"#eff6ff",color:"#1d4ed8",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{c.metodoPag}</span>}
-              {c.nfAsaas===true&&<span style={{background:"#dcfce7",color:"#166534",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4}}>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                NF Asaas</span>}
-              {c.nfAsaas===false&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>NF manual</span>}
-              {c.respFin&&<span style={{background:"#faf5ff",color:"#7c3aed",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{c.respFin}</span>}
+              {/* Quantos avisos de cobranca/NFSe estao programados */}
+              {Array.isArray(c.envios)&&c.envios.length>0&&<span title={"Envio da cobranca e NFSe: "+c.envios.length+" data(s) programada(s)"}
+                style={{background:"#f5f3ff",color:"#7c3aed",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                {c.envios.length} envio{c.envios.length>1?"s":""}</span>}
+              {/* Contato financeiro cadastrado */}
+              {(c.contatoNome||c.contatoWhats||c.contatoEmail)&&<span title={[c.contatoNome,c.contatoWhats,c.contatoEmail].filter(Boolean).join(" · ")}
+                style={{background:"#f0fdf4",color:"#15803d",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:4,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                {c.contatoNome||"contato"}</span>}
             </div>
           </div>;
         })}
@@ -59972,15 +60253,13 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_portal_acesso", label:"Criação e envio do acesso ao cliente"},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
-        {id:"d1_brief_gpt", label:"Upload do brief no agente do GPT"},
+        {id:"d1_brief_gpt", label:"Criação do agente no GPT e upload do briefing"},
       ]},
       {id:"d1_reuniao_op", label:"Reunião com equipe operacional sobre o projeto"},
       {id:"d1_concorrencia", label:"Análise de concorrência"},
       {id:"d1_reuniao_onboarding", label:"Reunião de onboarding"},
       {id:"d1_apresentar_equipe", label:"Apresentação da equipe"},
       {id:"d1_data_kickoff", label:"Confirmar data da reunião de kickoff"},
-      {id:"d1_templates", label:"Produção dos templates"},
-      {id:"d1_templates_aprovar", label:"Aprovação dos templates"},
       {id:"d1_gpt_agente", label:"Criação do agente personalizado no ChatGPT com materiais"},
       {id:"d1_gpt_briefing_word", label:"Extrair respostas do Briefing no App Pixels, colar em Word e subir no agente do cliente no GPT"},
       {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
@@ -60001,6 +60280,10 @@ const ONBOARDING_BLOCKS = [
         {id:"d2_estudo_materiais", label:"Subir estudo do brief nos materiais do projeto do cliente no Aplicativo da Pixels"},
       ]},
       {id:"d2_dados_projetos", label:"Passar dados do briefing para os projetos do cliente no Aplicativo da Pixels"},
+      // Vieram do Dia 1 em 08/2026. IDs seguem com prefixo d1_ de proposito: trocar
+      // o id zeraria o progresso ja salvo dos clientes que rodaram o onboarding.
+      {id:"d1_templates", label:"Produção dos templates"},
+      {id:"d1_templates_aprovar", label:"Aprovação dos templates"},
       {id:"d2_wpp_status", label:"Envio de mensagem de atualização de status no WhatsApp"},
     ],
   },
@@ -60815,8 +61098,47 @@ function _OnbScriptsSubstitute(txt, cl, startDate){
   return out;
 }
 
+/* Arrastar-e-soltar pra reordenar os scripts. Compartilhado pelos dois blocos
+   (_OnboardingScripts e _OngoingScripts) — a ordem persiste junto com o resto. */
+function _useScriptDrag(scripts, _persist){
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const _mover = function(from, to){
+    if(from===null || to===null || from===to) return;
+    const arr = (scripts||[]).slice();
+    if(from<0 || from>=arr.length || to<0 || to>=arr.length) return;
+    const item = arr.splice(from,1)[0];
+    arr.splice(to, 0, item);
+    _persist(arr);
+  };
+  return {
+    dragIdx: dragIdx,
+    overIdx: overIdx,
+    start: function(i){ return function(e){
+      setDragIdx(i);
+      try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", String(i)); }catch(_){}
+    };},
+    over: function(i){ return function(e){
+      e.preventDefault();
+      try{ e.dataTransfer.dropEffect="move"; }catch(_){}
+      setOverIdx(function(p){ return p===i ? p : i; });
+    };},
+    drop: function(i){ return function(e){
+      e.preventDefault(); e.stopPropagation();
+      _mover(dragIdx, i);
+      setDragIdx(null); setOverIdx(null);
+    };},
+    end: function(){ setDragIdx(null); setOverIdx(null); },
+  };
+}
+
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
-function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl}){
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag}){
+  // So vira draggable enquanto o mouse esta segurando o handle — assim continua
+  // dando pra selecionar texto no textarea normalmente.
+  const [_pode, _setPode] = useState(false);
+  const _dragging = !!drag && drag.dragIdx===idx;
+  const _alvo     = !!drag && drag.overIdx===idx && drag.dragIdx!==null && drag.dragIdx!==idx;
   // Box do titulo usa a cor do cliente selecionado no portal. Tinta (texto) troca
   // pra escuro quando a cor do cliente e clara demais (Climaves, Arabuta...).
   const _cor = (cl && cl.color) || "#7c3aed";
@@ -60827,7 +61149,13 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _lum = (0.299*_r + 0.587*_g + 0.114*_b)/255;
   const _ink = _lum>0.62 ? "#0f172a" : "#ffffff";
   const _sub = _lum>0.62 ? "rgba(15,23,42,.55)" : "rgba(255,255,255,.72)";
-  return <div style={{background:"#fff",border:"1px solid "+(_editing?"#a78bfa":"#e2e8f0"),borderRadius:11,padding:"12px 14px",transition:"border .12s",display:"flex",flexDirection:"column",gap:8}}>
+  return <div
+    draggable={_pode}
+    onDragStart={drag?drag.start(idx):undefined}
+    onDragOver={drag?drag.over(idx):undefined}
+    onDrop={drag?drag.drop(idx):undefined}
+    onDragEnd={function(){ _setPode(false); if(drag) drag.end(); }}
+    style={{background:"#fff",border:"1px solid "+(_alvo?_cor:(_editing?"#a78bfa":"#e2e8f0")),borderRadius:11,padding:"12px 14px",transition:"border .12s, opacity .12s, transform .12s",display:"flex",flexDirection:"column",gap:8,opacity:_dragging?0.4:1,transform:_alvo?"scale(1.012)":"none",boxShadow:_alvo?("0 0 0 3px "+_cor+"33"):"none"}}>
     {/* TITULO — box colorido com a cor do cliente; clique renomeia */}
     {_editing
       ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
@@ -60838,6 +61166,20 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",boxShadow:"0 3px 10px "+_cor+"38",lineHeight:1.3}}
           onMouseEnter={function(e){e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
+          {/* Handle de arrasto — segura aqui pra reordenar */}
+          {drag && <span title="Arraste pra reordenar"
+            onMouseDown={function(e){ e.stopPropagation(); _setPode(true); }}
+            onMouseUp={function(e){ e.stopPropagation(); _setPode(false); }}
+            onClick={function(e){ e.stopPropagation(); }}
+            style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,cursor:"grab",color:_sub,flexShrink:0,marginLeft:-2,transition:"background .12s"}}
+            onMouseEnter={function(e){ e.currentTarget.style.background=_lum>0.62?"rgba(15,23,42,.10)":"rgba(255,255,255,.22)"; }}
+            onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{pointerEvents:"none"}}>
+              <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
+              <circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>
+              <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+            </svg>
+          </span>}
           <span style={{flex:1,minWidth:0}}>{s.titulo||"(sem título)"}</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -60957,6 +61299,7 @@ function _OnboardingScripts({cl, startDate, accent}){
     }
   };
 
+  const _drag = _useScriptDrag(scripts, _persist);
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
 
   return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6}}>
@@ -60986,11 +61329,11 @@ function _OnboardingScripts({cl, startDate, accent}){
           Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
         </div>
       : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
-          {scripts.map(function(s){
+          {scripts.map(function(s, _i){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_drag}/>;
           })}
         </div>
     }
@@ -61086,6 +61429,7 @@ function _OngoingScripts({cl, accent}){
     }
   };
 
+  const _drag = _useScriptDrag(scripts, _persist);
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
   const _accent = accent || "#7c3aed";
 
@@ -61114,11 +61458,11 @@ function _OngoingScripts({cl, accent}){
           Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
         </div>
       : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
-          {scripts.map(function(s){
+          {scripts.map(function(s, _i){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_drag}/>;
           })}
         </div>
     }
