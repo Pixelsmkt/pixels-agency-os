@@ -12573,6 +12573,7 @@ function PageClientes({isMob, tasks}){
   if(activeClient)
     return <ClienteDetail cl={activeClient} isMob={isMob} tasks={TASKS}
       onMindmap={()=>setMindmapActive(true)}
+      onTrocarCliente={function(_c){ if(_c && _c.id!==activeClient.id) setActiveClient(_c); }}
       onBack={()=>{setActiveClient(null);setActiveSection("dashboard");}}/>;
 
   // ── Helpers de data BR (DD/MM/YYYY) ──
@@ -13100,7 +13101,7 @@ function CPacoteCalculadora({cl, isMob}){
         </span>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Pacote montado pelo cliente</div>
-          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>via \u201cMonte seu pacote\u201d no portal{_quando?(" · "+_quando):""}{pl.enviadoEm?" · orçamento salvo pelo cliente":""}</div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>via “Monte seu pacote” no portal{_quando?(" · "+_quando):""}{pl.enviadoEm?" · orçamento salvo pelo cliente":""}</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
@@ -13122,6 +13123,17 @@ function CPacoteCalculadora({cl, isMob}){
 }
 
 function CAnalises({cl,isMob,tasks,onGoTab}){
+  // Briefing bruto — alimenta o auto-preenchimento dos Dados cadastrais.
+  const [_briefingRaw,setBriefingRaw]=useState(null);
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb){ setBriefingRaw({}); return; }
+    let alive=true;
+    window._sb.from("clients").select("briefing_data").eq("client_id",cl.id).maybeSingle()
+      .then(function(r){ if(alive) setBriefingRaw((r&&r.data&&r.data.briefing_data)||{}); })
+      .catch(function(){ if(alive) setBriefingRaw({}); });
+    return function(){ alive=false; };
+  },[cl&&cl.id]);
+
   const TASKS = Array.isArray(tasks) ? tasks : [];
   const clTasks = TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt;});
 
@@ -13276,8 +13288,49 @@ function CAnalises({cl,isMob,tasks,onGoTab}){
     return new Date(parseInt(mm[2],10),mi,1);
   }
   
+/* ─── Dados cadastrais vindos do BRIEFING ──────────────────────────────
+   Puxa so o que e cadastral (razao social, CNPJ, endereco, cidade, contato).
+   Numero de negocio — faturamento, margem, ticket, LTV — fica de fora de
+   proposito: isso e estrategia, nao cadastro.
+   Fonte: clients.briefing_data, secao "identidade" (+ "aprovacao" pros
+   contatos). No Bioter o briefing e por unidade, entao respeita o unitId. */
+function _cadDoBriefing(briefing, unitId){
+  if(!briefing || typeof briefing!=="object") return {};
+  // Briefing do Bioter vive dentro da unidade; os outros sao planos.
+  const _raiz = unitId ? (briefing[unitId] || briefing["grupo"] || {}) : briefing;
+  const ident = (_raiz && _raiz.identidade) || {};
+  const aprov = (_raiz && _raiz.aprovacao)  || {};
+
+  const out = {};
+  const _por = function(destino, valor){
+    const v = String(valor==null?"":valor).trim();
+    if(v) out[destino] = v;
+  };
+  _por("razao_social", ident.nome_empresarial);
+  _por("cnpj",         ident.cnpj);
+  _por("endereco",     ident.endereco);
+  _por("cidade_uf",    ident.cidade);
+  _por("contato",      ident.responsavel_legal);
+
+  // E-mail e telefone: o briefing guarda como texto livre ("nome, WhatsApp,
+  // e-mail"). Extrai o primeiro que casar — e so uma sugestao, da pra editar.
+  const _blob = [ident.responsavel_legal, aprov.contato_aprovacao, aprov.contato_financeiro].filter(Boolean).join(" \n ");
+  if(_blob){
+    const _mail = _blob.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
+    if(_mail) _por("email", _mail[0]);
+    const _tel = _blob.match(/\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/);
+    if(_tel) _por("telefone", _tel[0].trim());
+  }
+  // CEP pode estar dentro do endereco completo
+  if(ident.endereco){
+    const _cep = String(ident.endereco).match(/\d{5}-?\d{3}/);
+    if(_cep) _por("cep", _cep[0]);
+  }
+  return out;
+}
+
 /* ─── Helper: Card editável de Dados Cadastrais (usado em Visão Geral do Cliente) ─── */
-function _CCadastroCard({ent, fields, isMob, canEdit}){
+function _CCadastroCard({ent, fields, isMob, canEdit, doBriefing}){
   // Carrega data do localStorage (silenciosamente)
   const [data, setData] = useState(function(){
     try{const r=localStorage.getItem(ent.storageKey);return r?JSON.parse(r):{};}catch(_){return {};}
@@ -13338,7 +13391,33 @@ function _CCadastroCard({ent, fields, isMob, canEdit}){
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1200);
     }catch(_){}
   };
-  const empty = Object.keys(data||{}).length===0;
+  // Merge de leitura: o que foi digitado manda; onde estiver vazio, entra o
+  // briefing. Nada e gravado sozinho — o valor do briefing e so exibido,
+  // marcado como tal, ate alguem salvar de fato.
+  const _brf = doBriefing || {};
+  const _mesclado = Object.assign({}, _brf, (function(){
+    const _lim={}; Object.keys(data||{}).forEach(function(k){ if(String(data[k]||"").trim()) _lim[k]=data[k]; });
+    return _lim;
+  })());
+  const _veioDoBriefing = function(k){
+    return !String((data||{})[k]||"").trim() && !!String(_brf[k]||"").trim();
+  };
+  const _faltantesDoBriefing = Object.keys(_brf).filter(function(k){
+    return !String((draft||{})[k]||"").trim();
+  });
+  const _puxarBriefing = function(){
+    const _novo = Object.assign({}, draft||{});
+    let _n = 0;
+    Object.keys(_brf).forEach(function(k){
+      if(!String(_novo[k]||"").trim()){ _novo[k]=_brf[k]; _n++; }
+    });
+    setDraft(_novo);
+    if(typeof pixelsToast!=="undefined"){
+      if(_n) pixelsToast.success(_n===1?"1 campo preenchido pelo briefing.":(_n+" campos preenchidos pelo briefing."),2600);
+      else   pixelsToast.info?pixelsToast.info("Nada novo no briefing.",2200):null;
+    }
+  };
+  const empty = Object.keys(_mesclado||{}).length===0;
   return <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <div style={{width:8,height:32,borderRadius:4,background:ent.color,flexShrink:0}}/>
@@ -13355,7 +13434,23 @@ function _CCadastroCard({ent, fields, isMob, canEdit}){
       </div>}
     </div>
     {editing
-      ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
+      ? <>
+        {/* Puxar do briefing — so preenche o que esta vazio, nunca sobrescreve */}
+        {_faltantesDoBriefing.length>0 && <div style={{background:"#f5f3ff",border:"1px solid #e4d4fd",borderRadius:10,
+          padding:"10px 13px",display:"flex",alignItems:"center",gap:11,flexWrap:"wrap",marginBottom:11}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <div style={{flex:1,minWidth:180,color:"#5b21b6",fontSize:11.5,fontWeight:600,lineHeight:1.45}}>
+            O briefing tem <strong>{_faltantesDoBriefing.length}</strong> {_faltantesDoBriefing.length===1?"dado cadastral":"dados cadastrais"} que ainda não {_faltantesDoBriefing.length===1?"está":"estão"} aqui.
+          </div>
+          <button type="button" onClick={_puxarBriefing}
+            style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,
+              fontWeight:800,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",flexShrink:0,
+              display:"inline-flex",alignItems:"center",gap:6}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+            Puxar do briefing
+          </button>
+        </div>}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
           {fields.map(function(f){
             const _v = (draft||{})[f.key]||"";
             return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
@@ -13372,14 +13467,22 @@ function _CCadastroCard({ent, fields, isMob, canEdit}){
             </div>;
           })}
         </div>
+      </>
       : (empty
-          ? <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{canEdit?"Nenhum dado preenchido — clique em Editar pra cadastrar.":"Dados cadastrais não preenchidos."}</div>
+          ? <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{canEdit?"Nenhum dado preenchido — clique em Editar pra cadastrar. Se o briefing estiver preenchido, os dados aparecem aqui sozinhos.":"Dados cadastrais não preenchidos."}</div>
           : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-              {fields.filter(function(f){return (data||{})[f.key];}).map(function(f){
-                const _v = (data||{})[f.key];
+              {fields.filter(function(f){return (_mesclado||{})[f.key];}).map(function(f){
+                const _v = (_mesclado||{})[f.key];
+                const _dobrf = _veioDoBriefing(f.key);
                 return <div key={f.key} style={Object.assign({display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f1f5f9"},f.full?{gridColumn:isMob?"auto":"span 2"}:{})}>
                   <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",minWidth:120}}>{f.label}</span>
-                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,wordBreak:"break-word"}}>{_v}</span>
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,wordBreak:"break-word"}}>
+                    {_v}
+                    {_dobrf && <span title="Puxado do briefing — clique em Editar e salve pra fixar aqui"
+                      style={{background:"#f5f3ff",color:"#7c3aed",border:"1px solid #e4d4fd",borderRadius:99,
+                        padding:"1px 7px",fontSize:9,fontWeight:800,marginLeft:7,letterSpacing:.3,
+                        textTransform:"uppercase",whiteSpace:"nowrap"}}>briefing</span>}
+                  </span>
                   <button type="button" onClick={function(){_copy(_v);}} title="Copiar"
                     style={{background:"transparent",border:"none",color:"#7c3aed",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}
                     onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";}}
@@ -13504,7 +13607,11 @@ function _projectDuration(s){
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {_entries.map(function(ent){return <_CCadastroCard key={ent.storageKey} ent={ent} fields={FIELDS} isMob={isMob} canEdit={CURRENT_USER&&CURRENT_USER.level===1}/>;})}
+          {_entries.map(function(ent){
+            return <_CCadastroCard key={ent.storageKey} ent={ent} fields={FIELDS} isMob={isMob}
+              canEdit={CURRENT_USER&&CURRENT_USER.level===1}
+              doBriefing={_cadDoBriefing(_briefingRaw, ent.unitId)}/>;
+          })}
         </div>
       </div>;
     })()}
@@ -13746,7 +13853,103 @@ function _projectDuration(s){
     })()}
   </div>;
 }
-function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
+/* ─── Seletor de troca rapida de cliente (header do detalhe) ───────────
+   Reusa CLIENTS e ClientLogo. Fecha no clique fora e no ESC.           */
+function _TrocarClienteSeletor({cl, onTrocar, isMob}){
+  const [aberto,setAberto]=useState(false);
+  const [busca,setBusca]=useState("");
+  const _ref=useRef(null);
+
+  useEffect(function(){
+    if(!aberto) return;
+    function _fora(e){ if(_ref.current && !_ref.current.contains(e.target)) setAberto(false); }
+    function _esc(e){ if(e.key==="Escape") setAberto(false); }
+    document.addEventListener("mousedown",_fora);
+    document.addEventListener("keydown",_esc);
+    return function(){
+      document.removeEventListener("mousedown",_fora);
+      document.removeEventListener("keydown",_esc);
+    };
+  },[aberto]);
+
+  const _todos=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){
+    return c && c.id!=="pixels" && String(c.name||"").trim();
+  });
+  const _q=String(busca||"").toLowerCase().trim();
+  const _lista=_todos.filter(function(c){
+    return !_q || String(c.name||"").toLowerCase().indexOf(_q)>=0 || String(c.sector||"").toLowerCase().indexOf(_q)>=0;
+  });
+
+  return <div ref={_ref} style={{position:"relative",flexShrink:0,width:isMob?"100%":"auto"}}>
+    <button type="button" onClick={function(){ setAberto(!aberto); setBusca(""); }}
+      title="Trocar de cliente"
+      style={{background:"#fff",border:"1px solid "+(aberto?cl.color:"#e2e8f0"),borderRadius:10,
+        padding:"8px 12px",color:"#475569",fontSize:12,fontWeight:700,cursor:"pointer",
+        display:"inline-flex",alignItems:"center",gap:8,fontFamily:"inherit",transition:"all .15s",
+        width:isMob?"100%":"auto",justifyContent:isMob?"space-between":"flex-start",
+        boxShadow:aberto?("0 0 0 3px "+cl.color+"1f"):"none"}}
+      onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.borderColor=cl.color+"77"; }}
+      onMouseLeave={function(e){ if(!aberto) e.currentTarget.style.borderColor="#e2e8f0"; }}>
+      <span style={{display:"inline-flex",alignItems:"center",gap:7,minWidth:0}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={cl.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+          <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
+        </svg>
+        Trocar cliente
+      </span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+
+    {aberto && <div style={{position:"absolute",top:"calc(100% + 6px)",right:isMob?"auto":0,left:isMob?0:"auto",
+      width:isMob?"100%":290,background:"#fff",border:"1px solid #e2e8f0",borderRadius:13,
+      boxShadow:"0 16px 40px rgba(15,23,42,.16)",zIndex:60,overflow:"hidden",fontFamily:"inherit"}}>
+
+      <div style={{padding:"9px 10px",borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:10,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input autoFocus value={busca} onChange={function(e){setBusca(e.target.value);}}
+            placeholder="Buscar cliente..."
+            style={{width:"100%",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,
+              padding:"7px 11px 7px 30px",fontSize:12,fontWeight:600,color:"#0f172a",outline:"none",
+              fontFamily:"inherit",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+
+      <div style={{maxHeight:300,overflowY:"auto",padding:6}}>
+        {_lista.length===0
+          ? <div style={{padding:"18px 12px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Nenhum cliente encontrado.</div>
+          : _lista.map(function(c){
+              const _atual=c.id===cl.id;
+              return <button key={c.id} type="button"
+                onClick={function(){ setAberto(false); if(!_atual) onTrocar(c); }}
+                style={{width:"100%",background:_atual?(c.color+"12"):"transparent",border:"none",
+                  borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:10,
+                  cursor:_atual?"default":"pointer",fontFamily:"inherit",textAlign:"left",transition:"background .12s"}}
+                onMouseEnter={function(e){ if(!_atual) e.currentTarget.style.background="#f8fafc"; }}
+                onMouseLeave={function(e){ e.currentTarget.style.background=_atual?(c.color+"12"):"transparent"; }}>
+                <div style={{width:30,height:30,borderRadius:8,background:"#fff",border:"1px solid #eef0f3",
+                  display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:3,flexShrink:0}}>
+                  {typeof ClientLogo==="function"
+                    ? <ClientLogo clientId={c.id} size="sm"/>
+                    : <span style={{color:c.color,fontWeight:900,fontSize:10}}>{c.abbr}</span>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:_atual?c.color:"#0f172a",fontWeight:_atual?800:700,fontSize:12.5,
+                    letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                  {c.sector && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1,
+                    overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.sector}</div>}
+                </div>
+                {_atual && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>;
+            })}
+      </div>
+    </div>}
+  </div>;
+}
+
+function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
   let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
   let [tab,setTab]=useState("analises");
@@ -13943,6 +14146,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
           </div>
           <div style={{color:C.td,fontSize:12,marginTop:2}}>{cl.sector}</div>
         </div>
+        {/* Troca rapida de cliente — evita voltar pra lista so pra abrir outro */}
+        {typeof onTrocarCliente==="function" && <_TrocarClienteSeletor cl={cl} onTrocar={onTrocarCliente} isMob={isMob}/>}
       </div>
     </div>
 
@@ -29587,7 +29792,6 @@ const PERM_GROUPS={
   ],
   dem_internas:[
     {section:"Acesso"},
-    {key:"verDemandasInternas",   label:"Ver Demandas Internas",       desc:"Acesso ao submenu de demandas internas"},
     {key:"criarDemandaInterna",   label:"Criar Demanda Interna",        desc:"Pode abrir novos cards internos"},
     {key:"aprovarDemandaInterna", label:"Aprovar Demanda Interna",      desc:"Vê e aprova no menu Aprovações > Demanda Interna"},
     {key:"verTodosInternos",      label:"Ver Todos os Cards Internos",  desc:"Vê cards de todos — sem isso, vê só os seus"},
@@ -45380,7 +45584,6 @@ export default function AgencyOS(){
       case "meudash":              return p.verDashboard;
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
-      case "demandas_internas":    return p.verDemandasInternas||isSocio;
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
@@ -45494,7 +45697,6 @@ export default function AgencyOS(){
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
-      case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
@@ -48744,31 +48946,25 @@ function PortalSolicitar({tasks, selCl, cl}) {
     // NOTA: validação de cliente deve ser reforçada por RLS no Supabase.
     // Sem RLS, um cliente com acesso ao token pode inserir tasks em nome de outro.
     setEnviando(true);
-    const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
-    const now=new Date().toISOString();
-    const novoCard={
-      id,title:titulo.trim(),desc:descricao.trim(),
-      status:"interno_demanda",priority:prioridade,
-      client:selCl,origem:"portal",
-      assignees:[],checklist:[],timeline:[],
-      createdAt:now,colEnteredAt:now,
-      createdBy:"portal_"+selCl,
-      assignee:"",sector:"",tags:[],comments:[],files:[],
-      watchers:[],deletedAt:null,cover:null,ajustar:false,
-      isAlteracao:false,score:null,publishDate:"",publishTime:"09:00",
-      bioterUnit:"",deadlineTime:"",deadline:"",
-    };
+    // ── UNIFICACAO 08/2026 ── solicitacoes viram DEMANDAS do cliente
+    // (client_demandas), a mesma estrutura de Estrategia > Clientes > Demandas.
+    const _rootId=(selCl||"").indexOf("bioter_")===0?"bioter":selCl;
+    const _unid=(selCl||"").indexOf("bioter_")===0?selCl.slice("bioter_".length):"";
+    const _prioMap={baixa:"baixa",media:"normal",alta:"alta",urgente:"urgente"};
     if(window._sb){
-      await window._sb.from("tasks").insert({
-        id,title:novoCard.title,status:"interno_demanda",
-        description:novoCard.desc,priority:prioridade,
-        client:selCl,origem:"portal",
-        assignee:"",assignees:[],checklist:[],timeline:[],
-        created_by:"portal_"+selCl,created_at:now,
-        col_entered_at:now,tags:[],comments:[],files:[],
-        watchers:[],cover:null,ajustar:false,is_alteracao:false,
-        score:null,publish_date:null,publish_time:"09:00",
-        bioter_unit:"",deadline_time:"",deleted_at:null,
+      await window._sb.from("client_demandas").insert({
+        client_id:_rootId,
+        titulo:titulo.trim(),
+        categoria:"outros",
+        descricao:(descricao.trim()?descricao.trim()+"\n\n":"")+"— Solicitada pelo cliente no portal.",
+        status:"nao_iniciada",
+        prioridade:_prioMap[prioridade]||"normal",
+        responsavel:"",
+        data_inicio:new Date().toISOString().slice(0,10),
+        prazo:null,
+        unidade:_unid,
+        tarefas:[],
+        created_by:"portal_"+selCl,
       }).catch(err=>console.error("portal insert:",err));
     }
     const clientName=cl?.name||selCl;
@@ -48782,7 +48978,6 @@ function PortalSolicitar({tasks, selCl, cl}) {
         targetUsers:["vinicius","gustavo"],
       },...p]);
     }
-    setMinhasReqs(p=>[novoCard,...p]);
     setTitulo("");setDescricao("");setPrioridade("media");
     setEnviado(true);setEnviando(false);
     setTimeout(()=>setEnviado(false),4000);
@@ -48823,10 +49018,12 @@ function PortalSolicitar({tasks, selCl, cl}) {
           </button>
         </div>
       </div>
+      {/* Demandas do cliente — client_demandas, mesma fonte da agencia */}
+      {typeof _PortalDemandasProjeto==="function"&&<_PortalDemandasProjeto cl={cl} isMob={false}/>}
       {minhasReqs.length>0&&(
         <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
           <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1}}>
-            <span style={{color:C.tx,fontWeight:700,fontSize:13}}>Minhas Solicitações</span>
+            <span style={{color:C.tx,fontWeight:700,fontSize:13}}>Solicitações antigas</span>
             <span style={{background:cl.color+"20",color:cl.color,borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,marginLeft:8}}>{minhasReqs.length}</span>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:0}}>
@@ -49985,6 +50182,89 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
    Mostra ao cliente: data solicitação, data desejada (ref), sprint vinculada,
    previsão de entrega (auto-calculada) e status (no prazo / atrasado / etc).
 ─────────────────────────────────────────────────────────────────────────── */
+/* ─── Demandas do projeto no PORTAL ─────────────────────────────────────
+   Le client_demandas (a mesma estrutura de Estrategia > Clientes > Demandas)
+   e mostra pro cliente titulo, status, prazo e progresso das etapas.
+   Somente leitura — quem gerencia e a equipe.                            */
+function _PortalDemandasProjeto({cl, isMob}){
+  const [dems,setDems]=useState(null);
+  const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
+  const _unid=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?cl.id.slice("bioter_".length):"";
+
+  useEffect(function(){
+    if(!_rootId||typeof window==="undefined"||!window._sb){setDems([]);return;}
+    let alive=true;
+    const _load=function(){
+      window._sb.from("client_demandas").select("*").eq("client_id",_rootId)
+        .order("created_at",{ascending:false})
+        .then(function(r){ if(alive) setDems((r&&r.data)||[]); })
+        .catch(function(){ if(alive) setDems([]); });
+    };
+    _load();
+    let ch=null;
+    try{
+      ch=window._sb.channel("portal-dem-"+_rootId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_demandas",filter:"client_id=eq."+_rootId},function(){ if(alive) _load(); })
+        .subscribe();
+    }catch(_){}
+    return function(){ alive=false; try{ if(ch) window._sb.removeChannel(ch); }catch(_){} };
+  },[_rootId]);
+
+  const _ST={
+    nao_iniciada:{label:"Recebida",          cor:"#64748b", bg:"#f1f5f9"},
+    andamento:   {label:"Em andamento",      cor:"#2563eb", bg:"#eff6ff"},
+    aguardando:  {label:"Aguardando você",   cor:"#b45309", bg:"#fffbeb"},
+    revisao:     {label:"Em revisão",        cor:"#7c3aed", bg:"#f5f3ff"},
+    concluida:   {label:"Concluída",         cor:"#15803d", bg:"#f0fdf4"},
+    pausada:     {label:"Pausada",           cor:"#475569", bg:"#f8fafc"},
+  };
+  const _br=function(iso){ if(!iso)return ""; const p=String(iso).split("-"); return p.length===3?(p[2]+"/"+p[1]):""; };
+
+  const _vis=(dems||[]).filter(function(d){
+    if(_unid){ const u=d.unidade||""; if(u&&u!=="grupo"&&u!==_unid) return false; }
+    return true;
+  });
+  if(dems===null||_vis.length===0) return null;
+
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+    <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:11,background:"linear-gradient(180deg,#fafbfc,#fff)"}}>
+      <div style={{width:34,height:34,borderRadius:10,background:(cl.color||"#7c3aed")+"14",border:"1px solid "+(cl.color||"#7c3aed")+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cl.color||"#7c3aed"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Projetos e demandas maiores</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Entregas com várias etapas — acompanhe o progresso de cada uma</div>
+      </div>
+      <span style={{background:(cl.color||"#7c3aed")+"15",color:cl.color||"#7c3aed",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_vis.length}</span>
+    </div>
+    <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+      {_vis.map(function(d){
+        const st=_ST[d.status]||_ST.nao_iniciada;
+        const ts=Array.isArray(d.tarefas)?d.tarefas:[];
+        const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
+        const pct=ts.length>0?Math.round(ok/ts.length*100):0;
+        const _fim=d.status==="concluida";
+        return <div key={d.id} style={{border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?8:14,flexDirection:isMob?"column":"row"}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2,textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
+            {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
+          </div>
+          <div style={{minWidth:isMob?0:170}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
+              <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{ts.length>0?(ok+" de "+ts.length+" etapas"):"em preparação"}</span>
+              <span style={{color:pct>=100?"#16a34a":(cl.color||"#7c3aed"),fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+            </div>
+            <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",borderRadius:99,background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+(cl.color||"#7c3aed")+","+(cl.color||"#7c3aed")+"bb)",transition:"width .3s"}}/>
+            </div>
+          </div>
+          <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,alignSelf:isMob?"flex-start":"center"}}>{st.label}</span>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 function PortalTimeline({cl, clTasks, isMob}){
   const [cfg,setCfg]=useState(null);
 
@@ -50075,7 +50355,8 @@ function PortalTimeline({cl, clTasks, isMob}){
   };
 
   if(tarefas.length===0){
-    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"56px 36px",textAlign:"center"}}>
+    return <div style={{display:"flex",flexDirection:"column",gap:18}}>
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"56px 36px",textAlign:"center"}}>
       <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
         <Ico n="check" size={32} color="#16a34a"/>
       </div>
@@ -50083,6 +50364,8 @@ function PortalTimeline({cl, clTasks, isMob}){
       <div style={{color:"#64748b",fontSize:13,marginTop:6,maxWidth:420,margin:"6px auto 0",lineHeight:1.55}}>
         Quando você abrir uma nova demanda na aba <strong>Solicitar</strong>, ela aparecerá aqui com a previsão de entrega.
       </div>
+    </div>
+    <_PortalDemandasProjeto cl={cl} isMob={isMob}/>
     </div>;
   }
 
@@ -50093,6 +50376,9 @@ function PortalTimeline({cl, clTasks, isMob}){
       <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Linha do tempo de entregas</div>
       <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Suas demandas, agrupadas pela sprint em que foram vinculadas pela equipe Pixels.</div>
     </div>
+
+    {/* Projetos maiores — client_demandas, sincronizado com Estrategia > Clientes > Demandas */}
+    <_PortalDemandasProjeto cl={cl} isMob={isMob}/>
 
     {/* Grupos */}
     {grupos_ordenados.map(function(g){
@@ -50235,6 +50521,42 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     const status=tipoCfg.routesFluxo?"rascunhos":"interno_demanda";
     const assignee=tipoCfg.routesFluxo?"ellen":"";
     const contentType=tipoCfg.contentType||solTipo;
+
+    // ── UNIFICACAO 08/2026 ── Arte/video seguem pro fluxo de producao (tasks).
+    // O RESTO vira uma DEMANDA do cliente (client_demandas) — a mesma estrutura
+    // de Estrategia > Clientes > Demandas, com etapas e progresso. O mini-kanban
+    // de demandas internas do Meu Dashboard foi desligado.
+    if(!tipoCfg.routesFluxo){
+      if(typeof window!=="undefined"&&window._sb){
+        try{
+          const _rootId=(cl.id||"").indexOf("bioter_")===0?"bioter":cl.id;
+          const _unid=(cl.id||"").indexOf("bioter_")===0?cl.id.slice("bioter_".length):"";
+          const _catMap={trafego:"trafego", material:"grafico", operacional:"outros", outro:"outros"};
+          const _prioMap={baixa:"baixa", media:"normal", alta:"alta", urgente:"urgente"};
+          const r=await window._sb.from("client_demandas").insert({
+            client_id:_rootId,
+            titulo:solTitulo.trim(),
+            categoria:_catMap[solTipo]||"outros",
+            descricao:(solDescricao.trim()?solDescricao.trim()+"\n\n":"")+"— Solicitada pelo cliente no portal.",
+            status:"nao_iniciada",
+            prioridade:_prioMap[solPrioridade]||"normal",
+            responsavel:"",
+            data_inicio:new Date().toISOString().slice(0,10),
+            prazo:_calcDataDesejada(solPrioridade)||null,
+            unidade:_unid,
+            tarefas:[],
+            created_by:"portal_"+cl.id,
+          });
+          if(r&&r.error)throw r.error;
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! A equipe vai organizar as etapas e você acompanha o progresso por aqui.",4200);
+          setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");
+        }catch(e){
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
+        }
+      }
+      setSolEnviando(false);
+      return;
+    }
 
     if(typeof window!=="undefined"&&window._sb){
       try{
@@ -52795,7 +53117,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     if(_temCalc){
       const pl=calcPl.pl, tot=pl.totals||{};
       return {
-        origem:"Montado no \u201cMonte seu pacote\u201d",
+        origem:"Montado no “Monte seu pacote”",
         valor:Number(tot.monthlyRecurring)>0?_brl0(tot.monthlyRecurring):"",
         extraPontual:Number(tot.oneTimePrice)>0?_brl0(tot.oneTimePrice):"",
         entregas:_pjLinhasCalculadora(pl),
@@ -71508,8 +71830,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
     </div>}
 
-    {/* ══════════ DEMANDAS INTERNAS — bloco enxuto antes do Sprint (pra sócio triar antes de planejar) ══════════ */}
-    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
+    {/* Demandas internas SAIRAM daqui (08/2026) — unificadas em
+        Estrategia > Clientes > (cliente) > Demandas, tabela client_demandas.
+        Solicitacoes do portal que nao sao arte/video tambem caem la. */}
 
     {/* ══════════ SPRINT — navegação livre por semanas ══════════ */}
     {(function(){
