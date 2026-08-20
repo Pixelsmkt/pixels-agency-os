@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 30/30 | Nao editar diretamente
+// Modulos: 31/31 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -12898,7 +12898,7 @@ function CScriptsTab({cl, isMob}){
     <div style={{background:_cor+"0b",border:"1px solid "+_cor+"26",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
       <div style={{color:"#475569",fontSize:11.5,lineHeight:1.55,fontWeight:500}}>
-        Os scripts são <strong style={{color:"#0f172a"}}>compartilhados entre todos os clientes</strong> e ficam sincronizados com a aba Onboarding — editar aqui muda lá, e vice-versa.
+        Os scripts são <strong style={{color:"#0f172a"}}>compartilhados entre todos os clientes</strong> — editar um texto aqui muda pra todo mundo.
         Ao copiar, os campos <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{cliente}}"}</code> e <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{data_inicio}}"}</code> já saem preenchidos com os dados de <strong style={{color:"#0f172a"}}>{(cl&&cl.name)||"este cliente"}</strong>.
       </div>
     </div>
@@ -13849,7 +13849,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"scripts",       label:"Scripts",             ico:"fileText"},
-    {id:"marcos",        label:"Marcos",              ico:"flame"},
+    {id:"marcos",        label:"Demandas",            ico:"layers"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"metas",         label:"Metas",               ico:"target"},
     {id:"parcerias",     label:"Parcerias",           ico:"users"},
@@ -13973,7 +13973,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="scripts"&&<CScriptsTab cl={cl} isMob={isMob}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
-    {tab==="marcos"&&<CMarcos cl={cl} canEdit={canEditarBriefing}/>}
+    {tab==="marcos"&&<CDemandas cl={cl} canEdit={canEditarBriefing}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
     {tab==="producao"&&<CProducaoTab cl={cl} tasks={TASKS} isMob={isMob}/>}
@@ -61115,9 +61115,28 @@ function _OnbScriptsSubstitute(txt, cl, startDate){
 
 /* Arrastar-e-soltar pra reordenar os scripts. Compartilhado pelos dois blocos
    (_OnboardingScripts e _OngoingScripts) — a ordem persiste junto com o resto. */
-function _useScriptDrag(scripts, _persist){
+// Scripts sao material comercial da agencia: so os socios editam. O resto do
+// time abre, le e copia — mas nao cria, renomeia, reordena nem apaga.
+const _SCRIPTS_DONOS = ["gustavo","vinicius"];
+function _scriptsPodeEditar(){
+  try{
+    if(typeof CURRENT_USER==="undefined" || !CURRENT_USER) return false;
+    return _SCRIPTS_DONOS.indexOf(CURRENT_USER.id)>=0;
+  }catch(_){ return false; }
+}
+
+// Carona do arrasto ENTRE secoes. As duas listas sao componentes separados e
+// persistem em linhas diferentes do team_data, entao o card em voo precisa ficar
+// num lugar que os dois enxergam. Guarda quem esta sendo arrastado e como
+// remover ele da origem depois que a secao de destino aceitar.
+let _scriptDragBus = null; // {grupo, item, remover}
+
+function _useScriptDrag(scripts, _persist, grupo){
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
+  const [deFora,  setDeFora]  = useState(false); // arrastando algo de outra secao por cima desta
+
+  // Reordena dentro da propria secao
   const _mover = function(from, to){
     if(from===null || to===null || from===to) return;
     const arr = (scripts||[]).slice();
@@ -61126,24 +61145,72 @@ function _useScriptDrag(scripts, _persist){
     arr.splice(to, 0, item);
     _persist(arr);
   };
+
+  // Recebe um card vindo da outra secao. `pos` null = joga no fim.
+  const _receber = function(pos){
+    const b = _scriptDragBus;
+    if(!b || b.grupo===grupo || !b.item) return false;
+    const arr = (scripts||[]).slice();
+    // Se ja existe um id igual aqui, nao duplica
+    if(arr.some(function(x){ return x && x.id===b.item.id; })) return false;
+    const _p = (pos===null || pos===undefined || pos>arr.length || pos<0) ? arr.length : pos;
+    arr.splice(_p, 0, b.item);
+    _persist(arr);
+    if(typeof b.remover==="function") b.remover();   // tira da origem
+    _scriptDragBus = null;
+    return true;
+  };
+
+  const _limpar = function(){ setDragIdx(null); setOverIdx(null); setDeFora(false); };
+
   return {
+    grupo: grupo,
     dragIdx: dragIdx,
     overIdx: overIdx,
+    deFora: deFora,
     start: function(i){ return function(e){
       setDragIdx(i);
+      const _item = (scripts||[])[i];
+      const _snapshot = (scripts||[]).slice();
+      _scriptDragBus = {
+        grupo: grupo,
+        item: _item,
+        // fecha sobre o snapshot da origem: remove o card e persiste la
+        remover: function(){
+          _persist(_snapshot.filter(function(x){ return !x || !_item || x.id!==_item.id; }));
+        },
+      };
       try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", String(i)); }catch(_){}
     };},
     over: function(i){ return function(e){
       e.preventDefault();
       try{ e.dataTransfer.dropEffect="move"; }catch(_){}
+      const _fora = !!_scriptDragBus && _scriptDragBus.grupo!==grupo;
+      setDeFora(function(p){ return p===_fora ? p : _fora; });
       setOverIdx(function(p){ return p===i ? p : i; });
     };},
     drop: function(i){ return function(e){
       e.preventDefault(); e.stopPropagation();
-      _mover(dragIdx, i);
-      setDragIdx(null); setOverIdx(null);
+      if(!_receber(i)) _mover(dragIdx, i);
+      _limpar();
     };},
-    end: function(){ setDragIdx(null); setOverIdx(null); },
+    // A secao inteira tambem aceita soltar — cai no fim da lista.
+    zonaOver: function(e){
+      const _fora = !!_scriptDragBus && _scriptDragBus.grupo!==grupo;
+      if(!_fora) return;
+      e.preventDefault();
+      try{ e.dataTransfer.dropEffect="move"; }catch(_){}
+      setDeFora(function(p){ return p===true ? p : true; });
+    },
+    zonaSai: function(){ setDeFora(false); },
+    zonaDrop: function(e){
+      const _fora = !!_scriptDragBus && _scriptDragBus.grupo!==grupo;
+      if(!_fora) return;
+      e.preventDefault(); e.stopPropagation();
+      _receber(null);
+      _limpar();
+    },
+    end: function(){ _scriptDragBus = null; _limpar(); },
   };
 }
 
@@ -61161,7 +61228,8 @@ function _ajustarAltura(el){
 }
 
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
-function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag}){
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag, canEdit}){
+  const _ro = canEdit===false;   // somente leitura
   // So vira draggable enquanto o mouse esta segurando o handle — assim continua
   // dando pra selecionar texto no textarea normalmente.
   const [_pode, _setPode] = useState(false);
@@ -61190,10 +61258,10 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           autoFocus onBlur={function(){setEditingId(null);}}
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
-      : <div onClick={function(){setEditingId(s.id);}} title="Clique pra renomear"
-          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",boxShadow:"0 3px 10px "+_cor+"38",lineHeight:1.3}}
-          onMouseEnter={function(e){e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
-          onMouseLeave={function(e){e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
+      : <div onClick={function(){ if(!_ro) setEditingId(s.id); }} title={_ro?"":"Clique pra renomear"}
+          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",boxShadow:"0 3px 10px "+_cor+"38",lineHeight:1.3}}
+          onMouseEnter={function(e){ if(_ro) return; e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
+          onMouseLeave={function(e){ if(_ro) return; e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
           {/* Handle de arrasto — segura aqui pra reordenar */}
           {drag && <span title="Arraste pra reordenar"
             onMouseDown={function(e){ e.stopPropagation(); _setPode(true); }}
@@ -61209,10 +61277,10 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
             </svg>
           </span>}
           <span style={{flex:1,minWidth:0}}>{s.titulo||"(sem título)"}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+          {!_ro && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-          </svg>
+          </svg>}
         </div>
     }
     {/* TEXTAREA — alto o suficiente pra ver o texto inteiro sem scroll interno.
@@ -61224,17 +61292,18 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
         _ajustarAltura(e.target);
       }}
       onInput={function(e){ _ajustarAltura(e.target); }}
-      placeholder={"Digite ou cole o texto do script..."}
-      style={Object.assign({},_INP,{resize:"vertical",minHeight:_SCRIPT_ALT_MIN,maxHeight:_SCRIPT_ALT_MAX+80,overflowY:"auto",lineHeight:1.55,fontFamily:_ONB_FF})}/>
+      readOnly={_ro}
+      placeholder={_ro?"":"Digite ou cole o texto do script..."}
+      style={Object.assign({},_INP,{resize:"vertical",minHeight:_SCRIPT_ALT_MIN,maxHeight:_SCRIPT_ALT_MAX+80,overflowY:"auto",lineHeight:1.55,fontFamily:_ONB_FF,background:_ro?"#fbfcfd":"#fafbfc",cursor:_ro?"text":"auto"})}/>
     <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
       <div style={{display:"flex",gap:6}}>
-        <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
+        {!_ro && <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
           style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,width:30,height:30,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.background="#fef2f2";}}
           onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-        </button>
+        </button>}
         <button onClick={function(){_copyScript(s);}} type="button" title={"Copia com dados de "+((cl&&cl.name)||"cliente")+" preenchidos automaticamente"}
           style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
           onMouseEnter={function(e){e.currentTarget.style.background="#15803d";}}
@@ -61322,10 +61391,13 @@ function _OnboardingScripts({cl, startDate, accent}){
     }
   };
 
-  const _drag = _useScriptDrag(scripts, _persist);
+  const _podeEditar = _scriptsPodeEditar();
+  const _drag = _useScriptDrag(scripts, _persist, "onboarding");
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
 
-  return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6}}>
+  return <div
+    onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
+    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
@@ -61337,28 +61409,43 @@ function _OnboardingScripts({cl, startDate, accent}){
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
         </div>
       </div>
-      <button onClick={_newScript} type="button"
+      {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
+        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Somente leitura
+      </span>}
+      {_podeEditar && <button onClick={_newScript} type="button"
         style={{background:accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Novo script
-      </button>
+      </button>}
     </div>
 
     {/* Lista de scripts */}
     {scripts.length===0
-      ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
-          Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
+      ? <div style={{background:_drag.deFora?"#f5f3ff":"#fafbfc",border:"1.5px dashed "+(_drag.deFora?"#a855f7":"#cbd5e1"),borderRadius:11,padding:"28px 20px",textAlign:"center",color:_drag.deFora?"#7c3aed":"#64748b",fontSize:12.5,fontWeight:_drag.deFora?700:400,transition:"all .12s"}}>
+          {_drag.deFora
+            ? "Solte aqui pra mover o script pra esta seção"
+            : (_podeEditar
+                ? <>Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.</>
+                : <>Nenhum script cadastrado ainda.</>)}
         </div>
-      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
+      : <>
+        {_drag.deFora && <div style={{background:"#f5f3ff",border:"1.5px dashed #a855f7",borderRadius:10,padding:"9px 13px",marginBottom:10,color:"#7c3aed",fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+          Solte aqui pra mover o script pra esta seção
+        </div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
           {scripts.map(function(s, _i){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_drag}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar}/>;
           })}
         </div>
+      </>
     }
   </div>;
 }
@@ -61452,11 +61539,14 @@ function _OngoingScripts({cl, accent}){
     }
   };
 
-  const _drag = _useScriptDrag(scripts, _persist);
+  const _podeEditar = _scriptsPodeEditar();
+  const _drag = _useScriptDrag(scripts, _persist, "ongoing");
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
   const _accent = accent || "#7c3aed";
 
-  return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6}}>
+  return <div
+    onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
+    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
         <div style={{width:44,height:44,borderRadius:12,background:"#dbeafe",border:"1px solid #bfdbfe",color:"#1d4ed8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -61467,27 +61557,42 @@ function _OngoingScripts({cl, accent}){
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra check-ins, reunioes, NPS, indicacoes e resultados de funil. Compartilhado entre todos os clientes.</div>
         </div>
       </div>
-      <button onClick={_newScript} type="button"
+      {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
+        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Somente leitura
+      </span>}
+      {_podeEditar && <button onClick={_newScript} type="button"
         style={{background:_accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Novo script
-      </button>
+      </button>}
     </div>
 
     {scripts.length===0
-      ? <div style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"28px 20px",textAlign:"center",color:"#64748b",fontSize:12.5}}>
-          Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.
+      ? <div style={{background:_drag.deFora?"#f5f3ff":"#fafbfc",border:"1.5px dashed "+(_drag.deFora?"#a855f7":"#cbd5e1"),borderRadius:11,padding:"28px 20px",textAlign:"center",color:_drag.deFora?"#7c3aed":"#64748b",fontSize:12.5,fontWeight:_drag.deFora?700:400,transition:"all .12s"}}>
+          {_drag.deFora
+            ? "Solte aqui pra mover o script pra esta seção"
+            : (_podeEditar
+                ? <>Nenhum script ainda. Clique em <strong>Novo script</strong> pra criar o primeiro.</>
+                : <>Nenhum script cadastrado ainda.</>)}
         </div>
-      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
+      : <>
+        {_drag.deFora && <div style={{background:"#f5f3ff",border:"1.5px dashed #a855f7",borderRadius:10,padding:"9px 13px",marginBottom:10,color:"#7c3aed",fontSize:11.5,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+          Solte aqui pra mover o script pra esta seção
+        </div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))",gap:10}}>
           {scripts.map(function(s, _i){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_drag}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar}/>;
           })}
         </div>
+      </>
     }
   </div>;
 }
@@ -76580,5 +76685,1005 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
       }
     </div>
 
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DEMANDAS DO CLIENTE — Estrategia > Clientes > aba Demandas
+   ───────────────────────────────────────────────────────────────────────
+   Uma DEMANDA e um projeto/entrega maior (site, campanha, captacao...) que
+   se quebra em TAREFAS. O progresso e sempre derivado das tarefas — nunca
+   digitado a mao.
+
+   Diferenca pra aba Producao: Producao e o fluxo operacional de pecas
+   (cards que viram post/video). Demandas e o projeto que atravessa varias
+   areas e responsaveis ate ficar pronto.
+
+   Banco: client_demandas (tarefas em jsonb). A tabela client_milestones
+   (marcos) NAO foi tocada — segue alimentando calendario, agenda e
+   dashboard. O historico de marcos aparece no fim desta aba.
+
+   Reuso: UserAvatar, Ico, TEAM, pixelsToast, pixelsConfirm, _pxMob.
+═══════════════════════════════════════════════════════════════════════ */
+
+const _DEM_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
+/* ── Catalogos ───────────────────────────────────────────────────────── */
+// Preparado pra crescer: e so somar um item aqui que filtro, formulario e
+// chip do card passam a conhecer a categoria nova.
+const DEM_CATEGORIAS = [
+  {id:"estrategia", label:"Estratégia",        cor:"#7c3aed", ico:"target"},
+  {id:"social",     label:"Social Media",      cor:"#ec4899", ico:"users"},
+  {id:"conteudo",   label:"Conteúdo",          cor:"#f59e0b", ico:"fileText"},
+  {id:"design",     label:"Design",            cor:"#a855f7", ico:"sparkles"},
+  {id:"video",      label:"Vídeo / Captação",  cor:"#0ea5e9", ico:"play"},
+  {id:"trafego",    label:"Tráfego Pago",      cor:"#2563eb", ico:"funnel"},
+  {id:"site",       label:"Site / Landing",    cor:"#0d9488", ico:"globe"},
+  {id:"branding",   label:"Branding",          cor:"#db2777", ico:"sparkles"},
+  {id:"grafico",    label:"Material Gráfico",  cor:"#ea580c", ico:"image"},
+  {id:"crm",        label:"CRM / Automação",   cor:"#4f46e5", ico:"layers"},
+  {id:"campanha",   label:"Campanha",          cor:"#dc2626", ico:"flame"},
+  {id:"evento",     label:"Evento",            cor:"#16a34a", ico:"calendar"},
+  {id:"outros",     label:"Outros",            cor:"#64748b", ico:"folder"},
+];
+function _demCat(id){
+  return DEM_CATEGORIAS.find(function(c){return c.id===id;}) || DEM_CATEGORIAS[DEM_CATEGORIAS.length-1];
+}
+
+const DEM_STATUS = [
+  {id:"nao_iniciada", label:"Não iniciada",      cor:"#64748b", bg:"#f1f5f9"},
+  {id:"andamento",    label:"Em andamento",      cor:"#2563eb", bg:"#eff6ff"},
+  {id:"aguardando",   label:"Aguardando cliente",cor:"#b45309", bg:"#fffbeb"},
+  {id:"revisao",      label:"Em revisão",        cor:"#7c3aed", bg:"#f5f3ff"},
+  {id:"concluida",    label:"Concluída",         cor:"#15803d", bg:"#f0fdf4"},
+  {id:"pausada",      label:"Pausada",           cor:"#475569", bg:"#f8fafc"},
+];
+function _demSt(id){
+  return DEM_STATUS.find(function(s){return s.id===id;}) || DEM_STATUS[0];
+}
+
+// Status de TAREFA — enxuto de proposito
+const DEM_TSTATUS = [
+  {id:"afazer",     label:"A fazer",      cor:"#94a3b8", bg:"#f8fafc"},
+  {id:"andamento",  label:"Em andamento", cor:"#2563eb", bg:"#eff6ff"},
+  {id:"aguardando", label:"Aguardando",   cor:"#b45309", bg:"#fffbeb"},
+  {id:"revisao",    label:"Em revisão",   cor:"#7c3aed", bg:"#f5f3ff"},
+  {id:"concluida",  label:"Concluída",    cor:"#15803d", bg:"#f0fdf4"},
+];
+function _demTSt(id){
+  return DEM_TSTATUS.find(function(s){return s.id===id;}) || DEM_TSTATUS[0];
+}
+
+const DEM_PRIOS = [
+  {id:"baixa",   label:"Baixa",   cor:"#94a3b8"},
+  {id:"normal",  label:"Normal",  cor:"#64748b"},
+  {id:"alta",    label:"Alta",    cor:"#ea580c"},
+  {id:"urgente", label:"Urgente", cor:"#dc2626"},
+];
+function _demPrio(id){
+  return DEM_PRIOS.find(function(p){return p.id===id;}) || DEM_PRIOS[1];
+}
+
+/* ── Utilitarios de data ─────────────────────────────────────────────── */
+function _demHoje(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function _demBR(iso){
+  if(!iso) return "";
+  const p=String(iso).split("-");
+  return p.length===3 ? (p[2]+"/"+p[1]+"/"+p[0]) : "";
+}
+function _demBRCurto(iso){
+  if(!iso) return "";
+  const p=String(iso).split("-");
+  return p.length===3 ? (p[2]+"/"+p[1]) : "";
+}
+// Quantos dias faltam (negativo = atrasado)
+function _demDias(iso){
+  if(!iso) return null;
+  try{
+    const a=new Date(iso+"T12:00:00");
+    const b=new Date(_demHoje()+"T12:00:00");
+    return Math.round((a-b)/86400000);
+  }catch(_){ return null; }
+}
+// Sinal de prazo — discreto de proposito: so vira vermelho quando ja passou.
+function _demPrazoTom(iso, concluida){
+  if(!iso || concluida) return null;
+  const d=_demDias(iso);
+  if(d===null) return null;
+  if(d<0)  return {tom:"atrasado", cor:"#dc2626", bg:"#fef2f2", bd:"#fecaca", txt:(d===-1?"1 dia atrasado":(Math.abs(d)+" dias atrasado"))};
+  if(d===0) return {tom:"hoje",    cor:"#b45309", bg:"#fffbeb", bd:"#fde68a", txt:"vence hoje"};
+  if(d<=3)  return {tom:"perto",   cor:"#b45309", bg:"#fffbeb", bd:"#fde68a", txt:(d===1?"falta 1 dia":("faltam "+d+" dias"))};
+  return null;
+}
+
+/* ── Progresso: SEMPRE derivado das tarefas ──────────────────────────── */
+function _demProgresso(d){
+  const ts=Array.isArray(d&&d.tarefas)?d.tarefas:[];
+  const tot=ts.length;
+  const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
+  return {total:tot, feitas:ok, pct: tot>0 ? Math.round(ok/tot*100) : 0};
+}
+
+function _demMembro(id){
+  try{
+    if(!id || typeof TEAM==="undefined") return null;
+    return TEAM.find(function(u){return u.id===id;}) || null;
+  }catch(_){ return null; }
+}
+
+function _demNovoId(){
+  return "t-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+}
+
+/* ═══ CHIP DE STATUS ═══ */
+function _DemChip({def, size}){
+  const _s = size==="sm";
+  return <span style={{background:def.bg,color:def.cor,border:"1px solid "+def.cor+"2e",borderRadius:99,
+    padding:_s?"2px 8px":"3px 10px",fontSize:_s?10:10.5,fontWeight:800,letterSpacing:.2,
+    whiteSpace:"nowrap",flexShrink:0,fontFamily:_DEM_FF}}>{def.label}</span>;
+}
+
+/* ═══ BARRA DE PROGRESSO ═══ */
+function _DemBarra({pct, cor, altura}){
+  const _h = altura || 7;
+  const _completo = pct>=100;
+  return <div style={{background:"#f1f5f9",borderRadius:99,height:_h,overflow:"hidden",width:"100%"}}>
+    <div style={{width:Math.max(0,Math.min(100,pct))+"%",height:"100%",borderRadius:99,
+      background:_completo?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+cor+","+cor+"bb)",
+      transition:"width .35s ease"}}/>
+  </div>;
+}
+
+/* ═══ SELECT PADRAO ═══ */
+const _DEM_LBL = {color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6};
+const _DEM_INP = {width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",
+  color:"#0f172a",fontSize:12.5,fontWeight:600,outline:"none",fontFamily:_DEM_FF,boxSizing:"border-box",transition:"all .12s"};
+function _demFoco(e){ e.currentTarget.style.borderColor="#a855f7"; e.currentTarget.style.boxShadow="0 0 0 3px rgba(168,85,247,.13)"; }
+function _demBlur(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.boxShadow="none"; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CARD DA DEMANDA — horizontal, expande em linha (accordion)
+═══════════════════════════════════════════════════════════════════════ */
+function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEdit, isMob, corCliente}){
+  const cat=_demCat(d.categoria);
+  const st=_demSt(d.status);
+  const prio=_demPrio(d.prioridade);
+  const prog=_demProgresso(d);
+  const resp=_demMembro(d.responsavel);
+  const _concluida = d.status==="concluida";
+  const _prazo=_demPrazoTom(d.prazo,_concluida);
+
+  return <div style={{background:"#fff",border:"1px solid "+(aberto?cat.cor+"55":"#e2e8f0"),borderRadius:14,
+    boxShadow:aberto?("0 8px 24px "+cat.cor+"1a"):"0 1px 3px rgba(15,23,42,.04)",
+    overflow:"hidden",transition:"border-color .15s, box-shadow .15s",fontFamily:_DEM_FF}}>
+
+    {/* ── Linha principal (clicavel) ── */}
+    <div onClick={onToggle} title={aberto?"Fechar":"Ver etapas"}
+      style={{display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?11:16,padding:isMob?"14px 15px":"15px 18px",
+        cursor:"pointer",flexDirection:isMob?"column":"row",borderLeft:"3px solid "+cat.cor}}
+      onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.background="#fcfcfd"; }}
+      onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+
+      {/* Icone da categoria */}
+      <div style={{width:38,height:38,borderRadius:11,background:cat.cor+"14",border:"1px solid "+cat.cor+"2e",
+        display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n={cat.ico} size={17} color={cat.cor}/>
+      </div>
+
+      {/* Titulo + meta */}
+      <div style={{flex:isMob?"none":"1 1 220px",minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.25,lineHeight:1.25,
+            textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
+          {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
+            <span style={{color:prio.cor,fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",
+              border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"1px 7px",flexShrink:0}}>{prio.label}</span>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4,flexWrap:"wrap"}}>
+          <span style={{color:cat.cor,fontSize:11,fontWeight:700}}>{cat.label}</span>
+          {d.prazo && <>
+            <span style={{color:"#cbd5e1",fontSize:10}}>·</span>
+            <span title={"Prazo final: "+_demBR(d.prazo)}
+              style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {_demBR(d.prazo)}
+            </span>
+          </>}
+          {_prazo && <span style={{background:_prazo.bg,color:_prazo.cor,border:"1px solid "+_prazo.bd,borderRadius:99,
+            padding:"1px 7px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_prazo.txt}</span>}
+        </div>
+      </div>
+
+      {/* Responsavel */}
+      <div style={{display:"flex",alignItems:"center",gap:7,minWidth:isMob?0:120,flexShrink:0}}>
+        {resp
+          ? <>
+              <UserAvatar user={resp} size={24} border={false}/>
+              <span style={{color:"#475569",fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(resp.name||"").split(" ")[0]}</span>
+            </>
+          : <span style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,fontStyle:"italic"}}>sem responsável</span>}
+      </div>
+
+      {/* Progresso */}
+      <div style={{minWidth:isMob?0:150,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
+          <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+            {prog.total>0 ? (prog.feitas+" de "+prog.total+" tarefas") : "sem tarefas"}
+          </span>
+          <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:12.5,fontWeight:800,letterSpacing:-.2,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
+        </div>
+        <_DemBarra pct={prog.pct} cor={cat.cor}/>
+      </div>
+
+      {/* Status + chevron */}
+      <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0,justifyContent:isMob?"space-between":"flex-end"}}>
+        <_DemChip def={st}/>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+    </div>
+
+    {/* ── Corpo expandido ── */}
+    {aberto && <_DemandaDetalhe d={d} cat={cat} prog={prog} canEdit={canEdit} isMob={isMob}
+      onEditar={onEditar} onExcluir={onExcluir} onSalvar={onSalvar}/>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DETALHE — cabecalho + lista de tarefas
+═══════════════════════════════════════════════════════════════════════ */
+function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onSalvar}){
+  const [novaAberta,setNovaAberta]=useState(false);
+  const [rascunho,setRascunho]=useState({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
+  const [editId,setEditId]=useState(null);
+  const [dragId,setDragId]=useState(null);
+  const [overId,setOverId]=useState(null);
+
+  const tarefas=Array.isArray(d.tarefas)?d.tarefas:[];
+
+  const _persistTarefas=function(lista){
+    onSalvar(Object.assign({},d,{tarefas:lista}));
+  };
+  const _addTarefa=function(){
+    const _n=String(rascunho.nome||"").trim();
+    if(!_n){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra tarefa."); return; }
+    const _t=Object.assign({id:_demNovoId(), done_at:""}, rascunho, {nome:_n});
+    if(_t.status==="concluida") _t.done_at=_demHoje();
+    _persistTarefas(tarefas.concat([_t]));
+    setRascunho({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
+    setNovaAberta(false);
+  };
+  const _patchTarefa=function(id, patch){
+    _persistTarefas(tarefas.map(function(t){
+      if(t.id!==id) return t;
+      const _novo=Object.assign({},t,patch);
+      // Concluir carimba a data automaticamente; desmarcar limpa.
+      if(patch.status==="concluida" && t.status!=="concluida") _novo.done_at=_demHoje();
+      if(patch.status && patch.status!=="concluida")          _novo.done_at="";
+      return _novo;
+    }));
+  };
+  const _delTarefa=async function(t){
+    let ok=true;
+    if(typeof pixelsConfirm==="function"){
+      ok=await pixelsConfirm({title:"Excluir tarefa?",message:'"'+(t.nome||"")+'" será removida da demanda.',danger:true});
+    }
+    if(!ok) return;
+    _persistTarefas(tarefas.filter(function(x){return x.id!==t.id;}));
+  };
+  // Reordenar: as tarefas ja vivem num array jsonb, entao e so trocar de lugar.
+  const _mover=function(fromId,toId){
+    if(!fromId||!toId||fromId===toId) return;
+    const arr=tarefas.slice();
+    const fi=arr.findIndex(function(x){return x.id===fromId;});
+    const ti=arr.findIndex(function(x){return x.id===toId;});
+    if(fi<0||ti<0) return;
+    const it=arr.splice(fi,1)[0];
+    arr.splice(ti,0,it);
+    _persistTarefas(arr);
+  };
+
+  const resp=_demMembro(d.responsavel);
+  const prio=_demPrio(d.prioridade);
+  const _proxima=tarefas.find(function(t){return t.status!=="concluida";});
+
+  return <div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:isMob?"15px 15px 17px":"17px 20px 19px",
+    display:"flex",flexDirection:"column",gap:15}}>
+
+    {/* ── Cabecalho de dados ── */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(120px,1fr))",gap:10}}>
+      {[
+        {l:"Início",     v:_demBR(d.data_inicio)||"—"},
+        {l:"Prazo final",v:_demBR(d.prazo)||"—"},
+        {l:"Prioridade", v:prio.label, cor:prio.cor},
+        {l:"Responsável",v:(resp&&resp.name)||"—"},
+        {l:"Progresso",  v:prog.pct+"%", cor:prog.pct>=100?"#16a34a":cat.cor},
+      ].map(function(x,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"9px 12px"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{x.l}</div>
+          <div style={{color:x.cor||"#0f172a",fontSize:12.5,fontWeight:800,marginTop:3,letterSpacing:-.15,fontFeatureSettings:"'tnum'",
+            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.v}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Descricao */}
+    {d.descricao && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",
+      color:"#475569",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{d.descricao}</div>}
+
+    {/* ── Tarefas ── */}
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+        <span style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={cat.cor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Etapas
+        </span>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{prog.feitas}/{prog.total}</span>
+        <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+        {canEdit && <button type="button" onClick={function(){setNovaAberta(!novaAberta);}}
+          style={{background:novaAberta?"#f1f5f9":"#fff",border:"1px solid "+cat.cor+"44",borderRadius:9,padding:"6px 12px",
+            color:cat.cor,fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Adicionar tarefa
+        </button>}
+      </div>
+
+      {/* Form rapido de nova tarefa */}
+      {novaAberta && canEdit && <div style={{background:"#fff",border:"1.5px solid "+cat.cor+"44",borderRadius:11,padding:"12px 13px",marginBottom:10,
+        display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,2fr) 130px 120px 110px auto",gap:8,alignItems:"end"}}>
+        <div>
+          <div style={_DEM_LBL}>Tarefa</div>
+          <input autoFocus value={rascunho.nome} placeholder="Ex: Desenvolvimento do layout"
+            onChange={function(e){setRascunho(Object.assign({},rascunho,{nome:e.target.value}));}}
+            onKeyDown={function(e){ if(e.key==="Enter") _addTarefa(); }}
+            onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+        </div>
+        <div>
+          <div style={_DEM_LBL}>Responsável</div>
+          <_DemSelectResp valor={rascunho.resp} onChange={function(v){setRascunho(Object.assign({},rascunho,{resp:v}));}}/>
+        </div>
+        <div>
+          <div style={_DEM_LBL}>Prazo</div>
+          <input type="date" value={rascunho.prazo}
+            onChange={function(e){setRascunho(Object.assign({},rascunho,{prazo:e.target.value}));}}
+            onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{fontWeight:600})}/>
+        </div>
+        <div>
+          <div style={_DEM_LBL}>Status</div>
+          <select value={rascunho.status}
+            onChange={function(e){setRascunho(Object.assign({},rascunho,{status:e.target.value}));}}
+            onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{cursor:"pointer"})}>
+            {DEM_TSTATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+          </select>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button type="button" onClick={_addTarefa}
+            style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:9,padding:"9px 15px",
+              fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,whiteSpace:"nowrap"}}>Adicionar</button>
+          <button type="button" onClick={function(){setNovaAberta(false);}}
+            style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",
+              fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF}}>Cancelar</button>
+        </div>
+      </div>}
+
+      {/* Lista */}
+      {tarefas.length===0
+        ? <div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:11,padding:"26px 18px",textAlign:"center",
+            color:"#94a3b8",fontSize:12.5}}>
+            Nenhuma etapa ainda.{canEdit?" Quebre a demanda em tarefas pra acompanhar o progresso.":""}
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {tarefas.map(function(t){
+              return <_DemTarefaLinha key={t.id} t={t} cat={cat} canEdit={canEdit} isMob={isMob}
+                emEdicao={editId===t.id}
+                setEmEdicao={function(v){setEditId(v?t.id:null);}}
+                onPatch={function(p){_patchTarefa(t.id,p);}}
+                onDel={function(){_delTarefa(t);}}
+                proxima={_proxima&&_proxima.id===t.id}
+                dragId={dragId} overId={overId}
+                onDragStart={function(){setDragId(t.id);}}
+                onDragOver={function(){ setOverId(function(p){return p===t.id?p:t.id;}); }}
+                onDrop={function(){ _mover(dragId,t.id); setDragId(null); setOverId(null); }}
+                onDragEnd={function(){ setDragId(null); setOverId(null); }}/>;
+            })}
+          </div>
+      }
+    </div>
+
+    {/* ── Acoes da demanda ── */}
+    {canEdit && <div style={{display:"flex",justifyContent:"flex-end",gap:7,paddingTop:4}}>
+      <button type="button" onClick={onEditar}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",color:"#475569",
+          fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6}}
+        onMouseEnter={function(e){e.currentTarget.style.borderColor=cat.cor+"66";e.currentTarget.style.color=cat.cor;}}
+        onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar demanda
+      </button>
+      <button type="button" onClick={onExcluir}
+        style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"8px 12px",color:"#dc2626",
+          fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Excluir
+      </button>
+    </div>}
+  </div>;
+}
+
+/* ═══ LINHA DA TAREFA ═══ */
+function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch, onDel, proxima,
+                          dragId, overId, onDragStart, onDragOver, onDrop, onDragEnd}){
+  const [podeArrastar,setPodeArrastar]=useState(false);
+  const st=_demTSt(t.status);
+  const resp=_demMembro(t.resp);
+  const _feita=t.status==="concluida";
+  const _prazo=_demPrazoTom(t.prazo,_feita);
+  const _arrastando=dragId===t.id;
+  const _alvo=overId===t.id && dragId && dragId!==t.id;
+
+  // Um clique no circulo alterna concluida <-> a fazer
+  const _toggle=function(e){
+    e.stopPropagation();
+    if(!canEdit) return;
+    onPatch({status:_feita?"afazer":"concluida"});
+  };
+
+  return <div
+    draggable={podeArrastar}
+    onDragStart={function(e){ onDragStart(); try{e.dataTransfer.effectAllowed="move";}catch(_){}}}
+    onDragOver={function(e){ e.preventDefault(); try{e.dataTransfer.dropEffect="move";}catch(_){} onDragOver(); }}
+    onDrop={function(e){ e.preventDefault(); e.stopPropagation(); onDrop(); }}
+    onDragEnd={function(){ setPodeArrastar(false); onDragEnd(); }}
+    style={{background:"#fff",border:"1px solid "+(_alvo?cat.cor:(proxima&&!_feita?cat.cor+"3d":"#eef0f3")),
+      borderRadius:10,padding:isMob?"10px 12px":"9px 13px",display:"flex",alignItems:isMob?"flex-start":"center",
+      gap:11,opacity:_arrastando?.4:1,flexDirection:isMob?"column":"row",
+      boxShadow:_alvo?("0 0 0 3px "+cat.cor+"26"):"none",transition:"border-color .12s, opacity .12s"}}>
+
+    <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0,width:isMob?"100%":"auto"}}>
+      {/* Handle */}
+      {canEdit && <span title="Arraste pra reordenar"
+        onMouseDown={function(){setPodeArrastar(true);}}
+        onMouseUp={function(){setPodeArrastar(false);}}
+        style={{cursor:"grab",color:"#cbd5e1",display:"inline-flex",flexShrink:0}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style={{pointerEvents:"none"}}>
+          <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
+          <circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>
+          <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
+        </svg>
+      </span>}
+
+      {/* Circulo de conclusao */}
+      <button type="button" onClick={_toggle} disabled={!canEdit}
+        title={_feita?"Marcar como a fazer":"Marcar como concluída"}
+        style={{width:20,height:20,borderRadius:"50%",flexShrink:0,padding:0,
+          border:"2px solid "+(_feita?"#16a34a":"#cbd5e1"),background:_feita?"#16a34a":"#fff",
+          cursor:canEdit?"pointer":"default",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
+        {_feita && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+      </button>
+
+      {/* Nome */}
+      {emEdicao && canEdit
+        ? <input autoFocus defaultValue={t.nome}
+            onBlur={function(e){ const v=e.target.value.trim(); if(v&&v!==t.nome) onPatch({nome:v}); setEmEdicao(false); }}
+            onKeyDown={function(e){ if(e.key==="Enter") e.currentTarget.blur(); if(e.key==="Escape") setEmEdicao(false); }}
+            style={Object.assign({},_DEM_INP,{padding:"5px 9px",fontSize:12.5})}/>
+        : <span onClick={function(){ if(canEdit) setEmEdicao(true); }}
+            title={canEdit?"Clique pra renomear":""}
+            style={{flex:1,minWidth:0,color:_feita?"#94a3b8":"#0f172a",fontSize:12.5,fontWeight:700,lineHeight:1.35,
+              textDecoration:_feita?"line-through":"none",cursor:canEdit?"text":"default",
+              overflow:"hidden",textOverflow:"ellipsis"}}>
+            {t.nome}
+            {proxima&&!_feita&&<span style={{background:cat.cor+"14",color:cat.cor,fontSize:9,fontWeight:800,
+              padding:"1px 6px",borderRadius:99,marginLeft:7,letterSpacing:.3,textTransform:"uppercase"}}>agora</span>}
+          </span>}
+    </div>
+
+    {/* Responsavel · prazo · status · excluir */}
+    <div style={{display:"flex",alignItems:"center",gap:9,flexShrink:0,flexWrap:"wrap",
+      width:isMob?"100%":"auto",paddingLeft:isMob?31:0}}>
+      {canEdit
+        ? <_DemSelectResp valor={t.resp} onChange={function(v){onPatch({resp:v});}} compacto/>
+        : (resp
+            ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+                <UserAvatar user={resp} size={20} border={false}/>
+                <span style={{color:"#475569",fontSize:11.5,fontWeight:700}}>{String(resp.name||"").split(" ")[0]}</span>
+              </span>
+            : <span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>—</span>)}
+
+      {canEdit
+        ? <input type="date" value={t.prazo||""} onChange={function(e){onPatch({prazo:e.target.value});}}
+            title={_prazo?_prazo.txt:"Data prevista"}
+            style={{background:_prazo?_prazo.bg:"#fff",border:"1px solid "+(_prazo?_prazo.bd:"#e2e8f0"),borderRadius:8,
+              padding:"4px 8px",fontSize:11,fontWeight:700,color:_prazo?_prazo.cor:"#475569",outline:"none",
+              fontFamily:_DEM_FF,fontFeatureSettings:"'tnum'",cursor:"pointer",width:126}}/>
+        : (t.prazo && <span style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_demBRCurto(t.prazo)}</span>)}
+
+      {canEdit
+        ? <select value={t.status} onChange={function(e){onPatch({status:e.target.value});}}
+            style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,padding:"4px 9px",
+              fontSize:10.5,fontWeight:800,outline:"none",fontFamily:_DEM_FF,cursor:"pointer",appearance:"none",textAlign:"center"}}>
+            {DEM_TSTATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+          </select>
+        : <_DemChip def={st} size="sm"/>}
+
+      {/* Data de conclusao — carimbada automaticamente */}
+      {_feita && t.done_at && <span title={"Concluída em "+_demBR(t.done_at)}
+        style={{color:"#16a34a",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:3}}>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        {_demBRCurto(t.done_at)}
+      </span>}
+
+      {canEdit && <button type="button" onClick={onDel} title="Excluir tarefa"
+        style={{background:"transparent",border:"none",padding:4,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex",flexShrink:0}}
+        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
+        onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";e.currentTarget.style.background="transparent";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+      </button>}
+    </div>
+
+    {/* Observacao */}
+    {t.obs && <div style={{width:"100%",color:"#94a3b8",fontSize:11,fontStyle:"italic",paddingLeft:isMob?31:41,lineHeight:1.4}}>{t.obs}</div>}
+  </div>;
+}
+
+/* ═══ SELECT DE RESPONSAVEL — usa o TEAM que ja existe ═══ */
+function _DemSelectResp({valor, onChange, compacto}){
+  const _time=(typeof TEAM!=="undefined")?TEAM:[];
+  const _m=_demMembro(valor);
+  return <div style={{position:"relative",display:"inline-flex",alignItems:"center",flexShrink:0}}>
+    {compacto && _m && <span style={{position:"absolute",left:5,pointerEvents:"none",display:"inline-flex"}}>
+      <UserAvatar user={_m} size={18} border={false}/>
+    </span>}
+    <select value={valor||""} onChange={function(e){onChange(e.target.value);}}
+      onFocus={_demFoco} onBlur={_demBlur}
+      style={compacto
+        ? {background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:_m?"4px 8px 4px 27px":"4px 10px",
+           fontSize:11,fontWeight:700,color:_m?"#475569":"#94a3b8",outline:"none",fontFamily:_DEM_FF,cursor:"pointer",
+           appearance:"none",maxWidth:132}
+        : Object.assign({},_DEM_INP,{cursor:"pointer"})}>
+      <option value="">{compacto?"—":"Sem responsável"}</option>
+      {_time.map(function(u){
+        return <option key={u.id} value={u.id}>{String(u.name||"").split(" ")[0]}</option>;
+      })}
+    </select>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MODAL — nova / editar demanda
+═══════════════════════════════════════════════════════════════════════ */
+function _DemandaModal({inicial, onSalvar, onFechar, isMob}){
+  const _novo=!inicial || !inicial.id;
+  const [f,setF]=useState(Object.assign({
+    titulo:"", categoria:"outros", descricao:"", status:"nao_iniciada",
+    prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"",
+  }, inicial||{}));
+  const set=function(k,v){ setF(function(p){return Object.assign({},p,{[k]:v});}); };
+  const cat=_demCat(f.categoria);
+
+  if(typeof useEscToClose==="function") useEscToClose(true, onFechar);
+
+  const _salvar=function(){
+    if(!String(f.titulo||"").trim()){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra demanda.");
+      return;
+    }
+    onSalvar(f);
+  };
+
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:500,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:_DEM_FF}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"auto",
+        boxShadow:"0 24px 64px rgba(15,23,42,.28)"}}>
+
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 52%,"+cat.cor+" 100%)",padding:"18px 22px",
+        color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",right:-40,top:-60,width:180,height:180,borderRadius:"50%",
+          background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:12,position:"relative",minWidth:0}}>
+          <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.15)",
+            border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n={cat.ico} size={18} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>{_novo?"Nova demanda":"Editar demanda"}</div>
+            <div style={{fontSize:11.5,opacity:.78,marginTop:2,fontWeight:500}}>Depois é só quebrar em tarefas — o progresso se calcula sozinho</div>
+          </div>
+        </div>
+        <button onClick={onFechar} title="Fechar"
+          style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.2)",borderRadius:9,width:30,height:30,
+            color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div style={{padding:"20px 22px 22px",display:"flex",flexDirection:"column",gap:13}}>
+        <div>
+          <div style={_DEM_LBL}>Nome da demanda</div>
+          <input autoFocus value={f.titulo} placeholder="Ex: Novo site institucional"
+            onChange={function(e){set("titulo",e.target.value);}}
+            onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{fontSize:14,fontWeight:700})}/>
+        </div>
+
+        <div>
+          <div style={_DEM_LBL}>Categoria</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {DEM_CATEGORIAS.map(function(c){
+              const _on=f.categoria===c.id;
+              return <button key={c.id} type="button" onClick={function(){set("categoria",c.id);}}
+                style={{background:_on?c.cor:"#fff",color:_on?"#fff":"#64748b",border:"1px solid "+(_on?c.cor:"#e2e8f0"),
+                  borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",
+                  fontFamily:_DEM_FF,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:5}}>
+                <Ico n={c.ico} size={12} color={_on?"#fff":c.cor}/>{c.label}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div style={_DEM_LBL}>Descrição / objetivo</div>
+          <textarea rows={3} value={f.descricao} placeholder="O que precisa ser entregue e por quê"
+            onChange={function(e){set("descricao",e.target.value);}}
+            onFocus={_demFoco} onBlur={_demBlur}
+            style={Object.assign({},_DEM_INP,{fontWeight:500,resize:"vertical",minHeight:70,lineHeight:1.55})}/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+          <div>
+            <div style={_DEM_LBL}>Responsável principal</div>
+            <_DemSelectResp valor={f.responsavel} onChange={function(v){set("responsavel",v);}}/>
+          </div>
+          <div>
+            <div style={_DEM_LBL}>Prioridade</div>
+            <div style={{display:"flex",gap:5}}>
+              {DEM_PRIOS.map(function(p){
+                const _on=f.prioridade===p.id;
+                return <button key={p.id} type="button" onClick={function(){set("prioridade",p.id);}}
+                  style={{flex:1,background:_on?p.cor:"#fff",color:_on?"#fff":"#64748b",
+                    border:"1px solid "+(_on?p.cor:"#e2e8f0"),borderRadius:9,padding:"9px 6px",fontSize:11.5,
+                    fontWeight:_on?800:600,cursor:"pointer",fontFamily:_DEM_FF,transition:"all .12s"}}>{p.label}</button>;
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:10}}>
+          <div>
+            <div style={_DEM_LBL}>Data de início</div>
+            <input type="date" value={f.data_inicio||""} onChange={function(e){set("data_inicio",e.target.value);}}
+              onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+          </div>
+          <div>
+            <div style={_DEM_LBL}>Prazo final</div>
+            <input type="date" value={f.prazo||""} onChange={function(e){set("prazo",e.target.value);}}
+              onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+          </div>
+          <div>
+            <div style={_DEM_LBL}>Status</div>
+            <select value={f.status} onChange={function(e){set("status",e.target.value);}}
+              onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{cursor:"pointer"})}>
+              {DEM_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
+        <button onClick={onFechar} type="button"
+          style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",
+            fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:_DEM_FF}}>Cancelar</button>
+        <button onClick={_salvar} type="button"
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+            padding:"10px 22px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:_DEM_FF,
+            boxShadow:"0 6px 16px rgba(124,58,237,.32)",display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {_novo?"Criar demanda":"Salvar"}
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ABA DEMANDAS — componente principal
+═══════════════════════════════════════════════════════════════════════ */
+function CDemandas({cl, canEdit, selUnit}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const isMob=(typeof _pxMob==="function")?_pxMob():false;
+  const _cor=(cl&&cl.color)||"#7c3aed";
+
+  // Bioter: demandas ficam no client_id raiz, a unidade vai no campo `unidade`
+  const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0) ? "bioter" : ((cl&&cl.id)||"");
+  const _isBioter=_rootId==="bioter";
+  const _unidade=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)
+    ? cl.id.slice("bioter_".length)
+    : (selUnit||"grupo");
+
+  const [demandas,setDemandas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [abertas,setAbertas]=useState({});
+  const [modal,setModal]=useState(null);       // null | {} novo | {...} editar
+  const [busca,setBusca]=useState("");
+  const [fStatus,setFStatus]=useState("");
+  const [fResp,setFResp]=useState("");
+  const [fCat,setFCat]=useState("");
+  const [fPrazo,setFPrazo]=useState("");
+  const [verMarcos,setVerMarcos]=useState(false);
+
+  const _carregar=async function(){
+    if(!sb||!_rootId){ setLoading(false); return; }
+    try{
+      const r=await sb.from("client_demandas").select("*").eq("client_id",_rootId)
+        .order("ordem",{ascending:true}).order("created_at",{ascending:false});
+      setDemandas((r&&r.data)||[]);
+    }catch(e){ console.warn("[demandas] load:", (e&&e.message)||e); }
+    setLoading(false);
+  };
+
+  useEffect(function(){
+    let alive=true;
+    _carregar();
+    if(!sb) return function(){alive=false;};
+    let ch=null;
+    try{
+      ch=sb.channel("demandas-rt-"+_rootId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_demandas",filter:"client_id=eq."+_rootId},
+          function(){ if(alive) _carregar(); })
+        .subscribe();
+    }catch(_){}
+    return function(){
+      alive=false;
+      try{ if(ch) sb.removeChannel(ch); }catch(_){}
+    };
+  },[_rootId]);
+
+  /* ── Persistencia ── */
+  const _salvarDemanda=async function(dados){
+    if(!sb) return;
+    const _payload={
+      client_id:_rootId,
+      titulo:String(dados.titulo||"").trim(),
+      categoria:dados.categoria||"outros",
+      descricao:dados.descricao||"",
+      status:dados.status||"nao_iniciada",
+      prioridade:dados.prioridade||"normal",
+      responsavel:dados.responsavel||"",
+      data_inicio:dados.data_inicio||null,
+      prazo:dados.prazo||null,
+      unidade:_isBioter?(_unidade||"grupo"):"",
+      tarefas:Array.isArray(dados.tarefas)?dados.tarefas:[],
+      updated_at:new Date().toISOString(),
+    };
+    try{
+      if(dados.id){
+        const r=await sb.from("client_demandas").update(_payload).eq("id",dados.id);
+        if(r&&r.error) throw r.error;
+      }else{
+        _payload.created_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"";
+        const r=await sb.from("client_demandas").insert(_payload);
+        if(r&&r.error) throw r.error;
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda criada.");
+      }
+      setModal(null);
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+((e&&e.message)||""),5500);
+    }
+  };
+
+  // Salvar so as tarefas (usado pelo detalhe) — otimista pra nao piscar
+  const _salvarTarefas=async function(d){
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{tarefas:d.tarefas}) : x; });
+    });
+    if(!sb) return;
+    try{
+      await sb.from("client_demandas")
+        .update({tarefas:d.tarefas, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas.",4000);
+      _carregar();
+    }
+  };
+
+  const _excluirDemanda=async function(d){
+    let ok=true;
+    if(typeof pixelsConfirm==="function"){
+      ok=await pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.titulo||"")+'" e todas as tarefas dela serão removidas.',danger:true});
+    }
+    if(!ok) return;
+    try{
+      await sb.from("client_demandas").delete().eq("id",d.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda excluída.");
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000);
+    }
+  };
+
+  /* ── Filtro por unidade (Bioter) ── */
+  const _daUnidade=!_isBioter ? demandas : demandas.filter(function(d){
+    if(_unidade==="grupo") return true;
+    const u=d.unidade||"grupo";
+    return u==="grupo" || u===_unidade;
+  });
+
+  /* ── Resumo operacional ── */
+  const _resumo=(function(){
+    const r={total:_daUnidade.length, andamento:0, aguardando:0, concluidas:0, atrasadas:0};
+    _daUnidade.forEach(function(d){
+      if(d.status==="andamento")  r.andamento++;
+      if(d.status==="aguardando") r.aguardando++;
+      if(d.status==="concluida")  r.concluidas++;
+      const _dd=_demDias(d.prazo);
+      if(d.status!=="concluida" && _dd!==null && _dd<0) r.atrasadas++;
+    });
+    return r;
+  })();
+
+  /* ── Filtros ── */
+  const _q=String(busca||"").toLowerCase().trim();
+  const _lista=_daUnidade.filter(function(d){
+    if(_q && String(d.titulo||"").toLowerCase().indexOf(_q)<0 && String(d.descricao||"").toLowerCase().indexOf(_q)<0) return false;
+    if(fStatus && d.status!==fStatus) return false;
+    if(fCat && d.categoria!==fCat) return false;
+    if(fResp){
+      const _naTarefa=(Array.isArray(d.tarefas)?d.tarefas:[]).some(function(t){return t&&t.resp===fResp;});
+      if(d.responsavel!==fResp && !_naTarefa) return false;
+    }
+    if(fPrazo){
+      const _dd=_demDias(d.prazo);
+      if(fPrazo==="atrasado" && !(d.status!=="concluida" && _dd!==null && _dd<0)) return false;
+      if(fPrazo==="semana"   && !(_dd!==null && _dd>=0 && _dd<=7))  return false;
+      if(fPrazo==="mes"      && !(_dd!==null && _dd>=0 && _dd<=30)) return false;
+      if(fPrazo==="sem"      && d.prazo) return false;
+    }
+    return true;
+  });
+
+  const _temFiltro=!!(_q||fStatus||fCat||fResp||fPrazo);
+  const _limpar=function(){ setBusca(""); setFStatus(""); setFCat(""); setFResp(""); setFPrazo(""); };
+
+  const _time=(typeof TEAM!=="undefined")?TEAM:[];
+
+  const _selEstilo={background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",
+    fontSize:11.5,fontWeight:700,color:"#475569",outline:"none",fontFamily:_DEM_FF,cursor:"pointer"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF}}>
+
+    {/* ══ HEADER + RESUMO ══ */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>Demandas</div>
+        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Projetos e entregas maiores, com etapas, responsáveis e prazos.</div>
+      </div>
+      {canEdit && <button type="button" onClick={function(){setModal({});}}
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+          padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,
+          display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)",flexShrink:0,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova demanda
+      </button>}
+    </div>
+
+    {/* Resumo compacto */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:9}}>
+      {[
+        {l:"Demandas",     v:_resumo.total,      c:"#0f172a"},
+        {l:"Em andamento", v:_resumo.andamento,  c:"#2563eb"},
+        {l:"Aguardando",   v:_resumo.aguardando, c:"#b45309"},
+        {l:"Concluídas",   v:_resumo.concluidas, c:"#15803d"},
+        {l:"Atrasadas",    v:_resumo.atrasadas,  c:"#dc2626"},
+      ].map(function(x,i){
+        const _zero=!x.v;
+        return <div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 13px",
+          boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+          <div style={{color:_zero?"#cbd5e1":x.c,fontSize:21,fontWeight:800,letterSpacing:-.7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{x.v}</div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:4}}>{x.l}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* ══ FILTROS ══ */}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",flex:isMob?"1 1 100%":"0 1 260px"}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:11,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar demanda..."
+          onFocus={_demFoco} onBlur={_demBlur}
+          style={Object.assign({},_DEM_INP,{padding:"8px 12px 8px 32px",fontSize:12,fontWeight:600})}/>
+      </div>
+      <select value={fStatus} onChange={function(e){setFStatus(e.target.value);}} style={_selEstilo}>
+        <option value="">Todos os status</option>
+        {DEM_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+      </select>
+      <select value={fCat} onChange={function(e){setFCat(e.target.value);}} style={_selEstilo}>
+        <option value="">Todas as categorias</option>
+        {DEM_CATEGORIAS.map(function(c){return <option key={c.id} value={c.id}>{c.label}</option>;})}
+      </select>
+      <select value={fResp} onChange={function(e){setFResp(e.target.value);}} style={_selEstilo}>
+        <option value="">Todos responsáveis</option>
+        {_time.map(function(u){return <option key={u.id} value={u.id}>{String(u.name||"").split(" ")[0]}</option>;})}
+      </select>
+      <select value={fPrazo} onChange={function(e){setFPrazo(e.target.value);}} style={_selEstilo}>
+        <option value="">Qualquer prazo</option>
+        <option value="atrasado">Atrasadas</option>
+        <option value="semana">Próximos 7 dias</option>
+        <option value="mes">Próximos 30 dias</option>
+        <option value="sem">Sem prazo</option>
+      </select>
+      {_temFiltro && <button type="button" onClick={_limpar}
+        style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",
+          fontFamily:_DEM_FF,padding:"8px 4px"}}>Limpar filtros</button>}
+    </div>
+
+    {/* ══ LISTA ══ */}
+    {loading
+      ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
+      : _lista.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
+            <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
+              {_temFiltro ? "Nada encontrado com esses filtros" : "Nenhuma demanda ainda"}
+            </div>
+            <div style={{color:"#94a3b8",fontSize:12.5}}>
+              {_temFiltro
+                ? "Ajuste a busca ou limpe os filtros."
+                : (canEdit ? "Crie a primeira demanda e quebre ela em etapas." : "A equipe ainda não cadastrou demandas.")}
+            </div>
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {_lista.map(function(d){
+              return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
+                aberto={!!abertas[d.id]}
+                onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
+                onEditar={function(){ setModal(d); }}
+                onExcluir={function(){ _excluirDemanda(d); }}
+                onSalvar={_salvarTarefas}/>;
+            })}
+          </div>
+    }
+
+    {/* ══ HISTORICO DE MARCOS ══
+        Os marcos continuam existindo em client_milestones — alimentam o
+        calendario, a agenda de eventos e o dashboard. Ficam aqui embaixo,
+        recolhidos, pra nao competir com as demandas. */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,overflow:"hidden"}}>
+      <div onClick={function(){setVerMarcos(!verMarcos);}}
+        style={{padding:"13px 17px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",
+          background:verMarcos?"#fafbfc":"#fff",transition:"background .12s"}}>
+        <div style={{width:30,height:30,borderRadius:9,background:_cor+"12",border:"1px solid "+_cor+"2e",
+          display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n="flame" size={14} color={_cor}/>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Marcos do projeto</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Acontecimentos e conquistas — aparecem também no calendário</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{flexShrink:0,transition:"transform .18s",transform:verMarcos?"rotate(180deg)":"rotate(0deg)"}}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      {verMarcos && <div style={{borderTop:"1px solid #f1f5f9",padding:"15px 17px 17px"}}>
+        {typeof CMarcos==="function"
+          ? <CMarcos cl={cl} canEdit={canEdit} selUnit={selUnit}/>
+          : <div style={{color:"#94a3b8",fontSize:12.5}}>Marcos indisponíveis.</div>}
+      </div>}
+    </div>
+
+    {modal && <_DemandaModal inicial={modal} isMob={isMob}
+      onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
 }
