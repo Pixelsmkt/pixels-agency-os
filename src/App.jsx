@@ -50455,7 +50455,10 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       return;
     }
     setSolEnviando(true);
-    const tipoCfg=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;})||TIPOS_DEMANDA_CLIENTE[5];
+    const _ehCategoria = String(solTipo||"").indexOf("cat:")===0;
+    const tipoCfg=_ehCategoria
+      ? {id:solTipo, routesFluxo:false}
+      : (TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;})||TIPOS_DEMANDA_CLIENTE[5]);
     const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
     const now=new Date().toISOString();
     const status=tipoCfg.routesFluxo?"rascunhos":"interno_demanda";
@@ -50476,7 +50479,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           const r=await window._sb.from("client_demandas").insert({
             client_id:_rootId,
             titulo:solTitulo.trim(),
-            categoria:_catMap[solTipo]||"outros",
+            categoria:_ehCategoria?solTipo.slice(4):(_catMap[solTipo]||"outros"),
             descricao:(solDescricao.trim()?solDescricao.trim()+"\n\n":"")+"— Solicitada pelo cliente no portal.",
             status:"nao_iniciada",
             prioridade:_prioMap[solPrioridade]||"normal",
@@ -50920,15 +50923,29 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",resize:"vertical",boxSizing:"border-box"}}/>
       </div>
 
-      {/* Linha 3: tipo */}
+      {/* Linha 3: tipo — MESMAS categorias de Estrategia > Clientes > Demandas.
+          Arte/video continuam separados porque vao direto pro fluxo de producao;
+          o resto vira uma demanda (client_demandas) com a categoria escolhida. */}
       <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tipo</div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Conteúdo pras redes <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· vai direto pra equipe de produção</span></div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {TIPOS_DEMANDA_CLIENTE.map(function(opt){
+          {TIPOS_DEMANDA_CLIENTE.filter(function(o){return o.routesFluxo;}).map(function(opt){
             const active=solTipo===opt.id;
             return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
               style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
               {opt.label}
+            </button>;
+          })}
+        </div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,margin:"12px 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Projeto / demanda <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· acompanhada por etapas</span></div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {(typeof DEM_CATEGORIAS!=="undefined"?DEM_CATEGORIAS:[]).map(function(c){
+            const _id="cat:"+c.id;
+            const active=solTipo===_id;
+            return <button key={_id} onClick={function(){setSolTipo(_id);}}
+              style={{background:active?c.cor+"15":"#fff",color:active?c.cor:"#64748b",border:"1px solid "+(active?c.cor:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:5}}>
+              {typeof Ico==="function"&&<Ico n={c.ico} size={11} color={active?c.cor:"#94a3b8"}/>}
+              {c.label}
             </button>;
           })}
         </div>
