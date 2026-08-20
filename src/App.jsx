@@ -13859,49 +13859,58 @@ function _projectDuration(s){
   </div>;
 }
 /* ─── Troca rapida de cliente (header do detalhe) ──────────────────────
-   Fila SEMPRE ABERTA de chips simetricos com logo + NOME escrito — 1 clique
-   troca o cliente. O Bioter expande em GRUPO + uma unidade por chip, porque
-   cada unidade tem portal e acessos proprios. O atual ganha a borda na cor. */
+   Fila sempre aberta, UMA LINHA (scroll horizontal se faltar espaco), chips
+   identicos em ordem alfabetica. Bioter = Grupo + unidades (badge da sigla).
+   A logo e renderizada direto (contain, sem crop) — o ClientLogo padrao tem
+   altura fixa e cortava logos largas (Construschorr, Lero, Vet, Arabuta).  */
 function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
-  const _todos=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){
-    return c && c.id!=="pixels" && String(c.name||"").trim();
-  });
+  const _todos=(typeof CLIENTS!=="undefined"?CLIENTS:[])
+    .filter(function(c){ return c && c.id!=="pixels" && String(c.name||"").trim(); })
+    .slice()
+    .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
   if(_todos.length<2) return null;
-  const _W = isMob ? 78 : 86;
-  const _units=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[];
+  const _W = isMob ? 76 : 86;
+  const _units=((typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[])
+    .slice()
+    .sort(function(a,b){ return String(a.pickerLabel||a.label||"").localeCompare(String(b.pickerLabel||b.label||""),"pt-BR",{sensitivity:"base"}); });
+
+  const _LogoBox=function(p){
+    // Caixa fixa 44x22 — logo inteira dentro, centralizada, SEM corte.
+    const _cliObj=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===p.logoId;});
+    const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[p.logoId]) || (_cliObj&&_cliObj.logoUrl) || null;
+    return <span style={{width:44,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+      {_src
+        ? <img src={_src} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+        : <span style={{color:p.cor,fontWeight:900,fontSize:11,background:p.cor+"16",borderRadius:6,padding:"1px 6px"}}>{p.abbr}</span>}
+      {p.badge && <span style={{position:"absolute",right:-7,bottom:-4,background:p.cor,color:"#fff",fontSize:7.5,fontWeight:900,borderRadius:6,padding:"1px 4px",lineHeight:1.3,border:"1.5px solid #fff"}}>{p.badge}</span>}
+    </span>;
+  };
 
   const _Chip=function(p){
-    // p: {key, nome, cor, ativo, logoId, abbr, sub, onClick}
     return <button type="button" title={p.nome+(p.sub?(" — "+p.sub):"")}
       onClick={p.onClick}
-      style={{width:_W,minHeight:isMob?56:60,borderRadius:12,padding:"7px 5px 6px",boxSizing:"border-box",
+      style={{width:_W,minWidth:_W,height:isMob?58:62,borderRadius:12,padding:"7px 5px 6px",boxSizing:"border-box",
         background:p.ativo?(p.cor+"0a"):"#fff",
         border:p.ativo?("2px solid "+p.cor):"1px solid #e2e8f0",
         boxShadow:p.ativo?("0 4px 14px "+p.cor+"30"):"0 1px 2px rgba(15,23,42,.04)",
         cursor:p.ativo?"default":"pointer",display:"inline-flex",flexDirection:"column",
-        alignItems:"center",justifyContent:"flex-start",gap:4,flexShrink:0,
+        alignItems:"center",justifyContent:"space-between",gap:3,flexShrink:0,
         opacity:p.ativo?1:.85,transition:"all .15s",fontFamily:"inherit"}}
       onMouseEnter={function(e){ if(!p.ativo){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=p.cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px "+p.cor+"26"; } }}
       onMouseLeave={function(e){ if(!p.ativo){ e.currentTarget.style.opacity=".85"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
-      <span style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"}}>
-        {typeof ClientLogo==="function"
-          ? <ClientLogo clientId={p.logoId} size="sm"/>
-          : <span style={{color:p.cor,fontWeight:900,fontSize:12}}>{p.abbr}</span>}
-        {p.badge && <span style={{position:"absolute",right:-4,bottom:-3,background:p.cor,color:"#fff",fontSize:7.5,fontWeight:900,borderRadius:6,padding:"1px 4px",lineHeight:1.3,border:"1.5px solid #fff"}}>{p.badge}</span>}
-      </span>
-      <span style={{color:p.ativo?p.cor:"#334155",fontSize:11,fontWeight:p.ativo?800:700,lineHeight:1.2,
-        letterSpacing:-.1,textAlign:"center",width:"100%",
+      <_LogoBox logoId={p.logoId} cor={p.cor} abbr={p.abbr} badge={p.badge}/>
+      <span style={{color:p.ativo?p.cor:"#334155",fontSize:10.5,fontWeight:p.ativo?800:700,lineHeight:1.15,
+        letterSpacing:-.15,textAlign:"center",width:"100%",
         display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
         {p.nome}
       </span>
     </button>;
   };
 
-  return <div style={{display:"flex",alignItems:"stretch",gap:8,flexShrink:0,flexWrap:"wrap",
-    width:isMob?"100%":"auto",justifyContent:isMob?"flex-start":"flex-end",maxWidth:isMob?"100%":860}}>
+  return <div style={{display:"flex",alignItems:"stretch",gap:7,flexWrap:"nowrap",overflowX:"auto",
+    paddingBottom:4,width:isMob?"100%":"auto",maxWidth:"100%",WebkitOverflowScrolling:"touch"}}>
     {_todos.map(function(c){
       const _cor=c.color||"#7c3aed";
-      // ── Bioter: chip do GRUPO + um por unidade ──
       if(c.id==="bioter"){
         const _ehBio=cl.id==="bioter";
         const _grupoAtivo=_ehBio && (!selUnit || selUnit==="grupo");
