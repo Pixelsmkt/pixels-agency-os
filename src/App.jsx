@@ -59958,12 +59958,6 @@ function _OpDrawer(props){
 ─────────────────────────────────────────────────────────────── */
 const ONBOARDING_BLOCKS = [
   {
-    id:"inicial", title:"Bloco inicial", subtitle:"Antes do dia 1",
-    items:[
-      {id:"inicial_7d", label:"Início do projeto em até 7 dias: templates, gravação de materiais e edições"},
-    ],
-  },
-  {
     id:"dia1", title:"Dia 1", subtitle:"Contratação e setup",
     items:[
       {id:"d1_whatsapp_grupo", label:"Criação do grupo de WhatsApp com todos os envolvidos no projeto"},
@@ -60111,7 +60105,6 @@ function _onbIsoDate(d){
 }
 // Offset (em dias úteis) por bloco — espelha o "Dia N" do checklist
 const _ONB_BLOCK_OFFSETS = {
-  inicial: 0,   // "Antes do dia 1" → cair pra hoje
   dia1:    1,
   dia2:    2,
   dia3:    3,
@@ -60122,7 +60115,6 @@ const _ONB_BLOCK_OFFSETS = {
 };
 // Responsáveis default por bloco (sócios cuidam do setup; equipe operacional entra depois)
 const _ONB_DEFAULT_RESP = {
-  inicial: ["vinicius","gustavo"],
   dia1:    ["vinicius","gustavo"],
   dia2:    ["gustavo","ellen"],
   dia3:    ["vinicius","gustavo","ellen"],
@@ -60746,17 +60738,17 @@ function OnboardingSection(props){
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               {_dtCurto}
             </span>}
-            {/* Tarefas concluidas — icone de checklist pra nao confundir com data */}
-            <span title={feitos+" de "+total+" tarefas concluidas"}
-              style={{display:"inline-flex",alignItems:"center",gap:5,background:allDone?"rgba(22,163,74,.92)":_t.veu,border:"1px solid "+(allDone?"rgba(22,163,74,.92)":_t.borda),borderRadius:99,padding:"3px 9px",color:allDone?"#fff":_t.ink,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-              {feitos}/{total}
-            </span>
           </div>
           {block.subtitle && <div style={{color:_t.soft,fontSize:11.5,fontWeight:600,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{block.subtitle}</div>}
         </div>
       </div>
-      <div style={{display:"inline-flex",alignItems:"center",gap:8,flexShrink:0}}>
+      <div style={{display:"inline-flex",alignItems:"center",gap:10,flexShrink:0}}>
+        {/* Tarefas concluidas — icone de checklist pra nao confundir com a data */}
+        <span title={feitos+" de "+total+" tarefas concluidas"}
+          style={{display:"inline-flex",alignItems:"center",gap:5,background:allDone?"rgba(22,163,74,.92)":_t.veu,border:"1px solid "+(allDone?"rgba(22,163,74,.92)":_t.borda),borderRadius:99,padding:"3px 9px",color:allDone?"#fff":_t.ink,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          {feitos}/{total}
+        </span>
         <div style={{background:_t.veu,borderRadius:99,height:6,overflow:"hidden",width:110}}>
           <div style={{width:pct+"%",height:"100%",background:allDone?"rgba(22,163,74,.95)":_t.ink,borderRadius:99,transition:"width .35s ease",opacity:allDone?1:.9}}/>
         </div>
@@ -61142,7 +61134,6 @@ function OnboardingChecklist(props){
   const accent = (cl && cl.color) || "#7c3aed";
 
   const _ICO_BY_BLOCK = {
-    inicial: "sparkles",
     dia1:    "flame",
     dia2:    "fileText",
     dia3:    "users",
