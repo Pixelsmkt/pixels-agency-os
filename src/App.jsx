@@ -60526,6 +60526,19 @@ function ClientAlertsPanel(props){
 const _ONB_RESP_IDS = ["gustavo","vinicius","ellen","ocsana","erick"];
 const _ONB_FF = "'Inter',system-ui,-apple-system,sans-serif";
 
+// Tinta legivel em cima da cor do cliente — clientes de cor clara (Climaves,
+// Arabuta) precisam de texto escuro pra nao sumir.
+function _onbTinta(cor){
+  const hx = String(cor||"").replace("#","");
+  const r = parseInt(hx.substring(0,2),16)||0;
+  const g = parseInt(hx.substring(2,4),16)||0;
+  const b = parseInt(hx.substring(4,6),16)||0;
+  const lum = (0.299*r + 0.587*g + 0.114*b)/255;
+  return lum > 0.62
+    ? {ink:"#0f172a", soft:"rgba(15,23,42,.62)", veu:"rgba(15,23,42,.10)", borda:"rgba(15,23,42,.14)"}
+    : {ink:"#ffffff", soft:"rgba(255,255,255,.75)", veu:"rgba(255,255,255,.20)", borda:"rgba(255,255,255,.26)"};
+}
+
 function _OnbDateField(props){
   // Pill de data com o calendário CUSTOM (_PxDatePicker via render-trigger).
   // Antes usava input date nativo + showPicker() — visual de sistema, feio.
@@ -60626,20 +60639,20 @@ function OnboardingItem(props){
     item.sub.forEach(function(sx){ if(items[sx.id]&&items[sx.id].done)_ok++; });
     return <div style={{display:"flex",flexDirection:"column",gap:0,marginLeft:level>0?28:0}}>
       <div onClick={function(){setAberto(!aberto);}}
-        style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,"+_ac+","+_ac+"d9)",border:"1px solid "+_ac,borderRadius:aberto?"10px 10px 0 0":"10px",padding:"10px 14px",opacity:it.done?0.82:1,transition:"all .15s",flexWrap:"wrap",cursor:"pointer",boxShadow:"0 3px 10px "+_ac+"2e"}}>
+        style={{display:"flex",alignItems:"center",gap:12,background:_ac+"12",border:"1px solid "+_ac+"33",borderLeft:"3px solid "+_ac,borderRadius:aberto?"10px 10px 0 0":"10px",padding:"10px 14px",opacity:it.done?0.72:1,transition:"all .15s",flexWrap:"wrap",cursor:"pointer"}}>
         <input type="checkbox" checked={!!it.done} onClick={function(e){e.stopPropagation();}} onChange={function(){toggle(item.id, currentUserId);}}
-          style={{width:17,height:17,cursor:"pointer",accentColor:"#fff",flexShrink:0}}/>
-        <span style={{flex:1,minWidth:180,color:"#fff",fontSize:13,fontWeight:800,letterSpacing:-.1,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:8}}>
+          style={{width:17,height:17,cursor:"pointer",accentColor:_ac,flexShrink:0}}/>
+        <span style={{flex:1,minWidth:180,color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.1,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:8}}>
           {item.label}
-          <span style={{background:"rgba(255,255,255,.22)",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_ok}/{_tot}</span>
+          <span style={{background:_ac,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_ok}/{_tot}</span>
         </span>
         <span onClick={function(e){e.stopPropagation();}} style={{display:"inline-flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
           <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
           <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
           <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
         </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-          style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)",opacity:.9}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={_ac} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
+          style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
           <polyline points="6 9 12 15 18 9"/>
         </svg>
       </div>
@@ -60700,25 +60713,58 @@ function OnboardingSection(props){
   });
   const pct = total>0?Math.round(feitos/total*100):0;
   const allDone = total>0&&feitos===total;
+  const _t = _onbTinta(_ac);
 
-  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:14,fontFamily:_ONB_FF}}>
-    {/* Header IGUAL ao Ongoing: ícone + título 15px + subtítulo + chip à direita */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:0}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        {typeof Ico==="function" && <Ico n={ico||"checkCircle"} size={16} color={_ac}/>}
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{block.title}</div>
-        <span style={{background:allDone?"#dcfce7":"#f1f5f9",color:allDone?"#15803d":"#64748b",fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:99,fontFeatureSettings:"'tnum'"}}>{feitos}/{total}</span>
-      </div>
-      <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
-        <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:110}}>
-          <div style={{width:pct+"%",height:"100%",background:allDone?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_ac+","+_ac+"cc)",borderRadius:99,transition:"width .35s ease"}}/>
+  // Data do bloco — os itens do dia caem no mesmo dia util calculado a partir do
+  // inicio do projeto; usa a menor data preenchida como a data daquela etapa.
+  let _dt = "";
+  block.items.forEach(function(x){
+    const _a = (items[x.id]||{}).due || "";
+    if(_a && (!_dt || _a < _dt)) _dt = _a;
+    if(x.sub) x.sub.forEach(function(sx){
+      const _b = (items[sx.id]||{}).due || "";
+      if(_b && (!_dt || _b < _dt)) _dt = _b;
+    });
+  });
+  const _dtCurto = _dt ? (_dt.slice(8,10)+"/"+_dt.slice(5,7)) : "";
+  const _dtLongo = _dt ? (_dt.slice(8,10)+"/"+_dt.slice(5,7)+"/"+_dt.slice(0,4)) : "";
+
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",fontFamily:_ONB_FF}}>
+    {/* Faixa do DIA — cor do cliente. E o nivel mais alto da hierarquia: os itens-pai
+        usam a mesma cor, porem em versao suave, pra nao competir com esta faixa. */}
+    <div style={{background:"linear-gradient(135deg,"+_ac+","+_ac+"d4)",padding:"13px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
+        <div style={{width:34,height:34,borderRadius:10,background:_t.veu,border:"1px solid "+_t.borda,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          {typeof Ico==="function" && <Ico n={ico||"checkCircle"} size={16} color={_t.ink}/>}
         </div>
-        <span style={{color:allDone?"#16a34a":_ac,fontWeight:800,fontSize:12,letterSpacing:-.2,fontFeatureSettings:"'tnum'",minWidth:38,textAlign:"right"}}>{pct}%</span>
+        <div style={{minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{color:_t.ink,fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.2}}>{block.title}</span>
+            {/* Data da etapa — icone de calendario */}
+            {_dtLongo && <span title={"Data prevista desta etapa: "+_dtLongo}
+              style={{display:"inline-flex",alignItems:"center",gap:5,background:_t.veu,border:"1px solid "+_t.borda,borderRadius:99,padding:"3px 9px",color:_t.ink,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {_dtCurto}
+            </span>}
+            {/* Tarefas concluidas — icone de checklist pra nao confundir com data */}
+            <span title={feitos+" de "+total+" tarefas concluidas"}
+              style={{display:"inline-flex",alignItems:"center",gap:5,background:allDone?"rgba(22,163,74,.92)":_t.veu,border:"1px solid "+(allDone?"rgba(22,163,74,.92)":_t.borda),borderRadius:99,padding:"3px 9px",color:allDone?"#fff":_t.ink,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              {feitos}/{total}
+            </span>
+          </div>
+          {block.subtitle && <div style={{color:_t.soft,fontSize:11.5,fontWeight:600,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{block.subtitle}</div>}
+        </div>
+      </div>
+      <div style={{display:"inline-flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <div style={{background:_t.veu,borderRadius:99,height:6,overflow:"hidden",width:110}}>
+          <div style={{width:pct+"%",height:"100%",background:allDone?"rgba(22,163,74,.95)":_t.ink,borderRadius:99,transition:"width .35s ease",opacity:allDone?1:.9}}/>
+        </div>
+        <span style={{color:_t.ink,fontWeight:800,fontSize:12.5,letterSpacing:-.2,fontFeatureSettings:"'tnum'",minWidth:38,textAlign:"right"}}>{pct}%</span>
       </div>
     </div>
-    {block.subtitle && <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:-8}}>{block.subtitle}</div>}
     {/* Lista de items */}
-    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <div style={{display:"flex",flexDirection:"column",gap:6,padding:"14px 18px 16px"}}>
       {block.items.map(function(it){
         return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={_ac} level={0}/>;
       })}
@@ -61684,7 +61730,7 @@ const PORTF_PROJETOS = [
     prazo:"90 dias",
     short:"Posicionamento e início de escala em 90 dias.",
     long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
-    entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
+    entregas:["Diagnóstico e estratégia","Gestão de mídia paga","Gestão de redes sociais","Suporte e acompanhamento"],
     valor:"R$ 4.000",
     unidade:"/mês",
     resumo:"Starter 3 Meses: R$ 4.000/mês (total R$ 12.000). Posicionamento, construção de presença e início de escala.",
@@ -61724,25 +61770,28 @@ const PORTF_PROJETOS = [
 const PORTF_STARTER_ENTREGAS = [
   {
     icon:"chart", title:"Diagnóstico e estratégia",
-    desc:"Análise do posicionamento atual, direcionamento tático e definição de prioridades.",
+    desc:"Entendimento do negócio, posicionamento, público, concorrência e definição do direcionamento estratégico.",
     cor:"#7c3aed",
     itens:[
-      "Diagnóstico completo do posicionamento atual da marca",
-      "Definição de objetivos estratégicos e indicadores de performance (KPIs)",
-      "Estruturação de plano tático com foco em crescimento previsível",
+      "Entendimento da empresa, produtos e serviços",
+      "Análise do posicionamento e comunicação atual da marca",
+      "Definição de objetivos estratégicos e prioridades",
+      "Definição do público que queremos atingir",
+      "Análise da concorrência",
+      "Estruturação da estratégia de comunicação",
     ],
   },
   {
     icon:"funnel", title:"Gestão de mídia paga",
-    desc:"Estruturação e otimização de campanhas para alcance, oportunidades e performance.",
+    desc:"Criação, ativação, acompanhamento e otimização das campanhas de anúncios nos meses 2 e 3.",
     cor:"#0ea5e9",
     itens:[
-      "Estratégia de anúncios para atrair, engajar e vender",
-      "Textos e criativos pensados para gerar cliques e conversões",
-      "Públicos segmentados com base no seu cliente ideal",
-      "Análise da concorrência para posicionar sua marca com vantagem",
-      "Otimização diária para gastar menos e vender mais",
-      "Relatórios claros com o que importa: resultado no caixa",
+      "Estratégia das campanhas de anúncios",
+      "Definição dos públicos que queremos alcançar",
+      "Criação e testes de anúncios e criativos",
+      "Ativação das campanhas a partir do segundo mês",
+      "Acompanhamento dos resultados",
+      "Otimização das campanhas com base na performance",
     ],
   },
   {
@@ -61751,19 +61800,19 @@ const PORTF_STARTER_ENTREGAS = [
     cor:"#ec4899",
     itens:[
       "Planejamento de calendário editorial",
-      "Edição de vídeo",
-      "Design",
-      "Criação de copywriting estratégico",
+      "Criação de copywriting e textos das publicações",
+      "Produção de artes",
+      "Edição de vídeos",
     ],
   },
   {
     icon:"check", title:"Suporte e acompanhamento",
-    desc:"Relatórios mensais, suporte via WhatsApp e alinhamento estratégico contínuo.",
+    desc:"Suporte, análise de performance e alinhamento estratégico ao longo do projeto.",
     cor:"#16a34a",
     itens:[
-      "Suporte diário via WhatsApp",
-      "Relatórios mensais completos",
-      "Reunião mensal de alinhamento estratégico",
+      "Suporte via WhatsApp",
+      "Relatório de performance do projeto",
+      "Reunião de alinhamento estratégico",
     ],
   },
 ];
@@ -61772,60 +61821,71 @@ const PORTF_STARTER_TIMELINE = [
   {
     mes:"Mês 1",
     titulo:"Estruturação e Posicionamento",
-    resumo:"Fase de diagnóstico, planejamento estratégico e construção da base de conteúdo. Preparamos tudo pra sua marca começar a comunicar com consistência.",
+    resumo:"Fase de diagnóstico, planejamento estratégico e construção da base de conteúdo. Preparamos a empresa para comunicar com consistência antes da ativação das campanhas.",
     itens:[
-      "Diagnóstico completo do posicionamento atual da marca",
-      "Definição de objetivos estratégicos e KPIs",
-      "Estruturação do plano tático de crescimento",
+      "Entendimento da empresa, produtos e serviços",
+      "Análise do posicionamento e comunicação atual da marca",
+      "Definição de objetivos estratégicos e prioridades",
+      "Definição do público que queremos atingir",
       "Análise da concorrência",
-      "Estratégia de anúncios pra atrair, engajar e vender",
-      "Planejamento de calendário editorial",
-      "Criação de copywriting estratégico",
+      "Estruturação da estratégia de comunicação",
+      "Planejamento do calendário editorial",
+      "Preparação da estratégia das futuras campanhas de anúncios",
+      "Criação dos textos e copywriting",
       "Produção de 4 artes",
       "Edição de 4 vídeos",
-      "Suporte diário via WhatsApp",
+      "Suporte via WhatsApp",
     ],
+    nota:"As campanhas começam no segundo mês, após a estruturação da base estratégica e de comunicação.",
     cor:"#7c3aed",
   },
   {
     mes:"Mês 2",
     titulo:"Início de Escala",
-    resumo:"Ativação das campanhas de mídia paga e consolidação da presença nas redes. Aqui começa a captação e a comunicação vira máquina.",
+    resumo:"Com a base preparada, ativamos as campanhas de mídia paga e começamos a ampliar a presença da empresa, acompanhando os primeiros dados e oportunidades geradas.",
     itens:[
       "Ativação das campanhas de mídia paga",
-      "Públicos segmentados com base no cliente ideal",
-      "Textos e criativos pra gerar cliques e conversões",
-      "Otimização diária para gastar menos e vender mais",
-      "Planejamento de calendário editorial",
-      "Criação de copywriting estratégico",
+      "Definição e segmentação dos públicos",
+      "Testes de anúncios e criativos",
+      "Acompanhamento dos resultados",
+      "Ajustes e otimizações das campanhas",
+      "Planejamento do calendário editorial",
+      "Criação dos textos e copywriting",
       "Produção de 2 artes",
       "Edição de 2 vídeos",
-      "Edição de vídeo",
-      "Design",
-      "Suporte diário via WhatsApp",
+      "Suporte via WhatsApp",
     ],
     cor:"#0ea5e9",
   },
   {
     mes:"Mês 3",
     titulo:"Consolidação e Otimização",
-    resumo:"Refinamento total: análise de resultados, otimização de performance e plano de continuidade pra crescimento sustentável.",
+    resumo:"Com dados reais das campanhas e do comportamento do público, refinamos a estratégia, concentramos esforços no que apresenta melhor resposta e planejamos a continuidade do crescimento.",
     itens:[
-      "Otimização contínua das campanhas",
-      "Relatórios claros: resultado no caixa",
-      "Relatório mensal completo de performance",
-      "Reunião mensal de alinhamento estratégico",
-      "Planejamento de calendário editorial",
-      "Criação de copywriting estratégico",
+      "Continuidade das campanhas de anúncios",
+      "Otimização das campanhas com base nos resultados",
+      "Redução de esforços no que não apresenta boa performance",
+      "Reforço das campanhas e abordagens com melhores resultados",
+      "Análise dos contatos e oportunidades geradas",
+      "Planejamento dos próximos passos e continuidade",
+      "Planejamento do calendário editorial",
+      "Criação dos textos e copywriting",
       "Produção de 2 artes",
       "Edição de 2 vídeos",
-      "Edição de vídeo",
-      "Design",
-      "Plano de continuidade e escala",
-      "Suporte diário via WhatsApp",
+      "Reunião de alinhamento estratégico",
+      "Relatório de performance do período",
+      "Suporte via WhatsApp",
     ],
     cor:"#16a34a",
   },
+];
+
+// Sugestão de verba de anúncios — NAO faz parte do preco do plano (R$ 12.000).
+// E pago pelo cliente direto nas plataformas (Meta/Google).
+const PORTF_STARTER_MIDIA = [
+  {mes:"Mês 1", valor:"", texto:"Sem investimento em anúncios"},
+  {mes:"Mês 2", valor:"R$ 2.000", texto:"em créditos de anúncios"},
+  {mes:"Mês 3", valor:"R$ 2.000", texto:"em créditos de anúncios"},
 ];
 
 const PORTF_IA = [
@@ -64585,9 +64645,54 @@ function PagePortfolio(props){
                     </div>;
                   })}
                 </div>
+
+                {/* Nota discreta da fase (ex: quando as campanhas comecam) — parte do metodo, nao alerta */}
+                {t.nota && <div style={{display:"flex",alignItems:"flex-start",gap:8,color:"#94a3b8",fontSize:11.5,lineHeight:1.5,fontFamily:_PORTF_FF,fontWeight:500,fontStyle:"italic",paddingLeft:2}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                  <span>{t.nota}</span>
+                </div>}
               </div>
             </div>;
           })}
+        </div>
+      </div>
+
+      {/* ── Investimento em midia — SEPARADO do valor do plano ── */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:isMob?"18px 18px 20px":"22px 26px 24px",fontFamily:_PORTF_FF,boxShadow:"0 2px 6px rgba(15,23,42,0.03)"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:13,flexWrap:"wrap"}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M17 15h2"/></svg>
+          </div>
+          <div style={{flex:1,minWidth:isMob?"100%":260}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?15:16.5,letterSpacing:-.3,lineHeight:1.25,fontFamily:_PORTF_FF}}>Investimento em mídia não incluso</div>
+            <div style={{color:"#64748b",fontSize:12.5,lineHeight:1.55,marginTop:6,maxWidth:640,fontFamily:_PORTF_FF}}>
+              O valor do Plano Starter corresponde aos serviços da Pixels. O investimento destinado às plataformas de anúncios é realizado separadamente pelo cliente diretamente nas plataformas.
+            </div>
+          </div>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:99,padding:"6px 13px",color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",flexShrink:0,fontFamily:_PORTF_FF,whiteSpace:"nowrap"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Não somado ao plano
+          </div>
+        </div>
+
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",margin:"20px 0 10px",fontFamily:_PORTF_FF}}>Sugestão inicial de investimento em mídia</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:10}}>
+          {PORTF_STARTER_MIDIA.map(function(m,i){
+            const _tem = !!m.valor;
+            return <div key={i} style={{background:_tem?"#f8fafc":"#fcfcfd",border:"1px solid "+(_tem?"#e2e8f0":"#f1f5f9"),borderRadius:12,padding:"13px 15px",fontFamily:_PORTF_FF}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",fontFamily:_PORTF_FF}}>{m.mes}</div>
+              {_tem
+                ? <div style={{marginTop:5}}>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.5,lineHeight:1.1,fontFeatureSettings:"'tnum'",fontFamily:_PORTF_FF}}>{m.valor}</div>
+                    <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:3,fontFamily:_PORTF_FF}}>{m.texto}</div>
+                  </div>
+                : <div style={{color:"#94a3b8",fontSize:12.5,fontWeight:600,marginTop:7,lineHeight:1.4,fontFamily:_PORTF_FF}}>{m.texto}</div>
+              }
+            </div>;
+          })}
+        </div>
+        <div style={{color:"#94a3b8",fontSize:11.5,lineHeight:1.55,marginTop:12,fontFamily:_PORTF_FF}}>
+          O investimento em mídia poderá ser ajustado conforme os resultados e o alinhamento estratégico do projeto.
         </div>
       </div>
 
