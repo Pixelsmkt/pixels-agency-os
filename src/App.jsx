@@ -13854,36 +13854,42 @@ function _projectDuration(s){
   </div>;
 }
 /* ─── Troca rapida de cliente (header do detalhe) ──────────────────────
-   Fila SEMPRE ABERTA de chips simetricos — 1 clique troca o cliente sem
-   voltar pra lista. O atual ganha a borda na cor dele.                  */
+   Fila SEMPRE ABERTA de chips simetricos com logo + NOME escrito — 1 clique
+   troca o cliente. O nome escrito importa porque logo sozinha nao diz qual
+   e a unidade/portal (caso Bioter). O atual ganha a borda na cor dele.    */
 function _TrocarClienteSeletor({cl, onTrocar, isMob}){
   const _todos=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){
     return c && c.id!=="pixels" && String(c.name||"").trim();
   });
   if(_todos.length<2) return null;
-  const _S = isMob ? 40 : 46;   // lado do chip — todos iguais, simetria garantida
+  const _W = isMob ? 84 : 96;   // chips identicos — simetria garantida
 
-  return <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0,flexWrap:"wrap",
+  return <div style={{display:"flex",alignItems:"stretch",gap:8,flexShrink:0,flexWrap:"wrap",
     width:isMob?"100%":"auto",justifyContent:isMob?"flex-start":"flex-end"}}>
     {_todos.map(function(c){
       const _atual=c.id===cl.id;
       const _cor=c.color||"#7c3aed";
       return <button key={c.id} type="button" title={c.name}
         onClick={function(){ if(!_atual) onTrocar(c); }}
-        style={{width:_S,height:_S,borderRadius:12,padding:5,boxSizing:"border-box",
-          background:"#fff",
+        style={{width:_W,minHeight:isMob?66:72,borderRadius:13,padding:"9px 6px 7px",boxSizing:"border-box",
+          background:_atual?(_cor+"0a"):"#fff",
           border:_atual?("2px solid "+_cor):"1px solid #e2e8f0",
-          boxShadow:_atual?("0 4px 12px "+_cor+"33"):"0 1px 2px rgba(15,23,42,.04)",
-          cursor:_atual?"default":"pointer",display:"inline-flex",alignItems:"center",
-          justifyContent:"center",overflow:"hidden",flexShrink:0,
-          opacity:_atual?1:.82,transition:"all .15s",fontFamily:"inherit",position:"relative"}}
-        onMouseEnter={function(e){ if(!_atual){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=_cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 14px "+_cor+"26"; } }}
-        onMouseLeave={function(e){ if(!_atual){ e.currentTarget.style.opacity=".82"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
-        {typeof ClientLogo==="function"
-          ? <ClientLogo clientId={c.id} size="sm"/>
-          : <span style={{color:_cor,fontWeight:900,fontSize:11}}>{c.abbr}</span>}
-        {_atual && <span style={{position:"absolute",bottom:2,left:"50%",transform:"translateX(-50%)",
-          width:14,height:3,borderRadius:99,background:_cor}}/>}
+          boxShadow:_atual?("0 4px 14px "+_cor+"30"):"0 1px 2px rgba(15,23,42,.04)",
+          cursor:_atual?"default":"pointer",display:"inline-flex",flexDirection:"column",
+          alignItems:"center",justifyContent:"flex-start",gap:6,flexShrink:0,
+          opacity:_atual?1:.85,transition:"all .15s",fontFamily:"inherit"}}
+        onMouseEnter={function(e){ if(!_atual){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=_cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px "+_cor+"26"; } }}
+        onMouseLeave={function(e){ if(!_atual){ e.currentTarget.style.opacity=".85"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
+        <span style={{width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {typeof ClientLogo==="function"
+            ? <ClientLogo clientId={c.id} size="sm"/>
+            : <span style={{color:_cor,fontWeight:900,fontSize:12}}>{c.abbr}</span>}
+        </span>
+        <span style={{color:_atual?_cor:"#475569",fontSize:9.5,fontWeight:_atual?800:700,lineHeight:1.25,
+          letterSpacing:-.1,textAlign:"center",width:"100%",
+          display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+          {c.name}
+        </span>
       </button>;
     })}
   </div>;
@@ -13988,11 +13994,11 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
   let TABS=[
     {id:"analises",      label:"Dashboard",           ico:"chart"},
     {id:"planejamento",  label:"Planejamento",         ico:"layers"},
+    {id:"marcos",        label:"Demandas",            ico:"layers"},
     {id:"producao",      label:"Produção",            ico:"target"},
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"scripts",       label:"Scripts",             ico:"fileText"},
-    {id:"marcos",        label:"Demandas",            ico:"layers"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"metas",         label:"Metas",               ico:"target"},
     {id:"parcerias",     label:"Parcerias",           ico:"users"},
@@ -77056,8 +77062,21 @@ function _demBR(iso){
 }
 function _demBRCurto(iso){
   if(!iso) return "";
-  const p=String(iso).split("-");
-  return p.length===3 ? (p[2]+"/"+p[1]) : "";
+  const d=String(iso).slice(0,10).split("-");
+  return d.length===3 ? (d[2]+"/"+d[1]) : "";
+}
+// "20/08 às 14:32" a partir de um ISO completo (ou so a data, se nao tiver hora)
+function _demQuando(iso){
+  if(!iso) return "";
+  try{
+    const s=String(iso);
+    const base=_demBRCurto(s);
+    if(s.length>10){
+      const d=new Date(s);
+      if(!isNaN(d)) return base+" às "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    }
+    return base;
+  }catch(_){ return ""; }
 }
 // Quantos dias faltam (negativo = atrasado)
 function _demDias(iso){
@@ -77232,8 +77251,11 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
   const _addTarefa=function(){
     const _n=String(rascunho.nome||"").trim();
     if(!_n){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra tarefa."); return; }
-    const _t=Object.assign({id:_demNovoId(), done_at:""}, rascunho, {nome:_n});
-    if(_t.status==="concluida") _t.done_at=_demHoje();
+    const _t=Object.assign({id:_demNovoId(), done_at:"", done_by:""}, rascunho, {nome:_n});
+    if(_t.status==="concluida"){
+      _t.done_at=new Date().toISOString();
+      _t.done_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"";
+    }
     _persistTarefas(tarefas.concat([_t]));
     setRascunho({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
     setNovaAberta(false);
@@ -77242,9 +77264,12 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
     _persistTarefas(tarefas.map(function(t){
       if(t.id!==id) return t;
       const _novo=Object.assign({},t,patch);
-      // Concluir carimba a data automaticamente; desmarcar limpa.
-      if(patch.status==="concluida" && t.status!=="concluida") _novo.done_at=_demHoje();
-      if(patch.status && patch.status!=="concluida")          _novo.done_at="";
+      // Concluir carimba QUEM e QUANDO automaticamente; desmarcar limpa.
+      if(patch.status==="concluida" && t.status!=="concluida"){
+        _novo.done_at=new Date().toISOString();
+        _novo.done_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"";
+      }
+      if(patch.status && patch.status!=="concluida"){ _novo.done_at=""; _novo.done_by=""; }
       return _novo;
     }));
   };
@@ -77493,12 +77518,18 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
           </select>
         : <_DemChip def={st} size="sm"/>}
 
-      {/* Data de conclusao — carimbada automaticamente */}
-      {_feita && t.done_at && <span title={"Concluída em "+_demBR(t.done_at)}
-        style={{color:"#16a34a",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:3}}>
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        {_demBRCurto(t.done_at)}
-      </span>}
+      {/* Quem concluiu + quando — carimbado no clique do check */}
+      {_feita && t.done_at && (function(){
+        const _quem=_demMembro(t.done_by);
+        const _tit=(_quem?("Concluída por "+_quem.name):"Concluída")+" em "+_demQuando(t.done_at);
+        return <span title={_tit}
+          style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:99,padding:"2px 8px 2px 3px",flexShrink:0}}>
+          {_quem
+            ? <UserAvatar user={_quem} size={17} border={false}/>
+            : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+          <span style={{color:"#15803d",fontSize:9.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{_demQuando(t.done_at)}</span>
+        </span>;
+      })()}
 
       {canEdit && <button type="button" onClick={onDel} title="Excluir tarefa"
         style={{background:"transparent",border:"none",padding:4,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex",flexShrink:0}}
@@ -77699,6 +77730,14 @@ function CDemandas({cl, canEdit, selUnit}){
   const [fCat,setFCat]=useState("");
   const [fPrazo,setFPrazo]=useState("");
   const [verMarcos,setVerMarcos]=useState(false);
+  // Vista: lista (detalhe/etapas) ou quadro (kanban por status). Persistida.
+  const _VISTA_KEY="pixels-demandas-vista";
+  const [vista,setVista]=useState(function(){
+    try{ return localStorage.getItem(_VISTA_KEY)||"lista"; }catch(_){ return "lista"; }
+  });
+  const _mudarVista=function(v){ setVista(v); try{ localStorage.setItem(_VISTA_KEY,v); }catch(_){} };
+  const [dragDem,setDragDem]=useState(null);
+  const [overCol,setOverCol]=useState(null);
 
   const _carregar=async function(){
     if(!sb||!_rootId){ setLoading(false); return; }
@@ -77773,6 +77812,23 @@ function CDemandas({cl, canEdit, selUnit}){
         .eq("id",d.id);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas.",4000);
+      _carregar();
+    }
+  };
+
+  // Arrastar no quadro = mudar o status da demanda
+  const _mudarStatusDemanda=async function(d, novo){
+    if(!d || d.status===novo) return;
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{status:novo}) : x; });
+    });
+    if(!sb) return;
+    try{
+      await sb.from("client_demandas")
+        .update({status:novo, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
       _carregar();
     }
   };
@@ -77907,6 +77963,22 @@ function CDemandas({cl, canEdit, selUnit}){
       {_temFiltro && <button type="button" onClick={_limpar}
         style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",
           fontFamily:_DEM_FF,padding:"8px 4px"}}>Limpar filtros</button>}
+
+      {/* Vista: Lista | Quadro */}
+      <div style={{marginLeft:"auto",display:"inline-flex",gap:2,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3}}>
+        {[
+          {id:"lista",  label:"Lista",  ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>},
+          {id:"quadro", label:"Quadro", ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>},
+        ].map(function(v){
+          const _on=vista===v.id;
+          return <button key={v.id} type="button" onClick={function(){_mudarVista(v.id);}}
+            style={{background:_on?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",color:_on?"#fff":"#64748b",
+              border:"none",borderRadius:8,padding:"7px 13px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",
+              fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+            {v.ico}{v.label}
+          </button>;
+        })}
+      </div>
     </div>
 
     {/* ══ LISTA ══ */}
@@ -77923,7 +77995,64 @@ function CDemandas({cl, canEdit, selUnit}){
                 : (canEdit ? "Crie a primeira demanda e quebre ela em etapas." : "A equipe ainda não cadastrou demandas.")}
             </div>
           </div>
-        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        : (vista==="quadro" && !isMob)
+          ? <div style={{display:"grid",gridTemplateColumns:"repeat("+DEM_STATUS.length+",minmax(200px,1fr))",gap:10,overflowX:"auto",paddingBottom:6}}>
+              {DEM_STATUS.map(function(st){
+                const _cards=_lista.filter(function(d){ return (d.status||"nao_iniciada")===st.id; });
+                const _alvo=overCol===st.id && dragDem;
+                return <div key={st.id}
+                  onDragOver={function(e){ if(!canEdit) return; e.preventDefault(); try{e.dataTransfer.dropEffect="move";}catch(_){} setOverCol(function(p){return p===st.id?p:st.id;}); }}
+                  onDrop={function(e){ if(!canEdit) return; e.preventDefault(); _mudarStatusDemanda(dragDem, st.id); setDragDem(null); setOverCol(null); }}
+                  style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:13,
+                    padding:"10px 9px",display:"flex",flexDirection:"column",gap:8,minHeight:180,transition:"all .12s"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"1px 4px"}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:st.cor,flexShrink:0}}/>
+                    <span style={{color:"#334155",fontSize:11,fontWeight:800,letterSpacing:-.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
+                    <span style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",fontSize:9.5,fontWeight:800,borderRadius:99,padding:"1px 7px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
+                  </div>
+                  {_cards.map(function(d){
+                    const cat=_demCat(d.categoria);
+                    const prog=_demProgresso(d);
+                    const resp=_demMembro(d.responsavel);
+                    const prio=_demPrio(d.prioridade);
+                    const _prazoTom=_demPrazoTom(d.prazo, d.status==="concluida");
+                    const _dragging=dragDem&&dragDem.id===d.id;
+                    return <div key={d.id}
+                      draggable={canEdit}
+                      onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
+                      onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
+                      onClick={function(){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}
+                      title="Clique pra abrir as etapas · arraste pra mudar o status"
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:"3px solid "+cat.cor,borderRadius:11,
+                        padding:"10px 11px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:7,
+                        opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 5px 14px rgba(15,23,42,.10)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.05)";}}>
+                      <div style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.15,lineHeight:1.3}}>{d.titulo}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span style={{color:cat.cor,fontSize:9.5,fontWeight:800}}>{cat.label}</span>
+                        {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
+                          <span style={{color:prio.cor,fontSize:8.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"0 6px"}}>{prio.label}</span>}
+                        {d.prazo&&<span style={{color:_prazoTom?_prazoTom.cor:"#94a3b8",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_demBRCurto(d.prazo)}</span>}
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        {resp
+                          ? <UserAvatar user={resp} size={19} border={false}/>
+                          : <span style={{width:19,height:19,borderRadius:"50%",background:"#f1f5f9",border:"1px dashed #cbd5e1",flexShrink:0}}/>}
+                        <div style={{flex:1,minWidth:0}}>
+                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={5}/>
+                        </div>
+                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
+                      </div>
+                    </div>;
+                  })}
+                  {_cards.length===0&&<div style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600,textAlign:"center",padding:"14px 4px",border:"1px dashed #e2e8f0",borderRadius:9}}>
+                    {_alvo?"Solte aqui":"—"}
+                  </div>}
+                </div>;
+              })}
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
                 aberto={!!abertas[d.id]}
