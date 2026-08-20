@@ -11499,8 +11499,7 @@ function COngoing({cl, isMob}){
       </div>;
     })()}
 
-    {/* ── SCRIPTS DO ONGOING — mensagens reutilizaveis (WhatsApp, e-mail, reuniao) ── */}
-    {typeof _OngoingScripts==="function" && <_OngoingScripts cl={cl} accent={accent}/>}
+    {/* Os scripts sairam daqui em 08/2026 — vivem na aba Scripts (CScriptsTab). */}
 
   </div>;
 }
@@ -61132,6 +61131,19 @@ function _useScriptDrag(scripts, _persist){
   };
 }
 
+// Altura do textarea do script: cresce com o texto, mas para num teto. Sem isso
+// um script longo empurrava a pagina inteira e nao dava pra ver as secoes.
+const _SCRIPT_ALT_MIN = 132;
+const _SCRIPT_ALT_MAX = 208;
+function _ajustarAltura(el){
+  if(!el) return;
+  try{
+    el.style.height = "auto";
+    const _h = Math.min(Math.max(el.scrollHeight + 4, _SCRIPT_ALT_MIN), _SCRIPT_ALT_MAX);
+    el.style.height = _h + "px";
+  }catch(_){}
+}
+
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
 function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag}){
   // So vira draggable enquanto o mouse esta segurando o handle — assim continua
@@ -61190,19 +61202,14 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
     {/* TEXTAREA — alto o suficiente pra ver o texto inteiro sem scroll interno.
         Plain text puro: underscores continuam _ (nao vira italico), perfeito pra WhatsApp. */}
     <textarea value={s.texto||""}
-      ref={function(el){
-        if(!el) return;
-        try{ el.style.height="auto"; el.style.height=(el.scrollHeight+4)+"px"; }catch(_){}
-      }}
+      ref={function(el){ _ajustarAltura(el); }}
       onChange={function(e){
         _updateScript(s.id,{texto:e.target.value});
-        try{ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight+4)+"px"; }catch(_){}
+        _ajustarAltura(e.target);
       }}
-      onInput={function(e){
-        try{ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight+4)+"px"; }catch(_){}
-      }}
+      onInput={function(e){ _ajustarAltura(e.target); }}
       placeholder={"Digite ou cole o texto do script..."}
-      style={Object.assign({},_INP,{resize:"none",minHeight:180,overflow:"hidden",lineHeight:1.55,fontFamily:_ONB_FF})}/>
+      style={Object.assign({},_INP,{resize:"vertical",minHeight:_SCRIPT_ALT_MIN,maxHeight:_SCRIPT_ALT_MAX+80,overflowY:"auto",lineHeight:1.55,fontFamily:_ONB_FF})}/>
     <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
       <div style={{display:"flex",gap:6}}>
@@ -61310,8 +61317,8 @@ function _OnboardingScripts({cl, startDate, accent}){
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Scripts do onboarding</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizáveis pra WhatsApp, e-mail e reuniões. Compartilhado entre todos os clientes.</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
         </div>
       </div>
       <button onClick={_newScript} type="button"
@@ -61440,7 +61447,7 @@ function _OngoingScripts({cl, accent}){
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Scripts do ongoing</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra check-ins, reunioes, NPS, indicacoes e resultados de funil. Compartilhado entre todos os clientes.</div>
         </div>
       </div>
@@ -61550,8 +61557,8 @@ function OnboardingChecklist(props){
       return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"checkCircle"}/>;
     })}
 
-    {/* Scripts reutilizáveis do onboarding — globais, com placeholders */}
-    <_OnboardingScripts cl={cl} startDate={startDate} accent={accent}/>
+    {/* Os scripts sairam daqui em 08/2026 — vivem na aba Scripts (CScriptsTab),
+        que renderiza _OnboardingScripts e _OngoingScripts lendo a mesma fonte. */}
   </div>;
 }
 
