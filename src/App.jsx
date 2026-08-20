@@ -60018,6 +60018,7 @@ const ONBOARDING_BLOCKS = [
         {id:"d3_kickoff_indicacoes", label:"Pedir indicações"},
         {id:"d3_kickoff_crosssell", label:"Fazer sugestões de cross-sell"},
       ]},
+      {id:"d3_plano_acao", label:"Plano de ação", doc:true, docDesc:"Documento com a estratégia que vamos utilizar"},
       {id:"d3_apresentar_plano", label:"Apresentar plano de projeto", sub:[
         {id:"d3_apresentar_templates", label:"Apresentar templates"},
       ]},
@@ -60036,8 +60037,8 @@ const ONBOARDING_BLOCKS = [
       {id:"d37_brief_estrategista", label:"Brief dos diretores para estrategista"},
       {id:"d37_brief_editores", label:"Brief da estrategista para editores"},
       {id:"d37_brief_midia", label:"Brief do head de tráfego pago para gestora de mídia"},
-      {id:"d37_calendario", label:"Produção do calendário editorial"},
-      {id:"d37_estrategia_ads", label:"Produção da estratégia de anúncios"},
+      {id:"d37_calendario", label:"Produção do calendário editorial", doc:true, docDesc:"Calendário editorial do mês"},
+      {id:"d37_estrategia_ads", label:"Produção da estratégia de anúncios", doc:true, docDesc:"Documento da estratégia de anúncios"},
       {id:"d37_aprovar_calendario", label:"Apresentar e aprovar calendário editorial"},
       {id:"d37_aprovar_ads", label:"Apresentar e aprovar estratégia de anúncios"},
     ],
@@ -60053,14 +60054,14 @@ const ONBOARDING_BLOCKS = [
   {
     id:"dia14", title:"Dia 14", subtitle:"Primeiro relatório",
     items:[
-      {id:"d14_relatorio_ads", label:"Primeiro relatório de tráfego pago"},
+      {id:"d14_relatorio_ads", label:"Primeiro relatório de tráfego pago", doc:true, docDesc:"Relatório de performance dos anúncios"},
     ],
   },
   {
     id:"dia31", title:"Dia 31", subtitle:"Fechamento do onboarding",
     items:[
       {id:"d31_reuniao", label:"Reunião de alinhamento"},
-      {id:"d31_relatorio", label:"Relatório"},
+      {id:"d31_relatorio", label:"Relatório", doc:true, docDesc:"Relatório de fechamento do onboarding"},
       {id:"d31_resultados", label:"Demonstração de resultados"},
       {id:"d31_ongoing", label:"Copiar tarefas do template de Ongoing para o Gantt do projeto"},
     ],
@@ -60605,28 +60606,80 @@ function _onbItemStatus(it){
   return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
 }
 
-/* ─── OnboardingItem — IDÊNTICO ao ChecklistRow do Ongoing ─── */
+/* ─── OnboardingItem — mesma base do ChecklistRow do Ongoing, com dois upgrades:
+   1) item PAI (com sub) vira cabeçalho na COR DO CLIENTE, colapsável — organiza
+      a lista vertical longa sem mudar a estrutura dos filhos.
+   2) item DOCUMENTO (doc:true) ganha destaque dourado + ícone de arquivo — são
+      entregas (Plano de ação, calendário, relatórios) que precisam chamar atenção. ─── */
 function OnboardingItem(props){
   const { item, items, toggle, setResp, setDue, currentUserId, accent, level } = props;
   const it = items[item.id] || {};
   const st = _onbItemStatus(it);
   const _ac = accent || "#7c3aed";
   const hasSub = item.sub && item.sub.length>0;
+  const [aberto,setAberto] = useState(true);
+  const isDoc = !!item.doc;
 
-  return <div style={{display:"flex",flexDirection:"column",gap:0}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap",marginLeft:level>0?28:0}}>
+  // ── PAI COM FILHOS — cabeçalho na cor do cliente, clicável pra abrir/fechar ──
+  if(hasSub){
+    let _tot=item.sub.length, _ok=0;
+    item.sub.forEach(function(sx){ if(items[sx.id]&&items[sx.id].done)_ok++; });
+    return <div style={{display:"flex",flexDirection:"column",gap:0,marginLeft:level>0?28:0}}>
+      <div onClick={function(){setAberto(!aberto);}}
+        style={{display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,"+_ac+","+_ac+"d9)",border:"1px solid "+_ac,borderRadius:aberto?"10px 10px 0 0":"10px",padding:"10px 14px",opacity:it.done?0.82:1,transition:"all .15s",flexWrap:"wrap",cursor:"pointer",boxShadow:"0 3px 10px "+_ac+"2e"}}>
+        <input type="checkbox" checked={!!it.done} onClick={function(e){e.stopPropagation();}} onChange={function(){toggle(item.id, currentUserId);}}
+          style={{width:17,height:17,cursor:"pointer",accentColor:"#fff",flexShrink:0}}/>
+        <span style={{flex:1,minWidth:180,color:"#fff",fontSize:13,fontWeight:800,letterSpacing:-.1,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:8}}>
+          {item.label}
+          <span style={{background:"rgba(255,255,255,.22)",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_ok}/{_tot}</span>
+        </span>
+        <span onClick={function(e){e.stopPropagation();}} style={{display:"inline-flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
+          <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
+          <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
+        </span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+          style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)",opacity:.9}}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      {aberto && <div style={{display:"flex",flexDirection:"column",gap:6,padding:"8px 0 2px 0",borderLeft:"2.5px solid "+_ac+"55",marginLeft:8}}>
+        {item.sub.map(function(s){
+          return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={_ac} level={(level||0)+1}/>;
+        })}
+      </div>}
+    </div>;
+  }
+
+  // ── DOCUMENTO / ENTREGA — destaque dourado com ícone de arquivo ──
+  if(isDoc){
+    return <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"linear-gradient(135deg,#fffbeb,#fef3c7)",border:"1.5px solid "+(it.done?"#f1f5f9":"#f0b429"),borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap",marginLeft:level>0?28:0,boxShadow:it.done?"none":"0 3px 12px rgba(240,180,41,.18)"}}>
       <input type="checkbox" checked={!!it.done} onChange={function(){toggle(item.id, currentUserId);}}
-        style={{width:17,height:17,cursor:"pointer",accentColor:_ac,flexShrink:0}}/>
-      <span style={{flex:1,minWidth:200,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF}}>{item.label}</span>
+        style={{width:17,height:17,cursor:"pointer",accentColor:"#b45309",flexShrink:0}}/>
+      <span style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#f0b429,#b45309)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px rgba(180,83,9,.3)"}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
+      </span>
+      <span style={{flex:1,minWidth:180,display:"flex",flexDirection:"column",gap:1,overflow:"hidden"}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.1,textDecoration:it.done?"line-through":"none",fontFamily:_ONB_FF}}>{item.label}</span>
+          <span style={{background:"#b45309",color:"#fff",fontSize:8.5,fontWeight:900,padding:"2px 7px",borderRadius:5,letterSpacing:.6,textTransform:"uppercase",flexShrink:0}}>Entrega</span>
+        </span>
+        {item.docDesc && !it.done && <span style={{color:"#a16207",fontSize:10.5,fontWeight:600,fontFamily:_ONB_FF}}>{item.docDesc}</span>}
+      </span>
       <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
       <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
       <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
-    </div>
-    {hasSub && <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:6}}>
-      {item.sub.map(function(s){
-        return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={_ac} level={(level||0)+1}/>;
-      })}
-    </div>}
+    </div>;
+  }
+
+  // ── ITEM NORMAL — igual antes ──
+  return <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap",marginLeft:level>0?28:0}}>
+    <input type="checkbox" checked={!!it.done} onChange={function(){toggle(item.id, currentUserId);}}
+      style={{width:17,height:17,cursor:"pointer",accentColor:_ac,flexShrink:0}}/>
+    <span style={{flex:1,minWidth:200,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF}}>{item.label}</span>
+    <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
+    <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
+    <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
   </div>;
 }
 
