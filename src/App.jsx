@@ -48936,7 +48936,13 @@ function PortalSolicitar({tasks, selCl, cl}) {
     // ── UNIFICACAO 08/2026 ── solicitacoes viram DEMANDAS do cliente
     // (client_demandas), a mesma estrutura de Estrategia > Clientes > Demandas.
     const _rootId=(selCl||"").indexOf("bioter_")===0?"bioter":selCl;
-    const _unid=(selCl||"").indexOf("bioter_")===0?selCl.slice("bioter_".length):"";
+    let _unid=(selCl||"").indexOf("bioter_")===0?selCl.slice("bioter_".length):"";
+    // Fallback: usuario logado no portal com unidade primaria definida
+    try{
+      if(!_unid && _rootId==="bioter" && typeof window!=="undefined" && window.__pxPortalUnit && window.__pxPortalUnit!=="grupo"){
+        _unid=String(window.__pxPortalUnit).split(",")[0].trim();
+      }
+    }catch(_){}
     const _prioMap={baixa:"baixa",media:"normal",alta:"alta",urgente:"urgente"};
     if(window._sb){
       await window._sb.from("client_demandas").insert({
@@ -50520,7 +50526,13 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       if(typeof window!=="undefined"&&window._sb){
         try{
           const _rootId=(cl.id||"").indexOf("bioter_")===0?"bioter":cl.id;
-          const _unid=(cl.id||"").indexOf("bioter_")===0?cl.id.slice("bioter_".length):"";
+          // Unidade: 1) cl.id ja resolvido com unidade (bioter_chapeco)
+          //          2) unidade primaria do usuario logado no portal (Rodrigo = chapeco)
+          // Sem isso a demanda nascia sem unidade e aparecia em TODAS as unidades.
+          let _unid=(cl.id||"").indexOf("bioter_")===0?cl.id.slice("bioter_".length):"";
+          if(!_unid && _rootId==="bioter" && currentClientUser && currentClientUser.primary_unit && currentClientUser.primary_unit!=="grupo"){
+            _unid=String(currentClientUser.primary_unit).split(",")[0].trim();
+          }
           const _catMap={trafego:"trafego", material:"grafico", operacional:"outros", outro:"outros"};
           const _prioMap={baixa:"baixa", media:"normal", alta:"alta", urgente:"urgente"};
           const r=await window._sb.from("client_demandas").insert({
@@ -53453,6 +53465,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   //   sem trava → "grupo" (vê tudo)
   const _initSelUnit = _hasLockedUnits ? (_lockedUnits.length===1 ? _lockedUnits[0] : "_minhas_") : "grupo";
   const [selUnit,setSelUnit]=useState(_initSelUnit);
+  // Unidade ativa do portal exposta globalmente — o formulario de solicitacao
+  // (PortalSolicitar) usa como fallback pra carimbar a unidade na demanda.
+  useEffect(function(){
+    try{ window.__pxPortalUnit = selUnit || ""; }catch(_){}
+    return function(){ try{ window.__pxPortalUnit = ""; }catch(_){} };
+  },[selUnit]);
   // Força selUnit a valor válido pra unidades travadas
   useEffect(function(){
     if(_hasLockedUnits){
