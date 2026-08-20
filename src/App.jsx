@@ -13867,29 +13867,29 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
     return c && c.id!=="pixels" && String(c.name||"").trim();
   });
   if(_todos.length<2) return null;
-  const _W = isMob ? 84 : 96;
+  const _W = isMob ? 78 : 86;
   const _units=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[];
 
   const _Chip=function(p){
     // p: {key, nome, cor, ativo, logoId, abbr, sub, onClick}
     return <button type="button" title={p.nome+(p.sub?(" — "+p.sub):"")}
       onClick={p.onClick}
-      style={{width:_W,minHeight:isMob?66:72,borderRadius:13,padding:"9px 6px 7px",boxSizing:"border-box",
+      style={{width:_W,minHeight:isMob?56:60,borderRadius:12,padding:"7px 5px 6px",boxSizing:"border-box",
         background:p.ativo?(p.cor+"0a"):"#fff",
         border:p.ativo?("2px solid "+p.cor):"1px solid #e2e8f0",
         boxShadow:p.ativo?("0 4px 14px "+p.cor+"30"):"0 1px 2px rgba(15,23,42,.04)",
         cursor:p.ativo?"default":"pointer",display:"inline-flex",flexDirection:"column",
-        alignItems:"center",justifyContent:"flex-start",gap:6,flexShrink:0,
+        alignItems:"center",justifyContent:"flex-start",gap:4,flexShrink:0,
         opacity:p.ativo?1:.85,transition:"all .15s",fontFamily:"inherit"}}
       onMouseEnter={function(e){ if(!p.ativo){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=p.cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px "+p.cor+"26"; } }}
       onMouseLeave={function(e){ if(!p.ativo){ e.currentTarget.style.opacity=".85"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
-      <span style={{width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"}}>
+      <span style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"}}>
         {typeof ClientLogo==="function"
           ? <ClientLogo clientId={p.logoId} size="sm"/>
           : <span style={{color:p.cor,fontWeight:900,fontSize:12}}>{p.abbr}</span>}
         {p.badge && <span style={{position:"absolute",right:-4,bottom:-3,background:p.cor,color:"#fff",fontSize:7.5,fontWeight:900,borderRadius:6,padding:"1px 4px",lineHeight:1.3,border:"1.5px solid #fff"}}>{p.badge}</span>}
       </span>
-      <span style={{color:p.ativo?p.cor:"#475569",fontSize:9.5,fontWeight:p.ativo?800:700,lineHeight:1.25,
+      <span style={{color:p.ativo?p.cor:"#334155",fontSize:11,fontWeight:p.ativo?800:700,lineHeight:1.2,
         letterSpacing:-.1,textAlign:"center",width:"100%",
         display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
         {p.nome}
@@ -60576,12 +60576,11 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_whatsapp_grupo", label:"Criação do grupo de WhatsApp com todos os envolvidos no projeto"},
       {id:"d1_contrato_redigir", label:"Redigir contrato no Autentique"},
       {id:"d1_contrato_assinar", label:"Assinatura do contrato"},
-      {id:"d1_indicacoes", label:"Pedir indicações (no dia da assinatura)"},
       {id:"d1_pagamento", label:"Pagamento", sub:[
         {id:"d1_pagamento_nfse", label:"Emitir NFSe"},
       ]},
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas"},
-      {id:"d1_portal_criar", label:"Criação do portal do cliente no App Pixels"},
+      {id:"d1_portal_criar", label:"Criar acesso ao portal do cliente"},
       {id:"d1_portal_acesso", label:"Criação e envio do acesso ao cliente"},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
@@ -60622,21 +60621,27 @@ const ONBOARDING_BLOCKS = [
   {
     id:"dia3", title:"Dia 3", subtitle:"Kickoff com o cliente",
     items:[
-      {id:"d3_reuniao_kickoff", label:"Reunião de kickoff", sub:[
+      // Reorganizado 08/2026: pais por MOMENTO — o que se faz ANTES da reuniao,
+      // o que se APRESENTA nela e o que se CONVERSA nela. Nenhum item novo de
+      // trabalho; ids preservados pra nao zerar o progresso ja marcado.
+      {id:"d3_preparacao", label:"Preparação para a reunião", sub:[
         {id:"d3_kickoff_apresentacao", label:"Preparar apresentação"},
+      ]},
+      {id:"d3_plano_acao", label:"Plano de ação", doc:true, docDesc:"Documento com a estratégia que vamos utilizar"},
+      {id:"d3_apresentacao", label:"Apresentação", sub:[
+        {id:"d3_apresentar_plano", label:"Apresentar plano de projeto"},
+        {id:"d3_apresentar_templates", label:"Apresentar templates"},
+        {id:"d3_apresentar_cronograma", label:"Apresentar cronograma"},
+        {id:"d3_apresentar_orcamento", label:"Apresentar orçamento de anúncios"},
+        {id:"d3_apresentar_funil", label:"Apresentar modelo de funil"},
+        {id:"d3_proximos", label:"Apresentar próximos passos"},
+      ]},
+      {id:"d3_reuniao_kickoff", label:"Reunião de kickoff", sub:[
+        {id:"d3_alinhamento", label:"Alinhamento de expectativas"},
+        {id:"d3_limites", label:"Explicar limites do escopo do projeto"},
         {id:"d3_kickoff_indicacoes", label:"Pedir indicações"},
         {id:"d3_kickoff_crosssell", label:"Fazer sugestões de cross-sell"},
       ]},
-      {id:"d3_plano_acao", label:"Plano de ação", doc:true, docDesc:"Documento com a estratégia que vamos utilizar"},
-      {id:"d3_apresentar_plano", label:"Apresentar plano de projeto", sub:[
-        {id:"d3_apresentar_templates", label:"Apresentar templates"},
-      ]},
-      {id:"d3_apresentar_cronograma", label:"Apresentar cronograma"},
-      {id:"d3_apresentar_orcamento", label:"Apresentar orçamento de anúncios"},
-      {id:"d3_apresentar_funil", label:"Apresentar modelo de funil"},
-      {id:"d3_alinhamento", label:"Alinhamento de expectativas"},
-      {id:"d3_limites", label:"Explicar limites do escopo do projeto"},
-      {id:"d3_proximos", label:"Apresentar próximos passos"},
     ],
   },
   {
@@ -60684,9 +60689,9 @@ const ONBOARDING_BLOCKS = [
 ];
 
 // Total de items (incluindo subs) — pra contagem do progresso
-function _onbCountAllItems(){
+function _onbCountAllItems(blocks){
   let n=0;
-  ONBOARDING_BLOCKS.forEach(function(b){
+  (blocks||ONBOARDING_BLOCKS).forEach(function(b){
     b.items.forEach(function(it){
       n++;
       if(it.sub) n += it.sub.length;
@@ -60695,6 +60700,30 @@ function _onbCountAllItems(){
   return n;
 }
 const ONBOARDING_TOTAL = _onbCountAllItems();
+
+/* ─── PRESETS DE ONBOARDING POR PRODUTO ─────────────────────────────────
+   Cada produto tera seu proprio roteiro. Por enquanto o do Starter e uma
+   COPIA do Pacote completo (decisao 08/2026): o Starter dura 3 meses, entao
+   o proprio onboarding cobre o projeto inteiro (dia 1 -> 90). O Ongoing
+   continua unico — e a rotina de quem esta em recorrencia (ou renovou).
+   Os IDs dos itens sao os MESMOS nos dois presets de proposito: trocar o
+   preset de um cliente nao zera o que ja foi marcado.                    */
+const ONBOARDING_BLOCKS_STARTER = (function(){
+  const _cp = JSON.parse(JSON.stringify(ONBOARDING_BLOCKS));
+  _cp.forEach(function(b){
+    if(b.id==="dia31") b.subtitle = "Fechamento do mês 1";
+    if(b.id==="dia90") b.subtitle = "Último dia do projeto — encerramento ou renovação";
+  });
+  return _cp;
+})();
+
+const ONBOARDING_PRESETS = [
+  {id:"completo", label:"Pacote completo",         blocks:ONBOARDING_BLOCKS},
+  {id:"starter",  label:"Plano Starter — 3 Meses", blocks:ONBOARDING_BLOCKS_STARTER},
+];
+function _onbPreset(id){
+  return ONBOARDING_PRESETS.find(function(p){return p.id===id;}) || ONBOARDING_PRESETS[0];
+}
 
 /* ─── SEED do Onboarding ──────────────────────────────────────────
    Quando um cliente é cadastrado, monta items prévios com:
@@ -60927,7 +60956,7 @@ function useClientOnboarding(clientId){
     _persist(next);
   }
 
-  const doneCount = Object.keys(items).filter(function(k){return k!=="__finalizado__" && k!=="__start_date__" && items[k] && items[k].done;}).length;
+  const doneCount = Object.keys(items).filter(function(k){return k.indexOf("__")!==0 && items[k] && items[k].done;}).length;
   const finalizado = !!items.__finalizado__;
   const startDate = items.__start_date__ || "";
   function setFinalizado(value){
@@ -60964,7 +60993,11 @@ function useClientOnboarding(clientId){
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Datas recalculadas a partir de "+_br+"!", 3500);
     }catch(_){}
   }
-  return { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll };
+  const preset = items.__preset__ || "completo";
+  function setPreset(pid){
+    _persist(Object.assign({}, items, {__preset__: pid}));
+  }
+  return { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll, preset, setPreset };
 }
 
 /* ─── COMPONENTE: ClientMetricsCards (visão geral) ───────────── */
@@ -61917,8 +61950,10 @@ function _OngoingScripts({cl, accent}){
 /* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
-  const { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll } = useClientOnboarding(cl.id);
-  const total = ONBOARDING_TOTAL;
+  const { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado, startDate, rescheduleAll, preset, setPreset } = useClientOnboarding(cl.id);
+  const _presetCfg = _onbPreset(preset);
+  const _blocks = _presetCfg.blocks;
+  const total = _onbCountAllItems(_blocks);
   const pct = total>0?Math.round(doneCount/total*100):0;
   const accent = (cl && cl.color) || "#7c3aed";
 
@@ -61977,6 +62012,17 @@ function OnboardingChecklist(props){
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
         </div>
         <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
+        {/* Tipo de onboarding — por produto */}
+        <div title="Roteiro de onboarding deste cliente, conforme o produto contratado"
+          style={{display:"inline-flex",gap:2,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:3}}>
+          {ONBOARDING_PRESETS.map(function(p){
+            const _on=preset===p.id;
+            return <button key={p.id} type="button" onClick={function(){ if(!_on) setPreset(p.id); }}
+              style={{background:_on?accent:"transparent",color:_on?"#fff":"#64748b",border:"none",borderRadius:8,
+                padding:"6px 11px",fontSize:11,fontWeight:_on?800:600,cursor:"pointer",fontFamily:_ONB_FF,
+                whiteSpace:"nowrap",transition:"all .12s"}}>{p.label}</button>;
+          })}
+        </div>
         {/* Data de inicio do projeto — muda todas as datas em dias uteis. Botao chama showPicker() diretamente */}
         <_OnbStartDatePill startDate={startDate} accent={accent} onPick={rescheduleAll}/>
         <button onClick={function(){setFinalizado(true);}}
@@ -61991,7 +62037,7 @@ function OnboardingChecklist(props){
     </div>
 
     {/* Blocos com seu ícone próprio */}
-    {ONBOARDING_BLOCKS.map(function(b){
+    {_blocks.map(function(b){
       return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"checkCircle"}/>;
     })}
 
