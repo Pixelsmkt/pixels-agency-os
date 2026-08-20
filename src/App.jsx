@@ -35090,6 +35090,22 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
      Com ajuste POR LÂMINA o texto virava um paredão: "[Lâmina 3/6] •
      Trocar texto: ...". Aqui a lâmina e a ação viram TAGS escuras, o
      resto fica texto normal e os [00:23] de vídeo seguem clicáveis. */
+// Quem pode ser marcado como responsavel num card de producao.
+// Regra base: designers, editores e socios. Os dois ajustes abaixo sao
+// manuais porque nao dao pra deduzir do cargo:
+//  - Hellen (level 2 / coordinator) entra: cuida da estrategia dos cards.
+//  - Ocsana (level 1 / estagiaria) sai: nao executa producao.
+// Cards antigos que ja tenham ela seguem exibindo normalmente — isso aqui
+// so controla quem aparece pra ser escolhido.
+const _CARD_RESP_INCLUI = ["ellen"];
+const _CARD_RESP_EXCLUI = ["ocsana"];
+function _cardPodeSerResp(u){
+  if(!u) return false;
+  if(_CARD_RESP_EXCLUI.indexOf(u.id)>=0) return false;
+  if(_CARD_RESP_INCLUI.indexOf(u.id)>=0) return true;
+  return u.dash==="designer" || u.dash==="editor" || u.level===1;
+}
+
   const _AJ_LAM_RE = /\[\s*L[âa]mina\s*(\d+)\s*\/\s*(\d+)\s*\]/i;
   const _AJ_ACAO_RE = /^\s*[•\-\*]\s*([^:\n]{2,42}?)\s*:\s?/;
   function _ajTsNodes(txt, hasVideo, k){
@@ -38869,7 +38885,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {(!isAgendado||isAdmin)&&<div>
             <label style={LB}><Ico n="users" size={12} color="#94a3b8"/> Responsáveis</label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:5}}>
-              {TEAM.filter(u=>u.dash==="designer"||u.dash==="editor"||u.level===1).map(function(u){
+              {TEAM.filter(u=>_cardPodeSerResp(u)).map(function(u){
                 const sel = assignees.includes(u.id);
                 const sup = SUPERVISORS[u.id];
                 const toggle=function(){
