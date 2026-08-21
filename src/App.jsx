@@ -51376,53 +51376,84 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           priority:_d.priority,
         });
       }
-      return <div onClick={function(){setEditTask(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,maxWidth:540,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-          <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"16px 22px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
+      const _LBL={fontSize:10,color:"#94a3b8",fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6};
+      const _INP={width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13.5,
+        boxSizing:"border-box",outline:"none",fontFamily:"inherit",color:"#0f172a",background:"#fff"};
+      return <div onClick={function(){setEditTask(null);}}
+        style={{position:"fixed",inset:0,zIndex:300,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(5px)",
+          display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"56px 16px 30px",overflowY:"auto",
+          fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div onClick={function(e){e.stopPropagation();}}
+          style={{background:"#fff",borderRadius:16,maxWidth:560,width:"100%",boxShadow:"0 32px 80px rgba(15,23,42,.32)",overflow:"hidden"}}>
+
+          {/* Header — mesmo DNA do modal de demandas da agência */}
+          <div style={{background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 52%,"+cl.color+" 100%)",padding:"18px 22px",
+            color:"#fff",display:"flex",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",right:-30,top:-40,width:160,height:160,borderRadius:"50%",
+              background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
+            <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.15)",
+              border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ico n="edit" size={16} color="#fff"/>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>Editar demanda</div>
-              <div style={{fontSize:11.5,opacity:.9,marginTop:2}}>Ajuste título, tipo, descrição ou prioridade</div>
+              <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>Ajuste título, tipo, descrição ou prioridade</div>
             </div>
-            <button onClick={function(){setEditTask(null);}} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:8,width:30,height:30,cursor:"pointer",fontSize:18,fontWeight:600}}>×</button>
+            <button onClick={function(){setEditTask(null);}}
+              style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.2)",borderRadius:9,width:30,height:30,
+                cursor:"pointer",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+
+          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:15}}>
             <div>
-              <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título</div>
-              <input value={_d.title} onChange={function(e){_setD({title:e.target.value});}} autoFocus
-                style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+              <div style={_LBL}>Título</div>
+              <input value={_d.title} onChange={function(e){_setD({title:e.target.value});}} autoFocus style={_INP}/>
             </div>
             <div>
-              <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Tipo</div>
-              <div style={{display:"flex",flexWrap:"nowrap",gap:5,overflowX:"auto"}}>
+              <div style={_LBL}>Tipo</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                 {_tiposList.map(function(tp){
                   const act=_d.tipo===tp.id;
                   return <button key={tp.id} type="button" onClick={function(){_setD({tipo:tp.id});}}
-                    style={{background:act?cl.color:"#fff",color:act?"#fff":"#475569",border:"1px solid "+(act?cl.color:"#e2e8f0"),borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",whiteSpace:"nowrap",flexShrink:0}}>{tp.label}</button>;
+                    style={{background:act?cl.color:"#fff",color:act?"#fff":"#64748b",border:"1px solid "+(act?cl.color:"#e2e8f0"),
+                      borderRadius:99,padding:"6px 13px",fontSize:11.5,fontWeight:act?800:600,cursor:"pointer",
+                      fontFamily:"inherit",transition:"all .12s"}}>{tp.label}</button>;
                 })}
               </div>
             </div>
             <div>
-              <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Prioridade</div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <div style={_LBL}>Prioridade</div>
+              <div style={{display:"flex",gap:5}}>
                 {_prios.map(function(p){
                   const act=_d.priority===p.id;
                   return <button key={p.id} type="button" onClick={function(){_setD({priority:p.id});}}
-                    style={{background:act?p.color:"#fff",color:act?"#fff":p.color,border:"1px solid "+(act?p.color:p.color+"55"),borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,lineHeight:1.15}}>
-                    <span>{p.label}</span>
-                    <span style={{fontSize:10.5,fontWeight:600,opacity:act?.85:.7,letterSpacing:.1}}>{"· "+p.dias+"d"}</span>
-                  </button>;
+                    title={"Prazo estimado: "+p.dias+(p.dias===1?" dia útil":" dias úteis")}
+                    style={{flex:1,background:act?p.color:"#fff",color:act?"#fff":"#64748b",
+                      border:"1px solid "+(act?p.color:"#e2e8f0"),borderRadius:9,padding:"9px 6px",fontSize:11.5,
+                      fontWeight:act?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>{p.label}</button>;
                 })}
               </div>
             </div>
             <div>
-              <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Descrição / detalhes</div>
+              <div style={_LBL}>Descrição / detalhes</div>
               <textarea value={_d.descricao} onChange={function(e){_setD({descricao:e.target.value});}} rows={4}
-                style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",lineHeight:1.5,outline:"none"}}/>
+                style={Object.assign({},_INP,{fontSize:13,resize:"vertical",lineHeight:1.55,minHeight:90})}/>
             </div>
           </div>
-          <div style={{padding:"14px 22px",background:"#f8fafc",borderTop:"1px solid #e2e8f0",display:"flex",justifyContent:"flex-end",gap:8}}>
-            <button onClick={function(){setEditTask(null);}} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
-            <button onClick={_salvar} style={{background:cl.color,color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer"}}>Salvar alterações</button>
+
+          <div style={{padding:"14px 22px 18px",display:"flex",justifyContent:"flex-end",gap:8,borderTop:"1px solid #f1f5f9"}}>
+            <button onClick={function(){setEditTask(null);}}
+              style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 17px",
+                fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button onClick={_salvar}
+              style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",color:"#fff",border:"none",borderRadius:10,
+                padding:"10px 19px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",
+                boxShadow:"0 6px 16px "+cl.color+"44",display:"inline-flex",alignItems:"center",gap:7}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Salvar alterações
+            </button>
           </div>
         </div>
       </div>;
