@@ -13871,7 +13871,7 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
     .slice()
     .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
   if(_todos.length<2) return null;
-  const _W = isMob ? 76 : 86;
+  const _W = isMob ? 68 : 76;
   const _units=((typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[])
     .slice()
     .sort(function(a,b){ return String(a.pickerLabel||a.label||"").localeCompare(String(b.pickerLabel||b.label||""),"pt-BR",{sensitivity:"base"}); });
@@ -13880,18 +13880,18 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
     // Caixa fixa 44x22 — logo inteira dentro, centralizada, SEM corte.
     const _cliObj=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===p.logoId;});
     const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[p.logoId]) || (_cliObj&&_cliObj.logoUrl) || null;
-    return <span style={{width:44,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+    return <span style={{width:48,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
       {_src
         ? <img src={_src} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
         : <span style={{color:p.cor,fontWeight:900,fontSize:11,background:p.cor+"16",borderRadius:6,padding:"1px 6px"}}>{p.abbr}</span>}
-      {p.badge && <span style={{position:"absolute",right:-7,bottom:-4,background:p.cor,color:"#fff",fontSize:7.5,fontWeight:900,borderRadius:6,padding:"1px 4px",lineHeight:1.3,border:"1.5px solid #fff"}}>{p.badge}</span>}
+      {p.badge && <span style={{position:"absolute",right:-5,bottom:-5,background:p.cor,color:"#fff",fontSize:7,fontWeight:900,borderRadius:5,padding:"0px 3px",lineHeight:1.5,border:"1.5px solid #fff"}}>{p.badge}</span>}
     </span>;
   };
 
   const _Chip=function(p){
     return <button type="button" title={p.nome+(p.sub?(" — "+p.sub):"")}
       onClick={p.onClick}
-      style={{width:_W,minWidth:_W,height:isMob?58:62,borderRadius:12,padding:"7px 5px 6px",boxSizing:"border-box",
+      style={{width:_W,minWidth:_W,height:isMob?52:54,borderRadius:11,padding:"6px 4px 5px",boxSizing:"border-box",
         background:p.ativo?(p.cor+"0a"):"#fff",
         border:p.ativo?("2px solid "+p.cor):"1px solid #e2e8f0",
         boxShadow:p.ativo?("0 4px 14px "+p.cor+"30"):"0 1px 2px rgba(15,23,42,.04)",
@@ -13901,7 +13901,7 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
       onMouseEnter={function(e){ if(!p.ativo){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=p.cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px "+p.cor+"26"; } }}
       onMouseLeave={function(e){ if(!p.ativo){ e.currentTarget.style.opacity=".85"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
       <_LogoBox logoId={p.logoId} cor={p.cor} abbr={p.abbr} badge={p.badge}/>
-      <span style={{color:p.ativo?p.cor:"#334155",fontSize:10.5,fontWeight:p.ativo?800:700,lineHeight:1.15,
+      <span style={{color:p.ativo?p.cor:"#334155",fontSize:9.5,fontWeight:p.ativo?800:700,lineHeight:1.12,
         letterSpacing:-.15,textAlign:"center",width:"100%",
         display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
         {p.nome}
@@ -13909,7 +13909,7 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
     </button>;
   };
 
-  return <div style={{display:"flex",alignItems:"stretch",gap:7,flexWrap:"nowrap",overflowX:"auto",
+  return <div style={{display:"flex",alignItems:"stretch",gap:5,flexWrap:"nowrap",overflowX:"auto",
     paddingBottom:4,width:isMob?"100%":"auto",maxWidth:"100%",WebkitOverflowScrolling:"touch"}}>
     {_todos.map(function(c){
       const _cor=c.color||"#7c3aed";
@@ -77215,6 +77215,22 @@ function _demProgresso(d){
   return {total:tot, feitas:ok, pct: tot>0 ? Math.round(ok/tot*100) : 0};
 }
 
+// Data de conclusao da demanda: a maior done_at das etapas; sem etapas, updated_at.
+function _demConcluidaEm(d){
+  const ts=Array.isArray(d&&d.tarefas)?d.tarefas:[];
+  let max="";
+  ts.forEach(function(t){ if(t&&t.done_at&&String(t.done_at)>max) max=String(t.done_at); });
+  return max || (d&&d.updated_at) || "";
+}
+
+// Bolinha de prioridade — substitui o chip escrito (pedido do time: menos texto)
+function _DemPrioDot({prio}){
+  if(!prio || prio.id==="normal" || prio.id==="baixa") return null;
+  return <span title={"Prioridade "+prio.label}
+    style={{width:9,height:9,borderRadius:"50%",background:prio.cor,flexShrink:0,
+      boxShadow:"0 0 0 3px "+prio.cor+"22"}}/>;
+}
+
 function _demMembro(id){
   try{
     if(!id || typeof TEAM==="undefined") return null;
@@ -77278,43 +77294,38 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEd
       onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.background="#fcfcfd"; }}
       onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
 
-      {/* Icone da categoria */}
-      <div style={{width:38,height:38,borderRadius:11,background:cat.cor+"14",border:"1px solid "+cat.cor+"2e",
-        display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <Ico n={cat.ico} size={17} color={cat.cor}/>
-      </div>
-
-      {/* Titulo + meta */}
-      <div style={{flex:isMob?"none":"1 1 220px",minWidth:0}}>
+      {/* Titulo + meta — enxuto: logo do cliente, bolinha de prioridade, titulo, data */}
+      <div style={{flex:isMob?"none":"1 1 240px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           {_cli && <span title={_cli.name}
-            style={{display:"inline-flex",alignItems:"center",gap:5,background:(_cli.color||"#7c3aed")+"10",
-              border:"1px solid "+(_cli.color||"#7c3aed")+"33",borderRadius:99,padding:"2px 9px 2px 4px",flexShrink:0}}>
-            <span style={{width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
-              {typeof ClientLogo==="function" ? <ClientLogo clientId={_cli.id} size="sm"/> : null}
-            </span>
-            <span style={{color:_cli.color||"#334155",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{_cli.name}</span>
+            style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",
+              overflow:"hidden",flexShrink:0,background:"#fff",border:"1px solid #eef0f3",borderRadius:7,padding:2}}>
+            {typeof ClientLogo==="function" ? <ClientLogo clientId={_cli.id} size="sm"/> : null}
           </span>}
+          <_DemPrioDot prio={prio}/>
           <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.25,lineHeight:1.25,
             textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
-          {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
-            <span style={{background:prio.cor+"12",color:prio.cor,fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",
-              border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"1px 8px",flexShrink:0}}>{prio.label}</span>}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5,flexWrap:"wrap"}}>
-          <span style={{background:cat.cor+"12",color:cat.cor,border:"1px solid "+cat.cor+"2e",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{cat.label}</span>
-          {d.prazo && <span title={"Prazo final: "+_demBR(d.prazo)}
-            style={{background:_prazo?_prazo.bg:"#f8fafc",color:_prazo?_prazo.cor:"#64748b",border:"1px solid "+(_prazo?_prazo.bd:"#e2e8f0"),borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {_demBR(d.prazo)}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
+          <span style={{color:cat.cor,fontSize:10.5,fontWeight:700}}>{cat.label}</span>
+          {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
+            style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {_demBRCurto(d.prazo)}
           </span>}
           {_prazo && <span style={{background:_prazo.bg,color:_prazo.cor,border:"1px solid "+_prazo.bd,borderRadius:99,
-            padding:"2px 8px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_prazo.txt}</span>}
+            padding:"1px 7px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_prazo.txt}</span>}
+          {_concluida && <span title={"Concluída em "+_demBR(_demConcluidaEm(d))}
+            style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,
+              padding:"2px 9px",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Concluída em {_demBRCurto(_demConcluidaEm(d))}
+          </span>}
         </div>
       </div>
 
       {/* Responsavel */}
-      <div style={{display:"flex",alignItems:"center",gap:7,minWidth:isMob?0:120,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,minWidth:isMob?0:110,flexShrink:0}}>
         {resp
           ? <>
               <UserAvatar user={resp} size={24} border={false}/>
@@ -77323,15 +77334,21 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEd
           : <span style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,fontStyle:"italic"}}>sem responsável</span>}
       </div>
 
-      {/* Progresso */}
-      <div style={{minWidth:isMob?0:150,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
-          <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
-            {prog.total>0 ? (prog.feitas+" de "+prog.total+" tarefas") : "sem tarefas"}
-          </span>
-          <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:12.5,fontWeight:800,letterSpacing:-.2,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
+      {/* Progresso — GRANDE: e o que diz se tem coisa pra concluir ali dentro */}
+      <div style={{minWidth:isMob?0:190,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6}}>
+          {prog.total>0
+            ? <span style={{color:"#0f172a",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>
+                {prog.feitas}<span style={{color:"#94a3b8",fontWeight:700}}>/{prog.total}</span>
+                <span style={{color:"#64748b",fontSize:11,fontWeight:700,marginLeft:5}}>etapas</span>
+              </span>
+            : <span style={{color:"#b45309",fontSize:11.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
+                sem etapas
+              </span>}
+          <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:14,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
         </div>
-        <_DemBarra pct={prog.pct} cor={cat.cor}/>
+        <_DemBarra pct={prog.pct} cor={cat.cor} altura={8}/>
       </div>
 
       {/* Status + chevron */}
@@ -77864,52 +77881,50 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente
                       onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
                       onClick={function(){ onAbrir(d); }}
                       title="Clique pra abrir as etapas · arraste pra mudar o status"
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:"3px solid "+cat.cor,borderRadius:12,
                         padding:"12px 13px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:9,
                         opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s, transform .12s"}}
                       onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.11)";e.currentTarget.style.transform="translateY(-1px)";}}
                       onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.05)";e.currentTarget.style.transform="";}}>
-                      {mostrarCliente&&(function(){
-                        const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;});
-                        if(!_cli) return null;
-                        return <span style={{display:"inline-flex",alignItems:"center",gap:5,alignSelf:"flex-start",
-                          background:(_cli.color||"#7c3aed")+"10",border:"1px solid "+(_cli.color||"#7c3aed")+"33",
-                          borderRadius:99,padding:"1px 8px 1px 3px"}}>
-                          <span style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                      {/* Logo do cliente (central) + bolinha de prioridade + titulo */}
+                      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                        {mostrarCliente&&(function(){
+                          const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;});
+                          if(!_cli) return null;
+                          return <span title={_cli.name}
+                            style={{width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",
+                              overflow:"hidden",flexShrink:0,background:"#fff",border:"1px solid #eef0f3",borderRadius:6,padding:2}}>
                             {typeof ClientLogo==="function"?<ClientLogo clientId={_cli.id} size="sm"/>:null}
-                          </span>
-                          <span style={{color:_cli.color||"#334155",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_cli.name}</span>
-                        </span>;
-                      })()}
-                      {/* Icone da categoria + titulo */}
-                      <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
-                        <span style={{width:28,height:28,borderRadius:8,background:cat.cor+"14",border:"1px solid "+cat.cor+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <Ico n={cat.ico} size={13} color={cat.cor}/>
+                          </span>;
+                        })()}
+                        <span style={{display:"inline-flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                          <_DemPrioDot prio={prio}/>
+                          <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,minWidth:0}}>{d.titulo}</span>
                         </span>
-                        <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,flex:1,minWidth:0}}>{d.titulo}</span>
                       </div>
-                      {/* Chips: categoria + prioridade + prazo */}
-                      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                        <span style={{background:cat.cor+"12",color:cat.cor,border:"1px solid "+cat.cor+"2e",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{cat.label}</span>
-                        {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
-                          <span style={{background:prio.cor+"12",color:prio.cor,border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{prio.label}</span>}
-                        {d.prazo&&<span style={{background:_prazoTom?_prazoTom.bg:"#f8fafc",color:_prazoTom?_prazoTom.cor:"#64748b",border:"1px solid "+(_prazoTom?_prazoTom.bd:"#e2e8f0"),borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:4}}>
+                      {/* Meta enxuta: categoria (texto) + data */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span style={{color:cat.cor,fontSize:10,fontWeight:700}}>{cat.label}</span>
+                        {d.prazo&&<span style={{color:_prazoTom?_prazoTom.cor:"#64748b",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:4}}>
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                           {_demBRCurto(d.prazo)}
                         </span>}
+                        {_prazoTom&&<span style={{background:_prazoTom.bg,color:_prazoTom.cor,border:"1px solid "+_prazoTom.bd,borderRadius:99,padding:"0 6px",fontSize:9,fontWeight:800,whiteSpace:"nowrap"}}>{_prazoTom.txt}</span>}
                       </div>
-                      {/* Rodape: responsavel + progresso */}
+                      {/* Rodape: responsavel + progresso em DESTAQUE */}
                       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
                         {resp
-                          ? <span style={{display:"inline-flex",alignItems:"center",gap:5,minWidth:0}}>
-                              <UserAvatar user={resp} size={20} border={false}/>
-                              <span style={{color:"#475569",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:64}}>{String(resp.name||"").split(" ")[0]}</span>
-                            </span>
+                          ? <UserAvatar user={resp} size={20} border={false}/>
                           : <span title="Sem responsável" style={{width:20,height:20,borderRadius:"50%",background:"#f1f5f9",border:"1px dashed #cbd5e1",flexShrink:0}}/>}
+                        {prog.total>0
+                          ? <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
+                              {prog.feitas}<span style={{color:"#94a3b8"}}>/{prog.total}</span>
+                            </span>
+                          : <span title="Quebra a demanda em etapas" style={{color:"#b45309",fontSize:9.5,fontWeight:800,flexShrink:0}}>sem etapas</span>}
                         <div style={{flex:1,minWidth:0}}>
-                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={5}/>
+                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={7}/>
                         </div>
-                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
+                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
                       </div>
                     </div>;
                   })}
