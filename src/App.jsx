@@ -14416,7 +14416,7 @@ function MilestoneForm({cl,onClose,onSaved}){
         client_id:cl.id,date,type,title:title.trim(),description:description.trim()||null,
         metrics:metricsObj,created_by:CURRENT_USER.name
       });
-      pixelsToast.success("Marco registrado!");
+      pixelsToast.success("Checkpoint registrado!");
       onSaved();
     }catch(e){pixelsToast.error("Erro: "+(e?.message||e));}
     setSaving(false);
@@ -14424,7 +14424,7 @@ function MilestoneForm({cl,onClose,onSaved}){
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(620px,94%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
-      <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Novo marco — {cl.name}</div>
+      <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Novo checkpoint — {cl.name}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div>
           <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Tipo</div>
@@ -14449,7 +14449,7 @@ function MilestoneForm({cl,onClose,onSaved}){
         </div>
         <div>
           <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Descrição</div>
-          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto do marco..." rows={3} style={{width:"100%",padding:"7px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto do checkpoint..." rows={3} style={{width:"100%",padding:"7px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
         </div>
         <div>
           <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Métricas (chave: valor por linha — opcional)</div>
@@ -14458,7 +14458,7 @@ function MilestoneForm({cl,onClose,onSaved}){
       </div>
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}}>
         <button onClick={onClose} style={{background:"#f8fafc",color:"#64748b",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"7px 14px",fontSize:11,cursor:"pointer"}}>Cancelar</button>
-        <button onClick={save} disabled={saving} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontSize:11,fontWeight:500,cursor:saving?"not-allowed":"pointer",opacity:saving?.5:1}}>{saving?"Salvando...":"Salvar marco"}</button>
+        <button onClick={save} disabled={saving} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontSize:11,fontWeight:500,cursor:saving?"not-allowed":"pointer",opacity:saving?.5:1}}>{saving?"Salvando...":"Salvar checkpoint"}</button>
       </div>
     </div>
   </div>);
@@ -14688,7 +14688,7 @@ function CMarcos({cl,canEdit,selUnit}){
     {/* Header */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
       <div>
-        <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>Marcos do projeto</div>
+        <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>Checkpoints do projeto</div>
         <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Acompanhe os principais acontecimentos e conquistas da parceria.</div>
       </div>
       {canEdit&&<button onClick={function(){setShowForm(true);}}
@@ -14696,18 +14696,18 @@ function CMarcos({cl,canEdit,selUnit}){
         onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px rgba(124,58,237,0.38)";}}
         onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.28)";}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-        Adicionar marco
+        Adicionar checkpoint
       </button>}
     </div>
 
     {loading?(
-      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13}}>Carregando marcos...</div>
+      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13}}>Carregando checkpoints...</div>
     ):_marcosVisiveis.length===0?(
       <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"48px 28px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
         <div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",color:"#a78bfa"}}>
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",letterSpacing:-.2,marginTop:4}}>Nenhum marco registrado ainda</div>
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",letterSpacing:-.2,marginTop:4}}>Nenhum checkpoint registrado ainda</div>
         <div style={{fontSize:12.5,color:"#64748b",maxWidth:380,margin:"0 auto",lineHeight:1.55,fontWeight:500}}>Os principais acontecimentos da parceria aparecerão aqui conforme forem registrados pela equipe.</div>
       </div>
     ):(
@@ -14752,7 +14752,7 @@ function CMarcos({cl,canEdit,selUnit}){
               </div>;
             })()}
             {canEdit&&<div style={{position:"absolute",top:11,right:11,display:"flex",gap:4}}>
-              <button onClick={function(){setEditingMarco(m);setShowForm(true);}} title="Editar marco"
+              <button onClick={function(){setEditingMarco(m);setShowForm(true);}} title="Editar checkpoint"
                 style={{background:"#f1f5f9",border:"none",color:"#64748b",cursor:"pointer",width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="#e0e7ff";e.currentTarget.style.color="#4f46e5";}}
                 onMouseLeave={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
@@ -14760,7 +14760,7 @@ function CMarcos({cl,canEdit,selUnit}){
               </button>
               <button onClick={async function(){
                 const _linkedEvId=(m.metrics&&m.metrics.linked_event_id)||null;
-                const _msg="Excluir este marco?"+(_linkedEvId?" O evento vinculado no calendário interno também será removido.":"");
+                const _msg="Excluir este checkpoint?"+(_linkedEvId?" O evento vinculado no calendário interno também será removido.":"");
                 if(!confirm(_msg))return;
                 // Se o marco veio de um internal_event, apaga AMBOS (marco + evento + outros marcos linkados ao mesmo evento)
                 if(_linkedEvId){
@@ -14775,7 +14775,7 @@ function CMarcos({cl,canEdit,selUnit}){
                 // Apaga o marco em si (caso não tenha sido pego pela query acima)
                 await sb.from("client_milestones").delete().eq("id",m.id);
                 reload();
-              }} title="Excluir marco"
+              }} title="Excluir checkpoint"
                 style={{background:"#f1f5f9",border:"none",color:"#64748b",cursor:"pointer",width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
                 onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
                 onMouseLeave={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
@@ -14872,7 +14872,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
           metrics:_metrics,
         }).eq("id", initial.id);
         if(r&&r.error) throw r.error;
-        if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco atualizado!");
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Checkpoint atualizado!");
       }else{
         await sb.from("client_milestones").insert({
           client_id:_rootId, date, type, title:title.trim(),
@@ -14880,7 +14880,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
           metrics:_metrics,
           created_by:typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""
         });
-        if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco registrado!");
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Checkpoint registrado!");
       }
       onSaved();
     }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||e));}
@@ -14889,7 +14889,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"Inter,system-ui,sans-serif"}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(720px,94%)",padding:"24px 28px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_isEdit?"Editar marco":"Novo marco"}</div>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_isEdit?"Editar checkpoint":"Novo checkpoint"}</div>
       <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20,fontWeight:500}}>{cl.name}</div>
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
@@ -14966,7 +14966,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
 
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Descrição curta</div>
-          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto rápido sobre o marco..." rows={3} style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",lineHeight:1.5,outline:"none"}}/>
+          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto rápido sobre o checkpoint..." rows={3} style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",lineHeight:1.5,outline:"none"}}/>
         </div>
 
         <div>
@@ -14991,7 +14991,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
 
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
         <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
-        <button onClick={save} disabled={saving} style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1}}>{saving?"Salvando...":(_isEdit?"Salvar alterações":"Salvar marco")}</button>
+        <button onClick={save} disabled={saving} style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1}}>{saving?"Salvando...":(_isEdit?"Salvar alterações":"Salvar checkpoint")}</button>
       </div>
     </div>
   </div>);
@@ -15307,7 +15307,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           const _errors=results.filter(function(r){return r&&r.error;});
           if(_errors.length>0){
             console.warn("[marco sync] errors:",_errors.map(function(r){return r.error;}));
-            if(typeof pixelsToast!=="undefined")pixelsToast.warning("Evento salvo, mas alguns marcos falharam: "+(_errors[0].error&&_errors[0].error.message||"erro desconhecido"));
+            if(typeof pixelsToast!=="undefined")pixelsToast.warning("Evento salvo, mas alguns checkpoints falharam: "+(_errors[0].error&&_errors[0].error.message||"erro desconhecido"));
           }
           const newMarcoId=(results[0]&&results[0].data&&results[0].data.id)||linkedId;
           if(newMarcoId){
@@ -15336,7 +15336,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   }
   function del(){
     if(!isEdit||!initial||!initial.id)return;
-    const _msg="Apagar este evento?"+(initial.linked_milestone_id?" O marco vinculado no cliente também será removido.":"");
+    const _msg="Apagar este evento?"+(initial.linked_milestone_id?" O checkpoint vinculado no cliente também será removido.":"");
     pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
       if(!yes)return;
       if(!window._sb)return;
@@ -15630,7 +15630,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             return _blocks;
           })()}
         </div>
-        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 marco será criado pra cada cliente.</div>}
+        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 checkpoint será criado pra cada cliente.</div>}
       </div>
 
       {/* Responsáveis (opcional) */}
@@ -16118,11 +16118,11 @@ function PageCalendarioInterno({isMob}){
             const _linkedEvId=(m.metrics&&m.metrics.linked_event_id)||null;
             return <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button onClick={function(){
-                const _msg="Apagar este marco?"+(_linkedEvId?" O evento vinculado no calendário também será removido.":"");
+                const _msg="Apagar este checkpoint?"+(_linkedEvId?" O evento vinculado no calendário também será removido.":"");
                 pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
                   if(!yes)return;
                   if(!window._sb)return;
-                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==m.id;});});return n;});if(_linkedEvId)setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==_linkedEvId;});});if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
+                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Checkpoint apagado.");setOpenMarco(null);setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==m.id;});});return n;});if(_linkedEvId)setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==_linkedEvId;});});if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
                   if(_linkedEvId){
                     window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
                       window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
@@ -16199,7 +16199,7 @@ function PageCalendarioInterno({isMob}){
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário interno</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-            {loadingMarcos?"carregando marcos…":(total+" evento"+(total!==1?"s":"")+" em "+MONTHS[calMonth.getMonth()].toLowerCase())}
+            {loadingMarcos?"carregando checkpoints…":(total+" evento"+(total!==1?"s":"")+" em "+MONTHS[calMonth.getMonth()].toLowerCase())}
           </div>
         </div>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
@@ -16471,7 +16471,7 @@ function PageCalendarioInterno({isMob}){
                         e.preventDefault();e.stopPropagation();
                         const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
                         if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem apagar.");return;}
-                        const _msg="Apagar este evento?"+(ev.linked_milestone_id?" O marco vinculado no cliente também será removido.":"");
+                        const _msg="Apagar este evento?"+(ev.linked_milestone_id?" O checkpoint vinculado no cliente também será removido.":"");
                         pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
                           if(!yes)return;
                           if(!window._sb)return;
@@ -18187,7 +18187,7 @@ function CProducaoTab({cl, tasks, isMob}){
                   })}
                 </div>}
                 {mo.extras && mo.extras.length>0 && <div style={{marginTop:6,paddingTop:8,borderTop:"1px dashed #e2e8f0"}}>
-                  <div style={{fontSize:9.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Marcos do mes</div>
+                  <div style={{fontSize:9.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Checkpoints do mês</div>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
                     {mo.extras.map(function(ex,i){
                       return <div key={i} style={{color:"#475569",fontSize:11,display:"flex",gap:6,alignItems:"flex-start"}}>
@@ -48299,7 +48299,7 @@ const PORTAL_ALL_TABS=[
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
   {id:"demandas",    ico:"zap",         label:"Demandas"},
   {id:"briefing",    ico:"fileText",    label:"Briefing"},
-  {id:"marcos",      ico:"flame",       label:"Marcos"},
+  {id:"marcos",      ico:"flame",       label:"Checkpoints"},
   {id:"playbook",    ico:"book",        label:"Playbook"},
   {id:"metas",       ico:"target",      label:"Metas"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
@@ -53334,7 +53334,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
       {marcosOrd.length===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e9ecf1",borderRadius:12,padding:"26px 20px",textAlign:"center",marginTop:12}}>
             <div style={{color:"#94a3b8",fontSize:12.5,fontWeight:600}}>A jornada aparece aqui assim que o projeto começar.</div>
-            <div style={{color:"#cbd5e1",fontSize:11,marginTop:4}}>Entregas e marcos do onboarding entram automaticamente.</div>
+            <div style={{color:"#cbd5e1",fontSize:11,marginTop:4}}>Entregas e checkpoints do onboarding entram automaticamente.</div>
           </div>
         : (function(){
         // Desktop: 2 colunas (6+5) com trilho próprio — metade da altura.
@@ -53972,7 +53972,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             badges={_demandasAbertas>0?[{label:"Em andamento",color:"#0284c7",bg:"#dbeafe"}]:[]}/>
           <_NavCard tab="briefing" accent="#a855f7" icon="fileText" title="Briefing"
             hint="Informações do seu negócio, produtos e público" badges={[]}/>
-          <_NavCard tab="marcos" accent="#d97706" icon="award" title="Marcos"
+          <_NavCard tab="marcos" accent="#d97706" icon="award" title="Checkpoints"
             hint="Acompanhe eventos, captações e entregas do projeto" badges={[]}/>
           <_NavCard tab="metas" accent="#dc2626" icon="target" title="Metas"
             hint="Seguidores, engajamento, leads e vendas do mês" badges={[]}/>
@@ -72332,7 +72332,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           resultado:{label:"Resultado", color:"#0891b2", bg:"#cffafe"},
           entrega:  {label:"Entrega",   color:"#dc2626", bg:"#fee2e2"},
         };
-        return map[t] || {label:t||"Marco", color:"#64748b", bg:"#f1f5f9"};
+        return map[t] || {label:t||"Checkpoint", color:"#64748b", bg:"#f1f5f9"};
       };
       const _fmtData = function(iso){
         if(!iso)return"";
@@ -72358,7 +72358,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>
             </div>
             <div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Marcos</div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Checkpoints</div>
               <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>O que entregamos pros clientes · ordem cronológica</div>
             </div>
           </div>
@@ -72375,7 +72375,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         </div>
         {shown.length===0
           ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"22px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>
-              {marcosFilter==="all"?"Nenhum marco registrado ainda.":"Nenhum marco registrado pra esse sócio."}
+              {marcosFilter==="all"?"Nenhum checkpoint registrado ainda.":"Nenhum checkpoint registrado pra esse sócio."}
             </div>
           : <div style={{display:"flex",flexDirection:"column",gap:9}}>
               {shown.map(function(m){
@@ -72411,7 +72411,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   </div>}
                 </div>;
               })}
-              {totalMarcos>shown.length && <div style={{textAlign:"center",color:"#94a3b8",fontSize:11.5,fontWeight:600,padding:"6px 0",letterSpacing:.2}}>+ {totalMarcos-shown.length} marcos mais antigos</div>}
+              {totalMarcos>shown.length && <div style={{textAlign:"center",color:"#94a3b8",fontSize:11.5,fontWeight:600,padding:"6px 0",letterSpacing:.2}}>+ {totalMarcos-shown.length} checkpoints mais antigos</div>}
             </div>
         }
       </section>;
@@ -77929,12 +77929,133 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente
                     </div>;
                   })}
                   {_cards.length===0&&<div style={{color:_alvo?st.cor:"#cbd5e1",fontSize:10.5,fontWeight:700,textAlign:"center",padding:"16px 4px",border:"1.5px dashed "+(_alvo?st.cor+"77":"#e2e8f0"),borderRadius:10,transition:"all .12s"}}>
-                    {_alvo?"Solte aqui":"—"}
+                    {_alvo?"Solte aqui":(st.id==="concluida"?"Solte aqui pra concluir — vai pro Histórico de entregas":"—")}
                   </div>}
                   </div>
                 </div>;
               })}
             </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HISTÓRICO DE ENTREGAS — demandas concluídas saem da lista/quadro e
+   ficam aqui, recolhidas. Dá pra enviar as importantes pros Checkpoints
+   (client_milestones, tipo "entrega") — sem duplicar: a demanda de origem
+   fica gravada em metrics.from_demanda.
+═══════════════════════════════════════════════════════════════════════ */
+function _demBRData(iso){
+  if(!iso) return "";
+  const d=String(iso).slice(0,10).split("-");
+  return d.length===3 ? (d[2]+"/"+d[1]+"/"+d[0]) : "";
+}
+function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const [aberto,setAberto]=useState(false);
+  const [enviados,setEnviados]=useState(null);   // null=carregando | {demandaId:true}
+  const [enviando,setEnviando]=useState("");
+
+  const _carregarEnviados=async function(){
+    if(!sb||!lista.length){ setEnviados({}); return; }
+    try{
+      const _cids=[];
+      lista.forEach(function(d){ if(d.client_id&&_cids.indexOf(d.client_id)<0) _cids.push(d.client_id); });
+      const r=await sb.from("client_milestones").select("id,metrics").in("client_id",_cids);
+      const m={};
+      ((r&&r.data)||[]).forEach(function(row){
+        const fd=row&&row.metrics&&row.metrics.from_demanda;
+        if(fd) m[fd]=true;
+      });
+      setEnviados(m);
+    }catch(_){ setEnviados({}); }
+  };
+  useEffect(function(){ if(aberto&&enviados===null) _carregarEnviados(); },[aberto]);
+
+  const _enviar=async function(d){
+    if(!sb||enviando) return;
+    setEnviando(d.id);
+    try{
+      const _quando=_demConcluidaEm(d);
+      const _data=_quando?String(_quando).slice(0,10):new Date().toISOString().slice(0,10);
+      const _met={from_demanda:d.id};
+      if(d.unidade&&d.unidade!=="grupo") _met.unit=d.unidade;
+      const r=await sb.from("client_milestones").insert({
+        client_id:d.client_id, date:_data, type:"entrega",
+        title:d.titulo||"Entrega", description:d.descricao||null,
+        metrics:_met,
+        created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:""
+      });
+      if(r&&r.error) throw r.error;
+      setEnviados(function(p){ const n=Object.assign({},p||{}); n[d.id]=true; return n; });
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Enviada pros Checkpoints do cliente.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro enviando: "+((e&&e.message)||""),4500);
+    }
+    setEnviando("");
+  };
+
+  if(!lista.length) return null;
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,overflow:"hidden"}}>
+    <div onClick={function(){setAberto(!aberto);}}
+      style={{padding:"13px 17px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",
+        background:aberto?"#fafbfc":"#fff",transition:"background .12s"}}>
+      <div style={{width:30,height:30,borderRadius:9,background:"#dcfce7",border:"1px solid #86efac",
+        display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Histórico de entregas</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Demandas concluídas — as mais importantes podem virar Checkpoints</div>
+      </div>
+      <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #86efac",fontSize:11,fontWeight:800,
+        borderRadius:99,padding:"2px 9px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{lista.length}</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </div>
+    {aberto&&<div style={{borderTop:"1px solid #f1f5f9"}}>
+      {lista.map(function(d,i){
+        const cat=_demCat(d.categoria);
+        const _cli=mostrarCliente?(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;}):null;
+        const _ja=enviados&&enviados[d.id];
+        return <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 17px",
+          borderTop:i>0?"1px solid #f8fafc":"none",flexWrap:"wrap"}}>
+          {_cli&&<span title={_cli.name}
+            style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",
+              overflow:"hidden",flexShrink:0,background:"#fff",border:"1px solid #eef0f3",borderRadius:7,padding:2}}>
+            {typeof ClientLogo==="function"?<ClientLogo clientId={_cli.id} size="sm"/>:null}
+          </span>}
+          <div onClick={function(){ if(onAbrir) onAbrir(d); }}
+            style={{flex:1,minWidth:160,cursor:onAbrir?"pointer":"default"}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15,lineHeight:1.3}}>{d.titulo}</div>
+            <div style={{color:cat.cor,fontSize:10,fontWeight:700,marginTop:1}}>{cat.label}</div>
+          </div>
+          <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #86efac",borderRadius:99,
+            padding:"3px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Concluída em {_demBRData(_demConcluidaEm(d))||"—"}
+          </span>
+          {canEdit&&(
+            _ja
+              ? <span title="Essa entrega já está nos Checkpoints do cliente"
+                  style={{background:"#f0fdfa",color:"#0d9488",border:"1px solid #99f6e4",borderRadius:9,
+                    padding:"5px 11px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  No Checkpoint
+                </span>
+              : <button type="button" disabled={!!enviando} onClick={function(){_enviar(d);}}
+                  title="Registra essa entrega nos Checkpoints do cliente (aparece no calendário e no portal)"
+                  style={{background:"#fff",color:"#0d9488",border:"1px solid #5eead4",borderRadius:9,
+                    padding:"5px 11px",fontSize:10.5,fontWeight:800,cursor:enviando?"wait":"pointer",fontFamily:_DEM_FF,
+                    whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,opacity:enviando===d.id?.6:1}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/><circle cx="12" cy="8" r="6"/></svg>
+                  {enviando===d.id?"Enviando…":"Enviar pro Checkpoint"}
+                </button>
+          )}
+        </div>;
+      })}
+    </div>}
+  </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -77955,6 +78076,7 @@ function CDemandas({cl, canEdit, selUnit}){
   const [demandas,setDemandas]=useState([]);
   const [loading,setLoading]=useState(true);
   const [abertas,setAbertas]=useState({});
+  const [quadroAberto,setQuadroAberto]=useState(null); // demanda aberta em modal (clique no quadro)
   const [modal,setModal]=useState(null);       // null | {} novo | {...} editar
   const [busca,setBusca]=useState("");
   const [fStatus,setFStatus]=useState("");
@@ -78119,6 +78241,10 @@ function CDemandas({cl, canEdit, selUnit}){
   });
 
   const _temFiltro=!!(_q||fStatus||fCat||fResp||fPrazo);
+  // Concluidas saem da lista/quadro e vivem no Historico de entregas.
+  const _ativas=_lista.filter(function(d){ return d.status!=="concluida"; });
+  const _concluidas=_lista.filter(function(d){ return d.status==="concluida"; })
+    .slice().sort(function(a,b){ return String(_demConcluidaEm(b)).localeCompare(String(_demConcluidaEm(a))); });
   const _limpar=function(){ setBusca(""); setFStatus(""); setFCat(""); setFResp(""); setFPrazo(""); };
 
   const _time=(typeof TEAM!=="undefined")?TEAM:[];
@@ -78214,7 +78340,7 @@ function CDemandas({cl, canEdit, selUnit}){
     {/* ══ LISTA ══ */}
     {loading
       ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
-      : _lista.length===0
+      : _ativas.length===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
             <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
               {_temFiltro ? "Nada encontrado com esses filtros" : "Nenhuma demanda ainda"}
@@ -78226,11 +78352,11 @@ function CDemandas({cl, canEdit, selUnit}){
             </div>
           </div>
         : (vista==="quadro" && !isMob)
-          ? <_DemandasQuadro lista={_lista} canEdit={canEdit}
+          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit}
               onMudarStatus={_mudarStatusDemanda}
-              onAbrir={function(d){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}/>
+              onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {_lista.map(function(d){
+            {_ativas.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
                 aberto={!!abertas[d.id]}
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
@@ -78240,6 +78366,10 @@ function CDemandas({cl, canEdit, selUnit}){
             })}
           </div>
     }
+
+    {/* ══ HISTÓRICO DE ENTREGAS ══ */}
+    <_DemHistorico lista={_concluidas} canEdit={canEdit}
+      onAbrir={function(d){ setQuadroAberto(d.id); }}/>
 
     {/* ══ HISTORICO DE MARCOS ══
         Os marcos continuam existindo em client_milestones — alimentam o
@@ -78254,7 +78384,7 @@ function CDemandas({cl, canEdit, selUnit}){
           <Ico n="flame" size={14} color={_cor}/>
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Marcos do projeto</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Checkpoints do projeto</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Acontecimentos e conquistas — aparecem também no calendário</div>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
@@ -78265,9 +78395,27 @@ function CDemandas({cl, canEdit, selUnit}){
       {verMarcos && <div style={{borderTop:"1px solid #f1f5f9",padding:"15px 17px 17px"}}>
         {typeof CMarcos==="function"
           ? <CMarcos cl={cl} canEdit={canEdit} selUnit={selUnit}/>
-          : <div style={{color:"#94a3b8",fontSize:12.5}}>Marcos indisponíveis.</div>}
+          : <div style={{color:"#94a3b8",fontSize:12.5}}>Checkpoints indisponíveis.</div>}
       </div>}
     </div>
+
+    {/* Modal de demanda aberta (clique no quadro / no histórico) */}
+    {quadroAberto&&(function(){
+      const _d=demandas.find(function(x){return x.id===quadroAberto;});
+      if(!_d) return null;
+      return <div onClick={function(){setQuadroAberto(null);}}
+        style={{position:"fixed",inset:0,zIndex:420,background:"rgba(15,23,42,.55)",backdropFilter:"blur(5px)",
+          display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"56px 16px 30px",overflowY:"auto"}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{width:"min(860px,100%)"}}>
+          <_DemandaCard d={_d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
+            aberto={true}
+            onToggle={function(){ setQuadroAberto(null); }}
+            onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
+            onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
+            onSalvar={_salvarTarefas}/>
+        </div>
+      </div>;
+    })()}
 
     {modal && <_DemandaModal inicial={modal} isMob={isMob}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
@@ -78289,6 +78437,7 @@ function CDemandasCentral({isMob}){
   const [demandas,setDemandas]=useState([]);
   const [loading,setLoading]=useState(true);
   const [abertas,setAbertas]=useState({});
+  const [quadroAberto,setQuadroAberto]=useState(null); // demanda aberta em modal (clique no quadro)
   const [modal,setModal]=useState(null);
   const [busca,setBusca]=useState("");
   const [fCliente,setFCliente]=useState("");
@@ -78465,6 +78614,9 @@ function CDemandasCentral({isMob}){
   });
 
   const _temFiltro=!!(_q||fCliente||fStatus||fCat||fResp||fPrazo);
+  const _ativas=_lista.filter(function(d){ return d.status!=="concluida"; });
+  const _concluidas=_lista.filter(function(d){ return d.status==="concluida"; })
+    .slice().sort(function(a,b){ return String(_demConcluidaEm(b)).localeCompare(String(_demConcluidaEm(a))); });
   const _limpar=function(){ setBusca(""); setFCliente(""); setFStatus(""); setFCat(""); setFResp(""); setFPrazo(""); };
   const _time=(typeof TEAM!=="undefined")?TEAM:[];
   const _selEstilo={background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",
@@ -78557,7 +78709,7 @@ function CDemandasCentral({isMob}){
     {/* Lista */}
     {loading
       ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
-      : _lista.length===0
+      : _ativas.length===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
             <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
               {_temFiltro?"Nada encontrado com esses filtros":"Nenhuma demanda ainda"}
@@ -78567,11 +78719,11 @@ function CDemandasCentral({isMob}){
             </div>
           </div>
         : (vista==="quadro" && !_mob)
-          ? <_DemandasQuadro lista={_lista} canEdit={canEdit} mostrarCliente={true}
+          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} mostrarCliente={true}
               onMudarStatus={_mudarStatusDemanda}
-              onAbrir={function(d){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}/>
+              onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {_lista.map(function(d){
+            {_ativas.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
                 aberto={!!abertas[d.id]}
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
@@ -78581,6 +78733,28 @@ function CDemandasCentral({isMob}){
             })}
           </div>
     }
+
+    {/* ══ HISTÓRICO DE ENTREGAS ══ */}
+    <_DemHistorico lista={_concluidas} canEdit={canEdit} mostrarCliente={true}
+      onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+
+    {/* Modal de demanda aberta (clique no quadro / no histórico) */}
+    {quadroAberto&&(function(){
+      const _d=demandas.find(function(x){return x.id===quadroAberto;});
+      if(!_d) return null;
+      return <div onClick={function(){setQuadroAberto(null);}}
+        style={{position:"fixed",inset:0,zIndex:420,background:"rgba(15,23,42,.55)",backdropFilter:"blur(5px)",
+          display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"56px 16px 30px",overflowY:"auto"}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{width:"min(860px,100%)"}}>
+          <_DemandaCard d={_d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
+            aberto={true}
+            onToggle={function(){ setQuadroAberto(null); }}
+            onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
+            onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
+            onSalvar={_salvarTarefas}/>
+        </div>
+      </div>;
+    })()}
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
       clientes={(!modal.id)?_clientes:null}
