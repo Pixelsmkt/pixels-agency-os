@@ -42318,6 +42318,7 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fChip,setFChip]=useState("todos");
   const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
   const [demFilter,setDemFilter]=useState("todas"); // chips da aba demandas
+  const [verLegadoDem,setVerLegadoDem]=useState(false); // lista antiga de demandas de mídia
   const [editingDem,setEditingDem]=useState(null);  // {clientId, task} pra modo editar
 
   // Excluir demanda interna (clientId, demandaId)
@@ -42333,6 +42334,8 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
 
   const isSocio=currentUser?.level===1;
   const canManageClients=isSocio;
+  // Demandas de mídia (novo quadro): sócios + gestor de mídia editam
+  const podeEditarDemandasMidia=isSocio||currentUser?.dash==="gestor"||currentUser?.id==="erick";
 
   // Mês de referência: usa fMonth se setado, senão mês atual
   const _refDate=fMonth?new Date(fMonth+"-01T00:00:00"):new Date();
@@ -42818,6 +42821,26 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
 
     {/* ───── ABA 2: DEMANDAS ───── */}
     {topTab==="demandas"&&<>
+      {/* ── NOVO: mesmas demandas do Estratégia, filtradas pra mídia (tráfego + campanha) ── */}
+      {typeof CDemandasCentral==="function"&&<CDemandasCentral isMob={isMob} embutida={true}
+        somenteCategorias={["trafego","campanha"]}
+        titulo="Demandas de mídia"
+        subtitulo="Tráfego pago e campanhas de todos os clientes — com etapas, responsáveis e prazos. Tudo que for Tráfego Pago ou Campanha cai aqui."
+        canEditProp={podeEditarDemandasMidia}/>}
+
+      {/* ── Modelo antigo, recolhido (some quando não tiver mais nada) ── */}
+      {allMediaDemands.length>0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,overflow:"hidden",marginTop:4}}>
+        <div onClick={()=>setVerLegadoDem(!verLegadoDem)}
+          style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:verLegadoDem?"#fafbfc":"#fff"}}>
+          <Ico n="folder" size={14} color="#94a3b8"/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5}}>Demandas do modelo antigo</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>Lista anterior (internas + portal) — as novas nascem no quadro aí de cima</div>
+          </div>
+          <span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"1px 9px",fontSize:10.5,fontWeight:700}}>{allMediaDemands.length}</span>
+          <Ico n={verLegadoDem?"chevronRight":"chevronRight"} size={13} color="#94a3b8"/>
+        </div>
+        {verLegadoDem&&<div style={{borderTop:"1px solid #f1f5f9",padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
         <KpiCard label="Novas"                value={demNovas}      icon="zap"       color="#9F43F6" bg="#9F43F614"/>
         <KpiCard label="Em andamento"         value={demAndamento}  icon="settings"  color="#f97316" bg="#fff7ed"/>
@@ -42877,6 +42900,8 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
           {filtered.map(d=><DemandaCard key={d.id+"-"+d.source} d={d}/>)}
         </div>;
       })()}
+        </div>}
+      </div>}
     </>}
 
     {/* ───── ABA 3: CLIENTES ───── */}
@@ -77133,6 +77158,8 @@ const DEM_CATEGORIAS = [
   {id:"evento",     label:"Evento",            cor:"#16a34a", ico:"calendar"},
   {id:"outros",     label:"Outros",            cor:"#64748b", ico:"folder"},
 ];
+// Categorias que vivem na GESTÃO DE MÍDIA (fora da central de Demandas)
+const _DEM_CATS_MIDIA=["trafego","campanha"];
 function _demCat(id){
   return DEM_CATEGORIAS.find(function(c){return c.id===id;}) || DEM_CATEGORIAS[DEM_CATEGORIAS.length-1];
 }
@@ -77774,10 +77801,16 @@ function _DemSelectResp({valor, onChange, compacto}){
 /* ═══════════════════════════════════════════════════════════════════════
    MODAL — nova / editar demanda
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes}){
+function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semCats}){
   const _novo=!inicial || !inicial.id;
+  // Categorias visíveis: `cats` restringe, `semCats` exclui (central esconde as de mídia)
+  const _catsVisiveis=DEM_CATEGORIAS.filter(function(c){
+    if(Array.isArray(cats)&&cats.length) return cats.indexOf(c.id)>=0;
+    if(Array.isArray(semCats)&&semCats.length) return semCats.indexOf(c.id)<0;
+    return true;
+  });
   const [f,setF]=useState(Object.assign({
-    titulo:"", categoria:"outros", descricao:"", status:"nao_iniciada",
+    titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
     prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"",
   }, inicial||{}));
   const set=function(k,v){ setF(function(p){return Object.assign({},p,{[k]:v});}); };
@@ -77842,7 +77875,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes}){
         <div>
           <div style={_DEM_LBL}>Categoria</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {DEM_CATEGORIAS.map(function(c){
+            {_catsVisiveis.map(function(c){
               const _on=f.categoria===c.id;
               return <button key={c.id} type="button" onClick={function(){set("categoria",c.id);}}
                 style={{background:_on?c.cor:"#fff",color:_on?"#fff":"#64748b",border:"1px solid "+(_on?c.cor:"#e2e8f0"),
@@ -78578,7 +78611,7 @@ function CDemandas({cl, canEdit, selUnit}){
    Fora daqui: arte/video (Linha de producao) e trafego (Gestao de midia).
    Reusa _DemandaCard/_DemandaDetalhe com o badge do cliente ligado.
 ═══════════════════════════════════════════════════════════════════════ */
-function CDemandasCentral({isMob}){
+function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditProp, embutida}){
   const sb=(typeof window!=="undefined")?window._sb:null;
   const _mob=(typeof _pxMob==="function")?_pxMob():!!isMob;
 
@@ -78595,7 +78628,17 @@ function CDemandasCentral({isMob}){
   const [fPrazo,setFPrazo]=useState("");
 
   // Central e SO dos socios (a rota ja bloqueia; aqui e cinto de seguranca).
-  const canEdit=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.level===1:false;
+  // Na Gestão de mídia, canEditProp libera também o gestor de mídia.
+  const canEdit=(typeof canEditProp==="boolean")
+    ? canEditProp
+    : ((typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.level===1:false);
+  // Escopo: com somenteCategorias, só elas (Gestão de mídia); sem, a central
+  // esconde as categorias de mídia (tráfego/campanha vivem lá).
+  const _soCats=(Array.isArray(somenteCategorias)&&somenteCategorias.length)?somenteCategorias:null;
+  const _noEscopo=function(d){
+    const c=d.categoria||"outros";
+    return _soCats ? _soCats.indexOf(c)>=0 : _DEM_CATS_MIDIA.indexOf(c)<0;
+  };
 
   // Vista da central: quadro por status e o DEFAULT — e a leitura de "onde cada
   // coisa esta" que uma central de comando pede. Lista fica pra varredura fina.
@@ -78747,9 +78790,10 @@ function CDemandasCentral({isMob}){
     .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
 
   /* ── Resumo global ── */
+  const _escopo=demandas.filter(_noEscopo);
   const _resumo=(function(){
-    const r={total:demandas.length, andamento:0, aguardando:0, concluidas:0, atrasadas:0};
-    demandas.forEach(function(d){
+    const r={total:_escopo.length, andamento:0, aguardando:0, concluidas:0, atrasadas:0};
+    _escopo.forEach(function(d){
       if(d.status==="andamento")  r.andamento++;
       if(d.status==="aguardando") r.aguardando++;
       if(d.status==="concluida")  r.concluidas++;
@@ -78761,7 +78805,7 @@ function CDemandasCentral({isMob}){
 
   /* ── Filtros ── */
   const _q=String(busca||"").toLowerCase().trim();
-  const _lista=demandas.filter(function(d){
+  const _lista=_escopo.filter(function(d){
     if(fCliente && d.client_id!==fCliente) return false;
     if(_q){
       const _cli=_clientes.find(function(c){return c.id===d.client_id;});
@@ -78793,13 +78837,15 @@ function CDemandasCentral({isMob}){
   const _selEstilo={background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",
     fontSize:11.5,fontWeight:700,color:"#475569",outline:"none",fontFamily:_DEM_FF,cursor:"pointer"};
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF,padding:_mob?"14px 12px":"22px 26px",maxWidth:vista==="quadro"?1560:1280,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF,
+    padding:embutida?0:(_mob?"14px 12px":"22px 26px"),
+    maxWidth:embutida?"none":(vista==="quadro"?1560:1280),margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
 
     {/* Header */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
       <div style={{minWidth:0}}>
-        <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.35}}>Demandas</div>
-        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Central de comando — projetos e entregas de todos os clientes. Arte e vídeo vivem na Linha de produção; tráfego, na Gestão de mídia.</div>
+        <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.35}}>{titulo||"Demandas"}</div>
+        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>{subtitulo||"Central de comando — projetos e entregas de todos os clientes. Arte e vídeo vivem na Linha de produção; tráfego e campanhas, na Gestão de mídia."}</div>
       </div>
       {canEdit && <button type="button" onClick={function(){setModal({});}}
         style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
@@ -78845,7 +78891,8 @@ function CDemandasCentral({isMob}){
       </select>
       <select value={fCat} onChange={function(e){setFCat(e.target.value);}} style={_selEstilo}>
         <option value="">Todas as categorias</option>
-        {DEM_CATEGORIAS.map(function(c){return <option key={c.id} value={c.id}>{c.label}</option>;})}
+        {DEM_CATEGORIAS.filter(function(c){return _soCats?_soCats.indexOf(c.id)>=0:_DEM_CATS_MIDIA.indexOf(c.id)<0;})
+          .map(function(c){return <option key={c.id} value={c.id}>{c.label}</option>;})}
       </select>
       <select value={fResp} onChange={function(e){setFResp(e.target.value);}} style={_selEstilo}>
         <option value="">Todos responsáveis</option>
@@ -78929,6 +78976,7 @@ function CDemandasCentral({isMob}){
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
       clientes={(!modal.id)?_clientes:null}
+      cats={_soCats} semCats={_soCats?null:_DEM_CATS_MIDIA}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
 }
