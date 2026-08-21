@@ -77138,12 +77138,13 @@ function _demCat(id){
 }
 
 const DEM_STATUS = [
-  {id:"nao_iniciada", label:"Não iniciada",      cor:"#64748b", bg:"#f1f5f9"},
-  {id:"andamento",    label:"Em andamento",      cor:"#2563eb", bg:"#eff6ff"},
-  {id:"aguardando",   label:"Aguardando cliente",cor:"#b45309", bg:"#fffbeb"},
-  {id:"revisao",      label:"Em revisão",        cor:"#7c3aed", bg:"#f5f3ff"},
-  {id:"concluida",    label:"Concluída",         cor:"#15803d", bg:"#f0fdf4"},
-  {id:"pausada",      label:"Pausada",           cor:"#475569", bg:"#f8fafc"},
+  // Cores no espírito da Linha de produção (rainbow): slate → amber → rosa → lime → verde → slate
+  {id:"nao_iniciada", label:"Não iniciada",      cor:"#94a3b8", bg:"#f1f5f9", ico:"inbox"},
+  {id:"andamento",    label:"Em andamento",      cor:"#f59e0b", bg:"#fffbeb", ico:"play"},
+  {id:"aguardando",   label:"Aguardando cliente",cor:"#ec4899", bg:"#fdf2f8", ico:"clock"},
+  {id:"revisao",      label:"Em revisão",        cor:"#84cc16", bg:"#f7fee7", ico:"eye"},
+  {id:"concluida",    label:"Concluída",         cor:"#16a34a", bg:"#f0fdf4", ico:"check"},
+  {id:"pausada",      label:"Pausada",           cor:"#64748b", bg:"#f8fafc", ico:"moreHor"},
 ];
 function _demSt(id){
   return DEM_STATUS.find(function(s){return s.id===id;}) || DEM_STATUS[0];
@@ -77315,39 +77316,46 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
   const _concluida = d.status==="concluida";
   const _prazo=_demPrazoTom(d.prazo,_concluida);
 
-  return <div style={{background:"#fff",border:"1px solid "+(aberto?cat.cor+"55":"#e2e8f0"),borderRadius:14,
-    boxShadow:aberto?("0 8px 24px "+cat.cor+"1a"):"0 1px 3px rgba(15,23,42,.04)",
+  return <div style={{background:"#fff",border:"1px solid "+(aberto?"#d3d9e2":"#e8ebf0"),borderRadius:14,
+    boxShadow:aberto?"0 8px 24px rgba(15,23,42,.08)":"0 1px 3px rgba(15,23,42,.04)",
     overflow:"hidden",transition:"border-color .15s, box-shadow .15s",fontFamily:_DEM_FF}}>
 
     {/* ── Linha principal (clicavel) ── */}
     <div onClick={onToggle} title={aberto?"Fechar":"Ver etapas"}
       style={{display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?11:16,padding:isMob?"14px 15px":"15px 18px",
-        cursor:"pointer",flexDirection:isMob?"column":"row",borderLeft:"3px solid "+cat.cor}}
+        cursor:"pointer",flexDirection:isMob?"column":"row"}}
       onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.background="#fcfcfd"; }}
       onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
 
       {/* Titulo + meta — enxuto: logo do cliente, bolinha de prioridade, titulo, data */}
       <div style={{flex:isMob?"none":"1 1 240px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          {_cli && <span title={_cli.name}
-            style={{width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",
-              overflow:"hidden",flexShrink:0,background:"#fff",border:"1px solid #eef0f3",borderRadius:7,padding:2}}>
-            {typeof ClientLogo==="function" ? <ClientLogo clientId={_cli.id} size="sm"/> : null}
-          </span>}
+          {_cli && (function(){
+            const _lg=((typeof CLIENT_LOGOS!=="undefined")&&CLIENT_LOGOS[_cli.id])||_cli.logoUrl||null;
+            return _lg
+              ? <img src={_lg} alt={_cli.name} title={_cli.name}
+                  style={{height:15,maxWidth:74,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>
+              : <span title={_cli.name} style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>
+                  {_cli.abbr||String(_cli.name||"").slice(0,14)}</span>;
+          })()}
           <_DemPrioDot prio={prio}/>
           <span style={{color:"#0f172a",fontWeight:400,fontSize:14,letterSpacing:-.1,lineHeight:1.3,
             textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
           <_DemPortalTag d={d}/>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
-          <span style={{color:cat.cor,fontSize:10.5,fontWeight:700}}>{cat.label}</span>
+          <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{cat.label}</span>
           {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
             style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             {_demBRCurto(d.prazo)}
           </span>}
-          {_prazo && <span style={{background:_prazo.bg,color:_prazo.cor,border:"1px solid "+_prazo.bd,borderRadius:99,
-            padding:"1px 7px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_prazo.txt}</span>}
+          {_prazo && !_concluida && (function(){
+            const _dd=_demDias(d.prazo);
+            return (_dd!==null&&_dd<0)
+              ? <span style={{color:"#dc2626",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{Math.abs(_dd)}d atraso</span>
+              : null;
+          })()}
           {_concluida && <span title={"Concluída em "+_demBR(_demConcluidaEm(d))}
             style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,
               padding:"2px 9px",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
@@ -77379,9 +77387,9 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
                 sem etapas
               </span>}
-          <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:14,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
+          <span style={{color:prog.pct>=100?"#16a34a":"#7c3aed",fontSize:14,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
         </div>
-        <_DemBarra pct={prog.pct} cor={cat.cor} altura={8}/>
+        <_DemBarra pct={prog.pct} cor={prog.pct>=100?"#16a34a":"#7c3aed"} altura={8}/>
       </div>
 
       {/* Status + chevron */}
@@ -77920,10 +77928,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                   onDrop={function(e){ if(!canEdit) return; e.preventDefault(); onMudarStatus(dragDem, st.id); setDragDem(null); setOverCol(null); }}
                   style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:14,
                     padding:0,display:"flex",flexDirection:"column",gap:0,minHeight:200,transition:"all .12s",overflow:"hidden"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:st.bg,borderBottom:"2px solid "+st.cor+"55"}}>
-                    <span style={{width:9,height:9,borderRadius:"50%",background:st.cor,flexShrink:0,boxShadow:"0 0 0 3px "+st.cor+"22"}}/>
-                    <span style={{color:st.cor,fontSize:12,fontWeight:800,letterSpacing:-.15,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
-                    <span style={{background:"#fff",border:"1px solid "+st.cor+"33",color:st.cor,fontSize:10.5,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:st.cor}}>
+                    {typeof Ico==="function"&&<Ico n={st.ico||"dot"} size={13} color="#fff"/>}
+                    <span style={{color:"#fff",fontSize:12,fontWeight:700,letterSpacing:.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
+                    <span style={{background:"rgba(255,255,255,.25)",color:"#fff",fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
                   {_cards.map(function(d){
@@ -77931,67 +77939,72 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                     const prog=_demProgresso(d);
                     const resp=_demMembro(d.responsavel);
                     const prio=_demPrio(d.prioridade);
-                    const _prazoTom=_demPrazoTom(d.prazo, d.status==="concluida");
+                    const _dd=_demDias(d.prazo);
+                    const _late=d.status!=="concluida"&&_dd!==null&&_dd<0;
+                    const _perto=d.status!=="concluida"&&_dd!==null&&_dd>=0&&_dd<=3;
                     const _dragging=dragDem&&dragDem.id===d.id;
+                    const _cli=mostrarCliente?(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;}):null;
+                    const _logo=_cli?(((typeof CLIENT_LOGOS!=="undefined")&&CLIENT_LOGOS[_cli.id])||_cli.logoUrl||null):null;
+                    const _prioOn=prio&&prio.id!=="normal"&&prio.id!=="baixa";
+                    const _exp=abertoId===d.id;
                     return <div key={d.id}
                       draggable={canEdit}
                       onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
                       onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
-                      onClick={function(){ setAbertoId(abertoId===d.id?null:d.id); }}
+                      onClick={function(){ setAbertoId(_exp?null:d.id); }}
                       title="Clique pra ver as etapas aqui mesmo · arraste pra mudar o status"
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:"3px solid "+cat.cor,borderRadius:12,
-                        padding:"12px 13px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:9,
-                        opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s, transform .12s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.11)";e.currentTarget.style.transform="translateY(-1px)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.05)";e.currentTarget.style.transform="";}}>
-                      {/* Logo do cliente (central) + bolinha de prioridade + titulo */}
-                      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-                        {mostrarCliente&&(function(){
-                          const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;});
-                          if(!_cli) return null;
-                          return <span title={_cli.name}
-                            style={{width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",
-                              overflow:"hidden",flexShrink:0,background:"#fff",border:"1px solid #eef0f3",borderRadius:6,padding:2}}>
-                            {typeof ClientLogo==="function"?<ClientLogo clientId={_cli.id} size="sm"/>:null}
-                          </span>;
-                        })()}
-                        <span style={{display:"inline-flex",alignItems:"center",gap:6,flex:1,minWidth:0,flexWrap:"wrap"}}>
-                          <_DemPrioDot prio={prio}/>
-                          <span style={{color:"#0f172a",fontSize:13,fontWeight:400,letterSpacing:-.05,lineHeight:1.35,minWidth:0}}>{d.titulo}</span>
-                          <_DemPortalTag d={d} mini={true}/>
-                        </span>
+                      style={{background:"#fff",border:"1px solid "+(_exp?"#d3d9e2":"#e8ebf0"),borderRadius:10,
+                        padding:"11px 12px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:8,
+                        opacity:_dragging?.4:1,boxShadow:"0 1px 2px rgba(15,23,42,.04)",transition:"box-shadow .12s, opacity .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 5px 14px rgba(15,23,42,.09)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";}}>
+
+                      {/* Linha do cliente: logo em proporção natural (nada de caixinha) */}
+                      {(_cli||_prioOn)&&<div style={{display:"flex",alignItems:"center",gap:8,minHeight:15}}>
+                        {_cli&&(_logo
+                          ? <img src={_logo} alt={_cli.name} title={_cli.name}
+                              style={{height:14,maxWidth:70,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>
+                          : <span title={_cli.name} style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",
+                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cli.abbr||String(_cli.name||"").slice(0,14)}</span>)}
+                        <span style={{flex:1}}/>
+                        <_DemPrioDot prio={prio}/>
+                      </div>}
+
+                      {/* Titulo — regular, respirado */}
+                      <div style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                        <span style={{color:"#1e293b",fontSize:13,fontWeight:400,letterSpacing:-.05,lineHeight:1.4,flex:1,minWidth:0}}>{d.titulo}</span>
+                        <_DemPortalTag d={d} mini={true}/>
                       </div>
-                      {/* Meta enxuta: categoria (texto) + data */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <span style={{color:cat.cor,fontSize:10,fontWeight:700}}>{cat.label}</span>
-                        {d.prazo&&<span style={{color:_prazoTom?_prazoTom.cor:"#64748b",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:4}}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                          {_demBRCurto(d.prazo)}
+
+                      {/* Meta discreta: categoria · data (cor só quando importa) */}
+                      <div style={{display:"flex",alignItems:"center",gap:6,color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
+                        <span>{cat.label}</span>
+                        {d.prazo&&<span style={{opacity:.6}}>·</span>}
+                        {d.prazo&&<span style={{color:_late?"#dc2626":(_perto?"#b45309":"#94a3b8"),fontWeight:(_late||_perto)?800:600,
+                          fontFeatureSettings:"'tnum'"}}>
+                          {_demBRCurto(d.prazo)}{_late?(" · "+Math.abs(_dd)+"d atraso"):""}
                         </span>}
-                        {_prazoTom&&<span style={{background:_prazoTom.bg,color:_prazoTom.cor,border:"1px solid "+_prazoTom.bd,borderRadius:99,padding:"0 6px",fontSize:9,fontWeight:800,whiteSpace:"nowrap"}}>{_prazoTom.txt}</span>}
                       </div>
-                      {/* Rodape: responsavel + progresso em DESTAQUE */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
-                        {resp
-                          ? <UserAvatar user={resp} size={20} border={false}/>
-                          : <span title="Sem responsável" style={{width:20,height:20,borderRadius:"50%",background:"#f1f5f9",border:"1px dashed #cbd5e1",flexShrink:0}}/>}
+
+                      {/* Rodape: responsavel + progresso (o que importa, em destaque) */}
+                      <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+                        {resp&&<UserAvatar user={resp} size={18} border={false}/>}
                         {prog.total>0
-                          ? <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>
-                              {prog.feitas}<span style={{color:"#94a3b8"}}>/{prog.total}</span>
-                            </span>
-                          : <span title="Quebra a demanda em etapas" style={{color:"#b45309",fontSize:9.5,fontWeight:800,flexShrink:0}}>sem etapas</span>}
+                          ? <span style={{color:"#334155",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.feitas}/{prog.total}</span>
+                          : <span title="Quebra a demanda em etapas" style={{color:"#b45309",fontSize:9.5,fontWeight:700,flexShrink:0}}>sem etapas</span>}
                         <div style={{flex:1,minWidth:0}}>
-                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={7}/>
+                          <_DemBarra pct={prog.pct} cor={prog.pct>=100?"#16a34a":"#7c3aed"} altura={5}/>
                         </div>
-                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-                          style={{flexShrink:0,transition:"transform .18s",transform:abertoId===d.id?"rotate(180deg)":"rotate(0deg)"}}>
+                        <span style={{color:prog.pct>=100?"#16a34a":"#64748b",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c2cad6" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+                          style={{flexShrink:0,transition:"transform .18s",transform:_exp?"rotate(180deg)":"rotate(0deg)"}}>
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
+
                       {/* Etapas expandidas DENTRO do kanban */}
-                      {abertoId===d.id&&<div onClick={function(e){e.stopPropagation();}}
-                        style={{borderTop:"1px solid #f1f5f9",paddingTop:8,display:"flex",flexDirection:"column",gap:4,cursor:"default"}}>
+                      {_exp&&<div onClick={function(e){e.stopPropagation();}}
+                        style={{borderTop:"1px solid #f4f6f8",paddingTop:8,display:"flex",flexDirection:"column",gap:4,cursor:"default"}}>
                         {(Array.isArray(d.tarefas)?d.tarefas:[]).length===0
                           ? <div style={{color:"#b45309",fontSize:10.5,fontWeight:700,padding:"2px 0"}}>Sem etapas ainda — abre a demanda pra criar.</div>
                           : (Array.isArray(d.tarefas)?d.tarefas:[]).map(function(t){
@@ -78012,7 +78025,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                               </div>;
                             })}
                         <button type="button" onClick={function(){ if(onAbrir) onAbrir(d); }}
-                          style={{background:"transparent",border:"none",color:cat.cor,fontSize:10.5,fontWeight:800,cursor:"pointer",
+                          style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:10.5,fontWeight:800,cursor:"pointer",
                             fontFamily:_DEM_FF,padding:"5px 0 1px",textAlign:"left",display:"inline-flex",alignItems:"center",gap:5}}>
                           Abrir demanda completa
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -78390,8 +78403,8 @@ function CDemandas({cl, canEdit, selUnit}){
     <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:9}}>
       {[
         {l:"Demandas",     v:_resumo.total,      c:"#0f172a"},
-        {l:"Em andamento", v:_resumo.andamento,  c:"#2563eb"},
-        {l:"Aguardando",   v:_resumo.aguardando, c:"#b45309"},
+        {l:"Em andamento", v:_resumo.andamento,  c:"#d97706"},
+        {l:"Aguardando",   v:_resumo.aguardando, c:"#db2777"},
         {l:"Concluídas",   v:_resumo.concluidas, c:"#15803d"},
         {l:"Atrasadas",    v:_resumo.atrasadas,  c:"#dc2626"},
       ].map(function(x,i){
@@ -78781,8 +78794,8 @@ function CDemandasCentral({isMob}){
     <div style={{display:"grid",gridTemplateColumns:_mob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:9}}>
       {[
         {l:"Demandas",     v:_resumo.total,      c:"#0f172a"},
-        {l:"Em andamento", v:_resumo.andamento,  c:"#2563eb"},
-        {l:"Aguardando",   v:_resumo.aguardando, c:"#b45309"},
+        {l:"Em andamento", v:_resumo.andamento,  c:"#d97706"},
+        {l:"Aguardando",   v:_resumo.aguardando, c:"#db2777"},
         {l:"Concluídas",   v:_resumo.concluidas, c:"#15803d"},
         {l:"Atrasadas",    v:_resumo.atrasadas,  c:"#dc2626"},
       ].map(function(x,i){
