@@ -77348,10 +77348,13 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
           {mostrarCliente && (function(){
             const _chip=_demCliChip(d);
             if(!_chip) return null;
-            return <span style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0,flexShrink:0}}>
-              {_chip.logo&&<img src={_chip.logo} alt="" title={_chip.nome}
-                style={{height:14,maxWidth:64,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>}
-              <span title={_chip.nome} style={{color:_chip.cor,fontSize:10.5,fontWeight:800,letterSpacing:.2,
+            return <span title={_chip.nome} style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0,flexShrink:0,
+              background:"linear-gradient(135deg,"+_chip.cor+"1f,"+_chip.cor+"0d)",
+              border:"1px solid "+_chip.cor+"40",borderRadius:99,padding:"3.5px 11px 3.5px 7px",
+              backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
+              boxShadow:"inset 0 1px 0 rgba(255,255,255,.5)"}}>
+              {_chip.logo&&<img src={_chip.logo} alt="" style={{height:13,maxWidth:50,objectFit:"contain",flexShrink:0}}/>}
+              <span style={{color:_chip.cor,fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
                 overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}}>{_chip.nome}</span>
             </span>;
           })()}
@@ -77941,10 +77944,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                   onDrop={function(e){ if(!canEdit) return; e.preventDefault(); onMudarStatus(dragDem, st.id); setDragDem(null); setOverCol(null); }}
                   style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:14,
                     padding:0,display:"flex",flexDirection:"column",gap:0,minHeight:200,transition:"all .12s",overflow:"hidden"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:st.cor}}>
-                    {typeof Ico==="function"&&<Ico n={st.ico||"dot"} size={13} color="#fff"/>}
-                    <span style={{color:"#fff",fontSize:12,fontWeight:700,letterSpacing:.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
-                    <span style={{background:"rgba(255,255,255,.25)",color:"#fff",fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 14px",background:st.cor}}>
+                    {typeof Ico==="function"&&<Ico n={st.ico||"dot"} size={16} color="#fff" strokeWidth={2.4}/>}
+                    <span style={{color:"#fff",fontSize:13.5,fontWeight:800,letterSpacing:-.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
+                    <span style={{background:"rgba(255,255,255,.28)",color:"#fff",fontSize:11.5,fontWeight:800,borderRadius:99,padding:"1.5px 10px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
                   {_cards.map(function(d){
@@ -77971,11 +77974,16 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";}}>
 
                       {/* Linha do cliente: logo em proporção natural (nada de caixinha) */}
-                      {_chip&&<div style={{display:"flex",alignItems:"center",gap:6,minHeight:15}}>
-                        {_chip.logo&&<img src={_chip.logo} alt="" title={_chip.nome}
-                          style={{height:13,maxWidth:56,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>}
-                        <span title={_chip.nome} style={{color:_chip.cor,fontSize:10,fontWeight:800,letterSpacing:.2,minWidth:0,
-                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_chip.nome}</span>
+                      {_chip&&<div style={{display:"flex",alignItems:"center",minHeight:20}}>
+                        <span title={_chip.nome} style={{display:"inline-flex",alignItems:"center",gap:6,maxWidth:"100%",
+                          background:"linear-gradient(135deg,"+_chip.cor+"1f,"+_chip.cor+"0d)",
+                          border:"1px solid "+_chip.cor+"40",borderRadius:99,padding:"3.5px 10px 3.5px 6px",
+                          backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
+                          boxShadow:"inset 0 1px 0 rgba(255,255,255,.5)"}}>
+                          {_chip.logo&&<img src={_chip.logo} alt="" style={{height:12,maxWidth:46,objectFit:"contain",flexShrink:0}}/>}
+                          <span style={{color:_chip.cor,fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_chip.nome}</span>
+                        </span>
                       </div>}
 
                       {/* Titulo — regular, respirado */}
@@ -78034,10 +78042,13 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                               </div>;
                             })}
                         <button type="button" onClick={function(){ if(onAbrir) onAbrir(d); }}
-                          style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:10.5,fontWeight:800,cursor:"pointer",
-                            fontFamily:_DEM_FF,padding:"5px 0 1px",textAlign:"left",display:"inline-flex",alignItems:"center",gap:5}}>
+                          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",marginTop:5,
+                            color:"#475569",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,width:"100%",
+                            display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.background="#faf8ff";}}
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";e.currentTarget.style.background="#fff";}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                           Abrir demanda completa
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                         </button>
                       </div>}
                     </div>;
