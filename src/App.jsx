@@ -48962,6 +48962,7 @@ function PortalSolicitar({tasks, selCl, cl}) {
         unidade:_unid,
         tarefas:[],
         created_by:"portal_"+selCl,
+        portal_visivel:true,
       }).catch(err=>console.error("portal insert:",err));
     }
     const clientName=cl?.name||selCl;
@@ -50193,6 +50194,7 @@ function _PortalDemandasProjeto({cl, isMob}){
     let alive=true;
     const _load=function(){
       window._sb.from("client_demandas").select("*").eq("client_id",_rootId)
+        .eq("portal_visivel",true)
         .order("created_at",{ascending:false})
         .then(function(r){ if(alive) setDems((r&&r.data)||[]); })
         .catch(function(){ if(alive) setDems([]); });
@@ -50552,6 +50554,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             unidade:_unid,
             tarefas:[],
             created_by:"portal_"+cl.id,
+            portal_visivel:true,
           });
           if(r&&r.error)throw r.error;
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! A equipe vai organizar as etapas e você acompanha o progresso por aqui.",4200);
@@ -77224,6 +77227,26 @@ function _demConcluidaEm(d){
 }
 
 // Bolinha de prioridade — substitui o chip escrito (pedido do time: menos texto)
+// Demanda que nasceu no portal do cliente (solicitação) — fica sincronizada lá.
+function _demDoPortal(d){ return String((d&&d.created_by)||"").indexOf("portal_")===0; }
+// Chip "Portal" (veio do cliente) ou "No portal" (interna que foi enviada pro portal)
+function _DemPortalTag({d, mini}){
+  const _doPortal=_demDoPortal(d);
+  if(!_doPortal && !d.portal_visivel) return null;
+  const _fs=mini?9:10, _pad=mini?"0 6px":"1px 8px";
+  if(_doPortal) return <span title="Solicitada pelo cliente no portal — sincronizada automaticamente lá"
+    style={{background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:99,padding:_pad,
+      fontSize:_fs,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
+    <svg width={mini?8:9} height={mini?8:9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+    Portal
+  </span>;
+  return <span title="Demanda interna enviada pro portal — o cliente está vendo"
+    style={{background:"#f0fdfa",color:"#0d9488",border:"1px solid #99f6e4",borderRadius:99,padding:_pad,
+      fontSize:_fs,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
+    <svg width={mini?8:9} height={mini?8:9} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+    No portal
+  </span>;
+}
 function _DemPrioDot({prio}){
   if(!prio || prio.id==="normal" || prio.id==="baixa") return null;
   return <span title={"Prioridade "+prio.label}
@@ -77271,7 +77294,7 @@ function _demBlur(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarg
 /* ═══════════════════════════════════════════════════════════════════════
    CARD DA DEMANDA — horizontal, expande em linha (accordion)
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEdit, isMob, corCliente, mostrarCliente}){
+function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPortal, canEdit, isMob, corCliente, mostrarCliente}){
   const _cli = mostrarCliente && typeof CLIENTS!=="undefined"
     ? CLIENTS.find(function(c){ return c.id===d.client_id; })
     : null;
@@ -77303,8 +77326,9 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEd
             {typeof ClientLogo==="function" ? <ClientLogo clientId={_cli.id} size="sm"/> : null}
           </span>}
           <_DemPrioDot prio={prio}/>
-          <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.25,lineHeight:1.25,
+          <span style={{color:"#0f172a",fontWeight:400,fontSize:14,letterSpacing:-.1,lineHeight:1.3,
             textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
+          <_DemPortalTag d={d}/>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
           <span style={{color:cat.cor,fontSize:10.5,fontWeight:700}}>{cat.label}</span>
@@ -77363,14 +77387,14 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEd
 
     {/* ── Corpo expandido ── */}
     {aberto && <_DemandaDetalhe d={d} cat={cat} prog={prog} canEdit={canEdit} isMob={isMob}
-      onEditar={onEditar} onExcluir={onExcluir} onSalvar={onSalvar}/>}
+      onEditar={onEditar} onExcluir={onExcluir} onSalvar={onSalvar} onPortal={onPortal}/>}
   </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
    DETALHE — cabecalho + lista de tarefas
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onSalvar}){
+function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onSalvar, onPortal}){
   const [novaAberta,setNovaAberta]=useState(false);
   const [rascunho,setRascunho]=useState({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
   const [editId,setEditId]=useState(null);
@@ -77535,7 +77559,20 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
     </div>
 
     {/* ── Acoes da demanda ── */}
-    {canEdit && <div style={{display:"flex",justifyContent:"flex-end",gap:7,paddingTop:4}}>
+    {canEdit && <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:7,paddingTop:4,flexWrap:"wrap"}}>
+      {onPortal && !_demDoPortal(d) && <button type="button" onClick={function(){onPortal(d);}}
+        title={d.portal_visivel?"O cliente está vendo essa demanda no portal — clique pra tirar de lá":"Libera essa demanda pro cliente acompanhar no portal"}
+        style={{background:d.portal_visivel?"#f0fdfa":"#fff",border:"1px solid "+(d.portal_visivel?"#5eead4":"#e2e8f0"),borderRadius:9,
+          padding:"8px 14px",color:d.portal_visivel?"#0d9488":"#475569",fontSize:12,fontWeight:700,cursor:"pointer",
+          fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,marginRight:"auto"}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        {d.portal_visivel?"No portal do cliente · Remover":"Enviar pro portal do cliente"}
+      </button>}
+      {onPortal && _demDoPortal(d) && <span title="Veio pelo portal — sincronizada automaticamente lá"
+        style={{color:"#2563eb",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5,marginRight:"auto"}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        Veio pelo portal · sempre sincronizada
+      </span>}
       <button type="button" onClick={onEditar}
         style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",color:"#475569",
           fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6}}
@@ -77850,9 +77887,21 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes}){
 
 /* ═══ QUADRO (kanban por status) — compartilhado pela aba do cliente e pela
    central. Arrastar entre colunas muda o status; clique abre as etapas. ═══ */
-function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente}){
+function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, mostrarCliente}){
   const [dragDem,setDragDem]=useState(null);
   const [overCol,setOverCol]=useState(null);
+  const [abertoId,setAbertoId]=useState(null); // card expandido DENTRO do kanban (etapas inline)
+  // Marca/desmarca etapa direto do kanban, com carimbo de quem/quando
+  const _checkTarefa=function(d,t){
+    if(!canEdit||!onSalvar) return;
+    const _ts=(Array.isArray(d.tarefas)?d.tarefas:[]).map(function(x){
+      if(x.id!==t.id) return x;
+      if(x.status==="concluida") return Object.assign({},x,{status:"afazer",done_at:"",done_by:""});
+      return Object.assign({},x,{status:"concluida",done_at:new Date().toISOString(),
+        done_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:""});
+    });
+    onSalvar(Object.assign({},d,{tarefas:_ts}));
+  };
   return <div style={{display:"grid",gridTemplateColumns:"repeat("+DEM_STATUS.length+",minmax(200px,1fr))",gap:10,overflowX:"auto",paddingBottom:6}}>
               {DEM_STATUS.map(function(st){
                 const _cards=lista.filter(function(d){ return (d.status||"nao_iniciada")===st.id; });
@@ -77879,8 +77928,8 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente
                       draggable={canEdit}
                       onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
                       onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
-                      onClick={function(){ onAbrir(d); }}
-                      title="Clique pra abrir as etapas · arraste pra mudar o status"
+                      onClick={function(){ setAbertoId(abertoId===d.id?null:d.id); }}
+                      title="Clique pra ver as etapas aqui mesmo · arraste pra mudar o status"
                       style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:"3px solid "+cat.cor,borderRadius:12,
                         padding:"12px 13px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:9,
                         opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s, transform .12s"}}
@@ -77897,9 +77946,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente
                             {typeof ClientLogo==="function"?<ClientLogo clientId={_cli.id} size="sm"/>:null}
                           </span>;
                         })()}
-                        <span style={{display:"inline-flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:6,flex:1,minWidth:0,flexWrap:"wrap"}}>
                           <_DemPrioDot prio={prio}/>
-                          <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,minWidth:0}}>{d.titulo}</span>
+                          <span style={{color:"#0f172a",fontSize:13,fontWeight:400,letterSpacing:-.05,lineHeight:1.35,minWidth:0}}>{d.titulo}</span>
+                          <_DemPortalTag d={d} mini={true}/>
                         </span>
                       </div>
                       {/* Meta enxuta: categoria (texto) + data */}
@@ -77925,7 +77975,40 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente
                           <_DemBarra pct={prog.pct} cor={cat.cor} altura={7}/>
                         </div>
                         <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+                          style={{flexShrink:0,transition:"transform .18s",transform:abertoId===d.id?"rotate(180deg)":"rotate(0deg)"}}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
                       </div>
+                      {/* Etapas expandidas DENTRO do kanban */}
+                      {abertoId===d.id&&<div onClick={function(e){e.stopPropagation();}}
+                        style={{borderTop:"1px solid #f1f5f9",paddingTop:8,display:"flex",flexDirection:"column",gap:4,cursor:"default"}}>
+                        {(Array.isArray(d.tarefas)?d.tarefas:[]).length===0
+                          ? <div style={{color:"#b45309",fontSize:10.5,fontWeight:700,padding:"2px 0"}}>Sem etapas ainda — abre a demanda pra criar.</div>
+                          : (Array.isArray(d.tarefas)?d.tarefas:[]).map(function(t){
+                              const _ok=t.status==="concluida";
+                              const _tr=_demMembro(t.resp);
+                              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:7,padding:"2px 0"}}>
+                                <span onClick={function(){_checkTarefa(d,t);}}
+                                  title={canEdit?(_ok?"Desmarcar":"Concluir etapa"):""}
+                                  style={{width:15,height:15,borderRadius:"50%",flexShrink:0,cursor:canEdit?"pointer":"default",
+                                    background:_ok?"#16a34a":"#fff",border:_ok?"1.5px solid #16a34a":"1.5px solid #cbd5e1",
+                                    display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
+                                  {_ok&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                </span>
+                                <span style={{flex:1,minWidth:0,color:_ok?"#94a3b8":"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.35,
+                                  textDecoration:_ok?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.nome}</span>
+                                {t.prazo&&!_ok&&<span style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_demBRCurto(t.prazo)}</span>}
+                                {_tr&&<UserAvatar user={_tr} size={15} border={false}/>}
+                              </div>;
+                            })}
+                        <button type="button" onClick={function(){ if(onAbrir) onAbrir(d); }}
+                          style={{background:"transparent",border:"none",color:cat.cor,fontSize:10.5,fontWeight:800,cursor:"pointer",
+                            fontFamily:_DEM_FF,padding:"5px 0 1px",textAlign:"left",display:"inline-flex",alignItems:"center",gap:5}}>
+                          Abrir demanda completa
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                        </button>
+                      </div>}
                     </div>;
                   })}
                   {_cards.length===0&&<div style={{color:_alvo?st.cor:"#cbd5e1",fontSize:10.5,fontWeight:700,textAlign:"center",padding:"16px 4px",border:"1.5px dashed "+(_alvo?st.cor+"77":"#e2e8f0"),borderRadius:10,transition:"all .12s"}}>
@@ -78027,7 +78110,7 @@ function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
           </span>}
           <div onClick={function(){ if(onAbrir) onAbrir(d); }}
             style={{flex:1,minWidth:160,cursor:onAbrir?"pointer":"default"}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15,lineHeight:1.3}}>{d.titulo}</div>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:400,letterSpacing:-.05,lineHeight:1.35,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>{d.titulo} <_DemPortalTag d={d} mini={true}/></div>
             <div style={{color:cat.cor,fontSize:10,fontWeight:700,marginTop:1}}>{cat.label}</div>
           </div>
           <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #86efac",borderRadius:99,
@@ -78181,6 +78264,29 @@ function CDemandas({cl, canEdit, selUnit}){
         .eq("id",d.id);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
+      _carregar();
+    }
+  };
+
+
+  // Envia/remove a demanda do portal do cliente. Demanda que veio do portal
+  // (created_by "portal_...") fica sempre sincronizada — nao passa por aqui.
+  const _togglePortal=async function(d){
+    if(!d||_demDoPortal(d)) return;
+    const _novo=!d.portal_visivel;
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{portal_visivel:_novo}) : x; });
+    });
+    if(!sb) return;
+    try{
+      const r=await sb.from("client_demandas")
+        .update({portal_visivel:_novo, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined")
+        pixelsToast.success(_novo?"Demanda liberada no portal do cliente.":"Demanda removida do portal do cliente.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro atualizando portal.",4000);
       _carregar();
     }
   };
@@ -78352,7 +78458,7 @@ function CDemandas({cl, canEdit, selUnit}){
             </div>
           </div>
         : (vista==="quadro" && !isMob)
-          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit}
+          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -78362,7 +78468,7 @@ function CDemandas({cl, canEdit, selUnit}){
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
-                onSalvar={_salvarTarefas}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
     }
@@ -78412,7 +78518,7 @@ function CDemandas({cl, canEdit, selUnit}){
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
         </div>
       </div>;
     })()}
@@ -78551,6 +78657,29 @@ function CDemandasCentral({isMob}){
         .eq("id",d.id);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
+      _carregar();
+    }
+  };
+
+
+  // Envia/remove a demanda do portal do cliente. Demanda que veio do portal
+  // (created_by "portal_...") fica sempre sincronizada — nao passa por aqui.
+  const _togglePortal=async function(d){
+    if(!d||_demDoPortal(d)) return;
+    const _novo=!d.portal_visivel;
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{portal_visivel:_novo}) : x; });
+    });
+    if(!sb) return;
+    try{
+      const r=await sb.from("client_demandas")
+        .update({portal_visivel:_novo, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined")
+        pixelsToast.success(_novo?"Demanda liberada no portal do cliente.":"Demanda removida do portal do cliente.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro atualizando portal.",4000);
       _carregar();
     }
   };
@@ -78719,7 +78848,7 @@ function CDemandasCentral({isMob}){
             </div>
           </div>
         : (vista==="quadro" && !_mob)
-          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} mostrarCliente={true}
+          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} mostrarCliente={true} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -78729,7 +78858,7 @@ function CDemandasCentral({isMob}){
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
-                onSalvar={_salvarTarefas}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
     }
@@ -78751,7 +78880,7 @@ function CDemandasCentral({isMob}){
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
         </div>
       </div>;
     })()}
