@@ -50210,7 +50210,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
    Le client_demandas (a mesma estrutura de Estrategia > Clientes > Demandas)
    e mostra pro cliente titulo, status, prazo e progresso das etapas.
    Somente leitura — quem gerencia e a equipe.                            */
-function _PortalDemandasProjeto({cl, isMob}){
+function _PortalDemandasProjeto({cl, isMob, modo}){
   const [dems,setDems]=useState(null);
   const [abertas,setAbertas]=useState({});
   const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
@@ -50250,14 +50250,18 @@ function _PortalDemandasProjeto({cl, isMob}){
     if(_unid){ const u=d.unidade||""; if(u&&u!=="grupo"&&u!==_unid) return false; }
     return true;
   });
-  if(dems===null||_vis.length===0) return null;
+  // modo: default = só ATIVAS; "concluidas" = só entregues (pra seção separada)
+  const _vis2=_vis.filter(function(d){
+    return (modo==="concluidas") ? d.status==="concluida" : d.status!=="concluida";
+  });
+  if(dems===null||_vis2.length===0) return null;
 
   const _c=cl.color||"#7c3aed";
   const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
     aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
 
-  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10,alignItems:"start"}}>
-    {_vis.map(function(d){
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
+    {_vis2.map(function(d){
       const st=_ST[d.status]||_ST.nao_iniciada;
       const cat=(typeof _demCat==="function")?_demCat(d.categoria):null;
       const ts=Array.isArray(d.tarefas)?d.tarefas:[];
@@ -50293,7 +50297,7 @@ function _PortalDemandasProjeto({cl, isMob}){
         {d.prazo&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>Previsão de entrega: {_br(d.prazo)}</div>}
 
         {/* Rodapé: progresso em destaque */}
-        <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8",marginTop:"auto"}}>
           {ts.length>0
             ? <span style={{color:"#334155",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{ok}/{ts.length}</span>
             : <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0}}>em preparação</span>}
@@ -50568,6 +50572,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
   const [solDescricao,setSolDescricao]=useState("");
   const [solPrioridade,setSolPrioridade]=useState("media");
   const [solEnviando,setSolEnviando]=useState(false);
+  const [verEntregues,setVerEntregues]=useState(false); // seção "Entregas concluídas" recolhida
 
   // Prazo padrão por prioridade (dias úteis)
   const PRAZO_POR_PRIORIDADE={baixa:30,media:14,alta:5,urgente:1};
@@ -51011,12 +51016,19 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     return (a.sprint_id||"").localeCompare(b.sprint_id||"");
   });
   // ── SPRINTS DESLIGADOS (momentaneamente, 08/2026): primeiro o básico. ──
-  // Achata tudo numa seção única, mantendo a ordem (urgentes primeiro).
+  // Achata tudo, separando ATIVAS das ENTREGUES (que vão pra seção própria).
   (function(){
     const _todas=[];
     grupos_ordenados.forEach(function(g){ (g.items||[]).forEach(function(t){ _todas.push(t); }); });
+    const _ehEntregue=function(t){
+      return !!(t.completedAt||t.completed_at)
+        ||["interno_executado","interno_aprovado","aprovacao_final","agendado","publicado"].indexOf(t.status)>=0;
+    };
+    const _atv=_todas.filter(function(t){return !_ehEntregue(t);});
+    const _ent=_todas.filter(_ehEntregue);
     grupos_ordenados.length=0;
-    if(_todas.length) grupos_ordenados.push({key:"_todas",items:_todas,sprint_id:null,urgente:false,_flat:true});
+    if(_atv.length) grupos_ordenados.push({key:"_todas",items:_atv,sprint_id:null,urgente:false,_flat:true});
+    if(_ent.length) grupos_ordenados.push({key:"_entregues",items:_ent,sprint_id:null,urgente:false,_flat:true,_entregues:true});
   })();
 
   // Header de cada grupo
@@ -51164,12 +51176,31 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     {grupos_ordenados.map(function(g){
       const h=labelDoGrupo(g);
       const accent=h.isUrgent?"#9333ea":cl.color;
-      return <section key={g.key} style={{display:"flex",flexDirection:"column",gap:10}}>
-
+      return <section key={g.key} style={{display:"flex",flexDirection:"column",gap:10,marginTop:g._entregues?6:0}}>
+        {g._entregues&&<div onClick={function(){setVerEntregues(!verEntregues);}}
+          style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 16px",
+            display:"flex",alignItems:"center",gap:11,cursor:"pointer"}}>
+          <span style={{width:28,height:28,borderRadius:9,background:"#dcfce7",border:"1px solid #86efac",
+            display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Entregas concluídas</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Tudo que já entregamos pra você</div>
+          </div>
+          <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #86efac",fontSize:11,fontWeight:800,
+            borderRadius:99,padding:"2px 9px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{g.items.length}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+            style={{flexShrink:0,transition:"transform .18s",transform:verEntregues?"rotate(180deg)":"rotate(0deg)"}}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>}
+        {g._entregues&&verEntregues&&typeof _PortalDemandasProjeto==="function"&&
+          <_PortalDemandasProjeto cl={cl} isMob={isMob} modo="concluidas"/>}
+        {(!g._entregues||verEntregues)&&
         
 
-        {/* Cada solicitação é um card estilo kanban, no mesmo grid */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10,alignItems:"start"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
           {g.items.map(function(t,idx){
             const tipo=tipoInfo(t);
             const st=statusInfo(t);
@@ -51202,7 +51233,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
               </div>
 
               {/* Status + ações */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #f4f6f8",marginTop:"auto"}}>
                 <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",marginRight:"auto"}}>{st.label}</span>
                 {isAcionavel&&<>
                   <button onClick={function(){ Promise.resolve(handleAprovar(t)).catch(function(err){ console.error("[Aprovar lista] erro async:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao aprovar: "+((err&&err.message)||err),6000); }); }}
@@ -51257,7 +51288,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
               </div>
             </div>;
           })}
-        </div>
+        </div>}
       </section>;
     })}
 
