@@ -50256,79 +50256,78 @@ function _PortalDemandasProjeto({cl, isMob}){
   const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
     aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
 
-  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10,alignItems:"start"}}>
     {_vis.map(function(d){
       const st=_ST[d.status]||_ST.nao_iniciada;
+      const cat=(typeof _demCat==="function")?_demCat(d.categoria):null;
       const ts=Array.isArray(d.tarefas)?d.tarefas:[];
       const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
       const pct=ts.length>0?Math.round(ok/ts.length*100):0;
       const _fim=d.status==="concluida";
       const _ab=!!abertas[d.id];
-      return <div key={d.id} style={{background:"#fff",border:"1px solid "+(_ab?"#d3d9e2":"#e8ebf0"),borderRadius:14,
-        overflow:"hidden",boxShadow:_ab?"0 8px 24px rgba(15,23,42,.08)":"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s"}}>
+      return <div key={d.id}
+        onClick={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
+        title={_ab?"Fechar etapas":"Ver as etapas"}
+        style={{background:"#fff",border:"1px solid "+(_ab?"#d3d9e2":"#e8ebf0"),borderRadius:12,padding:"12px 13px",
+          display:"flex",flexDirection:"column",gap:8,cursor:"pointer",
+          boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"box-shadow .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.09)";}}
+        onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
 
-        {/* Linha principal — mesmo desenho do card do Demandas da agência */}
-        <div onClick={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
-          title={_ab?"Fechar":"Ver as etapas"}
-          style={{display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?10:16,padding:isMob?"13px 14px":"14px 17px",
-            cursor:"pointer",flexDirection:isMob?"column":"row"}}
-          onMouseEnter={function(e){ if(!_ab) e.currentTarget.style.background="#fcfcfd"; }}
-          onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
-
-          <div style={{flex:isMob?"none":"1 1 240px",minWidth:0}}>
-            <div style={{color:"#0f172a",fontSize:14,fontWeight:400,letterSpacing:-.1,lineHeight:1.35,
-              textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
-            {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:3,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
-          </div>
-
-          {/* Progresso em destaque */}
-          <div style={{minWidth:isMob?0:190,flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
-              {ts.length>0
-                ? <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>
-                    {ok}<span style={{color:"#94a3b8",fontWeight:700}}>/{ts.length}</span>
-                    <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,marginLeft:4}}>etapas</span>
-                  </span>
-                : <span style={{color:"#94a3b8",fontSize:11,fontWeight:700}}>em preparação</span>}
-              <span style={{color:pct>=100?"#16a34a":_c,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
-            </div>
-            <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",borderRadius:99,transition:"width .3s",
-                background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_c+","+_c+"bb)"}}/>
-            </div>
-          </div>
-
-          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0,justifyContent:isMob?"space-between":"flex-end"}}>
-            <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
-              padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{st.label}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-              style={{flexShrink:0,transition:"transform .18s",transform:_ab?"rotate(180deg)":"rotate(0deg)"}}>
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
+        {/* Tag do tipo + status */}
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          {cat&&<span style={{background:cat.cor+"14",color:cat.cor,fontSize:9,fontWeight:800,letterSpacing:.4,
+            textTransform:"uppercase",padding:"3px 9px 3px 6px",borderRadius:99,flexShrink:0,
+            display:"inline-flex",alignItems:"center",gap:4}}>
+            {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10}/>}
+            {cat.label}
+          </span>}
+          <span style={{flex:1}}/>
+          <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
+            padding:"2px 9px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
         </div>
 
-        {/* Etapas — abrem no clique, sem espaço em branco desperdiçado */}
-        {_ab&&<div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:isMob?"11px 14px":"12px 17px",
-          display:"flex",flexDirection:"column",gap:6}}>
+        {/* Titulo + previsão */}
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:400,letterSpacing:-.05,lineHeight:1.4,
+          textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
+        {d.prazo&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>Previsão de entrega: {_br(d.prazo)}</div>}
+
+        {/* Rodapé: progresso em destaque */}
+        <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+          {ts.length>0
+            ? <span style={{color:"#334155",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{ok}/{ts.length}</span>
+            : <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0}}>em preparação</span>}
+          <div style={{flex:1,minWidth:0,background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+            <div style={{width:pct+"%",height:"100%",borderRadius:99,transition:"width .3s",
+              background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_c+","+_c+"bb)"}}/>
+          </div>
+          <span style={{color:pct>=100?"#16a34a":_c,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{pct}%</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c2cad6" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+            style={{flexShrink:0,transition:"transform .18s",transform:_ab?"rotate(180deg)":"rotate(0deg)"}}>
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+
+        {/* Etapas inline (abre no clique) */}
+        {_ab&&<div style={{borderTop:"1px solid #f4f6f8",paddingTop:8,display:"flex",flexDirection:"column",gap:5}}>
           {ts.length===0
-            ? <div style={{color:"#94a3b8",fontSize:12}}>A equipe ainda está organizando as etapas dessa demanda.</div>
+            ? <div style={{color:"#94a3b8",fontSize:11.5}}>A equipe ainda está organizando as etapas.</div>
             : ts.map(function(t){
                 const _tok=t.status==="concluida";
                 const _tst=_TST[t.status]||_TST.afazer;
-                const _tAndamento=t.status==="andamento"||t.status==="revisao";
-                return <div key={t.id} style={{display:"flex",alignItems:"center",gap:9}}>
-                  <span style={{width:16,height:16,borderRadius:"50%",flexShrink:0,
-                    background:_tok?"#16a34a":(_tAndamento?_tst.c+"18":"#fff"),
-                    border:_tok?"1.5px solid #16a34a":"1.5px solid "+(_tAndamento?_tst.c:"#d3dae3"),
+                const _tAnd=t.status==="andamento"||t.status==="revisao";
+                return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:15,height:15,borderRadius:"50%",flexShrink:0,
+                    background:_tok?"#16a34a":(_tAnd?_tst.c+"18":"#fff"),
+                    border:_tok?"1.5px solid #16a34a":"1.5px solid "+(_tAnd?_tst.c:"#d3dae3"),
                     display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
                     {_tok
-                      ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      : (_tAndamento?<span style={{width:6,height:6,borderRadius:"50%",background:_tst.c}}/>:null)}
+                      ? <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      : (_tAnd?<span style={{width:5,height:5,borderRadius:"50%",background:_tst.c}}/>:null)}
                   </span>
-                  <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:12,fontWeight:500,lineHeight:1.4,
+                  <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.35,
                     textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
-                  <span style={{color:_tst.c,fontSize:10,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
+                  <span style={{color:_tst.c,fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
                 </div>;
               })}
         </div>}
@@ -51169,8 +51168,8 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
 
         
 
-        {/* Cada solicitação é um card, no mesmo estilo do Demandas */}
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {/* Cada solicitação é um card estilo kanban, no mesmo grid */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10,alignItems:"start"}}>
           {g.items.map(function(t,idx){
             const tipo=tipoInfo(t);
             const st=statusInfo(t);
@@ -51180,8 +51179,8 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             const dataPrevista=t.data_prevista_entrega;
             const isAcionavel=t.status==="aprovado";
 
-            return <div key={t.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:14,padding:"13px 16px",
-              display:"flex",gap:12,alignItems:"center",boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"box-shadow .12s"}}
+            return <div key={t.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:12,padding:"12px 13px",
+              display:"flex",flexDirection:"column",gap:8,alignItems:"stretch",boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"box-shadow .12s"}}
               onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.09)";}}
               onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
 
@@ -51193,7 +51192,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
 
               {/* Titulo + meta inline (uma linha so se couber) */}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:400,lineHeight:1.35,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:400,lineHeight:1.4,letterSpacing:-.05}}>{t.title||"(sem título)"}</div>
                 <div style={{display:"flex",alignItems:"center",gap:10,color:"#94a3b8",fontSize:10.5,marginTop:2,flexWrap:"wrap"}}>
                   {_ddmmFull(dataReq)&&<span>enviada {_ddmmFull(dataReq)}</span>}
                   {_ddmm(dataDesejada)&&<span>· desejada {_ddmm(dataDesejada)}</span>}
@@ -51203,8 +51202,8 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
               </div>
 
               {/* Status + ações */}
-              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+                <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",marginRight:"auto"}}>{st.label}</span>
                 {isAcionavel&&<>
                   <button onClick={function(){ Promise.resolve(handleAprovar(t)).catch(function(err){ console.error("[Aprovar lista] erro async:",err); if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao aprovar: "+((err&&err.message)||err),6000); }); }}
                     title="Aprovar"
@@ -77868,10 +77867,11 @@ function _DemDataInput({valor, onChange, placeholder, compacto}){
       {valor?_demBR(valor):(placeholder||"Escolher data")}
     </button>
     {/* Popover */}
-    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:120,width:254,background:"#fff",
-      border:"1px solid #e8ebf0",borderRadius:14,boxShadow:"0 18px 46px rgba(15,23,42,.16)",padding:"12px 12px 10px",
+    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:compacto?"auto":0,right:compacto?0:"auto",
+      zIndex:120,width:302,background:"#fff",
+      border:"1px solid #e8ebf0",borderRadius:14,boxShadow:"0 18px 46px rgba(15,23,42,.16)",padding:"11px 13px 9px",
       fontFamily:_DEM_FF}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
         <button type="button" style={_navBtn} onClick={function(){setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1));}}
           onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color="#7c3aed";}}
           onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
@@ -77884,18 +77884,18 @@ function _DemDataInput({valor, onChange, placeholder, compacto}){
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:3}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:2}}>
         {["D","S","T","Q","Q","S","S"].map(function(l,i){
           return <span key={i} style={{textAlign:"center",color:"#b6bec9",fontSize:9.5,fontWeight:800}}>{l}</span>;
         })}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
         {_dias.map(function(d,i){
           if(!d) return <span key={"v"+i}/>;
           const _sel=_mesmoDia(d,_selD), _tj=_mesmoDia(d,_hoje);
           return <button key={i} type="button"
             onClick={function(){ onChange(_ymd(d)); setAberto(false); }}
-            style={{border:"none",borderRadius:8,height:29,cursor:"pointer",fontFamily:_DEM_FF,
+            style={{border:"none",borderRadius:8,height:26,cursor:"pointer",fontFamily:_DEM_FF,
               fontSize:11.5,fontWeight:_sel?800:600,fontFeatureSettings:"'tnum'",transition:"all .1s",
               background:_sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",
               color:_sel?"#fff":(_tj?"#7c3aed":"#334155"),
@@ -77906,7 +77906,7 @@ function _DemDataInput({valor, onChange, placeholder, compacto}){
           </button>;
         })}
       </div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:9,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:7,paddingTop:7,borderTop:"1px solid #f4f6f8"}}>
         <button type="button" onClick={function(){ onChange(""); setAberto(false); }}
           style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,padding:"3px 4px"}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
@@ -77930,13 +77930,14 @@ function _DemRespPicker({valor, onChange, mini}){
     document.addEventListener("mousedown",h);
     return function(){ document.removeEventListener("mousedown",h); };
   },[aberto]);
-  const _rosto=function(u,size,sel){
+  const _rosto=function(u,size,sel,dim){
+    const _op=(dim&&valor&&!sel)?.55:1;
     return <button key={u?u.id:"none"} type="button" title={u?u.name:"Sem responsável"}
-      onClick={function(){ onChange(u?u.id:""); setAberto(false); }}
+      onMouseDown={function(e){ e.preventDefault(); e.stopPropagation(); onChange(u?u.id:""); setAberto(false); }}
       style={{border:"none",background:"transparent",padding:2,borderRadius:"50%",cursor:"pointer",lineHeight:0,
-        boxShadow:sel?"0 0 0 2.5px #7c3aed":"0 0 0 1px #e2e8f0",opacity:(valor&&!sel)?.45:1,transition:"all .12s",flexShrink:0}}
-      onMouseEnter={function(e){e.currentTarget.style.opacity="1";}}
-      onMouseLeave={function(e){e.currentTarget.style.opacity=(valor&&!sel)?".45":"1";}}>
+        boxShadow:sel?"0 0 0 2.5px #7c3aed":"0 0 0 1px #e2e8f0",opacity:_op,transition:"all .12s",flexShrink:0}}
+      onMouseEnter={function(e){e.currentTarget.style.opacity="1";e.currentTarget.style.boxShadow=sel?"0 0 0 2.5px #7c3aed":"0 0 0 2px #c4b5fd";}}
+      onMouseLeave={function(e){e.currentTarget.style.opacity=String(_op);e.currentTarget.style.boxShadow=sel?"0 0 0 2.5px #7c3aed":"0 0 0 1px #e2e8f0";}}>
       {u
         ? <UserAvatar user={u} size={size} border={false}/>
         : <span style={{width:size,height:size,borderRadius:"50%",background:"#f8fafc",border:"1.5px dashed #cbd5e1",
@@ -77946,8 +77947,8 @@ function _DemRespPicker({valor, onChange, mini}){
   if(!mini){
     // Fileira de carinhas direto no formulário
     return <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minHeight:38}}>
-      {_rosto(null,30,!valor)}
-      {_time.map(function(u){ return _rosto(u,30,valor===u.id); })}
+      {_rosto(null,30,!valor,true)}
+      {_time.map(function(u){ return _rosto(u,30,valor===u.id,true); })}
       {_m&&<span style={{color:"#475569",fontSize:11.5,fontWeight:700,marginLeft:3}}>{String(_m.name||"").split(" ")[0]}</span>}
     </div>;
   }
@@ -77963,11 +77964,11 @@ function _DemRespPicker({valor, onChange, mini}){
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </span>}
     </button>
-    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:120,background:"#fff",
-      border:"1px solid #e8ebf0",borderRadius:12,boxShadow:"0 14px 38px rgba(15,23,42,.16)",padding:8,
-      display:"flex",gap:5,flexWrap:"wrap",width:196}}>
-      {_rosto(null,28,!valor)}
-      {_time.map(function(u){ return _rosto(u,28,valor===u.id); })}
+    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:130,background:"#fff",
+      border:"1px solid #dfe3ea",borderRadius:12,boxShadow:"0 16px 44px rgba(15,23,42,.22)",padding:9,
+      display:"flex",gap:6,flexWrap:"wrap",width:236}}>
+      {_rosto(null,30,!valor,false)}
+      {_time.map(function(u){ return _rosto(u,30,valor===u.id,false); })}
     </div>}
   </div>;
 }
