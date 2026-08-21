@@ -50222,6 +50222,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
     const _load=function(){
       window._sb.from("client_demandas").select("*").eq("client_id",_rootId)
         .eq("portal_visivel",true)
+        .is("deleted_at",null)
         .order("created_at",{ascending:false})
         .then(function(r){ if(alive) setDems((r&&r.data)||[]); })
         .catch(function(){ if(alive) setDems([]); });
@@ -51384,17 +51385,13 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"56px 16px 30px",overflowY:"auto",
           fontFamily:"'Inter',system-ui,sans-serif"}}>
         <div onClick={function(e){e.stopPropagation();}}
-          style={{background:"#fff",borderRadius:16,maxWidth:560,width:"100%",boxShadow:"0 32px 80px rgba(15,23,42,.32)",overflow:"hidden"}}>
+          style={{background:"#fff",borderRadius:16,maxWidth:660,width:"100%",boxShadow:"0 32px 80px rgba(15,23,42,.32)",overflow:"hidden"}}>
 
-          {/* Header — mesmo DNA do modal de demandas da agência */}
-          <div style={{background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 52%,"+cl.color+" 100%)",padding:"18px 22px",
+          {/* Header — na cor do cliente */}
+          <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"17px 24px",
             color:"#fff",display:"flex",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",right:-30,top:-40,width:160,height:160,borderRadius:"50%",
-              background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
-            <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.15)",
-              border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <Ico n="edit" size={16} color="#fff"/>
-            </div>
+              background:"radial-gradient(circle,rgba(255,255,255,.16),transparent 70%)",pointerEvents:"none"}}/>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>Editar demanda</div>
               <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>Ajuste título, tipo, descrição ou prioridade</div>
@@ -51406,7 +51403,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             </button>
           </div>
 
-          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:15}}>
+          <div style={{padding:"22px 24px",display:"flex",flexDirection:"column",gap:18}}>
             <div>
               <div style={_LBL}>Título</div>
               <input value={_d.title} onChange={function(e){_setD({title:e.target.value});}} autoFocus style={_INP}/>
@@ -51425,25 +51422,35 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             </div>
             <div>
               <div style={_LBL}>Prioridade</div>
-              <div style={{display:"flex",gap:5}}>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {_prios.map(function(p){
                   const act=_d.priority===p.id;
+                  const _ic=p.id==="urgente"
+                    ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>
+                    : p.id==="alta"
+                    ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                    : p.id==="media"
+                    ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>
+                    : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>;
                   return <button key={p.id} type="button" onClick={function(){_setD({priority:p.id});}}
                     title={"Prazo estimado: "+p.dias+(p.dias===1?" dia útil":" dias úteis")}
-                    style={{flex:1,background:act?p.color:"#fff",color:act?"#fff":"#64748b",
-                      border:"1px solid "+(act?p.color:"#e2e8f0"),borderRadius:9,padding:"9px 6px",fontSize:11.5,
-                      fontWeight:act?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>{p.label}</button>;
+                    style={{background:act?p.color:"#fff",color:act?"#fff":"#64748b",
+                      border:"1px solid "+(act?p.color:"#e2e8f0"),borderRadius:99,padding:"6px 13px",fontSize:11.5,
+                      fontWeight:act?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",
+                      display:"inline-flex",alignItems:"center",gap:5}}>
+                    {_ic}{p.label}
+                  </button>;
                 })}
               </div>
             </div>
             <div>
               <div style={_LBL}>Descrição / detalhes</div>
-              <textarea value={_d.descricao} onChange={function(e){_setD({descricao:e.target.value});}} rows={4}
-                style={Object.assign({},_INP,{fontSize:13,resize:"vertical",lineHeight:1.55,minHeight:90})}/>
+              <textarea value={_d.descricao} onChange={function(e){_setD({descricao:e.target.value});}} rows={9}
+                style={Object.assign({},_INP,{fontSize:13,resize:"vertical",lineHeight:1.6,minHeight:200})}/>
             </div>
           </div>
 
-          <div style={{padding:"14px 22px 18px",display:"flex",justifyContent:"flex-end",gap:8,borderTop:"1px solid #f1f5f9"}}>
+          <div style={{padding:"15px 24px 19px",display:"flex",justifyContent:"flex-end",gap:8,borderTop:"1px solid #f1f5f9"}}>
             <button onClick={function(){setEditTask(null);}}
               style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 17px",
                 fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
@@ -77459,7 +77466,7 @@ function _demBlur(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarg
 /* ═══════════════════════════════════════════════════════════════════════
    CARD DA DEMANDA — horizontal, expande em linha (accordion)
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPortal, canEdit, isMob, corCliente, mostrarCliente}){
+function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPortal, onContexto, canEdit, isMob, corCliente, mostrarCliente}){
   const _cli = mostrarCliente && typeof CLIENTS!=="undefined"
     ? CLIENTS.find(function(c){ return c.id===d.client_id; })
     : null;
@@ -77477,6 +77484,7 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
 
     {/* ── Linha principal (clicavel) ── */}
     <div onClick={onToggle} title={aberto?"Fechar":"Ver etapas"}
+      onContextMenu={onContexto?function(e){ e.preventDefault(); onContexto(d, e.clientX, e.clientY); }:undefined}
       style={{display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?11:16,padding:isMob?"14px 15px":"15px 18px",
         cursor:"pointer",flexDirection:isMob?"column":"row"}}
       onMouseEnter={function(e){ if(!aberto) e.currentTarget.style.background="#fcfcfd"; }}
@@ -77888,6 +77896,102 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
 }
 
 /* ═══ SELECT DE RESPONSAVEL — usa o TEAM que ja existe ═══ */
+/* ═══ LIXEIRA (30 dias) — soft delete em client_demandas.deleted_at ═══ */
+const _DEM_LIXEIRA_DIAS=30;
+function _demDiasRestantes(deletedAt){
+  try{
+    const _fim=new Date(deletedAt).getTime()+_DEM_LIXEIRA_DIAS*86400000;
+    return Math.max(0, Math.ceil((_fim-Date.now())/86400000));
+  }catch(_){ return _DEM_LIXEIRA_DIAS; }
+}
+// Purga o que passou de 30 dias — roda no máximo 1x por hora por sessão
+function _demPurgarLixeira(sb){
+  try{
+    const _agora=Date.now();
+    if(window.__pxDemPurgaTs && (_agora-window.__pxDemPurgaTs)<3600000) return;
+    window.__pxDemPurgaTs=_agora;
+    const _corte=new Date(_agora-_DEM_LIXEIRA_DIAS*86400000).toISOString();
+    sb.from("client_demandas").delete().lt("deleted_at",_corte).then(function(){}).catch(function(){});
+  }catch(_){}
+}
+/* Menu de contexto (botão direito no card) */
+function _DemCtxMenu({ctx, onAbrir, onExcluir, onFechar}){
+  if(!ctx) return null;
+  const _it={display:"flex",alignItems:"center",gap:9,padding:"9px 14px",fontSize:12.5,fontWeight:600,
+    cursor:"pointer",color:"#334155",fontFamily:_DEM_FF,whiteSpace:"nowrap"};
+  return <div onMouseDown={onFechar} onContextMenu={function(e){e.preventDefault();onFechar();}}
+    style={{position:"fixed",inset:0,zIndex:440}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{position:"fixed",top:Math.min(ctx.y,(typeof window!=="undefined"?window.innerHeight:800)-120),
+        left:Math.min(ctx.x,(typeof window!=="undefined"?window.innerWidth:1200)-230),
+        background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,boxShadow:"0 18px 46px rgba(15,23,42,.20)",
+        padding:5,minWidth:210,overflow:"hidden"}}>
+      <div style={_it}
+        onClick={function(){ onFechar(); onAbrir(ctx.d); }}
+        onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        Abrir demanda
+      </div>
+      <div style={{height:1,background:"#f1f5f9",margin:"3px 6px"}}/>
+      <div style={Object.assign({},_it,{color:"#dc2626"})}
+        onClick={function(){ onFechar(); onExcluir(ctx.d); }}
+        onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Excluir · Lixeira (30 dias)
+      </div>
+    </div>
+  </div>;
+}
+/* Lixeira — bloco recolhível no rodapé */
+function _DemLixeira({lista, mostrarCliente, onRestaurar, onExcluirDef}){
+  const [aberto,setAberto]=useState(false);
+  if(!lista.length) return null;
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,overflow:"hidden"}}>
+    <div onClick={function(){setAberto(!aberto);}}
+      style={{padding:"12px 17px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",
+        background:aberto?"#fafbfc":"#fff",transition:"background .12s"}}>
+      <div style={{width:28,height:28,borderRadius:9,background:"#fef2f2",border:"1px solid #fecaca",
+        display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:12.5,letterSpacing:-.15}}>Lixeira</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:600}}>Itens somem de vez depois de {_DEM_LIXEIRA_DIAS} dias</div>
+      </div>
+      <span style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fecaca",fontSize:10.5,fontWeight:800,
+        borderRadius:99,padding:"1px 9px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{lista.length}</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transition:"transform .18s",transform:aberto?"rotate(180deg)":"rotate(0deg)"}}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </div>
+    {aberto&&<div style={{borderTop:"1px solid #f1f5f9"}}>
+      {lista.map(function(d,i){
+        const _chip=mostrarCliente?_demCliChip(d):null;
+        const _rest=_demDiasRestantes(d.deleted_at);
+        return <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 17px",
+          borderTop:i>0?"1px solid #f8fafc":"none",flexWrap:"wrap"}}>
+          {_chip&&_chip.logo&&<img src={_chip.logo} alt="" title={_chip.titulo} style={{height:13,maxWidth:50,objectFit:"contain",flexShrink:0}}/>}
+          <div style={{flex:1,minWidth:150}}>
+            <div style={{color:"#64748b",fontSize:12,fontWeight:500,textDecoration:"line-through"}}>{d.titulo}</div>
+            <div style={{color:"#b6bec9",fontSize:10,fontWeight:600,marginTop:1,fontFeatureSettings:"'tnum'"}}>
+              some em {_rest} dia{_rest===1?"":"s"}
+            </div>
+          </div>
+          <button type="button" onClick={function(){onRestaurar(d);}}
+            style={{background:"#fff",color:"#0d9488",border:"1px solid #99f6e4",borderRadius:8,padding:"5px 11px",
+              fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,flexShrink:0}}>Restaurar</button>
+          <button type="button" onClick={function(){onExcluirDef(d);}}
+            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:8,padding:"5px 11px",
+              fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,flexShrink:0}}>Excluir agora</button>
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+
 /* ═══ CALENDÁRIO MODERNO — popover próprio, nada do nativo do navegador ═══ */
 const _DEM_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 function _DemDataInput({valor, onChange, placeholder, compacto}){
@@ -78254,7 +78358,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
 
 /* ═══ QUADRO (kanban por status) — compartilhado pela aba do cliente e pela
    central. Arrastar entre colunas muda o status; clique abre as etapas. ═══ */
-function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, mostrarCliente}){
+function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, onContexto, mostrarCliente}){
   const [dragDem,setDragDem]=useState(null);
   const [overCol,setOverCol]=useState(null);
   const [abertoId,setAbertoId]=useState(null); // card expandido DENTRO do kanban (etapas inline)
@@ -78300,6 +78404,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
                       onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
                       onClick={function(){ if(onAbrir) onAbrir(d); }}
+                      onContextMenu={onContexto?function(e){ e.preventDefault(); onContexto(d, e.clientX, e.clientY); }:undefined}
                       title="Clique pra abrir a demanda · arraste pra mudar o status"
                       style={{background:"#fff",border:"1px solid "+(_exp?"#d3d9e2":"#e8ebf0"),borderRadius:10,
                         padding:"11px 12px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:8,
@@ -78563,6 +78668,8 @@ function CDemandas({cl, canEdit, selUnit}){
   const [loading,setLoading]=useState(true);
   const [abertas,setAbertas]=useState({});
   const [quadroAberto,setQuadroAberto]=useState(null); // demanda aberta em modal (clique no quadro)
+  const [lixeira,setLixeira]=useState([]);             // soft-deletadas (30 dias)
+  const [ctxMenu,setCtxMenu]=useState(null);           // {d,x,y} — botão direito no card
   const [modal,setModal]=useState(null);       // null | {} novo | {...} editar
   const [busca,setBusca]=useState("");
   const [fStatus,setFStatus]=useState("");
@@ -78582,7 +78689,10 @@ function CDemandas({cl, canEdit, selUnit}){
     try{
       const r=await sb.from("client_demandas").select("*").eq("client_id",_rootId)
         .order("ordem",{ascending:true}).order("created_at",{ascending:false});
-      setDemandas((r&&r.data)||[]);
+      const _rows=(r&&r.data)||[];
+      setDemandas(_rows.filter(function(x){return !x.deleted_at;}));
+      setLixeira(_rows.filter(function(x){return !!x.deleted_at;}));
+      _demPurgarLixeira(sb);
     }catch(e){ console.warn("[demandas] load:", (e&&e.message)||e); }
     setLoading(false);
   };
@@ -78697,16 +78807,40 @@ function CDemandas({cl, canEdit, selUnit}){
   const _excluirDemanda=async function(d){
     let ok=true;
     if(typeof pixelsConfirm==="function"){
-      ok=await pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.titulo||"")+'" e todas as tarefas dela serão removidas.',danger:true});
+      ok=await pixelsConfirm({title:"Mandar pra Lixeira?",message:'"'+(d.titulo||"")+'" fica '+_DEM_LIXEIRA_DIAS+' dias na Lixeira (dá pra restaurar) e depois some de vez.',danger:true});
     }
     if(!ok) return;
     try{
-      await sb.from("client_demandas").delete().eq("id",d.id);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda excluída.");
+      const r=await sb.from("client_demandas")
+        .update({deleted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Foi pra Lixeira — "+_DEM_LIXEIRA_DIAS+" dias pra restaurar.");
+      setQuadroAberto(null);
       _carregar();
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000);
     }
+  };
+  const _restaurarDemanda=async function(d){
+    try{
+      const r=await sb.from("client_demandas")
+        .update({deleted_at:null,updated_at:new Date().toISOString()}).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda restaurada.");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro restaurando.",4000); }
+  };
+  const _excluirDefinitivo=async function(d){
+    let ok=true;
+    if(typeof pixelsConfirm==="function"){
+      ok=await pixelsConfirm({title:"Excluir DE VEZ?",message:'"'+(d.titulo||"")+'" será apagada agora, sem volta.',danger:true});
+    }
+    if(!ok) return;
+    try{
+      await sb.from("client_demandas").delete().eq("id",d.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Excluída definitivamente.");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000); }
   };
 
   /* ── Filtro por unidade (Bioter) ── */
@@ -78863,6 +78997,7 @@ function CDemandas({cl, canEdit, selUnit}){
         : (vista==="quadro" && !isMob)
           ? <_DemandasQuadro lista={_lista} canEdit={canEdit} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
+              onContexto={canEdit?function(d,x,y){ setCtxMenu({d:d,x:x,y:y}); }:null}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
@@ -78871,6 +79006,7 @@ function CDemandas({cl, canEdit, selUnit}){
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
+                onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
                 onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
@@ -78879,6 +79015,9 @@ function CDemandas({cl, canEdit, selUnit}){
     {/* ══ HISTÓRICO DE ENTREGAS ══ */}
     <_DemHistorico lista={_concluidas} canEdit={canEdit}
       onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+
+    {/* ══ LIXEIRA (30 dias) ══ */}
+    {canEdit&&<_DemLixeira lista={lixeira} onRestaurar={_restaurarDemanda} onExcluirDef={_excluirDefinitivo}/>}
 
     {/* ══ HISTORICO DE MARCOS ══
         Os marcos continuam existindo em client_milestones — alimentam o
@@ -78926,6 +79065,9 @@ function CDemandas({cl, canEdit, selUnit}){
       </div>;
     })()}
 
+    <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
+      onAbrir={function(d){ setQuadroAberto(d.id); }} onExcluir={_excluirDemanda}/>
+
     {modal && <_DemandaModal inicial={modal} isMob={isMob}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
@@ -78947,6 +79089,8 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
   const [loading,setLoading]=useState(true);
   const [abertas,setAbertas]=useState({});
   const [quadroAberto,setQuadroAberto]=useState(null); // demanda aberta em modal (clique no quadro)
+  const [lixeira,setLixeira]=useState([]);             // soft-deletadas (30 dias)
+  const [ctxMenu,setCtxMenu]=useState(null);           // {d,x,y} — botão direito no card
   const [modal,setModal]=useState(null);
   const [busca,setBusca]=useState("");
   const [fCliente,setFCliente]=useState("");
@@ -78981,7 +79125,10 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     try{
       const r=await sb.from("client_demandas").select("*")
         .order("updated_at",{ascending:false});
-      setDemandas((r&&r.data)||[]);
+      const _rows=(r&&r.data)||[];
+      setDemandas(_rows.filter(function(x){return !x.deleted_at;}));
+      setLixeira(_rows.filter(function(x){return !!x.deleted_at;}));
+      _demPurgarLixeira(sb);
     }catch(e){ console.warn("[demandas central] load:", (e&&e.message)||e); }
     setLoading(false);
   };
@@ -79102,16 +79249,40 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
   const _excluirDemanda=async function(d){
     let ok=true;
     if(typeof pixelsConfirm==="function"){
-      ok=await pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.titulo||"")+'" e todas as tarefas dela serão removidas.',danger:true});
+      ok=await pixelsConfirm({title:"Mandar pra Lixeira?",message:'"'+(d.titulo||"")+'" fica '+_DEM_LIXEIRA_DIAS+' dias na Lixeira (dá pra restaurar) e depois some de vez.',danger:true});
     }
     if(!ok) return;
     try{
-      await sb.from("client_demandas").delete().eq("id",d.id);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda excluída.");
+      const r=await sb.from("client_demandas")
+        .update({deleted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Foi pra Lixeira — "+_DEM_LIXEIRA_DIAS+" dias pra restaurar.");
+      setQuadroAberto(null);
       _carregar();
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000);
     }
+  };
+  const _restaurarDemanda=async function(d){
+    try{
+      const r=await sb.from("client_demandas")
+        .update({deleted_at:null,updated_at:new Date().toISOString()}).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda restaurada.");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro restaurando.",4000); }
+  };
+  const _excluirDefinitivo=async function(d){
+    let ok=true;
+    if(typeof pixelsConfirm==="function"){
+      ok=await pixelsConfirm({title:"Excluir DE VEZ?",message:'"'+(d.titulo||"")+'" será apagada agora, sem volta.',danger:true});
+    }
+    if(!ok) return;
+    try{
+      await sb.from("client_demandas").delete().eq("id",d.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Excluída definitivamente.");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000); }
   };
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[])
@@ -79283,6 +79454,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
         : (vista==="quadro" && !_mob)
           ? <_DemandasQuadro lista={_lista} canEdit={canEdit} mostrarCliente={true} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
+              onContexto={canEdit?function(d,x,y){ setCtxMenu({d:d,x:x,y:y}); }:null}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
@@ -79291,6 +79463,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
+                onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
                 onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
@@ -79299,6 +79472,9 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     {/* ══ HISTÓRICO DE ENTREGAS ══ */}
     <_DemHistorico lista={_concluidas} canEdit={canEdit} mostrarCliente={true}
       onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+
+    {/* ══ LIXEIRA (30 dias) ══ */}
+    {canEdit&&<_DemLixeira lista={lixeira} mostrarCliente={true} onRestaurar={_restaurarDemanda} onExcluirDef={_excluirDefinitivo}/>}
 
     {/* Modal de demanda aberta (clique no quadro / no histórico) */}
     {quadroAberto&&(function(){
@@ -79317,6 +79493,9 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
         </div>
       </div>;
     })()}
+
+    <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
+      onAbrir={function(d){ setQuadroAberto(d.id); }} onExcluir={_excluirDemanda}/>
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
       clientes={(!modal.id)?_clientesOpcoes:null}
