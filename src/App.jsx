@@ -78102,8 +78102,8 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       draggable={canEdit}
                       onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
                       onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
-                      onClick={function(){ setAbertoId(_exp?null:d.id); }}
-                      title="Clique pra ver as etapas aqui mesmo · arraste pra mudar o status"
+                      onClick={function(){ if(onAbrir) onAbrir(d); }}
+                      title="Clique pra abrir a demanda · arraste pra mudar o status"
                       style={{background:"#fff",border:"1px solid "+(_exp?"#d3d9e2":"#e8ebf0"),borderRadius:10,
                         padding:"11px 12px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:8,
                         opacity:_dragging?.4:1,boxShadow:"0 1px 2px rgba(15,23,42,.04)",transition:"box-shadow .12s, opacity .12s"}}
@@ -78143,8 +78143,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                         </span>}
                       </div>
 
-                      {/* Rodape: responsavel + progresso (o que importa, em destaque) */}
-                      <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+                      {/* Rodape: responsavel + progresso — clique AQUI expande as etapas no card */}
+                      <div onClick={function(e){ e.stopPropagation(); setAbertoId(_exp?null:d.id); }}
+                        title={_exp?"Recolher etapas":"Ver as etapas aqui no card"}
+                        style={{display:"flex",alignItems:"center",gap:7,paddingTop:8,borderTop:"1px solid #f4f6f8",cursor:"pointer"}}>
                         {resp&&<UserAvatar user={resp} size={18} border={false}/>}
                         {prog.total>0
                           ? <span style={{color:"#334155",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.feitas}/{prog.total}</span>
