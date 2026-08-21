@@ -50355,6 +50355,13 @@ function PortalTimeline({cl, clTasks, isMob}){
     if(!a.sprint_id&&!b.sprint_id)return 0;
     return (b.sprint_id||"").localeCompare(a.sprint_id||"");
   });
+  // ── SPRINTS DESLIGADOS (momentaneamente, 08/2026) — lista única ──
+  (function(){
+    const _todas=[];
+    grupos_ordenados.forEach(function(g){ (g.items||[]).forEach(function(t){ _todas.push(t); }); });
+    grupos_ordenados.length=0;
+    if(_todas.length) grupos_ordenados.push({key:"_todas",items:_todas,sprint_id:null,urgente:false,_flat:true});
+  })();
 
   // Helpers
   const _ddmm=function(s){if(!s)return "—";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
@@ -50376,6 +50383,7 @@ function PortalTimeline({cl, clTasks, isMob}){
 
   // Header de cada grupo
   const headerGrupo=function(g){
+    if(g._flat)return {label:"Suas demandas", color:"#0f172a", subtitulo:"Acompanhe o andamento de cada entrega"};
     if(g.urgente)return {label:"Urgências em análise", color:"#9333ea", subtitulo:"Demandas urgentes aguardando análise da equipe"};
     if(!g.sprint_id){
       const t=g.items[0]||{};
@@ -50427,7 +50435,7 @@ function PortalTimeline({cl, clTasks, isMob}){
     {/* Header geral */}
     <div>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Linha do tempo de entregas</div>
-      <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Suas demandas, agrupadas pela sprint em que foram vinculadas pela equipe Pixels.</div>
+      <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Suas demandas com a equipe Pixels — o andamento de cada entrega, num lugar só.</div>
     </div>
 
     {/* Projetos maiores — client_demandas, sincronizado com Estrategia > Clientes > Demandas */}
@@ -50984,9 +50992,18 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     if(!a.sprint_id&&!b.sprint_id)return 0;
     return (a.sprint_id||"").localeCompare(b.sprint_id||"");
   });
+  // ── SPRINTS DESLIGADOS (momentaneamente, 08/2026): primeiro o básico. ──
+  // Achata tudo numa seção única, mantendo a ordem (urgentes primeiro).
+  (function(){
+    const _todas=[];
+    grupos_ordenados.forEach(function(g){ (g.items||[]).forEach(function(t){ _todas.push(t); }); });
+    grupos_ordenados.length=0;
+    if(_todas.length) grupos_ordenados.push({key:"_todas",items:_todas,sprint_id:null,urgente:false,_flat:true});
+  })();
 
   // Header de cada grupo
   const labelDoGrupo=function(g){
+    if(g._flat)return {titulo:"Suas solicitações",periodo:"Arte e vídeo — a equipe organiza os prazos e você acompanha por aqui"};
     if(g.urgente)return {titulo:"Urgências em análise",periodo:"A equipe vai definir um prazo personalizado",isUrgent:true};
     if(!g.sprint_id)return {titulo:"Recém-recebidas",periodo:"Aguardando a equipe vincular a uma sprint"};
     const t=g.items[0]||{};
@@ -51108,7 +51125,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginTop:4}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Minhas demandas</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações que você enviou à equipe Pixels, agrupadas por sprint.</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações que você enviou à equipe Pixels — acompanhe o andamento de cada uma.</div>
       </div>
     </div>
 
@@ -78131,7 +78148,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                     </div>;
                   })}
                   {_cards.length===0&&<div style={{color:_alvo?st.cor:"#cbd5e1",fontSize:10.5,fontWeight:700,textAlign:"center",padding:"16px 4px",border:"1.5px dashed "+(_alvo?st.cor+"77":"#e2e8f0"),borderRadius:10,transition:"all .12s"}}>
-                    {_alvo?"Solte aqui":(st.id==="concluida"?"Solte aqui pra concluir — vai pro Histórico de entregas":"—")}
+                    {_alvo?"Solte aqui":"—"}
                   </div>}
                   </div>
                 </div>;
@@ -78172,6 +78189,24 @@ function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
   };
   useEffect(function(){ if(aberto&&enviados===null) _carregarEnviados(); },[aberto]);
 
+  const _desfazer=async function(d){
+    if(!sb||enviando) return;
+    let ok=true;
+    if(typeof pixelsConfirm==="function")
+      ok=await pixelsConfirm({title:"Tirar dos Checkpoints?",message:'"'+(d.titulo||"")+'" sai dos Checkpoints do cliente. A entrega continua aqui no histórico.',danger:true});
+    if(!ok) return;
+    setEnviando(d.id);
+    try{
+      const r=await sb.from("client_milestones").delete()
+        .eq("client_id",d.client_id).eq("metrics->>from_demanda",String(d.id));
+      if(r&&r.error) throw r.error;
+      setEnviados(function(p){ const n=Object.assign({},p||{}); delete n[d.id]; return n; });
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Removida dos Checkpoints.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro removendo: "+((e&&e.message)||""),4500);
+    }
+    setEnviando("");
+  };
   const _enviar=async function(d){
     if(!sb||enviando) return;
     setEnviando(d.id);
@@ -78239,12 +78274,16 @@ function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
           </span>
           {canEdit&&(
             _ja
-              ? <span title="Essa entrega já está nos Checkpoints do cliente"
+              ? <button type="button" disabled={!!enviando} onClick={function(){_desfazer(d);}}
+                  title="Está nos Checkpoints do cliente — clique pra desfazer o envio"
                   style={{background:"#f0fdfa",color:"#0d9488",border:"1px solid #99f6e4",borderRadius:9,
-                    padding:"5px 11px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
+                    padding:"5px 11px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,
+                    cursor:enviando?"wait":"pointer",fontFamily:_DEM_FF,opacity:enviando===d.id?.6:1,transition:"all .12s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.color="#dc2626";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#99f6e4";e.currentTarget.style.color="#0d9488";}}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  No Checkpoint
-                </span>
+                  {enviando===d.id?"Removendo…":"No Checkpoint · desfazer"}
+                </button>
               : <button type="button" disabled={!!enviando} onClick={function(){_enviar(d);}}
                   title="Registra essa entrega nos Checkpoints do cliente (aparece no calendário e no portal)"
                   style={{background:"#fff",color:"#0d9488",border:"1px solid #5eead4",borderRadius:9,
@@ -78565,7 +78604,7 @@ function CDemandas({cl, canEdit, selUnit}){
     {/* ══ LISTA ══ */}
     {loading
       ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
-      : _ativas.length===0
+      : _lista.length===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
             <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
               {_temFiltro ? "Nada encontrado com esses filtros" : "Nenhuma demanda ainda"}
@@ -78577,11 +78616,11 @@ function CDemandas({cl, canEdit, selUnit}){
             </div>
           </div>
         : (vista==="quadro" && !isMob)
-          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} onSalvar={_salvarTarefas}
+          ? <_DemandasQuadro lista={_lista} canEdit={canEdit} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {_ativas.map(function(d){
+            {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
                 aberto={!!abertas[d.id]}
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
@@ -78971,7 +79010,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     {/* Lista */}
     {loading
       ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
-      : _ativas.length===0
+      : _lista.length===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
             <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
               {_temFiltro?"Nada encontrado com esses filtros":"Nenhuma demanda ainda"}
@@ -78981,11 +79020,11 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
             </div>
           </div>
         : (vista==="quadro" && !_mob)
-          ? <_DemandasQuadro lista={_ativas} canEdit={canEdit} mostrarCliente={true} onSalvar={_salvarTarefas}
+          ? <_DemandasQuadro lista={_lista} canEdit={canEdit} mostrarCliente={true} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onAbrir={function(d){ setQuadroAberto(d.id); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {_ativas.map(function(d){
+            {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
                 aberto={!!abertas[d.id]}
                 onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
