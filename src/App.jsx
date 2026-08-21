@@ -2488,6 +2488,7 @@ function NavIcon({id,size=18,color}){
   if(id==="notificacoes")return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
   // ── Submenus Demandas ──
   if(id==="demandas_kanban")     return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+  if(id==="demandas_central")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
   if(id==="demandas_internas")   return <svg {...p}><path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="demandas_cal_pub")    return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>;
   if(id==="demandas_cal_interno")return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h8M8 17h5"/></svg>;
@@ -2547,19 +2548,20 @@ function NavIcon({id,size=18,color}){
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   // "Demandas" categoria pai REMOVIDA — só tinha 2 filhos, promovidos pra top-level.
-  {id:"demandas_kanban",  icon:"demandas_kanban", label:"Fluxo de demandas"},
+  {id:"demandas_kanban",  icon:"demandas_kanban", label:"Linha de produção"},
   {id:"demandas_cal_pub", icon:"demandas_cal_pub", label:"Calendário de publicações"},
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
     {id:"aprovacoes_video",      icon:"▶", label:"Avaliação de vídeo"},
   ]},
-  {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"comercial",  icon:"◈", label:"Comercial"},
   {id:"chat",       icon:"◐", label:"Chat"},
   {id:"gestao_enps",icon:"◇", label:"ENPS"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
+  {id:"demandas_central", icon:"demandas_central", label:"Demandas"},
+  {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
@@ -45573,6 +45575,7 @@ export default function AgencyOS(){
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
+      case "demandas_central":     return isSocio||(effectiveUser.dash==="coordinator")||p.verDemandas;
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
@@ -45686,6 +45689,7 @@ export default function AgencyOS(){
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "demandas_central":      return (isSocio||effectiveUser.dash==="coordinator"||effectivePerms.verDemandas)?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
@@ -77251,7 +77255,10 @@ function _demBlur(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarg
 /* ═══════════════════════════════════════════════════════════════════════
    CARD DA DEMANDA — horizontal, expande em linha (accordion)
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEdit, isMob, corCliente}){
+function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEdit, isMob, corCliente, mostrarCliente}){
+  const _cli = mostrarCliente && typeof CLIENTS!=="undefined"
+    ? CLIENTS.find(function(c){ return c.id===d.client_id; })
+    : null;
   const cat=_demCat(d.categoria);
   const st=_demSt(d.status);
   const prio=_demPrio(d.prioridade);
@@ -77280,6 +77287,14 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, canEd
       {/* Titulo + meta */}
       <div style={{flex:isMob?"none":"1 1 220px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {_cli && <span title={_cli.name}
+            style={{display:"inline-flex",alignItems:"center",gap:5,background:(_cli.color||"#7c3aed")+"10",
+              border:"1px solid "+(_cli.color||"#7c3aed")+"33",borderRadius:99,padding:"2px 9px 2px 4px",flexShrink:0}}>
+            <span style={{width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+              {typeof ClientLogo==="function" ? <ClientLogo clientId={_cli.id} size="sm"/> : null}
+            </span>
+            <span style={{color:_cli.color||"#334155",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{_cli.name}</span>
+          </span>}
           <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.25,lineHeight:1.25,
             textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
           {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
@@ -77672,7 +77687,7 @@ function _DemSelectResp({valor, onChange, compacto}){
 /* ═══════════════════════════════════════════════════════════════════════
    MODAL — nova / editar demanda
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaModal({inicial, onSalvar, onFechar, isMob}){
+function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes}){
   const _novo=!inicial || !inicial.id;
   const [f,setF]=useState(Object.assign({
     titulo:"", categoria:"outros", descricao:"", status:"nao_iniciada",
@@ -77721,6 +77736,15 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob}){
       </div>
 
       <div style={{padding:"20px 22px 22px",display:"flex",flexDirection:"column",gap:13}}>
+        {/* Cliente — so na central (na aba do cliente ele e implicito) */}
+        {Array.isArray(clientes)&&clientes.length>0&&<div>
+          <div style={_DEM_LBL}>Cliente</div>
+          <select value={f.client_id||""} onChange={function(e){set("client_id",e.target.value);}}
+            onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{cursor:"pointer"})}>
+            <option value="">Escolher cliente...</option>
+            {clientes.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+          </select>
+        </div>}
         <div>
           <div style={_DEM_LBL}>Nome da demanda</div>
           <input autoFocus value={f.titulo} placeholder="Ex: Novo site institucional"
@@ -78211,6 +78235,279 @@ function CDemandas({cl, canEdit, selUnit}){
     </div>
 
     {modal && <_DemandaModal inicial={modal} isMob={isMob}
+      onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CENTRAL DE DEMANDAS — Estrategia > Demandas
+   ───────────────────────────────────────────────────────────────────────
+   Visao de comando de TODAS as demandas de TODOS os clientes (client_demandas).
+   Fora daqui: arte/video (Linha de producao) e trafego (Gestao de midia).
+   Reusa _DemandaCard/_DemandaDetalhe com o badge do cliente ligado.
+═══════════════════════════════════════════════════════════════════════ */
+function CDemandasCentral({isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _mob=(typeof _pxMob==="function")?_pxMob():!!isMob;
+
+  const [demandas,setDemandas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [abertas,setAbertas]=useState({});
+  const [modal,setModal]=useState(null);
+  const [busca,setBusca]=useState("");
+  const [fCliente,setFCliente]=useState("");
+  const [fStatus,setFStatus]=useState("");
+  const [fResp,setFResp]=useState("");
+  const [fCat,setFCat]=useState("");
+  const [fPrazo,setFPrazo]=useState("");
+
+  // Quem edita na central: socios + Hellen (coordenacao). O resto le.
+  const canEdit=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)
+    ? (CURRENT_USER.level===1 || CURRENT_USER.dash==="coordinator")
+    : false;
+
+  const _carregar=async function(){
+    if(!sb){ setLoading(false); return; }
+    try{
+      const r=await sb.from("client_demandas").select("*")
+        .order("updated_at",{ascending:false});
+      setDemandas((r&&r.data)||[]);
+    }catch(e){ console.warn("[demandas central] load:", (e&&e.message)||e); }
+    setLoading(false);
+  };
+
+  useEffect(function(){
+    let alive=true;
+    _carregar();
+    // Garante que os clientes dinamicos estao no registro (badges/filtro)
+    try{
+      if(typeof window.loadDynamicClientsFromSupabase==="function")
+        window.loadDynamicClientsFromSupabase().catch(function(){});
+    }catch(_){}
+    if(!sb) return function(){alive=false;};
+    let ch=null;
+    try{
+      ch=sb.channel("demandas-central-rt")
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_demandas"},
+          function(){ if(alive) _carregar(); })
+        .subscribe();
+    }catch(_){}
+    return function(){ alive=false; try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[]);
+
+  const _salvarTarefas=async function(d){
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{tarefas:d.tarefas}) : x; });
+    });
+    if(!sb) return;
+    try{
+      await sb.from("client_demandas")
+        .update({tarefas:d.tarefas, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando tarefas.",4000);
+      _carregar();
+    }
+  };
+
+  const _salvarDemanda=async function(dados){
+    if(!sb) return;
+    const _cid=dados.client_id || fCliente;
+    if(!dados.id && !_cid){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolhe o cliente da demanda.");
+      return;
+    }
+    const _payload={
+      titulo:String(dados.titulo||"").trim(),
+      categoria:dados.categoria||"outros",
+      descricao:dados.descricao||"",
+      status:dados.status||"nao_iniciada",
+      prioridade:dados.prioridade||"normal",
+      responsavel:dados.responsavel||"",
+      data_inicio:dados.data_inicio||null,
+      prazo:dados.prazo||null,
+      updated_at:new Date().toISOString(),
+    };
+    try{
+      if(dados.id){
+        const r=await sb.from("client_demandas").update(_payload).eq("id",dados.id);
+        if(r&&r.error) throw r.error;
+      }else{
+        _payload.client_id=_cid;
+        _payload.unidade="";
+        _payload.tarefas=[];
+        _payload.created_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"";
+        const r=await sb.from("client_demandas").insert(_payload);
+        if(r&&r.error) throw r.error;
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda criada.");
+      }
+      setModal(null);
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+((e&&e.message)||""),5500);
+    }
+  };
+
+  const _excluirDemanda=async function(d){
+    let ok=true;
+    if(typeof pixelsConfirm==="function"){
+      ok=await pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.titulo||"")+'" e todas as tarefas dela serão removidas.',danger:true});
+    }
+    if(!ok) return;
+    try{
+      await sb.from("client_demandas").delete().eq("id",d.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda excluída.");
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000);
+    }
+  };
+
+  const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[])
+    .filter(function(c){ return c && String(c.name||"").trim(); })
+    .slice()
+    .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
+
+  /* ── Resumo global ── */
+  const _resumo=(function(){
+    const r={total:demandas.length, andamento:0, aguardando:0, concluidas:0, atrasadas:0};
+    demandas.forEach(function(d){
+      if(d.status==="andamento")  r.andamento++;
+      if(d.status==="aguardando") r.aguardando++;
+      if(d.status==="concluida")  r.concluidas++;
+      const _dd=_demDias(d.prazo);
+      if(d.status!=="concluida" && _dd!==null && _dd<0) r.atrasadas++;
+    });
+    return r;
+  })();
+
+  /* ── Filtros ── */
+  const _q=String(busca||"").toLowerCase().trim();
+  const _lista=demandas.filter(function(d){
+    if(fCliente && d.client_id!==fCliente) return false;
+    if(_q){
+      const _cli=_clientes.find(function(c){return c.id===d.client_id;});
+      const _alvo=(String(d.titulo||"")+" "+String(d.descricao||"")+" "+((_cli&&_cli.name)||"")).toLowerCase();
+      if(_alvo.indexOf(_q)<0) return false;
+    }
+    if(fStatus && d.status!==fStatus) return false;
+    if(fCat && d.categoria!==fCat) return false;
+    if(fResp){
+      const _naTarefa=(Array.isArray(d.tarefas)?d.tarefas:[]).some(function(t){return t&&t.resp===fResp;});
+      if(d.responsavel!==fResp && !_naTarefa) return false;
+    }
+    if(fPrazo){
+      const _dd=_demDias(d.prazo);
+      if(fPrazo==="atrasado" && !(d.status!=="concluida" && _dd!==null && _dd<0)) return false;
+      if(fPrazo==="semana"   && !(_dd!==null && _dd>=0 && _dd<=7))  return false;
+      if(fPrazo==="mes"      && !(_dd!==null && _dd>=0 && _dd<=30)) return false;
+      if(fPrazo==="sem"      && d.prazo) return false;
+    }
+    return true;
+  });
+
+  const _temFiltro=!!(_q||fCliente||fStatus||fCat||fResp||fPrazo);
+  const _limpar=function(){ setBusca(""); setFCliente(""); setFStatus(""); setFCat(""); setFResp(""); setFPrazo(""); };
+  const _time=(typeof TEAM!=="undefined")?TEAM:[];
+  const _selEstilo={background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",
+    fontSize:11.5,fontWeight:700,color:"#475569",outline:"none",fontFamily:_DEM_FF,cursor:"pointer"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF,padding:_mob?"14px 12px":"22px 26px",maxWidth:1280,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
+
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.35}}>Demandas</div>
+        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Central de comando — projetos e entregas de todos os clientes. Arte e vídeo vivem na Linha de produção; tráfego, na Gestão de mídia.</div>
+      </div>
+      {canEdit && <button type="button" onClick={function(){setModal({});}}
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+          padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,
+          display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)",flexShrink:0}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova demanda
+      </button>}
+    </div>
+
+    {/* Resumo */}
+    <div style={{display:"grid",gridTemplateColumns:_mob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:9}}>
+      {[
+        {l:"Demandas",     v:_resumo.total,      c:"#0f172a"},
+        {l:"Em andamento", v:_resumo.andamento,  c:"#2563eb"},
+        {l:"Aguardando",   v:_resumo.aguardando, c:"#b45309"},
+        {l:"Concluídas",   v:_resumo.concluidas, c:"#15803d"},
+        {l:"Atrasadas",    v:_resumo.atrasadas,  c:"#dc2626"},
+      ].map(function(x,i){
+        const _zero=!x.v;
+        return <div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 13px",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+          <div style={{color:_zero?"#cbd5e1":x.c,fontSize:21,fontWeight:800,letterSpacing:-.7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{x.v}</div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:4}}>{x.l}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Filtros */}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",flex:_mob?"1 1 100%":"0 1 240px"}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:11,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar demanda ou cliente..."
+          onFocus={_demFoco} onBlur={_demBlur}
+          style={Object.assign({},_DEM_INP,{padding:"8px 12px 8px 32px",fontSize:12,fontWeight:600})}/>
+      </div>
+      <select value={fCliente} onChange={function(e){setFCliente(e.target.value);}} style={Object.assign({},_selEstilo,fCliente?{borderColor:"#a855f7",color:"#7c3aed"}:{})}>
+        <option value="">Todos os clientes</option>
+        {_clientes.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+      </select>
+      <select value={fStatus} onChange={function(e){setFStatus(e.target.value);}} style={_selEstilo}>
+        <option value="">Todos os status</option>
+        {DEM_STATUS.map(function(st){return <option key={st.id} value={st.id}>{st.label}</option>;})}
+      </select>
+      <select value={fCat} onChange={function(e){setFCat(e.target.value);}} style={_selEstilo}>
+        <option value="">Todas as categorias</option>
+        {DEM_CATEGORIAS.map(function(c){return <option key={c.id} value={c.id}>{c.label}</option>;})}
+      </select>
+      <select value={fResp} onChange={function(e){setFResp(e.target.value);}} style={_selEstilo}>
+        <option value="">Todos responsáveis</option>
+        {_time.map(function(u){return <option key={u.id} value={u.id}>{String(u.name||"").split(" ")[0]}</option>;})}
+      </select>
+      <select value={fPrazo} onChange={function(e){setFPrazo(e.target.value);}} style={_selEstilo}>
+        <option value="">Qualquer prazo</option>
+        <option value="atrasado">Atrasadas</option>
+        <option value="semana">Próximos 7 dias</option>
+        <option value="mes">Próximos 30 dias</option>
+        <option value="sem">Sem prazo</option>
+      </select>
+      {_temFiltro && <button type="button" onClick={_limpar}
+        style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,padding:"8px 4px"}}>Limpar filtros</button>}
+    </div>
+
+    {/* Lista */}
+    {loading
+      ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Carregando…</div>
+      : _lista.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"46px 20px",textAlign:"center"}}>
+            <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>
+              {_temFiltro?"Nada encontrado com esses filtros":"Nenhuma demanda ainda"}
+            </div>
+            <div style={{color:"#94a3b8",fontSize:12.5}}>
+              {_temFiltro?"Ajuste a busca ou limpe os filtros.":"As demandas criadas nos clientes (e as solicitadas pelo portal) aparecem todas aqui."}
+            </div>
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {_lista.map(function(d){
+              return <_DemandaCard key={d.id} d={d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
+                aberto={!!abertas[d.id]}
+                onToggle={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
+                onEditar={function(){ setModal(d); }}
+                onExcluir={function(){ _excluirDemanda(d); }}
+                onSalvar={_salvarTarefas}/>;
+            })}
+          </div>
+    }
+
+    {modal && <_DemandaModal inicial={modal} isMob={_mob}
+      clientes={(!modal.id)?_clientes:null}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
 }
