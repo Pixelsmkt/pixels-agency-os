@@ -79066,7 +79066,7 @@ function _cqMarcarVista(clId,id){
 }
 
 /* ── Modal de edição (só sócios, só na agência) ── */
-function _CqModal({inicial, isMob, onSalvar, onFechar}){
+function _CqModal({inicial, isMob, onSalvar, onFechar, destino}){
   const _e=inicial||{};
   const [titulo,setTitulo]=useState(_e.titulo||"");
   const [descricao,setDescricao]=useState(_e.descricao||"");
@@ -79093,6 +79093,11 @@ function _CqModal({inicial, isMob, onSalvar, onFechar}){
       <div>
         <div style={{fontSize:17,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>{_e.id?"Editar conquista":"Nova conquista"}</div>
         <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>Escreve em "nós": Alcançamos, Vendemos, Conquistamos — é uma vitória do time com o cliente.</div>
+        {destino&&<div style={{marginTop:7,display:"inline-flex",alignItems:"center",gap:6,background:"#f5f3ff",border:"1px solid #ddd6fe",
+          borderRadius:99,padding:"3px 11px",fontSize:10.5,fontWeight:800,color:"#7c3aed"}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Vai pro álbum de: {destino}
+        </div>}
       </div>
       <div>
         <div style={_lbl}>Título</div>
@@ -79470,6 +79475,11 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
           </div>
     }
 
-    {modal&&<_CqModal inicial={modal} isMob={isMob} onSalvar={_salvar} onFechar={function(){setModal(null);}}/>}
+    {modal&&<_CqModal inicial={modal} isMob={isMob} onSalvar={_salvar} onFechar={function(){setModal(null);}}
+      destino={(!modal.id)&&_isBioter
+        ? ((_unidade!=="grupo"&&_unidade!=="_minhas_")
+            ? ("Bioter "+((typeof _DEM_BIOTER_UNIDADES!=="undefined"&&_DEM_BIOTER_UNIDADES[_unidade])||_unidade)+" (só essa unidade)")
+            : "Grupo Bioter (todas as unidades)")
+        : null}/>}
   </div>;
 }
