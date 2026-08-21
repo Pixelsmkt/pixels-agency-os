@@ -77831,6 +77831,97 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes}){
   </div>;
 }
 
+/* ═══ QUADRO (kanban por status) — compartilhado pela aba do cliente e pela
+   central. Arrastar entre colunas muda o status; clique abre as etapas. ═══ */
+function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, mostrarCliente}){
+  const [dragDem,setDragDem]=useState(null);
+  const [overCol,setOverCol]=useState(null);
+  return <div style={{display:"grid",gridTemplateColumns:"repeat("+DEM_STATUS.length+",minmax(200px,1fr))",gap:10,overflowX:"auto",paddingBottom:6}}>
+              {DEM_STATUS.map(function(st){
+                const _cards=lista.filter(function(d){ return (d.status||"nao_iniciada")===st.id; });
+                const _alvo=overCol===st.id && dragDem;
+                return <div key={st.id}
+                  onDragOver={function(e){ if(!canEdit) return; e.preventDefault(); try{e.dataTransfer.dropEffect="move";}catch(_){} setOverCol(function(p){return p===st.id?p:st.id;}); }}
+                  onDrop={function(e){ if(!canEdit) return; e.preventDefault(); onMudarStatus(dragDem, st.id); setDragDem(null); setOverCol(null); }}
+                  style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:14,
+                    padding:0,display:"flex",flexDirection:"column",gap:0,minHeight:200,transition:"all .12s",overflow:"hidden"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:st.bg,borderBottom:"2px solid "+st.cor+"55"}}>
+                    <span style={{width:9,height:9,borderRadius:"50%",background:st.cor,flexShrink:0,boxShadow:"0 0 0 3px "+st.cor+"22"}}/>
+                    <span style={{color:st.cor,fontSize:12,fontWeight:800,letterSpacing:-.15,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
+                    <span style={{background:"#fff",border:"1px solid "+st.cor+"33",color:st.cor,fontSize:10.5,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
+                  {_cards.map(function(d){
+                    const cat=_demCat(d.categoria);
+                    const prog=_demProgresso(d);
+                    const resp=_demMembro(d.responsavel);
+                    const prio=_demPrio(d.prioridade);
+                    const _prazoTom=_demPrazoTom(d.prazo, d.status==="concluida");
+                    const _dragging=dragDem&&dragDem.id===d.id;
+                    return <div key={d.id}
+                      draggable={canEdit}
+                      onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
+                      onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
+                      onClick={function(){ onAbrir(d); }}
+                      title="Clique pra abrir as etapas · arraste pra mudar o status"
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,
+                        padding:"12px 13px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:9,
+                        opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s, transform .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.11)";e.currentTarget.style.transform="translateY(-1px)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.05)";e.currentTarget.style.transform="";}}>
+                      {mostrarCliente&&(function(){
+                        const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;});
+                        if(!_cli) return null;
+                        return <span style={{display:"inline-flex",alignItems:"center",gap:5,alignSelf:"flex-start",
+                          background:(_cli.color||"#7c3aed")+"10",border:"1px solid "+(_cli.color||"#7c3aed")+"33",
+                          borderRadius:99,padding:"1px 8px 1px 3px"}}>
+                          <span style={{width:14,height:14,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                            {typeof ClientLogo==="function"?<ClientLogo clientId={_cli.id} size="sm"/>:null}
+                          </span>
+                          <span style={{color:_cli.color||"#334155",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_cli.name}</span>
+                        </span>;
+                      })()}
+                      {/* Icone da categoria + titulo */}
+                      <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
+                        <span style={{width:28,height:28,borderRadius:8,background:cat.cor+"14",border:"1px solid "+cat.cor+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <Ico n={cat.ico} size={13} color={cat.cor}/>
+                        </span>
+                        <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,flex:1,minWidth:0}}>{d.titulo}</span>
+                      </div>
+                      {/* Chips: categoria + prioridade + prazo */}
+                      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                        <span style={{background:cat.cor+"12",color:cat.cor,border:"1px solid "+cat.cor+"2e",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{cat.label}</span>
+                        {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
+                          <span style={{background:prio.cor+"12",color:prio.cor,border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{prio.label}</span>}
+                        {d.prazo&&<span style={{background:_prazoTom?_prazoTom.bg:"#f8fafc",color:_prazoTom?_prazoTom.cor:"#64748b",border:"1px solid "+(_prazoTom?_prazoTom.bd:"#e2e8f0"),borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:4}}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                          {_demBRCurto(d.prazo)}
+                        </span>}
+                      </div>
+                      {/* Rodape: responsavel + progresso */}
+                      <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                        {resp
+                          ? <span style={{display:"inline-flex",alignItems:"center",gap:5,minWidth:0}}>
+                              <UserAvatar user={resp} size={20} border={false}/>
+                              <span style={{color:"#475569",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:64}}>{String(resp.name||"").split(" ")[0]}</span>
+                            </span>
+                          : <span title="Sem responsável" style={{width:20,height:20,borderRadius:"50%",background:"#f1f5f9",border:"1px dashed #cbd5e1",flexShrink:0}}/>}
+                        <div style={{flex:1,minWidth:0}}>
+                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={5}/>
+                        </div>
+                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
+                      </div>
+                    </div>;
+                  })}
+                  {_cards.length===0&&<div style={{color:_alvo?st.cor:"#cbd5e1",fontSize:10.5,fontWeight:700,textAlign:"center",padding:"16px 4px",border:"1.5px dashed "+(_alvo?st.cor+"77":"#e2e8f0"),borderRadius:10,transition:"all .12s"}}>
+                    {_alvo?"Solte aqui":"—"}
+                  </div>}
+                  </div>
+                </div>;
+              })}
+            </div>;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    ABA DEMANDAS — componente principal
 ═══════════════════════════════════════════════════════════════════════ */
@@ -77862,8 +77953,6 @@ function CDemandas({cl, canEdit, selUnit}){
     try{ return localStorage.getItem(_VISTA_KEY)||"lista"; }catch(_){ return "lista"; }
   });
   const _mudarVista=function(v){ setVista(v); try{ localStorage.setItem(_VISTA_KEY,v); }catch(_){} };
-  const [dragDem,setDragDem]=useState(null);
-  const [overCol,setOverCol]=useState(null);
 
   const _carregar=async function(){
     if(!sb||!_rootId){ setLoading(false); return; }
@@ -78122,78 +78211,9 @@ function CDemandas({cl, canEdit, selUnit}){
             </div>
           </div>
         : (vista==="quadro" && !isMob)
-          ? <div style={{display:"grid",gridTemplateColumns:"repeat("+DEM_STATUS.length+",minmax(200px,1fr))",gap:10,overflowX:"auto",paddingBottom:6}}>
-              {DEM_STATUS.map(function(st){
-                const _cards=_lista.filter(function(d){ return (d.status||"nao_iniciada")===st.id; });
-                const _alvo=overCol===st.id && dragDem;
-                return <div key={st.id}
-                  onDragOver={function(e){ if(!canEdit) return; e.preventDefault(); try{e.dataTransfer.dropEffect="move";}catch(_){} setOverCol(function(p){return p===st.id?p:st.id;}); }}
-                  onDrop={function(e){ if(!canEdit) return; e.preventDefault(); _mudarStatusDemanda(dragDem, st.id); setDragDem(null); setOverCol(null); }}
-                  style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:14,
-                    padding:0,display:"flex",flexDirection:"column",gap:0,minHeight:200,transition:"all .12s",overflow:"hidden"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:st.bg,borderBottom:"2px solid "+st.cor+"55"}}>
-                    <span style={{width:9,height:9,borderRadius:"50%",background:st.cor,flexShrink:0,boxShadow:"0 0 0 3px "+st.cor+"22"}}/>
-                    <span style={{color:st.cor,fontSize:12,fontWeight:800,letterSpacing:-.15,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
-                    <span style={{background:"#fff",border:"1px solid "+st.cor+"33",color:st.cor,fontSize:10.5,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
-                  {_cards.map(function(d){
-                    const cat=_demCat(d.categoria);
-                    const prog=_demProgresso(d);
-                    const resp=_demMembro(d.responsavel);
-                    const prio=_demPrio(d.prioridade);
-                    const _prazoTom=_demPrazoTom(d.prazo, d.status==="concluida");
-                    const _dragging=dragDem&&dragDem.id===d.id;
-                    return <div key={d.id}
-                      draggable={canEdit}
-                      onDragStart={function(e){ setDragDem(d); try{e.dataTransfer.effectAllowed="move";}catch(_){} }}
-                      onDragEnd={function(){ setDragDem(null); setOverCol(null); }}
-                      onClick={function(){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}
-                      title="Clique pra abrir as etapas · arraste pra mudar o status"
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,
-                        padding:"12px 13px",cursor:canEdit?"grab":"pointer",display:"flex",flexDirection:"column",gap:9,
-                        opacity:_dragging?.4:1,boxShadow:"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .12s, opacity .12s, transform .12s"}}
-                      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.11)";e.currentTarget.style.transform="translateY(-1px)";}}
-                      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.05)";e.currentTarget.style.transform="";}}>
-                      {/* Icone da categoria + titulo */}
-                      <div style={{display:"flex",alignItems:"flex-start",gap:9}}>
-                        <span style={{width:28,height:28,borderRadius:8,background:cat.cor+"14",border:"1px solid "+cat.cor+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <Ico n={cat.ico} size={13} color={cat.cor}/>
-                        </span>
-                        <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,flex:1,minWidth:0}}>{d.titulo}</span>
-                      </div>
-                      {/* Chips: categoria + prioridade + prazo */}
-                      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                        <span style={{background:cat.cor+"12",color:cat.cor,border:"1px solid "+cat.cor+"2e",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{cat.label}</span>
-                        {d.prioridade&&d.prioridade!=="normal"&&d.prioridade!=="baixa"&&
-                          <span style={{background:prio.cor+"12",color:prio.cor,border:"1px solid "+prio.cor+"3d",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{prio.label}</span>}
-                        {d.prazo&&<span style={{background:_prazoTom?_prazoTom.bg:"#f8fafc",color:_prazoTom?_prazoTom.cor:"#64748b",border:"1px solid "+(_prazoTom?_prazoTom.bd:"#e2e8f0"),borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:4}}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                          {_demBRCurto(d.prazo)}
-                        </span>}
-                      </div>
-                      {/* Rodape: responsavel + progresso */}
-                      <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
-                        {resp
-                          ? <span style={{display:"inline-flex",alignItems:"center",gap:5,minWidth:0}}>
-                              <UserAvatar user={resp} size={20} border={false}/>
-                              <span style={{color:"#475569",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:64}}>{String(resp.name||"").split(" ")[0]}</span>
-                            </span>
-                          : <span title="Sem responsável" style={{width:20,height:20,borderRadius:"50%",background:"#f1f5f9",border:"1px dashed #cbd5e1",flexShrink:0}}/>}
-                        <div style={{flex:1,minWidth:0}}>
-                          <_DemBarra pct={prog.pct} cor={cat.cor} altura={5}/>
-                        </div>
-                        <span style={{color:prog.pct>=100?"#16a34a":cat.cor,fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.pct}%</span>
-                      </div>
-                    </div>;
-                  })}
-                  {_cards.length===0&&<div style={{color:_alvo?st.cor:"#cbd5e1",fontSize:10.5,fontWeight:700,textAlign:"center",padding:"16px 4px",border:"1.5px dashed "+(_alvo?st.cor+"77":"#e2e8f0"),borderRadius:10,transition:"all .12s"}}>
-                    {_alvo?"Solte aqui":"—"}
-                  </div>}
-                  </div>
-                </div>;
-              })}
-            </div>
+          ? <_DemandasQuadro lista={_lista} canEdit={canEdit}
+              onMudarStatus={_mudarStatusDemanda}
+              onAbrir={function(d){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
@@ -78264,6 +78284,14 @@ function CDemandasCentral({isMob}){
 
   // Central e SO dos socios (a rota ja bloqueia; aqui e cinto de seguranca).
   const canEdit=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.level===1:false;
+
+  // Vista da central: quadro por status e o DEFAULT — e a leitura de "onde cada
+  // coisa esta" que uma central de comando pede. Lista fica pra varredura fina.
+  const _VISTA_KEY="pixels-demandas-central-vista";
+  const [vista,setVista]=useState(function(){
+    try{ return localStorage.getItem(_VISTA_KEY)||"quadro"; }catch(_){ return "quadro"; }
+  });
+  const _mudarVista=function(v){ setVista(v); try{ localStorage.setItem(_VISTA_KEY,v); }catch(_){} };
 
   const _carregar=async function(){
     if(!sb){ setLoading(false); return; }
@@ -78347,6 +78375,22 @@ function CDemandasCentral({isMob}){
     }
   };
 
+  const _mudarStatusDemanda=async function(d, novo){
+    if(!d || d.status===novo) return;
+    setDemandas(function(prev){
+      return prev.map(function(x){ return x.id===d.id ? Object.assign({},x,{status:novo}) : x; });
+    });
+    if(!sb) return;
+    try{
+      await sb.from("client_demandas")
+        .update({status:novo, updated_at:new Date().toISOString()})
+        .eq("id",d.id);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro mudando status.",4000);
+      _carregar();
+    }
+  };
+
   const _excluirDemanda=async function(d){
     let ok=true;
     if(typeof pixelsConfirm==="function"){
@@ -78411,7 +78455,7 @@ function CDemandasCentral({isMob}){
   const _selEstilo={background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",
     fontSize:11.5,fontWeight:700,color:"#475569",outline:"none",fontFamily:_DEM_FF,cursor:"pointer"};
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF,padding:_mob?"14px 12px":"22px 26px",maxWidth:1280,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DEM_FF,padding:_mob?"14px 12px":"22px 26px",maxWidth:vista==="quadro"?1560:1280,margin:"0 auto",width:"100%",boxSizing:"border-box"}}>
 
     {/* Header */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
@@ -78478,6 +78522,21 @@ function CDemandasCentral({isMob}){
       </select>
       {_temFiltro && <button type="button" onClick={_limpar}
         style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,padding:"8px 4px"}}>Limpar filtros</button>}
+
+      <div style={{marginLeft:"auto",display:"inline-flex",gap:2,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3}}>
+        {[
+          {id:"quadro", label:"Quadro", ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>},
+          {id:"lista",  label:"Lista",  ico:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>},
+        ].map(function(v){
+          const _on=vista===v.id;
+          return <button key={v.id} type="button" onClick={function(){_mudarVista(v.id);}}
+            style={{background:_on?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",color:_on?"#fff":"#64748b",
+              border:"none",borderRadius:8,padding:"7px 13px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",
+              fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+            {v.ico}{v.label}
+          </button>;
+        })}
+      </div>
     </div>
 
     {/* Lista */}
@@ -78492,7 +78551,11 @@ function CDemandasCentral({isMob}){
               {_temFiltro?"Ajuste a busca ou limpe os filtros.":"As demandas criadas nos clientes (e as solicitadas pelo portal) aparecem todas aqui."}
             </div>
           </div>
-        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        : (vista==="quadro" && !_mob)
+          ? <_DemandasQuadro lista={_lista} canEdit={canEdit} mostrarCliente={true}
+              onMudarStatus={_mudarStatusDemanda}
+              onAbrir={function(d){ _mudarVista("lista"); setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=true; return n; }); }}/>
+          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
                 aberto={!!abertas[d.id]}
