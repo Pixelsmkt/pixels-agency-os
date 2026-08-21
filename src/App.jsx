@@ -77324,7 +77324,9 @@ function _demCliChip(d){
   if(d.client_id==="bioter"){
     // "Bioter" seco (sem "Grupo") + unidade com acento certo
     const _un=(d.unidade&&d.unidade!=="grupo")?String(d.unidade):"";
-    const u=_un?all.find(function(x){return x.id==="bioter_"+_un;}):null;
+    let u=_un?all.find(function(x){return x.id==="bioter_"+_un;}):null;
+    if(!u&&_un&&typeof BIOTER_GROUP_UNITS!=="undefined"&&Array.isArray(BIOTER_GROUP_UNITS))
+      u=BIOTER_GROUP_UNITS.find(function(x){return x.id==="bioter_"+_un;})||null;
     const _unNome=_un?(_DEM_BIOTER_UNIDADES[_un]||( _un.charAt(0).toUpperCase()+_un.slice(1) )):"";
     nome="Bioter"+(_unNome?(" · "+_unNome):"");
     if(u){ cor=u.color||cor; idLogo=u.id; logoUrl=u.logoUrl||logoUrl; }
@@ -77873,6 +77875,11 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   }, inicial||{}));
   const set=function(k,v){ setF(function(p){return Object.assign({},p,{[k]:v});}); };
   const cat=_demCat(f.categoria);
+  // Etapas já na criação — cada linha vira uma tarefa da demanda
+  const [etapas,setEtapas]=useState([]);
+  const _addEtapa=function(){ setEtapas(function(p){ return p.concat([{id:_demNovoId(),nome:"",resp:"",prazo:"",status:"afazer",obs:"",done_at:"",done_by:""}]); }); };
+  const _setEtapa=function(id,k,v){ setEtapas(function(p){ return p.map(function(t){ return t.id===id?Object.assign({},t,{[k]:v}):t; }); }); };
+  const _delEtapa=function(id){ setEtapas(function(p){ return p.filter(function(t){ return t.id!==id; }); }); };
 
   if(typeof useEscToClose==="function") useEscToClose(true, onFechar);
 
@@ -77881,7 +77888,9 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
       if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra demanda.");
       return;
     }
-    onSalvar(f);
+    const _ts=etapas.filter(function(t){ return String(t.nome||"").trim(); })
+      .map(function(t){ return Object.assign({},t,{nome:String(t.nome).trim()}); });
+    onSalvar(_novo&&_ts.length ? Object.assign({},f,{tarefas:_ts}) : f);
   };
 
   return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }}
@@ -77952,6 +77961,43 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
             onFocus={_demFoco} onBlur={_demBlur}
             style={Object.assign({},_DEM_INP,{fontWeight:500,resize:"vertical",minHeight:70,lineHeight:1.55})}/>
         </div>
+
+        {_novo&&<div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <div style={Object.assign({},_DEM_LBL,{marginBottom:0})}>Etapas (opcional)</div>
+            <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600}}>quebra a demanda em tarefas — dá pra completar depois</span>
+          </div>
+          {etapas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:7}}>
+            {etapas.map(function(t,i){
+              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr auto":"minmax(0,1fr) 140px 125px auto",gap:6,alignItems:"center"}}>
+                <input value={t.nome} placeholder={"Etapa "+(i+1)+" — ex: Briefing com o cliente"} autoFocus={!t.nome}
+                  onChange={function(e){_setEtapa(t.id,"nome",e.target.value);}}
+                  onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); _addEtapa(); } }}
+                  onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+                {!isMob&&<_DemSelectResp valor={t.resp} onChange={function(v){_setEtapa(t.id,"resp",v);}}/>}
+                {!isMob&&<input type="date" value={t.prazo}
+                  onChange={function(e){_setEtapa(t.id,"prazo",e.target.value);}}
+                  onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{fontWeight:600})}/>}
+                <button type="button" onClick={function(){_delEtapa(t.id);}} title="Remover etapa"
+                  style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"6px 4px",
+                    display:"inline-flex",alignItems:"center"}}
+                  onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                  onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>;
+            })}
+          </div>}
+          <button type="button" onClick={_addEtapa}
+            style={{background:"#fff",border:"1px dashed #cbd5e1",borderRadius:9,padding:"8px 12px",width:"100%",
+              color:"#64748b",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,
+              display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.color="#7c3aed";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {etapas.length?"Mais uma etapa":"Adicionar etapas"}
+          </button>
+        </div>}
 
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
           <div>
@@ -78777,7 +78823,9 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
 
   const _salvarDemanda=async function(dados){
     if(!sb) return;
-    const _cid=dados.client_id || fCliente;
+    let _cid=dados.client_id || fCliente;
+    let _unidNova="";
+    if(String(_cid||"").indexOf("bioter::")===0){ _unidNova=String(_cid).slice(8); _cid="bioter"; }
     if(!dados.id && !_cid){
       if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escolhe o cliente da demanda.");
       return;
@@ -78799,8 +78847,8 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
         if(r&&r.error) throw r.error;
       }else{
         _payload.client_id=_cid;
-        _payload.unidade="";
-        _payload.tarefas=[];
+        _payload.unidade=_unidNova;
+        _payload.tarefas=Array.isArray(dados.tarefas)?dados.tarefas:[];
         _payload.created_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"";
         const r=await sb.from("client_demandas").insert(_payload);
         if(r&&r.error) throw r.error;
@@ -78871,6 +78919,20 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     .filter(function(c){ return c && String(c.name||"").trim(); })
     .slice()
     .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
+  // Pro modal de criação: Bioter abre em Grupo + cada unidade (valor "bioter::<unidade>")
+  const _clientesOpcoes=(function(){
+    const out=[];
+    _clientes.forEach(function(c){
+      if(c.id==="bioter"){
+        out.push({id:"bioter",name:"Grupo Bioter (todas as unidades)"});
+        const us=(typeof BIOTER_GROUP_UNITS!=="undefined"&&Array.isArray(BIOTER_GROUP_UNITS))?BIOTER_GROUP_UNITS:[];
+        us.forEach(function(u){
+          out.push({id:"bioter::"+String(u.id||"").replace("bioter_",""),name:"   · "+u.name});
+        });
+      }else out.push({id:c.id,name:c.name});
+    });
+    return out;
+  })();
 
   /* ── Resumo global ── */
   const _escopo=demandas.filter(_noEscopo);
@@ -79058,7 +79120,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     })()}
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
-      clientes={(!modal.id)?_clientes:null}
+      clientes={(!modal.id)?_clientesOpcoes:null}
       cats={_soCats} semCats={_soCats?null:_DEM_CATS_MIDIA}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
