@@ -77237,6 +77237,21 @@ function _demConcluidaEm(d){
 }
 
 // Bolinha de prioridade — substitui o chip escrito (pedido do time: menos texto)
+// Cliente da demanda pro card: nome na cor do cliente + logo. Bioter resolve
+// a UNIDADE (client_id raiz "bioter" + campo unidade → "Bioter Chapecó" etc).
+function _demCliChip(d){
+  const all=(typeof CLIENTS!=="undefined")?CLIENTS:[];
+  const raiz=all.find(function(x){return x.id===d.client_id;});
+  if(!raiz) return null;
+  let nome=raiz.name, cor=raiz.color||"#64748b", idLogo=raiz.id, logoUrl=raiz.logoUrl;
+  if(d.client_id==="bioter"&&d.unidade&&d.unidade!=="grupo"){
+    const u=all.find(function(x){return x.id==="bioter_"+d.unidade;});
+    if(u){ nome=u.name; cor=u.color||cor; idLogo=u.id; logoUrl=u.logoUrl||logoUrl; }
+    else nome=raiz.name+" · "+String(d.unidade).charAt(0).toUpperCase()+String(d.unidade).slice(1);
+  }
+  const L=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS)?CLIENT_LOGOS:{};
+  return {nome:nome, cor:cor, logo:L[idLogo]||logoUrl||L[raiz.id]||raiz.logoUrl||null};
+}
 // Demanda que nasceu no portal do cliente (solicitação) — fica sincronizada lá.
 function _demDoPortal(d){ return String((d&&d.created_by)||"").indexOf("portal_")===0; }
 // Chip "Portal" (veio do cliente) ou "No portal" (interna que foi enviada pro portal)
@@ -77330,15 +77345,16 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
       {/* Titulo + meta — enxuto: logo do cliente, bolinha de prioridade, titulo, data */}
       <div style={{flex:isMob?"none":"1 1 240px",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          {_cli && (function(){
-            const _lg=((typeof CLIENT_LOGOS!=="undefined")&&CLIENT_LOGOS[_cli.id])||_cli.logoUrl||null;
-            return _lg
-              ? <img src={_lg} alt={_cli.name} title={_cli.name}
-                  style={{height:15,maxWidth:74,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>
-              : <span title={_cli.name} style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>
-                  {_cli.abbr||String(_cli.name||"").slice(0,14)}</span>;
+          {mostrarCliente && (function(){
+            const _chip=_demCliChip(d);
+            if(!_chip) return null;
+            return <span style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0,flexShrink:0}}>
+              {_chip.logo&&<img src={_chip.logo} alt="" title={_chip.nome}
+                style={{height:14,maxWidth:64,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>}
+              <span title={_chip.nome} style={{color:_chip.cor,fontSize:10.5,fontWeight:800,letterSpacing:.2,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}}>{_chip.nome}</span>
+            </span>;
           })()}
-          <_DemPrioDot prio={prio}/>
           <span style={{color:"#0f172a",fontWeight:400,fontSize:14,letterSpacing:-.1,lineHeight:1.3,
             textDecoration:_concluida?"line-through":"none",opacity:_concluida?.7:1}}>{d.titulo}</span>
           <_DemPortalTag d={d}/>
@@ -77347,7 +77363,7 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
           <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{cat.label}</span>
           {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
             style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {typeof Ico==="function"&&<Ico n="flame" size={11} color="currentColor"/>}
             {_demBRCurto(d.prazo)}
           </span>}
           {_prazo && !_concluida && (function(){
@@ -77383,10 +77399,7 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
                 {prog.feitas}<span style={{color:"#94a3b8",fontWeight:700}}>/{prog.total}</span>
                 <span style={{color:"#64748b",fontSize:11,fontWeight:700,marginLeft:5}}>etapas</span>
               </span>
-            : <span style={{color:"#b45309",fontSize:11.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
-                sem etapas
-              </span>}
+            : <span/>}
           <span style={{color:prog.pct>=100?"#16a34a":"#7c3aed",fontSize:14,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{prog.pct}%</span>
         </div>
         <_DemBarra pct={prog.pct} cor={prog.pct>=100?"#16a34a":"#7c3aed"} altura={8}/>
@@ -77943,9 +77956,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                     const _late=d.status!=="concluida"&&_dd!==null&&_dd<0;
                     const _perto=d.status!=="concluida"&&_dd!==null&&_dd>=0&&_dd<=3;
                     const _dragging=dragDem&&dragDem.id===d.id;
-                    const _cli=mostrarCliente?(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===d.client_id;}):null;
-                    const _logo=_cli?(((typeof CLIENT_LOGOS!=="undefined")&&CLIENT_LOGOS[_cli.id])||_cli.logoUrl||null):null;
-                    const _prioOn=prio&&prio.id!=="normal"&&prio.id!=="baixa";
+                    const _chip=mostrarCliente?_demCliChip(d):null;
                     const _exp=abertoId===d.id;
                     return <div key={d.id}
                       draggable={canEdit}
@@ -77960,14 +77971,11 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";}}>
 
                       {/* Linha do cliente: logo em proporção natural (nada de caixinha) */}
-                      {(_cli||_prioOn)&&<div style={{display:"flex",alignItems:"center",gap:8,minHeight:15}}>
-                        {_cli&&(_logo
-                          ? <img src={_logo} alt={_cli.name} title={_cli.name}
-                              style={{height:14,maxWidth:70,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>
-                          : <span title={_cli.name} style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",
-                              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cli.abbr||String(_cli.name||"").slice(0,14)}</span>)}
-                        <span style={{flex:1}}/>
-                        <_DemPrioDot prio={prio}/>
+                      {_chip&&<div style={{display:"flex",alignItems:"center",gap:6,minHeight:15}}>
+                        {_chip.logo&&<img src={_chip.logo} alt="" title={_chip.nome}
+                          style={{height:13,maxWidth:56,objectFit:"contain",objectPosition:"left center",flexShrink:0}}/>}
+                        <span title={_chip.nome} style={{color:_chip.cor,fontSize:10,fontWeight:800,letterSpacing:.2,minWidth:0,
+                          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_chip.nome}</span>
                       </div>}
 
                       {/* Titulo — regular, respirado */}
@@ -77979,9 +77987,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       {/* Meta discreta: categoria · data (cor só quando importa) */}
                       <div style={{display:"flex",alignItems:"center",gap:6,color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
                         <span>{cat.label}</span>
-                        {d.prazo&&<span style={{opacity:.6}}>·</span>}
-                        {d.prazo&&<span style={{color:_late?"#dc2626":(_perto?"#b45309":"#94a3b8"),fontWeight:(_late||_perto)?800:600,
-                          fontFeatureSettings:"'tnum'"}}>
+                        {d.prazo&&<span title={"Prazo de entrega: "+_demBR(d.prazo)}
+                          style={{color:_late?"#dc2626":(_perto?"#b45309":"#94a3b8"),fontWeight:(_late||_perto)?800:600,
+                          fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:3}}>
+                          {typeof Ico==="function"&&<Ico n="flame" size={10} color={_late?"#dc2626":(_perto?"#b45309":"#b6bec9")}/>}
                           {_demBRCurto(d.prazo)}{_late?(" · "+Math.abs(_dd)+"d atraso"):""}
                         </span>}
                       </div>
@@ -77991,7 +78000,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                         {resp&&<UserAvatar user={resp} size={18} border={false}/>}
                         {prog.total>0
                           ? <span style={{color:"#334155",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{prog.feitas}/{prog.total}</span>
-                          : <span title="Quebra a demanda em etapas" style={{color:"#b45309",fontSize:9.5,fontWeight:700,flexShrink:0}}>sem etapas</span>}
+                          : null}
                         <div style={{flex:1,minWidth:0}}>
                           <_DemBarra pct={prog.pct} cor={prog.pct>=100?"#16a34a":"#7c3aed"} altura={5}/>
                         </div>
