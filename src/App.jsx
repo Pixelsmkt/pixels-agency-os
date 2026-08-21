@@ -50269,21 +50269,49 @@ function _PortalDemandasProjeto({cl, isMob}){
         const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
         const pct=ts.length>0?Math.round(ok/ts.length*100):0;
         const _fim=d.status==="concluida";
-        return <div key={d.id} style={{border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?8:14,flexDirection:isMob?"column":"row"}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2,textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
-            {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
-          </div>
-          <div style={{minWidth:isMob?0:170}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
-              <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{ts.length>0?(ok+" de "+ts.length+" etapas"):"em preparação"}</span>
-              <span style={{color:pct>=100?"#16a34a":(cl.color||"#7c3aed"),fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+        const _c=cl.color||"#7c3aed";
+        // Status de etapa traduzido pro cliente
+        const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
+          aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
+        return <div key={d.id} style={{border:"1px solid #eef0f3",borderRadius:12,overflow:"hidden"}}>
+          {/* Cabeçalho da demanda */}
+          <div style={{padding:"12px 14px",display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?8:14,flexDirection:isMob?"column":"row",background:"#fcfcfd"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2,textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
+              {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
             </div>
-            <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",borderRadius:99,background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+(cl.color||"#7c3aed")+","+(cl.color||"#7c3aed")+"bb)",transition:"width .3s"}}/>
+            <div style={{minWidth:isMob?0:170}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
+                <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{ts.length>0?(ok+" de "+ts.length+" etapas"):"em preparação"}</span>
+                <span style={{color:pct>=100?"#16a34a":_c,fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+              </div>
+              <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+                <div style={{width:pct+"%",height:"100%",borderRadius:99,background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_c+","+_c+"bb)",transition:"width .3s"}}/>
+              </div>
             </div>
+            <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,alignSelf:isMob?"flex-start":"center"}}>{st.label}</span>
           </div>
-          <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,alignSelf:isMob?"flex-start":"center"}}>{st.label}</span>
+          {/* Etapas — o cliente vê exatamente onde cada uma está */}
+          {ts.length>0&&<div style={{borderTop:"1px solid #f1f5f9",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
+            {ts.map(function(t){
+              const _tok=t.status==="concluida";
+              const _tst=_TST[t.status]||_TST.afazer;
+              const _tAndamento=t.status==="andamento"||t.status==="revisao";
+              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:9}}>
+                <span style={{width:16,height:16,borderRadius:"50%",flexShrink:0,
+                  background:_tok?"#16a34a":(_tAndamento?_tst.c+"18":"#fff"),
+                  border:_tok?"1.5px solid #16a34a":"1.5px solid "+(_tAndamento?_tst.c:"#d3dae3"),
+                  display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                  {_tok
+                    ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    : (_tAndamento?<span style={{width:6,height:6,borderRadius:"50%",background:_tst.c}}/>:null)}
+                </span>
+                <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:12,fontWeight:500,lineHeight:1.4,
+                  textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
+                <span style={{color:_tst.c,fontSize:10,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
+              </div>;
+            })}
+          </div>}
         </div>;
       })}
     </div>
@@ -77145,15 +77173,15 @@ const _DEM_FF = "'Inter',system-ui,-apple-system,sans-serif";
 // chip do card passam a conhecer a categoria nova.
 const DEM_CATEGORIAS = [
   {id:"estrategia", label:"Estratégia",        cor:"#7c3aed", ico:"target"},
-  {id:"social",     label:"Social Media",      cor:"#ec4899", ico:"users"},
+  {id:"social",     label:"Social media",      cor:"#ec4899", ico:"users"},
   {id:"conteudo",   label:"Conteúdo",          cor:"#f59e0b", ico:"fileText"},
   {id:"design",     label:"Design",            cor:"#a855f7", ico:"sparkles"},
-  {id:"video",      label:"Vídeo / Captação",  cor:"#0ea5e9", ico:"play"},
-  {id:"trafego",    label:"Tráfego Pago",      cor:"#2563eb", ico:"funnel"},
-  {id:"site",       label:"Site / Landing",    cor:"#0d9488", ico:"globe"},
+  {id:"video",      label:"Vídeo / captação",  cor:"#0ea5e9", ico:"play"},
+  {id:"trafego",    label:"Tráfego pago",      cor:"#2563eb", ico:"funnel"},
+  {id:"site",       label:"Site / landing",    cor:"#0d9488", ico:"globe"},
   {id:"branding",   label:"Branding",          cor:"#db2777", ico:"sparkles"},
-  {id:"grafico",    label:"Material Gráfico",  cor:"#ea580c", ico:"image"},
-  {id:"crm",        label:"CRM / Automação",   cor:"#4f46e5", ico:"layers"},
+  {id:"grafico",    label:"Material gráfico",  cor:"#ea580c", ico:"image"},
+  {id:"crm",        label:"CRM / automação",   cor:"#4f46e5", ico:"layers"},
   {id:"campanha",   label:"Campanha",          cor:"#dc2626", ico:"flame"},
   {id:"evento",     label:"Evento",            cor:"#16a34a", ico:"calendar"},
   {id:"outros",     label:"Outros",            cor:"#64748b", ico:"folder"},
@@ -77397,7 +77425,7 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
           <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
-            {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color={cat.cor}/>}
+            {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color="#94a3b8"/>}
             {cat.label}
           </span>
           {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
@@ -78037,7 +78065,7 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                       {/* Meta discreta: categoria · data (cor só quando importa) */}
                       <div style={{display:"flex",alignItems:"center",gap:6,color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
                         <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
-                          {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color={cat.cor}/>}
+                          {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color="#94a3b8"/>}
                           {cat.label}
                         </span>
                         {d.prazo&&<span title={"Prazo de entrega: "+_demBR(d.prazo)}
