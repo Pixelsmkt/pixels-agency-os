@@ -77672,6 +77672,19 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
         </span>
         <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{prog.feitas}/{prog.total}</span>
         <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+        {canEdit&&tarefas.length>1&&<span title="Aplica em TODAS as etapas de uma vez"
+          style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,background:"#f8fafc",
+            border:"1px solid #eef0f3",borderRadius:99,padding:"3px 10px 3px 12px"}}>
+          <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Todas:</span>
+          <_DemRespPicker mini valor="" onChange={function(v){
+            _persistTarefas(tarefas.map(function(t){ return Object.assign({},t,{resp:v}); }));
+            if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Responsável aplicado em todas as etapas.":"Responsável removido de todas as etapas.");
+          }}/>
+          <_DemDataInput compacto valor="" placeholder="Data" onChange={function(v){
+            _persistTarefas(tarefas.map(function(t){ return Object.assign({},t,{prazo:v}); }));
+            if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Prazo aplicado em todas as etapas.":"Prazo removido de todas as etapas.");
+          }}/>
+        </span>}
         {canEdit && <button type="button" onClick={function(){setNovaAberta(!novaAberta);}}
           style={{background:novaAberta?"#f1f5f9":"#fff",border:"1px solid "+cat.cor+"44",borderRadius:9,padding:"6px 12px",
             color:cat.cor,fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
@@ -77996,7 +78009,21 @@ function _DemLixeira({lista, mostrarCliente, onRestaurar, onExcluirDef}){
 const _DEM_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 function _DemDataInput({valor, onChange, placeholder, compacto}){
   const [aberto,setAberto]=useState(false);
+  const [pos,setPos]=useState({top:100,left:100});
   const _ref=useRef(null);
+  const _abrir=function(e){
+    if(aberto){ setAberto(false); return; }
+    try{
+      const r=e.currentTarget.getBoundingClientRect();
+      const vw=window.innerWidth, vh=window.innerHeight, W=302, H=332;
+      let left=compacto?(r.right-W):r.left;
+      left=Math.max(8, Math.min(left, vw-W-8));
+      let top=r.bottom+6;
+      if(top+H>vh-8) top=Math.max(8, r.top-H-6);
+      setPos({top:top,left:left});
+    }catch(_){ setPos({top:100,left:100}); }
+    setAberto(true);
+  };
   const _hoje=new Date();
   const _selD=valor?new Date(String(valor).slice(0,10)+"T12:00:00"):null;
   const [mes,setMes]=useState(function(){ const b=_selD||_hoje; return new Date(b.getFullYear(),b.getMonth(),1); });
@@ -78021,7 +78048,7 @@ function _DemDataInput({valor, onChange, placeholder, compacto}){
     color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_DEM_FF};
   return <div ref={_ref} style={{position:"relative",width:compacto?"auto":"100%"}}>
     {/* Campo — o retângulo INTEIRO abre o calendário */}
-    <button type="button" onClick={function(){setAberto(!aberto);}}
+    <button type="button" onClick={_abrir}
       style={compacto
         ? {background:"#fff",border:"1px solid "+(aberto?"#a78bfa":"#e2e8f0"),borderRadius:8,padding:"4px 9px",
            fontSize:11,fontWeight:700,color:valor?"#475569":"#94a3b8",cursor:"pointer",fontFamily:_DEM_FF,
@@ -78033,8 +78060,8 @@ function _DemDataInput({valor, onChange, placeholder, compacto}){
       {valor?_demBR(valor):(placeholder||"Escolher data")}
     </button>
     {/* Popover */}
-    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:compacto?"auto":0,right:compacto?0:"auto",
-      zIndex:120,width:302,background:"#fff",
+    {aberto&&<div style={{position:"fixed",top:pos.top,left:pos.left,
+      zIndex:500,width:302,background:"#fff",
       border:"1px solid #e8ebf0",borderRadius:14,boxShadow:"0 18px 46px rgba(15,23,42,.16)",padding:"11px 13px 9px",
       fontFamily:_DEM_FF}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
@@ -78089,7 +78116,20 @@ function _DemRespPicker({valor, onChange, mini}){
   const _time=(typeof TEAM!=="undefined")?TEAM:[];
   const _m=_demMembro(valor);
   const [aberto,setAberto]=useState(false);
+  const [pos,setPos]=useState({top:100,left:100});
   const _ref=useRef(null);
+  const _abrirMini=function(e){
+    if(aberto){ setAberto(false); return; }
+    try{
+      const r=e.currentTarget.getBoundingClientRect();
+      const vw=window.innerWidth, vh=window.innerHeight, W=236, H=120;
+      let left=Math.max(8, Math.min(r.right-W, vw-W-8));
+      let top=r.bottom+6;
+      if(top+H>vh-8) top=Math.max(8, r.top-H-6);
+      setPos({top:top,left:left});
+    }catch(_){ setPos({top:100,left:100}); }
+    setAberto(true);
+  };
   useEffect(function(){
     if(!aberto) return undefined;
     const h=function(e){ if(_ref.current&&!_ref.current.contains(e.target)) setAberto(false); };
@@ -78120,7 +78160,7 @@ function _DemRespPicker({valor, onChange, mini}){
   }
   // mini: avatar atual + popover de carinhas
   return <div ref={_ref} style={{position:"relative",display:"inline-flex",flexShrink:0}}>
-    <button type="button" onClick={function(){setAberto(!aberto);}} title={_m?_m.name:"Definir responsável"}
+    <button type="button" onClick={_abrirMini} title={_m?_m.name:"Definir responsável"}
       style={{border:"none",background:"transparent",padding:2,borderRadius:"50%",cursor:"pointer",lineHeight:0,
         boxShadow:_m?"0 0 0 1.5px #e2e8f0":"none"}}>
       {_m
@@ -78130,7 +78170,7 @@ function _DemRespPicker({valor, onChange, mini}){
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </span>}
     </button>
-    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:130,background:"#fff",
+    {aberto&&<div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:500,background:"#fff",
       border:"1px solid #dfe3ea",borderRadius:12,boxShadow:"0 16px 44px rgba(15,23,42,.22)",padding:9,
       display:"flex",gap:6,flexWrap:"wrap",width:236}}>
       {_rosto(null,30,!valor,false)}
