@@ -77266,18 +77266,24 @@ function _demConcluidaEm(d){
 // Bolinha de prioridade — substitui o chip escrito (pedido do time: menos texto)
 // Cliente da demanda pro card: nome na cor do cliente + logo. Bioter resolve
 // a UNIDADE (client_id raiz "bioter" + campo unidade → "Bioter Chapecó" etc).
+const _DEM_BIOTER_UNIDADES={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",gloria:"Glória",uberlandia:"Uberlândia",paraguay:"Paraguay"};
 function _demCliChip(d){
   const all=(typeof CLIENTS!=="undefined")?CLIENTS:[];
   const raiz=all.find(function(x){return x.id===d.client_id;});
   if(!raiz) return null;
   let nome=raiz.name, cor=raiz.color||"#64748b", idLogo=raiz.id, logoUrl=raiz.logoUrl;
-  if(d.client_id==="bioter"&&d.unidade&&d.unidade!=="grupo"){
-    const u=all.find(function(x){return x.id==="bioter_"+d.unidade;});
-    if(u){ nome=u.name; cor=u.color||cor; idLogo=u.id; logoUrl=u.logoUrl||logoUrl; }
-    else nome=raiz.name+" · "+String(d.unidade).charAt(0).toUpperCase()+String(d.unidade).slice(1);
+  if(d.client_id==="bioter"){
+    // "Bioter" seco (sem "Grupo") + unidade com acento certo
+    const _un=(d.unidade&&d.unidade!=="grupo")?String(d.unidade):"";
+    const u=_un?all.find(function(x){return x.id==="bioter_"+_un;}):null;
+    const _unNome=_un?(_DEM_BIOTER_UNIDADES[_un]||( _un.charAt(0).toUpperCase()+_un.slice(1) )):"";
+    nome="Bioter"+(_unNome?(" · "+_unNome):"");
+    if(u){ cor=u.color||cor; idLogo=u.id; logoUrl=u.logoUrl||logoUrl; }
   }
+  // Pixels (demandas internas): a logo já diz tudo — sem texto
+  if(raiz.id==="pixels"||raiz.id==="interno") nome="";
   const L=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS)?CLIENT_LOGOS:{};
-  return {nome:nome, cor:cor, logo:L[idLogo]||logoUrl||L[raiz.id]||raiz.logoUrl||null};
+  return {nome:nome, cor:cor, logo:L[idLogo]||logoUrl||L[raiz.id]||raiz.logoUrl||null, titulo:nome||raiz.name};
 }
 // Demanda que nasceu no portal do cliente (solicitação) — fica sincronizada lá.
 function _demDoPortal(d){ return String((d&&d.created_by)||"").indexOf("portal_")===0; }
@@ -77375,14 +77381,14 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
           {mostrarCliente && (function(){
             const _chip=_demCliChip(d);
             if(!_chip) return null;
-            return <span title={_chip.nome} style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0,flexShrink:0,
+            return <span title={_chip.titulo} style={{display:"inline-flex",alignItems:"center",gap:6,minWidth:0,flexShrink:0,
               background:"linear-gradient(135deg,"+_chip.cor+"1f,"+_chip.cor+"0d)",
               border:"1px solid "+_chip.cor+"40",borderRadius:99,padding:"3.5px 11px 3.5px 7px",
               backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
               boxShadow:"inset 0 1px 0 rgba(255,255,255,.5)"}}>
               {_chip.logo&&<img src={_chip.logo} alt="" style={{height:13,maxWidth:50,objectFit:"contain",flexShrink:0}}/>}
-              <span style={{color:_chip.cor,fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}}>{_chip.nome}</span>
+              {(!!_chip.nome||!_chip.logo)&&<span style={{color:_chip.cor,fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}}>{_chip.nome||_chip.titulo}</span>}
             </span>;
           })()}
           <span style={{color:"#0f172a",fontWeight:400,fontSize:14,letterSpacing:-.1,lineHeight:1.3,
@@ -77390,7 +77396,10 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
           <_DemPortalTag d={d}/>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:5,flexWrap:"wrap"}}>
-          <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{cat.label}</span>
+          <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+            {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color={cat.cor}/>}
+            {cat.label}
+          </span>
           {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
             style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
             {typeof Ico==="function"&&<Ico n="flame" size={11} color="currentColor"/>}
@@ -77977,10 +77986,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
                   onDrop={function(e){ if(!canEdit) return; e.preventDefault(); onMudarStatus(dragDem, st.id); setDragDem(null); setOverCol(null); }}
                   style={{background:_alvo?st.bg:"#f8fafc",border:"1px solid "+(_alvo?st.cor+"66":"#eef0f3"),borderRadius:14,
                     padding:0,display:"flex",flexDirection:"column",gap:0,minHeight:200,transition:"all .12s",overflow:"hidden"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:9,padding:"11px 14px",background:st.cor}}>
-                    {typeof Ico==="function"&&<Ico n={st.ico||"dot"} size={16} color="#fff" strokeWidth={2.4}/>}
-                    <span style={{color:"#fff",fontSize:13.5,fontWeight:800,letterSpacing:-.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
-                    <span style={{background:"rgba(255,255,255,.28)",color:"#fff",fontSize:11.5,fontWeight:800,borderRadius:99,padding:"1.5px 10px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:st.cor}}>
+                    {typeof Ico==="function"&&<Ico n={st.ico||"dot"} size={13} color="#fff"/>}
+                    <span style={{color:"#fff",fontSize:12,fontWeight:700,letterSpacing:.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</span>
+                    <span style={{background:"rgba(255,255,255,.25)",color:"#fff",fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{_cards.length}</span>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
                   {_cards.map(function(d){
@@ -78008,14 +78017,14 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
 
                       {/* Linha do cliente: logo em proporção natural (nada de caixinha) */}
                       {_chip&&<div style={{display:"flex",alignItems:"center",minHeight:20}}>
-                        <span title={_chip.nome} style={{display:"inline-flex",alignItems:"center",gap:6,maxWidth:"100%",
+                        <span title={_chip.titulo} style={{display:"inline-flex",alignItems:"center",gap:6,maxWidth:"100%",
                           background:"linear-gradient(135deg,"+_chip.cor+"1f,"+_chip.cor+"0d)",
                           border:"1px solid "+_chip.cor+"40",borderRadius:99,padding:"3.5px 10px 3.5px 6px",
                           backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",
                           boxShadow:"inset 0 1px 0 rgba(255,255,255,.5)"}}>
                           {_chip.logo&&<img src={_chip.logo} alt="" style={{height:12,maxWidth:46,objectFit:"contain",flexShrink:0}}/>}
-                          <span style={{color:_chip.cor,fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_chip.nome}</span>
+                          {(!!_chip.nome||!_chip.logo)&&<span style={{color:_chip.cor,fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",minWidth:0,
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_chip.nome||_chip.titulo}</span>}
                         </span>
                       </div>}
 
@@ -78027,7 +78036,10 @@ function _DemandasQuadro({lista, canEdit, onMudarStatus, onAbrir, onSalvar, most
 
                       {/* Meta discreta: categoria · data (cor só quando importa) */}
                       <div style={{display:"flex",alignItems:"center",gap:6,color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
-                        <span>{cat.label}</span>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                          {typeof Ico==="function"&&<Ico n={cat.ico||"folder"} size={10} color={cat.cor}/>}
+                          {cat.label}
+                        </span>
                         {d.prazo&&<span title={"Prazo de entrega: "+_demBR(d.prazo)}
                           style={{color:_late?"#dc2626":(_perto?"#b45309":"#94a3b8"),fontWeight:(_late||_perto)?800:600,
                           fontFeatureSettings:"'tnum'",display:"inline-flex",alignItems:"center",gap:3}}>
