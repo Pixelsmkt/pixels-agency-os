@@ -77261,6 +77261,7 @@ const DEM_CATEGORIAS = [
   {id:"conteudo",   label:"Conteúdo",          cor:"#f59e0b", ico:"fileText"},
   {id:"design",     label:"Design",            cor:"#a855f7", ico:"sparkles"},
   {id:"video",      label:"Vídeo / captação",  cor:"#0ea5e9", ico:"play"},
+  {id:"roteiro",    label:"Roteiro",           cor:"#0891b2", ico:"mic"},
   {id:"trafego",    label:"Tráfego pago",      cor:"#2563eb", ico:"funnel"},
   {id:"site",       label:"Site / landing",    cor:"#0d9488", ico:"globe"},
   {id:"branding",   label:"Branding",          cor:"#db2777", ico:"sparkles"},
@@ -77466,7 +77467,7 @@ function _demBlur(e){ e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarg
 /* ═══════════════════════════════════════════════════════════════════════
    CARD DA DEMANDA — horizontal, expande em linha (accordion)
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPortal, onContexto, canEdit, isMob, corCliente, mostrarCliente}){
+function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPortal, onContexto, onPatchDemanda, canEdit, isMob, corCliente, mostrarCliente}){
   const _cli = mostrarCliente && typeof CLIENTS!=="undefined"
     ? CLIENTS.find(function(c){ return c.id===d.client_id; })
     : null;
@@ -77571,14 +77572,14 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
 
     {/* ── Corpo expandido ── */}
     {aberto && <_DemandaDetalhe d={d} cat={cat} prog={prog} canEdit={canEdit} isMob={isMob}
-      onEditar={onEditar} onExcluir={onExcluir} onSalvar={onSalvar} onPortal={onPortal}/>}
+      onEditar={onEditar} onExcluir={onExcluir} onSalvar={onSalvar} onPortal={onPortal} onPatchDemanda={onPatchDemanda}/>}
   </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
    DETALHE — cabecalho + lista de tarefas
 ═══════════════════════════════════════════════════════════════════════ */
-function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onSalvar, onPortal}){
+function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onSalvar, onPortal, onPatchDemanda}){
   const [novaAberta,setNovaAberta]=useState(false);
   const [rascunho,setRascunho]=useState({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
   const [editId,setEditId]=useState(null);
@@ -77586,8 +77587,14 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
   const [overId,setOverId]=useState(null);
 
   const tarefas=Array.isArray(d.tarefas)?d.tarefas:[];
+  // Ref sempre com a versão MAIS RECENTE — operações em sequência (ex: "Todas:"
+  // pessoa e depois data) compõem em vez de uma sobrescrever a outra.
+  const _tarefasRef=useRef(tarefas);
+  _tarefasRef.current=tarefas;
+  const _agora=function(){ return Array.isArray(_tarefasRef.current)?_tarefasRef.current:[]; };
 
   const _persistTarefas=function(lista){
+    _tarefasRef.current=lista;
     onSalvar(Object.assign({},d,{tarefas:lista}));
   };
   const _addTarefa=function(){
@@ -77598,12 +77605,12 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
       _t.done_at=new Date().toISOString();
       _t.done_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"";
     }
-    _persistTarefas(tarefas.concat([_t]));
+    _persistTarefas(_agora().concat([_t]));
     setRascunho({nome:"",resp:"",prazo:"",status:"afazer",obs:""});
     setNovaAberta(false);
   };
   const _patchTarefa=function(id, patch){
-    _persistTarefas(tarefas.map(function(t){
+    _persistTarefas(_agora().map(function(t){
       if(t.id!==id) return t;
       const _novo=Object.assign({},t,patch);
       // Concluir carimba QUEM e QUANDO automaticamente; desmarcar limpa.
@@ -77621,12 +77628,12 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
       ok=await pixelsConfirm({title:"Excluir tarefa?",message:'"'+(t.nome||"")+'" será removida da demanda.',danger:true});
     }
     if(!ok) return;
-    _persistTarefas(tarefas.filter(function(x){return x.id!==t.id;}));
+    _persistTarefas(_agora().filter(function(x){return x.id!==t.id;}));
   };
   // Reordenar: as tarefas ja vivem num array jsonb, entao e so trocar de lugar.
   const _mover=function(fromId,toId){
     if(!fromId||!toId||fromId===toId) return;
-    const arr=tarefas.slice();
+    const arr=_agora().slice();
     const fi=arr.findIndex(function(x){return x.id===fromId;});
     const ti=arr.findIndex(function(x){return x.id===toId;});
     if(fi<0||ti<0) return;
@@ -77642,7 +77649,62 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
   return <div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:isMob?"15px 15px 17px":"17px 20px 19px",
     display:"flex",flexDirection:"column",gap:15}}>
 
-    {/* ── Cabecalho de dados ── */}
+    {/* ── Cabecalho de dados — EDITÁVEL direto na ficha (autosave) ── */}
+    {(canEdit&&onPatchDemanda)?(function(){
+      const _cel={background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"8px 11px",minWidth:0};
+      const _lb={color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4};
+      const _sel={width:"100%",background:"transparent",border:"none",outline:"none",cursor:"pointer",
+        color:"#0f172a",fontSize:12.5,fontWeight:800,fontFamily:_DEM_FF,letterSpacing:-.15,padding:0};
+      return <>
+      <input key={"tt"+d.id} defaultValue={d.titulo||""} placeholder="Título da demanda"
+        onBlur={function(e){ const v=String(e.target.value||"").trim(); if(v&&v!==d.titulo) onPatchDemanda(d,{titulo:v}); }}
+        style={{width:"100%",background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"10px 13px",
+          fontSize:14,fontWeight:600,color:"#0f172a",outline:"none",fontFamily:_DEM_FF,boxSizing:"border-box"}}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
+        <div style={_cel}>
+          <div style={_lb}>Categoria</div>
+          <select value={d.categoria||"outros"} onChange={function(e){onPatchDemanda(d,{categoria:e.target.value});}} style={_sel}>
+            {DEM_CATEGORIAS.map(function(c){return <option key={c.id} value={c.id}>{c.label}</option>;})}
+          </select>
+        </div>
+        <div style={_cel}>
+          <div style={_lb}>Status</div>
+          <select value={d.status||"nao_iniciada"} onChange={function(e){onPatchDemanda(d,{status:e.target.value});}} style={_sel}>
+            {DEM_STATUS.map(function(st){return <option key={st.id} value={st.id}>{st.label}</option>;})}
+          </select>
+        </div>
+        <div style={_cel}>
+          <div style={_lb}>Prioridade</div>
+          <select value={d.prioridade||"normal"} onChange={function(e){onPatchDemanda(d,{prioridade:e.target.value});}}
+            style={Object.assign({},_sel,{color:prio.cor})}>
+            {DEM_PRIOS.map(function(pp){return <option key={pp.id} value={pp.id}>{pp.label}</option>;})}
+          </select>
+        </div>
+        <div style={_cel}>
+          <div style={_lb}>Responsável</div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <_DemRespPicker mini valor={d.responsavel||""} onChange={function(v){onPatchDemanda(d,{responsavel:v});}}/>
+            <span style={{color:"#0f172a",fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {(resp&&String(resp.name||"").split(" ")[0])||"—"}</span>
+          </div>
+        </div>
+        <div style={_cel}>
+          <div style={_lb}>Início</div>
+          <_DemDataInput compacto valor={d.data_inicio||""} placeholder="Definir"
+            onChange={function(v){onPatchDemanda(d,{data_inicio:v||null});}}/>
+        </div>
+        <div style={_cel}>
+          <div style={_lb}>Prazo final</div>
+          <_DemDataInput compacto valor={d.prazo||""} placeholder="Definir"
+            onChange={function(v){onPatchDemanda(d,{prazo:v||null});}}/>
+        </div>
+      </div>
+      <textarea key={"dd"+d.id} defaultValue={d.descricao||""} rows={2} placeholder="Descrição / objetivo da demanda…"
+        onBlur={function(e){ const v=String(e.target.value||""); if(v!==(d.descricao||"")) onPatchDemanda(d,{descricao:v}); }}
+        style={{width:"100%",background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"10px 13px",
+          color:"#475569",fontSize:12.5,lineHeight:1.6,outline:"none",resize:"vertical",fontFamily:_DEM_FF,boxSizing:"border-box"}}/>
+      </>;
+    })():<>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(120px,1fr))",gap:10}}>
       {[
         {l:"Início",     v:_demBR(d.data_inicio)||"—"},
@@ -77658,10 +77720,9 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
         </div>;
       })}
     </div>
-
-    {/* Descricao */}
     {d.descricao && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",
       color:"#475569",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{d.descricao}</div>}
+    </>}
 
     {/* ── Tarefas ── */}
     <div>
@@ -77677,11 +77738,11 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
             border:"1px solid #eef0f3",borderRadius:99,padding:"3px 10px 3px 12px"}}>
           <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Todas:</span>
           <_DemRespPicker mini valor="" onChange={function(v){
-            _persistTarefas(tarefas.map(function(t){ return Object.assign({},t,{resp:v}); }));
+            _persistTarefas(_agora().map(function(t){ return Object.assign({},t,{resp:v}); }));
             if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Responsável aplicado em todas as etapas.":"Responsável removido de todas as etapas.");
           }}/>
           <_DemDataInput compacto valor="" placeholder="Data" onChange={function(v){
-            _persistTarefas(tarefas.map(function(t){ return Object.assign({},t,{prazo:v}); }));
+            _persistTarefas(_agora().map(function(t){ return Object.assign({},t,{prazo:v}); }));
             if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Prazo aplicado em todas as etapas.":"Prazo removido de todas as etapas.");
           }}/>
         </span>}
@@ -77770,14 +77831,14 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
         Veio pelo portal · sempre sincronizada
       </span>}
-      <button type="button" onClick={onEditar}
+      {!onPatchDemanda&&<button type="button" onClick={onEditar}
         style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",color:"#475569",
           fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6}}
         onMouseEnter={function(e){e.currentTarget.style.borderColor=cat.cor+"66";e.currentTarget.style.color=cat.cor;}}
         onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         Editar demanda
-      </button>
+      </button>}
       <button type="button" onClick={onExcluir}
         style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"8px 12px",color:"#dc2626",
           fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6}}
@@ -78755,6 +78816,19 @@ function CDemandas({cl, canEdit, selUnit}){
   },[_rootId]);
 
   /* ── Persistencia ── */
+  // Autosave campo a campo (edição inline na ficha da demanda)
+  const _patchDemanda=async function(d,patch){
+    setDemandas(function(prev){ return prev.map(function(x){ return x.id===d.id?Object.assign({},x,patch):x; }); });
+    if(!sb) return;
+    try{
+      const r=await sb.from("client_demandas")
+        .update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando alteração.",4000);
+      _carregar();
+    }
+  };
   const _salvarDemanda=async function(dados){
     if(!sb) return;
     const _payload={
@@ -79047,7 +79121,7 @@ function CDemandas({cl, canEdit, selUnit}){
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
                 onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
-                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>;
             })}
           </div>
     }
@@ -79100,7 +79174,7 @@ function CDemandas({cl, canEdit, selUnit}){
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>
         </div>
       </div>;
     })()}
@@ -79207,6 +79281,19 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     }
   };
 
+  // Autosave campo a campo (edição inline na ficha da demanda)
+  const _patchDemanda=async function(d,patch){
+    setDemandas(function(prev){ return prev.map(function(x){ return x.id===d.id?Object.assign({},x,patch):x; }); });
+    if(!sb) return;
+    try{
+      const r=await sb.from("client_demandas")
+        .update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",d.id);
+      if(r&&r.error) throw r.error;
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando alteração.",4000);
+      _carregar();
+    }
+  };
   const _salvarDemanda=async function(dados){
     if(!sb) return;
     let _cid=dados.client_id || fCliente;
@@ -79504,7 +79591,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
                 onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
-                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>;
             })}
           </div>
     }
@@ -79529,7 +79616,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>
         </div>
       </div>;
     })()}
