@@ -45575,14 +45575,14 @@ export default function AgencyOS(){
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
-      case "demandas_central":     return isSocio||(effectiveUser.dash==="coordinator")||p.verDemandas;
+      case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
       case "aprovacoes_video":     return p.verAprovacoes;
-      case "gestaomidia":          return p.verGestaoMidia||isSocio;
+      case "gestaomidia":          return isSocio||effectiveUser.dash==="gestor"; // socios + gestor de midia (Erick)
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return p.verChat;
       // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
@@ -45689,7 +45689,7 @@ export default function AgencyOS(){
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "demandas_central":      return (isSocio||effectiveUser.dash==="coordinator"||effectivePerms.verDemandas)?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
+      case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
@@ -45697,7 +45697,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
-      case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
+      case "gestaomidia":          return (isSocio||effectiveUser.dash==="gestor")?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "gestao":
@@ -78262,10 +78262,8 @@ function CDemandasCentral({isMob}){
   const [fCat,setFCat]=useState("");
   const [fPrazo,setFPrazo]=useState("");
 
-  // Quem edita na central: socios + Hellen (coordenacao). O resto le.
-  const canEdit=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)
-    ? (CURRENT_USER.level===1 || CURRENT_USER.dash==="coordinator")
-    : false;
+  // Central e SO dos socios (a rota ja bloqueia; aqui e cinto de seguranca).
+  const canEdit=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.level===1:false;
 
   const _carregar=async function(){
     if(!sb){ setLoading(false); return; }
