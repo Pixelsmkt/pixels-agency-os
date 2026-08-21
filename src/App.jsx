@@ -51112,6 +51112,10 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       </div>
     </div>
 
+    {/* Projetos e demandas maiores — client_demandas com etapas, mesmo card da equipe.
+        Aparece o que veio do portal + o que a equipe liberou com "Enviar pro portal". */}
+    {typeof _PortalDemandasProjeto==="function"&&<_PortalDemandasProjeto cl={cl} isMob={isMob}/>}
+
     {/* Empty state */}
     {validas.length===0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"50px 36px",textAlign:"center"}}>
       <div style={{width:60,height:60,borderRadius:"50%",background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
