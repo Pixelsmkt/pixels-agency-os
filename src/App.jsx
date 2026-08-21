@@ -78133,13 +78133,13 @@ function _DemRespPicker({valor, onChange, mini}){
   useEffect(function(){
     if(!aberto) return undefined;
     const h=function(e){ if(_ref.current&&!_ref.current.contains(e.target)) setAberto(false); };
-    document.addEventListener("mousedown",h);
-    return function(){ document.removeEventListener("mousedown",h); };
+    document.addEventListener("click",h);
+    return function(){ document.removeEventListener("click",h); };
   },[aberto]);
   const _rosto=function(u,size,sel,dim){
     const _op=(dim&&valor&&!sel)?.55:1;
     return <button key={u?u.id:"none"} type="button" title={u?u.name:"Sem responsável"}
-      onMouseDown={function(e){ e.preventDefault(); e.stopPropagation(); onChange(u?u.id:""); setAberto(false); }}
+      onClick={function(e){ e.stopPropagation(); e.preventDefault(); onChange(u?u.id:""); setAberto(false); }}
       style={{border:"none",background:"transparent",padding:2,borderRadius:"50%",cursor:"pointer",lineHeight:0,
         boxShadow:sel?"0 0 0 2.5px #7c3aed":"0 0 0 1px #e2e8f0",opacity:_op,transition:"all .12s",flexShrink:0}}
       onMouseEnter={function(e){e.currentTarget.style.opacity="1";e.currentTarget.style.boxShadow=sel?"0 0 0 2.5px #7c3aed":"0 0 0 2px #c4b5fd";}}
