@@ -2595,6 +2595,10 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
   const [broken,setBroken]=useState(false);
   useEffect(function(){
+    // Sincroniza a foto quando o COMPONENTE troca de pessoa (user prop muda):
+    // sem isso o estado interno segurava a foto do usuário anterior.
+    setPhoto(getProfilePhoto(u.id));
+    setBroken(false);
     const handler=function(e){
       if(!e||!e.detail||!e.detail.userId||e.detail.userId===u.id){
         setPhoto(getProfilePhoto(u.id));
@@ -78378,9 +78382,23 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
         </div>
 
         <div style={{paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
             <div style={Object.assign({},_DEM_LBL,{marginBottom:0})}>Etapas</div>
             <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600}}>quebra a demanda em tarefas — dá pra completar depois</span>
+            <span style={{flex:1}}/>
+            {etapas.length>1&&<span title="Aplica em TODAS as etapas de uma vez"
+              style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,background:"#f8fafc",
+                border:"1px solid #eef0f3",borderRadius:99,padding:"3px 10px 3px 12px"}}>
+              <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Todas:</span>
+              <_DemRespPicker mini valor="" onChange={function(v){
+                setEtapas(function(p){ return p.map(function(t){ return Object.assign({},t,{resp:v}); }); });
+                if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Responsável aplicado em todas as etapas.":"Responsável removido de todas.");
+              }}/>
+              <_DemDataInput compacto valor="" placeholder="Data" onChange={function(v){
+                setEtapas(function(p){ return p.map(function(t){ return Object.assign({},t,{prazo:v}); }); });
+                if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Prazo aplicado em todas as etapas.":"Prazo removido de todas.");
+              }}/>
+            </span>}
           </div>
           {etapas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:7}}>
             {etapas.map(function(t,i){
