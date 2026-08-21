@@ -78279,8 +78279,19 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   }, inicial||{}));
   const set=function(k,v){ setF(function(p){return Object.assign({},p,{[k]:v});}); };
   const cat=_demCat(f.categoria);
-  // Etapas já na criação — cada linha vira uma tarefa da demanda
-  const [etapas,setEtapas]=useState([]);
+  // Etapas dentro do modal — na criação E na edição (ficha única)
+  const [etapas,setEtapas]=useState(function(){
+    const _ts=(inicial&&Array.isArray(inicial.tarefas))?inicial.tarefas:[];
+    return _ts.map(function(t){ return Object.assign({},t); });
+  });
+  const _checkEtapa=function(id){
+    setEtapas(function(p){ return p.map(function(t){
+      if(t.id!==id) return t;
+      if(t.status==="concluida") return Object.assign({},t,{status:"afazer",done_at:"",done_by:""});
+      return Object.assign({},t,{status:"concluida",done_at:new Date().toISOString(),
+        done_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:""});
+    }); });
+  };
   const _addEtapa=function(){ setEtapas(function(p){ return p.concat([{id:_demNovoId(),nome:"",resp:"",prazo:"",status:"afazer",obs:"",done_at:"",done_by:""}]); }); };
   const _setEtapa=function(id,k,v){ setEtapas(function(p){ return p.map(function(t){ return t.id===id?Object.assign({},t,{[k]:v}):t; }); }); };
   const _delEtapa=function(id){ setEtapas(function(p){ return p.filter(function(t){ return t.id!==id; }); }); };
@@ -78294,7 +78305,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
     }
     const _ts=etapas.filter(function(t){ return String(t.nome||"").trim(); })
       .map(function(t){ return Object.assign({},t,{nome:String(t.nome).trim()}); });
-    onSalvar(_novo&&_ts.length ? Object.assign({},f,{tarefas:_ts}) : f);
+    onSalvar(Object.assign({},f,{tarefas:_ts}));
   };
 
   return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }}
@@ -78366,14 +78377,21 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
             style={Object.assign({},_DEM_INP,{fontWeight:500,resize:"vertical",minHeight:70,lineHeight:1.55})}/>
         </div>
 
-        {_novo&&<div style={{paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
+        <div style={{paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-            <div style={Object.assign({},_DEM_LBL,{marginBottom:0})}>Etapas (opcional)</div>
+            <div style={Object.assign({},_DEM_LBL,{marginBottom:0})}>Etapas</div>
             <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600}}>quebra a demanda em tarefas — dá pra completar depois</span>
           </div>
           {etapas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:7}}>
             {etapas.map(function(t,i){
-              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr auto":"minmax(0,1fr) 44px 118px auto",gap:6,alignItems:"center"}}>
+              const _ok=t.status==="concluida";
+              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"20px 1fr auto":"20px minmax(0,1fr) 44px 118px auto",gap:6,alignItems:"center"}}>
+                <span onClick={function(){_checkEtapa(t.id);}} title={_ok?"Desmarcar":"Concluir etapa"}
+                  style={{width:17,height:17,borderRadius:"50%",cursor:"pointer",
+                    background:_ok?"#16a34a":"#fff",border:_ok?"1.5px solid #16a34a":"1.5px solid #cbd5e1",
+                    display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}>
+                  {_ok&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </span>
                 <input value={t.nome} placeholder={"Etapa "+(i+1)+" — ex: Briefing com o cliente"} autoFocus={!t.nome}
                   onChange={function(e){_setEtapa(t.id,"nome",e.target.value);}}
                   onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); _addEtapa(); } }}
@@ -78401,7 +78419,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             {etapas.length?"Mais uma etapa":"Adicionar etapas"}
           </button>
-        </div>}
+        </div>
 
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
           <div>
@@ -78841,7 +78859,9 @@ function CDemandas({cl, canEdit, selUnit}){
       responsavel:dados.responsavel||"",
       data_inicio:dados.data_inicio||null,
       prazo:dados.prazo||null,
-      unidade:_isBioter?(_unidade||"grupo"):"",
+      // Editando: preserva a unidade original da demanda (não muda de unidade
+      // só porque a edição foi feita vendo o grupo). Criando: usa a unidade da vista.
+      unidade:_isBioter?((dados.id&&typeof dados.unidade==="string")?dados.unidade:(_unidade==="grupo"?"":_unidade||"")):"",
       tarefas:Array.isArray(dados.tarefas)?dados.tarefas:[],
       updated_at:new Date().toISOString(),
     };
@@ -79112,7 +79132,7 @@ function CDemandas({cl, canEdit, selUnit}){
           ? <_DemandasQuadro lista={_lista} canEdit={canEdit} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onContexto={canEdit?function(d,x,y){ setCtxMenu({d:d,x:x,y:y}); }:null}
-              onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+              onAbrir={function(d){ setModal(d); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={isMob} canEdit={canEdit} corCliente={_cor}
@@ -79121,14 +79141,14 @@ function CDemandas({cl, canEdit, selUnit}){
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
                 onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
-                onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
     }
 
     {/* ══ HISTÓRICO DE ENTREGAS ══ */}
     <_DemHistorico lista={_concluidas} canEdit={canEdit}
-      onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+      onAbrir={function(d){ setModal(d); }}/>
 
     {/* ══ LIXEIRA (30 dias) ══ */}
     {canEdit&&<_DemLixeira lista={lixeira} onRestaurar={_restaurarDemanda} onExcluirDef={_excluirDefinitivo}/>}
@@ -79174,13 +79194,13 @@ function CDemandas({cl, canEdit, selUnit}){
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
         </div>
       </div>;
     })()}
 
     <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
-      onAbrir={function(d){ setQuadroAberto(d.id); }} onExcluir={_excluirDemanda}/>
+      onAbrir={function(d){ setModal(d); }} onExcluir={_excluirDemanda}/>
 
     {modal && <_DemandaModal inicial={modal} isMob={isMob}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
@@ -79314,6 +79334,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
       prazo:dados.prazo||null,
       updated_at:new Date().toISOString(),
     };
+    if(Array.isArray(dados.tarefas)) _payload.tarefas=dados.tarefas;
     try{
       if(dados.id){
         const r=await sb.from("client_demandas").update(_payload).eq("id",dados.id);
@@ -79582,7 +79603,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
           ? <_DemandasQuadro lista={_lista} canEdit={canEdit} mostrarCliente={true} onSalvar={_salvarTarefas}
               onMudarStatus={_mudarStatusDemanda}
               onContexto={canEdit?function(d,x,y){ setCtxMenu({d:d,x:x,y:y}); }:null}
-              onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+              onAbrir={function(d){ setModal(d); }}/>
           : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_lista.map(function(d){
               return <_DemandaCard key={d.id} d={d} isMob={_mob} canEdit={canEdit} mostrarCliente={true}
@@ -79591,14 +79612,14 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
                 onEditar={function(){ setModal(d); }}
                 onExcluir={function(){ _excluirDemanda(d); }}
                 onContexto={canEdit?function(dd,x,y){ setCtxMenu({d:dd,x:x,y:y}); }:null}
-                onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>;
+                onSalvar={_salvarTarefas} onPortal={_togglePortal}/>;
             })}
           </div>
     }
 
     {/* ══ HISTÓRICO DE ENTREGAS ══ */}
     <_DemHistorico lista={_concluidas} canEdit={canEdit} mostrarCliente={true}
-      onAbrir={function(d){ setQuadroAberto(d.id); }}/>
+      onAbrir={function(d){ setModal(d); }}/>
 
     {/* ══ LIXEIRA (30 dias) ══ */}
     {canEdit&&<_DemLixeira lista={lixeira} mostrarCliente={true} onRestaurar={_restaurarDemanda} onExcluirDef={_excluirDefinitivo}/>}
@@ -79616,13 +79637,13 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
             onToggle={function(){ setQuadroAberto(null); }}
             onEditar={function(){ setModal(_d); setQuadroAberto(null); }}
             onExcluir={function(){ setQuadroAberto(null); _excluirDemanda(_d); }}
-            onSalvar={_salvarTarefas} onPortal={_togglePortal} onPatchDemanda={_patchDemanda}/>
+            onSalvar={_salvarTarefas} onPortal={_togglePortal}/>
         </div>
       </div>;
     })()}
 
     <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
-      onAbrir={function(d){ setQuadroAberto(d.id); }} onExcluir={_excluirDemanda}/>
+      onAbrir={function(d){ setModal(d); }} onExcluir={_excluirDemanda}/>
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
       clientes={(!modal.id)?_clientesOpcoes:null}
