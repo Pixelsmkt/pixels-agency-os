@@ -38027,12 +38027,12 @@ function _cardPodeSerResp(u){
                   }}
                   style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,marginBottom:18,transition:"border .12s, background .12s, padding .12s"}}>
                   {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
+                    <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#7c3aed",boxShadow:"0 8px 22px rgba(124,58,237,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
                   </div>}
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalFin>0?14:10,marginTop:6}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #e2e8f0"}}><Ico n="image" size={16}/></div>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #ede9fe"}}><Ico n="image" size={16}/></div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo final {totalFin>0&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalFin}</span>}</div>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Arquivo final {totalFin>0&&<span style={{background:"#ede9fe",color:"#6d28d9",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalFin}</span>}</div>
                       <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>entrega final da equipe — pronto pra avaliação</div>
                     </div>
                     {totalFin>0&&<button onClick={function(){downloadAll([].concat(imgFin,vidFin),"Arquivos finais");}} title="Baixa todos os arquivos finais"
@@ -38344,7 +38344,7 @@ function _cardPodeSerResp(u){
                         onClick={function(e){e.stopPropagation();}}
                         style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                       <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>MAT · {a.name?a.name.slice(0,14):"vídeo"}</span>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Material · {a.name?a.name.slice(0,14):"vídeo"}</span>
                       </div>
                       <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                         <button onClick={function(e){e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar vídeo"
@@ -38397,12 +38397,12 @@ function _cardPodeSerResp(u){
                   }}
                   style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_refActive?"2px dashed #a140ff":"2px dashed transparent",background:_refActive?"#faf5ff":"transparent",padding:_refActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
                   {_refActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#7c3aed",boxShadow:"0 8px 22px rgba(124,58,237,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="pin" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Imagens de referência</span></div>
+                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="pin" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Imagens de referência</span></div>
                   </div>}
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:totalRef>0?14:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #ede9fe"}}><Ico n="pin" size={16}/></div>
+                    <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#f1f5f9,#e2e8f0)",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #e2e8f0"}}><Ico n="pin" size={16}/></div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Imagens de referência {totalRef>0&&<span style={{background:"#ede9fe",color:"#6d28d9",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalRef}</span>}</div>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.15,display:"flex",alignItems:"center",gap:8}}>Imagens de referência {totalRef>0&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:0}}>{totalRef}</span>}</div>
                       <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,letterSpacing:-.05}}>exemplos, sugestões e direcionamento pra equipe</div>
                     </div>
                     {totalRef>0&&<button onClick={function(){downloadAll([].concat(imgRef,vidRef),"Referências");}} title="Baixa todos os arquivos de referência"
@@ -38503,7 +38503,7 @@ function _cardPodeSerResp(u){
                             style={{position:"absolute",top:6,left:6,background:a.label?"#0f172a":"#a140ff",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px "+(a.label?"rgba(15,23,42,0.4)":"rgba(124,58,237,0.4)"),cursor:canEditRef?"pointer":"default",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}
                             onMouseEnter={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#334155":"#7c3aed";}}
                             onMouseLeave={function(e){if(canEditRef)e.currentTarget.style.background=a.label?"#0f172a":"#a140ff";}}>
-                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? ("REF · "+a.label) : ("REF · "+(a.name?a.name.slice(0,14):"vídeo"))}</span>
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.label ? ("Referência · "+a.label) : ("Referência · "+(a.name?a.name.slice(0,14):"vídeo"))}</span>
                             {canEditRef && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.85}}>
                               <path d="M12 20h9"/>
                               <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
