@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 31/31 | Nao editar diretamente
+// Modulos: 32/32 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -48300,6 +48300,7 @@ const PORTAL_ALL_TABS=[
   {id:"demandas",    ico:"zap",         label:"Demandas"},
   {id:"briefing",    ico:"fileText",    label:"Briefing"},
   {id:"marcos",      ico:"flame",       label:"Checkpoints"},
+  {id:"conquistas",  ico:"star",        label:"Conquistas"},
   {id:"playbook",    ico:"book",        label:"Playbook"},
   {id:"metas",       ico:"target",      label:"Metas"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
@@ -53673,6 +53674,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       return <CMarcos cl={cl} canEdit={!!_gestor} selUnit={selUnit}/>;
     })()}
+    {tab==="conquistas"&&typeof CConquistasAlbum==="function"&&(function(){
+      // Album de conquistas: SO OS SOCIOS editam, e so pelo lado da agencia.
+      // Cliente logado no portal (lockedClientId) NUNCA ve controle de edicao.
+      const _socio=!lockedClientId&&(typeof CURRENT_USER!=="undefined")&&CURRENT_USER&&CURRENT_USER.level===1;
+      return <CConquistasAlbum cl={cl} canEdit={!!_socio} selUnit={selUnit} isMob={isMob}/>;
+    })()}
     {tab==="playbook"&&typeof PortalPlaybookCliente==="function"&&(function(){
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       return <PortalPlaybookCliente cl={cl} canEdit={!!_gestor} isMob={isMob}/>;
@@ -53977,6 +53984,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             hint="Informações do seu negócio, produtos e público" badges={[]}/>
           <_NavCard tab="marcos" accent="#d97706" icon="award" title="Checkpoints"
             hint="Acompanhe eventos, captações e entregas do projeto" badges={[]}/>
+          <_NavCard tab="conquistas" accent="#eab308" icon="star" title="Conquistas"
+            hint="Nosso álbum de vitórias — cartas que desbloqueamos juntos" badges={[]}/>
           <_NavCard tab="metas" accent="#dc2626" icon="target" title="Metas"
             hint="Seguidores, engajamento, leads e vendas do mês" badges={[]}/>
           <_NavCard tab="planejamento" accent="#7c3aed" icon="calendar" title="Planejamento"
@@ -78888,5 +78897,454 @@ function CDemandasCentral({isMob}){
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
       clientes={(!modal.id)?_clientes:null}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   29_conquistas.jsx — ÁLBUM DE CONQUISTAS (Portal do Cliente)
+   ───────────────────────────────────────────────────────────────────────
+   Cartas colecionáveis estilo álbum de figurinhas / FIFA. Cada conquista
+   é uma carta: bloqueada (a caminho) ou desbloqueada (conquistamos!).
+   Tudo escrito em "nós" — fizemos, alcançamos, vendemos JUNTOS.
+
+   · Tabela: client_conquistas (agency ALL, cliente só leitura via RLS)
+   · Só os SÓCIOS editam — e só pelo lado da agência; no portal do
+     cliente não aparece NENHUM controle de edição.
+   · Carta recém-desbloqueada aparece VIRADA (verso brilhando); o clique
+     revela com flip + confete + som (_pxSomConfete, o mesmo estouro das
+     cartinhas de bônus do comercial). "Visto" fica no localStorage.
+   · Bioter: cartas moram em client_id="bioter", campo `unidade` segmenta
+     (grupo aparece em todas as unidades) — mesmo padrão de demandas/checkpoints.
+═══════════════════════════════════════════════════════════════════════ */
+
+const _CQ_FF="'Inter',system-ui,-apple-system,sans-serif";
+const _CQ_CUT="polygon(22px 0, 100% 0, 100% calc(100% - 22px), calc(100% - 22px) 100%, 0 100%, 0 22px)";
+const _CQ_CUT_IN="polygon(21px 0, 100% 0, 100% calc(100% - 21px), calc(100% - 21px) 100%, 0 100%, 0 21px)";
+const _CQ_HEX="polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
+const _CQ_ICONES=["award","star","target","trendingUp","dollar","users","heart","flame","zap","megaphone","flag","sparkles"];
+const _CQ_OURO="#f0b429", _CQ_OURO2="#ffd868";
+
+function _cqBR(d){
+  if(!d) return "";
+  const p=String(d).slice(0,10).split("-");
+  return p.length===3?(p[2]+"/"+p[1]+"/"+p[0]):"";
+}
+function _cqVistasKey(clId){ return "pixels-conq-vistas-"+clId; }
+function _cqLerVistas(clId){
+  try{ const v=JSON.parse(localStorage.getItem(_cqVistasKey(clId))||"[]"); return Array.isArray(v)?v:[]; }catch(_){ return []; }
+}
+function _cqMarcarVista(clId,id){
+  try{
+    const v=_cqLerVistas(clId);
+    if(v.indexOf(id)<0){ v.push(id); localStorage.setItem(_cqVistasKey(clId),JSON.stringify(v)); }
+  }catch(_){}
+}
+
+/* ── Modal de edição (só sócios, só na agência) ── */
+function _CqModal({inicial, isMob, onSalvar, onFechar}){
+  const _e=inicial||{};
+  const [titulo,setTitulo]=useState(_e.titulo||"");
+  const [descricao,setDescricao]=useState(_e.descricao||"");
+  const [icone,setIcone]=useState(_e.icone||"award");
+  const [tema,setTema]=useState(_e.tema||"roxo");
+  const [desb,setDesb]=useState(!!_e.desbloqueada);
+  const [dataDesb,setDataDesb]=useState(_e.unlocked_at||new Date().toISOString().slice(0,10));
+  const [salvando,setSalvando]=useState(false);
+  const _inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",
+    fontSize:13,color:"#0f172a",outline:"none",fontFamily:_CQ_FF,boxSizing:"border-box"};
+  const _lbl={color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5};
+  const _salvar=async function(){
+    if(!String(titulo||"").trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um título pra conquista."); return; }
+    setSalvando(true);
+    await onSalvar({id:_e.id, titulo:titulo.trim(), descricao:descricao.trim(), icone:icone, tema:tema,
+      desbloqueada:desb, unlocked_at:desb?(dataDesb||new Date().toISOString().slice(0,10)):null});
+    setSalvando(false);
+  };
+  return <div onClick={onFechar} style={{position:"fixed",inset:0,zIndex:430,background:"rgba(15,23,42,.58)",backdropFilter:"blur(6px)",
+    display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"70px 16px 30px",overflowY:"auto",fontFamily:_CQ_FF}}>
+    <div onClick={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,width:"min(560px,100%)",padding:isMob?"20px 18px":"24px 26px",
+        boxShadow:"0 32px 80px rgba(15,23,42,.32)",display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={{fontSize:17,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>{_e.id?"Editar conquista":"Nova conquista"}</div>
+        <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>Escreve em "nós": Alcançamos, Vendemos, Conquistamos — é uma vitória do time com o cliente.</div>
+      </div>
+      <div>
+        <div style={_lbl}>Título</div>
+        <input autoFocus value={titulo} onChange={function(e){setTitulo(e.target.value);}}
+          placeholder='Ex: Alcançamos 1.000 seguidores' style={_inp}/>
+      </div>
+      <div>
+        <div style={_lbl}>Descrição (opcional)</div>
+        <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} rows={2}
+          placeholder='Ex: Primeiro grande marco da comunidade que estamos construindo juntos.'
+          style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 180px",gap:12}}>
+        <div>
+          <div style={_lbl}>Ícone</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {_CQ_ICONES.map(function(ic){
+              const _on=icone===ic;
+              return <button key={ic} type="button" onClick={function(){setIcone(ic);}}
+                style={{width:36,height:36,borderRadius:9,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",
+                  background:_on?"linear-gradient(135deg,#a855f7,#7c3aed)":"#f8fafc",border:_on?"1px solid #7c3aed":"1px solid #e2e8f0"}}>
+                {typeof Ico==="function"&&<Ico n={ic} size={16} color={_on?"#fff":"#64748b"}/>}
+              </button>;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={_lbl}>Tema da carta</div>
+          <div style={{display:"flex",gap:6}}>
+            {[{id:"roxo",l:"Roxa",bg:"linear-gradient(135deg,#43197e,#180730)"},{id:"ouro",l:"Dourada",bg:"linear-gradient(135deg,#6b4204,#241501)"}].map(function(t){
+              const _on=tema===t.id;
+              return <button key={t.id} type="button" onClick={function(){setTema(t.id);}}
+                style={{flex:1,borderRadius:9,cursor:"pointer",padding:"8px 6px",background:t.bg,color:"#fff",fontSize:11.5,fontWeight:800,
+                  fontFamily:_CQ_FF,border:_on?"2px solid "+_CQ_OURO:"2px solid transparent",opacity:_on?1:.55}}>{t.l}</button>;
+            })}
+          </div>
+        </div>
+      </div>
+      <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 13px",
+        display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <label style={{display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12.5,fontWeight:700,color:"#0f172a"}}>
+          <input type="checkbox" checked={desb} onChange={function(e){setDesb(e.target.checked);}} style={{width:15,height:15,accentColor:"#7c3aed",cursor:"pointer"}}/>
+          Já conquistamos!
+        </label>
+        {desb&&<span style={{display:"inline-flex",alignItems:"center",gap:7}}>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:700}}>em</span>
+          <input type="date" value={dataDesb} onChange={function(e){setDataDesb(e.target.value);}}
+            style={Object.assign({},_inp,{width:"auto",padding:"6px 9px",fontSize:12})}/>
+        </span>}
+        {!desb&&<span style={{color:"#94a3b8",fontSize:11.5}}>Fica no álbum como carta a conquistar — quando desbloquear, o cliente vê a festa.</span>}
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:2}}>
+        <button type="button" onClick={onFechar}
+          style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",
+            fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_CQ_FF}}>Cancelar</button>
+        <button type="button" disabled={salvando} onClick={_salvar}
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",
+            fontSize:12.5,fontWeight:800,cursor:salvando?"wait":"pointer",fontFamily:_CQ_FF,opacity:salvando?.6:1}}>
+          {salvando?"Salvando…":"Salvar conquista"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ── Carta do álbum ── */
+function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, onToggleDesb, isMob}){
+  const _ouro=c.tema==="ouro";
+  const _bg=_ouro
+    ? "linear-gradient(158deg,#6b4204 0%,#4a2c02 42%,#241501 100%)"
+    : "linear-gradient(158deg,#43197e 0%,#2d1058 42%,#180730 100%)";
+  const _moldOk=_ouro
+    ? "linear-gradient(150deg,rgba(255,216,104,.95) 0%,rgba(240,180,41,.6) 30%,rgba(255,216,104,.35) 62%,rgba(255,216,104,.85) 100%)"
+    : "linear-gradient(150deg,rgba(255,216,104,.95) 0%,rgba(240,180,41,.55) 28%,rgba(120,60,200,.35) 62%,rgba(255,216,104,.75) 100%)";
+  const _somb=_ouro?"rgba(90,56,4,.4)":"rgba(43,16,85,.34)";
+  const _desb=!!c.desbloqueada;
+
+  /* ── VERSO — conquista nova esperando ser revelada ── */
+  if(nova && !revelada){
+    return <div onClick={onRevelar} title="Toque para revelar"
+      style={{clipPath:_CQ_CUT,padding:"1.5px",cursor:"pointer",
+        background:"linear-gradient(150deg,"+_CQ_OURO2+","+_CQ_OURO+" 40%,#9F43F6 75%,"+_CQ_OURO2+")",
+        filter:"drop-shadow(0 14px 30px rgba(159,67,246,.35))",animation:"pxCqPulse 1.8s ease-in-out infinite"}}>
+      <div style={{clipPath:_CQ_CUT_IN,position:"relative",overflow:"hidden",minHeight:isMob?218:248,
+        background:"linear-gradient(158deg,#2a0f52 0%,#180730 60%,#0d041c 100%)",
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:"20px 14px"}}>
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:.07,
+          backgroundImage:"repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 9px)"}}/>
+        <div style={{position:"absolute",top:"-40%",left:"-60%",width:"70%",height:"180%",transform:"rotate(18deg)",
+          background:"linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent)",animation:"pxCqShine 2.4s ease-in-out infinite"}}/>
+        <div style={{width:64,height:64,clipPath:_CQ_HEX,background:"linear-gradient(150deg,"+_CQ_OURO2+","+_CQ_OURO+")",
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:58,height:58,clipPath:_CQ_HEX,background:"#1c0a38",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{color:_CQ_OURO2,fontSize:26,fontWeight:900,fontFamily:_CQ_FF}}>?</span>
+          </div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{color:_CQ_OURO2,fontSize:10.5,fontWeight:900,letterSpacing:2.4,textTransform:"uppercase"}}>Nova conquista</div>
+          <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,fontWeight:600,marginTop:5}}>Toque para revelar</div>
+        </div>
+      </div>
+    </div>;
+  }
+
+  /* ── FRENTE ── */
+  return <div style={{clipPath:_CQ_CUT,padding:"1.5px",position:"relative",
+    background:_desb?_moldOk:"linear-gradient(150deg,#e8ebf1,#dfe3ea 55%,#e8ebf1)",
+    filter:_desb?"drop-shadow(0 14px 28px "+_somb+")":"drop-shadow(0 2px 6px rgba(15,23,42,.06))",
+    animation:revelada?"pxCqReveal .6s cubic-bezier(.34,1.3,.5,1) both":"none",
+    transition:"transform .2s cubic-bezier(.4,0,.2,1), filter .2s"}}
+    onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-4px)";}}
+    onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
+    <div style={{clipPath:_CQ_CUT_IN,position:"relative",overflow:"hidden",minHeight:isMob?218:248,boxSizing:"border-box",
+      background:_desb?_bg:"linear-gradient(158deg,#fbfcfe 0%,#f2f4f8 55%,#eaedf3 100%)",
+      padding:"18px 15px 15px",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+      {/* textura */}
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:_desb?.06:.5,
+        backgroundImage:"repeating-linear-gradient(135deg,"+(_desb?"#fff":"#dfe3ea")+" 0 1px,transparent 1px 9px)"}}/>
+      {_desb&&<div style={{position:"absolute",top:"-40%",left:"-60%",width:"55%",height:"180%",transform:"rotate(18deg)",pointerEvents:"none",
+        background:"linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent)",animation:"pxCqShine 3.6s ease-in-out infinite"}}/>}
+
+      {/* medalhão hexagonal */}
+      <div style={{width:58,height:58,clipPath:_CQ_HEX,flexShrink:0,marginTop:4,
+        background:_desb?("linear-gradient(150deg,"+_CQ_OURO2+","+_CQ_OURO+")"):"#dde2ea",
+        display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:52,height:52,clipPath:_CQ_HEX,background:_desb?(_ouro?"#3d2603":"#2a0f52"):"#f1f4f8",
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          {_desb
+            ? (typeof Ico==="function"&&<Ico n={c.icone||"award"} size={24} color={_CQ_OURO2}/>)
+            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a3adbb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
+        </div>
+      </div>
+
+      {/* título + descrição */}
+      <div style={{textAlign:"center",flex:1,minWidth:0,width:"100%",position:"relative"}}>
+        <div style={{color:_desb?"#fff":"#3b4454",fontSize:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,
+          textShadow:_desb?"0 1px 8px rgba(0,0,0,.35)":"none"}}>{c.titulo}</div>
+        {c.descricao&&<div style={{color:_desb?"rgba(255,255,255,.68)":"#8a93a3",fontSize:11,fontWeight:500,lineHeight:1.45,marginTop:5}}>{c.descricao}</div>}
+      </div>
+
+      {/* rodapé: estado */}
+      {_desb
+        ? <span style={{background:"rgba(240,180,41,.16)",border:"1px solid rgba(240,180,41,.5)",color:_CQ_OURO2,
+            borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Conquistamos em {_cqBR(c.unlocked_at)||"—"}
+          </span>
+        : <span style={{background:"#eef1f5",border:"1px solid #e2e8f0",color:"#8a93a3",
+            borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.4,whiteSpace:"nowrap"}}>Vamos conquistar juntos</span>}
+
+      {/* ── controles do sócio (nunca aparecem pro cliente) ── */}
+      {canEdit&&<div style={{display:"flex",gap:5,width:"100%",justifyContent:"center",position:"relative",flexWrap:"wrap"}}>
+        <button type="button" onClick={onToggleDesb}
+          title={_desb?"Voltar pra bloqueada":"Desbloquear agora — o cliente vê a revelação com festa"}
+          style={{background:_desb?"transparent":"linear-gradient(135deg,"+_CQ_OURO2+","+_CQ_OURO+")",
+            color:_desb?(_ouro?"#ffd868":"#c4b5fd"):"#3b2603",border:_desb?"1px solid rgba(255,255,255,.28)":"none",
+            borderRadius:8,padding:"5px 11px",fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF}}>
+          {_desb?"Bloquear":"Desbloquear"}
+        </button>
+        <button type="button" onClick={onEditar} title="Editar conquista"
+          style={{background:"transparent",border:"1px solid "+(_desb?"rgba(255,255,255,.28)":"#dbe0e8"),borderRadius:8,
+            padding:"5px 9px",color:_desb?"rgba(255,255,255,.8)":"#64748b",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_CQ_FF}}>Editar</button>
+        <button type="button" onClick={onExcluir} title="Excluir conquista"
+          style={{background:"transparent",border:"1px solid "+(_desb?"rgba(255,150,150,.4)":"#fecaca"),borderRadius:8,
+            padding:"5px 9px",color:_desb?"#fca5a5":"#dc2626",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_CQ_FF}}>Excluir</button>
+      </div>}
+    </div>
+  </div>;
+}
+
+/* ═══ ÁLBUM — componente principal ═══ */
+function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+
+  // Bioter: cartas moram no client_id raiz; `unidade` segmenta
+  const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
+  const _unidade=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?cl.id.slice("bioter_".length):(selUnit||"grupo");
+  const _isBioter=_rootId==="bioter";
+  const _cor=(cl&&cl.color)||"#9F43F6";
+
+  const [cartas,setCartas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modal,setModal]=useState(null);          // null | {} nova | {...} editar
+  const [vistas,setVistas]=useState(function(){ return _cqLerVistas(_rootId); });
+  const [reveladas,setReveladas]=useState({});    // {id:true} — anim de flip nesta sessão
+  const [confete,setConfete]=useState(false);
+
+  // Peças do confete — sorteadas uma vez (mesmo esquema das cartinhas do comercial)
+  const _confPecas=useMemo(function(){
+    const cores=["#f0b429","#ffd868","#9F43F6","#c084fc","#ffffff","#22c55e","#ff8fab"];
+    const anims=["pxCqConfA","pxCqConfB","pxCqConfC"];
+    const out=[];
+    for(let i=0;i<70;i++){
+      const redondo=i%4===0;
+      out.push({i:i,left:Math.round(Math.random()*100),
+        w:redondo?7:(4+Math.round(Math.random()*5)),h:redondo?7:(9+Math.round(Math.random()*9)),
+        cor:cores[i%cores.length],raio:redondo?"50%":"1px",rot:Math.round(Math.random()*360),
+        anim:anims[i%anims.length],dur:(1.5+Math.random()*1.3).toFixed(2),delay:(Math.random()*0.45).toFixed(2)});
+    }
+    return out;
+  },[]);
+
+  const _carregar=async function(){
+    if(!sb||!_rootId){ setLoading(false); return; }
+    try{
+      const r=await sb.from("client_conquistas").select("*").eq("client_id",_rootId)
+        .order("ordem",{ascending:true}).order("created_at",{ascending:true});
+      setCartas((r&&r.data)||[]);
+    }catch(e){ console.warn("[conquistas] load:",(e&&e.message)||e); }
+    setLoading(false);
+  };
+  useEffect(function(){
+    let alive=true;
+    _carregar();
+    if(!sb) return function(){alive=false;};
+    let ch=null;
+    try{
+      ch=sb.channel("conquistas-rt-"+_rootId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_conquistas",filter:"client_id=eq."+_rootId},
+          function(){ if(alive) _carregar(); })
+        .subscribe();
+    }catch(_){}
+    return function(){ alive=false; try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[_rootId]);
+
+  /* Unidade: "grupo" vê tudo; unidade específica vê grupo + as dela */
+  const _visiveis=!_isBioter?cartas:cartas.filter(function(c){
+    if(_unidade==="grupo"||_unidade==="_minhas_") return true;
+    const u=c.unidade||"grupo";
+    return u==="grupo"||u===_unidade;
+  });
+  const _desb=_visiveis.filter(function(c){return c.desbloqueada;});
+  const _pct=_visiveis.length?Math.round(_desb.length/_visiveis.length*100):0;
+
+  /* ── Revelar carta nova: som + confete + flip ── */
+  const _revelar=function(c){
+    try{ if(typeof _pxSomConfete==="function") _pxSomConfete(); }catch(_){}
+    setReveladas(function(p){ const n=Object.assign({},p); n[c.id]=true; return n; });
+    _cqMarcarVista(_rootId,c.id);
+    setVistas(_cqLerVistas(_rootId));
+    setConfete(false);
+    setTimeout(function(){ setConfete(true); },20);
+    setTimeout(function(){ setConfete(false); },3600);
+  };
+
+  /* ── CRUD (sócios) ── */
+  const _salvar=async function(dados){
+    if(!sb) return;
+    const _payload={titulo:dados.titulo,descricao:dados.descricao,icone:dados.icone,tema:dados.tema,
+      desbloqueada:dados.desbloqueada,unlocked_at:dados.unlocked_at,updated_at:new Date().toISOString()};
+    try{
+      if(dados.id){
+        const r=await sb.from("client_conquistas").update(_payload).eq("id",dados.id);
+        if(r&&r.error) throw r.error;
+      }else{
+        _payload.client_id=_rootId;
+        _payload.unidade=(_isBioter&&_unidade!=="grupo"&&_unidade!=="_minhas_")?_unidade:"";
+        _payload.ordem=cartas.length;
+        _payload.created_by=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"";
+        const r=await sb.from("client_conquistas").insert(_payload);
+        if(r&&r.error) throw r.error;
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Conquista salva.");
+      setModal(null);
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando: "+((e&&e.message)||""),5000); }
+  };
+  const _excluir=async function(c){
+    let ok=true;
+    if(typeof pixelsConfirm==="function")
+      ok=await pixelsConfirm({title:"Excluir conquista?",message:'"'+(c.titulo||"")+'" sai do álbum do cliente.',danger:true});
+    if(!ok) return;
+    try{
+      await sb.from("client_conquistas").delete().eq("id",c.id);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Conquista excluída.");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro excluindo.",4000); }
+  };
+  const _toggleDesb=async function(c){
+    const _novo=!c.desbloqueada;
+    setCartas(function(prev){ return prev.map(function(x){
+      return x.id===c.id?Object.assign({},x,{desbloqueada:_novo,unlocked_at:_novo?new Date().toISOString().slice(0,10):null}):x; }); });
+    try{
+      const r=await sb.from("client_conquistas")
+        .update({desbloqueada:_novo,unlocked_at:_novo?new Date().toISOString().slice(0,10):null,updated_at:new Date().toISOString()})
+        .eq("id",c.id);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined")
+        pixelsToast.success(_novo?"Desbloqueada! O cliente vai ver a revelação no portal.":"Carta voltou pra bloqueada.");
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro atualizando.",4000); _carregar(); }
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_CQ_FF,position:"relative"}}>
+    <style>{"@keyframes pxCqReveal{0%{opacity:0;transform:rotateY(88deg) scale(.9)}55%{opacity:1;transform:rotateY(-8deg) scale(1.03)}100%{opacity:1;transform:none}}"
+      +"@keyframes pxCqPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.028)}}"
+      +"@keyframes pxCqShine{0%{left:-60%}55%{left:120%}100%{left:120%}}"
+      +"@keyframes pxCqConfA{0%{opacity:1;transform:translate(0,-20px) rotate(0deg)}100%{opacity:0;transform:translate(-70px,560px) rotate(680deg)}}"
+      +"@keyframes pxCqConfB{0%{opacity:1;transform:translate(0,-20px) rotate(0deg)}100%{opacity:0;transform:translate(80px,580px) rotate(-720deg)}}"
+      +"@keyframes pxCqConfC{0%{opacity:1;transform:translate(0,-20px) rotate(0deg)}100%{opacity:0;transform:translate(12px,600px) rotate(520deg)}}"
+      +"@keyframes pxCqFlash{0%{opacity:0}18%{opacity:.85}100%{opacity:0}}"}</style>
+
+    {/* ── Header ── */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.35,display:"flex",alignItems:"center",gap:9}}>
+          {typeof Ico==="function"&&<Ico n="star" size={19} color={_CQ_OURO}/>}
+          Conquistas
+        </div>
+        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Nosso álbum de vitórias — cada carta é algo que conquistamos juntos.</div>
+      </div>
+      {canEdit&&<button type="button" onClick={function(){setModal({});}}
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+          padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
+          display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)",flexShrink:0}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova conquista
+      </button>}
+    </div>
+
+    {/* ── Progresso do álbum ── */}
+    {_visiveis.length>0&&<div style={{background:"linear-gradient(158deg,#2a0f52 0%,#180730 100%)",borderRadius:14,
+      padding:isMob?"13px 15px":"14px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:.06,
+        backgroundImage:"repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 9px)"}}/>
+      <span style={{color:_CQ_OURO2,fontSize:20,fontWeight:900,letterSpacing:-.5,fontFeatureSettings:"'tnum'",flexShrink:0}}>
+        {_desb.length}<span style={{color:"rgba(255,255,255,.45)",fontSize:14,fontWeight:700}}>/{_visiveis.length}</span>
+      </span>
+      <div style={{flex:1,minWidth:120}}>
+        <div style={{color:"rgba(255,255,255,.8)",fontSize:11,fontWeight:700,marginBottom:5,letterSpacing:.3}}>
+          {_pct>=100?"Álbum completo — e ainda estamos só começando!":"cartas desbloqueadas do nosso álbum"}
+        </div>
+        <div style={{height:8,background:"rgba(255,255,255,.12)",borderRadius:99,overflow:"hidden"}}>
+          <div style={{width:_pct+"%",height:"100%",borderRadius:99,transition:"width .5s",
+            background:"linear-gradient(90deg,"+_CQ_OURO+","+_CQ_OURO2+")"}}/>
+        </div>
+      </div>
+      <span style={{color:_CQ_OURO2,fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_pct}%</span>
+    </div>}
+
+    {/* ── Grid do álbum ── */}
+    {loading
+      ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:13,padding:"40px"}}>Abrindo o álbum…</div>
+      : _visiveis.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"50px 20px",textAlign:"center"}}>
+            <div style={{fontSize:26,marginBottom:8}}>🏆</div>
+            <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>O álbum ainda está sendo preparado</div>
+            <div style={{color:"#94a3b8",fontSize:12.5}}>
+              {canEdit?"Crie as primeiras cartas — os objetivos que vamos conquistar com esse cliente.":"Em breve as nossas primeiras conquistas aparecem aqui."}
+            </div>
+          </div>
+        : <div style={{position:"relative"}}>
+            {/* CONFETE — mesma festa das cartinhas de bônus */}
+            {confete&&<div style={{position:"absolute",left:0,right:0,top:-40,bottom:-40,pointerEvents:"none",overflow:"hidden",zIndex:9}}>
+              <div style={{position:"absolute",left:"50%",top:"30%",transform:"translate(-50%,-50%)",width:520,height:520,borderRadius:"50%",
+                background:"radial-gradient(circle,rgba(255,216,104,.55) 0%,rgba(240,180,41,.20) 38%,rgba(240,180,41,0) 70%)",
+                animation:"pxCqFlash .85s ease-out both"}}/>
+              {_confPecas.map(function(p){
+                return <div key={p.i} style={{position:"absolute",left:p.left+"%",top:0,width:p.w,height:p.h,background:p.cor,
+                  borderRadius:p.raio,transform:"rotate("+p.rot+"deg)",opacity:0,
+                  animation:p.anim+" "+p.dur+"s cubic-bezier(.18,.62,.42,1) "+p.delay+"s both",boxShadow:"0 1px 2px rgba(15,23,42,.14)"}}/>;
+              })}
+            </div>}
+            <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(auto-fill,minmax(160px,1fr))":"repeat(auto-fill,minmax(215px,1fr))",gap:isMob?11:16}}>
+              {_visiveis.map(function(c){
+                const _nova=c.desbloqueada&&vistas.indexOf(c.id)<0&&!reveladas[c.id];
+                return <_CqCarta key={c.id} c={c} isMob={isMob}
+                  nova={c.desbloqueada&&vistas.indexOf(c.id)<0}
+                  revelada={!!reveladas[c.id]}
+                  onRevelar={function(){_revelar(c);}}
+                  canEdit={canEdit&&!_nova}
+                  onEditar={function(){setModal(c);}}
+                  onExcluir={function(){_excluir(c);}}
+                  onToggleDesb={function(){_toggleDesb(c);}}/>;
+              })}
+            </div>
+          </div>
+    }
+
+    {modal&&<_CqModal inicial={modal} isMob={isMob} onSalvar={_salvar} onFechar={function(){setModal(null);}}/>}
   </div>;
 }
