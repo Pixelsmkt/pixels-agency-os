@@ -50212,6 +50212,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
    Somente leitura — quem gerencia e a equipe.                            */
 function _PortalDemandasProjeto({cl, isMob}){
   const [dems,setDems]=useState(null);
+  const [abertas,setAbertas]=useState({});
   const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
   const _unid=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?cl.id.slice("bioter_".length):"";
 
@@ -50251,70 +50252,88 @@ function _PortalDemandasProjeto({cl, isMob}){
   });
   if(dems===null||_vis.length===0) return null;
 
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
-    <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:11,background:"linear-gradient(180deg,#fafbfc,#fff)"}}>
-      <div style={{width:34,height:34,borderRadius:10,background:(cl.color||"#7c3aed")+"14",border:"1px solid "+(cl.color||"#7c3aed")+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cl.color||"#7c3aed"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-      </div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Projetos e demandas maiores</div>
-        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Entregas com várias etapas — acompanhe o progresso de cada uma</div>
-      </div>
-      <span style={{background:(cl.color||"#7c3aed")+"15",color:cl.color||"#7c3aed",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_vis.length}</span>
-    </div>
-    <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
-      {_vis.map(function(d){
-        const st=_ST[d.status]||_ST.nao_iniciada;
-        const ts=Array.isArray(d.tarefas)?d.tarefas:[];
-        const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
-        const pct=ts.length>0?Math.round(ok/ts.length*100):0;
-        const _fim=d.status==="concluida";
-        const _c=cl.color||"#7c3aed";
-        // Status de etapa traduzido pro cliente
-        const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
-          aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
-        return <div key={d.id} style={{border:"1px solid #eef0f3",borderRadius:12,overflow:"hidden"}}>
-          {/* Cabeçalho da demanda */}
-          <div style={{padding:"12px 14px",display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?8:14,flexDirection:isMob?"column":"row",background:"#fcfcfd"}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2,textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
-              {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
-            </div>
-            <div style={{minWidth:isMob?0:170}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
-                <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{ts.length>0?(ok+" de "+ts.length+" etapas"):"em preparação"}</span>
-                <span style={{color:pct>=100?"#16a34a":_c,fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
-              </div>
-              <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
-                <div style={{width:pct+"%",height:"100%",borderRadius:99,background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_c+","+_c+"bb)",transition:"width .3s"}}/>
-              </div>
-            </div>
-            <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,alignSelf:isMob?"flex-start":"center"}}>{st.label}</span>
+  const _c=cl.color||"#7c3aed";
+  const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
+    aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {_vis.map(function(d){
+      const st=_ST[d.status]||_ST.nao_iniciada;
+      const ts=Array.isArray(d.tarefas)?d.tarefas:[];
+      const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
+      const pct=ts.length>0?Math.round(ok/ts.length*100):0;
+      const _fim=d.status==="concluida";
+      const _ab=!!abertas[d.id];
+      return <div key={d.id} style={{background:"#fff",border:"1px solid "+(_ab?"#d3d9e2":"#e8ebf0"),borderRadius:14,
+        overflow:"hidden",boxShadow:_ab?"0 8px 24px rgba(15,23,42,.08)":"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s"}}>
+
+        {/* Linha principal — mesmo desenho do card do Demandas da agência */}
+        <div onClick={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
+          title={_ab?"Fechar":"Ver as etapas"}
+          style={{display:"flex",alignItems:isMob?"stretch":"center",gap:isMob?10:16,padding:isMob?"13px 14px":"14px 17px",
+            cursor:"pointer",flexDirection:isMob?"column":"row"}}
+          onMouseEnter={function(e){ if(!_ab) e.currentTarget.style.background="#fcfcfd"; }}
+          onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+
+          <div style={{flex:isMob?"none":"1 1 240px",minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:400,letterSpacing:-.1,lineHeight:1.35,
+              textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
+            {d.prazo&&<div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:3,fontFeatureSettings:"'tnum'"}}>Previsão: {_br(d.prazo)}</div>}
           </div>
-          {/* Etapas — o cliente vê exatamente onde cada uma está */}
-          {ts.length>0&&<div style={{borderTop:"1px solid #f1f5f9",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
-            {ts.map(function(t){
-              const _tok=t.status==="concluida";
-              const _tst=_TST[t.status]||_TST.afazer;
-              const _tAndamento=t.status==="andamento"||t.status==="revisao";
-              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:9}}>
-                <span style={{width:16,height:16,borderRadius:"50%",flexShrink:0,
-                  background:_tok?"#16a34a":(_tAndamento?_tst.c+"18":"#fff"),
-                  border:_tok?"1.5px solid #16a34a":"1.5px solid "+(_tAndamento?_tst.c:"#d3dae3"),
-                  display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                  {_tok
-                    ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    : (_tAndamento?<span style={{width:6,height:6,borderRadius:"50%",background:_tst.c}}/>:null)}
-                </span>
-                <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:12,fontWeight:500,lineHeight:1.4,
-                  textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
-                <span style={{color:_tst.c,fontSize:10,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
-              </div>;
-            })}
-          </div>}
-        </div>;
-      })}
-    </div>
+
+          {/* Progresso em destaque */}
+          <div style={{minWidth:isMob?0:190,flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
+              {ts.length>0
+                ? <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>
+                    {ok}<span style={{color:"#94a3b8",fontWeight:700}}>/{ts.length}</span>
+                    <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,marginLeft:4}}>etapas</span>
+                  </span>
+                : <span style={{color:"#94a3b8",fontSize:11,fontWeight:700}}>em preparação</span>}
+              <span style={{color:pct>=100?"#16a34a":_c,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+            </div>
+            <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",borderRadius:99,transition:"width .3s",
+                background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_c+","+_c+"bb)"}}/>
+            </div>
+          </div>
+
+          <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0,justifyContent:isMob?"space-between":"flex-end"}}>
+            <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
+              padding:"3px 10px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>{st.label}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
+              style={{flexShrink:0,transition:"transform .18s",transform:_ab?"rotate(180deg)":"rotate(0deg)"}}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* Etapas — abrem no clique, sem espaço em branco desperdiçado */}
+        {_ab&&<div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:isMob?"11px 14px":"12px 17px",
+          display:"flex",flexDirection:"column",gap:6}}>
+          {ts.length===0
+            ? <div style={{color:"#94a3b8",fontSize:12}}>A equipe ainda está organizando as etapas dessa demanda.</div>
+            : ts.map(function(t){
+                const _tok=t.status==="concluida";
+                const _tst=_TST[t.status]||_TST.afazer;
+                const _tAndamento=t.status==="andamento"||t.status==="revisao";
+                return <div key={t.id} style={{display:"flex",alignItems:"center",gap:9}}>
+                  <span style={{width:16,height:16,borderRadius:"50%",flexShrink:0,
+                    background:_tok?"#16a34a":(_tAndamento?_tst.c+"18":"#fff"),
+                    border:_tok?"1.5px solid #16a34a":"1.5px solid "+(_tAndamento?_tst.c:"#d3dae3"),
+                    display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    {_tok
+                      ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      : (_tAndamento?<span style={{width:6,height:6,borderRadius:"50%",background:_tst.c}}/>:null)}
+                  </span>
+                  <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:12,fontWeight:500,lineHeight:1.4,
+                    textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
+                  <span style={{color:_tst.c,fontSize:10,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
+                </div>;
+              })}
+        </div>}
+      </div>;
+    })}
   </div>;
 }
 
@@ -51146,37 +51165,12 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     {grupos_ordenados.map(function(g){
       const h=labelDoGrupo(g);
       const accent=h.isUrgent?"#9333ea":cl.color;
-      return <section key={g.key} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+      return <section key={g.key} style={{display:"flex",flexDirection:"column",gap:10}}>
 
-        {/* Header compacto */}
-        {(function(){
-          // Calcula se TODAS as demandas do grupo já foram entregues
-          const _totalEntregues = g.items.filter(function(t){
-            return t.completedAt || t.completed_at
-              || t.status==="interno_executado" || t.status==="interno_aprovado"
-              || t.status==="aprovacao_final" || t.status==="agendado" || t.status==="publicado"
-              || t.status==="aprovado";
-          }).length;
-          const _allDone = _totalEntregues === g.items.length && g.items.length > 0;
-          const _headerAccent = _allDone ? "#16a34a" : accent;
-          const _metaLabel = _allDone
-            ? "Todas entregues"
-            : (h.periodo + (h.dias?" · "+h.dias+"d úteis":""));
-          return <header style={{padding:"10px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-              <div style={{width:6,height:18,borderRadius:3,background:_headerAccent,flexShrink:0}}/>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.1}}>{h.titulo}</div>
-              <span style={{color:_allDone?"#16a34a":"#64748b",fontSize:11,fontWeight:_allDone?700:500,display:"inline-flex",alignItems:"center",gap:4}}>
-                {_allDone && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                {_metaLabel}
-              </span>
-            </div>
-            <span style={{background:_headerAccent+"15",color:_headerAccent,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{g.items.length}</span>
-          </header>;
-        })()}
+        
 
-        {/* Itens compactos — 1 linha por item */}
-        <div>
+        {/* Cada solicitação é um card, no mesmo estilo do Demandas */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
           {g.items.map(function(t,idx){
             const tipo=tipoInfo(t);
             const st=statusInfo(t);
@@ -51186,9 +51180,10 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             const dataPrevista=t.data_prevista_entrega;
             const isAcionavel=t.status==="aprovado";
 
-            return <div key={t.id} style={{padding:"10px 16px",borderBottom:idx<g.items.length-1?"1px solid #f5f6f8":"none",display:"flex",gap:12,alignItems:"center",transition:"background .12s"}}
-              onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}}
-              onMouseLeave={function(e){e.currentTarget.style.background="";}}>
+            return <div key={t.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:14,padding:"13px 16px",
+              display:"flex",gap:12,alignItems:"center",boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"box-shadow .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,.09)";}}
+              onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
 
               {/* Tipo (mini pill com icone) */}
               <span style={{background:tipo.color+"15",color:tipo.color,fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"3px 9px 3px 6px",borderRadius:99,flexShrink:0,display:"inline-flex",alignItems:"center",gap:4}}>
@@ -51198,7 +51193,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
 
               {/* Titulo + meta inline (uma linha so se couber) */}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.3,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
+                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:400,lineHeight:1.35,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
                 <div style={{display:"flex",alignItems:"center",gap:10,color:"#94a3b8",fontSize:10.5,marginTop:2,flexWrap:"wrap"}}>
                   {_ddmmFull(dataReq)&&<span>enviada {_ddmmFull(dataReq)}</span>}
                   {_ddmm(dataDesejada)&&<span>· desejada {_ddmm(dataDesejada)}</span>}
@@ -77628,13 +77623,13 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
         </div>
         <div>
           <div style={_DEM_LBL}>Responsável</div>
-          <_DemSelectResp valor={rascunho.resp} onChange={function(v){setRascunho(Object.assign({},rascunho,{resp:v}));}}/>
+          <div style={{display:"flex",alignItems:"center",minHeight:34}}>
+            <_DemRespPicker mini valor={rascunho.resp} onChange={function(v){setRascunho(Object.assign({},rascunho,{resp:v}));}}/>
+          </div>
         </div>
         <div>
           <div style={_DEM_LBL}>Prazo</div>
-          <input type="date" value={rascunho.prazo}
-            onChange={function(e){setRascunho(Object.assign({},rascunho,{prazo:e.target.value}));}}
-            onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{fontWeight:600})}/>
+          <_DemDataInput valor={rascunho.prazo} onChange={function(v){setRascunho(Object.assign({},rascunho,{prazo:v}));}} placeholder="Prazo"/>
         </div>
         <div>
           <div style={_DEM_LBL}>Status</div>
@@ -77785,7 +77780,7 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
     <div style={{display:"flex",alignItems:"center",gap:9,flexShrink:0,flexWrap:"wrap",
       width:isMob?"100%":"auto",paddingLeft:isMob?31:0}}>
       {canEdit
-        ? <_DemSelectResp valor={t.resp} onChange={function(v){onPatch({resp:v});}} compacto/>
+        ? <_DemRespPicker mini valor={t.resp} onChange={function(v){onPatch({resp:v});}}/>
         : (resp
             ? <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
                 <UserAvatar user={resp} size={20} border={false}/>
@@ -77794,11 +77789,7 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
             : <span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>—</span>)}
 
       {canEdit
-        ? <input type="date" value={t.prazo||""} onChange={function(e){onPatch({prazo:e.target.value});}}
-            title={_prazo?_prazo.txt:"Data prevista"}
-            style={{background:_prazo?_prazo.bg:"#fff",border:"1px solid "+(_prazo?_prazo.bd:"#e2e8f0"),borderRadius:8,
-              padding:"4px 8px",fontSize:11,fontWeight:700,color:_prazo?_prazo.cor:"#475569",outline:"none",
-              fontFamily:_DEM_FF,fontFeatureSettings:"'tnum'",cursor:"pointer",width:126}}/>
+        ? <_DemDataInput compacto valor={t.prazo||""} onChange={function(v){onPatch({prazo:v});}} placeholder="Prazo"/>
         : (t.prazo && <span style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_demBRCurto(t.prazo)}</span>)}
 
       {canEdit
@@ -77836,6 +77827,151 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
 }
 
 /* ═══ SELECT DE RESPONSAVEL — usa o TEAM que ja existe ═══ */
+/* ═══ CALENDÁRIO MODERNO — popover próprio, nada do nativo do navegador ═══ */
+const _DEM_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function _DemDataInput({valor, onChange, placeholder, compacto}){
+  const [aberto,setAberto]=useState(false);
+  const _ref=useRef(null);
+  const _hoje=new Date();
+  const _selD=valor?new Date(String(valor).slice(0,10)+"T12:00:00"):null;
+  const [mes,setMes]=useState(function(){ const b=_selD||_hoje; return new Date(b.getFullYear(),b.getMonth(),1); });
+  useEffect(function(){
+    if(!aberto) return undefined;
+    const b=_selD||_hoje; setMes(new Date(b.getFullYear(),b.getMonth(),1));
+    const h=function(e){ if(_ref.current&&!_ref.current.contains(e.target)) setAberto(false); };
+    const k=function(e){ if(e.key==="Escape") setAberto(false); };
+    document.addEventListener("mousedown",h); document.addEventListener("keydown",k);
+    return function(){ document.removeEventListener("mousedown",h); document.removeEventListener("keydown",k); };
+  },[aberto]);
+  const _ymd=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const _mesmoDia=function(a,b){ return a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); };
+  const _dias=(function(){
+    const out=[]; const ini=new Date(mes.getFullYear(),mes.getMonth(),1);
+    for(let i=0;i<ini.getDay();i++) out.push(null);
+    const n=new Date(mes.getFullYear(),mes.getMonth()+1,0).getDate();
+    for(let d=1;d<=n;d++) out.push(new Date(mes.getFullYear(),mes.getMonth(),d));
+    return out;
+  })();
+  const _navBtn={background:"transparent",border:"none",borderRadius:8,width:26,height:26,cursor:"pointer",
+    color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_DEM_FF};
+  return <div ref={_ref} style={{position:"relative",width:compacto?"auto":"100%"}}>
+    {/* Campo — o retângulo INTEIRO abre o calendário */}
+    <button type="button" onClick={function(){setAberto(!aberto);}}
+      style={compacto
+        ? {background:"#fff",border:"1px solid "+(aberto?"#a78bfa":"#e2e8f0"),borderRadius:8,padding:"4px 9px",
+           fontSize:11,fontWeight:700,color:valor?"#475569":"#94a3b8",cursor:"pointer",fontFamily:_DEM_FF,
+           display:"inline-flex",alignItems:"center",gap:5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}
+        : Object.assign({},_DEM_INP,{cursor:"pointer",display:"flex",alignItems:"center",gap:8,textAlign:"left",
+           color:valor?"#0f172a":"#94a3b8",fontWeight:valor?600:500,
+           borderColor:aberto?"#a78bfa":"#e2e8f0",boxShadow:aberto?"0 0 0 3px rgba(167,139,250,.18)":"none"})}>
+      <svg width={compacto?10:13} height={compacto?10:13} viewBox="0 0 24 24" fill="none" stroke={valor?"#7c3aed":"#94a3b8"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      {valor?_demBR(valor):(placeholder||"Escolher data")}
+    </button>
+    {/* Popover */}
+    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:120,width:254,background:"#fff",
+      border:"1px solid #e8ebf0",borderRadius:14,boxShadow:"0 18px 46px rgba(15,23,42,.16)",padding:"12px 12px 10px",
+      fontFamily:_DEM_FF}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+        <button type="button" style={_navBtn} onClick={function(){setMes(new Date(mes.getFullYear(),mes.getMonth()-1,1));}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color="#7c3aed";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{_DEM_MESES[mes.getMonth()]} {mes.getFullYear()}</span>
+        <button type="button" style={_navBtn} onClick={function(){setMes(new Date(mes.getFullYear(),mes.getMonth()+1,1));}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color="#7c3aed";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:3}}>
+        {["D","S","T","Q","Q","S","S"].map(function(l,i){
+          return <span key={i} style={{textAlign:"center",color:"#b6bec9",fontSize:9.5,fontWeight:800}}>{l}</span>;
+        })}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {_dias.map(function(d,i){
+          if(!d) return <span key={"v"+i}/>;
+          const _sel=_mesmoDia(d,_selD), _tj=_mesmoDia(d,_hoje);
+          return <button key={i} type="button"
+            onClick={function(){ onChange(_ymd(d)); setAberto(false); }}
+            style={{border:"none",borderRadius:8,height:29,cursor:"pointer",fontFamily:_DEM_FF,
+              fontSize:11.5,fontWeight:_sel?800:600,fontFeatureSettings:"'tnum'",transition:"all .1s",
+              background:_sel?"linear-gradient(135deg,#a855f7,#7c3aed)":"transparent",
+              color:_sel?"#fff":(_tj?"#7c3aed":"#334155"),
+              boxShadow:_sel?"0 4px 10px rgba(124,58,237,.30)":(_tj?"inset 0 0 0 1.5px #c4b5fd":"none")}}
+            onMouseEnter={function(e){ if(!_sel) e.currentTarget.style.background="#f5f3ff"; }}
+            onMouseLeave={function(e){ if(!_sel) e.currentTarget.style.background="transparent"; }}>
+            {d.getDate()}
+          </button>;
+        })}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:9,paddingTop:8,borderTop:"1px solid #f4f6f8"}}>
+        <button type="button" onClick={function(){ onChange(""); setAberto(false); }}
+          style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,padding:"3px 4px"}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>Limpar</button>
+        <button type="button" onClick={function(){ onChange(_ymd(_hoje)); setAberto(false); }}
+          style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:8,color:"#7c3aed",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:_DEM_FF,padding:"4px 12px"}}>Hoje</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ═══ RESPONSÁVEL POR CARINHA — clica na foto, sem digitar nome ═══ */
+function _DemRespPicker({valor, onChange, mini}){
+  const _time=(typeof TEAM!=="undefined")?TEAM:[];
+  const _m=_demMembro(valor);
+  const [aberto,setAberto]=useState(false);
+  const _ref=useRef(null);
+  useEffect(function(){
+    if(!aberto) return undefined;
+    const h=function(e){ if(_ref.current&&!_ref.current.contains(e.target)) setAberto(false); };
+    document.addEventListener("mousedown",h);
+    return function(){ document.removeEventListener("mousedown",h); };
+  },[aberto]);
+  const _rosto=function(u,size,sel){
+    return <button key={u?u.id:"none"} type="button" title={u?u.name:"Sem responsável"}
+      onClick={function(){ onChange(u?u.id:""); setAberto(false); }}
+      style={{border:"none",background:"transparent",padding:2,borderRadius:"50%",cursor:"pointer",lineHeight:0,
+        boxShadow:sel?"0 0 0 2.5px #7c3aed":"0 0 0 1px #e2e8f0",opacity:(valor&&!sel)?.45:1,transition:"all .12s",flexShrink:0}}
+      onMouseEnter={function(e){e.currentTarget.style.opacity="1";}}
+      onMouseLeave={function(e){e.currentTarget.style.opacity=(valor&&!sel)?".45":"1";}}>
+      {u
+        ? <UserAvatar user={u} size={size} border={false}/>
+        : <span style={{width:size,height:size,borderRadius:"50%",background:"#f8fafc",border:"1.5px dashed #cbd5e1",
+            display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:size*.44,fontWeight:700,boxSizing:"border-box"}}>—</span>}
+    </button>;
+  };
+  if(!mini){
+    // Fileira de carinhas direto no formulário
+    return <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",minHeight:38}}>
+      {_rosto(null,30,!valor)}
+      {_time.map(function(u){ return _rosto(u,30,valor===u.id); })}
+      {_m&&<span style={{color:"#475569",fontSize:11.5,fontWeight:700,marginLeft:3}}>{String(_m.name||"").split(" ")[0]}</span>}
+    </div>;
+  }
+  // mini: avatar atual + popover de carinhas
+  return <div ref={_ref} style={{position:"relative",display:"inline-flex",flexShrink:0}}>
+    <button type="button" onClick={function(){setAberto(!aberto);}} title={_m?_m.name:"Definir responsável"}
+      style={{border:"none",background:"transparent",padding:2,borderRadius:"50%",cursor:"pointer",lineHeight:0,
+        boxShadow:_m?"0 0 0 1.5px #e2e8f0":"none"}}>
+      {_m
+        ? <UserAvatar user={_m} size={26} border={false}/>
+        : <span style={{width:26,height:26,borderRadius:"50%",background:"#f8fafc",border:"1.5px dashed #cbd5e1",
+            display:"inline-flex",alignItems:"center",justifyContent:"center",boxSizing:"border-box"}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </span>}
+    </button>
+    {aberto&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:120,background:"#fff",
+      border:"1px solid #e8ebf0",borderRadius:12,boxShadow:"0 14px 38px rgba(15,23,42,.16)",padding:8,
+      display:"flex",gap:5,flexWrap:"wrap",width:196}}>
+      {_rosto(null,28,!valor)}
+      {_time.map(function(u){ return _rosto(u,28,valor===u.id); })}
+    </div>}
+  </div>;
+}
+
 function _DemSelectResp({valor, onChange, compacto}){
   const _time=(typeof TEAM!=="undefined")?TEAM:[];
   const _m=_demMembro(valor);
@@ -77962,22 +78098,22 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
             style={Object.assign({},_DEM_INP,{fontWeight:500,resize:"vertical",minHeight:70,lineHeight:1.55})}/>
         </div>
 
-        {_novo&&<div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+        {_novo&&<div style={{paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <div style={Object.assign({},_DEM_LBL,{marginBottom:0})}>Etapas (opcional)</div>
             <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600}}>quebra a demanda em tarefas — dá pra completar depois</span>
           </div>
           {etapas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:7}}>
             {etapas.map(function(t,i){
-              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr auto":"minmax(0,1fr) 140px 125px auto",gap:6,alignItems:"center"}}>
+              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr auto":"minmax(0,1fr) 44px 118px auto",gap:6,alignItems:"center"}}>
                 <input value={t.nome} placeholder={"Etapa "+(i+1)+" — ex: Briefing com o cliente"} autoFocus={!t.nome}
                   onChange={function(e){_setEtapa(t.id,"nome",e.target.value);}}
                   onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); _addEtapa(); } }}
                   onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
-                {!isMob&&<_DemSelectResp valor={t.resp} onChange={function(v){_setEtapa(t.id,"resp",v);}}/>}
-                {!isMob&&<input type="date" value={t.prazo}
-                  onChange={function(e){_setEtapa(t.id,"prazo",e.target.value);}}
-                  onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{fontWeight:600})}/>}
+                {!isMob&&<div style={{display:"flex",justifyContent:"center"}}>
+                  <_DemRespPicker mini valor={t.resp} onChange={function(v){_setEtapa(t.id,"resp",v);}}/>
+                </div>}
+                {!isMob&&<_DemDataInput compacto valor={t.prazo} onChange={function(v){_setEtapa(t.id,"prazo",v);}} placeholder="Prazo"/>}
                 <button type="button" onClick={function(){_delEtapa(t.id);}} title="Remover etapa"
                   style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"6px 4px",
                     display:"inline-flex",alignItems:"center"}}
@@ -77999,10 +78135,10 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           </button>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
           <div>
             <div style={_DEM_LBL}>Responsável principal</div>
-            <_DemSelectResp valor={f.responsavel} onChange={function(v){set("responsavel",v);}}/>
+            <_DemRespPicker valor={f.responsavel} onChange={function(v){set("responsavel",v);}}/>
           </div>
           <div>
             <div style={_DEM_LBL}>Prioridade</div>
@@ -78021,13 +78157,11 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:10}}>
           <div>
             <div style={_DEM_LBL}>Data de início</div>
-            <input type="date" value={f.data_inicio||""} onChange={function(e){set("data_inicio",e.target.value);}}
-              onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+            <_DemDataInput valor={f.data_inicio||""} onChange={function(v){set("data_inicio",v);}} placeholder="Hoje"/>
           </div>
           <div>
             <div style={_DEM_LBL}>Prazo final</div>
-            <input type="date" value={f.prazo||""} onChange={function(e){set("prazo",e.target.value);}}
-              onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+            <_DemDataInput valor={f.prazo||""} onChange={function(v){set("prazo",v);}} placeholder="Sem prazo"/>
           </div>
           <div>
             <div style={_DEM_LBL}>Status</div>
