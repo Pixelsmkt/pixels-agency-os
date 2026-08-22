@@ -35350,30 +35350,39 @@ function _cardPodeSerResp(u){
     if(!s) return s;
     // "AJUSTE NECESSARIO:" é redundante — o painel inteiro já é de ajuste
     s = s.replace(/^\s*AJUSTE\s+NECESS[AÁ]RI[OA]\s*:\s*/i,"");
-    const _tagBase = {display:"inline-flex",alignItems:"center",gap:5,color:"#fff",fontSize:10.5,fontWeight:800,letterSpacing:.2,padding:"3px 9px",borderRadius:7,verticalAlign:"middle",whiteSpace:"nowrap",lineHeight:1.35};
+    const _tagBase = {display:"inline-flex",alignItems:"center",gap:5,color:"#fff",fontSize:10.5,fontWeight:800,letterSpacing:.2,padding:"3px 9px",borderRadius:7,whiteSpace:"nowrap",lineHeight:1.35,flexShrink:0};
+    // Cada linha vira um BLOCO: tags sempre encostadas na ESQUERDA, texto ao lado.
     const out=[];
     s.split("\n").forEach(function(linha,li){
-      if(li>0) out.push(<span key={"br"+li}>{"\n"}</span>);
       let resto=linha;
       const ml=resto.match(_AJ_LAM_RE);
       if(ml){
-        out.push(<span key={"lam"+li} style={Object.assign({},_tagBase,{background:"linear-gradient(135deg,#a855f7,#7c3aed)",marginRight:7,boxShadow:"0 2px 6px rgba(124,58,237,.30)"})}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-          Lâmina {ml[1]}/{ml[2]}
-        </span>);
+        // Lâmina = cabeçalho da seção, numa linha própria
+        out.push(<div key={"lam"+li} style={{margin:(li>0?"14px":"2px")+" 0 6px"}}>
+          <span style={Object.assign({},_tagBase,{background:"linear-gradient(135deg,#a855f7,#7c3aed)",boxShadow:"0 2px 6px rgba(124,58,237,.30)"})}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            Lâmina {ml[1]}/{ml[2]}
+          </span>
+        </div>);
         resto=resto.replace(_AJ_LAM_RE,"");
       }
       const ma=resto.match(_AJ_ACAO_RE);
       if(ma){
-        out.push(<span key={"ac"+li} style={Object.assign({},_tagBase,{background:"#0f172a",marginRight:7,boxShadow:"0 2px 6px rgba(15,23,42,.22)"})}>
-          {_ajAcaoIco(ma[1])}
-          {ma[1]}
-        </span>);
         resto=resto.slice(ma[0].length);
+        out.push(<div key={"ac"+li} style={{display:"flex",alignItems:"flex-start",gap:8,margin:"3px 0"}}>
+          <span style={Object.assign({},_tagBase,{background:"#0f172a",boxShadow:"0 2px 6px rgba(15,23,42,.22)",marginTop:1})}>
+            {_ajAcaoIco(ma[1])}
+            {ma[1]}
+          </span>
+          <span style={{flex:1,minWidth:0,lineHeight:1.65}}>{_ajTsNodes(resto, hasVideo, "n"+li)}</span>
+        </div>);
+      }else if(String(resto).trim()){
+        out.push(<div key={"tx"+li} style={{margin:"3px 0",lineHeight:1.65}}>{_ajTsNodes(resto, hasVideo, "n"+li)}</div>);
+      }else{
+        out.push(<div key={"sp"+li} style={{height:4}}/>);
       }
-      if(resto) _ajTsNodes(resto, hasVideo, "n"+li).forEach(function(n){ out.push(n); });
     });
-    return out;
+    return <div style={{whiteSpace:"normal"}}>{out}</div>;
   }
   const [title,setTitle]=useState(task.title||"");
   const [desc,setDesc]=useState(task.desc||"");
@@ -50336,7 +50345,14 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
                   </span>
                   <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.35,
                     textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
-                  <span style={{color:_tst.c,fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>
+                  {t.prazo&&!_tok&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_br(t.prazo)}</span>}
+                  {(function(){
+                    const _tr=(typeof _demMembro==="function")?_demMembro(t.resp):null;
+                    return _tr?<span title={_tr.name} style={{flexShrink:0,display:"inline-flex"}}>
+                      {typeof UserAvatar==="function"&&<UserAvatar user={_tr} size={16} border={false}/>}
+                    </span>:null;
+                  })()}
+                  {(!t.prazo||_tok)&&<span style={{color:_tst.c,fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>}
                 </div>;
               })}
         </div>}
@@ -77267,7 +77283,8 @@ const DEM_CATEGORIAS = [
   {id:"video",      label:"Vídeo / captação",  cor:"#0ea5e9", ico:"play"},
   {id:"roteiro",    label:"Roteiro",           cor:"#0891b2", ico:"mic"},
   {id:"trafego",    label:"Tráfego pago",      cor:"#2563eb", ico:"funnel"},
-  {id:"site",       label:"Site / landing",    cor:"#0d9488", ico:"globe"},
+  {id:"site",       label:"Site",              cor:"#0d9488", ico:"globe"},
+  {id:"landing",    label:"Landing page",      cor:"#059669", ico:"table"},
   {id:"branding",   label:"Branding",          cor:"#db2777", ico:"sparkles"},
   {id:"grafico",    label:"Material gráfico",  cor:"#ea580c", ico:"image"},
   {id:"crm",        label:"CRM / automação",   cor:"#4f46e5", ico:"layers"},
@@ -78277,10 +78294,16 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
     if(Array.isArray(semCats)&&semCats.length) return semCats.indexOf(c.id)<0;
     return true;
   });
-  const [f,setF]=useState(Object.assign({
-    titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
-    prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"",
-  }, inicial||{}));
+  const [f,setF]=useState(function(){
+    const _base=Object.assign({
+      titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
+      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"",
+    }, inicial||{});
+    // Editando demanda de unidade Bioter: o select de cliente usa "bioter::<unidade>"
+    if(_base.client_id==="bioter"&&_base.unidade&&_base.unidade!=="grupo")
+      _base.client_id="bioter::"+_base.unidade;
+    return _base;
+  });
   const set=function(k,v){ setF(function(p){return Object.assign({},p,{[k]:v});}); };
   const cat=_demCat(f.categoria);
   // Etapas dentro do modal — na criação E na edição (ficha única)
@@ -79355,6 +79378,8 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     if(Array.isArray(dados.tarefas)) _payload.tarefas=dados.tarefas;
     try{
       if(dados.id){
+        // Se o select de cliente veio no form, permite MOVER a demanda de cliente/unidade
+        if(_cid){ _payload.client_id=_cid; _payload.unidade=_unidNova; }
         const r=await sb.from("client_demandas").update(_payload).eq("id",dados.id);
         if(r&&r.error) throw r.error;
       }else{
@@ -79664,7 +79689,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
       onAbrir={function(d){ setModal(d); }} onExcluir={_excluirDemanda}/>
 
     {modal && <_DemandaModal inicial={modal} isMob={_mob}
-      clientes={(!modal.id)?_clientesOpcoes:null}
+      clientes={_clientesOpcoes}
       cats={_soCats} semCats={_soCats?null:_DEM_CATS_MIDIA}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
