@@ -1551,7 +1551,7 @@ const _CT_BUCKET = {
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
 const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
+  const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
                 tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
   (tasks||[]).forEach(t=>{
     if(!t)return;
@@ -29441,6 +29441,55 @@ function _projImportarDoFinanceiro(){
     despOp:   desp,
   };
 }
+/* Seção editável da Projeção — MÓDULO (não recriar por render: recriar fazia o
+   React remontar a seção a cada tecla e o input perdia o foco = "uma letra por vez"). */
+function _ProjSecao({pos,label,cor,subtitle,sec,dados,mut,brl}){
+    const [exp,setExp]=useState(false);
+    const total=(dados[sec]||[]).reduce(function(a,it){
+      const n=parseFloat(String(it.v==null?"":it.v).replace(",","."));
+      return a+(isNaN(n)?0:n);
+    },0);
+    return <div style={{border:"1px solid #f1f5f9",borderRadius:11,overflow:"hidden"}}>
+      <div onClick={function(){setExp(!exp);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"12px 16px",cursor:"pointer",background:exp?cor+"08":"#fff",transition:"background .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background=cor+"10";}}
+        onMouseLeave={function(e){e.currentTarget.style.background=exp?cor+"08":"#fff";}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{background:cor,color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{pos}</span>
+          <span style={{color:cor,fontWeight:800,fontSize:16,width:14,textAlign:"center",flexShrink:0}}>−</span>
+          <div>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{label}</div>
+            {subtitle&&<div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{subtitle}</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{color:cor,fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.6}}>{brl(total)}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:exp?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+      {exp&&<div style={{padding:"8px 16px 14px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:6}}>
+        {(dados[sec]||[]).map(function(it,idx){
+          return <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #eef0f5",borderRadius:9,padding:"7px 10px"}}>
+            <input value={it.l} placeholder="Descrição"
+              onChange={function(e){const v=e.target.value;mut(function(d){d[sec][idx].l=v;return d;});}}
+              style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
+            <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
+            <input value={it.v} placeholder="0" inputMode="decimal"
+              onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");mut(function(d){d[sec][idx].v=v;return d;});}}
+              style={{width:100,border:"none",outline:"none",fontSize:13,fontWeight:800,color:cor,textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
+            <button onClick={function(){mut(function(d){d[sec].splice(idx,1);return d;});}} title="Remover"
+              style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex"}}
+              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+              onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>;
+        })}
+        <button onClick={function(){mut(function(d){(d[sec]=d[sec]||[]).push({l:"",v:""});return d;});}}
+          style={{background:cor+"0d",border:"1px dashed "+cor+"55",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:cor,cursor:"pointer",fontFamily:"inherit"}}>+ Adicionar item</button>
+      </div>}
+    </div>;
+  }
+
 function PageGestaoProjecao({isMob}){
   const [dados,setDados]=useState(function(){
     try{
@@ -29463,7 +29512,24 @@ function PageGestaoProjecao({isMob}){
         setCarregou(true);
       })
       .catch(function(){ if(alive) setCarregou(true); });
-    return function(){alive=false;};
+    // Tempo real: quando o OUTRO sócio salva, a projeção atualiza sozinha aqui.
+    // (mudança do próprio usuário é ignorada pra não brigar com o que ele digita)
+    let ch=null;
+    try{
+      ch=window._sb.channel("projecao-financeira-rt")
+        .on("postgres_changes",{event:"*",schema:"public",table:"app_data",filter:"key=eq.projecao_financeira"},
+          function(payload){
+            try{
+              if(!alive)return;
+              const v=payload&&payload.new&&payload.new.value;
+              const autor=(payload&&payload.new&&payload.new.updated_by)||"";
+              const eu=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"";
+              if(v&&v.receitas&&autor&&autor!==eu) setDados(v);
+            }catch(_){}
+          })
+        .subscribe();
+    }catch(_){}
+    return function(){alive=false; try{ if(ch) window._sb.removeChannel(ch); }catch(_){}};
   },[]);
 
   function _persist(next){
@@ -29496,50 +29562,6 @@ function PageGestaoProjecao({isMob}){
   const META=(typeof GF_META_MARGEM_PCT!=="undefined")?GF_META_MARGEM_PCT:0.5;
   const bateu=margem>=META&&receita>0;
 
-  /* Seção editável no MESMO visual do _DRESecao do Financeiro */
-  const _ProjSecao=function({pos,label,cor,subtitle,sec}){
-    const [exp,setExp]=useState(false);
-    const total=_tot(sec);
-    return <div style={{border:"1px solid #f1f5f9",borderRadius:11,overflow:"hidden"}}>
-      <div onClick={function(){setExp(!exp);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,padding:"12px 16px",cursor:"pointer",background:exp?cor+"08":"#fff",transition:"background .12s"}}
-        onMouseEnter={function(e){e.currentTarget.style.background=cor+"10";}}
-        onMouseLeave={function(e){e.currentTarget.style.background=exp?cor+"08":"#fff";}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <span style={{background:cor,color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{pos}</span>
-          <span style={{color:cor,fontWeight:800,fontSize:16,width:14,textAlign:"center",flexShrink:0}}>−</span>
-          <div>
-            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{label}</div>
-            {subtitle&&<div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{subtitle}</div>}
-          </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <span style={{color:cor,fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.6}}>{_brlF(total)}</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:exp?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-      </div>
-      {exp&&<div style={{padding:"8px 16px 14px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:6}}>
-        {(dados[sec]||[]).map(function(it,idx){
-          return <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #eef0f5",borderRadius:9,padding:"7px 10px"}}>
-            <input value={it.l} placeholder="Descrição"
-              onChange={function(e){const v=e.target.value;_mut(function(d){d[sec][idx].l=v;return d;});}}
-              style={{flex:1,minWidth:0,border:"none",outline:"none",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",background:"transparent"}}/>
-            <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>R$</span>
-            <input value={it.v} placeholder="0" inputMode="decimal"
-              onChange={function(e){const v=e.target.value.replace(/[^0-9.,]/g,"");_mut(function(d){d[sec][idx].v=v;return d;});}}
-              style={{width:100,border:"none",outline:"none",fontSize:13,fontWeight:800,color:cor,textAlign:"right",fontFamily:"inherit",fontFeatureSettings:"'tnum'",background:"transparent"}}/>
-            <button onClick={function(){_mut(function(d){d[sec].splice(idx,1);return d;});}} title="Remover"
-              style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex"}}
-              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-              onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>;
-        })}
-        <button onClick={function(){_mut(function(d){(d[sec]=d[sec]||[]).push({l:"",v:""});return d;});}}
-          style={{background:cor+"0d",border:"1px dashed "+cor+"55",borderRadius:9,padding:"8px 0",fontSize:11.5,fontWeight:700,color:cor,cursor:"pointer",fontFamily:"inherit"}}>+ Adicionar item</button>
-      </div>}
-    </div>;
-  };
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
@@ -29594,11 +29616,11 @@ function PageGestaoProjecao({isMob}){
         </div>
       </div>
 
-      <_ProjSecao pos="2." label="Impostos e deduções" cor="#f97316" sec="impostos" subtitle="Simples, taxas de pagamento e afins"/>
+      <_ProjSecao pos="2." label="Impostos e deduções" cor="#f97316" sec="impostos" dados={dados} mut={_mut} brl={_brlF} subtitle="Simples, taxas de pagamento e afins"/>
       <_DRELinha kind="subtotal" pos="3." op="=" label="Receita líquida" valor={receitaLiq} cor="#f59e0b" isMob={isMob}/>
-      <_ProjSecao pos="4." label="CSP (Custo do Serviço Prestado)" cor="#84cc16" sec="csp" subtitle="Time de entrega, freelancers e produção"/>
+      <_ProjSecao pos="4." label="CSP (Custo do Serviço Prestado)" cor="#84cc16" sec="csp" dados={dados} mut={_mut} brl={_brlF} subtitle="Time de entrega, freelancers e produção"/>
       <_DRELinha kind="subtotal" pos="5." op="=" label="Lucro bruto" valor={lucroBruto} cor="#14b8a6" isMob={isMob}/>
-      <_ProjSecao pos="6." label="Despesas variáveis diretas" cor="#06b6d4" sec="despDireta" subtitle="Mídia vinculada ao projeto, ferramentas, comissões"/>
+      <_ProjSecao pos="6." label="Despesas variáveis diretas" cor="#06b6d4" sec="despDireta" dados={dados} mut={_mut} brl={_brlF} subtitle="Mídia vinculada ao projeto, ferramentas, comissões"/>
       <div style={{background:"transparent",borderTop:"1px dashed #e2e8f0",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <span style={{background:"#3b82f6",color:"#fff",fontSize:12,fontWeight:800,width:32,height:32,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>7.</span>
@@ -29613,7 +29635,7 @@ function PageGestaoProjecao({isMob}){
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,marginTop:3,fontFeatureSettings:"'tnum'"}}>{pctMC.toFixed(2)}%</div>
         </div>
       </div>
-      <_ProjSecao pos="8." label="Despesas operacionais" cor="#6366f1" sec="despOp" subtitle="Salários fixos, contabilidade, softwares, pró-labore"/>
+      <_ProjSecao pos="8." label="Despesas operacionais" cor="#6366f1" sec="despOp" dados={dados} mut={_mut} brl={_brlF} subtitle="Salários fixos, contabilidade, softwares, pró-labore"/>
 
       {/* 9 · Resultado — mesmo card gradiente do Financeiro + meta 50% */}
       <div style={{background:resultado>=0?"linear-gradient(135deg,#7e22ce,#c026d3)":"linear-gradient(135deg,#0f172a,#7f1d1d)",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
@@ -53276,7 +53298,11 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   // ── Pacote: 1) montado na calculadora · 2) preset do Comercial · 3) personalizado
   const pacote=(items&&items.__pacote__)||{};
   const _catalogo=_pjPacotesComercial();
-  const _temCalc=!!(calcPl&&calcPl.pl&&(calcPl.pl.totals&&(Number(calcPl.pl.totals.monthlyRecurring)>0||Number(calcPl.pl.totals.oneTimePrice)>0)));
+  // "Monte seu pacote" só vale pra clientes com a calculadora LIBERADA (novos).
+  // Sem o gate, um teste da calculadora com outro cliente selecionado (caso
+  // Arabutã) fazia o dashboard dele exibir "Pacote contratado" indevido.
+  const _calcLiberada=(typeof PORTAL_CALC_CLIENTS!=="undefined")&&PORTAL_CALC_CLIENTS.indexOf(cl&&cl.id)>=0;
+  const _temCalc=_calcLiberada&&!!(calcPl&&calcPl.pl&&(calcPl.pl.totals&&(Number(calcPl.pl.totals.monthlyRecurring)>0||Number(calcPl.pl.totals.oneTimePrice)>0)));
   // presetIds: seleção MÚLTIPLA. Compat: presetId (string) do formato antigo.
   const _presetIds=(function(){
     if(Array.isArray(pacote.presetIds)) return pacote.presetIds.filter(function(x){return x&&x!=="custom";});
