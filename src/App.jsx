@@ -13875,41 +13875,40 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
     .slice()
     .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
   if(_todos.length<2) return null;
-  const _W = isMob ? 68 : 76;
+  const _W = isMob ? 42 : 46;
   const _units=((typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[])
     .slice()
     .sort(function(a,b){ return String(a.pickerLabel||a.label||"").localeCompare(String(b.pickerLabel||b.label||""),"pt-BR",{sensitivity:"base"}); });
 
   const _LogoBox=function(p){
-    // Caixa fixa 44x22 — logo inteira dentro, centralizada, SEM corte.
+    // Logo inteira dentro do quadradinho, SEM corte; sem logo cai na abreviação.
     const _cliObj=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===p.logoId;});
     const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[p.logoId]) || (_cliObj&&_cliObj.logoUrl) || null;
-    return <span style={{width:48,height:17,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+    return <span style={{width:"100%",height:"100%",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
       {_src
         ? <img src={_src} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
-        : <span style={{color:p.cor,fontWeight:900,fontSize:11,background:p.cor+"16",borderRadius:6,padding:"1px 6px"}}>{p.abbr}</span>}
-      {p.badge && <span style={{position:"absolute",right:-5,bottom:-5,background:p.cor,color:"#fff",fontSize:7,fontWeight:900,borderRadius:5,padding:"0px 3px",lineHeight:1.5,border:"1.5px solid #fff"}}>{p.badge}</span>}
+        : <span style={{color:p.cor,fontWeight:900,fontSize:10,background:p.cor+"16",borderRadius:6,padding:"1px 5px"}}>{p.abbr}</span>}
     </span>;
   };
 
   const _Chip=function(p){
+    // Minimalista: SÓ o quadradinho com a logo (nome no tooltip).
+    // Bioter: badge com as iniciais da unidade no canto.
     return <button type="button" title={p.nome+(p.sub?(" — "+p.sub):"")}
       onClick={p.onClick}
-      style={{width:_W,minWidth:_W,height:isMob?52:54,borderRadius:11,padding:"6px 4px 5px",boxSizing:"border-box",
+      style={{width:_W,minWidth:_W,height:_W,borderRadius:11,padding:6,boxSizing:"border-box",
+        position:"relative",overflow:"visible",
         background:p.ativo?(p.cor+"0a"):"#fff",
         border:p.ativo?("2px solid "+p.cor):"1px solid #e2e8f0",
         boxShadow:p.ativo?("0 4px 14px "+p.cor+"30"):"0 1px 2px rgba(15,23,42,.04)",
-        cursor:p.ativo?"default":"pointer",display:"inline-flex",flexDirection:"column",
-        alignItems:"center",justifyContent:"space-between",gap:3,flexShrink:0,
-        opacity:p.ativo?1:.85,transition:"all .15s",fontFamily:"inherit"}}
+        cursor:p.ativo?"default":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",
+        flexShrink:0,opacity:p.ativo?1:.85,transition:"all .15s",fontFamily:"inherit"}}
       onMouseEnter={function(e){ if(!p.ativo){ e.currentTarget.style.opacity="1"; e.currentTarget.style.borderColor=p.cor+"88"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 6px 16px "+p.cor+"26"; } }}
       onMouseLeave={function(e){ if(!p.ativo){ e.currentTarget.style.opacity=".85"; e.currentTarget.style.borderColor="#e2e8f0"; e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)"; } }}>
-      <_LogoBox logoId={p.logoId} cor={p.cor} abbr={p.abbr} badge={p.badge}/>
-      <span style={{color:p.ativo?p.cor:"#334155",fontSize:9.5,fontWeight:p.ativo?800:700,lineHeight:1.12,
-        letterSpacing:-.15,textAlign:"center",width:"100%",
-        display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-        {p.nome}
-      </span>
+      <_LogoBox logoId={p.logoId} cor={p.cor} abbr={p.abbr}/>
+      {p.badge && <span style={{position:"absolute",right:-4,bottom:-4,background:p.cor,color:"#fff",fontSize:7.5,
+        fontWeight:900,borderRadius:6,padding:"1px 4px",lineHeight:1.4,border:"1.5px solid #fff",
+        boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}>{p.badge}</span>}
     </button>;
   };
 
@@ -16503,14 +16502,21 @@ function PageCalendarioInterno({isMob}){
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
                       {_multiClients
                         ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.95)",color:_evColor,flexShrink:0,fontSize:9.5,fontWeight:800,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
-                            {_evCids.length}
+                            {(function(){
+                              // Cobre todos os clientes ativos? ícone de "todos" em vez do número
+                              const _tot=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c&&c.id!=="pixels"&&c.status!=="interno";}).length;
+                              if(_tot>1&&_evCids.length>=_tot)
+                                return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
+                              return _evCids.length;
+                            })()}
                             {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:11,height:11,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)",overflow:"hidden"}}>
                               <span style={{display:"inline-flex",transform:"scale(0.55)",transformOrigin:"center"}}>{_catIcon}</span>
                             </span>}
                           </span>
                         : _clLogo
                           ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,flexShrink:0,overflow:"visible"}}>
-                              <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                              <span style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.95)",borderRadius:5}}/>
+                              <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{position:"relative",maxWidth:"90%",maxHeight:"90%",objectFit:"contain",display:"block"}}/>
                               {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)",overflow:"hidden"}}>
                                 <span style={{display:"inline-flex",transform:"scale(0.65)",transformOrigin:"center"}}>{_catIcon}</span>
                               </span>}
@@ -68666,16 +68672,24 @@ function _PlanejamentosClientes({isMob}){
                 </div>}
                 {_gm[k].map(function(ev,i){
                   const _c=_CAT_COLOR[ev.category]||"#64748b";
-                  const _todos=ev.clientes.length>=_totalCli&&_totalCli>1;
+                  const _n=ev.clientes.length;
+                  // Anti-bagunça: no máximo 3 chips por linha. Quase-todos → "Todos";
+                  // 4+ → contador (nomes no hover); até 3 → chips coloridos.
+                  const _todos=_totalCli>1&&_n>=_totalCli-1;
+                  const _nomes=ev.clientes.map(function(c){return c.name;}).join(", ");
                   return <div key={i} style={{display:"flex",alignItems:"baseline",gap:7,flexWrap:"wrap",
                     padding:"5px 2px",borderBottom:"1px solid #f8fafc"}}>
                     <span style={{width:6,height:6,borderRadius:"50%",background:_c,flexShrink:0,alignSelf:"center"}}/>
                     <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:38}}>{_fmtEvDate(ev.date)}</span>
                     <span style={{color:"#334155",fontSize:11.5,fontWeight:600}}>{ev.title}</span>
                     {_todos
-                      ? <span style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#94a3b8",
+                      ? <span title={_nomes} style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#94a3b8",
                           borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.5,
                           textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>Todos os clientes</span>
+                      : _n>3
+                      ? <span title={_nomes} style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#64748b",
+                          borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.5,
+                          textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0,cursor:"default"}}>{_n} clientes</span>
                       : ev.clientes.map(function(c){
                           return <span key={c.id} title={c.name}
                             style={{background:c.color+"12",border:"1px solid "+c.color+"33",color:c.color,
