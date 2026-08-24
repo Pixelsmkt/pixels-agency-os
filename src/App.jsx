@@ -68615,6 +68615,72 @@ function _PlanejamentosClientes({isMob}){
       </div>
     </div>
 
+    {/* ══ RESUMO DO PERÍODO — todas as datas do calendário, com os clientes de cada uma ══ */}
+    {(function(){
+      const _pad=function(n){return String(n).padStart(2,"0");};
+      const _bM=_periodBounds("mensal", _globalYear+"-"+_pad(_globalMonth));
+      const _bQ=_periodBounds("trimestral", _globalYear+"-Q"+_globalQuarter);
+      const _agrega=function(b){
+        if(!b.start) return [];
+        const map={};
+        _clientes.forEach(function(cl){
+          ["datas_importantes","feiras_eventos"].forEach(function(sec){
+            _eventsFor(cl.id, sec, b.start, b.end).forEach(function(ev){
+              const k=ev.date+"|"+String(ev.title||"").toLowerCase();
+              if(!map[k]) map[k]={date:ev.date,title:ev.title||"(sem título)",category:ev.category,clientes:[]};
+              if(!map[k].clientes.some(function(c){return c.id===cl.id;}))
+                map[k].clientes.push({id:cl.id,name:cl.name,color:cl.color||"#64748b"});
+            });
+          });
+        });
+        return Object.values(map).sort(function(a,b2){ return String(a.date).localeCompare(String(b2.date)); });
+      };
+      const _evM=_agrega(_bM), _evQ=_agrega(_bQ);
+      if(!_evM.length&&!_evQ.length) return null;
+      const _Col=function(titulo, sub, lista, cor){
+        return <div style={{flex:1,minWidth:280}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:9}}>
+            <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{titulo}</span>
+            <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</span>
+          </div>
+          {lista.length===0
+            ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma data no período.</div>
+            : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {lista.map(function(ev,i){
+                const _c=_CAT_COLOR[ev.category]||"#64748b";
+                return <div key={i} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+                  background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"6px 10px"}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
+                  <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_fmtEvDate(ev.date)}</span>
+                  <span style={{color:"#334155",fontSize:11.5,fontWeight:600,minWidth:0}}>{ev.title}</span>
+                  <span style={{flex:1}}/>
+                  {ev.clientes.map(function(c){
+                    return <span key={c.id} title={c.name}
+                      style={{background:c.color+"14",border:"1px solid "+c.color+"3a",color:c.color,
+                        borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,
+                        textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>
+                      {String(c.name||"").replace(/^Grupo /i,"")}
+                    </span>;
+                  })}
+                </div>;
+              })}
+            </div>}
+        </div>;
+      };
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"15px 18px 16px",marginBottom:16,
+        boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Resumo do período</span>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>todas as datas do calendário e a quais clientes se aplicam — sem precisar rolar</span>
+        </div>
+        <div style={{display:"flex",gap:22,flexWrap:"wrap"}}>
+          {_Col("Mensal", _MESES_NM[_globalMonth-1]+" "+_globalYear, _evM)}
+          {_Col("Trimestral", "Q"+_globalQuarter+" "+_globalYear, _evQ)}
+        </div>
+      </div>;
+    })()}
+
     {_clientes.length===0
       ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>Sem clientes ativos cadastrados.</div>
       : <div style={{display:"flex",flexDirection:"column",gap:16}}>
