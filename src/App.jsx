@@ -68303,10 +68303,15 @@ function _PlanejamentosClientes({isMob}){
   const _mLbl = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][_month-1];
   const _qLbl = "Q"+_q+" "+_year;
 
-  // Lista clientes ativos (com contrato > 0 e não interno) — espelha o que Estratégia > Clientes usa
-  const _clientes = (typeof CLIENTS!=="undefined" ? CLIENTS : []).filter(function(c){
-    return c.status!=="interno" && Number(c.contract||0)>0;
-  });
+  // TODO cliente da agência ganha aba aqui automaticamente (cliente novo incluso).
+  // Só ficam de fora o interno (Pixels) e encerrados. Contrato zerado NÃO exclui —
+  // era isso que escondia cliente recém-criado (ex: Construções Clem sem valor preenchido).
+  const _clientes = (typeof CLIENTS!=="undefined" ? CLIENTS : [])
+    .filter(function(c){
+      return c && c.status!=="interno" && c.status!=="encerrado" && String(c.name||"").trim();
+    })
+    .slice()
+    .sort(function(a,b){ return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}); });
 
   // Status visual
   const _statusInternoCfg = {
