@@ -61728,6 +61728,10 @@ function _useScriptDrag(scripts, _persist, grupo){
         // fecha sobre o snapshot da origem: remove o card e persiste la
         remover: function(){
           _persist(_snapshot.filter(function(x){ return !x || !_item || x.id!==_item.id; }));
+          // O card arrastado sai do DOM da origem ANTES do dragend disparar —
+          // sem esta limpeza os estados dragIdx/overIdx ficavam presos (card
+          // cinza + destaque azul fantasma na seção de origem).
+          _limpar();
         },
       };
       try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain", String(i)); }catch(_){}
@@ -68639,34 +68643,51 @@ function _PlanejamentosClientes({isMob}){
       };
       const _evM=_agrega(_bM), _evQ=_agrega(_bQ);
       if(!_evM.length&&!_evQ.length) return null;
-      const _Col=function(titulo, sub, lista, cor){
-        return <div style={{flex:1,minWidth:280}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:9}}>
+      const _Col=function(titulo, sub, lista){
+        const _MES3=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+        // Agrupa por mês (útil no trimestral; no mensal vira um grupo só, sem label)
+        const _gm={};
+        lista.forEach(function(ev){ const k=String(ev.date).slice(0,7); (_gm[k]=_gm[k]||[]).push(ev); });
+        const _ks=Object.keys(_gm).sort();
+        const _totalCli=_clientes.length;
+        return <div style={{flex:1,minWidth:300}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
             <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{titulo}</span>
             <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</span>
           </div>
           {lista.length===0
             ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma data no período.</div>
-            : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {lista.map(function(ev,i){
-                const _c=_CAT_COLOR[ev.category]||"#64748b";
-                return <div key={i} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
-                  background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"6px 10px"}}>
-                  <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
-                  <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_fmtEvDate(ev.date)}</span>
-                  <span style={{color:"#334155",fontSize:11.5,fontWeight:600,minWidth:0}}>{ev.title}</span>
-                  <span style={{flex:1}}/>
-                  {ev.clientes.map(function(c){
-                    return <span key={c.id} title={c.name}
-                      style={{background:c.color+"14",border:"1px solid "+c.color+"3a",color:c.color,
-                        borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,
-                        textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>
-                      {String(c.name||"").replace(/^Grupo /i,"")}
-                    </span>;
-                  })}
-                </div>;
-              })}
-            </div>}
+            : _ks.map(function(k){
+              const _mi=parseInt(k.slice(5,7),10)-1;
+              return <div key={k} style={{marginBottom:6}}>
+                {_ks.length>1&&<div style={{color:"#b6bec9",fontSize:9,fontWeight:800,letterSpacing:1.2,margin:"8px 0 3px",display:"flex",alignItems:"center",gap:8}}>
+                  {_MES3[_mi]||k}
+                  <span style={{flex:1,height:1,background:"#f1f5f9"}}/>
+                </div>}
+                {_gm[k].map(function(ev,i){
+                  const _c=_CAT_COLOR[ev.category]||"#64748b";
+                  const _todos=ev.clientes.length>=_totalCli&&_totalCli>1;
+                  return <div key={i} style={{display:"flex",alignItems:"baseline",gap:7,flexWrap:"wrap",
+                    padding:"5px 2px",borderBottom:"1px solid #f8fafc"}}>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:_c,flexShrink:0,alignSelf:"center"}}/>
+                    <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:38}}>{_fmtEvDate(ev.date)}</span>
+                    <span style={{color:"#334155",fontSize:11.5,fontWeight:600}}>{ev.title}</span>
+                    {_todos
+                      ? <span style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#94a3b8",
+                          borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.5,
+                          textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>Todos os clientes</span>
+                      : ev.clientes.map(function(c){
+                          return <span key={c.id} title={c.name}
+                            style={{background:c.color+"12",border:"1px solid "+c.color+"33",color:c.color,
+                              borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.4,
+                              textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>
+                            {String(c.name||"").replace(/^Grupo /i,"")}
+                          </span>;
+                        })}
+                  </div>;
+                })}
+              </div>;
+            })}
         </div>;
       };
       return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"15px 18px 16px",marginBottom:16,
