@@ -16503,9 +16503,18 @@ function PageCalendarioInterno({isMob}){
                       {_multiClients
                         ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.95)",color:_evColor,flexShrink:0,fontSize:9.5,fontWeight:800,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
                             {(function(){
-                              // Cobre todos os clientes ativos? ícone de "todos" em vez do número
-                              const _tot=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c&&c.id!=="pixels"&&c.status!=="interno";}).length;
-                              if(_tot>1&&_evCids.length>=_tot)
+                              // Ícone de "todos" SÓ quando cobre LITERALMENTE todos os clientes ativos.
+                              // Bioter conta como coberta se tiver o id "bioter" (grupo) OU todas as unidades uma a uma.
+                              const _ativos=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c&&c.id!=="pixels"&&c.status!=="interno";});
+                              const _cobre=function(c){
+                                if(_evCids.indexOf(c.id)>=0) return true;
+                                if(c.id==="bioter"){
+                                  const _us=(typeof BIOTER_GROUP_UNITS!=="undefined"&&Array.isArray(BIOTER_GROUP_UNITS))?BIOTER_GROUP_UNITS:[];
+                                  return _us.length>0&&_us.every(function(u){return _evCids.indexOf(u.id)>=0;});
+                                }
+                                return false;
+                              };
+                              if(_ativos.length>1&&_ativos.every(_cobre))
                                 return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
                               return _evCids.length;
                             })()}
