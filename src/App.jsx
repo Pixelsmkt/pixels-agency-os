@@ -68635,82 +68635,61 @@ function _PlanejamentosClientes({isMob}){
       </div>
     </div>
 
-    {/* ══ RESUMO DO PERÍODO — todas as datas do calendário, com os clientes de cada uma ══ */}
+    {/* ══ RESUMO DO PERÍODO — POR CLIENTE: cada um destrinchado com suas datas ══ */}
     {(function(){
       const _pad=function(n){return String(n).padStart(2,"0");};
       const _MESES_NM=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const _bM=_periodBounds("mensal", _globalYear+"-"+_pad(_globalMonth));
       const _bQ=_periodBounds("trimestral", _globalYear+"-Q"+_globalQuarter);
-      const _agrega=function(b){
+      // Por CLIENTE: lista de eventos do período (dedup por data+título dentro do cliente)
+      const _porCliente=function(b){
         if(!b.start) return [];
-        const map={};
-        _clientes.forEach(function(cl){
+        return _clientes.map(function(cl){
+          const _map={};
           ["datas_importantes","feiras_eventos"].forEach(function(sec){
             _eventsFor(cl.id, sec, b.start, b.end).forEach(function(ev){
               const k=ev.date+"|"+String(ev.title||"").toLowerCase();
-              if(!map[k]) map[k]={date:ev.date,title:ev.title||"(sem título)",category:ev.category,clientes:[]};
-              if(!map[k].clientes.some(function(c){return c.id===cl.id;}))
-                map[k].clientes.push({id:cl.id,name:cl.name,color:cl.color||"#64748b"});
+              if(!_map[k]) _map[k]={date:ev.date,title:ev.title||"(sem título)",category:ev.category};
             });
           });
+          const _evs=Object.values(_map).sort(function(a,b2){ return String(a.date).localeCompare(String(b2.date)); });
+          return {cl:cl, eventos:_evs};
         });
-        return Object.values(map).sort(function(a,b2){ return String(a.date).localeCompare(String(b2.date)); });
       };
-      const _evM=_agrega(_bM), _evQ=_agrega(_bQ);
-      if(!_evM.length&&!_evQ.length) return null;
-      const _Col=function(titulo, sub, lista){
-        const _MES3=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
-        // Agrupa por mês (útil no trimestral; no mensal vira um grupo só, sem label)
-        const _gm={};
-        lista.forEach(function(ev){ const k=String(ev.date).slice(0,7); (_gm[k]=_gm[k]||[]).push(ev); });
-        const _ks=Object.keys(_gm).sort();
-        const _totalCli=_clientes.length;
-        return <div style={{flex:1,minWidth:300}}>
+      const _lM=_porCliente(_bM), _lQ=_porCliente(_bQ);
+      if(!_lM.some(function(x){return x.eventos.length;})&&!_lQ.some(function(x){return x.eventos.length;})) return null;
+      const _Col=function(titulo, sub, linhas){
+        return <div style={{flex:1,minWidth:320}}>
           <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
             <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{titulo}</span>
             <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</span>
           </div>
-          {lista.length===0
-            ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma data no período.</div>
-            : _ks.map(function(k){
-              const _mi=parseInt(k.slice(5,7),10)-1;
-              return <div key={k} style={{marginBottom:6}}>
-                {_ks.length>1&&<div style={{color:"#b6bec9",fontSize:9,fontWeight:800,letterSpacing:1.2,margin:"8px 0 3px",display:"flex",alignItems:"center",gap:8}}>
-                  {_MES3[_mi]||k}
-                  <span style={{flex:1,height:1,background:"#f1f5f9"}}/>
-                </div>}
-                {_gm[k].map(function(ev,i){
-                  const _c=_CAT_COLOR[ev.category]||"#64748b";
-                  const _n=ev.clientes.length;
-                  // Anti-bagunça: no máximo 3 chips por linha. Quase-todos → "Todos";
-                  // 4+ → contador (nomes no hover); até 3 → chips coloridos.
-                  const _todos=_totalCli>1&&_n>=_totalCli-1;
-                  const _nomes=ev.clientes.map(function(c){return c.name;}).join(", ");
-                  return <div key={i} style={{display:"flex",alignItems:"baseline",gap:7,flexWrap:"wrap",
-                    padding:"5px 2px",borderBottom:"1px solid #f8fafc"}}>
-                    <span style={{width:6,height:6,borderRadius:"50%",background:_c,flexShrink:0,alignSelf:"center"}}/>
-                    <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:38}}>{_fmtEvDate(ev.date)}</span>
-                    <span style={{color:"#334155",fontSize:11.5,fontWeight:600}}>{ev.title}</span>
-                    {_todos
-                      ? <span title={_nomes} style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#94a3b8",
-                          borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.5,
-                          textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>Todos os clientes</span>
-                      : _n>3
-                      ? <span title={_nomes} style={{background:"#f1f5f9",border:"1px solid #e8ecf1",color:"#64748b",
-                          borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.5,
-                          textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0,cursor:"default"}}>{_n} clientes</span>
-                      : ev.clientes.map(function(c){
-                          return <span key={c.id} title={c.name}
-                            style={{background:c.color+"12",border:"1px solid "+c.color+"33",color:c.color,
-                              borderRadius:99,padding:"0 8px",fontSize:8.5,fontWeight:800,letterSpacing:.4,
-                              textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>
-                            {String(c.name||"").replace(/^Grupo /i,"")}
-                          </span>;
-                        })}
-                  </div>;
-                })}
+          <div style={{display:"flex",flexDirection:"column"}}>
+            {linhas.map(function(li){
+              const _cor=li.cl.color||"#64748b";
+              return <div key={li.cl.id} style={{display:"flex",alignItems:"flex-start",gap:9,padding:"6px 2px",borderBottom:"1px solid #f8fafc"}}>
+                <span title={li.cl.name}
+                  style={{background:_cor+"12",border:"1px solid "+_cor+"33",color:_cor,borderRadius:99,
+                    padding:"1px 9px",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",
+                    whiteSpace:"nowrap",flexShrink:0,marginTop:1,minWidth:86,textAlign:"center",boxSizing:"border-box",
+                    overflow:"hidden",textOverflow:"ellipsis"}}>
+                  {String(li.cl.name||"").replace(/^Grupo /i,"")}
+                </span>
+                {li.eventos.length===0
+                  ? <span style={{color:"#d3dae3",fontSize:10.5,fontStyle:"italic",marginTop:1}}>sem datas no período</span>
+                  : <div style={{flex:1,minWidth:0,display:"flex",flexWrap:"wrap",gap:"2px 12px"}}>
+                      {li.eventos.map(function(ev,i){
+                        const _c=_CAT_COLOR[ev.category]||"#94a3b8";
+                        return <span key={i} title={ev.title} style={{display:"inline-flex",alignItems:"center",gap:4,maxWidth:"100%"}}>
+                          <span style={{width:5,height:5,borderRadius:"50%",background:_c,flexShrink:0}}/>
+                          <span style={{color:"#0f172a",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_fmtEvDate(ev.date)}</span>
+                          <span style={{color:"#64748b",fontSize:10.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:190}}>{ev.title}</span>
+                        </span>;
+                      })}
+                    </div>}
               </div>;
             })}
+          </div>
         </div>;
       };
       return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"15px 18px 16px",marginBottom:16,
@@ -68718,11 +68697,11 @@ function _PlanejamentosClientes({isMob}){
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Resumo do período</span>
-          <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>todas as datas do calendário e a quais clientes se aplicam — sem precisar rolar</span>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>cliente por cliente — quem tem data, quem tá descoberto</span>
         </div>
-        <div style={{display:"flex",gap:22,flexWrap:"wrap"}}>
-          {_Col("Mensal", _MESES_NM[_globalMonth-1]+" "+_globalYear, _evM)}
-          {_Col("Trimestral", "Q"+_globalQuarter+" "+_globalYear, _evQ)}
+        <div style={{display:"flex",gap:26,flexWrap:"wrap"}}>
+          {_Col("Mensal", _MESES_NM[_globalMonth-1]+" "+_globalYear, _lM)}
+          {_Col("Trimestral", "Q"+_globalQuarter+" "+_globalYear, _lQ)}
         </div>
       </div>;
     })()}
