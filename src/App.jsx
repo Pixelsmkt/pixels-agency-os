@@ -68618,6 +68618,7 @@ function _PlanejamentosClientes({isMob}){
     {/* ══ RESUMO DO PERÍODO — todas as datas do calendário, com os clientes de cada uma ══ */}
     {(function(){
       const _pad=function(n){return String(n).padStart(2,"0");};
+      const _MESES_NM=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const _bM=_periodBounds("mensal", _globalYear+"-"+_pad(_globalMonth));
       const _bQ=_periodBounds("trimestral", _globalYear+"-Q"+_globalQuarter);
       const _agrega=function(b){
