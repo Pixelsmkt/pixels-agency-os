@@ -68658,16 +68658,21 @@ function _PlanejamentosClientes({isMob}){
       };
       const _evM=_agrega(_bM), _evQ=_agrega(_bQ);
       if(!_evM.length&&!_evQ.length) return null;
-      // Mini-logo do cliente: quadradinho 18px, logo inteira; sem logo = inicial na cor
+      // Chip do cliente: logo pequena + NOME escrito na cor (estilo da 1ª versão)
       const _MiniLogo=function(cl){
         const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null;
         const _cor=cl.color||"#64748b";
         return <span key={cl.id} title={cl.name}
-          style={{width:18,height:18,borderRadius:5,background:"#fff",border:"1px solid #eef0f3",
-            display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
-          {_src
-            ? <img src={_src} alt="" style={{maxWidth:"82%",maxHeight:"82%",objectFit:"contain",display:"block"}}/>
-            : <span style={{color:_cor,fontSize:8.5,fontWeight:900}}>{String(cl.abbr||cl.name||"?").slice(0,2).toUpperCase()}</span>}
+          style={{display:"inline-flex",alignItems:"center",gap:4,background:_cor+"10",border:"1px solid "+_cor+"30",
+            borderRadius:99,padding:"1px 8px 1px 3px",flexShrink:0}}>
+          <span style={{width:14,height:14,borderRadius:4,background:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+            {_src
+              ? <img src={_src} alt="" style={{maxWidth:"85%",maxHeight:"85%",objectFit:"contain",display:"block"}}/>
+              : <span style={{color:_cor,fontSize:7.5,fontWeight:900}}>{String(cl.abbr||cl.name||"?").slice(0,2).toUpperCase()}</span>}
+          </span>
+          <span style={{color:_cor,fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap"}}>
+            {String(cl.name||"").replace(/^Grupo /i,"")}
+          </span>
         </span>;
       };
       const _Col=function(titulo, sub, lista){
@@ -68689,11 +68694,11 @@ function _PlanejamentosClientes({isMob}){
                 </div>}
                 {_gm[k].map(function(ev,i){
                   const _c=_CAT_COLOR[ev.category]||"#94a3b8";
-                  return <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 2px",borderBottom:"1px solid #f8fafc"}}>
+                  return <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 2px",borderBottom:"1px solid #e8ecf1",flexWrap:"wrap"}}>
                     <span style={{width:6,height:6,borderRadius:"50%",background:_c,flexShrink:0}}/>
                     <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:38}}>{_fmtEvDate(ev.date)}</span>
                     <span style={{color:"#334155",fontSize:11.5,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.title}</span>
-                    <span style={{display:"inline-flex",gap:3,flexShrink:0}}>
+                    <span style={{display:"inline-flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
                       {ev.clientes.map(_MiniLogo)}
                     </span>
                   </div>;
