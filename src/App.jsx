@@ -2592,7 +2592,8 @@ const NAV=[
     {id:"aprovacoes_video",      icon:"▶", label:"Avaliação de vídeo"},
   ]},
   {id:"comercial",  icon:"◈", label:"Comercial"},
-  {id:"chat",       icon:"◐", label:"Chat"},
+  // Chat interno DESLIGADO por enquanto (26/08) — religa descomentando esta linha
+  //{id:"chat",       icon:"◐", label:"Chat"},
   {id:"gestao_enps",icon:"◇", label:"ENPS"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
@@ -29778,9 +29779,7 @@ const PERM_TABS=[
   {id:"demandas",     navIcon:"demandas",   label:"Demandas",           color:"#2563eb"},
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a"},
-  {id:"chat",         navIcon:"chat",       label:"Chat",               color:"#0891b2"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
-  {id:"analises",     navIcon:"analises",   label:"Análises",           color:"#7c3aed"},
   {id:"ia",           navIcon:"ia",         label:"Pixels IA",          color:"#f97316"},
   {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
@@ -29834,78 +29833,21 @@ const PERM_GROUPS={
   aprovacoes:[
     {key:"verAprovacoes",        label:"Acessar Aprovações",          desc:"Acesso ao módulo de aprovações"},
     {section:"Copys e Publicações"},
-    {key:"verAprCopys",          label:"Aba Copys",                   desc:"Ver copys aguardando aprovação"},
-    {key:"verAprPublicacao",     label:"Aba Conteúdo",                desc:"Ver conteúdos para aprovar antes de publicar"},
     {key:"verAprAjuste",         label:"Aba Ajustes Solicitados",     desc:"Ver cards marcados para ajuste"},
     {key:"aprovar",              label:"Botão Aprovar (Copys/Pub)",   desc:"Pode aprovar ou solicitar ajuste em copys e publicações"},
     {section:"Demandas Internas"},
     {key:"aprovarDemandaInterna",label:"Aprovação Demanda Interna",   desc:"Vê e aprova demandas internas no menu Aprovações"},
   ],
-  chat:[
-    {key:"verChat",                         label:"Acessar Chat",             desc:"Acesso ao módulo de chat"},
-    {key:"enviarMensagem",                  label:"Enviar Mensagens",         desc:"Pode enviar mensagens"},
-    {section:"Canais Internos"},
-    {key:"verCanalGeral",                   label:"Canal Geral",              desc:"Acesso ao canal geral"},
-    {key:"verCanalDesign",                  label:"Canal Design",             desc:"Acesso ao canal de design"},
-    {key:"verCanalVideo",                   label:"Canal Vídeo",              desc:"Acesso ao canal de vídeo"},
-    {key:"verCanalTrafego",                 label:"Canal Tráfego",            desc:"Acesso ao canal de tráfego"},
-    {key:"verCanalSocial",                  label:"Canal Social Media",       desc:"Acesso ao canal de social media"},
-    {key:"verCanalAlertas",                 label:"Canal Alertas",            desc:"Acesso ao canal de alertas"},
-    {section:"Canais de Clientes"},
-    {key:"verCanalTodosClientes",           label:"Todos os Canais de Clientes",  desc:"Acesso a todos os canais de clientes"},
-    {key:"verCanalCliente_bioter",          label:"Canal Bioter",             desc:"Canal exclusivo do cliente Bioter"},
-    {key:"verCanalCliente_arabuta",         label:"Canal Arabuta",            desc:"Canal exclusivo do cliente Arabuta"},
-    {key:"verCanalCliente_climaves",        label:"Canal Climaves",           desc:"Canal exclusivo do cliente Climaves"},
-    {key:"verCanalCliente_construschorr",   label:"Canal Construschorr",      desc:"Canal exclusivo do cliente Construschorr"},
-    {key:"verCanalCliente_vetservice",      label:"Canal Vet Service",        desc:"Canal exclusivo do cliente Vet Service"},
-    {key:"verCanalCliente_pixels",          label:"Canal Pixels (interno)",   desc:"Canal interno da agência Pixels"},
-  ],
   clientes:[
     {key:"verClientes",       label:"Acessar Clientes",           desc:"Acesso à lista de clientes"},
     {section:"Informações Gerais"},
-    {key:"verDadosCliente",   label:"Dados do Cliente",           desc:"Ver informações e detalhes do cliente"},
     {key:"verResumoIA",       label:"Botão Resumo IA",            desc:"Pode gerar e ver o resumo de cliente pela IA"},
     {key:"editarEvolucao",    label:"Editar Aba Evolução",        desc:"Pode adicionar/editar marcos e métricas mensais"},
     {key:"editarBriefing",    label:"Editar Aba Briefing",        desc:"Pode editar visão, público, estratégia e 'não fazer'"},
-    {key:"editarFerramentasCliente",label:"Editar Ferramentas",   desc:"Pode editar campos personalizados nas ferramentas do cliente"},
     {section:"Por Cliente"},
-    {key:"verCliente_construschorr", label:"Construschorr", desc:"Acesso ao cliente Construschorr"},
-    {key:"verCliente_construschorr_metricas", label:"Construschorr — Métricas", desc:"Ver métricas de performance do Construschorr"},
-    {key:"verCliente_construschorr_mindmap", label:"Construschorr — Mapa Mental", desc:"Ver mapa mental do Construschorr"},
-    {key:"verCliente_construschorr_concorrencia", label:"Construschorr — Concorrência", desc:"Ver concorrência do Construschorr"},
-    {key:"verCliente_construschorr_links", label:"Construschorr — Links & Acessos", desc:"Ver links do Construschorr"},
-    {key:"verCliente_bioter", label:"Bioter", desc:"Acesso ao cliente Bioter"},
-    {key:"verCliente_bioter_metricas", label:"Bioter — Métricas", desc:"Ver métricas de performance do Bioter"},
-    {key:"verCliente_bioter_mindmap", label:"Bioter — Mapa Mental", desc:"Ver mapa mental do Bioter"},
-    {key:"verCliente_bioter_concorrencia", label:"Bioter — Concorrência", desc:"Ver concorrência do Bioter"},
-    {key:"verCliente_bioter_links", label:"Bioter — Links & Acessos", desc:"Ver links do Bioter"},
-    {key:"verCliente_arabuta", label:"Arabuta", desc:"Acesso ao cliente Arabuta"},
-    {key:"verCliente_arabuta_metricas", label:"Arabuta — Métricas", desc:"Ver métricas de performance do Arabuta"},
-    {key:"verCliente_arabuta_mindmap", label:"Arabuta — Mapa Mental", desc:"Ver mapa mental do Arabuta"},
-    {key:"verCliente_arabuta_concorrencia", label:"Arabuta — Concorrência", desc:"Ver concorrência do Arabuta"},
-    {key:"verCliente_arabuta_links", label:"Arabuta — Links & Acessos", desc:"Ver links do Arabuta"},
-    {key:"verCliente_climaves", label:"Climaves", desc:"Acesso ao cliente Climaves"},
-    {key:"verCliente_climaves_metricas", label:"Climaves — Métricas", desc:"Ver métricas de performance do Climaves"},
-    {key:"verCliente_climaves_mindmap", label:"Climaves — Mapa Mental", desc:"Ver mapa mental do Climaves"},
-    {key:"verCliente_climaves_concorrencia", label:"Climaves — Concorrência", desc:"Ver concorrência do Climaves"},
-    {key:"verCliente_climaves_links", label:"Climaves — Links & Acessos", desc:"Ver links do Climaves"},
-    {key:"verCliente_vetservice", label:"Vet Service", desc:"Acesso ao cliente Vet Service"},
-    {key:"verCliente_vetservice_metricas", label:"Vet Service — Métricas", desc:"Ver métricas de performance do Vet Service"},
-    {key:"verCliente_vetservice_mindmap", label:"Vet Service — Mapa Mental", desc:"Ver mapa mental do Vet Service"},
-    {key:"verCliente_vetservice_concorrencia", label:"Vet Service — Concorrência", desc:"Ver concorrência do Vet Service"},
-    {key:"verCliente_vetservice_links", label:"Vet Service — Links & Acessos", desc:"Ver links do Vet Service"},
-    {key:"verCliente_pixels", label:"Pixels (interno)", desc:"Acesso ao cliente Pixels (interno)"},
-    {key:"verCliente_pixels_metricas", label:"Pixels (interno) — Métricas", desc:"Ver métricas de performance do Pixels (interno)"},
-    {key:"verCliente_pixels_mindmap", label:"Pixels (interno) — Mapa Mental", desc:"Ver mapa mental do Pixels (interno)"},
-    {key:"verCliente_pixels_concorrencia", label:"Pixels (interno) — Concorrência", desc:"Ver concorrência do Pixels (interno)"},
-    {key:"verCliente_pixels_links", label:"Pixels (interno) — Links & Acessos", desc:"Ver links do Pixels (interno)"},
-  ],
-  analises:[
-    {key:"verAnalises",       label:"Acessar Análises",           desc:"Acesso ao módulo de análises"},
-    {section:"Sub-páginas"},
-    {key:"verAnaliseProd",    label:"Produção",                   desc:"Ver análise de produção da equipe"},
-    {key:"verAnaliseGarg",    label:"Gargalos",                   desc:"Ver análise de gargalos"},
-    {key:"verRelatorio",      label:"Relatórios",                 desc:"Ver relatórios de desempenho"},
+    ...((typeof CLIENTS!=="undefined"?CLIENTS:[])
+      .filter(c=>c&&String(c.name||"").trim())
+      .map(c=>({key:"verCliente_"+c.id,label:c.name,desc:"Acesso ao cliente "+c.name}))),
   ],
   ia:[
     {key:"pixelsIA",          label:"Acessar Pixels IA",          desc:"Acesso à inteligência artificial"},
@@ -29918,15 +29860,11 @@ const PERM_GROUPS={
   ],
   gestao:[
     {key:"verFinanceiro",     label:"Financeiro / DRE",           desc:"Acesso ao módulo financeiro"},
-    {key:"verDRECompleto",    label:"DRE Completo",               desc:"Ver DRE com todos os dados"},
-    {key:"verContratos",      label:"Contratos",                  desc:"Acesso ao módulo de contratos"},
   ],
   acessos:[
     {key:"verAcessos",        label:"Ver Acessos",                desc:"Acesso ao módulo de gerenciamento"},
-    {key:"editarAcessos",     label:"Editar Permissões",          desc:"Pode alterar permissões de outros"},
   ],
   notificacoes:[
-    {key:"verNotificacoes",   label:"Ver Notificações",           desc:"Acesso ao menu de notificações"},
     {key:"criarAlerta",       label:"Criar Alertas",              desc:"Pode criar alertas/notificações manualmente"},
   ],
   dem_internas:[
@@ -45097,7 +45035,7 @@ const MOBILE_NAV=[
   {id:"meudash",   icon:"⊡",label:"Dashboard"},
   {id:"demandas",  icon:"◈", label:"Demandas"},
   {id:"aprovacoes",icon:"◇", label:"Avaliações"},
-  {id:"chat",      icon:"◐", label:"Chat"},
+  //{id:"chat",      icon:"◐", label:"Chat"},
   {id:"clientes",  icon:"◉", label:"Clientes"},
 ];
 
@@ -45304,7 +45242,7 @@ export default function AgencyOS(){
   const [themeKey,setThemeKey]     = useState(_themeKey);
   // ═══ PÁGINA ATUAL — persiste em localStorage para sobreviver F5 ═══
   const [page,setPage]             = useState(()=>{
-    try{const s=localStorage.getItem("pixels-current-page");return s||"meudash";}catch{return "meudash";}
+    try{const s=localStorage.getItem("pixels-current-page");return (s&&s!=="chat")?s:"meudash";}catch{return "meudash";}
   });
   useEffect(()=>{try{localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
@@ -45935,7 +45873,7 @@ export default function AgencyOS(){
       case "aprovacoes_video":     return p.verAprovacoes;
       case "gestaomidia":          return isSocio||effectiveUser.dash==="gestor"; // socios + gestor de midia (Erick)
       case "comercial":            return p.verComercial||isSocio;
-      case "chat":                 return p.verChat;
+      case "chat":                 return false; // chat interno desligado por enquanto
       // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
       // e tem acesso de Estrategista). Mesmo padrão de "playbooks" e "planejamento".
       case "clientes":             return p.verClientes||effectiveUser.id==="ellen"||isSocio;
@@ -46043,7 +45981,7 @@ export default function AgencyOS(){
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
-      case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
+      case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
