@@ -30013,72 +30013,102 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   const open=tasks.filter(t=>t.status!=="aprovado"&&t.status!=="pausado");
   const late=open.filter(t=>daysLeft(t.deadline)<0);
 
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`2px solid ${user.color}`,borderRadius:22,width:"100%",maxWidth:680,maxHeight:"92vh",overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:`0 0 60px ${user.color}30`}}>
+  const isMobP=_pxMob();
+  const tabInfo=PERM_TABS.find(t=>t.id===activeTab)||{};
+  const _itensTab=PERM_GROUPS[activeTab]||[];
+  const _tabCor=tabInfo.color||user.color||"#7c3aed";
+  const _setTabAll=(v)=>{
+    if(isPartnerUser)return;
+    const patch={};
+    _itensTab.forEach(i=>{ if(i.key) patch[i.key]=v; });
+    setPerms(p=>({...p,...patch}));
+    setSaved(false);
+  };
+  const _miniBtn={background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"};
 
-      {/* Header */}
-      <div style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{width:52,height:52,borderRadius:16,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff"}}>{user.av}</div>
-          <div>
-            <div style={{color:"#fff",fontWeight:900,fontSize:18}}>{user.name}</div>
-            <div style={{color:"rgba(255,255,255,0.8)",fontSize:12,marginTop:2}}>{user.role} · Nível {user.level}</div>
+  return <div onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:1040,height:isMobP?"92vh":"min(88vh,760px)",display:"flex",flexDirection:isMobP?"column":"row",overflow:"hidden",boxShadow:"0 24px 70px rgba(15,23,42,.30)"}}>
+
+      {/* ── Sidebar: quem é + categorias ── */}
+      <div style={{width:isMobP?"100%":252,flexShrink:0,background:"#fafbfc",borderRight:isMobP?"none":"1px solid #eef0f3",borderBottom:isMobP?"1px solid #eef0f3":"none",display:"flex",flexDirection:"column",minHeight:0}}>
+        <div style={{padding:isMobP?"13px 16px 10px":"20px 18px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #eef0f3"}}>
+          {typeof UserAvatar==="function"
+            ? <UserAvatar user={user} size={44}/>
+            : <div style={{width:44,height:44,borderRadius:"50%",background:user.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:17}}>{user.av}</div>}
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</div>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:1}}>{user.role} · Nível {user.level}</div>
           </div>
         </div>
-        <button onClick={onClose} style={{background:"rgba(0,0,0,0.3)",border:"none",borderRadius:10,padding:"7px 13px",color:"#fff",cursor:"pointer",fontWeight:700}}>✕</button>
+        <div style={{flex:1,minHeight:0,overflowY:isMobP?"hidden":"auto",overflowX:isMobP?"auto":"hidden",display:"flex",flexDirection:isMobP?"row":"column",gap:2,padding:isMobP?"8px 10px":"10px"}}>
+          {PERM_TABS.map(tab=>{
+            const items=PERM_GROUPS[tab.id]||[];
+            const totalKeys=items.filter(i=>i.key).length;
+            const activeCount=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
+            const on=activeTab===tab.id;
+            return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:on?"#fff":"transparent",border:on?"1px solid #e8ecf1":"1px solid transparent",borderRadius:10,cursor:"pointer",textAlign:"left",whiteSpace:"nowrap",flexShrink:0,boxShadow:on?"0 1px 3px rgba(15,23,42,.06)":"none",transition:"all .12s",fontFamily:"inherit"}}
+              onMouseEnter={e=>{if(!on)e.currentTarget.style.background="#f1f5f9";}}
+              onMouseLeave={e=>{if(!on)e.currentTarget.style.background="transparent";}}>
+              <span style={{width:26,height:26,borderRadius:8,background:on?tab.color+"16":"transparent",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <NavIcon id={tab.navIcon||tab.id} size={14} color={on?tab.color:"#94a3b8"}/>
+              </span>
+              <span style={{flex:1,fontSize:12.5,fontWeight:on?800:600,color:on?"#0f172a":"#64748b"}}>{tab.label}</span>
+              {totalKeys>0&&<span style={{fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",color:activeCount>0?tab.color:"#cbd5e1",background:activeCount>0?tab.color+"14":"#f1f5f9",borderRadius:99,padding:"2px 7px"}}>{activeCount}/{totalKeys}</span>}
+            </button>;
+          })}
+        </div>
       </div>
 
-      {/* Quick stats */}
-      <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:10,padding:"16px 24px 0"}}>
-        {[
-          {l:"Demandas",v:tasks.length,c:user.color},
-          {l:"Abertas",v:open.length,c:C.yw},
-          {l:"Aprovadas",v:done.length,c:C.gr},
-          {l:"Atrasadas",v:late.length,c:late.length>0?C.rd:C.td},
-        ].map(s=><div key={s.l} style={{background:`linear-gradient(135deg,${s.c}22,${s.c}0a)`,border:`1px solid ${s.c}33`,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-          <div style={{color:s.c,fontWeight:900,fontSize:20}}>{s.v}</div>
-          <div style={{color:C.td,fontSize:10,marginTop:2}}>{s.l}</div>
-        </div>)}
-      </div>
+      {/* ── Painel da categoria ── */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:0}}>
+        <div style={{padding:"14px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <div style={{flex:1,minWidth:140}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>{tabInfo.label||"Permissões"}</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>Clique num item pra ligar ou desligar</div>
+          </div>
+          {!isPartnerUser&&<button onClick={()=>_setTabAll(true)} style={_miniBtn}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#86efac";e.currentTarget.style.color="#16a34a";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>Ligar tudo</button>}
+          {!isPartnerUser&&<button onClick={()=>_setTabAll(false)} style={_miniBtn}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.color="#dc2626";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>Desligar tudo</button>}
+          <button onClick={onClose} title="Fechar"
+            style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,width:32,height:32,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
 
-      {/* Tab Navigation */}
-      <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:`1px solid ${C.b1}`,background:C.s1,flexShrink:0}}>
-        {PERM_TABS.map(tab=>{
-          const items=PERM_GROUPS[tab.id]||[];
-          const activeItems=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key]));
-          const totalKeys=items.filter(i=>i.key).length;
-          const isActive=activeTab===tab.id;
-          return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
-            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",background:isActive?C.card:"transparent",border:"none",borderBottom:isActive?`2px solid ${tab.color}`:"2px solid transparent",color:isActive?tab.color:C.ts,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s",flexShrink:0,marginBottom:-1}}>
-            <NavIcon id={tab.navIcon||tab.id} size={16} color={isActive?tab.color:C.ts}/>
-            <span style={{fontSize:10,fontWeight:isActive?700:500}}>{tab.label}</span>
-            {totalKeys>0&&<span style={{fontSize:8,color:isActive?tab.color:C.td}}>{activeItems.length}/{totalKeys}</span>}
-          </button>;
-        })}
-      </div>
+        <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"16px 22px"}}>
+          {isPartnerUser&&<div style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 15px",color:"#7c3aed",fontSize:12.5,fontWeight:700,marginBottom:14}}>⚡ Sócios têm acesso total e irrestrito ao sistema — nada aqui pode ser desligado.</div>}
+          <div style={{display:"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
+            {_itensTab.map((item,idx)=>{
+              if(item.section) return <div key={"s"+idx} style={{gridColumn:isMobP?"auto":"span 2",color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginTop:idx>0?10:0,paddingBottom:5,borderBottom:"1px solid #f1f5f9"}}>{item.section}</div>;
+              const on=isPartnerUser?true:(perms[item.key]||false);
+              return <div key={item.key} onClick={()=>toggle(item.key)}
+                style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"11px 14px",background:on?_tabCor+"08":"#fff",borderRadius:11,border:"1px solid "+(on?_tabCor+"40":"#eef0f3"),transition:"all .12s",cursor:isPartnerUser?"default":"pointer"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:on?"#0f172a":"#64748b",fontSize:13,fontWeight:on?700:600,letterSpacing:-.1}}>{item.label}</div>
+                  {item.desc&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{item.desc}</div>}
+                </div>
+                <div style={{width:38,height:22,borderRadius:99,background:on?_tabCor:"#e2e8f0",position:"relative",transition:"background .18s",flexShrink:0}}>
+                  <div style={{position:"absolute",top:3,left:on?19:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .18s",boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}/>
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
 
-      {/* Permissions — aba ativa */}
-      <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1}}>
-        {isPartnerUser&&<div style={{background:C.a+"18",border:`1px solid ${C.a}44`,borderRadius:12,padding:"10px 14px",color:C.a,fontSize:12,fontWeight:600}}>⚡ Sócios têm acesso total e irrestrito ao sistema.</div>}
-
-        {(PERM_GROUPS[activeTab]||[]).map((item,idx)=>{
-          if(item.section) return <div key={idx} style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginTop:idx>0?8:0,paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>{item.section}</div>;
-          const on=isPartnerUser?true:(perms[item.key]||false);
-          const tabColor=PERM_TABS.find(t=>t.id===activeTab)?.color||user.color;
-          return <div key={item.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:on?tabColor+"10":C.s1,borderRadius:10,border:`1px solid ${on?tabColor+"33":C.b1}`,transition:"all .15s",cursor:isPartnerUser?"default":"pointer"}} onClick={()=>toggle(item.key)}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?700:500}}>{item.label}</div>
-              <div style={{color:C.td,fontSize:10,marginTop:1}}>{item.desc}</div>
-            </div>
-            <div style={{width:42,height:24,borderRadius:99,background:on?tabColor:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,marginLeft:12}}>
-              <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
-            </div>
-          </div>;
-        })}
-
-        <button onClick={save} disabled={saved} style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,color:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:900,fontSize:15,cursor:saved?"default":"pointer",boxShadow:`0 4px 18px ${user.color}40`,marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:saved?0.8:1}}>
-          {saved?<>✓ Permissões Salvas!</>:<>💾 Salvar Permissões</>}
-        </button>
+        <div style={{padding:"12px 22px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",alignItems:"center",gap:12,background:"#fafbfc"}}>
+          {saved&&<span style={{color:"#16a34a",fontSize:12.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:5}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Permissões salvas
+          </span>}
+          <button onClick={save} disabled={saved}
+            style={{background:saved?"#e2e8f0":"#0f172a",color:saved?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"11px 26px",fontWeight:800,fontSize:13.5,cursor:saved?"default":"pointer",fontFamily:"inherit",boxShadow:saved?"none":"0 4px 14px rgba(15,23,42,.22)",transition:"all .15s"}}>
+            {saved?"Salvo":"Salvar permissões"}
+          </button>
+        </div>
       </div>
     </div>
   </div>;
