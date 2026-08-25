@@ -515,11 +515,10 @@ const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrSho
 // "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
 // (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
 const BIOTER_POSTS_PRESETS = {
-  // Principais: 1 collab + 2 posts que ALTERNAM POR SEMANA
-  // (semana A: 2 vídeos-short; semana B: 2 fotos de obra) — flag doisAlternados
-  bioter_chapeco:    {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  // Principais: toda semana 1 collab + 1 vídeo-short + 1 foto de obra (3/sem)
+  bioter_chapeco:    {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_castro:     {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_toledo:     {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
   // Filiais: 1 collab + 1 post alternando (foto-de-obra/vídeo-short)
   bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
   bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
