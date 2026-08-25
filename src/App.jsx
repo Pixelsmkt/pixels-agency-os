@@ -1935,7 +1935,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         </div>;
       })}
     </div>
-    {_rolModal&&<div onClick={function(){_setRolModal(null);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {_rolModal&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; _setRolModal(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:480,width:"100%",maxHeight:"80vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,marginBottom:6}}>Rolar pendentes pro próximo mês</div>
         <div style={{color:"#64748b",fontSize:12.5,marginBottom:16,lineHeight:1.5}}><strong style={{color:"#a16207"}}>{_rolModal.cards.length} card(s)</strong> serão movidos de <strong>{refMonth}</strong> → <strong>{_rolModal.nextMonth}</strong>. Apenas cards NÃO aprovados/publicados são considerados.</div>
@@ -8383,7 +8383,7 @@ function _ConcCompModal({accent,initial,onClose,onSave}){
       setUploading(false);
     }
   }
-  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:FF}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:FF}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(500px,94%)",padding:"24px 26px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)"}}>
       <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{initial.id?"Editar concorrente":"Novo concorrente"}</div>
       <div style={{fontSize:12,color:"#94a3b8",marginBottom:18,fontWeight:500}}>Dados manuais do perfil monitorado</div>
@@ -8454,7 +8454,7 @@ function _ConcPostModal({accent,initial,competitors,postTypes,onClose,onSave}){
   const [insights,setInsights]=useState(initial.insights||"");
   const [thumbnail,setThumbnail]=useState(initial.thumbnail||"");
   const FF="'Inter',system-ui,sans-serif";
-  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:FF,overflowY:"auto"}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:FF,overflowY:"auto"}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(680px,94%)",padding:"24px 26px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)",marginBottom:60}}>
       <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{initial.id?"Editar post viral":"Registrar post viral"}</div>
       <div style={{fontSize:12,color:"#94a3b8",marginBottom:18,fontWeight:500}}>Preencha os dados que conseguir extrair do post da concorrência</div>
@@ -14056,7 +14056,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
 
     {/* ═══ MODAL AI RESUMO ═══ */}
-    {iaModal&&<div onClick={function(){setIaModal(false);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,paddingBottom:30,overflowY:"auto"}}>
+    {iaModal&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setIaModal(false); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,paddingBottom:30,overflowY:"auto"}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,width:"min(620px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
         <div style={{background:"linear-gradient(135deg, #faf5ff, #f0f9ff)",padding:"14px 18px",borderBottom:"0.5px solid #e9d5ff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
@@ -14425,7 +14425,7 @@ function MilestoneForm({cl,onClose,onSaved}){
     setSaving(false);
   };
 
-  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+  return(<div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(620px,94%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
       <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Novo checkpoint — {cl.name}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -14513,7 +14513,7 @@ function MetricsForm({cl,existing,onClose,onSaved}){
     setSaving(false);
   };
 
-  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+  return(<div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(620px,94%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
       <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3,marginBottom:4}}>Registrar métricas</div><div style={{fontSize:12.5,color:"#94a3b8",marginBottom:18}}>{cl.name}</div>
       <div style={{marginBottom:12}}>
@@ -14890,7 +14890,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
     setSaving(false);
   };
 
-  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"Inter,system-ui,sans-serif"}}>
+  return(<div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"Inter,system-ui,sans-serif"}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(720px,94%)",padding:"24px 28px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_isEdit?"Editar checkpoint":"Novo checkpoint"}</div>
       <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20,fontWeight:500}}>{cl.name}</div>
@@ -16075,7 +16075,7 @@ function PageCalendarioInterno({isMob}){
     const t=MARCO_TIPOS[tk];
     const dataFmt=m.date?(m.date.slice(8,10)+"/"+m.date.slice(5,7)+"/"+m.date.slice(0,4)):"—";
     const participants=Array.isArray(m.metrics&&m.metrics.participants)?m.metrics.participants:[];
-    return <div onClick={function(){setOpenMarco(null);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    return <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setOpenMarco(null); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.30)"}}>
         <div style={{height:4,background:_ac}}/>
         <div style={{padding:"22px 26px 20px"}}>
@@ -16162,7 +16162,7 @@ function PageCalendarioInterno({isMob}){
     const ev=openEvento.evento, cl=openEvento.cl;
     const _ac=cl.color||"#a855f7";
     const dataFmt=ev.date?(ev.date.slice(8,10)+"/"+ev.date.slice(5,7)+"/"+ev.date.slice(0,4)):"—";
-    return <div onClick={function(){setOpenEvento(null);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    return <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setOpenEvento(null); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(540px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.30)"}}>
         <div style={{height:4,background:_ac}}/>
         <div style={{padding:"22px 26px 20px"}}>
@@ -20088,7 +20088,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </>}
 
-        {showTrashConfirm&&<div onClick={()=>setShowTrashConfirm(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .2s ease"}}>
+        {showTrashConfirm&&<div onMouseDown={e=>{ if(e.target===e.currentTarget) setShowTrashConfirm(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .2s ease"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:0,maxWidth:420,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(15,23,42,0.30),0 8px 20px rgba(15,23,42,0.15)"}}>
         <div style={{padding:"26px 28px 22px"}}>
           <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:44,height:44,borderRadius:12,background:"#fef2f2",color:"#dc2626",marginBottom:14}}>
@@ -20377,7 +20377,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     return null;
                   }
                   return <>
-                    <div onClick={()=>setColMenuOpen(null)} style={{position:"fixed",inset:0,zIndex:998}}/>
+                    <div onMouseDown={e=>{ if(e.target===e.currentTarget) setColMenuOpen(null); }} style={{position:"fixed",inset:0,zIndex:998}}/>
                     <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,minWidth:280,background:"#fff",borderRadius:14,boxShadow:"0 18px 40px rgba(15,23,42,0.16), 0 3px 10px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04)",padding:8,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
                       <div style={{padding:"4px 10px 8px 10px",color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
@@ -25723,7 +25723,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     {copyDirectionTask&&(()=>{
       const _cl=CLIENTS.find(c=>c.id===copyDirectionTask.client);
       const _close=()=>{setCopyDirectionTask(null);setCopyDirectionText("");};
-      return <div onClick={_close} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      return <div onMouseDown={function(e){ if(e.target===e.currentTarget) _close(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="Escape"){_close();}else if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){confirmSendBackToCopy();}}}
           style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 80px rgba(15,23,42,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
           <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",gap:13}}>
@@ -37153,7 +37153,7 @@ function _cardPodeSerResp(u){
                   </button>
                   {/* Dropdown com todas as colunas coloridas */}
                   {showColPicker&&canEdit&&<>
-                    <div onClick={function(){setShowColPicker(false);}} style={{position:"fixed",inset:0,zIndex:299,background:"transparent"}}/>
+                    <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setShowColPicker(false); }} style={{position:"fixed",inset:0,zIndex:299,background:"transparent"}}/>
                     <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:300,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,boxShadow:"0 16px 40px rgba(15,23,42,0.14), 0 3px 10px rgba(15,23,42,0.06)",padding:6,minWidth:220,maxHeight:360,overflowY:"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
                       <div style={{fontSize:9.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6,padding:"6px 10px 4px"}}>Mover pra coluna</div>
                       {(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).map(function(c){
@@ -38853,7 +38853,7 @@ function _cardPodeSerResp(u){
                         <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{publishTime||"11:00"}</span>
                       </button>
                       {showPubTime&&canEdit&&<>
-                        <div onClick={function(){setShowPubTime(false);}} style={{position:"fixed",inset:0,zIndex:199,background:"transparent"}}/>
+                        <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setShowPubTime(false); }} style={{position:"fixed",inset:0,zIndex:199,background:"transparent"}}/>
                         <div onClick={function(e){e.stopPropagation();}} style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:200,background:"#fff",border:"1px solid #ede9fe",borderRadius:14,boxShadow:"0 16px 40px rgba(88,64,166,0.16), 0 3px 10px rgba(15,23,42,0.06)",padding:14,width:220,fontFamily:"'Inter',system-ui,sans-serif"}}>
                           {/* Steppers hora + minuto */}
                           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:12}}>
@@ -39070,7 +39070,7 @@ function _cardPodeSerResp(u){
                       </button>
                   }
                   {showPubTime&&!_disabled&&<>
-                    <div onClick={function(){setShowPubTime(false);}} style={{position:"fixed",inset:0,zIndex:199,background:"transparent"}}/>
+                    <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setShowPubTime(false); }} style={{position:"fixed",inset:0,zIndex:199,background:"transparent"}}/>
                     <div onClick={function(e){e.stopPropagation();}} style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:200,background:"#fff",border:"1px solid #ede9fe",borderRadius:14,boxShadow:"0 16px 40px rgba(88,64,166,0.16), 0 3px 10px rgba(15,23,42,0.06)",padding:14,width:220,fontFamily:"'Inter',system-ui,sans-serif"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginBottom:12}}>
                         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
@@ -48956,7 +48956,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     </div>
 
     {/* Modal Sinalizar evento — overlay simples, sem dependências externas */}
-    {showNewEvent&&<div onClick={function(){setShowNewEvent(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {showNewEvent&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setShowNewEvent(false); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,padding:"28px 28px 24px",maxWidth:480,width:"100%",boxShadow:"0 25px 70px rgba(15,23,42,0.18)"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:18}}>
           <div style={{flexShrink:0,width:40,height:40,borderRadius:10,background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -50419,7 +50419,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
     </div>}
 
     {/* Modal Solicitar Ajuste */}
-    {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    {ajusteModal&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setAjusteModal(null); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:6}}>Solicitar ajuste</div>
         <div style={{color:"#64748b",fontSize:12,marginBottom:14}}>Demanda: <strong style={{color:"#0f172a"}}>{ajusteModal.task.title||"(sem título)"}</strong></div>
@@ -51562,7 +51562,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
         prazo_dias:(cfg&&cfg.prazo_padrao_dias)||5,
       };
       const _ddmmS=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
-      return <div onClick={function(){setSprintPickerTask(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      return <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setSprintPickerTask(null); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
         <div onClick={function(e){e.stopPropagation();}}
           style={{background:"#fff",borderRadius:14,maxWidth:480,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
           <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"16px 22px",color:"#fff"}}>
@@ -51715,7 +51715,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     })()}
 
     {/* Modal: Confirmar exclusão */}
-    {excluirTask&&<div onClick={function(){setExcluirTask(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    {excluirTask&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setExcluirTask(null); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={function(e){e.stopPropagation();}}
         style={{background:"#fff",borderRadius:14,maxWidth:420,width:"100%",padding:"22px 24px",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",fontFamily:"'Inter',system-ui,sans-serif"}}>
         <div style={{width:48,height:48,borderRadius:12,background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
@@ -51736,7 +51736,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     </div>}
 
     {/* Modal: Solicitar ajuste */}
-    {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    {ajusteModal&&<div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setAjusteModal(null); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:6}}>Solicitar ajuste</div>
         <div style={{color:"#64748b",fontSize:12,marginBottom:14}}>Demanda: <strong style={{color:"#0f172a"}}>{ajusteModal.task.title||"(sem título)"}</strong></div>
@@ -51836,7 +51836,7 @@ function NovaDemandaModal({cl, onClose}){
     setEnviando(false);
   };
 
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
     <div onClick={function(e){e.stopPropagation();}}
       style={{background:"#fff",borderRadius:16,maxWidth:560,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
 
@@ -52071,7 +52071,7 @@ function RegistrarEntregaModal({cl, onClose}){
     setSalvando(false);
   };
 
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
     <div onClick={function(e){e.stopPropagation();}}
       style={{background:"#fff",borderRadius:16,maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"18px 22px",color:"#fff"}}>
@@ -57678,7 +57678,7 @@ function _ScriptViewer({script,canEdit,onEdit,onCopy,onClose}){
     if(_mdOnBg.current && e.target === e.currentTarget) onClose();
     _mdOnBg.current = false;
   }
-  return <div onMouseDown={_bgMouseDown} onClick={_bgClick} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:998,padding:24}}>
+  return <div onMouseDown={_bgMouseDown} onMouseDown={function(e){ if(e.target===e.currentTarget) _bgClick(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:998,padding:24}}>
     <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:820,maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 40px 100px rgba(15,23,42,0.35)",fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden"}}>
       {/* Header */}
       <div style={{padding:"22px 28px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:14}}>
@@ -57741,7 +57741,7 @@ function _ScriptEditor({script,onSave,onCancel}){
     if(_mdOnBg.current && e.target === e.currentTarget) onCancel();
     _mdOnBg.current = false;
   }
-  return <div onMouseDown={_bgMouseDown} onClick={_bgClick} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:20}}>
+  return <div onMouseDown={_bgMouseDown} onMouseDown={function(e){ if(e.target===e.currentTarget) _bgClick(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:20}}>
     <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:720,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(15,23,42,0.30)",fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* Header */}
       <div style={{padding:"20px 24px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
@@ -67162,7 +67162,7 @@ function _ENPSDrawer({user, rows, onClose}){
   const avgScore = userRows.length>0 ? (userRows.reduce(function(s,r){return s+r.score;},0)/userRows.length) : null;
   const lastScore = userRows[0]?.score;
   const lastClass = lastScore!=null ? _npsClassify(lastScore) : null;
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",justifyContent:"flex-end",fontFamily:_NPS_FF}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",justifyContent:"flex-end",fontFamily:_NPS_FF}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",width:"min(520px,100%)",height:"100%",overflowY:"auto",boxShadow:"-16px 0 48px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
       {/* Header */}
       <div style={{padding:"22px 24px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
@@ -70462,7 +70462,7 @@ function _EvDateField({value, onChange, placeholder}){
     </div>
     {open && <>
       {/* Backdrop pra fechar ao clicar fora */}
-      <div onClick={function(){setOpen(false);}} style={{position:"fixed",inset:0,zIndex:299}}/>
+      <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setOpen(false); }} style={{position:"fixed",inset:0,zIndex:299}}/>
       {/* Calendario popup */}
       <div onClick={function(e){e.stopPropagation();}}
         style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:300,background:"#fff",border:"1px solid #fed7aa",borderRadius:14,boxShadow:"0 16px 40px rgba(249,115,22,0.18), 0 3px 10px rgba(15,23,42,0.06)",padding:"12px 14px",width:260,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -71972,7 +71972,7 @@ function _DGOKREditModal({editing, setEditing, onSaveKR, onSaveObj}){
   if(typeof useEscToClose==="function") useEscToClose(true, ()=>setEditing(null));
   const isObj = !!editing._objetivo;
   function _close(){ setEditing(null); }
-  return <div onClick={_close} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) _close(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(520px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
       <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{isObj?"Objetivo do trimestre":(editing.id?"Editar resultado-chave":"Novo resultado-chave")}</div>
       <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>{isObj?"Frase única, ambiciosa e direcional.":"Mensurável: nome do KR + meta numérica + unidade (opcional)."}</div>
@@ -74287,7 +74287,7 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
     setSaving(false);
   };
 
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
       <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>Nova meta semanal</div>
       <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>Cadastre uma meta e marque o dia em que ela vence.</div>
@@ -74423,7 +74423,7 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
     setSaving(false);
   };
 
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:DG_INTER}}>
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:DG_INTER}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(620px,94%)",padding:"24px 28px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)",maxHeight:"calc(100vh - 90px)",overflowY:"auto"}}>
       <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18}}>
         {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
@@ -77924,6 +77924,11 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
             {typeof Ico==="function"&&<Ico n="flame" size={11} color="currentColor"/>}
             {_demBRCurto(d.prazo)}{d.hora?(" · "+String(d.hora).slice(0,5)):""}
           </span>}
+          {d.cidade&&<span title={"Cidade: "+d.cidade}
+            style={{color:"#64748b",fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            {d.cidade}
+          </span>}
           {_prazo && !_concluida && (function(){
             const _dd=_demDias(d.prazo);
             return (_dd!==null&&_dd<0)
@@ -78112,10 +78117,11 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
       {[
         {l:"Início",     v:_demBR(d.data_inicio)||"—"},
         {l:"Prazo final",v:(_demBR(d.prazo)||"—")+(d.hora?(" às "+String(d.hora).slice(0,5)):"")},
+        (d.cidade?{l:"Cidade",v:d.cidade}:null),
         {l:"Prioridade", v:prio.label, cor:prio.cor},
         {l:"Responsável",v:(resp&&resp.name)||"—"},
         {l:"Progresso",  v:prog.pct+"%", cor:prog.pct>=100?"#16a34a":cat.cor},
-      ].map(function(x,i){
+      ].filter(Boolean).map(function(x,i){
         return <div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"9px 12px"}}>
           <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{x.l}</div>
           <div style={{color:x.cor||"#0f172a",fontSize:12.5,fontWeight:800,marginTop:3,letterSpacing:-.15,fontFeatureSettings:"'tnum'",
@@ -78668,6 +78674,88 @@ function _DemSelectResp({valor, onChange, compacto}){
 /* ═══════════════════════════════════════════════════════════════════════
    MODAL — nova / editar demanda
 ═══════════════════════════════════════════════════════════════════════ */
+/* Seletor de horário próprio (nada de dropdown nativo feio) — mesmo estilo do _DemDataInput:
+   popover fixed com clamp/flip, pills de hora (0-23) e minutos (passo 5). Valor "HH:MM". */
+function _DemHoraInput({valor, onChange, placeholder}){
+  const [aberto,setAberto]=useState(false);
+  const [pos,setPos]=useState({top:100,left:100});
+  const _ref=useRef(null);
+  const W=252, H=318;
+  const _abrir=function(e){
+    if(aberto){ setAberto(false); return; }
+    try{
+      const r=e.currentTarget.getBoundingClientRect();
+      const vw=window.innerWidth, vh=window.innerHeight;
+      let left=Math.max(8, Math.min(r.left, vw-W-8));
+      let top=r.bottom+6;
+      if(top+H>vh-8) top=Math.max(8, r.top-H-6);
+      setPos({top:top,left:left});
+    }catch(_){ setPos({top:100,left:100}); }
+    setAberto(true);
+  };
+  useEffect(function(){
+    if(!aberto) return undefined;
+    const h=function(e){ if(_ref.current&&!_ref.current.contains(e.target)) setAberto(false); };
+    const k=function(e){ if(e.key==="Escape") setAberto(false); };
+    document.addEventListener("mousedown",h); document.addEventListener("keydown",k);
+    return function(){ document.removeEventListener("mousedown",h); document.removeEventListener("keydown",k); };
+  },[aberto]);
+  const _v=String(valor||"");
+  const _hSel=_v?parseInt(_v.slice(0,2),10):null;
+  const _mSel=_v?parseInt(_v.slice(3,5),10):null;
+  const _pad=function(n){ return String(n).padStart(2,"0"); };
+  const _setH=function(h){ onChange(_pad(h)+":"+(_mSel!=null?_pad(_mSel):"00")); };
+  const _setM=function(m){ onChange((_hSel!=null?_pad(_hSel):"09")+":"+_pad(m)); setAberto(false); };
+  const _pill=function(on){
+    return {border:"none",borderRadius:8,padding:0,height:26,fontSize:11.5,cursor:"pointer",fontFamily:_DEM_FF,
+      fontFeatureSettings:"'tnum'",fontWeight:on?800:600,transition:"all .1s",
+      background:on?"linear-gradient(135deg,#a855f7,#7c3aed)":"#f8fafc",
+      color:on?"#fff":"#475569",boxShadow:on?"0 3px 8px rgba(124,58,237,.35)":"none"};
+  };
+  const _lbl={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"2px 1px 5px"};
+  return <div ref={_ref} style={{position:"relative",width:"100%"}}>
+    <button type="button" onClick={_abrir}
+      style={Object.assign({},_DEM_INP,{cursor:"pointer",display:"flex",alignItems:"center",gap:8,textAlign:"left",
+        color:_v?"#0f172a":"#94a3b8",fontWeight:_v?600:500,fontFeatureSettings:"'tnum'",
+        borderColor:aberto?"#a78bfa":"#e2e8f0",boxShadow:aberto?"0 0 0 3px rgba(167,139,250,.18)":"none"})}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={_v?"#7c3aed":"#94a3b8"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      {_v||placeholder||"—"}
+    </button>
+    {aberto&&<div style={{position:"fixed",top:pos.top,left:pos.left,zIndex:500,width:W,background:"#fff",
+      border:"1px solid #e8ebf0",borderRadius:14,boxShadow:"0 18px 46px rgba(15,23,42,.16)",padding:"11px 13px 12px",
+      fontFamily:_DEM_FF,boxSizing:"border-box"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+        <span style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,display:"inline-flex",alignItems:"center",gap:6}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          {_v||"Horário"}
+        </span>
+        {_v&&<button type="button" onClick={function(){onChange("");setAberto(false);}}
+          style={{background:"none",border:"none",color:"#94a3b8",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_DEM_FF,padding:"3px 5px",borderRadius:7}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>Limpar</button>}
+      </div>
+      <div style={_lbl}>Hora</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:4}}>
+        {Array.from({length:24},function(_,h){
+          const on=_hSel===h;
+          return <button key={h} type="button" onClick={function(){_setH(h);}} style={_pill(on)}
+            onMouseEnter={function(e){if(!on)e.currentTarget.style.background="#f5f3ff";}}
+            onMouseLeave={function(e){if(!on)e.currentTarget.style.background="#f8fafc";}}>{_pad(h)}</button>;
+        })}
+      </div>
+      <div style={Object.assign({},_lbl,{marginTop:9})}>Minutos</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:4}}>
+        {Array.from({length:12},function(_,i){
+          const m=i*5, on=_mSel===m;
+          return <button key={m} type="button" onClick={function(){_setM(m);}} style={_pill(on)}
+            onMouseEnter={function(e){if(!on)e.currentTarget.style.background="#f5f3ff";}}
+            onMouseLeave={function(e){if(!on)e.currentTarget.style.background="#f8fafc";}}>:{_pad(m)}</button>;
+        })}
+      </div>
+    </div>}
+  </div>;
+}
+
 /* Botão "Enviar pro Checkpoint" auto-suficiente — checa/insere/remove em client_milestones
    via metrics->>from_demanda. Aparece na ficha da demanda quando ela está concluída. */
 function _DemCkBtn({d}){
@@ -78693,6 +78781,7 @@ function _DemCkBtn({d}){
       const _quando=(typeof _demConcluidaEm==="function")?_demConcluidaEm(d):null;
       const _data=_quando?String(_quando).slice(0,10):new Date().toISOString().slice(0,10);
       const _met={from_demanda:d.id};
+      if(d.cidade) _met.city=d.cidade;
       if(d.unidade&&d.unidade!=="grupo") _met.unit=d.unidade;
       const r=await sb.from("client_milestones").insert({
         client_id:d.client_id, date:_data, type:"entrega",
@@ -78751,7 +78840,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   const [f,setF]=useState(function(){
     const _base=Object.assign({
       titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
-      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"", hora:"",
+      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"", hora:"", cidade:"",
     }, inicial||{});
     // Editando demanda de unidade Bioter: o select de cliente usa "bioter::<unidade>"
     if(_base.client_id==="bioter"&&_base.unidade&&_base.unidade!=="grupo")
@@ -78946,9 +79035,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           </div>
           <div>
             <div style={_DEM_LBL}>Horário</div>
-            <input type="time" value={f.hora||""} onChange={function(e){set("hora",e.target.value);}}
-              onFocus={_demFoco} onBlur={_demBlur}
-              style={Object.assign({},_DEM_INP,{cursor:"pointer",fontFeatureSettings:"'tnum'"})}/>
+            <_DemHoraInput valor={f.hora||""} onChange={function(v){set("hora",v);}} placeholder="—"/>
           </div>
           <div>
             <div style={_DEM_LBL}>Status</div>
@@ -78956,6 +79043,18 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
               onFocus={_demFoco} onBlur={_demBlur} style={Object.assign({},_DEM_INP,{cursor:"pointer"})}>
               {DEM_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
             </select>
+          </div>
+        </div>
+
+        <div style={{marginTop:12}}>
+          <div style={_DEM_LBL}>Cidade (opcional)</div>
+          <div style={{position:"relative"}}>
+            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:f.cidade?"#7c3aed":"#94a3b8",pointerEvents:"none",display:"inline-flex"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </span>
+            <input type="text" value={f.cidade||""} onChange={function(e){set("cidade",e.target.value);}}
+              onFocus={_demFoco} onBlur={_demBlur} placeholder="Ex.: Chapecó, Curitiba..."
+              style={Object.assign({},_DEM_INP,{paddingLeft:36})}/>
           </div>
         </div>
       </div>
@@ -79191,6 +79290,7 @@ function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
       const _quando=_demConcluidaEm(d);
       const _data=_quando?String(_quando).slice(0,10):new Date().toISOString().slice(0,10);
       const _met={from_demanda:d.id};
+      if(d.cidade) _met.city=d.cidade;
       if(d.unidade&&d.unidade!=="grupo") _met.unit=d.unidade;
       const r=await sb.from("client_milestones").insert({
         client_id:d.client_id, date:_data, type:"entrega",
@@ -79368,6 +79468,7 @@ function CDemandas({cl, canEdit, selUnit}){
       data_inicio:dados.data_inicio||null,
       prazo:dados.prazo||null,
       hora:dados.hora||null,
+      cidade:dados.cidade||null,
       // Editando: preserva a unidade original da demanda (não muda de unidade
       // só porque a edição foi feita vendo o grupo). Criando: usa a unidade da vista.
       unidade:_isBioter?((dados.id&&typeof dados.unidade==="string")?dados.unidade:(_unidade==="grupo"?"":_unidade||"")):"",
@@ -79842,6 +79943,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
       data_inicio:dados.data_inicio||null,
       prazo:dados.prazo||null,
       hora:dados.hora||null,
+      cidade:dados.cidade||null,
       updated_at:new Date().toISOString(),
     };
     if(Array.isArray(dados.tarefas)) _payload.tarefas=dados.tarefas;
@@ -80224,9 +80326,9 @@ function _CqModal({inicial, isMob, onSalvar, onFechar, destino}){
       desbloqueada:desb, unlocked_at:desb?(dataDesb||new Date().toISOString().slice(0,10)):null});
     setSalvando(false);
   };
-  return <div onClick={onFechar} style={{position:"fixed",inset:0,zIndex:430,background:"rgba(15,23,42,.58)",backdropFilter:"blur(6px)",
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }} style={{position:"fixed",inset:0,zIndex:430,background:"rgba(15,23,42,.58)",backdropFilter:"blur(6px)",
     display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"70px 16px 30px",overflowY:"auto",fontFamily:_CQ_FF}}>
-    <div onClick={function(e){e.stopPropagation();}}
+    <div onMouseDown={function(e){e.stopPropagation();}}
       style={{background:"#fff",borderRadius:16,width:"min(560px,100%)",padding:isMob?"20px 18px":"24px 26px",
         boxShadow:"0 32px 80px rgba(15,23,42,.32)",display:"flex",flexDirection:"column",gap:14}}>
       <div>
