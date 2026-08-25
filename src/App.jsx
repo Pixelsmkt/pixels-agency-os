@@ -5296,7 +5296,7 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
     :[];
   const _escopo=(typeof ESCOPO_CARGOS!=="undefined")?ESCOPO_CARGOS[user.dash]:null;
   // Designer / Editor (freelancer com pagamento por demanda) -> dashboard V2 moderno
-  const _core=(user.pagamentoPorDemanda===true && typeof DashColabV2==="function")
+  const _core=(user.pagamentoPorDemanda===true && user.dash!=="social" && typeof DashColabV2==="function")
     ? <DashColabV2 user={user} tasks={tasks} allTasks={allTasks}
         setTasks={setTasks} isViewing={isViewing} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>
     : <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
@@ -29949,6 +29949,39 @@ const PERM_GROUPS={
   ],
 };
 
+/* ── Oculta um membro do TEAM em TODOS os navegadores ───────────────────
+   Lista compartilhada em team_data tipo='team_ocultos' (dados={ids:[...]}).
+   Usada pra remover membros do cadastro fixo sem login (ex: Ocsana) e pra
+   garantir que hardcoded excluídos não voltem no F5. ── */
+async function _pixelsOcultarMembro(teamId){
+  try{
+    const sb=window._sb;
+    if(sb){
+      let ids=[];
+      try{
+        const {data}=await sb.from("team_data").select("dados").eq("tipo","team_ocultos").maybeSingle();
+        ids=(data&&data.dados&&Array.isArray(data.dados.ids))?data.dados.ids.slice():[];
+      }catch(_){}
+      if(ids.indexOf(teamId)<0) ids.push(teamId);
+      await sb.from("team_data").upsert(
+        {tipo:"team_ocultos",dados:{ids:ids},updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:""},
+        {onConflict:"tipo"});
+    }
+  }catch(_){}
+  try{
+    const raw=localStorage.getItem("pixels-team-deleted");
+    const l=raw?JSON.parse(raw):[];
+    if(l.indexOf(teamId)<0){l.push(teamId);localStorage.setItem("pixels-team-deleted",JSON.stringify(l));}
+  }catch(_){}
+  try{
+    if(typeof TEAM!=="undefined"){
+      const i=TEAM.findIndex(t=>t&&t.id===teamId);
+      if(i>=0)TEAM.splice(i,1);
+    }
+    window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+  }catch(_){}
+}
+
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
   // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
@@ -30221,7 +30254,25 @@ function CollabProfilePage({user,profile,onSave,onClose}){
     }
   };
 
+  const [corPerfil,setCorPerfil]=useState(user.color||"#ec4899");
+  const _salvarCor=async function(){
+    if(corPerfil===user.color) return;
+    try{
+      if(typeof TEAM!=="undefined"){
+        const t=TEAM.find(function(x){return x&&x.id===user.id;});
+        if(t) t.color=corPerfil;
+      }
+      window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+    }catch(_){}
+    try{
+      const sb=window._sb;
+      const{data:profileRow}=await sb.from("profiles").select("id").eq("team_id",user.id).maybeSingle();
+      if(profileRow) await sb.from("profiles").update({color:corPerfil}).eq("id",profileRow.id);
+    }catch(_){}
+  };
+
   const save=()=>{
+    _salvarCor();
     onSave(user.id,{nome,funcao,telefone,email,nascimento,photo,cidade,estado,camiseta,calcado,smartphone,time,estadoCivil,filhos,comidas,bebida,hobbies,musica,series,filmes,viagens,pets,curiosidades,medoOuFobia,superpoder,talento,licoesAprendidas,bio,habilidades,objetivos,obs});
     onClose();
   };
@@ -30338,6 +30389,16 @@ function CollabProfilePage({user,profile,onSave,onClose}){
             <div><LBL t="Telefone / WhatsApp"/><input value={telefone} onChange={e=>setTelefone(e.target.value)} style={inp} placeholder="(49) 9 9900-0000"/></div>
             <div><LBL t="Data de Nascimento"/><input type="date" value={nascimento} onChange={e=>setNascimento(e.target.value)} style={inp}/></div>
             <div style={{gridColumn:"1/-1"}}><LBL t="E-mail profissional"/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inp} placeholder="email@pixelsmarketing.com.br"/></div>
+            <div style={{gridColumn:"1/-1"}}>
+              <LBL t="Cor no sistema"/>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#2563eb","#0ea5e9","#0d9488","#16a34a","#f59e0b","#ea580c","#ef4444","#475569"].map(c=>(
+                  <button key={c} type="button" onClick={()=>setCorPerfil(c)} title={c}
+                    style={{width:30,height:30,borderRadius:9,background:c,border:corPerfil===c?"3px solid #0f172a":"3px solid transparent",cursor:"pointer",padding:0,boxShadow:corPerfil===c?"0 3px 10px "+c+"60":"none",transition:"all .12s"}}/>
+                ))}
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:4}}>Usada no avatar, cards e por todo o app</span>
+              </div>
+            </div>
           </div>)}
 
           {activeTab==="pessoal"&&(<div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
@@ -30739,6 +30800,19 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     }else if(!confirm("Excluir '"+nome+"'?"))return;
     try{
       const sb=window._sb;
+      // Membro do cadastro fixo sem login (ex: Ocsana)? Não tem o que excluir no auth —
+      // só esconde do app (compartilhado entre todos os navegadores).
+      let _temProfile=false;
+      try{
+        const {data:_pr}=await sb.from("profiles").select("id").eq("team_id",teamId).maybeSingle();
+        _temProfile=!!_pr;
+      }catch(_){}
+      if(!_temProfile){
+        await _pixelsOcultarMembro(teamId);
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador removido.");
+        setTimeout(()=>window.location.reload(),1200);
+        return;
+      }
       await sb.auth.refreshSession().catch(()=>{});
       const{data:sess}=await sb.auth.getSession();
       const tok=sess?.session?.access_token;
@@ -30754,6 +30828,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao excluir.");
         return;
       }
+      await _pixelsOcultarMembro(teamId);
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador removido.");
       setTimeout(()=>window.location.reload(),1500);
     }catch(e){
@@ -30933,7 +31008,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 id:payload.team_id, name:payload.name, role:payload.role,
                 av:payload.av, color:payload.color, level:payload.level,
                 status:"online", dash:payload.dash,
-                canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true,
+                canDelete:false, canPixelsIA:false, pagamentoPorDemanda:(payload.dash==="designer"||payload.dash==="editor"),
                 supervisor:["gustavo","vinicius","hellen"],
                 _fromSupabase:true,
               });
@@ -31500,6 +31575,50 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         <div style={{padding:"6px 0"}}>
           {LEVEL_STRUCTURE.map((lv,idx,arr)=>{
             const members=TEAM.filter(m=>m.level===lv.l);
+            const _mostraAv=(m,i)=>{
+              const ph=collabProfiles[m.id]?.photo;
+              return (<div key={m.id} title={m.name} style={{width:26,height:26,borderRadius:"50%",overflow:"hidden",border:"2px solid "+C.card,marginLeft:i>0?-8:0,cursor:"pointer"}} onClick={()=>setEditProfile(m.id)}>
+                {ph?(<img src={ph} alt={m.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>)
+                  :(<div style={{width:"100%",height:"100%",background:m.color+"33",display:"flex",alignItems:"center",justifyContent:"center",color:m.color,fontWeight:900,fontSize:10}}>{m.av}</div>)}
+              </div>);
+            };
+            if(lv.l===3){
+              const _norm=d=>d==="video"?"editor":(d||"");
+              const SETORES3=[
+                {d:"designer",label:"Design",c:"#e040fb"},
+                {d:"editor",label:"Edição de vídeo",c:"#0ea5e9"},
+                {d:"social",label:"Social media",c:"#ec4899"},
+                {d:"coordinator",label:"Estratégia",c:"#8b5cf6"},
+                {d:"gestor",label:"Gestão de mídia",c:"#f59e0b"},
+              ];
+              const usados=new Set();
+              const grupos=SETORES3.map(s=>({...s,membros:members.filter(m=>_norm(m.dash)===s.d)})).filter(g=>g.membros.length>0);
+              grupos.forEach(g=>g.membros.forEach(m=>usados.add(m.id)));
+              const outros=members.filter(m=>!usados.has(m.id));
+              if(outros.length)grupos.push({d:"outros",label:"Outros",c:"#94a3b8",membros:outros});
+              return (<div key={lv.l} style={{borderBottom:idx<arr.length-1?"1px solid "+C.b1+"44":"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:16,padding:"12px 20px 4px"}}>
+                  <div style={{width:28,height:28,borderRadius:8,background:lv.c+"22",border:"1.5px solid "+lv.c+"44",display:"flex",alignItems:"center",justifyContent:"center",color:lv.c,fontWeight:800,fontSize:12,flexShrink:0}}>{lv.l}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:C.tx,fontWeight:600,fontSize:13}}>{lv.name}</div>
+                    <div style={{color:C.td,fontSize:11,marginTop:1}}>{lv.desc}</div>
+                  </div>
+                  <span style={{color:C.td,fontSize:11}}>{members.length+" membro"+(members.length!==1?"s":"")}</span>
+                </div>
+                <div style={{padding:"2px 20px 10px 64px",display:"flex",flexDirection:"column",gap:2}}>
+                  {grupos.map(g=>(
+                    <div key={g.d} style={{display:"flex",alignItems:"center",gap:12,padding:"6px 0"}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:g.c,flexShrink:0}}/>
+                      <span style={{flex:1,color:C.ts,fontSize:12.5,fontWeight:600}}>{g.label}</span>
+                      <div style={{display:"flex",alignItems:"center"}}>
+                        {g.membros.map(_mostraAv)}
+                        <span style={{color:C.td,fontSize:11,marginLeft:10,fontFeatureSettings:"'tnum'"}}>{g.membros.length}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>);
+            }
             return (<div key={lv.l} style={{display:"flex",alignItems:"center",gap:16,padding:"12px 20px",borderBottom:idx<arr.length-1?"1px solid "+C.b1+"44":"none"}}>
               <div style={{width:28,height:28,borderRadius:8,background:lv.c+"22",border:"1.5px solid "+lv.c+"44",display:"flex",alignItems:"center",justifyContent:"center",color:lv.c,fontWeight:800,fontSize:12,flexShrink:0}}>{lv.l}</div>
               <div style={{flex:1,minWidth:0}}>
@@ -45071,6 +45190,12 @@ export default function AgencyOS(){
         // Pega TODOS os campos pra também mesclar no TEAM + ACCESS_STORE
         const{data:rawRows}=await sb.from("profiles").select("team_id,name,role,av,color,level,dash,user_type,profile_data");
         if(!rawRows)return;
+        // Membros ocultados (excluídos sem login / hardcoded excluídos) — lista compartilhada
+        let _ocultos=[];
+        try{
+          const {data:_oc}=await sb.from("team_data").select("dados").eq("tipo","team_ocultos").maybeSingle();
+          _ocultos=(_oc&&_oc.dados&&Array.isArray(_oc.dados.ids))?_oc.dados.ids:[];
+        }catch(_){}
         // ── DEDUP por team_id — prefere row COM foto, depois com profile_data ──
         // Ocsana e outros users que tem 2+ rows (auth + manual) precisam dessa fusao:
         // sem isso, uma row sem foto sobrescreve a com foto no localStorage.
@@ -45127,7 +45252,8 @@ export default function AgencyOS(){
                 dash:row.dash?String(row.dash):"designer",
                 canDelete:false,
                 canPixelsIA:false,
-                pagamentoPorDemanda:true,
+                // Pagamento por demanda só faz sentido pra design/edição de vídeo
+                pagamentoPorDemanda:(function(){const _d=row.dash?String(row.dash):"designer";return _d==="designer"||_d==="editor"||_d==="video";})(),
                 supervisor:["gustavo","vinicius","hellen"],
                 _fromSupabase:true,
               });
@@ -45151,6 +45277,15 @@ export default function AgencyOS(){
             console.warn("[loadAllTeamPhotos row erro]",row&&row.team_id,rowErr);
           }
         });
+        // Remove do TEAM quem está na lista de ocultos (sócios nunca)
+        if(_ocultos.length&&typeof TEAM!=="undefined"&&Array.isArray(TEAM)){
+          for(let _i=TEAM.length-1;_i>=0;_i--){
+            const _t=TEAM[_i];
+            if(_t&&_ocultos.indexOf(_t.id)>=0&&_t.id!=="vinicius"&&_t.id!=="gustavo"){
+              TEAM.splice(_i,1); teamChanged=true;
+            }
+          }
+        }
         // Se TEAM mudou, dispara evento pro app refazer renders
         if(teamChanged){
           window.dispatchEvent(new CustomEvent("pixels:team-updated"));
@@ -46347,6 +46482,8 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
       try{ localStorage.setItem("pixels-team-deleted", JSON.stringify(Array.from(next))); }catch(_){}
       return next;
     });
+    // Compartilha a exclusão com todos os navegadores (team_data tipo=team_ocultos)
+    try{ if(typeof _pixelsOcultarMembro==="function") _pixelsOcultarMembro(uid); }catch(_){}
     // Remove imediatamente do TEAM em memória
     try{
       if(typeof TEAM!=="undefined"){
@@ -46689,7 +46826,7 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
           try{
             if(typeof TEAM!=="undefined"&&!TEAM.find(function(t){return t.id===payload.team_id;})){
-              TEAM.push({id:payload.team_id,name:payload.name,role:payload.role,av:payload.av,color:payload.color,level:payload.level,status:"online",dash:payload.dash,canDelete:false,canPixelsIA:false,pagamentoPorDemanda:true,supervisor:["gustavo","vinicius","hellen"],_fromSupabase:true});
+              TEAM.push({id:payload.team_id,name:payload.name,role:payload.role,av:payload.av,color:payload.color,level:payload.level,status:"online",dash:payload.dash,canDelete:false,canPixelsIA:false,pagamentoPorDemanda:(payload.dash==="designer"||payload.dash==="editor"),supervisor:["gustavo","vinicius","hellen"],_fromSupabase:true});
             }
             if(typeof ACCESS_STORE!=="undefined"&&!ACCESS_STORE[payload.team_id]){
               const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,social:(typeof SOCIAL_MEDIA_PERMS!=="undefined"?SOCIAL_MEDIA_PERMS:ACCESS_STORE.ellen),gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
