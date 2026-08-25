@@ -75582,7 +75582,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:14,alignItems:"start"}}>
 
         {/* ───── COLUNA PRINCIPAL ───── */}
-        <div style={{display:"flex",flexDirection:"column",gap:22,minWidth:0}}>
+        <div style={{display:"flex",flexDirection:"column",gap:34,minWidth:0}}>
 
           {/* Sobre a empresa */}
           <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
@@ -75597,6 +75597,57 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     : <_PbEmpty icon="building" text="Sem descrição cadastrada." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>;
                 })()
             }
+          </PlaybookBlock>
+
+          {/* Equipe no cliente — quem cuida do quê (referência do GC) */}
+          <PlaybookBlock id="pb-time" title="Equipe no cliente" subtitle="Quem cuida do quê nesse cliente — referência rápida pro GC" icon="users" color="#6366f1">
+            {(function(){
+              const _eq=Array.isArray(data.equipe)?data.equipe:[];
+              const _time=(typeof TEAM!=="undefined")?TEAM:[];
+              const _upd=function(lista){ onUpdate({equipe:lista}); };
+              if(!editMode){
+                return _eq.length===0
+                  ? <_PbEmpty icon="users" text="Equipe ainda não definida pra esse cliente." sub={isAdmin?"Ative o modo edição pra montar (pessoa + função).":""}/>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(215px,1fr))",gap:10}}>
+                      {_eq.map(function(m,i){
+                        const u=_time.find(function(x){return x.id===m.uid;});
+                        return <div key={i} style={{display:"flex",alignItems:"center",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
+                          {u&&typeof UserAvatar==="function"
+                            ? <UserAvatar user={u} size={36} border={false}/>
+                            : <span style={{width:36,height:36,borderRadius:"50%",background:"#eef1f5"}}/>}
+                          <div style={{minWidth:0}}>
+                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{(u&&u.name)||m.uid||"—"}</div>
+                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.funcao||"—"}</div>
+                          </div>
+                        </div>;
+                      })}
+                    </div>;
+              }
+              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {_eq.map(function(m,i){
+                  const u=_time.find(function(x){return x.id===m.uid;});
+                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px"}}>
+                    {u&&typeof UserAvatar==="function"?<UserAvatar user={u} size={28} border={false}/>:<span style={{width:28,height:28,borderRadius:"50%",background:"#eef1f5",flexShrink:0}}/>}
+                    <select value={m.uid||""} onChange={function(e){const v=e.target.value;_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{uid:v}):x;}));}}
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 9px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER,cursor:"pointer",width:150}}>
+                      <option value="">Quem?</option>
+                      {_time.map(function(tu){return <option key={tu.id} value={tu.id}>{String(tu.name||"").split(" ")[0]}</option>;})}
+                    </select>
+                    <input defaultValue={m.funcao||""} placeholder="Função nesse cliente — ex: GC · Design · Tráfego · Vídeo"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.funcao||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{funcao:v}):x;}));}}
+                      style={{flex:1,minWidth:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <button type="button" onClick={function(){_upd(_eq.filter(function(_,j){return j!==i;}));}} title="Remover"
+                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>;
+                })}
+                <button type="button" onClick={function(){_upd(_eq.concat([{uid:"",funcao:""}]));}}
+                  style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
+              </div>;
+            })()}
           </PlaybookBlock>
 
           {/* Comunicação da marca */}
@@ -76558,12 +76609,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
 // ─── Bloco genérico (com id pra ancora + subtitle) ──────────
 function PlaybookBlock({id, title, subtitle, icon, color, children}){
-  // Cabecalho PADRONIZADO em roxo pra todas as secoes. O playbook e muito
-  // vertical: a faixa roxa + tarja lateral deixam obvio onde uma secao termina
-  // e a proxima comeca. O prop `color` fica so por compatibilidade.
+  // Titulo PRETO (padrao), mas o ICONE e a tarja lateral usam a cor da secao —
+  // cada bloco ganha identidade propria sem virar arco-iris de texto. E o que
+  // diferencia "onde estou" num playbook muito vertical.
+  const _c = color || "#0f172a";
   return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:"linear-gradient(135deg,#f8fafc 0%,#eef1f5 100%)",borderBottom:"1px solid #e2e8f0",borderLeft:"4px solid #0f172a"}}>
-      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#334155 0%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px rgba(15,23,42,.28)",flexShrink:0}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px 14px 15px",background:"linear-gradient(135deg,"+_c+"08 0%,#f8fafc 100%)",borderBottom:"1px solid #e2e8f0",borderLeft:"4px solid "+_c}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+_c+" 0%,"+_pbDarken(_c)+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px "+_c+"3d",flexShrink:0}}>
         <Ico n={icon} size={18} color="#fff" strokeWidth={2.3}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
