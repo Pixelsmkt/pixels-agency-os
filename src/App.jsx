@@ -77806,7 +77806,7 @@ function _demCliChip(d){
   return {nome:nome, cor:cor, logo:L[idLogo]||logoUrl||L[raiz.id]||raiz.logoUrl||null, titulo:nome||raiz.name};
 }
 // Demanda que nasceu no portal do cliente (solicitação) — fica sincronizada lá.
-function _demDoPortal(d){ return String((d&&d.created_by)||"").indexOf("portal_")===0; }
+function _demDoPortal(d){ return /(^|:)portal_/.test(String((d&&d.created_by)||"")); }
 // Chip "Portal" (veio do cliente) ou "No portal" (interna que foi enviada pro portal)
 function _DemPortalTag({d, mini}){
   const _doPortal=_demDoPortal(d);
@@ -78831,7 +78831,8 @@ function _DemCkBtn({d}){
   </button>;
 }
 
-function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semCats}){
+function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semCats, onPortal}){
+  const [pv,setPv]=useState(!!(inicial&&inicial.portal_visivel));
   const _novo=!inicial || !inicial.id;
   // Categorias visíveis: `cats` restringe, `semCats` exclui (central esconde as de mídia)
   const _catsVisiveis=DEM_CATEGORIAS.filter(function(c){
@@ -79062,10 +79063,26 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
       </div>
 
       <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",minHeight:34}}>
+        <div style={{display:"flex",alignItems:"center",minHeight:34,gap:7,flexWrap:"wrap"}}>
+          {(!_novo&&inicial&&inicial.id)&&(
+            _demDoPortal(inicial)
+              ? <span title="Veio pelo portal — sincronizada automaticamente lá"
+                  style={{color:"#2563eb",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                  Veio pelo portal · sempre sincronizada
+                </span>
+              : (typeof onPortal==="function")&&<button type="button"
+                  onClick={function(){ onPortal(Object.assign({},inicial,{portal_visivel:pv})); setPv(!pv); }}
+                  title={pv?"O cliente está vendo essa demanda no portal — clique pra tirar de lá":"Libera essa demanda pro cliente acompanhar no portal"}
+                  style={{background:pv?"#f0fdfa":"#fff",border:"1px solid "+(pv?"#5eead4":"#e2e8f0"),borderRadius:9,
+                    padding:"7px 13px",color:pv?"#0d9488":"#475569",fontSize:11,fontWeight:800,cursor:"pointer",
+                    fontFamily:_DEM_FF,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  {pv?"No portal · Remover":"Enviar pro portal"}
+                </button>
+          )}
           {(!_novo&&f.status==="concluida"&&inicial&&inicial.id&&inicial.client_id)
-            ? <_DemCkBtn d={Object.assign({},inicial,{titulo:f.titulo||inicial.titulo,descricao:f.descricao})}/>
-            : <span/>}
+            &&<_DemCkBtn d={Object.assign({},inicial,{titulo:f.titulo||inicial.titulo,descricao:f.descricao})}/>}
         </div>
         <div style={{display:"flex",gap:8}}>
         <button onClick={onFechar} type="button"
@@ -79814,7 +79831,7 @@ function CDemandas({cl, canEdit, selUnit}){
     <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
       onAbrir={function(d){ setModal(d); }} onExcluir={_excluirDemanda}/>
 
-    {modal && <_DemandaModal inicial={modal} isMob={isMob}
+    {modal && <_DemandaModal inicial={modal} isMob={isMob} onPortal={_togglePortal}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
   </div>;
 }
@@ -80261,7 +80278,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     <_DemCtxMenu ctx={ctxMenu} onFechar={function(){setCtxMenu(null);}}
       onAbrir={function(d){ setModal(d); }} onExcluir={_excluirDemanda}/>
 
-    {modal && <_DemandaModal inicial={modal} isMob={_mob}
+    {modal && <_DemandaModal inicial={modal} isMob={_mob} onPortal={_togglePortal}
       clientes={_clientesOpcoes}
       cats={_soCats} semCats={_soCats?null:_DEM_CATS_MIDIA}
       onSalvar={_salvarDemanda} onFechar={function(){setModal(null);}}/>}
