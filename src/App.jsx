@@ -17014,7 +17014,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     const year=calMonth.getFullYear(),month=calMonth.getMonth()+1;
     // Respeita o filtro de cliente ativo: "todos" gera pra todos,
     // cliente específico gera só pra aquele cliente. Pra Bioter, considera unidades.
-    const clientesBase=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
+    const clientesBase=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
     const clientes=filterClient==="todos"?clientesBase:clientesBase.filter(function(c){return c.id===filterClient;});
     // Unidades Bioter individuais (cada uma tem sua própria config de posts)
     const unidadesBioter=(typeof BIOTER_GROUP_UNITS!=="undefined")?BIOTER_GROUP_UNITS:[];
@@ -17026,6 +17026,42 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     // Rastreador: cards já alocados em alguma unidade — evita um card de "Grupo
     // Bioter" ser usado pra 6 unidades diferentes (cada card só pode ser publicado uma vez).
     const cardsAlocados=new Set();
+    // Slots sem card real viram RASCUNHO pronto na data certa — a estrategista
+    // não precisa criar card por card, só abrir e preencher.
+    const collabDraftPorData={};
+    function _criarRascunhoSlot(slot, alvoId, alvoNome){
+      const _ehUnit=String(alvoId).indexOf("bioter_")===0;
+      const _cid=_ehUnit?"bioter":alvoId;
+      const _uk=_ehUnit?String(alvoId).replace(/^bioter_/,""):null;
+      const userName=(typeof CURRENT_USER!=="undefined")?CURRENT_USER.name:"Sistema";
+      const _lbl=slot.type==="video"?"Vídeo":slot.type==="arte"?"Arte":slot.type==="foto"?"Foto de obra":slot.type==="collab"?"Collab":"Post";
+      // Collab: UM card por data (bioterUnit "grupo" cobre todas as unidades)
+      if(slot.type==="collab"&&_ehUnit&&collabDraftPorData[slot.date]){
+        const _ja=collabDraftPorData[slot.date];
+        proposals.push({taskId:_ja.id,cardTitle:_ja.title,clientId:alvoId,clientName:alvoNome,contentType:"arte",isCollab:true,isNewShort:true,isDraft:true,status:"rascunhos",proposedDate:slot.date,slotType:"collab"});
+        return;
+      }
+      const newId="plan-"+slot.type+"-"+slot.date+"-"+(_uk||_cid)+"-"+Math.random().toString(36).slice(2,7);
+      const _now=new Date();
+      const card={
+        id:newId,
+        title:_lbl+" — "+(slot.type==="collab"&&_ehUnit?"Grupo Bioter":alvoNome),
+        client:_cid, bioterUnit:(slot.type==="collab"&&_ehUnit)?"grupo":_uk,
+        contentType:(slot.type==="collab"?"arte":slot.type),
+        tipo:(slot.type==="collab"?"arte":slot.type),
+        status:"rascunhos", _planDraft:true,
+        publishDate:slot.date, publishTime:"11:00", deadline:slot.date,
+        assignee:"ellen", assignees:["ellen"], watchers:[], priority:"normal",
+        files:[], tags:[], comments:[], checklist:[], cover:null, deletedAt:null,
+        referenceMonth:String(year)+"-"+String(month).padStart(2,"0"),
+        colEnteredAt:_now.toISOString(),
+        createdAt:_now.toLocaleDateString("pt-BR"), createdBy:userName,
+        timeline:[{type:"created",label:"Rascunho gerado pelo Plano do mês ("+_lbl+")",atFmt:_now.toLocaleDateString("pt-BR"),user:userName}],
+      };
+      newShortCards.push(card);
+      if(slot.type==="collab"&&_ehUnit) collabDraftPorData[slot.date]=card;
+      proposals.push({taskId:newId,cardTitle:card.title,clientId:alvoId,clientName:alvoNome,contentType:card.contentType,isCollab:slot.type==="collab",isNewShort:true,isDraft:true,status:"rascunhos",proposedDate:slot.date,slotType:slot.type});
+    }
     // Helper: processa um "alvo" (cliente normal ou unidade Bioter)
     function processarAlvo(alvoId, alvoNome, taskMatcherFn){
       const cfg=(typeof getPostsConfig==="function")?getPostsConfig(alvoId):{arte:1,video:1};
@@ -17096,9 +17132,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             slotType:slot.type,
           });
         } else {
-          // Slot ficou sem card real — registra pra alerta no preview.
+          // Slot sem card real → cria um RASCUNHO já na data e com o tipo certos.
           // (slot.type==="video_short" ja entrou no createShortCard la em cima.)
-          missingSlots.push({clientId:alvoId, clientName:alvoNome, slotType:slot.type, date:slot.date});
+          _criarRascunhoSlot(slot, alvoId, alvoNome);
         }
       });
     }
