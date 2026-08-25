@@ -77672,6 +77672,7 @@ const DEM_CATEGORIAS = [
   {id:"crm",        label:"CRM / automação",   cor:"#4f46e5", ico:"layers"},
   {id:"campanha",   label:"Campanha",          cor:"#dc2626", ico:"flame"},
   {id:"evento",     label:"Evento",            cor:"#16a34a", ico:"calendar"},
+  {id:"operacional",label:"Operacional",       cor:"#475569", ico:"settings"},
   {id:"outros",     label:"Outros",            cor:"#64748b", ico:"folder"},
 ];
 // Categorias que vivem na GESTÃO DE MÍDIA (fora da central de Demandas)
