@@ -1224,6 +1224,42 @@ const ACCESS_STORE={
   guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true,verPlaybooks:true},
 };
 
+/* ── Perms padrão do cargo SOCIAL MEDIA (ex.: Luiza) ─────────────────────
+   Um nível abaixo da Hellen: vê a Linha de produção inteira (todas as colunas,
+   incl. Aprovado/Agendado/Publicado pra agendar, publicar e conferir), arrasta
+   cards e baixa materiais — mas NÃO cria, edita nem exclui demandas, sem
+   lixeira, sem aprovações, sem clientes/financeiro/acessos. */
+const SOCIAL_MEDIA_PERMS={...DEFAULT_PERMS,
+  verDemandas:true, arrastarCards:true, verTodosKanban:true, filtroCliente:true,
+  colDemanda:true, colExecucao:true, colAjustes:true, colAvaliacao:true,
+  colAprovado:true, colAprovacaoFinal:true, colAgendado:true, colPublicado:true, colPausado:true,
+  verChat:true, enviarMensagem:true, verCanalGeral:true, verCanalSocial:true, verCanalAlertas:true,
+  verNotificacoes:true, verCalendario:true, verCalPub:true, verPlaybooks:true,
+};
+
+/* ── ESCOPO POR CARGO — mostrado como card no dashboard do colaborador ── */
+const ESCOPO_CARGOS={
+  social:{
+    cargo:"Social media",
+    faz:[
+      "Agendar e publicar conteúdos previamente aprovados, conforme o calendário editorial",
+      "Publicar Stories utilizando materiais, textos e orientações disponibilizados pela equipe",
+      "Distribuir os conteúdos aprovados nos grupos de WhatsApp indicados, usando os materiais disponíveis no app",
+      "Acompanhar comentários nas redes e responder interações simples e institucionais — dúvidas técnicas, comerciais ou sensíveis vão pra equipe responsável",
+      "Acompanhar trends, formatos e oportunidades relevantes e sinalizar à Estrategista de Conteúdo e/ou à direção",
+      "Conferir se os conteúdos programados foram publicados corretamente e informar qualquer falha operacional",
+    ],
+    fora:[
+      "Planejamento editorial e definição de estratégia",
+      "Criação de copies e roteiros",
+      "Design e edição de vídeo",
+      "Gestão de mídia paga",
+      "Atendimento comercial",
+      "Produção de sites ou aplicativos",
+    ],
+  },
+};
+
 /* ─── SMART FORMAT TITLE — auto-formata título do card ─── */
 const TITLE_STOPWORDS_PTBR = new Set([
   "de","da","do","das","dos","e","ou","a","o","as","os",
@@ -5239,13 +5275,14 @@ function RenderDash({user,isViewing=false,tasks,setTasks,notifs,isMob}){
     case"gestor":      return <DashGestor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
     case"designer":    return <DashDesigner    user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
     case"editor":      return <DashEditor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    case"social":      return <DashEditor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
     default:           return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
   }
 }
 
 // DashColaborador unifica DashCoordinator, DashGestor, DashDesigner, DashEditor
 // icon é definido pelo campo user.dash via DASH_ICONS
-const DASH_ICONS={coordinator:"📱",gestor:"📊",designer:"🎨",editor:"🎬"};
+const DASH_ICONS={coordinator:"📱",gestor:"📊",designer:"🎨",editor:"🎬",social:"📲"};
 function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs,isMob}){
   // Tasks DELE (individual): onde ele é o responsável principal
   const tasks=(propTasks||[]).filter(t=>t.assignee===user.id||(t.assignees||[]).includes(user.id));
@@ -5257,14 +5294,69 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
   const supervisedTasks=supervisedUsers.length>0
     ?(propTasks||[]).filter(t=>!t.deletedAt&&(supervisedUsers.includes(t.assignee)||supervisedUsers.some(s=>(t.assignees||[]).includes(s))))
     :[];
+  const _escopo=(typeof ESCOPO_CARGOS!=="undefined")?ESCOPO_CARGOS[user.dash]:null;
   // Designer / Editor (freelancer com pagamento por demanda) -> dashboard V2 moderno
-  if(user.pagamentoPorDemanda===true && typeof DashColabV2==="function"){
-    return <DashColabV2 user={user} tasks={tasks} allTasks={allTasks}
-      setTasks={setTasks} isViewing={isViewing} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
-  }
-  return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
-    supervisedTasks={supervisedTasks} supervisedUsers={supervisedUsers}
-    setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
+  const _core=(user.pagamentoPorDemanda===true && typeof DashColabV2==="function")
+    ? <DashColabV2 user={user} tasks={tasks} allTasks={allTasks}
+        setTasks={setTasks} isViewing={isViewing} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>
+    : <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
+        supervisedTasks={supervisedTasks} supervisedUsers={supervisedUsers}
+        setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
+  if(!_escopo) return _core;
+  return <div style={{display:"flex",flexDirection:"column"}}>
+    <_EscopoCargoCard escopo={_escopo} uid={user.id} isMob={isMob}/>
+    {_core}
+  </div>;
+}
+
+/* ── Card "Seu escopo" — deixa preto no branco o que é do cargo e o que não é.
+     Recolhível; estado lembrado por usuário no localStorage. ── */
+function _EscopoCargoCard({escopo, uid, isMob}){
+  const [aberto,setAberto]=useState(function(){
+    try{ return localStorage.getItem("pixels-escopo-recolhido-"+uid)!=="1"; }catch(_){ return true; }
+  });
+  const _toggle=function(){
+    setAberto(function(p){
+      try{ localStorage.setItem("pixels-escopo-recolhido-"+uid, p?"1":"0"); }catch(_){}
+      return !p;
+    });
+  };
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,margin:"14px 18px 0",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",borderLeft:"4px solid #6366f1"}}>
+    <div onClick={_toggle} style={{padding:"13px 18px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",background:aberto?"#fafbff":"#fff"}}>
+      <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,#6366f1,#4f46e5)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px rgba(99,102,241,.3)"}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Seu escopo — {escopo.cargo}</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>O que é seu e o que segue com as outras cadeiras do time</div>
+      </div>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    {aberto&&<div style={{padding:"4px 18px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:16}}>
+      <div>
+        <div style={{color:"#16a34a",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Faz parte do seu dia a dia</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {escopo.faz.map(function(t,i){
+            return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><polyline points="20 6 9 17 4 12"/></svg>
+              <span style={{color:"#334155",fontSize:12,lineHeight:1.55,fontWeight:500}}>{t}</span>
+            </div>;
+          })}
+        </div>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Fora do escopo — segue com o time</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {escopo.fora.map(function(t,i){
+            return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <span style={{color:"#94a3b8",fontSize:12,lineHeight:1.55,fontWeight:500}}>{t}</span>
+            </div>;
+          })}
+        </div>
+      </div>
+    </div>}
+  </div>;
 }
 // Aliases para compatibilidade com RenderDash
 // DashCoordinator NAO e mais alias — agora e funcao propria em 26_dash_gustavo.jsx
@@ -30817,7 +30909,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               });
             }
             if(typeof ACCESS_STORE!=="undefined" && !ACCESS_STORE[payload.team_id]){
-              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
+              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,social:(typeof SOCIAL_MEDIA_PERMS!=="undefined"?SOCIAL_MEDIA_PERMS:ACCESS_STORE.ellen),gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
               ACCESS_STORE[payload.team_id]={...(dashDefaults[payload.dash]||DEFAULT_PERMS)};
             }
             if(data.photo_url){
@@ -30843,6 +30935,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         {id:"designer",label:"Design"},
         {id:"editor",label:"Edição de vídeo"},
         {id:"coordinator",label:"Estratégia"},
+        {id:"social",label:"Social media"},
         {id:"gestor",label:"Gestão de mídia"},
         {id:"partner",label:"Gestão"},
       ];
@@ -45016,6 +45109,7 @@ export default function AgencyOS(){
                 designer:ACCESS_STORE.andre,
                 editor:ACCESS_STORE.guilherme,
                 coordinator:ACCESS_STORE.ellen,
+                social:(typeof SOCIAL_MEDIA_PERMS!=="undefined"?SOCIAL_MEDIA_PERMS:ACCESS_STORE.ellen),
                 gestor:ACCESS_STORE.erick,
                 partner:ACCESS_STORE.vinicius,
               };
@@ -46568,7 +46662,7 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
               TEAM.push({id:payload.team_id,name:payload.name,role:payload.role,av:payload.av,color:payload.color,level:payload.level,status:"online",dash:payload.dash,canDelete:false,canPixelsIA:false,pagamentoPorDemanda:true,supervisor:["gustavo","vinicius","hellen"],_fromSupabase:true});
             }
             if(typeof ACCESS_STORE!=="undefined"&&!ACCESS_STORE[payload.team_id]){
-              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
+              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,social:(typeof SOCIAL_MEDIA_PERMS!=="undefined"?SOCIAL_MEDIA_PERMS:ACCESS_STORE.ellen),gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
               ACCESS_STORE[payload.team_id]=Object.assign({},(dashDefaults[payload.dash]||(typeof DEFAULT_PERMS!=="undefined"?DEFAULT_PERMS:{})));
             }
             if(data.photo_url){
@@ -46585,7 +46679,7 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
           setNovoBusy(false);
         }
       };
-      const DASH_OPTS=[{id:"designer",label:"Design"},{id:"editor",label:"Edição de vídeo"},{id:"coordinator",label:"Estratégia"},{id:"gestor",label:"Gestão de mídia"},{id:"partner",label:"Gestão"}];
+      const DASH_OPTS=[{id:"designer",label:"Design"},{id:"editor",label:"Edição de vídeo"},{id:"coordinator",label:"Estratégia"},{id:"social",label:"Social media"},{id:"gestor",label:"Gestão de mídia"},{id:"partner",label:"Gestão"}];
       const CORS=["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#0ea5e9","#16a34a","#f59e0b","#ef4444","#475569"];
       return <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={function(){if(!novoBusy)setNovoOpen(false);}}>
         <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:540,boxShadow:"0 24px 60px rgba(0,0,0,0.35)",overflow:"hidden",maxHeight:"92vh",display:"flex",flexDirection:"column",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -48574,7 +48668,6 @@ const PORTAL_ALL_TABS=[
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"parcerias",   ico:"users",       label:"Parcerias"},
   {id:"concorrencia",ico:"eye",         label:"Concorrência"},
-  {id:"chat",        ico:"message",     label:"Chat"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
 ];
 const INTERNAS_COLS_RADAR_P=[
@@ -54393,8 +54486,6 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             hint="Mapeamento de influencers e estratégias locais" badges={[]}/>
           <_NavCard tab="concorrencia" accent="#64748b" icon="eye" title="Concorrência"
             hint="Movimentos dos seus concorrentes no digital" badges={[]}/>
-          <_NavCard tab="chat" accent="#9F43F6" icon="message" title="Chat"
-            hint="Fale direto com a equipe da Pixels" badges={[]}/>
         </div>
 
         {/* Próximas publicações — só se houver */}
