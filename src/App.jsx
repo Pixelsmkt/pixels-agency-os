@@ -507,7 +507,14 @@ function buildMarco(input){
    substituindo um arte/video.
    Override por cliente via localStorage["pixels-posts-config-<clientId>"].
 ─────────────────────────────────────────────────────── */
-const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrShortAlternado:false, fotoObraQuinzenal:false, doisAlternados:false};
+const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrShortAlternado:false, fotoObraQuinzenal:false, doisAlternados:false, umAlternado:false, dias:null};
+
+// Dias/ritmo personalizados POR CLIENTE (id do CLIENTS). dias = dias da semana
+// preferidos (1=seg ... 6=sáb). umAlternado = 1 post/semana alternando vídeo/arte.
+const CLIENT_POSTS_PRESETS = {
+  // VetService: 1 post por semana, QUARTA-feira (alterna vídeo/arte por semana)
+  vetservice: {arte:0, video:0, umAlternado:true, dias:[3]},
+};
 
 // Presets específicos por unidade Bioter (sobrescreve o default)
 // Principais (3/semana): 1 arte + 1 vídeo + 1 collab (foto-obra quinzenal substitui o vídeo)
@@ -566,6 +573,8 @@ function getPostsConfig(clientId){
   }catch(e){}
   // 2. É unidade Bioter? Usa preset
   if(BIOTER_POSTS_PRESETS[clientId])return Object.assign({},POSTS_PADRAO,BIOTER_POSTS_PRESETS[clientId]);
+  // 3. Cliente com ritmo/dias próprios (ex: VetService)
+  if(typeof CLIENT_POSTS_PRESETS!=="undefined"&&CLIENT_POSTS_PRESETS[clientId])return Object.assign({},POSTS_PADRAO,CLIENT_POSTS_PRESETS[clientId]);
   return Object.assign({},POSTS_PADRAO);
 }
 function savePostsConfig(clientId, cfg){
@@ -602,6 +611,10 @@ function generateMonthPlanDates(year, month, postsConfig){
     if(cfg.doisAlternados){
       if(weekIndex%2===0)fotos+=2; else shorts+=2;
     }
+    // 1 post/semana alternando vídeo/arte (ex: VetService)
+    if(cfg.umAlternado){
+      if(weekIndex%2===0)artes++; else videos++;
+    }
     const totalSemana=artes+videos+collabs+fotos+shorts;
     if(totalSemana<=0){weekIndex++;cur.setDate(cur.getDate()+7);continue;}
     // ── DIAS FIXOS POR TIPO (Bioter): sincroniza as unidades entre si ──
@@ -617,8 +630,9 @@ function generateMonthPlanDates(year, month, postsConfig){
     while(shorts>0){_pushDia(1,"video_short");shorts--;}
     while(collabs>0){_pushDia(3,"collab");collabs--;}
     while(fotos>0){_pushDia(4,"foto");fotos--;}
-    // Arte/vídeo (padrão dos clientes): SEGUNDA e QUINTA; 3º slot quarta.
-    const dayOrder=[1,4,3,2,5]; // 2ª, 5ª, 4ª, 3ª, 6ª
+    // Arte/vídeo: dias preferidos do cliente (cfg.dias) ou o padrão SEGUNDA e QUINTA.
+    const _diasPref=(Array.isArray(cfg.dias)&&cfg.dias.length)?cfg.dias.slice():[1,4];
+    const dayOrder=_diasPref.concat([3,2,5,6].filter(function(d){return _diasPref.indexOf(d)<0;}));
     let slotIdx=0;
     while((artes>0||videos>0)&&slotIdx<dayOrder.length){
       const dayOffset=dayOrder[slotIdx]-1;
@@ -17038,7 +17052,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     // Slots sem card real viram RASCUNHO pronto na data certa — a estrategista
     // não precisa criar card por card, só abrir e preencher.
     const collabDraftPorData={};
+    const collabDiaOcupado={};
     function _criarRascunhoSlot(slot, alvoId, alvoNome){
+      // Collab REAL (card do Grupo) já ocupou esse dia → não cria nada em duplicidade
+      if(slot.type==="collab"&&collabDiaOcupado[slot.date])return;
       const _ehUnit=String(alvoId).indexOf("bioter_")===0;
       const _cid=_ehUnit?"bioter":alvoId;
       const _uk=_ehUnit?String(alvoId).replace(/^bioter_/,""):null;
@@ -17085,7 +17102,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           && !t.publishDate
           && !cardsAlocados.has(t.id);
       });
-      if(cards.length===0)return;
+      // SEM early-return quando cards=0: cliente/unidade sem card nenhum
+      // (ex: Acreforte, Toledo) ainda gera rascunhos e shorts nos slots.
       // Separar por tipo: collab = card de Grupo Bioter ou Bioter Brasil
       // (vale pra qualquer unidade Bioter coberta), demais = cards normais
       const isCollabFn=(typeof isBioterCollabCard==="function")?isBioterCollabCard:function(){return false;};
@@ -17121,14 +17139,17 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         else if(slot.type==="arte"&&artes[aIdx])card=artes[aIdx++];
         else if(slot.type==="video"&&videos[vIdx])card=videos[vIdx++];
         else if(slot.type==="foto"&&fotos[fIdx])card=fotos[fIdx++];
-        // Fallback: usa o que tiver (alterna conforme disponibilidade)
-        if(!card&&semTipo[sIdx])card=semTipo[sIdx++];
-        if(!card&&slot.type!=="collab"&&collabs[cIdx])card=collabs[cIdx++];
-        if(!card&&artes[aIdx])card=artes[aIdx++];
-        if(!card&&fotos[fIdx])card=fotos[fIdx++];
-        if(!card&&videos[vIdx])card=videos[vIdx++];
+        // Slots ESTRITOS: dia de collab é SÓ o grupo (nada das unidades),
+        // dia de foto de obra é só foto. Sem card do tipo → vira rascunho.
+        const _estrito=(slot.type==="collab"||slot.type==="foto"||slot.type==="video_short");
+        if(!_estrito){
+          if(!card&&semTipo[sIdx])card=semTipo[sIdx++];
+          if(!card&&artes[aIdx])card=artes[aIdx++];
+          if(!card&&videos[vIdx])card=videos[vIdx++];
+        }
         if(card){
           cardsAlocados.add(card.id);
+          if(slot.type==="collab")collabDiaOcupado[slot.date]=true;
           proposals.push({
             taskId:card.id,
             cardTitle:card.title,
