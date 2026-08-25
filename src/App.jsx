@@ -46275,6 +46275,9 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
   });
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({});
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [novoBusy, setNovoBusy] = useState(false);
+  const [novo, setNovo] = useState({name:"",email:"",password:"",team_id:"",team_id_touched:false,role:"",dash:"designer",color:"#ec4899",level:3,photo_base64:"",photo_mime:""});
 
   // ── FIX perda de dados: hidrata do Supabase no mount ──
   // Antes, esta tela lia SÓ do localStorage. Se o sócio mudasse de PC ou limpasse cache,
@@ -46294,11 +46297,32 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
         if(error && error.code!=="PGRST116"){ console.warn("[Time] load team_data:", error.message); return; }
         if(cancelled) return;
         const fromSb = (data && data.dados && typeof data.dados==="object") ? data.dados : {};
+        // Fallback: puxa o que os colaboradores ja preencheram no proprio perfil (profiles.profile_data)
+        let fromProf = {};
+        try{
+          const {data:_rows} = await window._sb.from("profiles").select("team_id,profile_data").not("team_id","is",null);
+          (_rows||[]).forEach(function(r){
+            const pd = r && r.profile_data;
+            if(!r || !r.team_id || !pd || typeof pd!=="object") return;
+            const m = {};
+            if(pd.funcao)   m.cargo = pd.funcao;
+            if(pd.telefone) m.telefone = pd.telefone;
+            if(pd.email)    m.email = pd.email;
+            if(pd.cidade)   m.cidade = pd.cidade + (pd.estado?("/"+pd.estado):"");
+            if(pd.nascimento){
+              const _p = String(pd.nascimento).split("-");
+              m.data_nascimento = (_p.length===3) ? (_p[2]+"/"+_p[1]) : String(pd.nascimento);
+            }
+            if(pd.bio||pd.obs) m.bio = pd.bio||pd.obs;
+            if(Object.keys(m).length) fromProf[r.team_id] = m;
+          });
+        }catch(_){}
+        if(cancelled) return;
         setExtras(function(prev){
           const merged = {};
-          const allUids = new Set([].concat(Object.keys(fromSb), Object.keys(prev||{})));
+          const allUids = new Set([].concat(Object.keys(fromProf), Object.keys(fromSb), Object.keys(prev||{})));
           allUids.forEach(function(uid){
-            merged[uid] = Object.assign({}, fromSb[uid]||{}, (prev||{})[uid]||{});
+            merged[uid] = Object.assign({}, fromProf[uid]||{}, fromSb[uid]||{}, (prev||{})[uid]||{});
           });
           try{ localStorage.setItem("pixels-team-data", JSON.stringify(merged)); }catch(_){}
           return merged;
@@ -46385,7 +46409,7 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <div style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{_baseTeam.length} colaboradores</div>
-        <button type="button" onClick={function(){if(typeof onNavTo==="function")onNavTo("acessos");}}
+        <button type="button" onClick={function(){setNovoOpen(true);}}
           style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 14px rgba(124,58,237,.32)",display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
           <Ico n="plus" size={13} color="#fff"/> Novo colaborador
         </button>
@@ -46494,6 +46518,156 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
         </div>;
       })}
     </div>
+
+    {/* ── NOVO COLABORADOR — cria login + perfil daqui mesmo (mesma edge function do Acessos) ── */}
+    {novoOpen&&(function(){
+      const inp={background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif"};
+      const lbl={color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+      const _set=function(patch){setNovo(function(p){return Object.assign({},p,patch);});};
+      const _slug=function(s){return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]/g,"");};
+      const onPickFoto=function(file){
+        if(!file)return;
+        const r=new FileReader();
+        r.onload=function(){_set({photo_base64:String(r.result||""),photo_mime:file.type||"image/png"});};
+        r.readAsDataURL(file);
+      };
+      const submit=async function(){
+        if(!novo.name.trim()||!novo.email.trim()||!novo.password.trim()||!novo.team_id.trim()){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha nome, email, senha e ID curto.");
+          return;
+        }
+        setNovoBusy(true);
+        try{
+          const sb=window._sb;
+          const {data:sess}=await sb.auth.getSession();
+          const tok=sess&&sess.session?sess.session.access_token:null;
+          const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+          const payload={
+            email:novo.email.trim().toLowerCase(),
+            password:novo.password,
+            name:novo.name.trim(),
+            role:novo.role||"Colaborador",
+            dash:novo.dash,
+            color:novo.color,
+            av:(novo.name.trim()[0]||"?").toUpperCase(),
+            level:Number(novo.level)||3,
+            team_id:novo.team_id.trim().toLowerCase(),
+            photo_base64:novo.photo_base64,
+            photo_mime:novo.photo_mime,
+          };
+          const res=await fetch(url+"/functions/v1/create-collaborator",{method:"POST",headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},body:JSON.stringify(payload)});
+          const data=await res.json();
+          if(!res.ok){
+            if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao criar colaborador.");
+            setNovoBusy(false);
+            return;
+          }
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
+          try{
+            if(typeof TEAM!=="undefined"&&!TEAM.find(function(t){return t.id===payload.team_id;})){
+              TEAM.push({id:payload.team_id,name:payload.name,role:payload.role,av:payload.av,color:payload.color,level:payload.level,status:"online",dash:payload.dash,canDelete:false,canPixelsIA:false,pagamentoPorDemanda:true,supervisor:["gustavo","vinicius","hellen"],_fromSupabase:true});
+            }
+            if(typeof ACCESS_STORE!=="undefined"&&!ACCESS_STORE[payload.team_id]){
+              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
+              ACCESS_STORE[payload.team_id]=Object.assign({},(dashDefaults[payload.dash]||(typeof DEFAULT_PERMS!=="undefined"?DEFAULT_PERMS:{})));
+            }
+            if(data.photo_url){
+              try{localStorage.setItem("pixels-selfprofile-"+payload.team_id,JSON.stringify({photo:data.photo_url,name:payload.name,role:payload.role}));}catch(_){}
+            }
+            window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+          }catch(e){console.warn(e);}
+          if(novo.role) _save(payload.team_id,{cargo:novo.role});
+          setNovoOpen(false);
+          setNovoBusy(false);
+          setNovo({name:"",email:"",password:"",team_id:"",team_id_touched:false,role:"",dash:"designer",color:"#ec4899",level:3,photo_base64:"",photo_mime:""});
+        }catch(e){
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro de conexão.");
+          setNovoBusy(false);
+        }
+      };
+      const DASH_OPTS=[{id:"designer",label:"Design"},{id:"editor",label:"Edição de vídeo"},{id:"coordinator",label:"Estratégia"},{id:"gestor",label:"Gestão de mídia"},{id:"partner",label:"Gestão"}];
+      const CORS=["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#0ea5e9","#16a34a","#f59e0b","#ef4444","#475569"];
+      return <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={function(){if(!novoBusy)setNovoOpen(false);}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:540,boxShadow:"0 24px 60px rgba(0,0,0,0.35)",overflow:"hidden",maxHeight:"92vh",display:"flex",flexDirection:"column",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div style={{background:"linear-gradient(135deg,#a855f7 0%,#7c3aed 55%,#1e1b4b 100%)",padding:"20px 24px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Novo colaborador</div>
+              <div style={{color:"rgba(255,255,255,.78)",fontSize:12,marginTop:2,fontWeight:500}}>Cria login + perfil direto daqui</div>
+            </div>
+            <button onClick={function(){if(!novoBusy)setNovoOpen(false);}}
+              style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,width:32,height:32,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:13,overflowY:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:64,height:64,borderRadius:"50%",background:novo.photo_base64?("url("+novo.photo_base64+") center/cover"):novo.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:24,flexShrink:0,border:"3px solid #f1f5f9"}}>
+                {!novo.photo_base64&&((novo.name[0]||"?").toUpperCase())}
+              </div>
+              <div style={{flex:1}}>
+                <div style={lbl}>Foto de perfil (opcional)</div>
+                <label style={{display:"inline-block",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:600,color:"#475569",cursor:"pointer"}}>
+                  {novo.photo_base64?"Trocar foto":"Escolher arquivo"}
+                  <input type="file" accept="image/*" onChange={function(e){onPickFoto(e.target.files&&e.target.files[0]);}} style={{display:"none"}}/>
+                </label>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:11}}>
+              <div style={{gridColumn:"span 2"}}>
+                <div style={lbl}>Nome</div>
+                <input value={novo.name} placeholder="Nome do colaborador"
+                  onChange={function(e){const v=e.target.value;_set(novo.team_id_touched?{name:v}:{name:v,team_id:_slug(v.split(" ")[0])});}} style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>E-mail (login)</div>
+                <input value={novo.email} placeholder="colab@pixelsmarketing.com.br" onChange={function(e){_set({email:e.target.value});}} style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>Senha</div>
+                <input value={novo.password} placeholder="Senha de acesso" onChange={function(e){_set({password:e.target.value});}} style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>ID curto</div>
+                <input value={novo.team_id} placeholder="ex: joao" onChange={function(e){_set({team_id:_slug(e.target.value),team_id_touched:true});}} style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>Setor</div>
+                <select value={novo.dash} onChange={function(e){_set({dash:e.target.value});}} style={Object.assign({},inp,{cursor:"pointer"})}>
+                  {DASH_OPTS.map(function(o){return <option key={o.id} value={o.id}>{o.label}</option>;})}
+                </select>
+              </div>
+              <div>
+                <div style={lbl}>Cargo</div>
+                <input value={novo.role} placeholder="Designer Sênior" onChange={function(e){_set({role:e.target.value});}} style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>Nível de acesso</div>
+                <select value={novo.level} onChange={function(e){_set({level:Number(e.target.value)});}} style={Object.assign({},inp,{cursor:"pointer"})}>
+                  <option value={3}>Colaborador</option>
+                  <option value={2}>Coordenação</option>
+                  <option value={1}>Sócio (acesso total)</option>
+                </select>
+              </div>
+              <div style={{gridColumn:"span 2"}}>
+                <div style={lbl}>Cor</div>
+                <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                  {CORS.map(function(c){return <button key={c} type="button" onClick={function(){_set({color:c});}}
+                    style={{width:26,height:26,borderRadius:8,background:c,border:novo.color===c?"3px solid #0f172a":"3px solid transparent",cursor:"pointer",padding:0}}/>;})}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,padding:"14px 22px",borderTop:"1px solid #f1f5f9",justifyContent:"flex-end",background:"#fafbfc"}}>
+            <button onClick={function(){if(!novoBusy)setNovoOpen(false);}} disabled={novoBusy}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 18px",fontSize:12.5,fontWeight:600,color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button onClick={submit} disabled={novoBusy}
+              style={{background:novoBusy?"#a78bfa":"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:9,padding:"9px 20px",fontSize:12.5,fontWeight:700,color:"#fff",cursor:novoBusy?"default":"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(124,58,237,.32)"}}>
+              {novoBusy?"Criando...":"Criar colaborador"}
+            </button>
+          </div>
+        </div>
+      </div>;
+    })()}
   </div>;
 }
 
@@ -77748,7 +77922,7 @@ function _DemandaCard({d, aberto, onToggle, onEditar, onExcluir, onSalvar, onPor
           {d.prazo && !_concluida && <span title={"Prazo final: "+_demBR(d.prazo)}
             style={{color:_prazo?_prazo.cor:"#64748b",fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
             {typeof Ico==="function"&&<Ico n="flame" size={11} color="currentColor"/>}
-            {_demBRCurto(d.prazo)}
+            {_demBRCurto(d.prazo)}{d.hora?(" · "+String(d.hora).slice(0,5)):""}
           </span>}
           {_prazo && !_concluida && (function(){
             const _dd=_demDias(d.prazo);
@@ -77937,7 +78111,7 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(120px,1fr))",gap:10}}>
       {[
         {l:"Início",     v:_demBR(d.data_inicio)||"—"},
-        {l:"Prazo final",v:_demBR(d.prazo)||"—"},
+        {l:"Prazo final",v:(_demBR(d.prazo)||"—")+(d.hora?(" às "+String(d.hora).slice(0,5)):"")},
         {l:"Prioridade", v:prio.label, cor:prio.cor},
         {l:"Responsável",v:(resp&&resp.name)||"—"},
         {l:"Progresso",  v:prog.pct+"%", cor:prog.pct>=100?"#16a34a":cat.cor},
@@ -78494,6 +78668,78 @@ function _DemSelectResp({valor, onChange, compacto}){
 /* ═══════════════════════════════════════════════════════════════════════
    MODAL — nova / editar demanda
 ═══════════════════════════════════════════════════════════════════════ */
+/* Botão "Enviar pro Checkpoint" auto-suficiente — checa/insere/remove em client_milestones
+   via metrics->>from_demanda. Aparece na ficha da demanda quando ela está concluída. */
+function _DemCkBtn({d}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const [st,setSt]=useState("check"); // check | fora | dentro | busy
+  useEffect(function(){
+    let vivo=true;
+    (async function(){
+      try{
+        if(!sb||!d||!d.id||!d.client_id){ if(vivo)setSt("fora"); return; }
+        const r=await sb.from("client_milestones").select("id")
+          .eq("client_id",d.client_id).eq("metrics->>from_demanda",String(d.id)).limit(1);
+        if(!vivo) return;
+        setSt(r&&r.data&&r.data.length?"dentro":"fora");
+      }catch(_){ if(vivo)setSt("fora"); }
+    })();
+    return function(){vivo=false;};
+  },[d&&d.id]);
+  const _enviar=async function(){
+    if(!sb||st==="busy") return;
+    setSt("busy");
+    try{
+      const _quando=(typeof _demConcluidaEm==="function")?_demConcluidaEm(d):null;
+      const _data=_quando?String(_quando).slice(0,10):new Date().toISOString().slice(0,10);
+      const _met={from_demanda:d.id};
+      if(d.unidade&&d.unidade!=="grupo") _met.unit=d.unidade;
+      const r=await sb.from("client_milestones").insert({
+        client_id:d.client_id, date:_data, type:"entrega",
+        title:d.titulo||"Entrega", description:d.descricao||null, metrics:_met,
+        created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:""
+      });
+      if(r&&r.error) throw r.error;
+      setSt("dentro");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Enviada pros Checkpoints do cliente.");
+    }catch(e){
+      setSt("fora");
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro enviando: "+((e&&e.message)||""),4500);
+    }
+  };
+  const _desfazer=async function(){
+    if(!sb||st==="busy") return;
+    let ok=true;
+    if(typeof pixelsConfirm==="function")
+      ok=await pixelsConfirm({title:"Tirar dos Checkpoints?",message:'"'+(d.titulo||"")+'" sai dos Checkpoints do cliente.',danger:true});
+    if(!ok) return;
+    setSt("busy");
+    try{
+      const r=await sb.from("client_milestones").delete()
+        .eq("client_id",d.client_id).eq("metrics->>from_demanda",String(d.id));
+      if(r&&r.error) throw r.error;
+      setSt("fora");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Removida dos Checkpoints.");
+    }catch(e){
+      setSt("dentro");
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro removendo: "+((e&&e.message)||""),4500);
+    }
+  };
+  if(st==="check") return null;
+  const _dentro=st==="dentro";
+  const _busy=st==="busy";
+  return <button type="button" disabled={_busy} onClick={_dentro?_desfazer:_enviar}
+    title={_dentro?"Está nos Checkpoints do cliente — clique pra desfazer":"Registra essa entrega nos Checkpoints do cliente (calendário e portal)"}
+    style={_dentro
+      ? {background:"#f0fdfa",color:"#0d9488",border:"1px solid #99f6e4",borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,cursor:_busy?"wait":"pointer",fontFamily:_DEM_FF,opacity:_busy?.6:1}
+      : {background:"#fff",color:"#0d9488",border:"1px solid #5eead4",borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,cursor:_busy?"wait":"pointer",fontFamily:_DEM_FF,opacity:_busy?.6:1}}>
+    {_dentro
+      ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12"/><circle cx="12" cy="8" r="6"/></svg>}
+    {_busy?"Aguarde…":(_dentro?"No Checkpoint · desfazer":"Enviar pro Checkpoint")}
+  </button>;
+}
+
 function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semCats}){
   const _novo=!inicial || !inicial.id;
   // Categorias visíveis: `cats` restringe, `semCats` exclui (central esconde as de mídia)
@@ -78505,7 +78751,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   const [f,setF]=useState(function(){
     const _base=Object.assign({
       titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
-      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"",
+      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"", hora:"",
     }, inicial||{});
     // Editando demanda de unidade Bioter: o select de cliente usa "bioter::<unidade>"
     if(_base.client_id==="bioter"&&_base.unidade&&_base.unidade!=="grupo")
@@ -78689,7 +78935,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"1fr 1fr .72fr 1fr",gap:10}}>
           <div>
             <div style={_DEM_LBL}>Data de início</div>
             <_DemDataInput valor={f.data_inicio||""} onChange={function(v){set("data_inicio",v);}} placeholder="Hoje"/>
@@ -78697,6 +78943,12 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           <div>
             <div style={_DEM_LBL}>Prazo final</div>
             <_DemDataInput valor={f.prazo||""} onChange={function(v){set("prazo",v);}} placeholder="Sem prazo"/>
+          </div>
+          <div>
+            <div style={_DEM_LBL}>Horário</div>
+            <input type="time" value={f.hora||""} onChange={function(e){set("hora",e.target.value);}}
+              onFocus={_demFoco} onBlur={_demBlur}
+              style={Object.assign({},_DEM_INP,{cursor:"pointer",fontFeatureSettings:"'tnum'"})}/>
           </div>
           <div>
             <div style={_DEM_LBL}>Status</div>
@@ -78708,7 +78960,13 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
         </div>
       </div>
 
-      <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
+      <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",minHeight:34}}>
+          {(!_novo&&f.status==="concluida"&&inicial&&inicial.id&&inicial.client_id)
+            ? <_DemCkBtn d={Object.assign({},inicial,{titulo:f.titulo||inicial.titulo,descricao:f.descricao})}/>
+            : <span/>}
+        </div>
+        <div style={{display:"flex",gap:8}}>
         <button onClick={onFechar} type="button"
           style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",
             fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:_DEM_FF}}>Cancelar</button>
@@ -78719,6 +78977,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           {_novo?"Criar demanda":"Salvar"}
         </button>
+        </div>
       </div>
     </div>
   </div>;
@@ -79108,6 +79367,7 @@ function CDemandas({cl, canEdit, selUnit}){
       responsavel:dados.responsavel||"",
       data_inicio:dados.data_inicio||null,
       prazo:dados.prazo||null,
+      hora:dados.hora||null,
       // Editando: preserva a unidade original da demanda (não muda de unidade
       // só porque a edição foi feita vendo o grupo). Criando: usa a unidade da vista.
       unidade:_isBioter?((dados.id&&typeof dados.unidade==="string")?dados.unidade:(_unidade==="grupo"?"":_unidade||"")):"",
@@ -79581,6 +79841,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
       responsavel:dados.responsavel||"",
       data_inicio:dados.data_inicio||null,
       prazo:dados.prazo||null,
+      hora:dados.hora||null,
       updated_at:new Date().toISOString(),
     };
     if(Array.isArray(dados.tarefas)) _payload.tarefas=dados.tarefas;
