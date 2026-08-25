@@ -522,11 +522,12 @@ const CLIENT_POSTS_PRESETS = {
 // "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
 // (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
 const BIOTER_POSTS_PRESETS = {
-  // Principais: 1 collab (quarta) + 1 post alternando POR SEMANA — semana A:
-  // short (segunda, as três juntas); semana B: foto de obra (quinta, as três juntas)
-  bioter_chapeco:    {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
-  bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
-  bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
+  // Principais: 3 posts/sem = 1 collab (quarta) + 1 alternando por semana
+  // (short segunda / foto de obra quinta, as três juntas) + 1 arte/vídeo
+  // (alterna por semana, cai no dia livre: seg na semana de foto, qui na de short)
+  bioter_chapeco:    {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, umAlternado:true, fotoObraQuinzenal:false},
+  bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, umAlternado:true, fotoObraQuinzenal:false},
+  bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, umAlternado:true, fotoObraQuinzenal:false},
   // Filiais: 1 collab + 1 post alternando (foto-de-obra/vídeo-short)
   bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
   bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
@@ -621,7 +622,9 @@ function generateMonthPlanDates(year, month, postsConfig){
     // SEGUNDA = dia de short (todas juntas) · QUINTA = dia de foto de obra
     // (todas juntas) · QUARTA = collab. As filiais alternam por semana, então
     // caem na segunda (semana de short) ou na quinta (semana de foto) — juntas.
+    const _diasUsados=new Set();
     const _pushDia=function(dayNum,type){
+      _diasUsados.add(dayNum);
       const d=new Date(cur);d.setDate(d.getDate()+(dayNum-1));
       if(d.getMonth()===month-1&&d>=firstDay){
         result.push({date:d.toISOString().slice(0,10), type:type});
@@ -635,6 +638,8 @@ function generateMonthPlanDates(year, month, postsConfig){
     const dayOrder=_diasPref.concat([3,2,5,6].filter(function(d){return _diasPref.indexOf(d)<0;}));
     let slotIdx=0;
     while((artes>0||videos>0)&&slotIdx<dayOrder.length){
+      // Pula dia já ocupado por short/foto/collab (a arte/vídeo cai no dia livre)
+      if(_diasUsados.has(dayOrder[slotIdx])&&slotIdx<dayOrder.length-1){slotIdx++;continue;}
       const dayOffset=dayOrder[slotIdx]-1;
       const d=new Date(cur);d.setDate(d.getDate()+dayOffset);
       if(d.getMonth()===month-1&&d>=firstDay){
