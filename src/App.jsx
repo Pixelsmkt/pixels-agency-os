@@ -515,10 +515,11 @@ const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrSho
 // "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
 // (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
 const BIOTER_POSTS_PRESETS = {
-  // Principais: toda semana 1 collab + 1 vídeo-short + 1 foto de obra (3/sem)
-  bioter_chapeco:    {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_castro:     {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_toledo:     {arte:0, video:0, collab:1, foto:1, videoShort:1, doisAlternados:false, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  // Principais: 1 collab (quarta) + 1 post alternando POR SEMANA — semana A:
+  // short (segunda, as três juntas); semana B: foto de obra (quinta, as três juntas)
+  bioter_chapeco:    {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
+  bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
+  bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, fotoObraQuinzenal:false},
   // Filiais: 1 collab + 1 post alternando (foto-de-obra/vídeo-short)
   bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
   bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
@@ -603,21 +604,29 @@ function generateMonthPlanDates(year, month, postsConfig){
     }
     const totalSemana=artes+videos+collabs+fotos+shorts;
     if(totalSemana<=0){weekIndex++;cur.setDate(cur.getDate()+7);continue;}
-    // Distribuição: padrão da casa é SEGUNDA e QUINTA (2 posts/sem);
-    // 3º slot cai na quarta, depois terça e sexta.
+    // ── DIAS FIXOS POR TIPO (Bioter): sincroniza as unidades entre si ──
+    // SEGUNDA = dia de short (todas juntas) · QUINTA = dia de foto de obra
+    // (todas juntas) · QUARTA = collab. As filiais alternam por semana, então
+    // caem na segunda (semana de short) ou na quinta (semana de foto) — juntas.
+    const _pushDia=function(dayNum,type){
+      const d=new Date(cur);d.setDate(d.getDate()+(dayNum-1));
+      if(d.getMonth()===month-1&&d>=firstDay){
+        result.push({date:d.toISOString().slice(0,10), type:type});
+      }
+    };
+    while(shorts>0){_pushDia(1,"video_short");shorts--;}
+    while(collabs>0){_pushDia(3,"collab");collabs--;}
+    while(fotos>0){_pushDia(4,"foto");fotos--;}
+    // Arte/vídeo (padrão dos clientes): SEGUNDA e QUINTA; 3º slot quarta.
     const dayOrder=[1,4,3,2,5]; // 2ª, 5ª, 4ª, 3ª, 6ª
     let slotIdx=0;
-    while((artes>0||videos>0||collabs>0||fotos>0||shorts>0)&&slotIdx<dayOrder.length){
+    while((artes>0||videos>0)&&slotIdx<dayOrder.length){
       const dayOffset=dayOrder[slotIdx]-1;
       const d=new Date(cur);d.setDate(d.getDate()+dayOffset);
       if(d.getMonth()===month-1&&d>=firstDay){
         const ds=d.toISOString().slice(0,10);
-        // Ordem preferencial: collab → foto → short → arte → video
         let type;
-        if(collabs>0){type="collab";collabs--;}
-        else if(fotos>0){type="foto";fotos--;}
-        else if(shorts>0){type="video_short";shorts--;}
-        else if(artes>=videos&&artes>0){type="arte";artes--;}
+        if(artes>=videos&&artes>0){type="arte";artes--;}
         else if(videos>0){type="video";videos--;}
         else if(artes>0){type="arte";artes--;}
         else break;
