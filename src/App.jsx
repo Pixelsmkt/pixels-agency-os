@@ -2601,12 +2601,13 @@ const NAV=[
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
-  {id:"ia",         icon:"◎", label:"Pixels IA",children:[
-    {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
-    {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
-    {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
-    {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
-  ]},
+  // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
+  //{id:"ia",         icon:"◎", label:"Pixels IA",children:[
+  //  {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
+  //  {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
+  //  {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
+  //  {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
+  //]},
   {type:"divider",label:"PORTAL"},
   {id:"portal",     icon:"◯", label:"Portal do cliente"},
   {type:"divider",label:"ADMIN"},
@@ -29780,7 +29781,7 @@ const PERM_TABS=[
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
-  {id:"ia",           navIcon:"ia",         label:"Pixels IA",          color:"#f97316"},
+  {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
   {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
   {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
@@ -29850,7 +29851,6 @@ const PERM_GROUPS={
       .map(c=>({key:"verCliente_"+c.id,label:c.name,desc:"Acesso ao cliente "+c.name}))),
   ],
   ia:[
-    {key:"pixelsIA",          label:"Acessar Pixels IA",          desc:"Acesso à inteligência artificial"},
     {key:"escanear",          label:"Escanear Storage",           desc:"Pode escanear o Storage de arquivos"},
     {key:"verBriefingCard",   label:"Ver Briefing no Card",       desc:"Vê o briefing dentro dos cartões"},
     {key:"editarSLA",         label:"Editar SLA & Publicação",    desc:"Pode editar SLA do card e data/hora de publicação"},
@@ -45242,7 +45242,7 @@ export default function AgencyOS(){
   const [themeKey,setThemeKey]     = useState(_themeKey);
   // ═══ PÁGINA ATUAL — persiste em localStorage para sobreviver F5 ═══
   const [page,setPage]             = useState(()=>{
-    try{const s=localStorage.getItem("pixels-current-page");return (s&&s!=="chat")?s:"meudash";}catch{return "meudash";}
+    try{const s=localStorage.getItem("pixels-current-page");const _off=!s||s==="chat"||s==="analises"||s==="ia"||s.slice(0,3)==="ia_";return _off?"meudash":s;}catch{return "meudash";}
   });
   useEffect(()=>{try{localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
@@ -45882,7 +45882,7 @@ export default function AgencyOS(){
       case "ia_diagnostico":
       case "ia_churn":
       case "ia_playbooks":
-      case "ia_biblioteca":        return p.pixelsIA||isSocio;
+      case "ia_biblioteca":        return false; // Pixels IA desligada por enquanto
       case "portal":
       case "portal_dashboard":
       case "portal_demandas":
