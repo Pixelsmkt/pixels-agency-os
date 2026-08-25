@@ -50508,8 +50508,8 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
       const cat=(typeof _demCat==="function")?_demCat(d.categoria):null;
       const ts=Array.isArray(d.tarefas)?d.tarefas:[];
       const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
-      const pct=ts.length>0?Math.round(ok/ts.length*100):0;
       const _fim=d.status==="concluida";
+      const pct=_fim?100:(ts.length>0?Math.round(ok/ts.length*100):0);
       const _ab=!!abertas[d.id];
       return <div key={d.id}
         onClick={function(){ setAbertas(function(p){ const n=Object.assign({},p); n[d.id]=!n[d.id]; return n; }); }}
@@ -77768,6 +77768,8 @@ function _demProgresso(d){
   const ts=Array.isArray(d&&d.tarefas)?d.tarefas:[];
   const tot=ts.length;
   const ok=ts.filter(function(t){return t&&t.status==="concluida";}).length;
+  // Demanda concluída = 100%, independente das etapas marcadas
+  if(d&&d.status==="concluida") return {total:tot, feitas:ok, pct:100};
   return {total:tot, feitas:ok, pct: tot>0 ? Math.round(ok/tot*100) : 0};
 }
 
