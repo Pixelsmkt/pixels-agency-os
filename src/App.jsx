@@ -20168,45 +20168,62 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         ];
 
         return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
-          {/* ── SETOR ── só quem tem filtroSetor */}
-          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon={<Ico n="folder" size={13}/>} active={filterSector!=="todos_setores"}>
-            {(close)=>SETORES.map(s=><button key={s.id} onClick={()=>{setFilterSector(s.id);close();}}
-              style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
-              {s.label}
-              {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
-            </button>)}
-          </KanbanDropdown>}
+          {/* ── SETOR — botões diretos, um clique ── */}
+          {myPerms.filtroSetor&&SETORES.map(s=>{
+            const _on=filterSector===s.id;
+            return <button key={s.id} onClick={()=>setFilterSector(s.id)}
+              style={{background:_on?"#0f172a":"#fff",color:_on?"#fff":"#475569",border:`1px solid ${_on?"#0f172a":"#e2e8f0"}`,borderRadius:99,padding:"0 13px",height:32,fontSize:12,fontWeight:_on?700:600,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",whiteSpace:"nowrap",boxSizing:"border-box"}}
+              onMouseEnter={e=>{if(!_on){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#0f172a";}}}
+              onMouseLeave={e=>{if(!_on){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}}>
+              {s.id==="todos_setores"?"Todos":s.label}
+            </button>;
+          })}
 
-          {/* ── COLABORADOR (antes Perfil) ── com foto de perfil */}
-          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Colaborador":TEAM.find(u=>u.id===filterUser)?.name||"Colaborador"} icon={<Ico n="users" size={13}/>} active={filterUser!=="todos"}>
-            {(close)=>allowedUsers.map(f=>{
-              const u=TEAM.find(x=>x.id===f);
-              const active=filterUser===f;
-              return <button key={f} onClick={()=>{setFilterUser(f);close();}}
-                style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
-                {f==="todos"
-                  ?<div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Ico n="users" size={11}/></div>
-                  :u&&<UserAvatar user={u} size={22}/>
-                }
-                {f==="todos"?"Todos":u?.name||f}
-                {active&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
-              </button>;
-            })}
-          </KanbanDropdown>}
+          {myPerms.filtroSetor&&myPerms.filtroPerfil&&canSeeAll&&<div style={{width:1,height:22,background:"#e2e8f0",margin:"0 3px",flexShrink:0}}/>}
 
-          {/* ── CLIENTE ── só quem tem filtroCliente */}
-          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon={<Ico n="building" size={13}/>} active={filterClient!=="todos"}>
-            {(close)=>[{id:"todos",name:"Todos os clientes",color:C.a},...CLIENTS].map(cl=>{
-              const active=filterClient===cl.id;
-              return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");close();}}
-                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
-                {cl.id!=="todos"&&<div style={{width:20,height:20,borderRadius:6,background:cl.color+"22",border:`1px solid ${cl.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontSize:8,fontWeight:800}}>{cl.abbr||"A"}</div>}
-                {cl.name}
-                {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
-              </button>;
-            })}
-          </KanbanDropdown>}
+          {/* ── COLABORADOR — carinhas clicáveis ── */}
+          {myPerms.filtroPerfil&&canSeeAll&&allowedUsers.map(f=>{
+            const _on=filterUser===f;
+            if(f==="todos")return <button key="u_todos" title="Todos os colaboradores" onClick={()=>setFilterUser("todos")}
+              style={{width:32,height:32,borderRadius:"50%",background:_on?"#0f172a":"#fff",color:_on?"#fff":"#64748b",border:`1px solid ${_on?"#0f172a":"#e2e8f0"}`,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .15s",padding:0,flexShrink:0}}>
+              <Ico n="users" size={13}/>
+            </button>;
+            const u=TEAM.find(x=>x.id===f);
+            if(!u)return null;
+            return <button key={f} title={u.name} onClick={()=>setFilterUser(_on?"todos":f)}
+              style={{width:32,height:32,borderRadius:"50%",padding:0,border:"none",background:"none",cursor:"pointer",flexShrink:0,opacity:(filterUser==="todos"||_on)?1:.35,transition:"all .15s",boxShadow:_on?"0 0 0 2px #fff,0 0 0 4px #0f172a":"none"}}
+              onMouseEnter={e=>{e.currentTarget.style.opacity="1";}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity=(filterUser==="todos"||filterUser===f)?"1":".35";}}>
+              <UserAvatar user={u} size={32}/>
+            </button>;
+          })}
 
+          {myPerms.filtroCliente&&(myPerms.filtroSetor||(myPerms.filtroPerfil&&canSeeAll))&&<div style={{width:1,height:22,background:"#e2e8f0",margin:"0 3px",flexShrink:0}}/>}
+
+          {/* ── CLIENTE — quadradinhos com a logo ── */}
+          {myPerms.filtroCliente&&(()=>{
+            const _cls=CLIENTS.filter(c=>c&&String(c.name||"").trim()).slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"}));
+            const _todosOn=filterClient==="todos";
+            return <>
+              <button key="c_todos" title="Todos os clientes" onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
+                style={{width:32,height:32,borderRadius:9,background:_todosOn?"#0f172a":"#fff",color:_todosOn?"#fff":"#64748b",border:`1px solid ${_todosOn?"#0f172a":"#e2e8f0"}`,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .15s",padding:0,flexShrink:0}}>
+                <Ico n="building" size={13}/>
+              </button>
+              {_cls.map(cl=>{
+                const _on=filterClient===cl.id;
+                const _cor=cl.color||"#7c3aed";
+                const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null;
+                return <button key={cl.id} title={cl.name} onClick={()=>{if(_on){setFilterClient("todos");}else{setFilterClient(cl.id);}setFilterBioterUnit("todos");}}
+                  style={{width:32,height:32,borderRadius:9,padding:4,boxSizing:"border-box",background:_on?(_cor+"0a"):"#fff",border:_on?`2px solid ${_cor}`:"1px solid #e2e8f0",boxShadow:_on?`0 3px 10px ${_cor}30`:"none",display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,opacity:(_todosOn||_on)?1:.45,transition:"all .15s"}}
+                  onMouseEnter={e=>{if(!_on){e.currentTarget.style.opacity="1";e.currentTarget.style.borderColor=_cor+"88";}}}
+                  onMouseLeave={e=>{if(!_on){e.currentTarget.style.opacity=(filterClient==="todos")?"1":".45";e.currentTarget.style.borderColor="#e2e8f0";}}}>
+                  {_src
+                    ?<img src={_src} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                    :<span style={{color:_cor,fontWeight:900,fontSize:8.5}}>{cl.abbr||"?"}</span>}
+                </button>;
+              })}
+            </>;
+          })()}
 
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
