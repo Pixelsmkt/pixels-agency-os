@@ -529,9 +529,10 @@ const BIOTER_POSTS_PRESETS = {
   bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, umAlternado:true, fotoObraQuinzenal:false},
   bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true, umAlternado:true, fotoObraQuinzenal:false},
   // Filiais: 1 collab + 1 post alternando (foto-de-obra/vídeo-short)
-  bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
-  bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
-  bioter_uberlandia: {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
+  // Filiais: foto de obra na SEXTA (fotoDia:5) pra não empilhar tudo na quinta com as principais
+  bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoDia:5, fotoObraQuinzenal:false},
+  bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoDia:5, fotoObraQuinzenal:false},
+  bioter_uberlandia: {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoDia:5, fotoObraQuinzenal:false},
 };
 // Helper: identifica se um card é "collab" baseado no bioterUnit
 // (Grupo Bioter / Bioter Brasil servem como collab pras unidades individuais).
@@ -630,9 +631,9 @@ function generateMonthPlanDates(year, month, postsConfig){
         result.push({date:d.toISOString().slice(0,10), type:type});
       }
     };
-    while(shorts>0){_pushDia(1,"video_short");shorts--;}
-    while(collabs>0){_pushDia(3,"collab");collabs--;}
-    while(fotos>0){_pushDia(4,"foto");fotos--;}
+    while(shorts>0){_pushDia(cfg.shortDia||1,"video_short");shorts--;}
+    while(collabs>0){_pushDia(cfg.collabDia||3,"collab");collabs--;}
+    while(fotos>0){_pushDia(cfg.fotoDia||4,"foto");fotos--;}
     // Arte/vídeo: dias preferidos do cliente (cfg.dias) ou o padrão SEGUNDA e QUINTA.
     const _diasPref=(Array.isArray(cfg.dias)&&cfg.dias.length)?cfg.dias.slice():[1,4];
     const dayOrder=_diasPref.concat([3,2,5,6].filter(function(d){return _diasPref.indexOf(d)<0;}));
