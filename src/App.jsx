@@ -75616,25 +75616,27 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             }
           </PlaybookBlock>
 
-          {/* Equipe no cliente — quem cuida do quê (referência do GC) */}
-          <PlaybookBlock id="pb-time" title="Equipe no cliente" subtitle="Quem cuida do quê nesse cliente — referência rápida pro GC" icon="users" color="#6366f1">
+          {/* Equipe do cliente — pessoas DA EMPRESA (cliente) que aparecem nos conteúdos */}
+          <PlaybookBlock id="pb-time" title="Equipe do cliente" subtitle="Funcionários e sócios da empresa que aparecem nos vídeos — nome e cargo certos pro GC" icon="users" color="#6366f1">
             {(function(){
               const _eq=Array.isArray(data.equipe)?data.equipe:[];
-              const _time=(typeof TEAM!=="undefined")?TEAM:[];
               const _upd=function(lista){ onUpdate({equipe:lista}); };
+              const _inic=function(n){
+                const _p=String(n||"").trim().split(/\s+/).filter(Boolean);
+                if(!_p.length)return "?";
+                return (_p[0][0]+(_p.length>1?_p[_p.length-1][0]:"")).toUpperCase();
+              };
               if(!editMode){
                 return _eq.length===0
-                  ? <_PbEmpty icon="users" text="Equipe ainda não definida pra esse cliente." sub={isAdmin?"Ative o modo edição pra montar (pessoa + função).":""}/>
-                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(215px,1fr))",gap:10}}>
+                  ? <_PbEmpty icon="users" text="Ninguém cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar as pessoas da empresa (nome + cargo pro GC).":""}/>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
                       {_eq.map(function(m,i){
-                        const u=_time.find(function(x){return x.id===m.uid;});
-                        return <div key={i} style={{display:"flex",alignItems:"center",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
-                          {u&&typeof UserAvatar==="function"
-                            ? <UserAvatar user={u} size={36} border={false}/>
-                            : <span style={{width:36,height:36,borderRadius:"50%",background:"#eef1f5"}}/>}
+                        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
+                          <span style={{width:36,height:36,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
                           <div style={{minWidth:0}}>
-                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{(u&&u.name)||m.uid||"—"}</div>
-                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.funcao||"—"}</div>
+                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{m.nome||"—"}</div>
+                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
+                            {m.obs?<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,marginTop:3,lineHeight:1.45}}>{m.obs}</div>:null}
                           </div>
                         </div>;
                       })}
@@ -75642,17 +75644,17 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               }
               return <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {_eq.map(function(m,i){
-                  const u=_time.find(function(x){return x.id===m.uid;});
-                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px"}}>
-                    {u&&typeof UserAvatar==="function"?<UserAvatar user={u} size={28} border={false}/>:<span style={{width:28,height:28,borderRadius:"50%",background:"#eef1f5",flexShrink:0}}/>}
-                    <select value={m.uid||""} onChange={function(e){const v=e.target.value;_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{uid:v}):x;}));}}
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 9px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER,cursor:"pointer",width:150}}>
-                      <option value="">Quem?</option>
-                      {_time.map(function(tu){return <option key={tu.id} value={tu.id}>{String(tu.name||"").split(" ")[0]}</option>;})}
-                    </select>
-                    <input defaultValue={m.funcao||""} placeholder="Função nesse cliente — ex: GC · Design · Tráfego · Vídeo"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.funcao||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{funcao:v}):x;}));}}
-                      style={{flex:1,minWidth:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
+                    <span style={{width:28,height:28,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
+                    <input defaultValue={m.nome||""} placeholder="Nome da pessoa"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.nome||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{nome:v}):x;}));}}
+                      style={{width:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <input defaultValue={m.cargo||""} placeholder="Cargo — ex: Sócio-diretor · Engenheira"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.cargo||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{cargo:v}):x;}));}}
+                      style={{width:210,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <input defaultValue={m.obs||""} placeholder="Obs pro editor (opcional) — ex: como escrever no GC, onde aparece"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.obs||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{obs:v}):x;}));}}
+                      style={{flex:1,minWidth:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
                     <button type="button" onClick={function(){_upd(_eq.filter(function(_,j){return j!==i;}));}} title="Remover"
                       style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
                       onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
@@ -75661,7 +75663,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     </button>
                   </div>;
                 })}
-                <button type="button" onClick={function(){_upd(_eq.concat([{uid:"",funcao:""}]));}}
+                <button type="button" onClick={function(){_upd(_eq.concat([{nome:"",cargo:"",obs:""}]));}}
                   style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
               </div>;
             })()}
