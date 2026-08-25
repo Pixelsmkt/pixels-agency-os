@@ -16906,7 +16906,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [genConfirm,setGenConfirm]=useState(null);
   const [showMissingSlots,setShowMissingSlots]=useState(false);
   // Snapshot pra UNDO do último "Aplicar datas" — guarda os publishDates anteriores
-  const [lastApplySnapshot,setLastApplySnapshot]=useState(null);
+  const [lastApplySnapshot,setLastApplySnapshot]=useState(function(){
+    try{ const raw=localStorage.getItem("pixels-plan-last-apply"); return raw?JSON.parse(raw):null; }catch(_){ return null; }
+  });
   // Drag-and-drop: arrastar card entre dias atualiza publishDate automaticamente
   const [dragTaskId,setDragTaskId]=useState(null);
   const [dropDayId,setDropDayId]=useState(null);
@@ -17211,7 +17213,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       return {taskId:prop.taskId, oldDate:task?.publishDate||"", oldTime:task?.publishTime||""};
     });
     const newShortIds=(genConfirm.newShortCards||[]).map(function(c){return c.id;});
-    setLastApplySnapshot({when:Date.now(), snapshot, month:genConfirm.month, year:genConfirm.year, newShortIds:newShortIds});
+    const _snapObj={when:Date.now(), snapshot, month:genConfirm.month, year:genConfirm.year, newShortIds:newShortIds};
+    setLastApplySnapshot(_snapObj);
+    try{ localStorage.setItem("pixels-plan-last-apply", JSON.stringify(_snapObj)); }catch(_){}
     if(typeof setTasks==="function"){
       setTasks(function(prev){
         const arr=(prev||[]).map(function(t){
@@ -17249,6 +17253,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       pixelsToast.success(msg);
     }
     setLastApplySnapshot(null);
+    try{ localStorage.removeItem("pixels-plan-last-apply"); }catch(_){}
   }
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
