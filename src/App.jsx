@@ -507,7 +507,7 @@ function buildMarco(input){
    substituindo um arte/video.
    Override por cliente via localStorage["pixels-posts-config-<clientId>"].
 ─────────────────────────────────────────────────────── */
-const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrShortAlternado:false, fotoObraQuinzenal:false};
+const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrShortAlternado:false, fotoObraQuinzenal:false, doisAlternados:false};
 
 // Presets específicos por unidade Bioter (sobrescreve o default)
 // Principais (3/semana): 1 arte + 1 vídeo + 1 collab (foto-obra quinzenal substitui o vídeo)
@@ -515,11 +515,12 @@ const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrSho
 // "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
 // (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
 const BIOTER_POSTS_PRESETS = {
-  // Principais: 3 posts/sem = 1 collab + 1 foto-de-obra + 1 vídeo-short-do-drive
-  bioter_chapeco:    {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_castro:     {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  bioter_toledo:     {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
-  // Filiais: 2 posts/sem = 1 collab + 1 alternando (foto-de-obra/vídeo-short)
+  // Principais: 1 collab + 2 posts que ALTERNAM POR SEMANA
+  // (semana A: 2 vídeos-short; semana B: 2 fotos de obra) — flag doisAlternados
+  bioter_chapeco:    {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_castro:     {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_toledo:     {arte:0, video:0, collab:1, foto:0, videoShort:0, doisAlternados:true, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  // Filiais: 1 collab + 1 post alternando (foto-de-obra/vídeo-short)
   bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
   bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
   bioter_uberlandia: {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
@@ -596,10 +597,16 @@ function generateMonthPlanDates(year, month, postsConfig){
     if(cfg.fotoOrShortAlternado){
       if(weekIndex%2===0)fotos++; else shorts++;
     }
+    // Principais Bioter: 2 slots que alternam JUNTOS por semana
+    // (semana par = 2 fotos de obra; semana ímpar = 2 vídeos-short do Drive)
+    if(cfg.doisAlternados){
+      if(weekIndex%2===0)fotos+=2; else shorts+=2;
+    }
     const totalSemana=artes+videos+collabs+fotos+shorts;
     if(totalSemana<=0){weekIndex++;cur.setDate(cur.getDate()+7);continue;}
-    // Distribuição em dias úteis: começa seg, qua, sex
-    const dayOrder=[1,3,5,2,4]; // 2ª, 4ª, 6ª (priorizando), depois 3ª e 5ª
+    // Distribuição: padrão da casa é SEGUNDA e QUINTA (2 posts/sem);
+    // 3º slot cai na quarta, depois terça e sexta.
+    const dayOrder=[1,4,3,2,5]; // 2ª, 5ª, 4ª, 3ª, 6ª
     let slotIdx=0;
     while((artes>0||videos>0||collabs>0||fotos>0||shorts>0)&&slotIdx<dayOrder.length){
       const dayOffset=dayOrder[slotIdx]-1;
