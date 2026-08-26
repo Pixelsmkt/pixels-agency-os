@@ -15293,6 +15293,29 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     return (initial&&initial.client_id)?[initial.client_id]:[];
   });
   const clientId = clientIds[0] || ""; // legado pra cor automática + marco quando 1 cliente
+  // Publicar no portal do cliente: OPT-IN explícito. Evento interno NÃO vira checkpoint
+  // visível pro cliente a menos que isso esteja marcado. Em edição, herda o estado anterior.
+  const [publicarPortal,setPublicarPortal]=useState(!!(initial&&initial.linked_milestone_id));
+  // Trava de segurança: só apaga marcos em massa se tivermos certeza de que este evento
+  // já estava publicado. Sem isso, um evento com link quebrado abriria desmarcado e o
+  // primeiro "Salvar" varreria os checkpoints do portal sem ninguém pedir.
+  const _hadPortalRef=useRef(!!(initial&&initial.linked_milestone_id));
+  // Se o usuário já mexeu na caixa, a consulta assíncrona NÃO pode desfazer a escolha dele
+  const _userTouchedPortalRef=useRef(false);
+  useEffect(function(){
+    if(!isEdit||!initial||!initial.id||!window._sb)return;
+    let alive=true;
+    try{
+      window._sb.from("client_milestones").select("id").eq("metrics->>linked_event_id",String(initial.id)).limit(1)
+        .then(function(r){
+          if(!alive||!r||!r.data||r.data.length===0)return;
+          _hadPortalRef.current=true;
+          if(!_userTouchedPortalRef.current)setPublicarPortal(true);
+        },function(){});
+    }catch(_){}
+    return function(){alive=false;};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
   const [saving,setSaving]=useState(false);
   const _hRef=useRef(null);
   const _savingRef=useRef(false);
@@ -15350,7 +15373,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       assinatura:"comercial",
       entrega:"entrega",
     };
-    const _shouldSyncMarco=clientIds.length>0&&!!category&&_CAT_TO_MARCO[category];
+    const _shouldSyncMarco=publicarPortal&&clientIds.length>0&&!!category&&_CAT_TO_MARCO[category];
     // Helper que executa save com retry automático se coluna desconhecida (ex.: city, client_ids sem SQL)
     function _runSaveWithRetry(){
       const _exec = function(_payload){
@@ -15384,17 +15407,66 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       if(r&&r.error){_savingRef.current=false;setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
       const _savedRow=r&&r.data;
       // Sincronizar marco vinculado (se aplicável)
-      function _doneSave(){
+      function _doneSave(_silencioso){
         _savingRef.current=false;
         setSaving(false);
-        if(typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":(_shouldSyncMarco?"Evento criado! Marco registrado no cliente.":"Evento criado!"));
+        // _silencioso: caminhos que já mostraram o próprio aviso não podem ser cobertos
+        // por um "Evento atualizado!" verde logo em seguida.
+        if(!_silencioso&&typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":(_shouldSyncMarco?"Evento criado! Marco registrado no cliente.":"Evento criado!"));
         onSaved&&onSaved();
       }
       if(!_shouldSyncMarco){
-        // Sem cliente/categoria pra criar marco. Se tinha marco vinculado antes (edit) e agora não tem mais, apagar
-        if(isEdit&&initial.linked_milestone_id){
-          window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
-            window._sb.from("internal_events").update({linked_milestone_id:null}).eq("id",_savedRow.id).then(function(){_doneSave();});
+        // Não publicar no portal (desmarcado, ou sem cliente/categoria). Se havia marcos vinculados
+        // antes, apagar TODOS — inclusive as cópias criadas pra cada cliente/unidade.
+        // Decide na HORA, consultando o banco — não depende do estado semeado no mount,
+        // então não existe janela entre "abriu o modal" e "clicou em Salvar".
+        if(isEdit&&initial&&initial.id){
+          const _evId=String(initial.id);
+          const _falhou=function(msg){
+            console.warn("[marco] delete falhou:",msg);
+            if(typeof pixelsToast!=="undefined")pixelsToast.error("Evento salvo, mas NÃO consegui tirar os checkpoints do portal: "+msg+". Eles continuam visíveis pro cliente.",8000);
+            _doneSave();
+          };
+          const _finish=function(){
+            _hadPortalRef.current=false;
+            window._sb.from("internal_events").update({linked_milestone_id:null}).eq("id",_evId).then(function(){_doneSave();},function(){_doneSave();});
+          };
+          // ATENÇÃO: o supabase-js RESOLVE com {error} em falha de API (não rejeita).
+          // Sem checar r.error, um delete barrado por RLS passaria por sucesso.
+          const _apagaTudo=function(){
+            window._sb.from("client_milestones").delete().eq("metrics->>linked_event_id",_evId).then(function(r1){
+              if(r1&&r1.error){_falhou(r1.error.message||"erro desconhecido");return;}
+              if(initial.linked_milestone_id){
+                window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(r2){
+                  if(r2&&r2.error){_falhou(r2.error.message||"erro desconhecido");return;}
+                  _finish();
+                },function(e){_falhou((e&&e.message)||"exceção");});
+              }else{_finish();}
+            },function(e){_falhou((e&&e.message)||"exceção");});
+          };
+          window._sb.from("client_milestones").select("id").eq("metrics->>linked_event_id",_evId).limit(1).then(function(rq){
+            if(rq&&rq.error){
+              // Não dá pra saber se existe algo publicado: não apaga às cegas, mas avisa
+              console.warn("[marco] consulta falhou:",rq.error.message);
+              if(_hadPortalRef.current||initial.linked_milestone_id){_apagaTudo();}else{_doneSave();}
+              return;
+            }
+            const _temCopias=!!(rq&&rq.data&&rq.data.length>0);
+            if(!_temCopias&&!initial.linked_milestone_id){_doneSave();return;} // nada publicado: nada a fazer
+            // Existe checkpoint publicado. Mas apagar exige INTENÇÃO: ou o usuário desmarcou
+            // a caixa, ou a caixa abriu marcada (sabíamos que estava publicado). Se abriu
+            // desmarcada por link quebrado e ninguém tocou nela, a UI é que estava errada —
+            // varrer os checkpoints do cliente aqui seria destruir dado sem ninguém pedir.
+            if(!_userTouchedPortalRef.current&&!_hadPortalRef.current){
+              _hadPortalRef.current=true;
+              setPublicarPortal(true);
+              if(typeof pixelsToast!=="undefined")pixelsToast.warning("Evento salvo. Ele já tem checkpoints publicados no portal, mas a caixa abriu desmarcada — não removi nada. Reabra, desmarque de propósito e salve se quiser tirar do portal.",9000);
+              _doneSave(true);return;
+            }
+            _apagaTudo();
+          },function(e){
+            console.warn("[marco] consulta exceção:",e);
+            if(_hadPortalRef.current||initial.linked_milestone_id){_apagaTudo();}else{_doneSave();}
           });
         }else{_doneSave();}
         return;
@@ -15468,7 +15540,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   }
   function del(){
     if(!isEdit||!initial||!initial.id)return;
-    const _msg="Apagar este evento?"+(initial.linked_milestone_id?" O checkpoint vinculado no cliente também será removido.":"");
+    const _msg="Apagar este evento?"+((initial.linked_milestone_id||_hadPortalRef.current)?" Os checkpoints publicados no portal do cliente também serão removidos.":"");
     pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
       if(!yes)return;
       if(!window._sb)return;
@@ -15476,15 +15548,39 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.");
         onDeleted&&onDeleted();
       }
-      if(initial.linked_milestone_id){
-        window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
-          window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
-        }).catch(function(){
-          window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
-        });
-      }else{
-        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel).catch(function(e){console.warn("[internal_events del]",e);});
-      }
+      const _delEvento=function(){
+        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel,function(e){console.warn("[internal_events del]",e);_doneDel();});
+      };
+      // Apaga TODAS as cópias do checkpoint (uma por cliente/unidade), não só a principal.
+      // Aguardado de propósito: se o evento sumisse antes, sobrariam checkpoints órfãos
+      // no portal do cliente apontando pra um evento que não existe mais.
+      // Só bloqueia a exclusão do evento se ele REALMENTE tinha checkpoint publicado —
+      // determinado por consulta, não pelo ref do mount (que pode não ter voltado ainda).
+      // Um evento puramente interno não pode ficar impossível de apagar porque o filtro
+      // jsonb devolveu erro.
+      let _tinhaPortal=!!(_hadPortalRef.current||initial.linked_milestone_id);
+      const _abortaDel=function(msg){
+        console.warn("[marcos del]",msg);
+        if(!_tinhaPortal){_delEvento();return;}
+        if(typeof pixelsToast!=="undefined")pixelsToast.error("Não consegui remover os checkpoints do portal ("+msg+"). O evento NÃO foi apagado — tenta de novo.",8000);
+      };
+      // Checa r.error: o supabase-js resolve (não rejeita) quando a API recusa.
+      // Se as cópias não saírem, aborta — apagar o evento deixaria checkpoints órfãos no portal.
+      const _apagaCopias=function(){
+        window._sb.from("client_milestones").delete().eq("metrics->>linked_event_id",String(initial.id)).then(function(r1){
+          if(r1&&r1.error){_abortaDel(r1.error.message||"erro desconhecido");return;}
+          if(initial.linked_milestone_id){
+            window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(r2){
+              if(r2&&r2.error){_abortaDel(r2.error.message||"erro desconhecido");return;}
+              _delEvento();
+            },function(e){_abortaDel((e&&e.message)||"exceção");});
+          }else{_delEvento();}
+        },function(e){_abortaDel((e&&e.message)||"exceção");});
+      };
+      window._sb.from("client_milestones").select("id").eq("metrics->>linked_event_id",String(initial.id)).limit(1).then(function(rq){
+        if(rq&&!rq.error&&rq.data)_tinhaPortal=_tinhaPortal||rq.data.length>0;
+        _apagaCopias();
+      },function(){_apagaCopias();});
     });
   }
   const PURPLE="#7c3aed";
@@ -15762,7 +15858,22 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             return _blocks;
           })()}
         </div>
-        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 checkpoint será criado pra cada cliente.</div>}
+        {clientIds.length>0&&<div style={{marginTop:10,padding:"10px 12px",borderRadius:10,border:"1px solid "+(publicarPortal?"#c7d2fe":"#e2e8f0"),background:publicarPortal?"#eef2ff":"#f8fafc"}}>
+          <label style={{display:"flex",alignItems:"flex-start",gap:9,cursor:"pointer"}}>
+            <input type="checkbox" checked={publicarPortal} onChange={function(e){_userTouchedPortalRef.current=true;setPublicarPortal(e.target.checked);}}
+              style={{marginTop:2,width:15,height:15,accentColor:"#4f46e5",cursor:"pointer",flexShrink:0}}/>
+            <span style={{fontSize:12,lineHeight:1.45,color:"#334155"}}>
+              <b style={{color:"#1e293b"}}>Publicar no portal do cliente</b>
+              <span style={{display:"block",color:"#64748b",fontSize:11,marginTop:2}}>
+                {publicarPortal
+                  ? (clientIds.length>1
+                      ? ("Vai criar "+clientIds.length+" checkpoints visíveis pros clientes — 1 pra cada.")
+                      : "Vai criar 1 checkpoint visível pro cliente no portal.")
+                  : "Evento fica só na agenda interna. O cliente não vê nada."}
+              </span>
+            </span>
+          </label>
+        </div>}
       </div>
 
       {/* Responsáveis (opcional) */}
@@ -24047,11 +24158,16 @@ const _isVideoUrl=(u)=>typeof u==="string"&&_VIDEO_URL_RE.test(u);
 //   3) se falhar 2x, mostra fallback (controlado pelo pai via display:none nextElement)
 //   4) onLoad reseta display caso a img tenha aparecido depois de um retry tardio
 //   5) Se a URL for de vídeo, renderiza <video controls> em vez de <img>
-function _ApprovImg({src,idx,onFail}){
+function _ApprovImg({src,idx,onFail,previewSrc}){
   const [tryNum,setTryNum]=useState(0); // 0 = original, 1 = retry1, 2 = falhou
   const [hidden,setHidden]=useState(false);
-  const realSrc=tryNum===0?src:(src+(src.includes("?")?"&":"?")+"_r="+tryNum);
-  useEffect(()=>{setTryNum(0);setHidden(false);},[src,idx]);
+  // Vídeo: toca o preview leve quando existir (mesma duração, timecodes batem).
+  // Se o preview falhar, cai pro original antes de considerar o vídeo quebrado.
+  const _hasPreview=!!(previewSrc&&_isVideoUrl(src)&&previewSrc!==src);
+  const [previewFailed,setPreviewFailed]=useState(false);
+  const _base=(_hasPreview&&!previewFailed)?previewSrc:src;
+  const realSrc=tryNum===0?_base:(_base+(_base.includes("?")?"&":"?")+"_r="+tryNum);
+  useEffect(()=>{setTryNum(0);setHidden(false);setPreviewFailed(false);},[src,idx]);
   // Vídeo: player nativo com controls. Sem retry porque <video> trata buffer sozinho.
   if(_isVideoUrl(src)){
     return <video src={realSrc} controls playsInline preload="metadata"
@@ -24060,6 +24176,12 @@ function _ApprovImg({src,idx,onFail}){
         if(ph&&ph.style)ph.style.display="none";
       }}
       onError={(e)=>{
+        // Preview quebrado não significa vídeo quebrado — tenta o original antes de desistir
+        if(_hasPreview&&!previewFailed){
+          console.warn("[aprov] preview falhou, caindo pro original:",src);
+          setPreviewFailed(true);
+          return;
+        }
         console.warn("[aprov] vídeo falhou:",src);
         e.currentTarget.style.display="none";
         const ph=e.currentTarget.nextElementSibling;
@@ -24127,6 +24249,12 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const allImgs=(_ordenados.length>0?_ordenados:(_perm.length>0?_perm:_fallback))
     .filter(Boolean)
     .filter(function(u,i,arr){return arr.indexOf(u)===i;});   // dedup preservando a ordem
+  // Mapa url original -> preview comprimido. O player usa o preview (leve, abre rapido);
+  // o download continua oferecendo o original. Timecodes batem: mesma duracao.
+  const _previewByUrl={};
+  (task.files||[]).forEach(function(f){
+    if(f&&f.url&&f.previewUrl){ _previewByUrl[_fixUrlA(f.url)]=_fixUrlA(f.previewUrl); }
+  });
 
   const [activeIdx,setActiveIdx]=useState(0);
   // Store one canvas drawing per image index
@@ -24939,7 +25067,17 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   }
                 };
                 return <>
-                  <video ref={videoRef} src={currentSrc} controls
+                  <video ref={videoRef} key={currentSrc} src={_previewByUrl[currentSrc]||currentSrc} controls
+                    onError={function(e){
+                      // Preview quebrado não é vídeo quebrado — cai pro original uma vez
+                      const _el=e.currentTarget;
+                      if(_el.getAttribute("data-fellback")==="1")return;
+                      if(!currentSrc||_el.src===currentSrc)return;
+                      _el.setAttribute("data-fellback","1");
+                      console.warn("[anotar] preview falhou, usando original");
+                      _el.src=currentSrc;
+                      try{_el.load();}catch(_){}
+                    }}
                     onTimeUpdate={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     onLoadedMetadata={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     style={{maxWidth:"100%",maxHeight:"68vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
@@ -25819,6 +25957,24 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _velhas={}; if(_vs) _vs.anteriores.forEach(function(f){ _velhas[_kf(f)]=true; });
   const _versoesOcultas=_vs?_vs.anteriores.length:0;
   const _filesAtuais=((current&&current.files)||[]).filter(function(f){ return !_velhas[_kf(f)]; });
+  // Preview comprimido do video mais recente (usado no botao "Baixar compactado")
+  const _previewVideo=(function(){
+    try{
+      const _tsp=function(f){const v=(f&&(f.addedAtIso||f.addedAt))||"";const st=String(v);
+        if(/^\d{4}-\d{2}-\d{2}T/.test(st)){const d=new Date(st);return isNaN(d.getTime())?0:d.getTime();}
+        const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+        if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0);return isNaN(d.getTime())?0:d.getTime();}
+        return 0;};
+      // Pega o MAIS RECENTE (mesma regra do botão de download original) e só depois
+      // checa se ele tem preview. Filtrar por previewUrl antes ordenaria errado e o
+      // botão "compactado" poderia baixar um corte ANTIGO achando que é o atual.
+      const _vids=(_filesAtuais||[])
+        .filter(function(f){return f&&!f.isAnnotation&&f.url&&!f.uploading&&(String(f.type||"").startsWith("video/")||_isVideoUrl(f.url));})
+        .slice().sort(function(a,b){return _tsp(b)-_tsp(a);});
+      const _atual=_vids[0]||null;
+      return (_atual&&_atual.previewUrl)?_atual:null;
+    }catch(_){return null;}
+  })();
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
@@ -25858,6 +26014,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const filtered=_allImgsRaw.filter(u=>!brokenImgs.has(u));
     return filtered.length>0?filtered:_allImgsRaw;
   })();
+  // Mapa url original -> preview comprimido (720p). O player e as miniaturas usam o
+  // preview: abre em segundos em vez de baixar 80-270 MB. Download continua no original.
+  const _prevMap=(function(){
+    const m={};
+    try{
+      ((current&&current.files)||[]).forEach(function(f){
+        // allImgs passa por _fixUrl — a chave do mapa precisa passar também, senão não casa
+        if(f&&f.url&&f.previewUrl)m[_fixUrl(f.url)]=_fixUrl(f.previewUrl);
+      });
+    }catch(_){}
+    return m;
+  })();
+  const _playSrc=function(u){return (u&&_prevMap[u])||u;};
   // Auto-skip: quando entra num card, se o imgIdx aponta pra uma URL quebrada,
   // pula automaticamente pra primeira que ainda não falhou.
   useEffect(()=>{
@@ -26081,7 +26250,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 </span>))}
                 {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento/prioridade ═════ */}
                 {(tab==="video"||tab==="publicacao")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
-                  <button type="button" title={tab==="video"?"Baixar vídeo original":((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
+                  <button type="button" title={tab==="video"?(_previewVideo?"Baixar vídeo ORIGINAL (arquivo cheio, alta qualidade)":"Baixar vídeo original"):((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
                     onClick={async function(){
                       try{
                         const _isVid = function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(u);};
@@ -26169,6 +26338,35 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </button>
+                  {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
+                  {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
+                  <button type="button" title="Baixar versão compactada (720p, bem menor — ideal pra WhatsApp e aprovação)"
+                    onClick={async function(){
+                      try{
+                        const _url=_previewVideo.previewUrl;
+                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando versão compactada…",2500);
+                        const _title=current.title?String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"video";
+                        const _extM=String(_url).toLowerCase().match(/\.(mp4|webm)(?:\?|$)/);
+                        const _fname=_title+"_compactado."+(_extM?_extM[1]:"mp4");
+                        const _r=await fetch(_url);
+                        const _b=await _r.blob();
+                        const _u=URL.createObjectURL(_b);
+                        const _a=document.createElement("a"); _a.href=_u; _a.download=_fname;
+                        document.body.appendChild(_a); _a.click();
+                        setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname,3000);
+                      }catch(e){
+                        console.warn("[download preview]",e);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download compactado: "+(e&&e.message||"erro"),4000);
+                        try{window.open(_previewVideo.previewUrl,"_blank");}catch(_){}
+                      }
+                    }}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,padding:"0 10px",color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,transition:"all .15s",whiteSpace:"nowrap"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {_previewVideo.previewSize?(Math.max(1,Math.round(_previewVideo.previewSize/1048576))+" MB"):"Leve"}
+                  </button>)}
                   <button type="button" title="Copiar link do cartão"
                     onClick={async function(){
                       try{
@@ -26205,7 +26403,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               return(<div key={src+"_"+i} onClick={()=>setImgIdx(i)}
                 style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
                 {_isVideoUrl(src)
-                  ? <><video src={src} preload="metadata" muted playsInline
+                  ? <><video src={_playSrc(src)} preload="metadata" muted playsInline
                       style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s",background:"#0f172a"}}/>
                     <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
                       <span style={{width:28,height:28,borderRadius:"50%",background:"rgba(15,23,42,0.72)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.3)"}}>
@@ -26231,7 +26429,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               title={allImgs.length>0&&!_curIsVideo?"Clique pra ampliar":""}
               style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:(allImgs.length>0&&!_curIsVideo)?"zoom-in":"default"}}>
             {allImgs.length>0
-              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
+              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} previewSrc={_playSrc(allImgs[Math.min(imgIdx,allImgs.length-1)])} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
                   <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                     <Ico n="image" size={28} color="#cbd5e1"/>
@@ -36152,7 +36350,7 @@ function _cardPodeSerResp(u){
   // e descarta placeholders que ainda não terminaram (sem url) — defesa em profundidade
   const cleanAttachments=(arr)=>arr
     .filter(a=>!a.uploading&&a.url) // só anexos que terminaram o upload
-    .map(({uploading,progress,...rest})=>rest);
+    .map(({uploading,progress,compressing,compressProgress,...rest})=>rest);
 
   const handleClose=useCallback(()=>{
     if(uploadingCount>0){
@@ -36447,10 +36645,230 @@ function _cardPodeSerResp(u){
     }catch{resolve(null);}
   });
 
+  // ── Compressão de vídeo pra PREVIEW (roda no navegador, sem servidor) ──
+  // Gera uma versão leve (720p, ~1.2 Mbps) usada pra tocar na tela de avaliação.
+  // O arquivo ORIGINAL continua intacto no storage — o preview é um extra.
+  // Se qualquer coisa falhar, resolve null e o app segue usando o original.
+  const PREVIEW_MIN_SIZE=20*1024*1024;   // só comprime acima de 20 MB
+  const PREVIEW_MAX_DURATION=15*60;      // acima de 15 min não compensa (gravação é em tempo real)
+  const PREVIEW_MAX_EDGE=1280;           // maior lado do preview
+  const PREVIEW_VIDEO_BPS=1200000;
+  const PREVIEW_AUDIO_BPS=96000;
+
+  const _pickPreviewMime=()=>{
+    if(typeof MediaRecorder==="undefined")return null;
+    const cands=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
+    for(const m of cands){try{if(MediaRecorder.isTypeSupported(m))return m;}catch(_){}}
+    return null;
+  };
+
+  // Valida o preview antes de aceitar: duração compatível e frames de verdade.
+  // Preview ruim (congelado/cortado) é PIOR que preview nenhum — na dúvida, descarta.
+  const _validatePreview=(blob,srcDur,drawCount)=>new Promise((resolve)=>{
+    // 1) frames desenhados: se a aba ficou escondida o rAF congela e sai vídeo parado
+    const _minFrames=Math.max(10,Math.floor(srcDur*8)); // exige ~8 fps de média
+    if(drawCount<_minFrames){console.warn("[preview] poucos frames:",drawCount,"<",_minFrames);resolve(false);return;}
+    // 2) duração do resultado (MediaRecorder webm às vezes reporta Infinity — aí confiamos nos frames)
+    let settled=false;
+    const v=document.createElement("video");
+    const u=URL.createObjectURL(blob);
+    const done=(ok)=>{if(settled)return;settled=true;try{URL.revokeObjectURL(u);}catch(_){}resolve(ok);};
+    v.preload="metadata";v.muted=true;
+    v.onloadedmetadata=()=>{
+      const d=v.duration;
+      if(!isFinite(d)||d<=0){done(true);return;} // sem duração confiável: frames já garantiram
+      // Tolerância curta: o preview vira a régua de tempo dos comentários ([MM:SS]),
+      // e o seek do ajuste acontece no ORIGINAL. Drift grande erra a cena.
+      done(Math.abs(d-srcDur)<=0.6);
+    };
+    v.onerror=()=>done(false);
+    setTimeout(()=>done(false),8000);
+    v.src=u;
+  });
+
+  const compressVideoPreview=(file,onProgress,abortRef)=>new Promise((resolve)=>{
+    let done=false,video=null,url=null,rec=null,raf=null,elStream=null,canvasStream=null,audioCtx=null;
+    let drawCount=0,guardTimer=null,startWatchdog=null,lastPct=-1,lastDrawT=-1,recStarted=false;
+    // Se a aba JÁ está escondida quando começa, o rAF nunca roda — detecta desde o início
+    let hiddenDuring=(typeof document!=="undefined"&&document.hidden);
+    const _onVis=()=>{if(document.hidden)hiddenDuring=true;};
+    const cleanup=()=>{
+      try{if(raf)cancelAnimationFrame(raf);}catch(_){}
+      try{if(guardTimer)clearTimeout(guardTimer);}catch(_){}
+      try{if(startWatchdog)clearTimeout(startWatchdog);}catch(_){}
+      try{if(rec&&rec.state!=="inactive")rec.stop();}catch(_){}
+      try{if(canvasStream)canvasStream.getTracks().forEach(t=>t.stop());}catch(_){}
+      try{if(elStream)elStream.getTracks().forEach(t=>t.stop());}catch(_){}
+      try{if(audioCtx&&audioCtx.state!=="closed")audioCtx.close();}catch(_){}
+      try{if(video){video.pause();video.removeAttribute("src");video.load();}}catch(_){}
+      try{if(url)URL.revokeObjectURL(url);}catch(_){}
+      try{document.removeEventListener("visibilitychange",_onVis);}catch(_){}
+    };
+    const finish=(val)=>{if(done)return;done=true;cleanup();resolve(val);};
+    const aborted=()=>!!(abortRef&&abortRef.current);
+    try{
+      const mimeType=_pickPreviewMime();
+      if(!mimeType){finish(null);return;}
+      document.addEventListener("visibilitychange",_onVis);
+      video=document.createElement("video");
+      video.preload="auto";video.playsInline=true;
+      // NÃO zerar volume/muted aqui: em Chromium isso zera também o sinal que o WebAudio
+      // captura, e o preview sairia MUDO. O silêncio vem de não conectar em destination.
+      url=URL.createObjectURL(file);video.src=url;
+      video.onerror=()=>finish(null);
+      video.onloadedmetadata=()=>{
+        if(aborted()){finish(null);return;}
+        const dur=video.duration;
+        if(!isFinite(dur)||dur<=0||dur>PREVIEW_MAX_DURATION){finish(null);return;}
+        const vw=video.videoWidth,vh=video.videoHeight;
+        if(!vw||!vh){finish(null);return;}
+        const scale=Math.min(1,PREVIEW_MAX_EDGE/Math.max(vw,vh));
+        const cw=Math.max(2,Math.round(vw*scale/2)*2), ch=Math.max(2,Math.round(vh*scale/2)*2); // H.264 exige pares
+        const canvas=document.createElement("canvas");
+        canvas.width=cw;canvas.height=ch;
+        const ctx=canvas.getContext("2d",{alpha:false});
+        canvasStream=canvas.captureStream(30);
+        let _audioOk=false;
+        try{
+          const AC=window.AudioContext||window.webkitAudioContext;
+          if(AC){
+            audioCtx=new AC();
+            const srcNode=audioCtx.createMediaElementSource(video);
+            const dest=audioCtx.createMediaStreamDestination();
+            srcNode.connect(dest); // sem connect(audioCtx.destination) => inaudível pro usuário
+            const at=dest.stream.getAudioTracks()[0];
+            if(at){canvasStream.addTrack(at);_audioOk=true;}
+            if(audioCtx.state==="suspended"){try{audioCtx.resume();}catch(_){}}
+          }
+        }catch(_){}
+        if(!_audioOk){
+          // Sem WebAudio não existe caminho bom: captureStream lê DEPOIS do volume, então
+          // ou toca alto pro usuário ou grava mudo. Preview mudo é pior que preview nenhum.
+          console.warn("[preview] WebAudio indisponível — usando o original");
+          finish(null);return;
+        }
+        const chunks=[];
+        try{
+          rec=new MediaRecorder(canvasStream,{mimeType,videoBitsPerSecond:PREVIEW_VIDEO_BPS,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
+        }catch(_){finish(null);return;}
+        rec.ondataavailable=(e)=>{if(e.data&&e.data.size>0)chunks.push(e.data);};
+        rec.onerror=()=>finish(null);
+        rec.onstop=()=>{
+          if(aborted()||hiddenDuring){finish(null);return;}
+          if(!chunks.length){finish(null);return;}
+          // Se o vídeo original tem áudio, o preview PRECISA ter. Eles comentam trilha
+          // sonora na avaliação — preview mudo passaria despercebido até o cliente ver.
+          // Default seguro: EXIGE áudio, a não ser que fique provado que a fonte não tem.
+          // (o contrário faria um detector inconclusivo liberar preview mudo em silêncio)
+          const _semAudioComprovado=(video.webkitAudioDecodedByteCount===0)||(video.mozHasAudio===false);
+          if(!_semAudioComprovado){
+            const _temTrilha=canvasStream.getAudioTracks().length>0;
+            const _ctxOk=!!audioCtx&&audioCtx.state==="running";
+            if(!_temTrilha||!_ctxOk){console.warn("[preview] áudio não capturado, descartando");finish(null);return;}
+          }
+          const blob=new Blob(chunks,{type:(mimeType.split(";")[0]||"video/mp4")});
+          // Se não encolheu pelo menos 35%, não compensa guardar um segundo arquivo
+          if(blob.size>=file.size*0.65){finish(null);return;}
+          _validatePreview(blob,dur,drawCount).then(function(ok){finish(ok?blob:null);}).catch(function(){finish(null);});
+        };
+        const draw=()=>{
+          if(done)return;
+          if(aborted()){try{if(rec&&rec.state!=="inactive")rec.stop();}catch(_){}finish(null);return;}
+          try{
+            ctx.drawImage(video,0,0,cw,ch);
+            // Conta só quando o tempo AVANÇA: se o decoder travar e o rAF continuar,
+            // redesenhar o mesmo frame mil vezes não pode passar por "vídeo válido".
+            const _t=video.currentTime;
+            if(_t!==lastDrawT){lastDrawT=_t;drawCount++;}
+          }catch(_){}
+          if(onProgress){ // só notifica quando o inteiro muda (evita ~60 setState/s)
+            const pct=Math.min(99,Math.round(video.currentTime/dur*100));
+            if(pct!==lastPct){lastPct=pct;try{onProgress(pct);}catch(_){}}
+          }
+          raf=requestAnimationFrame(draw);
+        };
+        video.onended=()=>{try{if(rec&&rec.state!=="inactive"){rec.stop();return;}}catch(_){}finish(null);};
+        // Começa a gravar no primeiro 'playing': antes do play() sobraria um pedaço de
+        // frame parado no início (o preview ficaria mais longo e os timecodes deslocados);
+        // depois do play() perderia o começo. No 'playing' o offset é ~0.
+        video.onplaying=()=>{
+          if(recStarted||done)return;
+          recStarted=true;
+          try{rec.start(1000);}catch(_){finish(null);return;}
+          draw();
+        };
+        video.play().catch(()=>finish(null));
+        // Se o 'playing' não vier em 10s (stall de decode que não vira error), desiste já —
+        // senão a fila de compressão ficaria travada até o guardTimer (até 15 min).
+        startWatchdog=setTimeout(()=>{if(!recStarted&&!done){console.warn("[preview] play não iniciou");finish(null);}},30000);
+        // Trava de segurança: duração + 30s. Se estourar, o resultado sai truncado -> descarta.
+        guardTimer=setTimeout(()=>{console.warn("[preview] timeout, descartando");finish(null);},(dur+30)*1000);
+      };
+    }catch(_){finish(null);}
+  });
+
+  // Fila GLOBAL de compressão (uma por vez em toda a aba, não por modal).
+  // De propósito NÃO é abortada no unmount: o fluxo real é "sobe vídeo -> Salvar -> fecha",
+  // e o modal some poucos segundos depois do upload. Se abortasse, o preview quase nunca
+  // existiria. O <video> é destacado do DOM e continua rodando sozinho; o guardTimer limita
+  // o tempo, e _persistPreviewUrl decide no fim se grava (card salvo) ou limpa o órfão.
+  const _previewAbortRef=useRef(false);
+  const queuePreviewCompression=(fn)=>{
+    if(typeof window==="undefined")return Promise.resolve(fn());
+    const prev=window.__pxPreviewQueue||Promise.resolve();
+    const next=prev.then(fn,fn);
+    window.__pxPreviewQueue=next.catch(()=>{});
+    return next;
+  };
+  // Espelho do state pra consultar de dentro de callbacks async sem depender de closure velha
+  const _attachmentsRef=useRef([]);
+  // Zera no unmount: depois disso o ref congelaria na última lista e um preview órfão
+  // (card fechado sem salvar) nunca seria apagado do storage.
+  useEffect(()=>{_attachmentsRef.current=attachments;},[attachments]);
+  useEffect(()=>()=>{_attachmentsRef.current=[];},[]);
+  // Fila ÚNICA de escrita no tasks.files: _persistPreviewUrl e _persistRegenThumb fazem
+  // SELECT -> patch -> UPDATE do array inteiro. Sem serializar, um sobrescreve o outro
+  // (some a thumbnail ou some o previewUrl).
+  const _filesWriteQueueRef=useRef(Promise.resolve());
+  const queueFilesWrite=(fn)=>{
+    const next=_filesWriteQueueRef.current.then(fn,fn);
+    _filesWriteQueueRef.current=next.catch(()=>{});
+    return next;
+  };
+
+  // Persiste previewUrl/previewPath no tasks.files (o preview fica pronto depois do upload)
+  const _persistPreviewUrl=(attachmentId,previewUrl,previewPath,previewSize)=>queueFilesWrite(async()=>{
+    try{
+      const sb=window._sb;
+      if(!sb||!task||!task.id)return;
+      const patch={previewUrl:previewUrl,previewPath:previewPath,previewSize:previewSize};
+      setAttachments(p=>p.map(a=>a.id===attachmentId?{...a,...patch}:a));
+      const {data:current}=await sb.from("tasks").select("files").eq("id",task.id).maybeSingle();
+      if(!current||!Array.isArray(current.files))return;
+      if(!current.files.some(function(f){return f&&f.id===attachmentId;})){
+        // NÃO está no banco. Dois casos MUITO diferentes:
+        //  a) o card ainda não foi salvo (caso comum — o preview fica pronto antes do Salvar):
+        //     mantém o patch local, que vai junto no save. Não apaga nada.
+        //  b) o anexo sumiu também do estado local => foi removido de verdade: limpa o órfão.
+        const _aindaLocal=(_attachmentsRef.current||[]).some(function(a){return a&&a.id===attachmentId;});
+        if(!_aindaLocal){
+          try{await sb.storage.from("agency-files").remove([previewPath]);}catch(_){}
+        }
+        return;
+      }
+      const updated=current.files.map(function(f){return (f&&f.id===attachmentId)?Object.assign({},f,patch):f;});
+      const _upd=await sb.from("tasks").update({files:updated}).eq("id",task.id);
+      if(_upd&&_upd.error){console.warn("[preview] update tasks.files:",_upd.error.message);return;}
+      if(typeof setTasks==="function"){
+        setTasks(function(prev){return prev.map(function(t){return t.id===task.id?Object.assign({},t,{files:updated}):t;});});
+      }
+    }catch(e){/* best-effort */}
+  });
+
   // Persiste a thumbnail regenerada em background — atualiza task.files no Supabase
   // Chamado pelo <_VideoThumb onCaptured={...}/> quando canvas capture funciona.
   // Debounce localStorage evita múltiplas chamadas do mesmo attachment por sessão.
-  const _persistRegenThumb=async(attachmentId, dataURL)=>{
+  const _persistRegenThumb=(attachmentId, dataURL)=>queueFilesWrite(async()=>{
     try{
       const key = "thumb-persist-done:"+attachmentId;
       if(localStorage.getItem(key)) return; // já persistiu nesta sessão
@@ -36465,13 +36883,14 @@ function _cardPodeSerResp(u){
       const updated = current.files.map(function(f){
         return (f && f.id===attachmentId) ? Object.assign({}, f, {thumbnail:dataURL}) : f;
       });
-      await sb.from("tasks").update({files:updated}).eq("id",task.id);
+      const _updT=await sb.from("tasks").update({files:updated}).eq("id",task.id);
+      if(_updT&&_updT.error){console.warn("[thumb] update tasks.files:",_updT.error.message);return;}
       // Também atualiza no state global tasks (pra outros componentes verem)
       if(typeof setTasks==="function"){
         setTasks(function(prev){ return prev.map(function(t){ return t.id===task.id ? Object.assign({},t,{files:updated}) : t; }); });
       }
     }catch(e){ /* silencioso — regen é best-effort */ }
-  };
+  });
 
   // Registry de XHRs ativos — permite abortar uploads pendentes se o modal desmontar
   const xhrRegistryRef=useRef([]);
@@ -36555,6 +36974,8 @@ function _cardPodeSerResp(u){
       xhr.setRequestHeader("Authorization",`Bearer ${token}`);
       xhr.setRequestHeader("Content-Type",file.type||"application/octet-stream");
       xhr.setRequestHeader("x-upsert","false");
+      // Nomes de arquivo sao unicos e imutaveis -> cache agressivo no CDN (era no-cache por omissao)
+      xhr.setRequestHeader("cache-control","max-age=31536000");
       xhr.timeout=30*60*1000; // 30 minutos pra arquivos muito grandes
       xhr.send(file);
     }catch(e){reject(e);}
@@ -36575,7 +36996,7 @@ function _cardPodeSerResp(u){
       `bucketName ${b64("agency-files")}`,
       `objectName ${b64(path)}`,
       `contentType ${b64(file.type||"application/octet-stream")}`,
-      `cacheControl ${b64("3600")}`
+      `cacheControl ${b64("31536000")}`
     ].join(",");
     // 1) Cria upload
     const createRes=await fetch(`${sbUrl}/storage/v1/upload/resumable`,{
@@ -36729,6 +37150,34 @@ function _cardPodeSerResp(u){
         const{data}=sb.storage.from("agency-files").getPublicUrl(path);
         const thumb=await thumbPromise;
         setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb}:a));
+
+        // ── Preview comprimido (background, nao bloqueia o card) ──
+        // Roda depois do upload do original; se falhar, o app continua usando o original.
+        if(isVideo&&file.size>PREVIEW_MIN_SIZE){
+          setAttachments(p=>p.map(a=>a.id===tempId?{...a,compressing:true,compressProgress:0}:a));
+          queuePreviewCompression(async()=>{
+            try{
+              if(_previewAbortRef.current)return;
+              const blob=await compressVideoPreview(file,(pct)=>{
+                setAttachments(p=>p.map(a=>a.id===tempId?{...a,compressProgress:pct}:a));
+              },_previewAbortRef);
+              if(_previewAbortRef.current)return;
+              if(!blob){
+                setAttachments(p=>p.map(a=>a.id===tempId?{...a,compressing:false}:a));
+                return;
+              }
+              const pExt=(blob.type&&blob.type.indexOf("webm")>=0)?"webm":"mp4";
+              const pPath=path.replace(/\.[^.]+$/,"")+"-preview."+pExt;
+              await uploadSmart(blob,pPath,null);
+              const{data:pData}=sb.storage.from("agency-files").getPublicUrl(pPath);
+              setAttachments(p=>p.map(a=>a.id===tempId?{...a,compressing:false}:a));
+              await _persistPreviewUrl(tempId,pData.publicUrl,pPath,blob.size);
+            }catch(e){
+              console.warn("[preview] falhou:",e&&e.message||e);
+              setAttachments(p=>p.map(a=>a.id===tempId?{...a,compressing:false}:a));
+            }
+          });
+        }
         // ── Histórico: registra upload de arquivo na timeline do card ──
         // (mostra "Subiu vídeo.mp4" + quem + quando no histórico do card)
         try{
@@ -36768,7 +37217,10 @@ function _cardPodeSerResp(u){
     // Storage delete em background — loga falhas pra debug (rotina de varrer órfãos no /acessos cobre)
     if(att?.storagePath){
       try{
-        window._sb.storage.from("agency-files").remove([att.storagePath])
+        // Remove o original E o preview comprimido (se existir) na mesma chamada
+        const _paths=[att.storagePath];
+        if(att.previewPath)_paths.push(att.previewPath);
+        window._sb.storage.from("agency-files").remove(_paths)
           .then(({error})=>{if(error)console.warn("[removeAttachment] storage:",error.message);})
           .catch(e=>console.warn("[removeAttachment] storage exception:",e?.message||e));
       }catch(e){console.warn("[removeAttachment] sync exception:",e?.message||e);}
