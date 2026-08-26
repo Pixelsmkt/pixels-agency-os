@@ -35764,9 +35764,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const col=KANBAN_COLS.find(c=>c.id===task.status);
   // ═══ Player Frame.io no ajuste: ref pro <video> e helpers pra seek em [MM:SS] ═══
   const _ajusteVideoRef = useRef(null);
+  // Player do Briefing: os timecodes [MM:SS] das rodadas de ajuste também precisam
+  // funcionar lá, não só dentro do painel "Solicitação de ajuste".
+  const _briefVideoRef = useRef(null);
   function _seekAjusteVideo(seconds){
     try{
-      const v = _ajusteVideoRef.current;
+      const _a=_ajusteVideoRef.current, _b=_briefVideoRef.current;
+      // prefere o player que está realmente na tela agora
+      const v = (_a&&_a.isConnected)?_a:((_b&&_b.isConnected)?_b:(_a||_b));
       if(!v) return;
       v.currentTime = Math.max(0, Number(seconds)||0);
       const p = v.play(); if(p && p.catch) p.catch(function(){});
@@ -38045,7 +38050,7 @@ function _cardPodeSerResp(u){
                 {/* VÍDEO — player grande. ARTE — grid simétrica, todos do mesmo tamanho. */}
                 {_isV
                   ? <div style={{background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
-                      <video src={_last.url} controls preload="metadata" playsInline
+                      <video ref={_briefVideoRef} src={_last.url} controls preload="metadata" playsInline
                         style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
                     </div>
                   : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
@@ -38603,12 +38608,54 @@ function _cardPodeSerResp(u){
               // Filtra comentarios que ja aparecem no painel "Solicitacao de ajuste"
               // (evita duplicacao quando o card esta em status ajustes/alteracao).
               const _hasAjustePanel=task.status==="ajustes"||task.isAlteracao;
-              const _visibleComments=_hasAjustePanel
-                ?comments.filter(function(c){return c.type!=="feedback"&&c.type!=="audio"&&c.type!=="client_request";})
-                :comments;
+              const _isFb=function(c){return !!c&&(c.type==="feedback"||c.type==="audio"||c.type==="client_request");};
+              const _cTs=function(c){
+                const v=(c&&(c.at||c.atFmt||c.time))||"";const st=String(v);
+                if(/^\d{4}-\d{2}-\d{2}T/.test(st)){const d=new Date(st);return isNaN(d.getTime())?0:d.getTime();}
+                const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+                if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0);return isNaN(d.getTime())?0:d.getTime();}
+                return 0;};
+              // ═══ Rodadas de ajuste no Briefing ═══
+              // Antes os pedidos de ajuste vinham numa lista chapada, na ordem crua do array
+              // (mais ANTIGO primeiro), sem rótulo de rodada — dava a impressão de que só
+              // tinha havido um ajuste. Agora numera em ordem cronológica (R1 = mais antigo)
+              // e exibe do mais RECENTE pro mais antigo, igual à sidebar de avaliação.
+              // Quando o painel "Solicitação de ajuste" está na tela, some daqui pra não duplicar.
+              const _rodadas=_hasAjustePanel?[]:(comments||[]).filter(_isFb).slice()
+                .sort(function(a,b){return _cTs(a)-_cTs(b);})
+                .map(function(c,i){return {c:c,label:"R"+(i+1)};})
+                .reverse();
+              const _visibleComments=(comments||[]).filter(function(c){return !_isFb(c);});
+              const _temVideoAjuste=!!_findAjusteVideoUrl();
               return <div>
               <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
-              {_visibleComments.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
+              {_visibleComments.length===0&&_rodadas.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
+
+              {_rodadas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{color:"#7c3aed",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Pedidos de ajuste</span>
+                  {_rodadas.length>1&&<span style={{background:"#f3e8ff",color:"#7c3aed",fontSize:9.5,padding:"2px 9px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>{_rodadas.length} rodadas</span>}
+                </div>
+                {_rodadas.map(function(r,i){
+                  const c=r.c, _atual=(i===0);
+                  return <div key={c.id} style={{border:"1px solid "+(_atual?"#e9d5ff":"#f1f5f9"),background:_atual?"#faf5ff":"#fff",borderRadius:12,overflow:"hidden"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderBottom:"1px solid "+(_atual?"#f3e8ff":"#f8fafc"),flexWrap:"wrap"}}>
+                      <span style={{background:_atual?"#7c3aed":"#cbd5e1",color:"#fff",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4}}>{r.label}</span>
+                      <span style={{color:"#0f172a",fontSize:12,fontWeight:700}}>{c.user}</span>
+                      <span style={{color:"#94a3b8",fontSize:10.5}}>{c.atFmt||c.time||""}</span>
+                      {_atual&&_rodadas.length>1&&<span style={{marginLeft:"auto",background:"#fee2e2",color:"#b91c1c",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>mais recente</span>}
+                    </div>
+                    <div style={{padding:"10px 13px"}}>
+                      {c.type==="audio"&&c.audioUrl
+                        ?<audio src={c.audioUrl} controls style={{width:"100%",height:32}}/>
+                        :<div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.9,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+                          {_renderAjusteText(String(c.text||"").replace("AJUSTE NECESSARIO: ",""),_temVideoAjuste)}
+                        </div>}
+                    </div>
+                  </div>;
+                })}
+              </div>}
+
               {_visibleComments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{c.av}</div>
                 <div style={{flex:1}}>
