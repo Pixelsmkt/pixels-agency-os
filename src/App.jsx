@@ -24169,6 +24169,13 @@ function _ApprovImg({src,idx,onFail,previewSrc}){
   const realSrc=tryNum===0?_base:(_base+(_base.includes("?")?"&":"?")+"_r="+tryNum);
   useEffect(()=>{setTryNum(0);setHidden(false);setPreviewFailed(false);},[src,idx]);
   // Vídeo: player nativo com controls. Sem retry porque <video> trata buffer sozinho.
+  if(_isVideoUrl(src)&&hidden){
+    return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:24,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700}}>O player não conseguiu carregar esse vídeo</div>
+      <a href={src} target="_blank" rel="noopener noreferrer"
+        style={{background:"#0f172a",color:"#fff",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:700,textDecoration:"none"}}>Abrir o vídeo em nova aba</a>
+    </div>;
+  }
   if(_isVideoUrl(src)){
     return <video src={realSrc} controls playsInline preload="metadata"
       onLoadedMetadata={e=>{
@@ -24183,12 +24190,10 @@ function _ApprovImg({src,idx,onFail,previewSrc}){
           return;
         }
         console.warn("[aprov] vídeo falhou:",src);
-        e.currentTarget.style.display="none";
-        const ph=e.currentTarget.nextElementSibling;
-        if(ph)ph.style.display="flex";
+        setHidden(true);
         if(typeof onFail==="function")onFail(src);
       }}
-      style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",display:hidden?"none":"block",background:"#000",borderRadius:8}}/>;
+      style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",display:"block",background:"#000",borderRadius:8,minWidth:280,minHeight:200}}/>;
   }
   return <img src={realSrc} alt="" referrerPolicy="no-referrer"
     onLoad={e=>{
@@ -25956,7 +25961,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _kf=function(f){return String(f&&f.id||"")+"|"+String(f&&f.url||"");};
   const _velhas={}; if(_vs) _vs.anteriores.forEach(function(f){ _velhas[_kf(f)]=true; });
   const _versoesOcultas=_vs?_vs.anteriores.length:0;
-  const _filesAtuais=((current&&current.files)||[]).filter(function(f){ return !_velhas[_kf(f)]; });
+  let _filesAtuais=((current&&current.files)||[]).filter(function(f){ return !_velhas[_kf(f)]; });
+  // Defesa: se o filtro de versões escondeu TODOS os arquivos, mostra tudo
+  // (melhor repetir versão antiga do que tela em branco).
+  if(_filesAtuais.length===0&&((current&&current.files)||[]).length>0) _filesAtuais=((current&&current.files)||[]).slice();
   // Preview comprimido do video mais recente (usado no botao "Baixar compactado")
   const _previewVideo=(function(){
     try{
@@ -26428,6 +26436,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             return <div onClick={()=>{if(allImgs.length>0&&!_curIsVideo)setImgZoom(true);}}
               title={allImgs.length>0&&!_curIsVideo?"Clique pra ampliar":""}
               style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:(allImgs.length>0&&!_curIsVideo)?"zoom-in":"default"}}>
+            {allImgs.length===0&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:32,textAlign:"center"}}>
+              <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                <Ico n="play" size={28} color="#cbd5e1"/>
+              </div>
+              <div style={{color:"#0f172a",fontSize:14,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                {((current&&current.files)||[]).length>0
+                  ? "Os anexos desse card não foram reconhecidos como arte/vídeo final"
+                  : "Esse card ainda não tem arquivo anexado"}
+              </div>
+              <div style={{color:"#64748b",fontSize:12,maxWidth:380,lineHeight:1.5,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                {((current&&current.files)||[]).length>0
+                  ? ((current&&current.files)||[]).length+" arquivo(s) no card — abre \"Ver detalhes do cartão\" pra conferir."
+                  : "O editor precisa subir o vídeo no card antes da avaliação."}
+              </div>
+            </div>)}
             {allImgs.length>0
               ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} previewSrc={_playSrc(allImgs[Math.min(imgIdx,allImgs.length-1)])} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
