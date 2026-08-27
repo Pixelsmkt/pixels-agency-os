@@ -26359,6 +26359,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </button>
+                  {/* Sem versão leve: chip explicativo no lugar do botão */}
+                  {tab==="video"&&!(_previewVideo&&_previewVideo.previewUrl)&&(
+                  <span title="Esse vídeo não tem versão compactada — ela é gerada automaticamente quando o editor sobe o vídeo no card. Vídeos antigos ou com compressão descartada só têm o original."
+                    style={{background:"#f8fafc",border:"1px dashed #e2e8f0",borderRadius:9,height:36,padding:"0 10px",color:"#94a3b8",display:"inline-flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"help"}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    Sem versão leve
+                  </span>)}
                   {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
                   {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
                   <button type="button" title="Baixar versão compactada (720p, bem menor — ideal pra WhatsApp e aprovação)"
