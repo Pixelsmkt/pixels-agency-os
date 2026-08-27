@@ -40608,6 +40608,35 @@ function OrientacoesView({clientId, bioterUnit, sector}){
     };
   },[clientId]);
 
+  // Briefing do cliente (clients.briefing_data) — dados NÃO-confidenciais pro card
+  const [briefingBd,setBriefingBd]=useState(null);
+  useEffect(function(){
+    let vivo=true;
+    (async function(){
+      try{
+        if(!window._sb||!clientId){ if(vivo)setBriefingBd(null); return; }
+        const {data}=await window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle();
+        if(!vivo) return;
+        let _b=(data&&data.briefing_data)||null;
+        if(_b&&_b.grupo&&typeof _b.grupo==="object"&&!_b.identidade) _b=_b.grupo;
+        setBriefingBd(_b);
+      }catch(_){ if(vivo)setBriefingBd(null); }
+    })();
+    return function(){vivo=false;};
+  },[clientId]);
+  const _bg=function(sec,fid){ try{ const v=briefingBd&&briefingBd[sec]&&briefingBd[sec][fid]; return (v&&String(v).trim())?String(v).trim():""; }catch(_){ return ""; } };
+  const _briefItens=[
+    {l:"Razão social",         v:_bg("identidade","nome_empresarial")},
+    {l:"CNPJ",                 v:_bg("identidade","cnpj")},
+    {l:"Cidade",               v:_bg("identidade","cidade")},
+    {l:"Endereço",             v:_bg("identidade","endereco")},
+    {l:"WhatsApp empresarial", v:_bg("identidade","whatsapp_empresarial")},
+    {l:"E-mail empresarial",   v:_bg("identidade","email_empresarial")},
+    {l:"Site",                 v:_bg("processo","site")},
+    {l:"Tom de voz",           v:_bg("orcamento","tom_voz")},
+    {l:"Time comercial",       v:_bg("processo","contato_comercial"), multi:true},
+  ].filter(function(x){return x.v;});
+
   // Contatos resolvidos: se card tem bioterUnit → contatos daquela unidade; senão → contatos default
   const _resolvedContatos = (function(){
     if(!playbookData) return null;
@@ -40649,13 +40678,13 @@ function OrientacoesView({clientId, bioterUnit, sector}){
     const lista=Array.isArray(c)?c:[c];
     return lista.filter(function(x){return x&&(x.nome||x.whatsapp||x.email);});
   })();
-  const hasContent=_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||!!_pbComunicacao||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  const hasContent=_briefItens.length>0||_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||!!_pbComunicacao||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
       <div style={{marginBottom:10,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={32}/></div>
       <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:6}}>Sem orientações cadastradas pra {cl?.name||"esse cliente"}</div>
-      <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong style={{color:"#7c3aed"}}>Estratégia → Clientes → {cl?.name||"esse cliente"} → Playbook</strong> e edite a seção <strong>Orientações</strong> pra cadastrar logos, paleta de cores, fontes, tom de voz, hashtags, CTA e redes sociais. O que for cadastrado aparece automaticamente aqui.</div>
+      <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong style={{color:"#7c3aed"}}>Estratégia → Clientes → {cl?.name||"esse cliente"} → Playbook</strong> e edite a seção <strong>Orientações</strong> pra cadastrar logos, paleta de cores, fontes, tom de voz, hashtags, CTA e redes sociais. As respostas do <strong>Briefing</strong> (CNPJ, endereço, contatos, time comercial) também aparecem aqui automaticamente quando preenchidas.</div>
     </div>
   );
 
@@ -40706,6 +40735,21 @@ function OrientacoesView({clientId, bioterUnit, sector}){
             {_resolvedUnitName && <span style={{color:"#64748b",fontWeight:600,marginLeft:6}}>· {_resolvedUnitName}</span>}
           </div>
           <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
+        </div>
+      </div>}
+
+      {/* ═══ Do Briefing — dados não-confidenciais preenchidos no Briefing (auto) ═══ */}
+      {_briefItens.length>0&&<div>
+        <SectionTitle label="Do Briefing" sub="Respostas do Briefing do cliente — clique pra copiar" icon="fileText" accent="#0d9488"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {_briefItens.map(function(x,i){
+            const _on=copiedHex===x.v;
+            return <button key={i} type="button" onClick={function(){copyHex(x.v);}} title="Clique pra copiar"
+              style={{background:_on?"#f0fdfa":"#fff",border:"1px solid "+(_on?"#5eead4":"#e2e8f0"),borderRadius:11,padding:"10px 13px",textAlign:"left",cursor:"copy",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",minWidth:0,gridColumn:x.multi?"1/-1":"auto"}}>
+              <div style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{_on?"Copiado ✓":x.l}</div>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:3,lineHeight:1.5,wordBreak:"break-word",whiteSpace:x.multi?"pre-wrap":"normal"}}>{x.v}</div>
+            </button>;
+          })}
         </div>
       </div>}
 
