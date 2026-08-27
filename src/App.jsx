@@ -37818,7 +37818,7 @@ function _cardPodeSerResp(u){
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:1280,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:1280,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",maxHeight:isMobile?"none":"94vh",fontFamily:"'Inter',system-ui,sans-serif"}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -37830,7 +37830,7 @@ function _cardPodeSerResp(u){
         if(!last)return null;
         const _isVideo = isVid(last);
         return <div data-cover-wrap="1" onClick={function(){setLightbox({url:last.url,name:last.name||"capa",storagePath:last.storagePath});}} title="Clique pra abrir em tela cheia"
-          style={{background:_isVideo?"#0f172a":"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:320,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",position:"relative"}}>
+          style={{background:_isVideo?"#0f172a":"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:240,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",position:"relative",flexShrink:0}}>
           {_isVideo
             ? <><video src={last.url} preload="metadata" muted playsInline
                 onLoadedMetadata={function(e){try{e.target.currentTime = e.target.duration>0.6?0.5:0.1;}catch(_){}}}
@@ -37845,7 +37845,7 @@ function _cardPodeSerResp(u){
                   // Esconde o container inteiro do cover — deixa o card limpo em vez de player quebrado
                   const wrap=e.currentTarget.closest("[data-cover-wrap]"); if(wrap) wrap.style.display="none";
                 }}
-                style={{maxWidth:"100%",maxHeight:320,objectFit:"contain",display:"block",background:"#0f172a"}}/>
+                style={{maxWidth:"100%",maxHeight:240,objectFit:"contain",display:"block",background:"#0f172a"}}/>
               <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,rgba(15,23,42,0.10) 0%,rgba(15,23,42,0.45) 100%)",pointerEvents:"none"}}>
                 <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,255,255,0.95)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.5)"}}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="#0f172a" style={{marginLeft:3}}><polygon points="6 4 20 12 6 20 6 4"/></svg>
@@ -38096,10 +38096,10 @@ function _cardPodeSerResp(u){
       </div>
 
       {/* ── BODY: 2-col grid ── */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 340px",minHeight:0}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 340px",minHeight:0,flex:1,overflow:"hidden"}}>
 
         {/* ── LEFT PANEL ── */}
-        <div style={{padding:"18px 22px",borderRight:"1px solid #f1f5f9",overflowY:"auto",maxHeight:"82vh"}}>
+        <div style={{padding:"18px 22px",borderRight:"1px solid #f1f5f9",overflowY:"auto",maxHeight:isMobile?"82vh":"none",minHeight:0}}>
 
           {/* Timestamps pra decidir qual bloco (entrega x ajuste) fica no topo */}
           {/* DESC */}
@@ -39555,7 +39555,7 @@ function _cardPodeSerResp(u){
         </div>
 
         {/* ── RIGHT SIDEBAR ── */}
-        <div style={{padding:"16px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto",maxHeight:"82vh",background:"#fafbfc",borderRadius:"0 0 22px 0",borderLeft:"1px solid #edf0f4"}}>
+        <div style={{padding:"16px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto",maxHeight:isMobile?"82vh":"none",minHeight:0,background:"#fafbfc",borderRadius:"0 0 22px 0",borderLeft:"1px solid #edf0f4"}}>
 
           {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
           {canEditSLAandPub&&!isAgendado&&(
@@ -51480,6 +51480,21 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
             <polyline points="6 9 12 15 18 9"/>
           </svg>
         </div>
+
+        {/* Resumo / Ata — tópicos que a equipe deixou pro cliente */}
+        {_ab&&d.resumo&&String(d.resumo).trim()&&<div style={{borderTop:"1px solid #f4f6f8",paddingTop:8}}>
+          <div style={{color:"#0284c7",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>
+            {d.categoria==="reuniao"?"Ata da reunião":"Resumo"}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {String(d.resumo).split("\n").map(function(s){return s.replace(/^[-•*]\s*/,"").trim();}).filter(Boolean).map(function(li,ix){
+              return <div key={ix} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:"#0284c7",flexShrink:0,marginTop:6}}/>
+                <span style={{color:"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.5,minWidth:0}}>{li}</span>
+              </div>;
+            })}
+          </div>
+        </div>}
 
         {/* Etapas inline (abre no clique) */}
         {_ab&&<div style={{borderTop:"1px solid #f4f6f8",paddingTop:8,display:"flex",flexDirection:"column",gap:5}}>
@@ -76715,6 +76730,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             }
           </PlaybookBlock>
 
+          {/* Dados do Briefing — auto, read-only, copiável */}
+          <_PbBriefingAuto clientId={cl.id}/>
+
           {/* Equipe do cliente — pessoas DA EMPRESA (cliente) que aparecem nos conteúdos */}
           <PlaybookBlock id="pb-time" title="Equipe do cliente" subtitle="Funcionários e sócios da empresa que aparecem nos vídeos — nome e cargo certos pro GC" icon="users" color="#6366f1">
             {(function(){
@@ -77726,6 +77744,57 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 }
 
 // ─── Bloco genérico (com id pra ancora + subtitle) ──────────
+/* ── _PbBriefingAuto: puxa AUTOMÁTICO do Briefing (clients.briefing_data) os dados
+   não-confidenciais que a produção usa: identidade (razão social, CNPJ, cidade,
+   endereço, WhatsApp/e-mail empresarial), site e tom de voz. Read-only — edita no
+   Briefing. Clique num valor copia. NADA de logins/senhas/orçamento aqui. ── */
+function _PbBriefingAuto({clientId}){
+  const [bd,setBd]=useState(null);
+  const [copiado,setCopiado]=useState("");
+  useEffect(function(){
+    let vivo=true;
+    (async function(){
+      try{
+        if(!window._sb||!clientId) return;
+        const {data}=await window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle();
+        if(!vivo) return;
+        let _b=(data&&data.briefing_data)||null;
+        // Formato por unidade (Bioter): usa o "grupo" como base
+        if(_b&&_b.grupo&&typeof _b.grupo==="object"&&!_b.identidade) _b=_b.grupo;
+        setBd(_b);
+      }catch(_){ if(vivo)setBd(null); }
+    })();
+    return function(){vivo=false;};
+  },[clientId]);
+  const _g=function(sec,fid){ try{ const v=bd&&bd[sec]&&bd[sec][fid]; return (v&&String(v).trim())?String(v).trim():""; }catch(_){ return ""; } };
+  const itens=[
+    {l:"Razão social",        v:_g("identidade","nome_empresarial")},
+    {l:"CNPJ",                v:_g("identidade","cnpj")},
+    {l:"Cidade",              v:_g("identidade","cidade")},
+    {l:"Endereço",            v:_g("identidade","endereco")},
+    {l:"WhatsApp empresarial",v:_g("identidade","whatsapp_empresarial")},
+    {l:"E-mail empresarial",  v:_g("identidade","email_empresarial")},
+    {l:"Site",                v:_g("processo","site")},
+    {l:"Tom de voz",          v:_g("orcamento","tom_voz")},
+  ].filter(function(x){return x.v;});
+  if(itens.length===0) return null;
+  const _copiar=async function(v){
+    try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){}
+  };
+  return <PlaybookBlock id="pb-briefing-auto" title="Dados do Briefing" subtitle="Puxado automático das respostas do Briefing — clique pra copiar; edita lá no Briefing" icon="fileText" color="#0d9488">
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
+      {itens.map(function(x,i){
+        const _on=copiado===x.v;
+        return <button key={i} type="button" onClick={function(){_copiar(x.v);}} title="Clique pra copiar"
+          style={{background:_on?"#f0fdfa":"#fafbfc",border:"1px solid "+(_on?"#5eead4":"#eef0f3"),borderRadius:11,padding:"10px 13px",textAlign:"left",cursor:"copy",fontFamily:"inherit",transition:"all .12s",minWidth:0}}>
+          <div style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{_on?"Copiado ✓":x.l}</div>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>{x.v}</div>
+        </button>;
+      })}
+    </div>
+  </PlaybookBlock>;
+}
+
 function PlaybookBlock({id, title, subtitle, icon, color, children}){
   // Titulo PRETO (padrao), mas o ICONE e a tarja lateral usam a cor da secao —
   // cada bloco ganha identidade propria sem virar arco-iris de texto. E o que
@@ -78597,6 +78666,7 @@ const DEM_CATEGORIAS = [
   {id:"crm",        label:"CRM / automação",   cor:"#4f46e5", ico:"layers"},
   {id:"campanha",   label:"Campanha",          cor:"#dc2626", ico:"flame"},
   {id:"evento",     label:"Evento",            cor:"#16a34a", ico:"calendar"},
+  {id:"reuniao",    label:"Reunião",           cor:"#0284c7", ico:"users"},
   {id:"operacional",label:"Operacional",       cor:"#475569", ico:"settings"},
   {id:"outros",     label:"Outros",            cor:"#64748b", ico:"folder"},
 ];
@@ -79769,7 +79839,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   const [f,setF]=useState(function(){
     const _base=Object.assign({
       titulo:"", categoria:(Array.isArray(cats)&&cats.length)?cats[0]:"outros", descricao:"", status:"nao_iniciada",
-      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"", hora:"", cidade:"",
+      prioridade:"normal", responsavel:"", data_inicio:_demHoje(), prazo:"", hora:"", cidade:"", resumo:"",
     }, inicial||{});
     // Editando demanda de unidade Bioter: o select de cliente usa "bioter::<unidade>"
     if(_base.client_id==="bioter"&&_base.unidade&&_base.unidade!=="grupo")
@@ -79985,6 +80055,14 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
               onFocus={_demFoco} onBlur={_demBlur} placeholder="Ex.: Chapecó, Curitiba..."
               style={Object.assign({},_DEM_INP,{paddingLeft:36})}/>
           </div>
+        </div>
+
+        <div style={{marginTop:12}}>
+          <div style={_DEM_LBL}>{f.categoria==="reuniao"?"Ata da reunião (o cliente vê no portal)":"Resumo (o cliente vê no portal)"}</div>
+          <textarea value={f.resumo||""} onChange={function(e){set("resumo",e.target.value);}}
+            onFocus={_demFoco} onBlur={_demBlur} rows={4}
+            placeholder={"Um tópico por linha — ex:\nDefinimos o calendário de setembro\nCliente vai enviar as fotos da obra\nPróxima reunião dia 15"}
+            style={Object.assign({},_DEM_INP,{resize:"vertical",minHeight:86,lineHeight:1.6})}/>
         </div>
       </div>
 
@@ -80414,6 +80492,7 @@ function CDemandas({cl, canEdit, selUnit}){
       prazo:dados.prazo||null,
       hora:dados.hora||null,
       cidade:dados.cidade||null,
+      resumo:dados.resumo||null,
       // Editando: preserva a unidade original da demanda (não muda de unidade
       // só porque a edição foi feita vendo o grupo). Criando: usa a unidade da vista.
       unidade:_isBioter?((dados.id&&typeof dados.unidade==="string")?dados.unidade:(_unidade==="grupo"?"":_unidade||"")):"",
@@ -80889,6 +80968,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
       prazo:dados.prazo||null,
       hora:dados.hora||null,
       cidade:dados.cidade||null,
+      resumo:dados.resumo||null,
       updated_at:new Date().toISOString(),
     };
     if(Array.isArray(dados.tarefas)) _payload.tarefas=dados.tarefas;
