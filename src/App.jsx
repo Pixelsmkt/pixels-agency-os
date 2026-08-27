@@ -37946,6 +37946,60 @@ function _cardPodeSerResp(u){
               onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative"}}>
+            {/* Baixar entrega: imagem única, carrossel completo ou vídeo — direto do card */}
+            {(function(){
+              const _urls=(function(){
+                try{
+                  const _fs=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(task):((task&&task.files)||[]);
+                  return (_fs||[]).filter(function(f){return f&&f.url&&!f.isAnnotation&&!f.uploading;}).map(function(f){return f.url;});
+                }catch(_){ return []; }
+              })();
+              if(_urls.length===0) return null;
+              const _baixar=async function(){
+                try{
+                  const _multi=_urls.length>1;
+                  if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" arquivos…"):"Baixando…",2500);
+                  let _ok=0;
+                  for(let i=0;i<_urls.length;i++){
+                    const _url=_urls[i];
+                    let _fname="";
+                    try{ _fname=decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                    if(!_fname||_fname.length<4){
+                      const _t=(task&&task.title)?String(task.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"arquivo";
+                      _fname=_t+(_multi?("_"+(i+1)):"");
+                    } else if(_multi){
+                      const _d=_fname.lastIndexOf(".");
+                      _fname=(_d>0?_fname.slice(0,_d):_fname)+"_lamina_"+(i+1)+(_d>0?_fname.slice(_d):"");
+                    }
+                    try{
+                      const _r=await fetch(_url);
+                      const _b=await _r.blob();
+                      const _u=URL.createObjectURL(_b);
+                      const _a2=document.createElement("a"); _a2.href=_u; _a2.download=_fname;
+                      document.body.appendChild(_a2); _a2.click();
+                      setTimeout(function(){URL.revokeObjectURL(_u);_a2.remove();},250);
+                      _ok++;
+                      if(i<_urls.length-1) await new Promise(function(r){setTimeout(r,350);});
+                    }catch(e2){ console.warn("[card download "+(i+1)+"]",e2); }
+                  }
+                  if(typeof pixelsToast!=="undefined"){
+                    if(_ok===_urls.length) pixelsToast.success(_multi?("Baixados "+_ok+" arquivos ✓"):"Baixado ✓",3000);
+                    else if(_ok>0) pixelsToast.warning("Baixados "+_ok+"/"+_urls.length,4000);
+                    else pixelsToast.error("Falha nos downloads",4000);
+                  }
+                }catch(e){
+                  console.warn("[card download]",e);
+                  if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
+                }
+              };
+              return <button onClick={_baixar} title={_urls.length>1?("Baixar as "+_urls.length+" lâminas/arquivos da entrega"):"Baixar a entrega"}
+                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s",position:"relative"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                {_urls.length>1&&<span style={{position:"absolute",top:-5,right:-5,background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,borderRadius:99,padding:"1px 5px",lineHeight:1.5,border:"1.5px solid #fff"}}>{_urls.length}</span>}
+              </button>;
+            })()}
             {/* Botões soltos no header: Copiar link, Duplicar cartão, Mover para lixeira */}
             <button onClick={copyCardLink} title="Copiar link"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
