@@ -3139,6 +3139,7 @@ const BRIEFING_SECTIONS = [
     fields:[
       { id:"processo_comercial", label:"Processo comercial completo", help:"da chegada do lead até o pagamento", type:"textarea" },
       { id:"qualificacao_leads", label:"Como os leads são qualificados", type:"textarea" },
+      { id:"contato_comercial", label:"Time comercial e contatos", help:"quem é a equipe — nomes, região, telefone/WhatsApp, e-mail", type:"textarea" },
       { id:"crm", label:"CRM ou plataforma de automação", help:"qual?", type:"text" },
       { id:"site", label:"Site / landing page", help:"link, se houver", type:"text" },
     ]
@@ -3168,7 +3169,6 @@ const BRIEFING_SECTIONS = [
       { id:"outros", label:"Detalhe importante que não foi mencionado", type:"textarea" },
       { id:"contato_aprovacao", label:"Responsável pela aprovação de conteúdos", help:"nome, WhatsApp, e-mail", type:"textarea" },
       { id:"contato_financeiro", label:"Responsável financeiro", help:"nome, WhatsApp, e-mail", type:"textarea" },
-      { id:"contato_comercial", label:"Time comercial", help:"nomes, região, WhatsApp, e-mail", type:"textarea" },
     ]
   },
   { id:"logins",          label:"Logins e acessos",      icon:"lock",         color:"#0ea5e9",
@@ -38032,7 +38032,7 @@ function _cardPodeSerResp(u){
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
-          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"],["contatos","Contatos"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"12px 18px",fontSize:13.5,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -40587,7 +40587,15 @@ function OrientacoesView({clientId, bioterUnit, sector}){
   };
   const _allOV = _mergeOV(playbookData).filter(function(x){return x && (x.imgUrl || x.description || x.title);});
   const _hasOrientacoesVisuais = _allOV.length > 0;
-  const hasContent=_hasContatos||_hasOrientacoesVisuais||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  const _pbEquipe=(playbookData&&Array.isArray(playbookData.equipe))?playbookData.equipe.filter(function(m){return m&&(m.nome||m.cargo);}):[];
+  const _pbComunicacao=(playbookData&&playbookData.comunicacao)||"";
+  const _contatosArr=(function(){
+    const c=_resolvedContatos;
+    if(!c) return [];
+    const lista=Array.isArray(c)?c:[c];
+    return lista.filter(function(x){return x&&(x.nome||x.whatsapp||x.email);});
+  })();
+  const hasContent=_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||!!_pbComunicacao||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -40741,6 +40749,48 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       {data.tomDeVoz&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Tom de voz" icon="mic" accent="#16a34a"/>
         <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{data.tomDeVoz}</div>
+      </div>}
+
+      {/* ═══ Comunicação da marca (Playbook) ═══ */}
+      {_pbComunicacao&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle label="Comunicação da marca" sub="Do Playbook — estilo e linguagem" icon="sparkles" accent="#0ea5e9"/>
+        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbComunicacao}</div>
+      </div>}
+
+      {/* ═══ Equipe do cliente (Playbook) — nome e cargo certos pro GC ═══ */}
+      {_pbEquipe.length>0&&<div>
+        <SectionTitle label="Equipe do cliente" sub="Quem aparece nos conteúdos — nome e cargo pro GC" icon="users" accent="#6366f1"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {_pbEquipe.map(function(m,i){
+            const _inic=(function(n){const p=String(n||"").trim().split(/\s+/).filter(Boolean);if(!p.length)return "?";return (p[0][0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase();})(m.nome);
+            return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px"}}>
+              <span style={{width:32,height:32,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{_inic}</span>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{m.nome||"—"}</div>
+                <div style={{color:"#6366f1",fontSize:10.5,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
+                {m.obs&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,lineHeight:1.4}}>{m.obs}</div>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* ═══ Contatos do cliente (Playbook) — resumo; a aba Contatos tem o completo ═══ */}
+      {_contatosArr.length>0&&<div>
+        <SectionTitle label="Contatos do cliente" sub="Do Playbook — a aba Contatos ao lado tem o detalhe" icon="phone" accent="#16a34a"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {_contatosArr.map(function(ct,i){
+            const _wa=String(ct.whatsapp||"").replace(/\D/g,"");
+            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:3}}>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{ct.nome||"—"}</div>
+              {ct.whatsapp&&<a href={_wa?("https://wa.me/55"+_wa):undefined} target="_blank" rel="noopener noreferrer"
+                style={{color:"#16a34a",fontSize:11.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>
+                <Ico n="phone" size={11}/>{ct.whatsapp}
+              </a>}
+              {ct.email&&<a href={"mailto:"+ct.email} style={{color:"#64748b",fontSize:11,fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis"}}>{ct.email}</a>}
+            </div>;
+          })}
+        </div>
       </div>}
 
       {/* ═══ Hashtags ═══ */}
