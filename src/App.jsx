@@ -24172,8 +24172,12 @@ function _ApprovImg({src,idx,onFail,previewSrc}){
   if(_isVideoUrl(src)&&hidden){
     return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10,padding:24,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
       <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700}}>O player não conseguiu carregar esse vídeo</div>
-      <a href={src} target="_blank" rel="noopener noreferrer"
-        style={{background:"#0f172a",color:"#fff",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:700,textDecoration:"none"}}>Abrir o vídeo em nova aba</a>
+      <div style={{display:"flex",gap:8}}>
+        <button type="button" onClick={()=>{setHidden(false);setTryNum(t=>t+1);}}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Tentar de novo</button>
+        <a href={src} target="_blank" rel="noopener noreferrer"
+          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:700,textDecoration:"none"}}>Abrir em nova aba</a>
+      </div>
     </div>;
   }
   if(_isVideoUrl(src)){
@@ -24183,13 +24187,22 @@ function _ApprovImg({src,idx,onFail,previewSrc}){
         if(ph&&ph.style)ph.style.display="none";
       }}
       onError={(e)=>{
+        // Abort de troca de card/página NÃO é vídeo quebrado — ignora
+        const _me=e.currentTarget&&e.currentTarget.error;
+        if(_me&&_me.code===1) return; // MEDIA_ERR_ABORTED
         // Preview quebrado não significa vídeo quebrado — tenta o original antes de desistir
         if(_hasPreview&&!previewFailed){
           console.warn("[aprov] preview falhou, caindo pro original:",src);
           setPreviewFailed(true);
           return;
         }
-        console.warn("[aprov] vídeo falhou:",src);
+        // 1ª falha real: tenta de novo com cache-bust (erros transitórios de rede/cache)
+        if(tryNum<1){
+          console.warn("[aprov] vídeo falhou, tentando de novo:",src);
+          setTimeout(()=>setTryNum(t=>t+1),400);
+          return;
+        }
+        console.warn("[aprov] vídeo falhou definitivamente:",src,_me&&_me.code);
         setHidden(true);
         if(typeof onFail==="function")onFail(src);
       }}
@@ -26452,7 +26465,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               </div>
             </div>)}
             {allImgs.length>0
-              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} previewSrc={_playSrc(allImgs[Math.min(imgIdx,allImgs.length-1)])} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
+              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} previewSrc={_playSrc(allImgs[Math.min(imgIdx,allImgs.length-1)])} idx={imgIdx} key={"k"+imgIdx+"_"+String(allImgs[Math.min(imgIdx,allImgs.length-1)]||"")} onFail={markBroken}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
                   <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                     <Ico n="image" size={28} color="#cbd5e1"/>
