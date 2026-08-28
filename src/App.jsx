@@ -40900,11 +40900,12 @@ function OrientacoesView({clientId, bioterUnit, sector}){
             const _wa=String(ct.whatsapp||"").replace(/\D/g,"");
             return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:3}}>
               <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{ct.nome||"—"}</div>
-              {ct.whatsapp&&<a href={_wa?("https://wa.me/55"+_wa):undefined} target="_blank" rel="noopener noreferrer"
-                style={{color:"#16a34a",fontSize:11.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>
-                <Ico n="phone" size={11}/>{ct.whatsapp}
-              </a>}
-              {ct.email&&<a href={"mailto:"+ct.email} style={{color:"#64748b",fontSize:11,fontWeight:600,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis"}}>{ct.email}</a>}
+              {ct.whatsapp&&<button type="button" onClick={function(){copyHex(ct.whatsapp);}} title="Clique pra copiar o número"
+                style={{background:"none",border:"none",padding:0,color:copiedHex===ct.whatsapp?"#0d9488":"#16a34a",fontSize:11.5,fontWeight:700,cursor:"copy",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",textAlign:"left"}}>
+                <Ico n="phone" size={11}/>{copiedHex===ct.whatsapp?"Copiado ✓":ct.whatsapp}
+              </button>}
+              {ct.email&&<button type="button" onClick={function(){copyHex(ct.email);}} title="Clique pra copiar o e-mail"
+                style={{background:"none",border:"none",padding:0,color:copiedHex===ct.email?"#0d9488":"#64748b",fontSize:11,fontWeight:600,cursor:"copy",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"inherit",textAlign:"left"}}>{copiedHex===ct.email?"Copiado ✓":ct.email}</button>}
             </div>;
           })}
         </div>
