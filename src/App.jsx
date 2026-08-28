@@ -40596,12 +40596,31 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       }catch(_){ return null; }
     }
     setPlaybookData(_readPlaybook());
+    // Fetch FRESH do Supabase — o cache local pode estar velho ou o playbook
+    // ter sido preenchido em outro PC (era só localStorage e os contatos não chegavam)
+    let _alive=true;
+    async function _fetchPb(){
+      try{
+        if(!window._sb) return;
+        const {data,error}=await window._sb.from("playbooks").select("data").eq("client_id",clientId).maybeSingle();
+        if(!_alive||error||!data||!data.data) return;
+        setPlaybookData(data.data);
+        try{
+          const raw=localStorage.getItem("pixels-playbooks-v1");
+          const obj=raw?JSON.parse(raw):{};
+          obj[clientId]=data.data;
+          localStorage.setItem("pixels-playbooks-v1",JSON.stringify(obj));
+        }catch(_){}
+      }catch(_){}
+    }
+    _fetchPb();
     function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybook());}
-    function _onCustom(){setPlaybookData(_readPlaybook());}
+    function _onCustom(){setPlaybookData(_readPlaybook());_fetchPb();}
     window.addEventListener("storage", _onStorage);
     window.addEventListener("pixels:playbook-updated", _onCustom);
-    const _tid = setInterval(_onCustom, 4000);
+    const _tid = setInterval(_onCustom, 8000);
     return function(){
+      _alive=false;
       window.removeEventListener("storage", _onStorage);
       window.removeEventListener("pixels:playbook-updated", _onCustom);
       clearInterval(_tid);
