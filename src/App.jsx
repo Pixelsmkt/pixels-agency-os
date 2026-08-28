@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 32/32 | Nao editar diretamente
+// Modulos: 33/33 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2635,6 +2635,7 @@ const NAV=[
   {id:"demandas_central", icon:"demandas_central", label:"Demandas"},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
+  {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
   // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
   //{id:"ia",         icon:"◎", label:"Pixels IA",children:[
@@ -46659,6 +46660,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
+      case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
@@ -46773,6 +46775,7 @@ export default function AgencyOS(){
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
@@ -81811,5 +81814,429 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
             ? ("Bioter "+((typeof _DEM_BIOTER_UNIDADES!=="undefined"&&_DEM_BIOTER_UNIDADES[_unidade])||_unidade)+" (só essa unidade)")
             : "Grupo Bioter (todas as unidades)")
         : null}/>}
+  </div>;
+}
+
+// ======= 30_matriz.jsx =======
+/* ═══════════════════════════════════════════════════════════════════════
+   MATRIZ DE RESPONSABILIDADES — Estratégia > Matriz de Responsabilidades
+   Cadeiras da empresa: responsável, missão, atribuições, entregas e interfaces.
+   Tabela: responsibility_roles (jsonb pras listas — mesmo padrão do resto).
+   Edição: sócios + Hellen. Visual segue o padrão das telas de Estratégia.
+   ═══════════════════════════════════════════════════════════════════════ */
+const _MTZ_FF="'Inter',system-ui,sans-serif";
+const _MTZ_INP={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_MTZ_FF};
+const _MTZ_LBL={color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
+function _mtzRespUser(r){
+  if(!r) return null;
+  if(r.responsavel_uid){ const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===r.responsavel_uid;}); if(u) return u; }
+  return null;
+}
+function _mtzBR(iso){
+  if(!iso) return "";
+  try{ const d=new Date(iso); if(isNaN(d.getTime()))return ""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; }
+}
+/* Editor de lista dinâmica (atribuições / entregas) — linha + X + adicionar */
+function _MtzListaEdit({itens, onChange, placeholder, addLabel}){
+  const _set=function(i,v){ onChange(itens.map(function(x,j){return j===i?v:x;})); };
+  const _del=function(i){ onChange(itens.filter(function(_,j){return j!==i;})); };
+  const _add=function(){ onChange(itens.concat([""])); };
+  return <div style={{display:"flex",flexDirection:"column",gap:6}}>
+    {itens.map(function(v,i){
+      return <div key={i} style={{display:"flex",alignItems:"center",gap:7}}>
+        <input value={v} placeholder={placeholder} onChange={function(e){_set(i,e.target.value);}}
+          style={Object.assign({},_MTZ_INP,{padding:"8px 12px",fontSize:12.5})}/>
+        <button type="button" onClick={function(){_del(i);}} title="Remover"
+          style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex",flexShrink:0}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>;
+    })}
+    <button type="button" onClick={_add}
+      style={{background:"#7c3aed0d",border:"1px dashed #7c3aed55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#7c3aed",cursor:"pointer",fontFamily:_MTZ_FF}}>+ {addLabel}</button>
+  </div>;
+}
+/* Modal de criação/edição */
+function _MtzForm({inicial, cadeiras, onSalvar, onFechar}){
+  const _novo=!(inicial&&inicial.id);
+  const [f,setF]=useState(function(){
+    return {
+      nome:(inicial&&inicial.nome)||"",
+      responsavel_nome:(inicial&&inicial.responsavel_nome)||"",
+      responsavel_uid:(inicial&&inicial.responsavel_uid)||"",
+      missao:(inicial&&inicial.missao)||"",
+      atribuicoes:(inicial&&Array.isArray(inicial.atribuicoes))?inicial.atribuicoes.slice():[],
+      entregas:(inicial&&Array.isArray(inicial.entregas))?inicial.entregas.slice():[],
+      interfaces:(inicial&&Array.isArray(inicial.interfaces))?inicial.interfaces.slice():[],
+    };
+  });
+  const set=function(k,v){ setF(function(p){ const n=Object.assign({},p); n[k]=v; return n; }); };
+  const [novaInterface,setNovaInterface]=useState("");
+  if(typeof useEscToClose==="function") useEscToClose(true,onFechar);
+  const _salvar=function(){
+    if(!String(f.nome||"").trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Dá um nome pra cadeira."); return; }
+    if(!String(f.missao||"").trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escreve a missão da cadeira."); return; }
+    onSalvar(Object.assign({},f,{
+      atribuicoes:f.atribuicoes.map(function(s){return String(s).trim();}).filter(Boolean),
+      entregas:f.entregas.map(function(s){return String(s).trim();}).filter(Boolean),
+      interfaces:f.interfaces.map(function(s){return String(s).trim();}).filter(Boolean),
+    }));
+  };
+  const _outras=(cadeiras||[]).filter(function(c){ return !inicial||c.id!==inicial.id; });
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:_MTZ_FF}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:640,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,.28)"}}>
+      <div style={{background:"linear-gradient(135deg,#1e1b4b 0%,#4c1d95 55%,#7c3aed 100%)",padding:"18px 22px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+          <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="layers" size={18} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>{_novo?"Nova cadeira":"Editar cadeira"}</div>
+            <div style={{fontSize:11.5,opacity:.78,marginTop:2,fontWeight:500}}>Quem faz o quê na operação — preto no branco</div>
+          </div>
+        </div>
+        <button onClick={onFechar} title="Fechar"
+          style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.2)",borderRadius:9,width:30,height:30,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:15}}>
+        <div>
+          <div style={_MTZ_LBL}>Nome da cadeira *</div>
+          <input value={f.nome} onChange={function(e){set("nome",e.target.value);}} placeholder="Ex: Estratégia de Conteúdo e Coordenação de Produção" style={_MTZ_INP}/>
+        </div>
+        <div>
+          <div style={_MTZ_LBL}>Responsável</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            {(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){
+              const _sel=f.responsavel_uid===u.id;
+              return <button key={u.id} type="button" title={u.name}
+                onClick={function(){ if(_sel){set("responsavel_uid","");}else{setF(function(p){return Object.assign({},p,{responsavel_uid:u.id,responsavel_nome:p.responsavel_nome||u.name});});} }}
+                style={{width:34,height:34,borderRadius:"50%",padding:0,border:"none",background:"none",cursor:"pointer",flexShrink:0,opacity:(!f.responsavel_uid||_sel)?1:.35,boxShadow:_sel?"0 0 0 2px #fff,0 0 0 4px #7c3aed":"none",transition:"all .12s"}}>
+                {typeof UserAvatar==="function"?<UserAvatar user={u} size={34}/>:<span/>}
+              </button>;
+            })}
+            <input value={f.responsavel_nome} onChange={function(e){set("responsavel_nome",e.target.value);}} placeholder="Nome do responsável"
+              style={Object.assign({},_MTZ_INP,{width:210})}/>
+          </div>
+        </div>
+        <div>
+          <div style={_MTZ_LBL}>Missão da cadeira *</div>
+          <textarea value={f.missao} onChange={function(e){set("missao",e.target.value);}} rows={3}
+            placeholder="O principal objetivo dessa função, em 1 ou 2 linhas..."
+            style={Object.assign({},_MTZ_INP,{resize:"vertical",minHeight:72,lineHeight:1.6})}/>
+        </div>
+        <div>
+          <div style={_MTZ_LBL}>Atribuições</div>
+          <_MtzListaEdit itens={f.atribuicoes} onChange={function(v){set("atribuicoes",v);}} placeholder="Ex: Agendar publicações" addLabel="Adicionar atribuição"/>
+        </div>
+        <div>
+          <div style={_MTZ_LBL}>Entregas recorrentes</div>
+          <_MtzListaEdit itens={f.entregas} onChange={function(v){set("entregas",v);}} placeholder="Ex: Planejamento editorial mensal" addLabel="Adicionar entrega"/>
+        </div>
+        <div>
+          <div style={_MTZ_LBL}>Interfaces — com quem essa cadeira se relaciona</div>
+          {_outras.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+            {_outras.map(function(c){
+              const _on=f.interfaces.indexOf(c.nome)>=0;
+              return <button key={c.id} type="button"
+                onClick={function(){ set("interfaces",_on?f.interfaces.filter(function(x){return x!==c.nome;}):f.interfaces.concat([c.nome])); }}
+                style={{background:_on?"#7c3aed":"#f5f3ff",color:_on?"#fff":"#7c3aed",border:"1px solid "+(_on?"#7c3aed":"#ede9fe"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_MTZ_FF,transition:"all .12s"}}>
+                {c.nome.split("|")[0].split(" e ")[0].trim()}
+              </button>;
+            })}
+          </div>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:f.interfaces.length?8:0}}>
+            {f.interfaces.map(function(nm,i){
+              return <span key={i} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:99,padding:"4px 6px 4px 11px",fontSize:11.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                {nm}
+                <button type="button" onClick={function(){set("interfaces",f.interfaces.filter(function(_,j){return j!==i;}));}}
+                  style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,display:"inline-flex"}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </span>;
+            })}
+          </div>
+          <div style={{display:"flex",gap:7}}>
+            <input value={novaInterface} onChange={function(e){setNovaInterface(e.target.value);}} placeholder="Outra interface — ex: Direção, Clientes"
+              onKeyDown={function(e){ if(e.key==="Enter"&&novaInterface.trim()){ set("interfaces",f.interfaces.concat([novaInterface.trim()])); setNovaInterface(""); } }}
+              style={Object.assign({},_MTZ_INP,{padding:"8px 12px",fontSize:12.5})}/>
+            <button type="button" onClick={function(){ if(novaInterface.trim()){ set("interfaces",f.interfaces.concat([novaInterface.trim()])); setNovaInterface(""); } }}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"0 14px",fontSize:12,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:_MTZ_FF,flexShrink:0}}>Adicionar</button>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
+        <button onClick={onFechar} type="button"
+          style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:_MTZ_FF}}>Cancelar</button>
+        <button onClick={_salvar} type="button"
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:_MTZ_FF,boxShadow:"0 6px 16px rgba(124,58,237,.32)"}}>
+          {_novo?"Criar cadeira":"Salvar"}
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+/* Modal de detalhe */
+function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
+  const u=_mtzRespUser(r);
+  if(typeof useEscToClose==="function") useEscToClose(true,onFechar);
+  const _Sec=function(p){
+    return <div>
+      <div style={{color:p.cor||"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>{p.t}</div>
+      {p.children}
+    </div>;
+  };
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onFechar(); }}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:490,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:_MTZ_FF}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:680,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,.28)"}}>
+      <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",gap:14}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 5px 14px rgba(124,58,237,.3)"}}>
+          <Ico n="layers" size={20} color="#fff"/>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4,lineHeight:1.25}}>{r.nome}</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:7}}>
+            {u&&typeof UserAvatar==="function"
+              ? <UserAvatar user={u} size={24}/>
+              : <span style={{width:24,height:24,borderRadius:"50%",background:"#7c3aed14",border:"1px solid #7c3aed2b",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+            <span style={{color:"#475569",fontSize:13,fontWeight:700}}>{r.responsavel_nome||"—"}</span>
+            {r.updated_at&&<span style={{color:"#cbd5e1",fontSize:11,fontWeight:600,marginLeft:4}}>· atualizada em {_mtzBR(r.updated_at)}</span>}
+          </div>
+        </div>
+        <button onClick={onFechar} title="Fechar"
+          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,width:32,height:32,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:18}}>
+        {r.missao&&<div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px",color:"#4c1d95",fontSize:13.5,lineHeight:1.65,fontWeight:500}}>{r.missao}</div>}
+        {(r.atribuicoes||[]).length>0&&<_Sec t={"Atribuições ("+r.atribuicoes.length+")"} cor="#7c3aed">
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"5px 16px"}}>
+            {r.atribuicoes.map(function(a,i){
+              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{color:"#334155",fontSize:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
+              </div>;
+            })}
+          </div>
+        </_Sec>}
+        {(r.entregas||[]).length>0&&<_Sec t="Entregas recorrentes" cor="#16a34a">
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {r.entregas.map(function(e,i){
+              return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700}}>{e}</span>;
+            })}
+          </div>
+        </_Sec>}
+        {(r.interfaces||[]).length>0&&<_Sec t="Interfaces" cor="#0284c7">
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {r.interfaces.map(function(e,i){
+              return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700}}>{e}</span>;
+            })}
+          </div>
+        </_Sec>}
+      </div>
+      {canEdit&&<div style={{padding:"12px 24px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+        <button onClick={onExcluir} type="button"
+          style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_MTZ_FF,display:"inline-flex",alignItems:"center",gap:6}}>
+          <Ico n="trash" size={13}/>Excluir
+        </button>
+        <button onClick={onEditar} type="button"
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_MTZ_FF}}>Editar</button>
+      </div>}
+    </div>
+  </div>;
+}
+function PageMatrizResponsabilidades({isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const canEdit=!!(_u&&(_u.level===1||_u.id==="ellen"));
+  const [cadeiras,setCadeiras]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [busca,setBusca]=useState("");
+  const [vista,setVista]=useState("cadeiras"); // cadeiras | fluxo
+  const [detalhe,setDetalhe]=useState(null);
+  const [form,setForm]=useState(null); // null | {} novo | cadeira
+  const _carregar=async function(){
+    try{
+      if(!sb){setLoading(false);return;}
+      const {data,error}=await sb.from("responsibility_roles").select("*").order("ordem",{ascending:true}).order("created_at",{ascending:true});
+      if(error) throw error;
+      setCadeiras(data||[]);
+    }catch(e){
+      console.warn("[matriz]",e&&e.message);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro carregando a matriz.",3500);
+    }
+    setLoading(false);
+  };
+  useEffect(function(){ _carregar(); },[]);
+  const _salvar=async function(dados){
+    try{
+      if(!sb) return;
+      if(form&&form.id){
+        const {error}=await sb.from("responsibility_roles").update(Object.assign({},dados,{updated_at:new Date().toISOString()})).eq("id",form.id);
+        if(error) throw error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Cadeira atualizada.");
+      }else{
+        const {error}=await sb.from("responsibility_roles").insert(Object.assign({},dados,{ordem:cadeiras.length,created_by:_u?_u.name:""}));
+        if(error) throw error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Cadeira criada.");
+      }
+      setForm(null); setDetalhe(null);
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro salvando: "+((e&&e.message)||""),4000);
+    }
+  };
+  const _excluir=async function(r){
+    let ok=true;
+    if(typeof pixelsConfirm==="function")
+      ok=await pixelsConfirm({title:"Excluir cadeira?",message:'"'+r.nome+'" será removida da matriz. Essa ação não pode ser desfeita.',confirmLabel:"Excluir",danger:true});
+    if(!ok) return;
+    try{
+      if(!sb) return;
+      const {error}=await sb.from("responsibility_roles").delete().eq("id",r.id);
+      if(error) throw error;
+      setDetalhe(null);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Cadeira excluída.");
+      _carregar();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro excluindo: "+((e&&e.message)||""),4000);
+    }
+  };
+  const _q=busca.trim().toLowerCase();
+  const _norm=function(s){ try{ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }catch(_){ return String(s||"").toLowerCase(); } };
+  const _qn=_norm(_q);
+  const visiveis=cadeiras.filter(function(r){
+    if(!_qn) return true;
+    if(_norm(r.nome).indexOf(_qn)>=0) return true;
+    if(_norm(r.responsavel_nome).indexOf(_qn)>=0) return true;
+    if((r.atribuicoes||[]).some(function(a){return _norm(a).indexOf(_qn)>=0;})) return true;
+    if((r.entregas||[]).some(function(a){return _norm(a).indexOf(_qn)>=0;})) return true;
+    return false;
+  });
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_MTZ_FF,maxWidth:1400,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+    {/* Header */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
+      <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}>
+        <Ico n="layers" size={22} color="#fff"/>
+      </div>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Matriz de Responsabilidades</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Estrutura de cadeiras, responsáveis e atribuições da operação.</div>
+      </div>
+      {canEdit&&<button type="button" onClick={function(){setForm({});}}
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_MTZ_FF,boxShadow:"0 4px 14px rgba(124,58,237,.32)",display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+        <Ico n="plus" size={13} color="#fff"/> Nova cadeira
+      </button>}
+    </div>
+    {/* Busca + vistas */}
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{position:"relative",display:"inline-flex",alignItems:"center",flex:1,minWidth:240,maxWidth:420}}>
+        <span style={{position:"absolute",left:13,color:busca?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cadeira ou responsabilidade..."
+          style={{background:"#fff",border:"1px solid "+(busca?"#0f172a":"#e2e8f0"),borderRadius:11,padding:"0 14px 0 38px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:"100%",height:40,boxSizing:"border-box",fontFamily:_MTZ_FF}}/>
+      </div>
+      <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
+        {[{id:"cadeiras",l:"Cadeiras"},{id:"fluxo",l:"Fluxo"}].map(function(v){
+          const _on=vista===v.id;
+          return <button key={v.id} type="button" onClick={function(){setVista(v.id);}}
+            style={{background:_on?"#fff":"transparent",color:_on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:_MTZ_FF,boxShadow:_on?"0 1px 3px rgba(15,23,42,.08)":"none",transition:"all .12s"}}>{v.l}</button>;
+        })}
+      </div>
+    </div>
+    {loading&&<div style={{padding:"48px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando a matriz…</div>}
+    {!loading&&visiveis.length===0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"48px 24px",textAlign:"center"}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>{_q?"Nenhuma cadeira bate com essa busca":"Nenhuma cadeira cadastrada ainda"}</div>
+      <div style={{color:"#64748b",fontSize:12.5}}>{_q?"Tenta outro termo — a busca olha nome, responsável, atribuições e entregas.":(canEdit?'Clica em "+ Nova cadeira" pra começar.':"Os sócios vão cadastrar as cadeiras em breve.")}</div>
+    </div>}
+    {/* ── VISTA CADEIRAS ── */}
+    {!loading&&vista==="cadeiras"&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14}}>
+      {visiveis.map(function(r){
+        const u=_mtzRespUser(r);
+        const _atr=(r.atribuicoes||[]);
+        const _mais=_atr.length>5?_atr.length-5:0;
+        return <div key={r.id} onClick={function(){setDetalhe(r);}}
+          style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,.025)"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(15,23,42,.08)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.025)";}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.3}}>{r.nome}</div>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7}}>
+              {u&&typeof UserAvatar==="function"
+                ? <UserAvatar user={u} size={22}/>
+                : <span style={{width:22,height:22,borderRadius:"50%",background:"#7c3aed14",border:"1px solid #7c3aed2b",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+              <span style={{color:"#475569",fontSize:12.5,fontWeight:700}}>{r.responsavel_nome||"—"}</span>
+            </div>
+          </div>
+          {r.missao&&<div style={{color:"#64748b",fontSize:12.5,lineHeight:1.6,fontWeight:500,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{r.missao}</div>}
+          {_atr.length>0&&<div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Atribuições</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+              {_atr.slice(0,5).map(function(a,i){
+                return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style={{color:"#334155",fontSize:12,lineHeight:1.45,fontWeight:500}}>{a}</span>
+                </div>;
+              })}
+            </div>
+            {_mais>0&&<div style={{color:"#7c3aed",fontSize:11.5,fontWeight:800,marginTop:6}}>+ {_mais} atribuições</div>}
+          </div>}
+          {(r.entregas||[]).length>0&&<div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Entregas recorrentes</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {(r.entregas||[]).slice(0,4).map(function(e,i){
+                return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{e}</span>;
+              })}
+              {(r.entregas||[]).length>4&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,alignSelf:"center"}}>+{(r.entregas||[]).length-4}</span>}
+            </div>
+          </div>}
+          {(r.interfaces||[]).length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:10,borderTop:"1px solid #f4f6f8",marginTop:"auto"}}>
+            {(r.interfaces||[]).map(function(e,i){
+              return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{e}</span>;
+            })}
+          </div>}
+        </div>;
+      })}
+    </div>}
+    {/* ── VISTA FLUXO — cadeia vertical simples (por ordem), preparada pra crescer ── */}
+    {!loading&&vista==="fluxo"&&visiveis.length>0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"28px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
+      {visiveis.map(function(r,i){
+        const u=_mtzRespUser(r);
+        return <Fragment key={r.id}>
+          {i>0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"2px 0"}}>
+            <div style={{width:2,height:22,background:"#e2e8f0"}}/>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:-4}}><polyline points="6 9 12 15 18 9"/></svg>
+          </div>}
+          <div onClick={function(){setDetalhe(r);}}
+            style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 20px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",width:isMob?"100%":420,maxWidth:"100%",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.background="#faf5ff";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.background="#fafbfc";}}>
+            {u&&typeof UserAvatar==="function"
+              ? <UserAvatar user={u} size={34}/>
+              : <span style={{width:34,height:34,borderRadius:"50%",background:"#7c3aed14",border:"1px solid #7c3aed2b",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.3}}>{r.nome}</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2}}>{r.responsavel_nome||"—"}{(r.interfaces||[]).length?(" · interfaces: "+(r.interfaces||[]).join(", ")):""}</div>
+            </div>
+          </div>
+        </Fragment>;
+      })}
+      <div style={{color:"#cbd5e1",fontSize:11,fontWeight:600,marginTop:18}}>O fluxo segue a ordem das cadeiras — conforme a estrutura crescer (Direção, Produção, Gestão de mídia), os níveis entram aqui.</div>
+    </div>}
+    {detalhe&&<_MtzDetalhe r={detalhe} canEdit={canEdit}
+      onEditar={function(){setForm(detalhe);}}
+      onExcluir={function(){_excluir(detalhe);}}
+      onFechar={function(){setDetalhe(null);}}/>}
+    {form&&<_MtzForm inicial={form.id?form:null} cadeiras={cadeiras}
+      onSalvar={_salvar} onFechar={function(){setForm(null);}}/>}
   </div>;
 }
