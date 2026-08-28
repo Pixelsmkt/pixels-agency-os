@@ -2611,6 +2611,7 @@ function NavIcon({id,size=18,color}){
   if(id==="interno_carreira")   return <svg {...p}><path d="M3 17l4-8 4 4 4-6 4 10"/></svg>;
   // ── Estratégia ──
   if(id==="planejamento")       return <svg {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill={cl}/></svg>;
+  if(id==="matriz")             return <svg {...p}><rect x="9" y="2" width="6" height="5" rx="1.5"/><rect x="2" y="16" width="6" height="5" rx="1.5"/><rect x="16" y="16" width="6" height="5" rx="1.5"/><path d="M12 7v4"/><path d="M5 16v-2a2 2 0 012-2h10a2 2 0 012 2v2"/></svg>;
   if(id==="playbooks")          return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
 }
@@ -76800,86 +76801,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Dados do Briefing — auto, read-only, copiável */}
           <_PbBriefingAuto clientId={cl.id}/>
 
-          {/* Equipe do cliente — pessoas DA EMPRESA (cliente) que aparecem nos conteúdos */}
-          <PlaybookBlock id="pb-time" title="Equipe do cliente" subtitle="Funcionários e sócios da empresa que aparecem nos vídeos — nome e cargo certos pro GC" icon="users" color="#6366f1">
-            {(function(){
-              const _eq=Array.isArray(data.equipe)?data.equipe:[];
-              const _upd=function(lista){ onUpdate({equipe:lista}); };
-              const _inic=function(n){
-                const _p=String(n||"").trim().split(/\s+/).filter(Boolean);
-                if(!_p.length)return "?";
-                return (_p[0][0]+(_p.length>1?_p[_p.length-1][0]:"")).toUpperCase();
-              };
-              if(!editMode){
-                return _eq.length===0
-                  ? <_PbEmpty icon="users" text="Ninguém cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar as pessoas da empresa (nome + cargo pro GC).":""}/>
-                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
-                      {_eq.map(function(m,i){
-                        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
-                          <span style={{width:36,height:36,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
-                          <div style={{minWidth:0}}>
-                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{m.nome||"—"}</div>
-                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
-                            {m.obs?<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,marginTop:3,lineHeight:1.45}}>{m.obs}</div>:null}
-                          </div>
-                        </div>;
-                      })}
-                    </div>;
-              }
-              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {_eq.map(function(m,i){
-                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
-                    <span style={{width:28,height:28,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
-                    <input defaultValue={m.nome||""} placeholder="Nome da pessoa"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.nome||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{nome:v}):x;}));}}
-                      style={{width:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <input defaultValue={m.cargo||""} placeholder="Cargo — ex: Sócio-diretor · Engenheira"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.cargo||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{cargo:v}):x;}));}}
-                      style={{width:210,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <input defaultValue={m.obs||""} placeholder="Obs pro editor (opcional) — ex: como escrever no GC, onde aparece"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.obs||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{obs:v}):x;}));}}
-                      style={{flex:1,minWidth:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <button type="button" onClick={function(){_upd(_eq.filter(function(_,j){return j!==i;}));}} title="Remover"
-                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
-                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>;
-                })}
-                <button type="button" onClick={function(){_upd(_eq.concat([{nome:"",cargo:"",obs:""}]));}}
-                  style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
-              </div>;
-            })()}
-          </PlaybookBlock>
-
-          {/* Comunicação da marca */}
-          <PlaybookBlock id="pb-comunicacao" title="Comunicação da marca" subtitle="Tom de voz, estilo e linguagem" icon="sparkles" color="#0ea5e9">
-            {editMode
-              ? <_PbAutoTextarea value={editComm} onChange={e=>setEditComm(e.target.value)} onBlur={function(){if((editComm||"")!==(data.comunicacao||"")) onUpdate({comunicacao:editComm});}} rows={5}
-                  placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
-                  style={_pbInpStyle()}/>
-              : (data.comunicacao
-                  ? <PbProse text={data.comunicacao}/>
-                  : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>)
-            }
-            {!editMode && Array.isArray(data.pilares) && data.pilares.length>0 && <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+PB_BORDER2}}>
-              <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:9}}>Pilares de comunicação</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
-                {data.pilares.map((p,i)=>(
-                  <span key={i} style={{background:"#e0f2fe",color:"#075985",border:"1px solid #bae6fd",borderRadius:99,padding:"4px 11px",fontSize:12,fontWeight:600,letterSpacing:-.1}}>{p}</span>
-                ))}
-              </div>
-            </div>}
-          </PlaybookBlock>
-
-          {/* Orientacoes — Logo, paleta, fontes, tom de voz — inteira aqui no topo apos Comunicacao */}
-          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
-            <COrientacoes key={"orient-"+cl.id} cl={cl}/>
-          </PlaybookBlock>}
-
-          {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
-              Pra Bioter: cada unidade tem seus próprios contatos (Chapecó, Toledo, Castro...). */}
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
             {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
               <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>Filtrar por unidade</div>
@@ -77021,6 +76942,88 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               </div>;
             })()}
           </PlaybookBlock>
+
+
+          {/* Equipe do cliente — pessoas DA EMPRESA (cliente) que aparecem nos conteúdos */}
+          <PlaybookBlock id="pb-time" title="Equipe do cliente" subtitle="Funcionários e sócios da empresa que aparecem nos vídeos — nome e cargo certos pro GC" icon="users" color="#6366f1">
+            {(function(){
+              const _eq=Array.isArray(data.equipe)?data.equipe:[];
+              const _upd=function(lista){ onUpdate({equipe:lista}); };
+              const _inic=function(n){
+                const _p=String(n||"").trim().split(/\s+/).filter(Boolean);
+                if(!_p.length)return "?";
+                return (_p[0][0]+(_p.length>1?_p[_p.length-1][0]:"")).toUpperCase();
+              };
+              if(!editMode){
+                return _eq.length===0
+                  ? <_PbEmpty icon="users" text="Ninguém cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar as pessoas da empresa (nome + cargo pro GC).":""}/>
+                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
+                      {_eq.map(function(m,i){
+                        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
+                          <span style={{width:36,height:36,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
+                          <div style={{minWidth:0}}>
+                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{m.nome||"—"}</div>
+                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
+                            {m.obs?<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,marginTop:3,lineHeight:1.45}}>{m.obs}</div>:null}
+                          </div>
+                        </div>;
+                      })}
+                    </div>;
+              }
+              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {_eq.map(function(m,i){
+                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
+                    <span style={{width:28,height:28,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
+                    <input defaultValue={m.nome||""} placeholder="Nome da pessoa"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.nome||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{nome:v}):x;}));}}
+                      style={{width:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <input defaultValue={m.cargo||""} placeholder="Cargo — ex: Sócio-diretor · Engenheira"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.cargo||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{cargo:v}):x;}));}}
+                      style={{width:210,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <input defaultValue={m.obs||""} placeholder="Obs pro editor (opcional) — ex: como escrever no GC, onde aparece"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.obs||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{obs:v}):x;}));}}
+                      style={{flex:1,minWidth:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <button type="button" onClick={function(){_upd(_eq.filter(function(_,j){return j!==i;}));}} title="Remover"
+                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>;
+                })}
+                <button type="button" onClick={function(){_upd(_eq.concat([{nome:"",cargo:"",obs:""}]));}}
+                  style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
+              </div>;
+            })()}
+          </PlaybookBlock>
+
+          {/* Comunicação da marca */}
+          <PlaybookBlock id="pb-comunicacao" title="Comunicação da marca" subtitle="Tom de voz, estilo e linguagem" icon="sparkles" color="#0ea5e9">
+            {editMode
+              ? <_PbAutoTextarea value={editComm} onChange={e=>setEditComm(e.target.value)} onBlur={function(){if((editComm||"")!==(data.comunicacao||"")) onUpdate({comunicacao:editComm});}} rows={5}
+                  placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
+                  style={_pbInpStyle()}/>
+              : (data.comunicacao
+                  ? <PbProse text={data.comunicacao}/>
+                  : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>)
+            }
+            {!editMode && Array.isArray(data.pilares) && data.pilares.length>0 && <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+PB_BORDER2}}>
+              <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:9}}>Pilares de comunicação</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                {data.pilares.map((p,i)=>(
+                  <span key={i} style={{background:"#e0f2fe",color:"#075985",border:"1px solid #bae6fd",borderRadius:99,padding:"4px 11px",fontSize:12,fontWeight:600,letterSpacing:-.1}}>{p}</span>
+                ))}
+              </div>
+            </div>}
+          </PlaybookBlock>
+
+          {/* Orientacoes — Logo, paleta, fontes, tom de voz — inteira aqui no topo apos Comunicacao */}
+          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
+            <COrientacoes key={"orient-"+cl.id} cl={cl}/>
+          </PlaybookBlock>}
+
+          {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
+              Pra Bioter: cada unidade tem seus próprios contatos (Chapecó, Toledo, Castro...). */}
 
           {/* Produtos — lista do que trabalhamos pro cliente.
               Bioter: cada produto pode ter unidades específicas (varia por região). */}
@@ -82159,7 +82162,7 @@ function PageMatrizResponsabilidades({isMob}){
       <div style={{color:"#64748b",fontSize:12.5}}>{_q?"Tenta outro termo — a busca olha nome, responsável, atribuições e entregas.":(canEdit?'Clica em "+ Nova cadeira" pra começar.':"Os sócios vão cadastrar as cadeiras em breve.")}</div>
     </div>}
     {/* ── VISTA CADEIRAS ── */}
-    {!loading&&vista==="cadeiras"&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14}}>
+    {!loading&&vista==="cadeiras"&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(480px,1fr))",gap:14}}>
       {visiveis.map(function(r){
         const u=_mtzRespUser(r);
         const _atr=(r.atribuicoes||[]);
@@ -82177,26 +82180,24 @@ function PageMatrizResponsabilidades({isMob}){
               <span style={{color:"#475569",fontSize:12.5,fontWeight:700}}>{r.responsavel_nome||"—"}</span>
             </div>
           </div>
-          {r.missao&&<div style={{color:"#64748b",fontSize:12.5,lineHeight:1.6,fontWeight:500,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{r.missao}</div>}
+          {r.missao&&<div style={{color:"#64748b",fontSize:12.5,lineHeight:1.6,fontWeight:500}}>{r.missao}</div>}
           {_atr.length>0&&<div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Atribuições</div>
-            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-              {_atr.slice(0,5).map(function(a,i){
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Atribuições ({_atr.length})</div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"4px 14px"}}>
+              {_atr.map(function(a,i){
                 return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:6}}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
                   <span style={{color:"#334155",fontSize:12,lineHeight:1.45,fontWeight:500}}>{a}</span>
                 </div>;
               })}
             </div>
-            {_mais>0&&<div style={{color:"#7c3aed",fontSize:11.5,fontWeight:800,marginTop:6}}>+ {_mais} atribuições</div>}
           </div>}
           {(r.entregas||[]).length>0&&<div>
             <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Entregas recorrentes</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {(r.entregas||[]).slice(0,4).map(function(e,i){
+              {(r.entregas||[]).map(function(e,i){
                 return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{e}</span>;
               })}
-              {(r.entregas||[]).length>4&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,alignSelf:"center"}}>+{(r.entregas||[]).length-4}</span>}
             </div>
           </div>}
           {(r.interfaces||[]).length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:10,borderTop:"1px solid #f4f6f8",marginTop:"auto"}}>
