@@ -21159,7 +21159,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         video_feira:{label:"Vídeo básico",icon:"flag"},
                         foto:{label:"Ajuste de template",icon:"camera"},
                         corte:{label:"Corte de vídeo",icon:"scissors"},
-                        video_short:{label:"Vídeo do Drive",icon:"play"},
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
