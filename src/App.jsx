@@ -15358,27 +15358,29 @@ function _demTemProducao(t){
     return al.some(function(id){var m=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===id;});return !!(m&&m.pagamentoPorDemanda);});
   }catch(_){return false;}
 }
-function CalendarMonthNav({calMonth, setCalMonth, MONTHS}){
+function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   const isToday = (()=>{const n=new Date();return calMonth.getMonth()===n.getMonth()&&calMonth.getFullYear()===n.getFullYear();})();
+  const _b=!!big;
+  const _bt=_b?42:30, _ic=_b?18:14, _mw=_b?210:160, _mf=_b?18:13, _hf=_b?13:11, _hp=_b?"9px 18px":"6px 12px", _rad=_b?14:12, _gap=_b?8:6;
   return(
-    <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:4}}>
+    <div style={{display:"inline-flex",alignItems:"center",gap:_gap,background:"#fff",border:"1px solid #e2e8f0",borderRadius:_rad,padding:_b?6:4,boxShadow:_b?"0 2px 10px rgba(15,23,42,0.06)":"none"}}>
       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} title="Mês anterior"
-        style={{background:"none",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        style={{background:"none",border:"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
         onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
         onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <svg width={_ic} height={_ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div style={{color:"#0f172a",fontWeight:700,fontSize:13,minWidth:160,textAlign:"center",letterSpacing:-.2}}>
+      <div style={{color:"#0f172a",fontWeight:_b?800:700,fontSize:_mf,minWidth:_mw,textAlign:"center",letterSpacing:-.3,textTransform:"capitalize"}}>
         {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
       </div>
       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} title="Próximo mês"
-        style={{background:"none",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        style={{background:"none",border:"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
         onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
         onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg width={_ic} height={_ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       <button onClick={()=>setCalMonth(new Date())} disabled={isToday}
-        style={{background:isToday?"#f1f5f9":"#0f172a",color:isToday?"#cbd5e1":"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:isToday?"default":"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+        style={{background:isToday?"#f1f5f9":"#0f172a",color:isToday?"#cbd5e1":"#fff",border:"none",borderRadius:_b?10:8,padding:_hp,fontSize:_hf,fontWeight:700,cursor:isToday?"default":"pointer",fontFamily:"inherit",transition:"all .12s"}}>
         Hoje
       </button>
     </div>
@@ -17674,7 +17676,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
         <span style={{flex:1}}/>
         {/* Seletor de mês — reposto aqui depois de remover o widget de progresso */}
-        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big/>
       </div>
 
       {/* Modal: preview da sugestão de datas — cards existentes */}
@@ -31213,10 +31215,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     (async()=>{
       try{
         const sb=window._sb;
-        const{data:rows}=await sb.from("team_login_secrets").select("team_id,senha,updated_at");
+        const{data:rows}=await sb.from("team_login_secrets").select("team_id,senha,email,updated_at");
         if(rows){
           const m={};
-          rows.forEach(r=>{if(r.team_id)m[r.team_id]={senha:r.senha,updated_at:r.updated_at};});
+          rows.forEach(r=>{if(r.team_id)m[r.team_id]={senha:r.senha,email:r.email,updated_at:r.updated_at};});
           setLoginSecrets(m);
         }
       }catch(e){console.warn("[acessos] login secrets:",e&&e.message?e.message:e);}
@@ -31239,7 +31241,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       });
       const data=await res.json().catch(()=>({error:"Resposta inválida do servidor"}));
       if(!res.ok){if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao redefinir senha.");setResetPwd(p=>({...p,busy:false}));return;}
-      setLoginSecrets(m=>({...m,[teamId]:{senha:nova,updated_at:new Date().toISOString()}}));
+      setLoginSecrets(m=>({...m,[teamId]:Object.assign({},m[teamId]||{},{senha:nova,updated_at:new Date().toISOString()})}));
       setRevealPwd(m=>({...m,[teamId]:true}));
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha redefinida! Agora aparece aqui pros sócios.");
       setResetPwd({open:false,teamId:null,nome:"",value:"",busy:false});
@@ -31547,7 +31549,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           <div style={{padding:"18px 22px"}}>
             <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Nova senha</div>
             <input autoFocus type="text" value={resetPwd.value} onChange={e=>setResetPwd(p=>({...p,value:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")_redefinirSenhaSubmit();}} placeholder="mín. 6 caracteres"
-              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"10px 13px",color:C.tx,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"10px 13px",color:C.tx,fontSize:14,fontWeight:600,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
             <div style={{display:"flex",gap:8,marginTop:16}}>
               <button onClick={()=>setResetPwd({open:false,teamId:null,nome:"",value:"",busy:false})} style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"10px",color:C.ts,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancelar</button>
               <button onClick={_redefinirSenhaSubmit} disabled={resetPwd.busy} style={{flex:1,background:C.a,border:"none",borderRadius:9,padding:"10px",color:"#fff",fontWeight:700,fontSize:13,cursor:resetPwd.busy?"default":"pointer",opacity:resetPwd.busy?.6:1}}>{resetPwd.busy?"Salvando...":"Redefinir"}</button>
@@ -31606,8 +31608,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
           // Registra a senha no cofre de login (só sócios veem no card do Time)
           try{
-            await sb.from("team_login_secrets").upsert({team_id:payload.team_id,senha:payload.password,updated_by:CURRENT_USER.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
-            setLoginSecrets(m=>({...m,[payload.team_id]:{senha:payload.password,updated_at:new Date().toISOString()}}));
+            await sb.from("team_login_secrets").upsert({team_id:payload.team_id,senha:payload.password,email:payload.email,updated_by:CURRENT_USER.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
+            setLoginSecrets(m=>({...m,[payload.team_id]:{senha:payload.password,email:payload.email,updated_at:new Date().toISOString()}}));
           }catch(_e){console.warn("[acessos] captura senha login:",_e&&_e.message?_e.message:_e);}
           setNovoColabOpen(false);
           setNovoColabBusy(false);
@@ -32127,15 +32129,16 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               <div>
                 <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.2,lineHeight:1.25}}>{displayName}</div>
                 <div style={{color:u.color,fontSize:12.5,fontWeight:600,marginTop:3}}>{(collabProfiles[u.id]&&collabProfiles[u.id].funcao)||u.role}</div>
-                <div style={{color:C.td,fontSize:11,marginTop:4}}>{u.id+"@pixelsmarketing.com.br"}</div>
+                <div title="Email de login" style={{color:C.td,fontSize:11,marginTop:4}}>{(loginSecrets[u.id]&&loginSecrets[u.id].email)||(u.id+"@pixelsmarketing.com.br")}</div>
               </div>
               {isMePartner&&(()=>{
                 const _sec=loginSecrets[u.id];
                 const _rev=!!revealPwd[u.id];
+                const _temSenha=!!(_sec&&_sec.senha);
                 return <div style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"7px 10px",display:"flex",alignItems:"center",gap:7,marginTop:2}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.td} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                  {_sec?(<>
-                    <span style={{flex:1,fontFamily:"monospace",fontSize:12.5,color:C.tx,fontWeight:600,letterSpacing:_rev?0:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?_sec.senha:"••••••••"}</span>
+                  {_temSenha?(<>
+                    <span style={{flex:1,fontFamily:"'Inter',system-ui,sans-serif",fontSize:13,color:C.tx,fontWeight:700,letterSpacing:_rev?-.1:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?_sec.senha:"••••••••"}</span>
                     <button title={_rev?"Ocultar":"Mostrar"} onClick={()=>setRevealPwd(m=>({...m,[u.id]:!m[u.id]}))} style={{background:"none",border:"none",cursor:"pointer",color:C.ts,padding:2,display:"flex"}}>
                       {_rev
                         ?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -32144,9 +32147,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                     <button title="Copiar senha" onClick={()=>{try{navigator.clipboard.writeText(_sec.senha);if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha copiada!");}catch(e){}}} style={{background:"none",border:"none",cursor:"pointer",color:C.ts,padding:2,display:"flex"}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                     </button>
-                    <button title="Redefinir senha" onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:"none",border:"none",cursor:"pointer",color:C.a,padding:2,display:"flex"}}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-                    </button>
+                    <button title="Trocar a senha de login desse colaborador" onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})}
+                      style={{background:C.a+"12",border:"1px solid "+C.a+"3a",borderRadius:7,padding:"4px 10px",fontSize:10,fontWeight:800,color:C.a,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.2}}>Trocar</button>
                   </>):(<>
                     <span title="As senhas criadas antes desta tela ficam criptografadas no login e não têm como ser recuperadas — nem por nós. Clique em Definir pra registrar uma senha nova (o colaborador passa a logar com ela) e a partir daí ela aparece aqui." style={{flex:1,fontSize:10.5,color:C.td,fontStyle:"italic",cursor:"help"}}>Ainda não registrada</span>
                     <button onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:C.a+"15",border:"1px solid "+C.a+"44",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:C.a,cursor:"pointer",whiteSpace:"nowrap"}}>Definir</button>
