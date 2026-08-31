@@ -54973,7 +54973,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   const clStatus=cl.payment?.status||"pendente";
   const clPayDate=cl.payment?.date||"—";
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1920,margin:"0 auto",padding:isMob?"14px 12px 32px":"20px 20px 40px",boxSizing:"border-box",width:"100%"}}>
+  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:"none",margin:0,padding:isMob?"14px 12px 32px":"18px 26px 40px",boxSizing:"border-box",width:"100%"}}>
 
     {/* Header — sem emoji, tipografia limpa */}
     <div>
@@ -81811,12 +81811,41 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     return out;
   },[]);
 
+  // Trilha padrão de vendas — vem automático em TODO cliente (sócio pode desbloquear/editar/excluir depois)
+  const _TRILHA_VENDAS=[
+    "R$ 100 mil em vendas pelo canal digital",
+    "R$ 1 milhão em vendas pelo canal digital",
+    "R$ 10 milhões em vendas pelo canal digital",
+    "R$ 100 milhões em vendas pelo canal digital",
+    "R$ 1 bilhão em vendas pelo canal digital",
+  ];
+  const _seedTentado=useRef(false);
   const _carregar=async function(){
     if(!sb||!_rootId){ setLoading(false); return; }
     try{
       const r=await sb.from("client_conquistas").select("*").eq("client_id",_rootId)
         .order("ordem",{ascending:true}).order("created_at",{ascending:true});
-      setCartas((r&&r.data)||[]);
+      let _lista=(r&&r.data)||[];
+      // Auto-seed 1x: só sócio cria; cria as cartas de venda que faltam (dedup por título normalizado)
+      if(canEdit && !_seedTentado.current){
+        _seedTentado.current=true;
+        const _norm=function(s){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); };
+        const _tem=_lista.map(function(c){return _norm(c.titulo);});
+        const _faltam=_TRILHA_VENDAS.filter(function(t){ return _tem.indexOf(_norm(t))<0; });
+        if(_faltam.length>0){
+          const _base=_lista.length;
+          const _rows=_faltam.map(function(t,i){
+            return {client_id:_rootId,unidade:"",titulo:t,descricao:"",icone:"dollar",tema:"ouro",
+              desbloqueada:false,unlocked_at:null,ordem:_base+i,
+              created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:"seed"};
+          });
+          try{
+            const _ins=await sb.from("client_conquistas").insert(_rows).select("*");
+            if(_ins&&!_ins.error&&_ins.data) _lista=_lista.concat(_ins.data);
+          }catch(_){}
+        }
+      }
+      setCartas(_lista);
     }catch(e){ console.warn("[conquistas] load:",(e&&e.message)||e); }
     setLoading(false);
   };
@@ -81861,38 +81890,6 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     setReveladas(function(p){ const n=Object.assign({},p); delete n[c.id]; return n; });
     setConfete(false);
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Carta virada — o cliente revela de novo com festa.",2500);
-  };
-
-  /* ── Trilha de vendas: cria de uma vez os marcos de vendas pelo canal digital ── */
-  const _TRILHA_VENDAS=[
-    {titulo:"R$ 100 mil em vendas pelo canal digital"},
-    {titulo:"R$ 1 milhão em vendas pelo canal digital"},
-    {titulo:"R$ 10 milhões em vendas pelo canal digital"},
-    {titulo:"R$ 100 milhões em vendas pelo canal digital"},
-    {titulo:"R$ 1 bilhão em vendas pelo canal digital"},
-  ];
-  const _seedTrilhaVendas=async function(){
-    if(!sb||!_rootId) return;
-    const _norm=function(s){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); };
-    const _existentes=cartas.map(function(c){return _norm(c.titulo);});
-    const _faltam=_TRILHA_VENDAS.filter(function(t){ return _existentes.indexOf(_norm(t.titulo))<0; });
-    if(_faltam.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("A trilha de vendas já está no álbum."); return; }
-    let ok=true;
-    if(typeof pixelsConfirm==="function")
-      ok=await pixelsConfirm({title:"Criar trilha de vendas?",message:"Vai adicionar "+_faltam.length+" carta(s) de metas de vendas pelo canal digital (bloqueadas). Você desbloqueia cada uma quando a meta for batida.",confirmLabel:"Criar trilha"});
-    if(!ok) return;
-    try{
-      const _uni=(_isBioter&&_unidade!=="grupo"&&_unidade!=="_minhas_")?_unidade:"";
-      const _rows=_faltam.map(function(t,i){
-        return {client_id:_rootId,unidade:_uni,titulo:t.titulo,descricao:"",icone:"dollar",tema:"ouro",
-          desbloqueada:false,unlocked_at:null,ordem:cartas.length+i,
-          created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:""};
-      });
-      const r=await sb.from("client_conquistas").insert(_rows);
-      if(r&&r.error) throw r.error;
-      if(typeof pixelsToast!=="undefined") pixelsToast.success(_faltam.length+" carta(s) de vendas criada(s).");
-      _carregar();
-    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro criando trilha: "+((e&&e.message)||""),5000); }
   };
 
   /* ── CRUD (sócios) ── */
@@ -81960,21 +81957,13 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
         </div>
         <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Nosso álbum de vitórias — cada carta é algo que conquistamos juntos.</div>
       </div>
-      {canEdit&&<div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-        <button type="button" onClick={_seedTrilhaVendas} title="Cria de uma vez os marcos de R$100 mil → R$1 bilhão em vendas"
-          style={{background:"#fff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,
-            padding:"10px 15px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
-            display:"inline-flex",alignItems:"center",gap:7}}>
-          <Ico n="dollar" size={13} color="#7c3aed"/> Trilha de vendas
-        </button>
-        <button type="button" onClick={function(){setModal({});}}
-          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
-            padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
-            display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)"}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nova conquista
-        </button>
-      </div>}
+      {canEdit&&<button type="button" onClick={function(){setModal({});}}
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+          padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
+          display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)",flexShrink:0}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova conquista
+      </button>}
     </div>
 
     {/* ── Progresso do álbum ── */}
