@@ -15351,6 +15351,13 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
    Calendar grid simétrico (aspect-ratio: 1), header de dias da semana,
    navegação de mês, número do dia, status dot — usados pelos dois calendários
    (Calendário de publicações e Calendário interno). */
+// Card tem EQUIPE DE PRODUÇÃO (pago por demanda)? Usado pra só mostrar a tag de mês de pagamento quando faz sentido.
+function _demTemProducao(t){
+  try{
+    var al=Array.isArray(t.assignees)?t.assignees:(t.assignee?[t.assignee]:[]);
+    return al.some(function(id){var m=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===id;});return !!(m&&m.pagamentoPorDemanda);});
+  }catch(_){return false;}
+}
 function CalendarMonthNav({calMonth, setCalMonth, MONTHS}){
   const isToday = (()=>{const n=new Date();return calMonth.getMonth()===n.getMonth()&&calMonth.getFullYear()===n.getFullYear();})();
   return(
@@ -20772,7 +20779,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         </div>}
 
         {/* ── Progresso do mês — só CEOs (nivel 1) e Estrategista (Hellen) ── */}
-        {(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
+        {/* Progresso do mês (produzir) — REMOVIDO a pedido pra ganhar espaço na linha de produção. Componente ProgressoDoMes segue existindo; descomente pra reativar. */}
+        {false&&(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(280px,320px))`,gap:14,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
@@ -21017,7 +21025,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
+                  {(t.contentType||(t.referenceMonth&&_demTemProducao(t)))&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
                     {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
                     {t.contentType&&(function(){
                       const types={
@@ -21048,7 +21056,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </span>;
                     })()}
                     {/* Mês de pagamento (formato YYYY-MM → "Mai/26") */}
-                    {t.referenceMonth&&(function(){
+                    {t.referenceMonth&&_demTemProducao(t)&&(function(){
                       const parts=String(t.referenceMonth).split("-");
                       if(parts.length<2)return null;
                       const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
