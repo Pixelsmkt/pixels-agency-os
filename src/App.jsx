@@ -41063,6 +41063,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
   const _allOV = _mergeOV(playbookData).filter(function(x){return x && (x.imgUrl || x.description || x.title);});
   const _hasOrientacoesVisuais = _allOV.length > 0;
   const _pbEquipe=(playbookData&&Array.isArray(playbookData.equipe))?playbookData.equipe.filter(function(m){return m&&(m.nome||m.cargo);}):[];
+  const _pbMarcacoes=(playbookData&&Array.isArray(playbookData.marcacoes))?playbookData.marcacoes.filter(function(m){return m&&(m.arroba||m.nome);}):[];
   const _pbComunicacao=(playbookData&&playbookData.comunicacao)||"";
   const _contatosArr=(function(){
     const c=_resolvedContatos;
@@ -41070,7 +41071,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
     const lista=Array.isArray(c)?c:[c];
     return lista.filter(function(x){return x&&(x.nome||x.whatsapp||x.email);});
   })();
-  const hasContent=_briefItens.length>0||_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||!!_pbComunicacao||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  const hasContent=_briefItens.length>0||_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -41261,6 +41262,23 @@ function OrientacoesView({clientId, bioterUnit, sector}){
                 {m.obs&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,lineHeight:1.4}}>{m.obs}</div>}
               </div>
             </div>;
+          })}
+        </div>
+      </div>}
+
+      {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
+      {_pbMarcacoes.length>0&&<div>
+        <SectionTitle label="Marcar no post (@)" sub="Perfis pra marcar na publicação — clique pra copiar o @" icon="tag" accent="#0284c7"/>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+          {_pbMarcacoes.map(function(m,i){
+            const _a=String(m.arroba||"").trim()?("@"+String(m.arroba).trim().replace(/^@+/,"")):"";
+            const _copyVal=_a||m.nome||"";
+            return <button key={i} type="button" title="Clique pra copiar o @"
+              onClick={function(){copyHex(_copyVal);}}
+              style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+(copiedHex===_copyVal?"#5eead4":"#bae6fd"),borderRadius:99,padding:"7px 13px",cursor:"copy",fontFamily:"inherit"}}>
+              <span style={{color:copiedHex===_copyVal?"#0d9488":"#0284c7",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{copiedHex===_copyVal?"Copiado ✓":(_a||"—")}</span>
+              {m.nome&&copiedHex!==_copyVal?<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>· {m.nome}</span>:null}
+            </button>;
           })}
         </div>
       </div>}
@@ -77641,6 +77659,53 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 })}
                 <button type="button" onClick={function(){_upd(_eq.concat([{nome:"",cargo:"",obs:""}]));}}
                   style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
+              </div>;
+            })()}
+          </PlaybookBlock>
+
+          {/* Marcar no post (@) — DIFERENTE do GC: aqui vão os @ pra marcar na publicação */}
+          <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
+            {(function(){
+              const _mk=Array.isArray(data.marcacoes)?data.marcacoes:[];
+              const _upd=function(lista){ onUpdate({marcacoes:lista}); };
+              const _fmtAt=function(a){var v=String(a||"").trim();if(!v)return "";return "@"+v.replace(/^@+/,"");};
+              if(!editMode){
+                const _vis=_mk.filter(function(m){return m&&(m.arroba||m.nome);});
+                return _vis.length===0
+                  ? <_PbEmpty icon="tag" text="Nenhum @ cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar os perfis pra marcar no post.":""}/>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {_vis.map(function(m,i){
+                        const _a=_fmtAt(m.arroba);
+                        return <button key={i} type="button" title="Clique pra copiar o @"
+                          onClick={function(){try{navigator.clipboard.writeText(_a||m.nome||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado: "+(_a||m.nome));}catch(e){}}}
+                          style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:99,padding:"7px 13px",cursor:"pointer",fontFamily:PB_INTER}}>
+                          <span style={{color:"#0284c7",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_a||"—"}</span>
+                          {m.nome?<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>· {m.nome}</span>:null}
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                        </button>;
+                      })}
+                    </div>;
+              }
+              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {_mk.map(function(m,i){
+                  return <div key={"mk"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
+                    <span style={{color:"#0284c7",fontSize:15,fontWeight:800,flexShrink:0}}>@</span>
+                    <input defaultValue={String(m.arroba||"").replace(/^@+/,"")} placeholder="usuario (sem @) — ex: construschorr"
+                      onBlur={function(e){const v=e.target.value.trim().replace(/^@+/,"");if(v!==String(m.arroba||"").replace(/^@+/,""))_upd(_mk.map(function(x,j){return j===i?Object.assign({},x,{arroba:v}):x;}));}}
+                      style={{width:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <input defaultValue={m.nome||""} placeholder="Quem é (opcional) — ex: Perfil da empresa · Sócio João"
+                      onBlur={function(e){const v=e.target.value;if(v!==(m.nome||""))_upd(_mk.map(function(x,j){return j===i?Object.assign({},x,{nome:v}):x;}));}}
+                      style={{flex:1,minWidth:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
+                    <button type="button" onClick={function(){_upd(_mk.filter(function(_,j){return j!==i;}));}} title="Remover"
+                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>;
+                })}
+                <button type="button" onClick={function(){_upd(_mk.concat([{arroba:"",nome:""}]));}}
+                  style={{background:"#0ea5e90d",border:"1px dashed #0ea5e955",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#0284c7",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar @</button>
               </div>;
             })()}
           </PlaybookBlock>
