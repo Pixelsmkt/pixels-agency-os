@@ -15363,24 +15363,24 @@ function CalendarMonthNav({calMonth, setCalMonth, MONTHS, big}){
   const _b=!!big;
   const _bt=_b?42:30, _ic=_b?18:14, _mw=_b?210:160, _mf=_b?18:13, _hf=_b?13:11, _hp=_b?"9px 18px":"6px 12px", _rad=_b?14:12, _gap=_b?8:6;
   return(
-    <div style={{display:"inline-flex",alignItems:"center",gap:_gap,background:"#fff",border:"1px solid #e2e8f0",borderRadius:_rad,padding:_b?6:4,boxShadow:_b?"0 2px 10px rgba(15,23,42,0.06)":"none"}}>
+    <div style={{display:"inline-flex",alignItems:"center",gap:_gap,background:_b?"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)":"#fff",border:_b?"none":"1px solid #e2e8f0",borderRadius:_b?16:_rad,padding:_b?"7px 8px":4,boxShadow:_b?"0 8px 24px rgba(15,23,42,0.28)":"none"}}>
       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} title="Mês anterior"
-        style={{background:"none",border:"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
-        onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
-        onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
+        style={{background:_b?"rgba(255,255,255,0.08)":"none",border:_b?"1px solid rgba(255,255,255,0.12)":"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:_b?"#cbd5e1":"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={e=>{if(_b){e.currentTarget.style.background="rgba(255,255,255,0.18)";e.currentTarget.style.color="#fff";}else{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}}
+        onMouseLeave={e=>{if(_b){e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.color="#cbd5e1";}else{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}}>
         <svg width={_ic} height={_ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div style={{color:"#0f172a",fontWeight:_b?800:700,fontSize:_mf,minWidth:_mw,textAlign:"center",letterSpacing:-.3,textTransform:"capitalize"}}>
+      <div style={{color:_b?"#fff":"#0f172a",fontWeight:_b?800:700,fontSize:_mf,minWidth:_mw,textAlign:"center",letterSpacing:-.3,textTransform:"capitalize",lineHeight:1.15}}>
         {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
       </div>
       <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} title="Próximo mês"
-        style={{background:"none",border:"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
-        onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
-        onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
+        style={{background:_b?"rgba(255,255,255,0.08)":"none",border:_b?"1px solid rgba(255,255,255,0.12)":"none",borderRadius:_b?11:8,width:_bt,height:_bt,color:_b?"#cbd5e1":"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={e=>{if(_b){e.currentTarget.style.background="rgba(255,255,255,0.18)";e.currentTarget.style.color="#fff";}else{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}}
+        onMouseLeave={e=>{if(_b){e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.color="#cbd5e1";}else{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}}>
         <svg width={_ic} height={_ic} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       <button onClick={()=>setCalMonth(new Date())} disabled={isToday}
-        style={{background:isToday?"#f1f5f9":"#0f172a",color:isToday?"#cbd5e1":"#fff",border:"none",borderRadius:_b?10:8,padding:_hp,fontSize:_hf,fontWeight:700,cursor:isToday?"default":"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+        style={{background:_b?(isToday?"rgba(255,255,255,0.10)":"#fff"):(isToday?"#f1f5f9":"#0f172a"),color:_b?(isToday?"rgba(255,255,255,0.35)":"#0f172a"):(isToday?"#cbd5e1":"#fff"),border:"none",borderRadius:_b?11:8,padding:_hp,fontSize:_hf,fontWeight:800,cursor:isToday?"default":"pointer",fontFamily:"inherit",transition:"all .12s",marginLeft:_b?4:0}}>
         Hoje
       </button>
     </div>
