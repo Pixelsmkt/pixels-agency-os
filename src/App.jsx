@@ -36868,8 +36868,14 @@ function _cardPodeSerResp(u){
       const _clearedByAdmin = isAdmin && _hadRefMonthBefore && !_autoRefMonth;
       // Vazio? preenche sozinho (dia >= 10 → mês seguinte), pra qualquer responsável.
       // Respeita quando o admin zerou de propósito nesta sessão.
-      if(!_autoRefMonth && !_clearedByAdmin && typeof pxMesPagamentoAuto==="function"){
-        _autoRefMonth = pxMesPagamentoAuto();
+      // Mês de pagamento só existe quando há EQUIPE DE PRODUÇÃO (pago por demanda) no card.
+      const _temProducao = (assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);});
+      if(_temProducao){
+        if(!_autoRefMonth && !_clearedByAdmin && typeof pxMesPagamentoAuto==="function"){
+          _autoRefMonth = pxMesPagamentoAuto();
+        }
+      } else {
+        _autoRefMonth = null; // sem equipe de produção → sem mês de pagamento
       }
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
@@ -40522,7 +40528,8 @@ function _cardPodeSerResp(u){
             </div>
           </div>
 
-          {/* Mês de referência — visível pra todos, mas só sócios editam (contabilização de pagamento) */}
+          {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
+          {(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
           <div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
               <span>Mês de pagamento</span>
@@ -40566,6 +40573,7 @@ function _cardPodeSerResp(u){
               </div>;
             })()}
           </div>
+          )}
 
           {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -47088,7 +47096,7 @@ export default function AgencyOS(){
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
-      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
+      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
@@ -47204,7 +47212,7 @@ export default function AgencyOS(){
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
-      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
+      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
