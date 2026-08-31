@@ -41208,7 +41208,14 @@ function OrientacoesView({clientId, bioterUnit, sector}){
   const _allOV = _mergeOV(playbookData).filter(function(x){return x && (x.imgUrl || x.description || x.title);});
   const _hasOrientacoesVisuais = _allOV.length > 0;
   const _pbEquipe=(playbookData&&Array.isArray(playbookData.equipe))?playbookData.equipe.filter(function(m){return m&&(m.nome||m.cargo);}):[];
-  const _pbMarcacoes=(playbookData&&Array.isArray(playbookData.marcacoes))?playbookData.marcacoes.filter(function(m){return m&&(m.arroba||m.nome);}):[];
+  // Marcações: Bioter é POR UNIDADE (marcacoes_by_unit); demais clientes usam a lista única.
+  const _pbMarcacoes=(function(){
+    if(!playbookData)return [];
+    var raw;
+    if(bioterUnit){ raw=(playbookData.marcacoes_by_unit||{})[bioterUnit]||[]; }
+    else raw=playbookData.marcacoes||[];
+    return Array.isArray(raw)?raw.filter(function(m){return m&&(m.arroba||m.nome);}):[];
+  })();
   const _pbComunicacao=(playbookData&&playbookData.comunicacao)||"";
   const _contatosArr=(function(){
     const c=_resolvedContatos;
@@ -50176,7 +50183,7 @@ const PORTAL_ALL_TABS=[
   {id:"metas",       ico:"target",      label:"Metas"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicações"},
-  {id:"analises",    ico:"chart",       label:"Análises"},
+  // {id:"analises",    ico:"chart",       label:"Análises"}, // DESATIVADA por enquanto (pedido 2026-08-31) — automação do Reportei ainda não resolve pro cliente
   {id:"parcerias",   ico:"users",       label:"Parcerias"},
   {id:"concorrencia",ico:"eye",         label:"Concorrência"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
@@ -56068,8 +56075,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             hint={_publicadasMes>0?_publicadasMes+" publicada"+(_publicadasMes===1?"":"s")+" este mês":"Feed do Instagram das entregas"} badges={[]}/>
           <_NavCard tab="performance" accent="#f59e0b" icon="trendingUp" title="Performance"
             hint="Funil digital + faturamento vindo de campanhas" badges={[]}/>
+          {/* Análises desativada por enquanto (2026-08-31)
           <_NavCard tab="analises" accent="#8b5cf6" icon="barChart" title="Análises"
-            hint="Dashboard Reportei com métricas completas" badges={[]}/>
+            hint="Dashboard Reportei com métricas completas" badges={[]}/> */}
           <_NavCard tab="nps" accent="#0ea5e9" icon="star" title="NPS"
             hint="Avalie a Pixels — sua opinião conta" badges={[]}/>
           <_NavCard tab="parcerias" accent="#ec4899" icon="users" title="Parcerias"
@@ -77828,14 +77836,24 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Marcar no post (@) — DIFERENTE do GC: aqui vão os @ pra marcar na publicação */}
           <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
             {(function(){
-              const _mk=Array.isArray(data.marcacoes)?data.marcacoes:[];
-              const _upd=function(lista){ onUpdate({marcacoes:lista}); };
+              // Bioter: marcações são POR UNIDADE (segue o seletor do topo) — igual aos Contatos.
+              const _mk=_isBioter
+                ? (Array.isArray((data.marcacoes_by_unit||{})[_unitTab])?data.marcacoes_by_unit[_unitTab]:[])
+                : (Array.isArray(data.marcacoes)?data.marcacoes:[]);
+              const _upd=function(lista){
+                if(_isBioter) onUpdate({marcacoes_by_unit: Object.assign({},data.marcacoes_by_unit||{},{[_unitTab]:lista})});
+                else onUpdate({marcacoes:lista});
+              };
+              const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
               const _fmtAt=function(a){var v=String(a||"").trim();if(!v)return "";return "@"+v.replace(/^@+/,"");};
+              const _chipUnidade=_isBioter?<div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_uAtual&&(_uAtual.pickerLabel||_uAtual.label))||_unitTab}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>@ desta unidade — troque no seletor do topo</span>
+              </div>:null;
               if(!editMode){
                 const _vis=_mk.filter(function(m){return m&&(m.arroba||m.nome);});
-                return _vis.length===0
-                  ? <_PbEmpty icon="tag" text="Nenhum @ cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar os perfis pra marcar no post.":""}/>
-                  : <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                if(_vis.length===0) return <React.Fragment>{_chipUnidade}<_PbEmpty icon="tag" text="Nenhum @ cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar os perfis pra marcar no post.":""}/></React.Fragment>;
+                return <React.Fragment>{_chipUnidade}<div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                       {_vis.map(function(m,i){
                         const _a=_fmtAt(m.arroba);
                         return <button key={i} type="button" title="Clique pra copiar o @"
@@ -77846,11 +77864,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
                         </button>;
                       })}
-                    </div>;
+                    </div></React.Fragment>;
               }
               return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {_chipUnidade}
                 {_mk.map(function(m,i){
-                  return <div key={"mk"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
+                  return <div key={"mk"+(_isBioter?_unitTab:"")+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
                     <span style={{color:"#0284c7",fontSize:15,fontWeight:800,flexShrink:0}}>@</span>
                     <input defaultValue={String(m.arroba||"").replace(/^@+/,"")} placeholder="usuario (sem @) — ex: construschorr"
                       onBlur={function(e){const v=e.target.value.trim().replace(/^@+/,"");if(v!==String(m.arroba||"").replace(/^@+/,""))_upd(_mk.map(function(x,j){return j===i?Object.assign({},x,{arroba:v}):x;}));}}
