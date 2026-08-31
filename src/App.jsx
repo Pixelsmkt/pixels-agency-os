@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 33/33 | Nao editar diretamente
+// Modulos: 34/34 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -4370,6 +4370,216 @@ window.loadDynamicClientsFromSupabase = async function(){
     });
   }catch(_){}
 })();
+
+// ═══════════════════════════════════════════════════════════════════
+// 00b_preview_util.jsx — Compactação de vídeo (versão leve 720p) GLOBAL
+// Fonte única usada pelo upload (10_radar_entrega), pelo botão manual
+// (06_aprovacoes) e pelo backfill automático (17_gestao_midia).
+// A compactação roda no NAVEGADOR em tempo real (MediaRecorder): precisa
+// da aba aberta e em primeiro plano. Preview ruim é descartado de propósito.
+// ═══════════════════════════════════════════════════════════════════
+
+// Gera um preview 720p (Blob) a partir de um File/Blob de vídeo. Resolve
+// com o Blob comprimido, ou null se não deu (aba escondida, sem áudio,
+// não encolheu o suficiente, etc). onProgress(pct 0-99). abortRef.current.
+function pixelsGenerateVideoPreview(file,onProgress,abortRef){
+  return new Promise(function(resolve){
+    var PREVIEW_MAX_DURATION=15*60;   // acima de 15 min não compensa (tempo real)
+    var PREVIEW_MAX_EDGE=1280;        // maior lado do preview
+    var PREVIEW_VIDEO_BPS=1200000;
+    var PREVIEW_AUDIO_BPS=96000;
+    function _pickPreviewMime(){
+      if(typeof MediaRecorder==="undefined")return null;
+      var cands=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
+      for(var i=0;i<cands.length;i++){try{if(MediaRecorder.isTypeSupported(cands[i]))return cands[i];}catch(_){}}
+      return null;
+    }
+    function _validatePreview(blob,srcDur,drawCount){return new Promise(function(res){
+      var _minFrames=Math.max(10,Math.floor(srcDur*8));
+      if(drawCount<_minFrames){console.warn("[preview] poucos frames:",drawCount,"<",_minFrames);res(false);return;}
+      var settled=false;
+      var v=document.createElement("video");
+      var u=URL.createObjectURL(blob);
+      var done=function(ok){if(settled)return;settled=true;try{URL.revokeObjectURL(u);}catch(_){}res(ok);};
+      v.preload="metadata";v.muted=true;
+      v.onloadedmetadata=function(){
+        var d=v.duration;
+        if(!isFinite(d)||d<=0){done(true);return;}
+        done(Math.abs(d-srcDur)<=0.6);
+      };
+      v.onerror=function(){done(false);};
+      setTimeout(function(){done(false);},8000);
+      v.src=u;
+    });}
+
+    var done=false,video=null,url=null,rec=null,raf=null,elStream=null,canvasStream=null,audioCtx=null;
+    var drawCount=0,guardTimer=null,startWatchdog=null,lastPct=-1,lastDrawT=-1,recStarted=false;
+    var hiddenDuring=(typeof document!=="undefined"&&document.hidden);
+    var _onVis=function(){if(document.hidden)hiddenDuring=true;};
+    var cleanup=function(){
+      try{if(raf)cancelAnimationFrame(raf);}catch(_){}
+      try{if(guardTimer)clearTimeout(guardTimer);}catch(_){}
+      try{if(startWatchdog)clearTimeout(startWatchdog);}catch(_){}
+      try{if(rec&&rec.state!=="inactive")rec.stop();}catch(_){}
+      try{if(canvasStream)canvasStream.getTracks().forEach(function(t){t.stop();});}catch(_){}
+      try{if(elStream)elStream.getTracks().forEach(function(t){t.stop();});}catch(_){}
+      try{if(audioCtx&&audioCtx.state!=="closed")audioCtx.close();}catch(_){}
+      try{if(video){video.pause();video.removeAttribute("src");video.load();}}catch(_){}
+      try{if(url)URL.revokeObjectURL(url);}catch(_){}
+      try{document.removeEventListener("visibilitychange",_onVis);}catch(_){}
+    };
+    var finish=function(val){if(done)return;done=true;cleanup();resolve(val);};
+    var aborted=function(){return !!(abortRef&&abortRef.current);};
+    try{
+      var mimeType=_pickPreviewMime();
+      if(!mimeType){finish(null);return;}
+      document.addEventListener("visibilitychange",_onVis);
+      video=document.createElement("video");
+      video.preload="auto";video.playsInline=true;
+      url=URL.createObjectURL(file);video.src=url;
+      video.onerror=function(){finish(null);};
+      video.onloadedmetadata=function(){
+        if(aborted()){finish(null);return;}
+        var dur=video.duration;
+        if(!isFinite(dur)||dur<=0||dur>PREVIEW_MAX_DURATION){finish(null);return;}
+        var vw=video.videoWidth,vh=video.videoHeight;
+        if(!vw||!vh){finish(null);return;}
+        var scale=Math.min(1,PREVIEW_MAX_EDGE/Math.max(vw,vh));
+        var cw=Math.max(2,Math.round(vw*scale/2)*2), ch=Math.max(2,Math.round(vh*scale/2)*2);
+        var canvas=document.createElement("canvas");
+        canvas.width=cw;canvas.height=ch;
+        var ctx=canvas.getContext("2d",{alpha:false});
+        canvasStream=canvas.captureStream(30);
+        var _audioOk=false;
+        try{
+          var AC=window.AudioContext||window.webkitAudioContext;
+          if(AC){
+            audioCtx=new AC();
+            var srcNode=audioCtx.createMediaElementSource(video);
+            var dest=audioCtx.createMediaStreamDestination();
+            srcNode.connect(dest);
+            var at=dest.stream.getAudioTracks()[0];
+            if(at){canvasStream.addTrack(at);_audioOk=true;}
+            if(audioCtx.state==="suspended"){try{audioCtx.resume();}catch(_){}}
+          }
+        }catch(_){}
+        if(!_audioOk){console.warn("[preview] WebAudio indisponível — usando o original");finish(null);return;}
+        var chunks=[];
+        try{
+          rec=new MediaRecorder(canvasStream,{mimeType:mimeType,videoBitsPerSecond:PREVIEW_VIDEO_BPS,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
+        }catch(_){finish(null);return;}
+        rec.ondataavailable=function(e){if(e.data&&e.data.size>0)chunks.push(e.data);};
+        rec.onerror=function(){finish(null);};
+        rec.onstop=function(){
+          if(aborted()||hiddenDuring){finish(null);return;}
+          if(!chunks.length){finish(null);return;}
+          var _semAudioComprovado=(video.webkitAudioDecodedByteCount===0)||(video.mozHasAudio===false);
+          if(!_semAudioComprovado){
+            var _temTrilha=canvasStream.getAudioTracks().length>0;
+            var _ctxOk=!!audioCtx&&audioCtx.state==="running";
+            if(!_temTrilha||!_ctxOk){console.warn("[preview] áudio não capturado, descartando");finish(null);return;}
+          }
+          var blob=new Blob(chunks,{type:(mimeType.split(";")[0]||"video/mp4")});
+          if(blob.size>=file.size*0.65){finish(null);return;}
+          _validatePreview(blob,dur,drawCount).then(function(ok){finish(ok?blob:null);}).catch(function(){finish(null);});
+        };
+        var draw=function(){
+          if(done)return;
+          if(aborted()){try{if(rec&&rec.state!=="inactive")rec.stop();}catch(_){}finish(null);return;}
+          try{
+            ctx.drawImage(video,0,0,cw,ch);
+            var _t=video.currentTime;
+            if(_t!==lastDrawT){lastDrawT=_t;drawCount++;}
+          }catch(_){}
+          if(onProgress){
+            var pct=Math.min(99,Math.round(video.currentTime/dur*100));
+            if(pct!==lastPct){lastPct=pct;try{onProgress(pct);}catch(_){}}
+          }
+          raf=requestAnimationFrame(draw);
+        };
+        video.onended=function(){try{if(rec&&rec.state!=="inactive"){rec.stop();return;}}catch(_){}finish(null);};
+        video.onplaying=function(){
+          if(recStarted||done)return;
+          recStarted=true;
+          try{rec.start(1000);}catch(_){finish(null);return;}
+          draw();
+        };
+        video.play().catch(function(){finish(null);});
+        startWatchdog=setTimeout(function(){if(!recStarted&&!done){console.warn("[preview] play não iniciou");finish(null);}},30000);
+        guardTimer=setTimeout(function(){console.warn("[preview] timeout, descartando");finish(null);},(dur+30)*1000);
+      };
+    }catch(_){finish(null);}
+  });
+}
+
+// Fila global de escrita em tasks.files (serializa SELECT->patch->UPDATE).
+function _pixelsQueueFilesWrite(fn){
+  if(typeof window==="undefined")return Promise.resolve().then(fn);
+  var prev=window.__pxFilesWriteQueue||Promise.resolve();
+  var next=prev.then(fn,fn);
+  window.__pxFilesWriteQueue=next.catch(function(){});
+  return next;
+}
+
+// Persiste previewUrl/previewPath/previewSize no tasks.files de um card qualquer.
+function pixelsPersistPreview(taskId,fileId,previewUrl,previewPath,previewSize){
+  return _pixelsQueueFilesWrite(async function(){
+    try{
+      var sb=window._sb;
+      if(!sb||!taskId)return false;
+      var sel=await sb.from("tasks").select("files").eq("id",taskId).maybeSingle();
+      var current=sel&&sel.data;
+      if(!current||!Array.isArray(current.files))return false;
+      var patch={previewUrl:previewUrl,previewPath:previewPath,previewSize:previewSize};
+      var matched=false;
+      var updated=current.files.map(function(f){
+        if(!f)return f;
+        var hit=(fileId&&f.id===fileId)||(previewPath&&f.storagePath&&previewPath.indexOf(f.storagePath.replace(/\.[^.]+$/,""))===0);
+        if(hit){matched=true;return Object.assign({},f,patch);}
+        return f;
+      });
+      if(!matched)return false;
+      var upd=await sb.from("tasks").update({files:updated}).eq("id",taskId);
+      if(upd&&upd.error){console.warn("[preview] update tasks.files:",upd.error.message);return false;}
+      return true;
+    }catch(e){console.warn("[preview] persist:",e&&e.message||e);return false;}
+  });
+}
+
+// Baixa o original, gera o preview e persiste. Retorna {ok,skipped,previewUrl,previewSize}.
+async function pixelsBackfillOneVideo(taskId,file,onProgress,abortRef){
+  var sb=window._sb;
+  if(!sb||!file)return {ok:false};
+  var PREVIEW_MIN_SIZE=20*1024*1024;
+  // 1) baixa o original (preferir storagePath — sem CORS)
+  var orig=null;
+  try{
+    if(file.storagePath){
+      var dl=await sb.storage.from("agency-files").download(file.storagePath);
+      if(dl&&dl.data)orig=dl.data;
+    }
+  }catch(_){}
+  if(!orig&&file.url){
+    try{var r=await fetch(file.url);if(r.ok)orig=await r.blob();}catch(_){}
+  }
+  if(!orig)return {ok:false,reason:"download"};
+  if(orig.size<=PREVIEW_MIN_SIZE)return {ok:false,skipped:true,reason:"pequeno"};
+  // 2) comprime
+  var blob=await pixelsGenerateVideoPreview(orig,onProgress,abortRef);
+  if(!blob)return {ok:false,reason:"compress"};
+  // 3) sobe o preview ao lado do original
+  var base=(file.storagePath||("tasks/"+taskId+"/"+(file.id||Date.now()))).replace(/\.[^.]+$/,"");
+  var pExt=(blob.type&&blob.type.indexOf("webm")>=0)?"webm":"mp4";
+  var pPath=base+"-preview."+pExt;
+  try{
+    var up=await sb.storage.from("agency-files").upload(pPath,blob,{contentType:blob.type||"video/mp4",upsert:true});
+    if(up&&up.error){console.warn("[backfill] upload:",up.error.message);return {ok:false,reason:"upload"};}
+  }catch(e){console.warn("[backfill] upload ex:",e&&e.message||e);return {ok:false,reason:"upload"};}
+  var pub=sb.storage.from("agency-files").getPublicUrl(pPath);
+  var previewUrl=pub&&pub.data&&pub.data.publicUrl;
+  await pixelsPersistPreview(taskId,file.id,previewUrl,pPath,blob.size);
+  return {ok:true,previewUrl:previewUrl,previewSize:blob.size,previewPath:pPath};
+}
 
 // ======= 01_dashboard.jsx =======
 
@@ -25407,6 +25617,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // URLs de imagens que já sabemos que falharam — pra esconder thumbs quebradas
   // e auto-pular pra próxima boa quando o user abrir um card.
   const [brokenImgs,setBrokenImgs]=useState(()=>new Set());
+  const [genLeve,setGenLeve]=useState({}); // versão leve gerada sob demanda por card
+  const _genAbortRef=useRef(false);
   const markBroken=useCallback((url)=>{
     if(!url)return;
     setBrokenImgs(prev=>{
@@ -26003,6 +26215,20 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       return (_atual&&_atual.previewUrl)?_atual:null;
     }catch(_){return null;}
   })();
+  // Vídeo final MAIS RECENTE, tenha preview ou não (alvo do botão "Gerar versão leve").
+  const _ultimoVideo=(function(){
+    try{
+      const _tsp=function(f){const v=(f&&(f.addedAtIso||f.addedAt))||"";const st=String(v);
+        if(/^\d{4}-\d{2}-\d{2}T/.test(st)){const d=new Date(st);return isNaN(d.getTime())?0:d.getTime();}
+        const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+        if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0);return isNaN(d.getTime())?0:d.getTime();}
+        return 0;};
+      const _vids=(_filesAtuais||[])
+        .filter(function(f){return f&&!f.isAnnotation&&f.url&&f.storagePath&&!f.uploading&&(String(f.type||"").startsWith("video/")||_isVideoUrl(f.url));})
+        .slice().sort(function(a,b){return _tsp(b)-_tsp(a);});
+      return _vids[0]||null;
+    }catch(_){return null;}
+  })();
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
@@ -26366,13 +26592,45 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                   </button>
-                  {/* Sem versão leve: chip explicativo no lugar do botão */}
-                  {tab==="video"&&!(_previewVideo&&_previewVideo.previewUrl)&&(
-                  <span title="Esse vídeo não tem versão compactada — ela é gerada automaticamente quando o editor sobe o vídeo no card. Vídeos antigos ou com compressão descartada só têm o original."
-                    style={{background:"#f8fafc",border:"1px dashed #e2e8f0",borderRadius:9,height:36,padding:"0 10px",color:"#94a3b8",display:"inline-flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,whiteSpace:"nowrap",cursor:"help"}}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                    Sem versão leve
-                  </span>)}
+                  {/* ═════ Gerar versão leve sob demanda (vídeos sem preview) ═════ */}
+                  {tab==="video"&&_ultimoVideo&&!(_previewVideo&&_previewVideo.previewUrl)&&(function(){
+                    const _g=(current&&genLeve[current.id])||{};
+                    const _busy=!!_g.busy;
+                    return <React.Fragment>
+                      <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
+                      <button type="button" disabled={_busy}
+                        title="Gerar a versão leve (720p) agora a partir do original. Deixe esta aba aberta e visível enquanto processa (roda em tempo real, ~1-2 min)."
+                        onClick={async function(){
+                          if(_busy||!current||!_ultimoVideo)return;
+                          const _cid=current.id, _vid=_ultimoVideo;
+                          _genAbortRef.current=false;
+                          setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:0}});});
+                          if(typeof pixelsToast!=="undefined")pixelsToast.info("Gerando versão leve… mantenha esta aba aberta e visível.",4500);
+                          try{
+                            const res=await pixelsBackfillOneVideo(_cid,_vid,function(pct){setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:true,pct:pct}});});},_genAbortRef);
+                            if(res&&res.ok){
+                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:100,done:true}});});
+                              if(setTasks)setTasks(function(p){return p.map(function(t){return t.id===_cid?Object.assign({},t,{files:(t.files||[]).map(function(f){return (f&&f.id===_vid.id)?Object.assign({},f,{previewUrl:res.previewUrl,previewPath:res.previewPath,previewSize:res.previewSize}):f;})}):t;});});
+                              if(typeof pixelsToast!=="undefined")pixelsToast.success("Versão leve pronta! Já pode baixar/usar.",4500);
+                            }else{
+                              setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
+                              const _motivo=(res&&res.skipped)?"o vídeo é pequeno, não precisa de versão leve.":((res&&res.reason==="download")?"não consegui baixar o original.":"a aba foi pro fundo ou o vídeo não encolheu o bastante. Tenta de novo deixando a aba aberta e visível.");
+                              if(typeof pixelsToast!=="undefined")pixelsToast.warning("Não gerou: "+_motivo,6000);
+                            }
+                          }catch(e){
+                            setGenLeve(function(m){return Object.assign({},m,{[_cid]:{busy:false,pct:0}});});
+                            if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao gerar: "+((e&&e.message)||"erro"),5000);
+                          }
+                        }}
+                        style={{background:_busy?"#f1f5f9":"#faf5ff",border:"1px solid "+(_busy?"#e2e8f0":"#e4d4fd"),borderRadius:9,height:36,padding:"0 12px",color:_busy?"#94a3b8":"#7c3aed",cursor:_busy?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",fontSize:11.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",transition:"all .15s"}}
+                        onMouseEnter={function(e){if(!_busy){e.currentTarget.style.background="#f3e8ff";e.currentTarget.style.borderColor="#c4b5fd";}}}
+                        onMouseLeave={function(e){if(!_busy){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor="#e4d4fd";}}}>
+                        {_busy
+                          ?<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{animation:"pixelsSpin 0.8s linear infinite"}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Gerando {_g.pct||0}%</React.Fragment>
+                          :<React.Fragment><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>Gerar versão leve</React.Fragment>}
+                      </button>
+                    </React.Fragment>;
+                  })()}
                   {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
                   {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
                   <button type="button" title="Baixar versão compactada (720p, bem menor — ideal pra WhatsApp e aprovação)"
@@ -31878,7 +32136,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
                     </button>
                   </>):(<>
-                    <span style={{flex:1,fontSize:10.5,color:C.td,fontStyle:"italic"}}>Senha não registrada</span>
+                    <span title="As senhas criadas antes desta tela ficam criptografadas no login e não têm como ser recuperadas — nem por nós. Clique em Definir pra registrar uma senha nova (o colaborador passa a logar com ela) e a partir daí ela aparece aqui." style={{flex:1,fontSize:10.5,color:C.td,fontStyle:"italic",cursor:"help"}}>Ainda não registrada</span>
                     <button onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:C.a+"15",border:"1px solid "+C.a+"44",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:C.a,cursor:"pointer",whiteSpace:"nowrap"}}>Definir</button>
                   </>)}
                 </div>;
@@ -46012,6 +46270,69 @@ export default function AgencyOS(){
     if(authState==="app")loadSelfProfile();
   },[authState]);
 
+  // ── Backfill automático de versões leves (720p) em segundo plano ──
+  // Vídeos que ficaram sem preview (aba fechada durante o upload, ou vídeos
+  // antigos) são compactados um por vez enquanto um usuário da agência tem o
+  // app aberto. É em tempo real (MediaRecorder), então: só desktop, respeita
+  // aba visível, e usa "claim" no banco pra dois navegadores não comprimirem
+  // o mesmo vídeo. Best-effort: o que não terminar hoje continua depois.
+  useEffect(()=>{
+    if(authState!=="app")return;
+    if(typeof MediaRecorder==="undefined")return;
+    try{ if(window.innerWidth<1024)return; }catch(_){ return; }
+    if(window.__pxBackfillRan)return; window.__pxBackfillRan=true;
+    let stopped=false;
+    const abortRef={current:false};
+    const _sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+    const _waitVisible=async()=>{ while(!stopped && typeof document!=="undefined" && document.hidden){ await _sleep(3000); } };
+    const run=async()=>{
+      await _sleep(20000); // deixa o app carregar antes de pesar a CPU
+      if(stopped)return;
+      const sb=window._sb; if(!sb)return;
+      let rows=null;
+      try{ const r=await sb.from("tasks").select("id,status,files").not("files","is",null); rows=r&&r.data; }catch(_){ return; }
+      if(!rows||stopped)return;
+      // Só vídeos que ainda vão passar por aprovação ou já aprovados/agendados que NÃO
+      // foram postados. Publicados já foram — não precisam de versão leve. Rascunhos,
+      // produção (demanda/execução), pausados, reprovados e internos ficam de fora.
+      const _OK_STATUS={avaliacao:1,aprovacao_final:1,aprovado:1,agendado:1,ajustes:1,alteracao_copy:1};
+      const cands=[];
+      for(const t of rows){
+        if(!t||!Array.isArray(t.files))continue;
+        if(!_OK_STATUS[t.status])continue;
+        for(const fl of t.files){
+          if(!fl||!fl.url||fl.uploading||fl.isAnnotation)continue;
+          const isVid=String(fl.type||"").startsWith("video/")||/\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(fl.url||""));
+          if(!isVid)continue;
+          if(fl.previewUrl)continue;
+          if(!fl.storagePath)continue;
+          if(typeof fl.size==="number" && fl.size<=20*1024*1024)continue;
+          cands.push({taskId:t.id,file:fl});
+        }
+      }
+      if(cands.length===0||stopped)return;
+      console.log("[backfill] candidatos sem versão leve:",cands.length);
+      let feitos=0;
+      for(const c of cands){
+        if(stopped)break;
+        await _waitVisible();
+        if(stopped)break;
+        let got=false;
+        try{ const {data}=await sb.rpc("pixels_claim_preview",{p_path:c.file.storagePath,p_task:String(c.taskId),p_file:String(c.file.id||"")}); got=!!data; }catch(_){ got=false; }
+        if(!got)continue;
+        let ok=false;
+        try{ const res=await pixelsBackfillOneVideo(c.taskId,c.file,null,abortRef); ok=!!(res&&res.ok); if(ok)feitos++; }catch(_){ ok=false; }
+        try{ await sb.rpc("pixels_finish_preview",{p_path:c.file.storagePath,p_ok:ok}); }catch(_){}
+        await _sleep(4000); // respiro entre vídeos
+      }
+      if(feitos>0 && !stopped && typeof pixelsToast!=="undefined"){
+        try{ pixelsToast.success("Versões leves geradas em segundo plano: "+feitos+".",6000); }catch(_){}
+      }
+    };
+    run();
+    return ()=>{ stopped=true; abortRef.current=true; window.__pxBackfillRan=false; };
+  },[authState]);
+
   // ── Carregar TODAS as fotos dos colaboradores ──
   // Antes só carregava em "Gerenciar Permissões" — agora baixa logo no startup
   // pra qualquer avatar (kanban, chat, aprovações) ter foto correta.
@@ -47417,11 +47738,22 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
           });
         }catch(_){}
         if(cancelled) return;
+        // Mescla SEM deixar valor vazio sobrescrever valor preenchido: um "" salvo
+        // no team_data (ex: aniversário deixado em branco no Gestão) não pode apagar
+        // o que a pessoa preencheu no perfil (Acessos > Time / profiles.profile_data).
+        const _assignNonEmpty = function(base, over){
+          const out = Object.assign({}, base||{});
+          Object.keys(over||{}).forEach(function(k){
+            const v = over[k];
+            if(v!==undefined && v!==null && !(typeof v==="string" && v.trim()==="")) out[k]=v;
+          });
+          return out;
+        };
         setExtras(function(prev){
           const merged = {};
           const allUids = new Set([].concat(Object.keys(fromProf), Object.keys(fromSb), Object.keys(prev||{})));
           allUids.forEach(function(uid){
-            merged[uid] = Object.assign({}, fromProf[uid]||{}, fromSb[uid]||{}, (prev||{})[uid]||{});
+            merged[uid] = _assignNonEmpty(_assignNonEmpty(fromProf[uid]||{}, fromSb[uid]||{}), (prev||{})[uid]||{});
           });
           try{ localStorage.setItem("pixels-team-data", JSON.stringify(merged)); }catch(_){}
           return merged;
