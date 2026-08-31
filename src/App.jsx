@@ -79968,6 +79968,7 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
 function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch, onDel, proxima,
                           dragId, overId, onDragStart, onDragOver, onDrop, onDragEnd}){
   const [podeArrastar,setPodeArrastar]=useState(false);
+  const [notaAberta,setNotaAberta]=useState(false);
   const st=_demTSt(t.status);
   const resp=_demMembro(t.resp);
   const _feita=t.status==="concluida";
@@ -79990,7 +79991,7 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
     onDragEnd={function(){ setPodeArrastar(false); onDragEnd(); }}
     style={{background:"#fff",border:"1px solid "+(_alvo?cat.cor:(proxima&&!_feita?cat.cor+"3d":"#eef0f3")),
       borderRadius:10,padding:isMob?"10px 12px":"9px 13px",display:"flex",alignItems:isMob?"flex-start":"center",
-      gap:11,opacity:_arrastando?.4:1,flexDirection:isMob?"column":"row",
+      gap:11,opacity:_arrastando?.4:1,flexWrap:"wrap",flexDirection:isMob?"column":"row",
       boxShadow:_alvo?("0 0 0 3px "+cat.cor+"26"):"none",transition:"border-color .12s, opacity .12s"}}>
 
     <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0,width:isMob?"100%":"auto"}}>
@@ -80030,6 +80031,13 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
             {proxima&&!_feita&&<span style={{background:cat.cor+"14",color:cat.cor,fontSize:9,fontWeight:800,
               padding:"1px 6px",borderRadius:99,marginLeft:7,letterSpacing:.3,textTransform:"uppercase"}}>agora</span>}
           </span>}
+      {canEdit && <button type="button" title={(t.obs&&String(t.obs).trim())?"Editar explicação da etapa":"Explicar o que essa etapa representa"}
+        onClick={function(e){e.stopPropagation();setNotaAberta(function(v){return !v;});}}
+        style={{background:notaAberta?cat.cor+"18":"transparent",border:"none",borderRadius:6,padding:"3px",cursor:"pointer",flexShrink:0,color:(t.obs&&String(t.obs).trim())?cat.cor:"#cbd5e1",display:"inline-flex",alignItems:"center"}}
+        onMouseEnter={function(e){if(!notaAberta)e.currentTarget.style.color=cat.cor;}}
+        onMouseLeave={function(e){if(!notaAberta)e.currentTarget.style.color=(t.obs&&String(t.obs).trim())?cat.cor:"#cbd5e1";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      </button>}
     </div>
 
     {/* Responsavel · prazo · status · excluir */}
@@ -80077,8 +80085,22 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
       </button>}
     </div>
 
-    {/* Observacao */}
-    {t.obs && <div style={{width:"100%",color:"#94a3b8",fontSize:11,fontStyle:"italic",paddingLeft:isMob?31:41,lineHeight:1.4}}>{t.obs}</div>}
+    {/* Explicação da etapa (o que ela representa) — recolhida por padrão pra não poluir */}
+    {(notaAberta || (t.obs && String(t.obs).trim())) && <div style={{width:"100%",paddingLeft:isMob?0:41,marginTop:2}}>
+      {canEdit && notaAberta
+        ? <textarea autoFocus defaultValue={t.obs||""} placeholder="Explique o que essa etapa representa / o que precisa acontecer pra concluir"
+            onClick={function(e){e.stopPropagation();}}
+            onBlur={function(e){var v=e.target.value;if((v||"")!==(t.obs||""))onPatch({obs:v});setNotaAberta(false);}}
+            onKeyDown={function(e){if(e.key==="Escape")setNotaAberta(false);}}
+            style={Object.assign({},_DEM_INP,{minHeight:54,resize:"vertical",fontSize:12,fontWeight:500,lineHeight:1.5,color:"#475569"})}/>
+        : ((t.obs && String(t.obs).trim())
+            ? <div onClick={function(){if(canEdit)setNotaAberta(true);}} title={canEdit?"Clique pra editar":""}
+                style={{background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:9,padding:"8px 11px",fontSize:11.5,color:"#64748b",lineHeight:1.5,whiteSpace:"pre-wrap",cursor:canEdit?"text":"default",display:"flex",gap:7,alignItems:"flex-start"}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <span>{t.obs}</span>
+              </div>
+            : null)}
+    </div>}
   </div>;
 }
 
@@ -80570,6 +80592,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
   const _addEtapa=function(){ setEtapas(function(p){ return p.concat([{id:_demNovoId(),nome:"",resp:"",prazo:"",status:"afazer",obs:"",done_at:"",done_by:""}]); }); };
   const _setEtapa=function(id,k,v){ setEtapas(function(p){ return p.map(function(t){ return t.id===id?Object.assign({},t,{[k]:v}):t; }); }); };
   const _delEtapa=function(id){ setEtapas(function(p){ return p.filter(function(t){ return t.id!==id; }); }); };
+  const [notaForm,setNotaForm]=useState({}); // etapas do form com a caixa de explicação aberta
 
   if(typeof useEscToClose==="function") useEscToClose(true, onFechar);
 
@@ -80674,7 +80697,10 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
           {etapas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:7}}>
             {etapas.map(function(t,i){
               const _ok=t.status==="concluida";
-              return <div key={t.id} style={{display:"grid",gridTemplateColumns:isMob?"20px 1fr auto":"20px minmax(0,1fr) 44px 118px auto",gap:6,alignItems:"center"}}>
+              const _notaOn=!!notaForm[t.id];
+              const _temObs=!!(t.obs&&String(t.obs).trim());
+              return <div key={t.id} style={{display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{display:"grid",gridTemplateColumns:isMob?"20px 1fr auto":"20px minmax(0,1fr) 44px 118px auto",gap:6,alignItems:"center"}}>
                 <span onClick={function(){_checkEtapa(t.id);}} title={_ok?"Desmarcar":"Concluir etapa"}
                   style={{width:17,height:17,borderRadius:"50%",cursor:"pointer",
                     background:_ok?"#16a34a":"#fff",border:_ok?"1.5px solid #16a34a":"1.5px solid #cbd5e1",
@@ -80689,13 +80715,29 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
                   <_DemRespPicker mini valor={t.resp} onChange={function(v){_setEtapa(t.id,"resp",v);}}/>
                 </div>}
                 {!isMob&&<_DemDataInput compacto valor={t.prazo} onChange={function(v){_setEtapa(t.id,"prazo",v);}} placeholder="Prazo"/>}
-                <button type="button" onClick={function(){_delEtapa(t.id);}} title="Remover etapa"
-                  style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"6px 4px",
-                    display:"inline-flex",alignItems:"center"}}
-                  onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-                  onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
+                <div style={{display:"flex",alignItems:"center",gap:1,justifyContent:"flex-end"}}>
+                  <button type="button" title={_temObs?"Editar explicação da etapa":"Explicar o que essa etapa representa"}
+                    onClick={function(){setNotaForm(function(m){var n=Object.assign({},m);n[t.id]=!m[t.id];return n;});}}
+                    style={{background:_notaOn?"#7c3aed18":"transparent",border:"none",borderRadius:6,color:_temObs?"#7c3aed":"#cbd5e1",cursor:"pointer",padding:"6px 4px",display:"inline-flex",alignItems:"center"}}
+                    onMouseEnter={function(e){if(!_notaOn)e.currentTarget.style.color="#7c3aed";}}
+                    onMouseLeave={function(e){if(!_notaOn)e.currentTarget.style.color=_temObs?"#7c3aed":"#cbd5e1";}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  </button>
+                  <button type="button" onClick={function(){_delEtapa(t.id);}} title="Remover etapa"
+                    style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"6px 4px",
+                      display:"inline-flex",alignItems:"center"}}
+                    onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                    onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                </div>
+                {(_notaOn||_temObs)&&<div style={{paddingLeft:isMob?0:23}}>
+                  <textarea value={t.obs||""} placeholder="Explique o que essa etapa representa / o que precisa acontecer pra concluir (opcional)"
+                    onChange={function(e){_setEtapa(t.id,"obs",e.target.value);}}
+                    onFocus={_demFoco} onBlur={_demBlur}
+                    style={Object.assign({},_DEM_INP,{minHeight:_notaOn?50:0,padding:"7px 11px",fontSize:11.5,fontWeight:500,lineHeight:1.5,color:"#475569",resize:"vertical",background:"#f8fafc"})}/>
+                </div>}
               </div>;
             })}
           </div>}
