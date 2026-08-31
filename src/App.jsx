@@ -17665,6 +17665,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
         </div>
+        <span style={{flex:1}}/>
+        {/* Seletor de mês — reposto aqui depois de remover o widget de progresso */}
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
       </div>
 
       {/* Modal: preview da sugestão de datas — cards existentes */}
