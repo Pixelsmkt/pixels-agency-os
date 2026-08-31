@@ -2593,6 +2593,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_time")        return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+  if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   if(id==="gestao_enps")        return <svg {...p}><path d="M3 12a9 9 0 1118 0"/><line x1="12" y1="12" x2="16" y2="8"/><circle cx="12" cy="12" r="1.5"/></svg>;
   if(id==="planejamento_mensal")return <svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></svg>;
@@ -2653,6 +2654,7 @@ const NAV=[
     {id:"gestao_projecao",      icon:"▥", label:"Projeção financeira"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_time",          icon:"◉", label:"Time"},
+    {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
     {id:"gestao_armazenamento", icon:"⛃", label:"Armazenamento"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
@@ -30890,6 +30892,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
   const isMePartner=CURRENT_USER.level===1; // renomeado pra não conflitar com global isPartner(uid)
+  const _podeSenhas=CURRENT_USER.id==="gustavo"||CURRENT_USER.id==="vinicius"; // cofre de senhas só CEOs
   const myPerms=withPartnerOverride({...DEFAULT_PERMS,...(ACCESS_STORE[CURRENT_USER.id]||{})}, CURRENT_USER.id);
   const [collabProfiles,setCollabProfiles]=useState(()=>{
     // Carrega perfis do localStorage como cache inicial
@@ -31711,7 +31714,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       {/* ── MAIN TAB SWITCHER ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:3,background:C.s1,borderRadius:12,padding:3}}>
-          {MAIN_TABS.map(([id,lbl])=>(
+          {MAIN_TABS.filter(function(t){return t[0]!=="senhas"||_podeSenhas;}).map(([id,lbl])=>(
             <button key={id} onClick={()=>setMainTab(id)}
               style={{background:mainTab===id?"linear-gradient(135deg,"+C.a+","+C.aD+")":"transparent",color:mainTab===id?"#fff":C.ts,border:"none",borderRadius:9,padding:"9px 20px",fontWeight:mainTab===id?700:400,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
               {lbl}
@@ -32153,7 +32156,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
 
       {/* Tab Storage — só admins */}
       {mainTab==="ferramentas"&&isMePartner&&<ToolsVault user={CURRENT_USER}/>}
-      {mainTab==="senhas"&&isMePartner&&<PasswordVault user={CURRENT_USER}/>}
+      {mainTab==="senhas"&&_podeSenhas&&<PasswordVault user={CURRENT_USER}/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
     </div>
@@ -46694,6 +46697,7 @@ export default function AgencyOS(){
       case "gestao_operacional":   return isSocio;
       case "gestao_portfolio":     return isSocio;
       case "gestao_time":          return isSocio;  // Time: só sócios podem ver
+      case "gestao_administrativo": return isSocio;
       case "gestao_armazenamento": return isSocio;  // Armazenamento: só sócios
       case "gestao_enps":          return true;  // todos veem (filtragem dentro)
       case "acessos":              return p.verAcessos||isSocio;
@@ -46792,6 +46796,7 @@ export default function AgencyOS(){
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
+      case "gestao_administrativo": return isSocio?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
       case "gestao_armazenamento":  return isSocio?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
@@ -52326,97 +52331,18 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
 
   return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* Form de Nova Solicitação inline */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"flex",alignItems:"center",gap:9}}>
+    {/* Header de minhas demandas — no topo */}
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{width:42,height:42,borderRadius:12,background:cl.color+"15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         <Ico n="zap" size={20} color={cl.color}/>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
       </div>
-
-      {/* Linha 1: título */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Título *</div>
-        <input value={solTitulo} onChange={function(e){setSolTitulo(e.target.value);}} maxLength={200}
-          placeholder="Ex: Banner promocional para Black Friday"
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",boxSizing:"border-box"}}/>
-      </div>
-
-      {/* Linha 2: descrição */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Descrição</div>
-        <textarea value={solDescricao} onChange={function(e){setSolDescricao(e.target.value);}} maxLength={5000} rows={3}
-          placeholder="Detalhe o que precisa, referências, prazos, etc..."
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
-
-      {/* Linha 3: tipo — MESMAS categorias de Estrategia > Clientes > Demandas.
-          Arte/video continuam separados porque vao direto pro fluxo de producao;
-          o resto vira uma demanda (client_demandas) com a categoria escolhida. */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Conteúdo pras redes <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· vai direto pra equipe de produção</span></div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {TIPOS_DEMANDA_CLIENTE.filter(function(o){return o.routesFluxo;}).map(function(opt){
-            const active=solTipo===opt.id;
-            return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
-              style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
-              {opt.label}
-            </button>;
-          })}
-        </div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,margin:"12px 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Projeto / demanda <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· acompanhada por etapas</span></div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {(typeof DEM_CATEGORIAS!=="undefined"?DEM_CATEGORIAS:[]).map(function(c){
-            const _id="cat:"+c.id;
-            const active=solTipo===_id;
-            return <button key={_id} onClick={function(){setSolTipo(_id);}}
-              style={{background:active?c.cor+"15":"#fff",color:active?c.cor:"#64748b",border:"1px solid "+(active?c.cor:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:5}}>
-              {typeof Ico==="function"&&<Ico n={c.ico} size={11} color={active?c.cor:"#94a3b8"}/>}
-              {c.label}
-            </button>;
-          })}
-        </div>
-      </div>
-
-      {/* Linha 4: prioridade — prazo de entrega já indicado em cada opção */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[
-            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:30},
-            {id:"media",   l:"Média",   c:"#f97316", dias:14},
-            {id:"alta",    l:"Alta",    c:"#ef4444", dias:5},
-            {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
-          ].map(function(p){
-            const active=solPrioridade===p.id;
-            return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
-              style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
-              {p.l}
-              <span style={{display:"inline-flex",alignItems:"center",gap:3,opacity:.85,fontSize:10.5}}>
-                <Ico n="clock" size={11}/> {p.dias} {p.dias===1?"dia útil":"dias úteis"}
-              </span>
-            </button>;
-          })}
-        </div>
-      </div>
-
-      {/* Botão Enviar — à esquerda, com mais respiro */}
-      <div style={{display:"flex",justifyContent:"flex-start",marginTop:14}}>
-        <button onClick={enviarSolicitacao} disabled={solEnviando}
-          style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
-          onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
-          onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
-          {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
-        </button>
-      </div>
-    </div>
-
-    {/* Header de minhas demandas */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginTop:4}}>
-      <div>
+      <div style={{minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Minhas demandas</div>
         <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações que você enviou à equipe Pixels — acompanhe o andamento de cada uma.</div>
       </div>
     </div>
+
+
 
     {/* Projetos e demandas maiores — client_demandas com etapas, mesmo card da equipe.
         Aparece o que veio do portal + o que a equipe liberou com "Enviar pro portal". */}
@@ -52551,7 +52477,92 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       </section>;
     })}
 
+    {/* ── Separador forte entre "minhas demandas" e o formulário ── */}
+    <div style={{height:1,background:"#e2e8f0",margin:"14px 0 4px"}}/>
 
+    {/* Form de Nova Solicitação inline */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:9}}>
+        <Ico n="zap" size={20} color={cl.color}/>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
+      </div>
+
+      {/* Linha 1: título */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Título *</div>
+        <input value={solTitulo} onChange={function(e){setSolTitulo(e.target.value);}} maxLength={200}
+          placeholder="Ex: Banner promocional para Black Friday"
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Linha 2: descrição */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Descrição</div>
+        <textarea value={solDescricao} onChange={function(e){setSolDescricao(e.target.value);}} maxLength={5000} rows={3}
+          placeholder="Detalhe o que precisa, referências, prazos, etc..."
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",resize:"vertical",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Linha 3: tipo — MESMAS categorias de Estrategia > Clientes > Demandas.
+          Arte/video continuam separados porque vao direto pro fluxo de producao;
+          o resto vira uma demanda (client_demandas) com a categoria escolhida. */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Conteúdo pras redes <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· vai direto pra equipe de produção</span></div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {TIPOS_DEMANDA_CLIENTE.filter(function(o){return o.routesFluxo;}).map(function(opt){
+            const active=solTipo===opt.id;
+            return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
+              style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
+              {opt.label}
+            </button>;
+          })}
+        </div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,margin:"12px 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Projeto / demanda <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· acompanhada por etapas</span></div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {(typeof DEM_CATEGORIAS!=="undefined"?DEM_CATEGORIAS:[]).map(function(c){
+            const _id="cat:"+c.id;
+            const active=solTipo===_id;
+            return <button key={_id} onClick={function(){setSolTipo(_id);}}
+              style={{background:active?c.cor+"15":"#fff",color:active?c.cor:"#64748b",border:"1px solid "+(active?c.cor:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:5}}>
+              {typeof Ico==="function"&&<Ico n={c.ico} size={11} color={active?c.cor:"#94a3b8"}/>}
+              {c.label}
+            </button>;
+          })}
+        </div>
+      </div>
+
+      {/* Linha 4: prioridade — prazo de entrega já indicado em cada opção */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[
+            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:30},
+            {id:"media",   l:"Média",   c:"#f97316", dias:14},
+            {id:"alta",    l:"Alta",    c:"#ef4444", dias:5},
+            {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
+          ].map(function(p){
+            const active=solPrioridade===p.id;
+            return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
+              style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+              {p.l}
+              <span style={{display:"inline-flex",alignItems:"center",gap:3,opacity:.85,fontSize:10.5}}>
+                <Ico n="clock" size={11}/> {p.dias} {p.dias===1?"dia útil":"dias úteis"}
+              </span>
+            </button>;
+          })}
+        </div>
+      </div>
+
+      {/* Botão Enviar — à esquerda, com mais respiro */}
+      <div style={{display:"flex",justifyContent:"flex-start",marginTop:14}}>
+        <button onClick={enviarSolicitacao} disabled={solEnviando}
+          style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
+          onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
+          onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+          {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
+        </button>
+      </div>
+    </div>
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
@@ -55038,19 +55049,39 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
     {/* Tabs — desktop quebra em linhas (sem barra de rolagem); mobile desliza
         no dedo com a scrollbar escondida (padrão de app touch). */}
-    <style>{".pxPortalTabs::-webkit-scrollbar{display:none}"}</style>
-    <div className="pxPortalTabs" style={isMob
-      ? {display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}
-      : {display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap",rowGap:2}}>
-      {TABS.map(function(t){
-        const active=tab===t.id;
-        return <button key={t.id} onClick={function(){setTab(t.id);}}
-          style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
-          <Ico n={t.ico||"dot"} size={13}/>
-          {t.label}
-        </button>;
-      })}
-    </div>
+    <style>{".pxPortalTabs::-webkit-scrollbar{display:none}.pxPortalSide::-webkit-scrollbar{width:6px}.pxPortalSide::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:9px}"}</style>
+    {/* ── LAYOUT: sidebar (desktop) + conteúdo · mobile mantém a barra no topo ── */}
+    <div style={isMob?{display:"block"}:{display:"flex",gap:18,alignItems:"flex-start"}}>
+
+      {isMob
+        ? <div className="pxPortalTabs" style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",marginBottom:14}}>
+            {TABS.map(function(t){
+              const active=tab===t.id;
+              return <button key={t.id} onClick={function(){setTab(t.id);}}
+                style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
+                <Ico n={t.ico||"dot"} size={13}/>
+                {t.label}
+              </button>;
+            })}
+          </div>
+        : <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#fff",border:"1px solid "+C.b1,borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+            {TABS.map(function(t){
+              const active=tab===t.id;
+              return <button key={t.id} onClick={function(){setTab(t.id);}}
+                style={{background:active?cl.color+"12":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?cl.color:C.ts,fontWeight:active?700:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%"}}
+                onMouseEnter={function(e){if(!active)e.currentTarget.style.background="#f8fafc";}}
+                onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
+                <span style={{width:26,height:26,borderRadius:8,background:active?cl.color+"18":"#f1f5f9",color:active?cl.color:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Ico n={t.ico||"dot"} size={13} color={active?cl.color:"#94a3b8"}/>
+                </span>
+                <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</span>
+              </button>;
+            })}
+          </div>
+      }
+
+      {/* ── CONTEÚDO ── */}
+      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:16}}>
 
     {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
     {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} viewerIsPixels={!lockedClientId} currentClientUser={currentClientUser}/>}
@@ -55518,6 +55549,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
     {/* Faturamento agora vive dentro da aba Performance (renderizado acima junto com PortalFunil) */}
 
+      </div>{/* fim conteúdo */}
+    </div>{/* fim layout sidebar+conteúdo */}
   </div>);
 }
 
@@ -62001,6 +62034,145 @@ function _OpDrawer(props){
   </div>;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   GESTÃO > ADMINISTRATIVO — dados cadastrais da Pixels + fiscais das NFs.
+   Fonte única: tabela dados_administrativos (1 linha, jsonb). Só sócios.
+   Cada valor é clique-pra-copiar. Edição inline (modo edição por sócio).
+   ═══════════════════════════════════════════════════════════════════════ */
+const _ADM_FF="'Inter',system-ui,sans-serif";
+function PageAdministrativo({isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const canEdit=!!(_u&&_u.level===1);
+  const [dados,setDados]=useState({empresa:{},notas_fiscais:{}});
+  const [loading,setLoading]=useState(true);
+  const [edit,setEdit]=useState(false);
+  const [draft,setDraft]=useState(null);
+  const [copiado,setCopiado]=useState("");
+  const _load=async function(){
+    try{
+      if(!sb){setLoading(false);return;}
+      const {data,error}=await sb.from("dados_administrativos").select("dados").eq("id",1).maybeSingle();
+      if(error) throw error;
+      const d=(data&&data.dados)||{};
+      setDados({empresa:d.empresa||{},notas_fiscais:d.notas_fiscais||{}});
+    }catch(e){ console.warn("[adm]",e&&e.message); }
+    setLoading(false);
+  };
+  useEffect(function(){ _load(); },[]);
+  const _copiar=async function(v){
+    if(!v)return;
+    try{ await navigator.clipboard.writeText(String(v)); setCopiado(String(v)); setTimeout(function(){setCopiado("");},1400); }catch(_){}
+  };
+  const _salvar=async function(){
+    try{
+      if(!sb) return;
+      const {error}=await sb.from("dados_administrativos").upsert({id:1,dados:draft,updated_by:_u?_u.name:"",updated_at:new Date().toISOString()},{onConflict:"id"});
+      if(error) throw error;
+      setDados({empresa:draft.empresa||{},notas_fiscais:draft.notas_fiscais||{}});
+      setEdit(false); setDraft(null);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Dados administrativos salvos.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro salvando: "+((e&&e.message)||""),4000);
+    }
+  };
+  const _setD=function(sec,k,v){ setDraft(function(p){ const n=JSON.parse(JSON.stringify(p||dados)); if(!n[sec])n[sec]={}; n[sec][k]=v; return n; }); };
+  const _EMP=[
+    {k:"razao_social",l:"Razão social"},{k:"nome_fantasia",l:"Nome fantasia"},
+    {k:"cnpj",l:"CNPJ"},{k:"inscricao_estadual",l:"Inscrição Estadual"},
+    {k:"inscricao_municipal",l:"Inscrição Municipal"},{k:"regime_tributacao",l:"Regime de tributação",full:true},
+    {k:"email",l:"E-mail"},{k:"data_abertura",l:"Data de abertura"},
+    {k:"cep",l:"CEP"},{k:"cep_obs",l:"Observação do CEP",full:true},
+    {k:"endereco",l:"Endereço",full:true},
+    {k:"cnae_principal",l:"CNAE principal",full:true},
+    {k:"cnae_prefeitura",l:"CNAE Prefeitura de Chapecó"},
+    {k:"codigo_servico_municipal",l:"Código de serviço municipal",full:true},
+    {k:"codigo_complementar_municipal",l:"Código complementar municipal"},
+  ];
+  const _NF=[
+    {k:"codigo_tributacao_nacional",l:"Código de tributação nacional",full:true},
+    {k:"codigo_nbs",l:"Código NBS",full:true},
+    {k:"cst",l:"Situação tributária (CST)"},
+    {k:"cclasstrib",l:"Classificação tributária (cClassTrib)"},
+    {k:"indicador_operacao",l:"Indicador da operação",full:true},
+    {k:"iss_tipo_recolhimento",l:"Recolhimento do ISS"},
+    {k:"iss_aliquota",l:"Alíquota de ISS"},
+  ];
+  const _cur=edit?(draft||dados):dados;
+  const _Campo=function(p){
+    const v=(_cur[p.sec]||{})[p.f.k]||"";
+    if(edit){
+      return <div style={{gridColumn:(p.f.full&&!isMob)?"1/-1":"auto"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{p.f.l}</div>
+        <input value={v} onChange={function(e){_setD(p.sec,p.f.k,e.target.value);}}
+          style={{width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:12.5,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_ADM_FF}}/>
+      </div>;
+    }
+    if(!v) return null;
+    const _on=copiado===String(v);
+    return <button type="button" onClick={function(){_copiar(v);}} title="Clique pra copiar"
+      style={{gridColumn:(p.f.full&&!isMob)?"1/-1":"auto",background:_on?"#f0fdfa":"#fafbfc",border:"1px solid "+(_on?"#5eead4":"#eef0f3"),borderRadius:11,padding:"10px 13px",textAlign:"left",cursor:"copy",fontFamily:_ADM_FF,transition:"all .12s",minWidth:0}}>
+      <div style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{_on?"Copiado ✓":p.f.l}</div>
+      <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:3,lineHeight:1.5,wordBreak:"break-word"}}>{v}</div>
+    </button>;
+  };
+  const _Sec=function(p){
+    return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,overflow:"hidden"}}>
+      <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:11,background:"#fafbfc"}}>
+        <div style={{width:34,height:34,borderRadius:10,background:p.cor+"15",color:p.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n={p.ico} size={16} color={p.cor}/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{p.t}</div>
+          {p.sub&&<div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>{p.sub}</div>}
+        </div>
+      </div>
+      <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+        {p.children}
+      </div>
+    </div>;
+  };
+  const _nf=_cur.notas_fiscais||{};
+  const _trib=Array.isArray(_nf.tributos)?_nf.tributos:[];
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_ADM_FF,maxWidth:1200,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#0ea5e9,#0284c7)"}}/>
+      <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 6px 16px rgba(2,132,199,.25)"}}>
+        <Ico n="fileText" size={22} color="#fff"/>
+      </div>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Administrativo</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Dados cadastrais e fiscais da Pixels — pra emissão de nota e contratos.</div>
+      </div>
+      {canEdit&&(edit
+        ? <div style={{display:"flex",gap:8}}>
+            <button onClick={function(){setEdit(false);setDraft(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:_ADM_FF}}>Cancelar</button>
+            <button onClick={_salvar} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_ADM_FF}}>Salvar</button>
+          </div>
+        : <button onClick={function(){setDraft(JSON.parse(JSON.stringify(dados)));setEdit(true);}}
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:_ADM_FF,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Ico n="edit" size={13}/> Editar
+          </button>)}
+    </div>
+    {loading?<div style={{padding:"48px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>:<>
+      <_Sec t="Dados da empresa" sub="Razão social, CNPJ, endereço e códigos" ico="building" cor="#0284c7">
+        {_EMP.map(function(f){ return <_Campo key={f.k} sec="empresa" f={f}/>; })}
+      </_Sec>
+      <_Sec t="Notas fiscais" sub="Códigos e classificações pra emissão" ico="fileText" cor="#16a34a">
+        {_NF.map(function(f){ return <_Campo key={f.k} sec="notas_fiscais" f={f}/>; })}
+        {!edit&&_trib.length>0&&<div style={{gridColumn:isMob?"auto":"1/-1"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Tributos na nota</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {_trib.map(function(t,i){
+              return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:700}}>{t.nome}: {t.valor}</span>;
+            })}
+          </div>
+        </div>}
+      </_Sec>
+    </>}
+  </div>;
+}
+
 // ======= 21_cliente_onboarding.jsx =======
 // Visão Geral modernizada + Onboarding do cliente.
 // Persiste em Supabase nas tabelas client_meta e client_onboarding.
@@ -62044,13 +62216,7 @@ const ONBOARDING_BLOCKS = [
   {
     id:"dia2", title:"Dia 2", subtitle:"Estudo do brief",
     items:[
-      {id:"d2_estudo", label:"Estudo do brief", sub:[
-        {id:"d2_estudo_gpt", label:"Destrinchar produtos e serviços com GPT"},
-        {id:"d2_estudo_validar", label:"Validar/corrigir as informações com cliente"},
-        {id:"d2_estudo_estrategista", label:"Enviar estudo do brief para estrategista"},
-        {id:"d2_estudo_gpt_upload", label:"Upload do estudo do brief no GPT"},
-        {id:"d2_estudo_materiais", label:"Subir estudo do brief nos materiais do projeto do cliente no Aplicativo da Pixels"},
-      ]},
+      {id:"d2_estudo", label:"Estudo do briefing"},
       {id:"d2_dados_projetos", label:"Passar dados do briefing para os projetos do cliente no Aplicativo da Pixels"},
       // Vieram do Dia 1 em 08/2026. IDs seguem com prefixo d1_ de proposito: trocar
       // o id zeraria o progresso ja salvo dos clientes que rodaram o onboarding.
@@ -81395,6 +81561,9 @@ function _cqVistasKey(clId){ return "pixels-conq-vistas-"+clId; }
 function _cqLerVistas(clId){
   try{ const v=JSON.parse(localStorage.getItem(_cqVistasKey(clId))||"[]"); return Array.isArray(v)?v:[]; }catch(_){ return []; }
 }
+function _cqDesmarcarVista(clId,id){
+  try{ const l=_cqLerVistas(clId).filter(function(x){return x!==id;}); localStorage.setItem(_cqVistasKey(clId),JSON.stringify(l)); }catch(_){}
+}
 function _cqMarcarVista(clId,id){
   try{
     const v=_cqLerVistas(clId);
@@ -81500,7 +81669,7 @@ function _CqModal({inicial, isMob, onSalvar, onFechar, destino}){
 }
 
 /* ── Carta do álbum ── */
-function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, onToggleDesb, isMob}){
+function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, onToggleDesb, onResetReveal, isMob}){
   const _ouro=c.tema==="ouro";
   const _bg=_ouro
     ? "linear-gradient(158deg,#6b4204 0%,#4a2c02 42%,#241501 100%)"
@@ -81593,6 +81762,12 @@ function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, o
             borderRadius:8,padding:"5px 11px",fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF}}>
           {_desb?"Bloquear":"Desbloquear"}
         </button>
+        {_desb&&typeof onResetReveal==="function"&&<button type="button" onClick={onResetReveal} title="Vira a carta de novo — o cliente revela com festa outra vez"
+          style={{background:"transparent",border:"1px solid rgba(255,216,104,.5)",borderRadius:8,
+            padding:"5px 9px",color:_CQ_OURO2,fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,display:"inline-flex",alignItems:"center",gap:4}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Revelar de novo
+        </button>}
         <button type="button" onClick={onEditar} title="Editar conquista"
           style={{background:"transparent",border:"1px solid "+(_desb?"rgba(255,255,255,.28)":"#dbe0e8"),borderRadius:8,
             padding:"5px 9px",color:_desb?"rgba(255,255,255,.8)":"#64748b",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_CQ_FF}}>Editar</button>
@@ -81679,6 +81854,47 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     setTimeout(function(){ setConfete(false); },3600);
   };
 
+  /* ── Reset de revelação: vira a carta de novo pra reexplodir a festa ── */
+  const _resetRevelacao=function(c){
+    _cqDesmarcarVista(_rootId,c.id);
+    setVistas(_cqLerVistas(_rootId));
+    setReveladas(function(p){ const n=Object.assign({},p); delete n[c.id]; return n; });
+    setConfete(false);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Carta virada — o cliente revela de novo com festa.",2500);
+  };
+
+  /* ── Trilha de vendas: cria de uma vez os marcos de vendas pelo canal digital ── */
+  const _TRILHA_VENDAS=[
+    {titulo:"R$ 100 mil em vendas pelo canal digital"},
+    {titulo:"R$ 1 milhão em vendas pelo canal digital"},
+    {titulo:"R$ 10 milhões em vendas pelo canal digital"},
+    {titulo:"R$ 100 milhões em vendas pelo canal digital"},
+    {titulo:"R$ 1 bilhão em vendas pelo canal digital"},
+  ];
+  const _seedTrilhaVendas=async function(){
+    if(!sb||!_rootId) return;
+    const _norm=function(s){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); };
+    const _existentes=cartas.map(function(c){return _norm(c.titulo);});
+    const _faltam=_TRILHA_VENDAS.filter(function(t){ return _existentes.indexOf(_norm(t.titulo))<0; });
+    if(_faltam.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("A trilha de vendas já está no álbum."); return; }
+    let ok=true;
+    if(typeof pixelsConfirm==="function")
+      ok=await pixelsConfirm({title:"Criar trilha de vendas?",message:"Vai adicionar "+_faltam.length+" carta(s) de metas de vendas pelo canal digital (bloqueadas). Você desbloqueia cada uma quando a meta for batida.",confirmLabel:"Criar trilha"});
+    if(!ok) return;
+    try{
+      const _uni=(_isBioter&&_unidade!=="grupo"&&_unidade!=="_minhas_")?_unidade:"";
+      const _rows=_faltam.map(function(t,i){
+        return {client_id:_rootId,unidade:_uni,titulo:t.titulo,descricao:"",icone:"dollar",tema:"ouro",
+          desbloqueada:false,unlocked_at:null,ordem:cartas.length+i,
+          created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.name:""};
+      });
+      const r=await sb.from("client_conquistas").insert(_rows);
+      if(r&&r.error) throw r.error;
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(_faltam.length+" carta(s) de vendas criada(s).");
+      _carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro criando trilha: "+((e&&e.message)||""),5000); }
+  };
+
   /* ── CRUD (sócios) ── */
   const _salvar=async function(dados){
     if(!sb) return;
@@ -81744,13 +81960,21 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
         </div>
         <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Nosso álbum de vitórias — cada carta é algo que conquistamos juntos.</div>
       </div>
-      {canEdit&&<button type="button" onClick={function(){setModal({});}}
-        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
-          padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
-          display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)",flexShrink:0}}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nova conquista
-      </button>}
+      {canEdit&&<div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+        <button type="button" onClick={_seedTrilhaVendas} title="Cria de uma vez os marcos de R$100 mil → R$1 bilhão em vendas"
+          style={{background:"#fff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,
+            padding:"10px 15px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
+            display:"inline-flex",alignItems:"center",gap:7}}>
+          <Ico n="dollar" size={13} color="#7c3aed"/> Trilha de vendas
+        </button>
+        <button type="button" onClick={function(){setModal({});}}
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,
+            padding:"10px 17px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_CQ_FF,
+            display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,.30)"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova conquista
+        </button>
+      </div>}
     </div>
 
     {/* ── Progresso do álbum ── */}
@@ -81806,7 +82030,8 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
                   canEdit={canEdit&&!_nova}
                   onEditar={function(){setModal(c);}}
                   onExcluir={function(){_excluir(c);}}
-                  onToggleDesb={function(){_toggleDesb(c);}}/>;
+                  onToggleDesb={function(){_toggleDesb(c);}}
+                  onResetReveal={function(){_resetRevelacao(c);}}/>;
               })}
             </div>
           </div>
