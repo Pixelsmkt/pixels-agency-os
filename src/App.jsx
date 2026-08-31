@@ -81804,14 +81804,27 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     return out;
   },[]);
 
-  // Trilha padrão de vendas — vem automático em TODO cliente (sócio pode desbloquear/editar/excluir depois)
+  // Trilha padrão de vendas — vem automático em TODO cliente, ordem crescente.
+  // (sócio pode desbloquear/editar/excluir depois)
   const _TRILHA_VENDAS=[
-    "R$ 100 mil em vendas pelo canal digital",
-    "R$ 1 milhão em vendas pelo canal digital",
-    "R$ 10 milhões em vendas pelo canal digital",
-    "R$ 100 milhões em vendas pelo canal digital",
-    "R$ 1 bilhão em vendas pelo canal digital",
+    "R$ 100 mil em vendas a partir do canal digital",
+    "R$ 1 milhão em vendas a partir do canal digital",
+    "R$ 10 milhões em vendas a partir do canal digital",
+    "R$ 100 milhões em vendas a partir do canal digital",
+    "R$ 1 bilhão em vendas a partir do canal digital",
   ];
+  // Detecta o NÍVEL da carta de venda (1..5) por valor — não pelo texto exato.
+  // Assim "pelo/através/a partir do canal digital" e "100.000/100 mil" contam como o mesmo tier.
+  const _tierVenda=function(titulo){
+    const t=String(titulo||"").toLowerCase();
+    if(t.indexOf("digital")<0||t.indexOf("venda")<0) return 0;
+    if(/\bbilh/.test(t)||/1\.000\.000\.000/.test(t)) return 5;
+    if(/100\s*milh/.test(t)||/100\.000\.000/.test(t)) return 4;
+    if(/10\s*milh/.test(t)||/10\.000\.000/.test(t)) return 3;
+    if(/milh/.test(t)||/1\.000\.000/.test(t)) return 2;
+    if(/100\s*mil\b/.test(t)||/100\.000/.test(t)) return 1;
+    return 0;
+  };
   const _seedTentado=useRef(false);
   const _carregar=async function(){
     if(!sb||!_rootId){ setLoading(false); return; }
@@ -81822,9 +81835,8 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
       // Auto-seed 1x: só sócio cria; cria as cartas de venda que faltam (dedup por título normalizado)
       if(canEdit && !_seedTentado.current){
         _seedTentado.current=true;
-        const _norm=function(s){ return String(s||"").toLowerCase().replace(/\s+/g," ").trim(); };
-        const _tem=_lista.map(function(c){return _norm(c.titulo);});
-        const _faltam=_TRILHA_VENDAS.filter(function(t){ return _tem.indexOf(_norm(t))<0; });
+        const _tiersTem={}; _lista.forEach(function(c){ const _t=_tierVenda(c.titulo); if(_t)_tiersTem[_t]=true; });
+        const _faltam=_TRILHA_VENDAS.filter(function(t){ return !_tiersTem[_tierVenda(t)]; });
         if(_faltam.length>0){
           const _base=_lista.length;
           const _rows=_faltam.map(function(t,i){
