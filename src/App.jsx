@@ -17824,8 +17824,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
       </div>
 
-      {/* ── Progresso do mês (publicar) — sincronizado com o calendario ── */}
-      {typeof ProgressoDoMes!=="undefined"&&<ProgressoDoMes visible={(tasks||[]).filter(function(t){return !t.deletedAt;})} mode="publicar" externalDate={calMonth} setExternalDate={setCalMonth}/>}
+      {/* ── Progresso do mês (publicar) — REMOVIDO a pedido: os medidores por cliente
+             não faziam mais sentido aqui e ocupavam muito espaço. Componente ProgressoDoMes
+             segue existindo e é usado no dash (mode="produzir"). Pra reativar, é só descomentar. ── */}
 
       {/* ── Filtro de cliente ── */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
