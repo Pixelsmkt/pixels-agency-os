@@ -20782,20 +20782,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* Aparece quando o card tem Andre/Maria/Guilherme (pagamento por demanda) sem referenceMonth */}
                   {/* preenchido — sinal pro sócio ir preencher pra o freelancer ser pago. */}
                   {(function(){
-                    if(t.referenceMonth) return null;
+                    const _dead = t.status==="reprovado"||t.status==="pausado";
+                    // Alerta 1: freelancer marcado mas SEM mês de pagamento
                     const _freelas = ["andre","maria","guilherme"];
                     const _assList = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
                     const _hasFreela = _assList.some(function(id){return _freelas.indexOf(String(id||"").toLowerCase())>=0;});
-                    if(!_hasFreela) return null;
-                    // Nao mostra em Rascunhos/Reprovada (nao paga freelancer nesses estados)
-                    if(t.status==="rascunhos"||t.status==="reprovado"||t.status==="pausado") return null;
-                    return <div title="Sem mês de pagamento — clique no card pra definir"
-                      style={{position:"absolute",top:6,right:6,zIndex:5,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                        <line x1="12" y1="9" x2="12" y2="13"/>
-                        <line x1="12" y1="17" x2="12.01" y2="17"/>
-                      </svg>
+                    const _semPagamento = !t.referenceMonth && _hasFreela && !(t.status==="rascunhos"||_dead);
+                    // Alerta 2: card SEM tipo de conteúdo (arte única / carrossel / foto de obra / vídeo…)
+                    const _semTipo = !t.contentType && !_dead;
+                    if(!_semPagamento && !_semTipo) return null;
+                    const _dot=function(title,children){
+                      return <div title={title} style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>{children}</div>;
+                    };
+                    return <div style={{position:"absolute",top:6,right:6,zIndex:5,display:"flex",gap:5,alignItems:"center"}}>
+                      {_semTipo && _dot("Sem tipo de conteúdo — clique no card pra definir (arte única, carrossel, foto de obra, vídeo…)",
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>)}
+                      {_semPagamento && _dot("Sem mês de pagamento — clique no card pra definir",
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
                     </div>;
                   })()}
                   <style>{`@keyframes pixelsPulseAlert{0%,100%{transform:scale(1);box-shadow:0 2px 8px rgba(220,38,38,0.55),0 0 0 2px #fff}50%{transform:scale(1.08);box-shadow:0 3px 12px rgba(220,38,38,0.75),0 0 0 3px #fff}}`}</style>
@@ -30437,9 +30440,10 @@ function CollabProfilePage({user,profile,onSave,onClose}){
   const fileRef=useRef(null);
 
   const [nome,setNome]=useState(p.nome||user.name);
-  // Sempre usa o role do TEAM atual (setor oficial) — ignora valores antigos
-  // salvos no profile_data quando o setor mudou (ex: "Gestor Meta & Google" → "Gestão de mídia")
-  const [funcao,setFuncao]=useState(user.role||p.funcao||"");
+  // Função/cargo: prioriza o que a pessoa salvou (profile_data.funcao); só cai no
+  // role do TEAM se ainda não editaram. Antes o role sobrescrevia o valor salvo — o
+  // usuário editava, salvava, e ao reabrir voltava pro role (parecia "não salvou").
+  const [funcao,setFuncao]=useState((p.funcao&&String(p.funcao).trim())||user.role||"");
   const [telefone,setTelefone]=useState(p.telefone||"");
   const [email,setEmail]=useState(p.email||user.id+"@pixelsmarketing.com.br");
   const [nascimento,setNascimento]=useState(p.nascimento||"");
@@ -30930,6 +30934,51 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     loadProfiles();
   },[]);
 
+  // ═════ Cofre de senhas de login do time (só sócios level 1 veem) ═════
+  const [loginSecrets,setLoginSecrets]=useState({});
+  const [revealPwd,setRevealPwd]=useState({});
+  const [resetPwd,setResetPwd]=useState({open:false,teamId:null,nome:"",value:"",busy:false});
+  useEffect(()=>{
+    if(!isMePartner)return;
+    (async()=>{
+      try{
+        const sb=window._sb;
+        const{data:rows}=await sb.from("team_login_secrets").select("team_id,senha,updated_at");
+        if(rows){
+          const m={};
+          rows.forEach(r=>{if(r.team_id)m[r.team_id]={senha:r.senha,updated_at:r.updated_at};});
+          setLoginSecrets(m);
+        }
+      }catch(e){console.warn("[acessos] login secrets:",e&&e.message?e.message:e);}
+    })();
+  },[isMePartner]);
+  const _redefinirSenhaSubmit=async()=>{
+    const teamId=resetPwd.teamId, nova=resetPwd.value;
+    if(!teamId)return;
+    if(!nova||nova.length<6){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Senha precisa de no mínimo 6 caracteres.");return;}
+    setResetPwd(p=>({...p,busy:true}));
+    try{
+      const sb=window._sb;
+      const{data:sess}=await sb.auth.getSession();
+      const tok=sess?.session?.access_token;
+      const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+      const res=await fetch(url+"/functions/v1/set-collaborator-password",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+        body:JSON.stringify({team_id:teamId,password:nova}),
+      });
+      const data=await res.json().catch(()=>({error:"Resposta inválida do servidor"}));
+      if(!res.ok){if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao redefinir senha.");setResetPwd(p=>({...p,busy:false}));return;}
+      setLoginSecrets(m=>({...m,[teamId]:{senha:nova,updated_at:new Date().toISOString()}}));
+      setRevealPwd(m=>({...m,[teamId]:true}));
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha redefinida! Agora aparece aqui pros sócios.");
+      setResetPwd({open:false,teamId:null,nome:"",value:"",busy:false});
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e&&e.message?e.message:e));
+      setResetPwd(p=>({...p,busy:false}));
+    }
+  };
+
   const [mainTab,setMainTab]=useState("clientes");
   const [teamRev,setTeamRev]=useState(0);
   useEffect(()=>{
@@ -31217,6 +31266,26 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     />)}
 
     {/* ── NOVO COLABORADOR MODAL ── */}
+    {resetPwd.open&&(
+      <div onMouseDown={e=>{if(e.target===e.currentTarget)setResetPwd({open:false,teamId:null,nome:"",value:"",busy:false});}}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(3px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,width:"100%",maxWidth:400,boxShadow:"0 24px 60px rgba(0,0,0,.28)",overflow:"hidden"}}>
+          <div style={{padding:"18px 22px 14px",borderBottom:"1px solid "+C.b1}}>
+            <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.2}}>Redefinir senha</div>
+            <div style={{color:C.td,fontSize:12,marginTop:3}}>{resetPwd.nome} vai passar a logar com a senha nova.</div>
+          </div>
+          <div style={{padding:"18px 22px"}}>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Nova senha</div>
+            <input autoFocus type="text" value={resetPwd.value} onChange={e=>setResetPwd(p=>({...p,value:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")_redefinirSenhaSubmit();}} placeholder="mín. 6 caracteres"
+              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"10px 13px",color:C.tx,fontSize:14,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"monospace"}}/>
+            <div style={{display:"flex",gap:8,marginTop:16}}>
+              <button onClick={()=>setResetPwd({open:false,teamId:null,nome:"",value:"",busy:false})} style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"10px",color:C.ts,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+              <button onClick={_redefinirSenhaSubmit} disabled={resetPwd.busy} style={{flex:1,background:C.a,border:"none",borderRadius:9,padding:"10px",color:"#fff",fontWeight:700,fontSize:13,cursor:resetPwd.busy?"default":"pointer",opacity:resetPwd.busy?.6:1}}>{resetPwd.busy?"Salvando...":"Redefinir"}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
     {novoColabOpen&&(()=>{
       const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
       const lbl={color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
@@ -31265,6 +31334,11 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             return;
           }
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
+          // Registra a senha no cofre de login (só sócios veem no card do Time)
+          try{
+            await sb.from("team_login_secrets").upsert({team_id:payload.team_id,senha:payload.password,updated_by:CURRENT_USER.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
+            setLoginSecrets(m=>({...m,[payload.team_id]:{senha:payload.password,updated_at:new Date().toISOString()}}));
+          }catch(_e){console.warn("[acessos] captura senha login:",_e&&_e.message?_e.message:_e);}
           setNovoColabOpen(false);
           setNovoColabBusy(false);
           setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:""});
@@ -31782,9 +31856,33 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               </div>
               <div>
                 <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.2,lineHeight:1.25}}>{displayName}</div>
-                <div style={{color:u.color,fontSize:12.5,fontWeight:600,marginTop:3}}>{u.role}</div>
+                <div style={{color:u.color,fontSize:12.5,fontWeight:600,marginTop:3}}>{(collabProfiles[u.id]&&collabProfiles[u.id].funcao)||u.role}</div>
                 <div style={{color:C.td,fontSize:11,marginTop:4}}>{u.id+"@pixelsmarketing.com.br"}</div>
               </div>
+              {isMePartner&&(()=>{
+                const _sec=loginSecrets[u.id];
+                const _rev=!!revealPwd[u.id];
+                return <div style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"7px 10px",display:"flex",alignItems:"center",gap:7,marginTop:2}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.td} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  {_sec?(<>
+                    <span style={{flex:1,fontFamily:"monospace",fontSize:12.5,color:C.tx,fontWeight:600,letterSpacing:_rev?0:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?_sec.senha:"••••••••"}</span>
+                    <button title={_rev?"Ocultar":"Mostrar"} onClick={()=>setRevealPwd(m=>({...m,[u.id]:!m[u.id]}))} style={{background:"none",border:"none",cursor:"pointer",color:C.ts,padding:2,display:"flex"}}>
+                      {_rev
+                        ?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        :<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                    </button>
+                    <button title="Copiar senha" onClick={()=>{try{navigator.clipboard.writeText(_sec.senha);if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha copiada!");}catch(e){}}} style={{background:"none",border:"none",cursor:"pointer",color:C.ts,padding:2,display:"flex"}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>
+                    <button title="Redefinir senha" onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:"none",border:"none",cursor:"pointer",color:C.a,padding:2,display:"flex"}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                    </button>
+                  </>):(<>
+                    <span style={{flex:1,fontSize:10.5,color:C.td,fontStyle:"italic"}}>Senha não registrada</span>
+                    <button onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:C.a+"15",border:"1px solid "+C.a+"44",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:C.a,cursor:"pointer",whiteSpace:"nowrap"}}>Definir</button>
+                  </>)}
+                </div>;
+              })()}
               {/* Ações — só ícones SVG modernos, sem emojis */}
               <div style={{display:"flex",gap:6,paddingTop:10,borderTop:"1px solid "+C.b1+"66"}}>
                 <button onClick={()=>u.level===1?setViewDash(u.id):setViewUser(u)}
@@ -54690,7 +54788,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
       {editPacote && <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:8}}>Pacote do Comercial</div>
-              <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto",paddingRight:2}}>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {_catalogo.map(function(x){
                   const _isCustom=x.id==="custom";
                   const sel=_isCustom ? _customOn : (_presetIds.indexOf(x.id)>=0);
