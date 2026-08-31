@@ -5545,7 +5545,7 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
   const supervisedTasks=supervisedUsers.length>0
     ?(propTasks||[]).filter(t=>!t.deletedAt&&(supervisedUsers.includes(t.assignee)||supervisedUsers.some(s=>(t.assignees||[]).includes(s))))
     :[];
-  const _escopo=(typeof ESCOPO_CARGOS!=="undefined")?ESCOPO_CARGOS[user.dash]:null;
+  const _escopo=null; // Escopo saiu do dashboard — a Matriz de Responsabilidades cobre isso agora.
   // Designer / Editor (freelancer com pagamento por demanda) -> dashboard V2 moderno
   const _core=(user.pagamentoPorDemanda===true && user.dash!=="social" && typeof DashColabV2==="function")
     ? <DashColabV2 user={user} tasks={tasks} allTasks={allTasks}
@@ -5911,6 +5911,34 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           </div>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
         </div>
+        {/* ── Social media: visão crystal clear do calendário ── */}
+        {effectiveUser.dash==="social"&&(function(){
+          const _all=(allTasks||[]).filter(function(t){return t&&!t.deletedAt;});
+          const _aFazer=_all.filter(function(t){return t.status==="aprovado";}).length;
+          const _n=new Date(); _n.setHours(0,0,0,0);
+          const _dow=(_n.getDay()+6)%7; // 0 = segunda
+          const _ini=new Date(_n); _ini.setDate(_n.getDate()-_dow);
+          const _fimS=new Date(_ini); _fimS.setDate(_ini.getDate()+6);
+          const _iso=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+          const _i0=_iso(_ini), _i1=_iso(_fimS);
+          const _prodSemana=_all.filter(function(t){
+            if(!t.publishDate)return false;
+            if(t.publishDate<_i0||t.publishDate>_i1)return false;
+            if(t.status==="publicado"||t.status==="aprovado"||t.status==="agendado"||t.status==="aprovacao_final")return false;
+            if(t.status==="pausado"||t.status==="reprovado")return false;
+            return true; // mesmo grupo "Em produção" do Calendário de publicações
+          }).length;
+          return <React.Fragment>
+            <div title="Posts com status APROVADO — prontos pra você agendar/postar" style={{background:"rgba(236,72,153,0.25)",border:"1px solid rgba(236,72,153,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
+              <span style={{color:"#fbcfe8",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_aFazer}</span>
+              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Posts a fazer</div>
+            </div>
+            <div title="Posts desta semana no calendário que ainda estão EM PRODUÇÃO com a equipe" style={{background:"rgba(6,182,212,0.22)",border:"1px solid rgba(6,182,212,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
+              <span style={{color:"#a5f3fc",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_prodSemana}</span>
+              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Produção na semana</div>
+            </div>
+          </React.Fragment>;
+        })()}
         {lateMes.length>0&&<div style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 4px 12px rgba(220,38,38,0.35)"}}>
           <span style={{fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{lateMes.length}</span>
           <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,opacity:.95}}>Atrasadas</div>
@@ -42743,11 +42771,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
         </div>
       </div>
 
-      :<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"40px 24px",textAlign:"center",maxWidth:860,margin:"0 auto",width:"100%"}}>
-        <div style={{width:48,height:48,borderRadius:12,background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 14px"}}>📭</div>
-        <div style={{color:"#0f172a",fontWeight:600,fontSize:16,marginBottom:6}}>Tudo tranquilo</div>
-        <div style={{color:"#94a3b8",fontSize:13,lineHeight:1.6}}>Nenhuma demanda ativa. Novas chegam aqui assim que atribuídas.</div>
-      </div>
+      :<div style={{color:"#94a3b8",fontSize:12.5,fontWeight:500,textAlign:"center",padding:"10px 0",maxWidth:860,margin:"0 auto",width:"100%"}}>Nenhuma demanda ativa no momento.</div>
     }
 
     {/* ═══ NOVO: Saúde da fila (gauge SVG) + Contagem do mês (mini) — lado a lado ═══ */}
@@ -42826,7 +42850,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
 
       {/* NOTIFICAÇÕES */}
-      {widgets.notifs&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      {false&&widgets.notifs&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <span style={{fontSize:14}}>🔔</span>
@@ -42850,7 +42874,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       </div>}
 
       {/* INFOGRÁFICO DE CLIENTES — cards com logo + status claro */}
-      {widgets.clients&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      {false&&widgets.clients&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:10,background:"#f8fafc"}}>
           <div style={{width:32,height:32,borderRadius:10,background:"#2563eb",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
@@ -68082,7 +68106,11 @@ function useENPS(){
 
 function PageGestaoENPS(props){
   const isMob = props.isMob;
-  const canAll = _enpsCanSeeAll();
+  // View-as fiel: quando um sócio "Visualiza como" um colaborador, mostra a visão DELE
+  // (só o próprio ENPS), não a visão de gestor. Login real de colaborador já era individual.
+  const _effUser=(props.viewingAs&&typeof TEAM!=="undefined"&&TEAM.find(function(u){return u.id===props.viewingAs;}))||CURRENT_USER;
+  const _emViewAs=!!(props.viewingAs&&_effUser.id!==CURRENT_USER.id);
+  const canAll = (_effUser.level===1)||_effUser.id==="ellen"||_effUser.id==="hellen";
   const { rows, add, remove, loading } = useENPS();
   // Sócios (level 1) não respondem ENPS — só acompanham resultados
   const isSocio = (typeof CURRENT_USER!=="undefined" && CURRENT_USER.level===1);
@@ -68123,11 +68151,12 @@ function PageGestaoENPS(props){
     });
   },[isSocio, loading, rows.length]);
 
-  const myRow = rows.find(function(r){return r.user_id===CURRENT_USER.id && r.cycle_month===cycle;});
+  const myRow = rows.find(function(r){return r.user_id===_effUser.id && r.cycle_month===cycle;});
   const respondidoEsseMes = !!myRow;
 
   function handleSubmit(){
     if(score==null) return;
+    if(_emViewAs){ if(typeof pixelsToast!=="undefined")pixelsToast.info("Modo visualização — o ENPS é respondido pela própria pessoa.",4000); return; }
     setSaving(true);
     add({
       user_id:CURRENT_USER.id,
@@ -68387,7 +68416,7 @@ function PageGestaoENPS(props){
 
     {/* ═══ MINHA EVOLUÇÃO + HISTÓRICO — só pra colaborador comum, dados próprios apenas ═══ */}
     {!canAll && !loading && (function(){
-      const minhasRows = rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).slice().sort(function(a,b){return (a.cycle_month||"").localeCompare(b.cycle_month||"");});
+      const minhasRows = rows.filter(function(r){return r.user_id===_effUser.id;}).slice().sort(function(a,b){return (a.cycle_month||"").localeCompare(b.cycle_month||"");});
       const minhaMedia = minhasRows.length>0 ? (minhasRows.reduce(function(s,r){return s+r.score;},0)/minhasRows.length) : null;
       const ultima = minhasRows.length>0 ? minhasRows[minhasRows.length-1] : null;
       const ultimaCl = ultima ? _npsClassify(ultima.score) : null;
@@ -76675,9 +76704,10 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const isFreelaDesign = effectiveUser.dash === "designer";
   const isFreelaVideo  = effectiveUser.dash === "editor";
   const isFreelaMidia  = effectiveUser.id === "erick";
+  const isSocial       = effectiveUser.dash === "social"; // social media (Luiza e futuras contratações)
 
   // UNIFICADO: sem sub-abas de área. Um playbook por cliente com tudo junto.
-  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia;
+  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial;
   const [openClient, setOpenClient] = useState(null);
   const [search, setSearch] = useState("");
   const [store, _updateClient] = _usePlaybooksStore();
@@ -82992,45 +83022,66 @@ function PageMatrizResponsabilidades({isMob}){
       {visiveis.map(function(r){
         const u=_mtzRespUser(r);
         const _atr=(r.atribuicoes||[]);
-        const _mais=_atr.length>5?_atr.length-5:0;
+        const cor=(u&&u.color)||"#7c3aed";
         return <div key={r.id} onClick={function(){setDetalhe(r);}}
-          style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,.025)"}}
-          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(15,23,42,.08)";}}
-          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.025)";}}>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.3}}>{r.nome}</div>
-            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7}}>
+          style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:18,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",transition:"all .18s",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 14px 34px "+cor+"22";e.currentTarget.style.borderColor=cor+"55";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.04)";e.currentTarget.style.borderColor="#e8ebf0";}}>
+          {/* Banner com a cor do responsável */}
+          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:"16px 20px 15px",display:"flex",alignItems:"center",gap:13,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.12)",filter:"blur(2px)",pointerEvents:"none"}}/>
+            <div style={{width:46,height:46,borderRadius:"50%",overflow:"hidden",border:"2.5px solid rgba(255,255,255,0.85)",boxShadow:"0 4px 12px rgba(0,0,0,.18)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {u&&typeof UserAvatar==="function"
-                ? <UserAvatar user={u} size={22}/>
-                : <span style={{width:22,height:22,borderRadius:"50%",background:"#7c3aed14",border:"1px solid #7c3aed2b",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:9.5,fontWeight:800}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
-              <span style={{color:"#475569",fontSize:12.5,fontWeight:700}}>{r.responsavel_nome||"—"}</span>
+                ? <UserAvatar user={u} size={42} border={false}/>
+                : <span style={{color:cor,fontSize:16,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.25,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
+              <div style={{color:"rgba(255,255,255,.9)",fontSize:11.5,fontWeight:700,marginTop:3,display:"inline-flex",alignItems:"center",gap:5}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                {r.responsavel_nome||"—"}
+              </div>
             </div>
           </div>
-          {r.missao&&<div style={{color:"#64748b",fontSize:12.5,lineHeight:1.6,fontWeight:500}}>{r.missao}</div>}
-          {_atr.length>0&&<div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Atribuições ({_atr.length})</div>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"4px 14px"}}>
-              {_atr.map(function(a,i){
-                return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:6}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
-                  <span style={{color:"#334155",fontSize:12,lineHeight:1.45,fontWeight:500}}>{a}</span>
-                </div>;
-              })}
-            </div>
-          </div>}
-          {(r.entregas||[]).length>0&&<div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Entregas recorrentes</div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {(r.entregas||[]).map(function(e,i){
-                return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{e}</span>;
-              })}
-            </div>
-          </div>}
-          {(r.interfaces||[]).length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:10,borderTop:"1px solid #f4f6f8",marginTop:"auto"}}>
-            {(r.interfaces||[]).map(function(e,i){
-              return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700}}>{e}</span>;
-            })}
-          </div>}
+          <div style={{padding:"16px 20px 18px",display:"flex",flexDirection:"column",gap:14,flex:1}}>
+            {r.missao&&<div style={{background:cor+"0a",borderLeft:"3px solid "+cor,borderRadius:"0 11px 11px 0",padding:"11px 14px",color:"#475569",fontSize:12.5,lineHeight:1.6,fontWeight:500}}>{r.missao}</div>}
+            {_atr.length>0&&<div>
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
+                <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atribuições</span>
+                <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_atr.length}</span>
+                <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
+              </div>
+              <div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"6px 16px"}}>
+                {_atr.map(function(a,i){
+                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                    <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
+                    <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                  </div>;
+                })}
+              </div>
+            </div>}
+            {(r.entregas||[]).length>0&&<div>
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
+                <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Entregas recorrentes</span>
+                <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {(r.entregas||[]).map(function(e,i){
+                  return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:700}}>{e}</span>;
+                })}
+              </div>
+            </div>}
+            {(r.interfaces||[]).length>0&&<div style={{paddingTop:12,borderTop:"1px solid #f1f4f8",marginTop:"auto"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <span style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginRight:2}}>Interfaces</span>
+                {(r.interfaces||[]).map(function(e,i){
+                  return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"3px 11px",fontSize:10.5,fontWeight:700}}>{e}</span>;
+                })}
+              </div>
+            </div>}
+          </div>
         </div>;
       })}
     </div>}
