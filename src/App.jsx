@@ -51836,7 +51836,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
   const [solDescricao,setSolDescricao]=useState("");
   const [solPrioridade,setSolPrioridade]=useState("media");
   const [solEnviando,setSolEnviando]=useState(false);
-  const [verEntregues,setVerEntregues]=useState(false); // seção "Entregas concluídas" recolhida
+  const [verEntregues,setVerEntregues]=useState(true); // seção "Entregas concluídas" — sempre aberta
 
   // Prazo padrão por prioridade (dias úteis)
   const PRAZO_POR_PRIORIDADE={baixa:30,media:14,alta:5,urgente:1};
@@ -52362,27 +52362,20 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       const h=labelDoGrupo(g);
       const accent=h.isUrgent?"#9333ea":cl.color;
       return <section key={g.key} style={{display:"flex",flexDirection:"column",gap:10,marginTop:g._entregues?6:0}}>
-        {g._entregues&&<div onClick={function(){setVerEntregues(!verEntregues);}}
-          style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 16px",
-            display:"flex",alignItems:"center",gap:11,cursor:"pointer"}}>
-          <span style={{width:28,height:28,borderRadius:9,background:"#dcfce7",border:"1px solid #86efac",
-            display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        {g._entregues&&<div style={{display:"flex",alignItems:"center",gap:11,padding:"2px 2px 2px 0"}}>
+          <span style={{width:34,height:34,borderRadius:10,background:cl.color+"15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="checkCircle" size={17} color={cl.color}/>
           </span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2}}>Entregas concluídas</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Tudo que já entregamos pra você</div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>Entregas concluídas</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:1,fontWeight:500}}>Tudo que já entregamos pra você</div>
           </div>
-          <span style={{background:"#dcfce7",color:"#15803d",border:"1px solid #86efac",fontSize:11,fontWeight:800,
-            borderRadius:99,padding:"2px 9px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{g.items.length}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"
-            style={{flexShrink:0,transition:"transform .18s",transform:verEntregues?"rotate(180deg)":"rotate(0deg)"}}>
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          <span style={{background:cl.color+"15",color:cl.color,fontSize:12,fontWeight:800,
+            borderRadius:99,padding:"3px 11px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{g.items.length}</span>
         </div>}
-        {g._entregues&&verEntregues&&typeof _PortalDemandasProjeto==="function"&&
+        {g._entregues&&typeof _PortalDemandasProjeto==="function"&&
           <_PortalDemandasProjeto cl={cl} isMob={isMob} modo="concluidas"/>}
-        {(!g._entregues||verEntregues)&&
+        {(!g._entregues)&&
         
 
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
