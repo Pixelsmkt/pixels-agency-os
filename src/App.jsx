@@ -54434,6 +54434,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
   const [editPacote,setEditPacote]=useState(false);
   const [draftEntregas,setDraftEntregas]=useState("");
   const [draftValor,setDraftValor]=useState("");
+  const [draftCustomLabel,setDraftCustomLabel]=useState("");
   const _cor=(cl&&cl.color)||"#7c3aed";
 
   const [marcos,setMarcos]=useState([]);
@@ -54524,7 +54525,19 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
     return a + (String(x.unidade||"").indexOf("/mês")>=0 ? n : 0);
   },0);
   const _entregasCustom=Array.isArray(pacote.entregas)?pacote.entregas:[];
+  const _customOn=!!pacote.customOn;
+  const _customVal=Number(pacote.valorCustom||0)||0;
+  const _customLabel=(pacote.customLabel&&String(pacote.customLabel).trim())||"Item personalizado";
+  const _somaTotal=_somaPresets+(_customOn?_customVal:0);
   const _brl0=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
+  // Presets + o item personalizado (quando ligado) como uma linha a mais do pacote
+  const _presetsView=(function(){
+    var out=_presets.slice();
+    if(_customOn){
+      out=out.concat([{id:"__custom__",label:_customLabel,valor:_customVal>0?_brl0(_customVal):"",unidade:"/mês",entregas:_entregasCustom}]);
+    }
+    return out;
+  })();
 
   function _persistPacote(patch){
     const next=Object.assign({},items,{__pacote__:Object.assign({},pacote,patch)});
@@ -54539,7 +54552,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
     const lista=draftEntregas.split("\n").map(function(x){return x.trim();}).filter(Boolean);
     const _v=Number(String(draftValor||"").replace(/[^0-9]/g,""))||0;
     setEditPacote(false);
-    _persistPacote({presetId:"custom", entregas:lista, valorCustom:_v});
+    _persistPacote({customOn:true, customLabel:(draftCustomLabel||"").trim(), entregas:lista, valorCustom:_v});
   }
 
   if(onb===null) return null;
@@ -54555,11 +54568,11 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
         entregas:_pjLinhasCalculadora(pl),
       };
     }
-    if(_presets.length>0) return {
-      origem: _presets.length===1 ? ("Pacote "+_presets[0].label) : (_presets.length+" pacotes contratados"),
-      valor: _somaPresets>0 ? _brl0(_somaPresets) : _presets[0].valor,
+    if(_presetsView.length>0) return {
+      origem: _presetsView.length===1 ? ("Pacote "+_presetsView[0].label) : (_presetsView.length+" pacotes contratados"),
+      valor: _somaTotal>0 ? _brl0(_somaTotal) : _presetsView[0].valor,
       unidade: "/mês",
-      presets: _presets,
+      presets: _presetsView,
       entregas: [],
     };
     var _vc=(pacote&&pacote.valorCustom!=null&&Number(pacote.valorCustom)>0)?Number(pacote.valorCustom):(Number(cl.contract)>0?Number(cl.contract):0);
@@ -54646,9 +54659,9 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
               </div>
             </div>;
           })}
-          {_pacoteView.presets.length>1&&_somaPresets>0&&<div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,paddingTop:9,borderTop:"1.5px solid "+_cor+"33"}}>
+          {_pacoteView.presets.length>1&&_somaTotal>0&&<div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,paddingTop:9,borderTop:"1.5px solid "+_cor+"33"}}>
             <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Total mensal</span>
-            <span style={{color:_cor,fontSize:15,fontWeight:900,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{_brl0(_somaPresets)}<span style={{color:"#a3adbb",fontSize:10,fontWeight:600}}>/mês</span></span>
+            <span style={{color:_cor,fontSize:15,fontWeight:900,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{_brl0(_somaTotal)}<span style={{color:"#a3adbb",fontSize:10,fontWeight:600}}>/mês</span></span>
           </div>}
         </div>}
 
@@ -54680,10 +54693,10 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
               <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:280,overflowY:"auto",paddingRight:2}}>
                 {_catalogo.map(function(x){
                   const _isCustom=x.id==="custom";
-                  const sel=_isCustom ? (pacote.presetId==="custom") : (_presetIds.indexOf(x.id)>=0);
+                  const sel=_isCustom ? _customOn : (_presetIds.indexOf(x.id)>=0);
                   return <button key={x.id} type="button"
                     onClick={function(){
-                      if(_isCustom){ _persistPacote({presetId:pacote.presetId==="custom"?"":"custom"}); return; }
+                      if(_isCustom){ setDraftEntregas((_entregasCustom||[]).join("\n")); setDraftValor(String(pacote.valorCustom||"")); setDraftCustomLabel(pacote.customLabel||""); _persistPacote({customOn:!pacote.customOn}); return; }
                       // múltipla escolha: liga/desliga sem fechar o painel
                       const _next=_presetIds.indexOf(x.id)>=0
                         ? _presetIds.filter(function(y){return y!==x.id;})
@@ -54705,7 +54718,13 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
                 })}
               </div>
             </div>
-            {pacote.presetId==="custom"&&<>
+            {_customOn&&<>
+              <div>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6}}>Nome do item</div>
+                <input value={draftCustomLabel} onChange={function(e){setDraftCustomLabel(e.target.value);}}
+                  placeholder="Ex: Produção de 1 vídeo extra"
+                  style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12.5,fontWeight:700,fontFamily:"inherit",outline:"none",color:"#0f172a"}}/>
+              </div>
               <div>
                 <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6}}>Valor mensal</div>
                 <div style={{position:"relative",display:"flex",alignItems:"center"}}>
@@ -54726,7 +54745,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
             </>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
               <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
-                {_presetIds.length>0?(_presetIds.length+" selecionado"+(_presetIds.length>1?"s":"")+(_somaPresets>0?" · "+_brl0(_somaPresets)+"/mês":"")):"pode marcar mais de um"}
+                {(function(){ var n=_presetIds.length+(_customOn?1:0); return n>0?(n+" selecionado"+(n>1?"s":"")+(_somaTotal>0?" · "+_brl0(_somaTotal)+"/mês":"")):"pode marcar mais de um"; })()}
               </span>
               <button onClick={function(){setEditPacote(false);}} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Concluir</button>
             </div>
