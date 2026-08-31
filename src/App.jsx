@@ -1621,6 +1621,41 @@ const _CT_BUCKET = {
 // "reprovado" entra porque o material foi produzido — paga igual.
 // Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
 const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
+/* ─── Ajustes manuais de pagamento (bônus/desconto por freelancer+mês) ───
+   Guardado em team_data tipo='pagamento_ajustes' como { "freelaId:YYYY-MM": {valor,motivo,...} }.
+   Cache global síncrono pra calcDesignerPayments incluir em TODOS os lugares
+   (Financeiro, DRE, dash do freelancer) sem mudar cada consumidor. ─── */
+function pxLoadFreelaAjustes(){
+  try{
+    var sb=window._sb; if(!sb) return;
+    sb.from("team_data").select("dados").eq("tipo","pagamento_ajustes").maybeSingle().then(function(r){
+      window.__pxFreelaAjustes=(r&&r.data&&r.data.dados&&typeof r.data.dados==="object")?r.data.dados:{};
+      try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
+    }).catch(function(){});
+  }catch(_){}
+}
+function pxGetFreelaAjuste(freelaId, month){
+  var m=(typeof window!=="undefined"&&window.__pxFreelaAjustes)||{};
+  var a=m[freelaId+":"+month];
+  return a?{valor:Number(a.valor)||0,motivo:a.motivo||""}:{valor:0,motivo:""};
+}
+function pxSetFreelaAjuste(freelaId, month, valor, motivo){
+  try{
+    var sb=window._sb; if(!sb) return Promise.resolve(false);
+    var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
+    var key=freelaId+":"+month;
+    var v=Number(valor)||0;
+    if(!v && !(motivo||"").trim()){ delete cur[key]; }
+    else cur[key]={valor:v,motivo:motivo||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+    window.__pxFreelaAjustes=cur;
+    try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
+    return sb.from("team_data").upsert({tipo:"pagamento_ajustes",dados:cur},{onConflict:"tipo"}).then(function(r){
+      if(r&&r.error){console.warn("[ajustes] save:",r.error.message);if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar ajuste: "+r.error.message);return false;}
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Ajuste salvo.",2000);
+      return true;
+    });
+  }catch(e){return Promise.resolve(false);}
+}
 function calcDesignerPayments(tasks, designerId, refMonth){
   const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
                 tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
@@ -1667,6 +1702,19 @@ function calcDesignerPayments(tasks, designerId, refMonth){
   });
   // Preços de referência pra UI (mês selecionado; sem seleção, o mês corrente)
   out._prices = _pricesFor(designerId, refMonth);
+  // ── Ajuste manual do mês (bônus/desconto registrado no Financeiro) ──
+  out.ajuste=0; out.ajusteMotivo="";
+  try{
+    if(refMonth && typeof pxGetFreelaAjuste==="function"){
+      const _aj=pxGetFreelaAjuste(designerId, refMonth);
+      out.ajuste=Number(_aj.valor)||0; out.ajusteMotivo=_aj.motivo||"";
+      out.total+=out.ajuste;
+    } else if(!refMonth && typeof window!=="undefined" && window.__pxFreelaAjustes){
+      Object.keys(window.__pxFreelaAjustes).forEach(function(k){
+        if(k.indexOf(designerId+":")===0){ const _v=Number(window.__pxFreelaAjustes[k].valor)||0; out.ajuste+=_v; out.total+=_v; }
+      });
+    }
+  }catch(_){}
   return out;
 }
 function formatRefMonth(refMonth){
@@ -1688,6 +1736,14 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
   // Whitelist explícita pra Ocsana (estagiária com salário fixo) e qualquer outro perfil
   // que tenha pagamentoPorDemanda:true por engano em algum override não cair aqui.
   const _PAY_BY_DEMAND_IDS = ["andre","maria","guilherme"];
+  // Re-render quando os ajustes manuais carregam/mudam (cache global)
+  const [_ajTick,setAjTick]=useState(0);
+  useEffect(function(){
+    if(typeof pxLoadFreelaAjustes==="function") pxLoadFreelaAjustes();
+    var _f=function(){ setAjTick(function(t){return t+1;}); };
+    window.addEventListener("pixels:freela-ajustes-updated",_f);
+    return function(){ window.removeEventListener("pixels:freela-ajustes-updated",_f); };
+  },[]);
   const freelancers=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda && _PAY_BY_DEMAND_IDS.indexOf(u.id)>=0;});
   const rows=freelancers.map(function(fr){
     const calc=calcDesignerPayments(tasks||[],fr.id,refMonth);
@@ -1988,6 +2044,37 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               </div>;
             })()}
           </div>
+
+          {/* AJUSTE DO MÊS — bônus (+) ou desconto (−) além das demandas */}
+          {(function(){
+            const _souSocio=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER.level===1);
+            const _temMes=!!refMonth;
+            if(!_temMes){
+              return c.ajuste?<div style={{padding:"8px 18px",display:"flex",justifyContent:"space-between",borderTop:"1px dashed #eef0f3"}}>
+                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Ajustes (todos os meses)</span>
+                <span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>
+              </div>:null;
+            }
+            const _aj=(typeof pxGetFreelaAjuste==="function")?pxGetFreelaAjuste(fr.id,refMonth):{valor:0,motivo:""};
+            if(!_souSocio&&!c.ajuste) return null;
+            return <div style={{padding:"10px 18px 12px",borderTop:"1px dashed #eef0f3",display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Ajuste do mês <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>· bônus (+) ou desconto (use −), além das demandas</span></div>
+              {_souSocio
+                ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <input key={fr.id+"_"+refMonth+"_v_"+_ajTick} type="text" defaultValue={_aj.valor?String(_aj.valor).replace(".",","):""} placeholder="0,00"
+                      onBlur={function(e){var v=parseFloat(String(e.target.value||"").replace(",","."))||0;if(v!==(Number(_aj.valor)||0)&&typeof pxSetFreelaAjuste==="function")pxSetFreelaAjuste(fr.id,refMonth,v,_aj.motivo||"");}}
+                      style={{width:104,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+                    <input key={fr.id+"_"+refMonth+"_m_"+_ajTick} type="text" defaultValue={_aj.motivo||""} placeholder="Motivo — ex: bônus de meta · desconto de adiantamento"
+                      onBlur={function(e){var m=e.target.value;if(m!==(_aj.motivo||"")&&typeof pxSetFreelaAjuste==="function")pxSetFreelaAjuste(fr.id,refMonth,Number(_aj.valor)||0,m);}}
+                      style={{flex:1,minWidth:0,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,color:"#334155",outline:"none",fontFamily:"inherit"}}/>
+                    {!!c.ajuste&&<span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>}
+                  </div>
+                : <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                    <span style={{color:"#64748b",fontSize:12}}>{c.ajusteMotivo||"Ajuste"}</span>
+                    <span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>
+                  </div>}
+            </div>;
+          })()}
 
           {/* TOTAL — separador limpo */}
           <div style={{padding:"14px 18px",background:"linear-gradient(180deg,"+accent+"08, "+accent+"14)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
@@ -5816,7 +5903,12 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const now=new Date();
   const hour=now.getHours();
   const greeting=hour<12?"Bom dia ☀️":hour<18?"Boa tarde 🌤️":"Boa noite 🌙";
-  const unread=(notifs||[]).filter(n=>!n.read).length;
+  // Só notifs NÃO lidas endereçadas a este usuário (targetUsers vazio = geral) — mesma regra do drawer
+  const unread=(notifs||[]).filter(n=>{
+    if(n.read)return false;
+    if(!n.targetUsers||!Array.isArray(n.targetUsers)||n.targetUsers.length===0)return true;
+    return n.targetUsers.indexOf(effectiveUser.id)>=0;
+  }).length;
 
   // Demandas do mês atual
   const mesAtual=now.getMonth();
@@ -5903,14 +5995,14 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
            Escondido pros sócios (Vinicius+Gustavo). User pediu dash limpo, sem
            números genéricos. Os dados ficam nas seções específicas do dash. */}
       {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<div style={{position:"relative",zIndex:1,flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
-        <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
+        {effectiveUser.dash!=="social"&&<div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
             <span style={{color:"#bbf7d0",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{conclMes}</span>
             <span style={{color:"rgba(255,255,255,0.55)",fontSize:13}}>/</span>
             <span style={{color:"#fff",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{emAberto}</span>
           </div>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
-        </div>
+        </div>}
         {/* ── Social media: visão crystal clear do calendário ── */}
         {effectiveUser.dash==="social"&&(function(){
           const _all=(allTasks||[]).filter(function(t){return t&&!t.deletedAt;});
@@ -5921,21 +6013,21 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           const _fimS=new Date(_ini); _fimS.setDate(_ini.getDate()+6);
           const _iso=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
           const _i0=_iso(_ini), _i1=_iso(_fimS);
-          const _prodSemana=_all.filter(function(t){
+          const _pubSemana=_all.filter(function(t){
             if(!t.publishDate)return false;
             if(t.publishDate<_i0||t.publishDate>_i1)return false;
-            if(t.status==="publicado"||t.status==="aprovado"||t.status==="agendado"||t.status==="aprovacao_final")return false;
             if(t.status==="pausado"||t.status==="reprovado")return false;
-            return true; // mesmo grupo "Em produção" do Calendário de publicações
+            if(t.contentType==="folder")return false;
+            return true; // mesmo filtro do Calendário de publicações
           }).length;
           return <React.Fragment>
             <div title="Posts com status APROVADO — prontos pra você agendar/postar" style={{background:"rgba(236,72,153,0.25)",border:"1px solid rgba(236,72,153,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
               <span style={{color:"#fbcfe8",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_aFazer}</span>
               <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Posts a fazer</div>
             </div>
-            <div title="Posts desta semana no calendário que ainda estão EM PRODUÇÃO com a equipe" style={{background:"rgba(6,182,212,0.22)",border:"1px solid rgba(6,182,212,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
-              <span style={{color:"#a5f3fc",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_prodSemana}</span>
-              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Produção na semana</div>
+            <div title="Posts no Calendário de publicações desta semana (segunda a domingo)" style={{background:"rgba(6,182,212,0.22)",border:"1px solid rgba(6,182,212,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
+              <span style={{color:"#a5f3fc",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_pubSemana}</span>
+              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Publicações na semana</div>
             </div>
           </React.Fragment>;
         })()}
@@ -21067,6 +21159,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         video_feira:{label:"Vídeo básico",icon:"flag"},
                         foto:{label:"Ajuste de template",icon:"camera"},
                         corte:{label:"Corte de vídeo",icon:"scissors"},
+                        video_short:{label:"Vídeo do Drive",icon:"play"},
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
@@ -30250,8 +30343,20 @@ function PageGestaoProjecao({isMob}){
       .then(function(r){
         if(!alive)return;
         const v=r&&r.data&&r.data.value;
-        if(v&&v.receitas) setDados(v);
+        // SEMPRE abre com os números atuais do Financeiro (pedido: nunca começar do zero).
+        // Continua 100% editável — os rascunhos valem pra sessão e sincronizam entre sócios.
+        const _temValor=function(d){ if(!d)return false; return ["receitas","impostos","csp","despDireta","despOp"].some(function(k){ return (d[k]||[]).some(function(x){ var n=parseFloat(String(x&&x.v||"").replace(",",".")); return !isNaN(n)&&n>0; }); }); };
+        const _fresh=_projImportarDoFinanceiro();
+        if(_temValor(_fresh)) setDados(_fresh);
+        else if(v&&v.receitas) setDados(v); // financeiro ainda não carregou → usa o último salvo
         setCarregou(true);
+        // Retry: caches do Financeiro podem carregar alguns segundos depois do mount.
+        // Só substitui se o usuário ainda não mexeu em nada nessa sessão.
+        setTimeout(function(){
+          if(!alive||window.__pxProjEditou)return;
+          const _f2=_projImportarDoFinanceiro();
+          if(_temValor(_f2)) setDados(_f2);
+        },3000);
       })
       .catch(function(){ if(alive) setCarregou(true); });
     // Tempo real: quando o OUTRO sócio salva, a projeção atualiza sozinha aqui.
@@ -30284,7 +30389,7 @@ function PageGestaoProjecao({isMob}){
         .catch(function(e){ console.warn("projecao save:",e); });
     },800);
   }
-  function _mut(fn){ setDados(function(prev){ const next=fn(JSON.parse(JSON.stringify(prev))); _persist(next); return next; }); }
+  function _mut(fn){ window.__pxProjEditou=true; setDados(function(prev){ const next=fn(JSON.parse(JSON.stringify(prev))); _persist(next); return next; }); }
 
   const _num=function(v){ const n=parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n)?0:n; };
   const _brlF=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -40555,6 +40660,8 @@ function _cardPodeSerResp(u){
                 {id:"video_feira",label:"Vídeo básico",icon:"flag"},
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
+                /* Linha 3: Short vindo do Drive do cliente (não é produção da equipe — não entra no pagamento) */
+                {id:"video_short",label:"Vídeo do Drive",icon:"play"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 const _canPick=canEdit&&canEditContentType;
@@ -42771,7 +42878,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
         </div>
       </div>
 
-      :<div style={{color:"#94a3b8",fontSize:12.5,fontWeight:500,textAlign:"center",padding:"10px 0",maxWidth:860,margin:"0 auto",width:"100%"}}>Nenhuma demanda ativa no momento.</div>
+      :null
     }
 
     {/* ═══ NOVO: Saúde da fila (gauge SVG) + Contagem do mês (mini) — lado a lado ═══ */}
@@ -46333,6 +46440,8 @@ export default function AgencyOS(){
       }catch(e){}
     };
     if(authState==="app")loadSelfProfile();
+    // Carrega os ajustes manuais de pagamento (bônus/descontos) pro cache global
+    if(authState==="app"&&typeof pxLoadFreelaAjustes==="function")pxLoadFreelaAjustes();
   },[authState]);
 
   // ── Backfill automático de versões leves (720p) em segundo plano ──
@@ -68250,7 +68359,7 @@ function PageGestaoENPS(props){
     </div>
 
     {/* ═══ CARD PRINCIPAL DE RESPOSTA — só pra colaboradores ═══ */}
-    {!isSocio && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
+    {(!isSocio||_emViewAs) && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
       <div>
         <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pergunta do mês</div>
         <div style={{color:"#0f172a",fontSize:isMob?17:20,fontWeight:700,letterSpacing:-.4,lineHeight:1.3,marginTop:6,fontFamily:_NPS_FF,maxWidth:760}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar para trabalhar?</div>
@@ -69415,6 +69524,9 @@ function DashColabV2(props){
         <div style={{textAlign:"right"}}>
           <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.8,textTransform:"uppercase"}}>Total a receber</div>
           <div style={{color:"#fff",fontWeight:900,fontSize:isMob?36:48,letterSpacing:-1.5,fontFeatureSettings:"'tnum'",lineHeight:1,marginTop:4,textShadow:"0 2px 12px "+accent+"55"}}>{_dcFmtBRL2(valorReceber)}</div>
+          {!!calc.ajuste&&<div style={{marginTop:8,display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.22)",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:700,color:"#fff"}}>
+            {(calc.ajuste>0?"inclui bônus de +":"inclui desconto de −")+_dcFmtBRL2(Math.abs(calc.ajuste))}{calc.ajusteMotivo?(" · "+calc.ajusteMotivo):""}
+          </div>}
           <div style={{color:"#cbd5e1",fontSize:12,marginTop:6,fontWeight:600}}>
             {tasksPagas.length} {tasksPagas.length===1?"entrega":"entregas"}
             {tasksPagas.length>0 && " · média "+_dcFmtBRL2(valorMedio)}
@@ -77220,7 +77332,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const _firstUnitId = (typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS[0])?BIOTER_UNITS[0].id:"";
   const [_unitTab,setUnitTab] = useState(_firstUnitId);
   // Filtro independente pra aba Produtos (nao compartilha com Contatos)
-  const [_unitTabProd,setUnitTabProd] = useState(_firstUnitId);
+  const _unitTabProd=_unitTab, setUnitTabProd=setUnitTab; // UNIFICADO: um seletor de unidade no topo governa Contatos e Produtos
   // Lightbox pra ver imagem de produto expandida (sem abrir nova aba)
   const [_prodLightbox,setProdLightbox] = useState(null);
   useEffect(function(){
@@ -77484,6 +77596,23 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
         ))}
       </div>
 
+      {/* ══════════ UNIDADE ATIVA (Grupo Bioter) — seletor ÚNICO que governa o playbook todo ══════════ */}
+      {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:54,zIndex:4,boxShadow:"0 2px 10px rgba(15,23,42,.05)"}}>
+        <span style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Unidade</span>
+        <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
+          {BIOTER_UNITS.map(function(u){
+            const active=_unitTab===u.id;
+            return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
+              style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 13px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
+              onMouseEnter={function(e){if(!active)e.currentTarget.style.background="rgba(15,23,42,.06)";}}
+              onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
+              {u.pickerLabel||u.label}
+            </button>;
+          })}
+        </div>
+        <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>Contatos e Produtos abaixo mostram só essa unidade</span>
+      </div>}
+
       {/* ══════════ GRID 2 COLUNAS ══════════ */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:14,alignItems:"start"}}>
 
@@ -77509,20 +77638,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           <_PbBriefingAuto clientId={cl.id}/>
 
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
-            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
-              <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>Filtrar por unidade</div>
-              <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
-                {BIOTER_UNITS.map(function(u){
-                  const active=_unitTab===u.id;
-                  return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
-                    style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:active?700:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
-                    onMouseEnter={function(e){if(!active) e.currentTarget.style.background="rgba(15,23,42,.06)";}}
-                    onMouseLeave={function(e){if(!active) e.currentTarget.style.background="transparent";}}>
-                    {u.pickerLabel||u.label}
-                  </button>;
-                })}
-              </div>
-            </div>}
+            {_isBioter && typeof BIOTER_UNITS!=="undefined" && (function(){
+              const _u=BIOTER_UNITS.find(function(x){return x.id===_unitTab;});
+              return <div style={{marginBottom:14,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_u&&(_u.pickerLabel||_u.label))||_unitTab}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>unidade ativa — troque no seletor fixo do topo</span>
+              </div>;
+            })()}
             {(function(){
               const _currentUnit = _isBioter ? _unitTab : null;
               // ── Normaliza contatos pra sempre ser array ──
@@ -77581,7 +77703,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 const displayList = listEdit.length > 0 ? listEdit : [{nome:"",whatsapp:"",email:""}];
                 return <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   {displayList.map(function(ct,idx){
-                    return <div key={idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
+                    return <div key={(_currentUnit||"c")+"-"+idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                         <div style={{color:"#0d9488",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Contato {idx+1}</div>
                         <button type="button" onClick={function(){_removeAt(idx);}} title="Remover contato"
