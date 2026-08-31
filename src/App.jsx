@@ -62033,7 +62033,8 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_data_kickoff", label:"Confirmar data da reunião de kickoff"},
       {id:"d1_gpt_agente", label:"Criação do agente personalizado no ChatGPT com materiais"},
       {id:"d1_gpt_briefing_word", label:"Extrair respostas do Briefing no App Pixels, colar em Word e subir no agente do cliente no GPT"},
-      {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
+      // Renomeado 08/2026 (era "Criação da pasta Operacional do Drive") — id mantido pra não zerar progresso salvo
+      {id:"d1_drive_operacional", label:"Criação da pasta compartilhada com o cliente no Google Drive"},
       {id:"d1_claude_sync", label:"Linkar Claude pra subir automático os materiais aprovados na pasta Arquivo do cliente"},
       {id:"d1_wpp_boasvindas", label:"Enviar script de boas-vindas no WhatsApp"},
       {id:"d1_wpp_boasvindas_fin", label:"Enviar script de boas-vindas financeiro no WhatsApp"},
