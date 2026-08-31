@@ -36335,6 +36335,7 @@ function _cardPodeSerResp(u){
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
   const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
+  const _refMonthHidRef=useRef(null); // ref do input month — SEMPRE no topo (hook não pode ser condicional)
   // Deadline com auto-correção EAGER (no useState initializer, sem side effect)
   // — evita que useEffect modifique deadline pós-mount e cause falso "hasChanges" no abrir do card
   const _computeInitialDeadline=(t)=>{
@@ -40559,7 +40560,7 @@ function _cardPodeSerResp(u){
               const _label=referenceMonth?(_MN[parseInt(_cur.split("-")[1])-1]+" "+_cur.split("-")[0]):"Selecione o mês";
               // Mês de pagamento — só Gustavo edita (é ele quem gerencia a contabilização de pagamento)
               const _enabled=canEdit&&(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id==="gustavo");
-              const _hidRef=useRef(null);
+              const _hidRef=_refMonthHidRef; // hook hoisted pro topo do componente
               const ArrowBtn=function(props){
                 const dir=props.dir;
                 return <button type="button" disabled={!_enabled} onClick={function(e){e.preventDefault();_step(dir==="prev"?-1:1);}}
