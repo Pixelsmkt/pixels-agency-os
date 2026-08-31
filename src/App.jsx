@@ -49561,6 +49561,7 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_CALC_CLIENTS=["lerofibras"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
+  {id:"servicos",    ico:"package",     label:"Serviços"},
   {id:"planejamento",ico:"layers",      label:"Planejamento"},
   {id:"performance", ico:"trendingUp",  label:"Performance"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
@@ -54425,11 +54426,14 @@ function _pjLinhasCalculadora(pl){
   }catch(_){}
   return L;
 }
-function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
+function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
+  const _mostrarPacote=mostrar!=="timeline";
+  const _mostrarTimeline=mostrar!=="pacote";
   const [onb,setOnb]=useState(null);          // client_onboarding.items
   const [calcPl,setCalcPl]=useState(null);    // portal_calculadora.payload (Monte seu pacote)
   const [editPacote,setEditPacote]=useState(false);
   const [draftEntregas,setDraftEntregas]=useState("");
+  const [draftValor,setDraftValor]=useState("");
   const _cor=(cl&&cl.color)||"#7c3aed";
 
   const [marcos,setMarcos]=useState([]);
@@ -54533,8 +54537,9 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
   }
   function salvarPacote(){
     const lista=draftEntregas.split("\n").map(function(x){return x.trim();}).filter(Boolean);
+    const _v=Number(String(draftValor||"").replace(/[^0-9]/g,""))||0;
     setEditPacote(false);
-    _persistPacote({presetId:"custom", entregas:lista});
+    _persistPacote({presetId:"custom", entregas:lista, valorCustom:_v});
   }
 
   if(onb===null) return null;
@@ -54557,7 +54562,8 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
       presets: _presets,
       entregas: [],
     };
-    return {origem:"", valor:Number(cl.contract)>0?_brl0(cl.contract):"", entregas:_entregasCustom};
+    var _vc=(pacote&&pacote.valorCustom!=null&&Number(pacote.valorCustom)>0)?Number(pacote.valorCustom):(Number(cl.contract)>0?Number(cl.contract):0);
+    return {origem:"", valor:_vc>0?_brl0(_vc):"", unidade:_vc>0?"/mês":"", entregas:_entregasCustom};
   })();
 
   // Uma linha da linha do tempo (compartilhada pelas 2 colunas)
@@ -54588,10 +54594,10 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
     </div>;
   };
 
-  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"340px minmax(0,1fr)",gap:14,alignItems:"start"}}>
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":((_mostrarPacote&&_mostrarTimeline)?"340px minmax(0,1fr)":"minmax(0,1fr)"),gap:14,alignItems:"start"}}>
 
     {/* ── PACOTE CONTRATADO ── */}
-    <div style={{background:"linear-gradient(160deg,"+_cor+"10,"+_cor+"04 55%,#ffffff)",border:"1px solid "+_cor+"2e",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+    {_mostrarPacote&&<div style={{background:"linear-gradient(160deg,"+_cor+"10,"+_cor+"04 55%,#ffffff)",border:"1px solid "+_cor+"2e",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+_cor+","+_cor+"55)"}}/>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12}}>
         <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
@@ -54603,7 +54609,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
             {cl.since&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>cliente desde {cl.since}</div>}
           </div>
         </div>
-        {canEdit&&!_temCalc&&!editPacote&&<button onClick={function(){setDraftEntregas(_entregasCustom.join("\n"));setEditPacote(true);}} title="Vincular pacote do Comercial (só a equipe Pixels vê este botão)"
+        {canEdit&&!_temCalc&&!editPacote&&<button onClick={function(){setDraftEntregas(_entregasCustom.join("\n"));setDraftValor(String((pacote.valorCustom!=null?pacote.valorCustom:(Number(cl.contract)>0?cl.contract:""))||""));setEditPacote(true);}} title="Vincular pacote do Comercial (só a equipe Pixels vê este botão)"
           style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
           <Ico n="edit" size={13} color="#64748b"/>
         </button>}
@@ -54700,6 +54706,16 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
               </div>
             </div>
             {pacote.presetId==="custom"&&<>
+              <div>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6}}>Valor mensal</div>
+                <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+                  <span style={{position:"absolute",left:12,color:"#64748b",fontSize:13,fontWeight:800,pointerEvents:"none"}}>R$</span>
+                  <input value={draftValor} onChange={function(e){setDraftValor(e.target.value.replace(/[^0-9.,]/g,""));}}
+                    inputMode="numeric" placeholder="4.000"
+                    style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px 10px 38px",fontSize:14,fontWeight:800,fontFamily:"inherit",outline:"none",color:"#0f172a",fontFeatureSettings:"'tnum'"}}/>
+                  <span style={{position:"absolute",right:12,color:"#a3adbb",fontSize:11,fontWeight:600,pointerEvents:"none"}}>/mês</span>
+                </div>
+              </div>
               <textarea value={draftEntregas} onChange={function(e){setDraftEntregas(e.target.value);}} rows={6}
                 placeholder={"Personalizado: um entregável por linha"}
                 style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+_cor+"55",borderRadius:10,padding:"10px 12px",fontSize:12,fontFamily:"inherit",lineHeight:1.6,resize:"vertical",outline:"none",color:"#0f172a"}}/>
@@ -54715,11 +54731,11 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
               <button onClick={function(){setEditPacote(false);}} style={{background:_cor,border:"none",borderRadius:8,padding:"7px 16px",fontSize:11.5,fontWeight:800,color:"#fff",cursor:"pointer"}}>Concluir</button>
             </div>
           </div>}
-    </div>
+    </div>}
 
 
     {/* ── LINHA DO TEMPO DO PROJETO ── */}
-    <div style={{background:"#fff",border:"1px solid #e9ecf1",borderRadius:16,padding:"18px 20px"}}>
+    {_mostrarTimeline&&<div style={{background:"#fff",border:"1px solid #e9ecf1",borderRadius:16,padding:"18px 20px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:4}}>
         <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
           <span style={{width:34,height:34,borderRadius:10,background:_cor+"14",border:"1px solid "+_cor+"2e",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
@@ -54761,7 +54777,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk}){
           })}
         </div>;
       })()}
-    </div>
+    </div>}
   </div>;
 }
 
@@ -55079,6 +55095,17 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
     {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} viewerIsPixels={!lockedClientId} currentClientUser={currentClientUser}/>}
 
+    {/* ── SERVIÇOS ── pacote contratado (movido do Dashboard) */}
+    {tab==="servicos"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Serviços contratados</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O pacote que você tem com a Pixels e o que ele inclui.</div>
+      </div>
+      <PortalJornadaProjeto cl={cl} isMob={isMob} mostrar="pacote"
+        canEdit={!lockedClientId && typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level<=2}
+        onGoTab={setTab} tabsOk={TABS.map(function(t){return t.id;})}/>
+    </div>}
+
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} currentClientUser={currentClientUser}/>}
 
@@ -55390,8 +55417,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
           })}
         </div>
 
-        {/* Pacote contratado + linha do tempo do projeto (preset de onboarding) */}
-        <PortalJornadaProjeto cl={cl} isMob={isMob}
+        {/* Linha do tempo do projeto (o Pacote contratado agora vive na aba Serviços) */}
+        <PortalJornadaProjeto cl={cl} isMob={isMob} mostrar="timeline"
           canEdit={!lockedClientId && typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level<=2}
           onGoTab={setTab} tabsOk={TABS.map(function(t){return t.id;})}/>
 
