@@ -52682,12 +52682,12 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   // ── KANBAN (pedido 2026-09-01, v2): igual ao quadro do Demandas interno —
   //    coluna com barra de título sólida + contador, corpo cinza, minHeight —
   //    mas monocromático: tons CRESCENTES da cor do cliente, coluna a coluna. ──
-  const _kmix=function(f){ // mistura a cor do cliente com branco (f = fração da cor)
+  const _kmix=function(f){ // escala de tom: f<1 escurece a cor do cliente (mistura com preto), f=1 = cor viva cheia
     try{
       var h=String(_c).replace("#","");
       if(h.length===3) h=h.split("").map(function(x){return x+x;}).join("");
       var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
-      var m=function(v){return Math.round(v*f+255*(1-f));};
+      var m=function(v){return Math.round(v*f);};
       return "rgb("+m(r)+","+m(g)+","+m(b)+")";
     }catch(_){ return _c; }
   };
@@ -52695,11 +52695,11 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
     try{ if(typeof DEM_STATUS!=="undefined"){ var x=DEM_STATUS.find(function(y){return y.id===id;}); if(x&&x.ico) return x.ico; } }catch(_){}
     return "dot";
   };
-  const _KCOLS=[
-    {id:"nao_iniciada",label:"Recebidas",       f:.38},
-    {id:"andamento",   label:"Em andamento",    f:.54},
-    {id:"aguardando",  label:"Aguardando você", f:.7},
-    {id:"revisao",     label:"Em revisão",      f:.85},
+  const _KCOLS=[ // crescente: do tom escuro até a cor bem viva
+    {id:"nao_iniciada",label:"Recebidas",       f:.45},
+    {id:"andamento",   label:"Em andamento",    f:.6},
+    {id:"aguardando",  label:"Aguardando você", f:.74},
+    {id:"revisao",     label:"Em revisão",      f:.88},
     {id:"concluida",   label:"Concluídas",      f:1},
   ];
   const _kanCols=_KCOLS.map(function(col){
@@ -52707,7 +52707,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   });
   // Pausadas: só se existirem, no fim, tom mais claro
   const _pausadas=_vis2.filter(function(d){return d.status==="pausada";});
-  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",f:.26,items:_pausadas});
+  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",f:.38,items:_pausadas});
   // Nada perdido: status desconhecido cai na primeira coluna
   (function(){
     const _ok={}; _kanCols.forEach(function(c){c.items.forEach(function(d){_ok[d.id]=1;});});
@@ -52716,14 +52716,13 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
 
   const _KanCol=function(col){
     const _head=_kmix(col.f);
-    const _claro=col.f<.6; // header claro → texto na cor do cliente; forte → branco
-    const _txt=_claro?_c:"#fff";
+    const _txt="#fff"; // texto SEMPRE branco — os tons são todos vivos/escuros
     return <div key={col.id} style={{background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:14,
       display:"flex",flexDirection:"column",minHeight:isMob?0:200,overflow:"hidden"}}>
       <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:_head}}>
         {typeof Ico==="function"&&<Ico n={_kIco(col.id)} size={13} color={_txt}/>}
         <span style={{color:_txt,fontSize:12,fontWeight:700,letterSpacing:.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{col.label}</span>
-        <span style={{background:_claro?"rgba(255,255,255,.65)":"rgba(255,255,255,.25)",color:_txt,fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{col.items.length}</span>
+        <span style={{background:"rgba(255,255,255,.25)",color:_txt,fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{col.items.length}</span>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
         {col.items.length===0
@@ -53432,7 +53431,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     const _ent=_todas.filter(_ehEntregue);
     grupos_ordenados.length=0;
     if(_atv.length) grupos_ordenados.push({key:"_todas",items:_atv,sprint_id:null,urgente:false,_flat:true});
-    if(_ent.length) grupos_ordenados.push({key:"_entregues",items:_ent,sprint_id:null,urgente:false,_flat:true,_entregues:true});
+    // Seção "Entregas concluídas" removida (2026-09-01): concluídas agora são coluna do kanban.
   })();
 
   // Header de cada grupo
@@ -83165,6 +83164,8 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
   ];
   // Lane MENSAL — quanto batemos dentro de um mês
   const _TRILHA_MENSAL=[
+    "R$ 10 mil em vendas no mês a partir do canal digital",
+    "R$ 25 mil em vendas no mês a partir do canal digital",
     "R$ 50 mil em vendas no mês a partir do canal digital",
     "R$ 100 mil em vendas no mês a partir do canal digital",
     "R$ 250 mil em vendas no mês a partir do canal digital",
