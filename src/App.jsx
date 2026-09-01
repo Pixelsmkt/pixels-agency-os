@@ -4990,8 +4990,14 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%",padding:isMob?"0 4px":0}}>
     {openCard&&<CardModal task={openCard} tasks={allTasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER} cardPerms={adminCardPerms}/>}
-    {isViewing&&<div style={{background:"#a140ff",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
-      👁 Visualizando dashboard de <strong>{user.name}</strong>
+    {isViewing&&<div style={{display:"inline-flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%)",border:"1px solid #fed7aa",borderRadius:12,padding:"7px 15px 7px 9px",boxShadow:"0 2px 10px rgba(234,88,12,.10)",alignSelf:"flex-start"}}>
+      <span style={{width:27,height:27,borderRadius:9,background:"linear-gradient(135deg,#f59e0b,#ea580c)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px rgba(234,88,12,.35)"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </span>
+      <span style={{lineHeight:1.2}}>
+        <span style={{display:"block",color:"#c2410c",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Visualizando como</span>
+        <span style={{display:"block",color:"#7c2d12",fontSize:13.5,fontWeight:800,letterSpacing:-.25}}>{user.name}</span>
+      </span>
     </div>}
 
     {/* ═══ PAGAMENTO POR DEMANDA — Bloco consolidado (André + Maria + Guilherme) ═══ */}
@@ -5943,21 +5949,33 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   // usuario, senao quem ja tinha o roxo em localStorage continuaria no roxo.
   const PX_COVER_DEFAULT="#15171c";
   const COVER_COLORS=["#15171c","#1f2430","#334155","#0f172a","#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777"];
-  const _pxCoverStored=(uid)=>{
+  // Social media entra com capa VERDE (identidade do cargo); demais seguem o grafite.
+  const _pxDefaultCover=(u)=>(u&&u.dash==="social")?"#059669":PX_COVER_DEFAULT;
+  const _pxCoverStored=(uid,u)=>{
+    const _def=_pxDefaultCover(u);
     try{
       const mk="pixels-covercolor-v2-"+uid;
       if(!localStorage.getItem(mk)){
         localStorage.removeItem("pixels-covercolor-"+uid);
         localStorage.setItem(mk,"1");
-        return PX_COVER_DEFAULT;
+        return _def;
       }
-      return localStorage.getItem("pixels-covercolor-"+uid)||PX_COVER_DEFAULT;
-    }catch{return PX_COVER_DEFAULT;}
+      // Migração única: quem é social e ainda estava no grafite antigo passa pro verde
+      if(u&&u.dash==="social"){
+        const mk3="pixels-covercolor-v3social-"+uid;
+        if(!localStorage.getItem(mk3)){
+          localStorage.setItem(mk3,"1");
+          localStorage.setItem("pixels-covercolor-"+uid,_def);
+          return _def;
+        }
+      }
+      return localStorage.getItem("pixels-covercolor-"+uid)||_def;
+    }catch{return _def;}
   };
-  const [coverColor,setCoverColor]=useState(()=>_pxCoverStored(effectiveUser.id));
+  const [coverColor,setCoverColor]=useState(()=>_pxCoverStored(effectiveUser.id,effectiveUser));
   // Ao mudar o user visualizado, recarrega a cor da capa desse user
   useEffect(()=>{
-    setCoverColor(_pxCoverStored(effectiveUser.id));
+    setCoverColor(_pxCoverStored(effectiveUser.id,effectiveUser));
   },[effectiveUser.id]);
   const [showColorPicker,setShowColorPicker]=useState(false);
   const saveCoverColor=(c)=>{
@@ -6003,34 +6021,6 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           </div>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
         </div>}
-        {/* ── Social media: visão crystal clear do calendário ── */}
-        {effectiveUser.dash==="social"&&(function(){
-          const _all=(allTasks||[]).filter(function(t){return t&&!t.deletedAt;});
-          const _aFazer=_all.filter(function(t){return t.status==="aprovado";}).length;
-          const _n=new Date(); _n.setHours(0,0,0,0);
-          const _dow=(_n.getDay()+6)%7; // 0 = segunda
-          const _ini=new Date(_n); _ini.setDate(_n.getDate()-_dow);
-          const _fimS=new Date(_ini); _fimS.setDate(_ini.getDate()+6);
-          const _iso=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
-          const _i0=_iso(_ini), _i1=_iso(_fimS);
-          const _pubSemana=_all.filter(function(t){
-            if(!t.publishDate)return false;
-            if(t.publishDate<_i0||t.publishDate>_i1)return false;
-            if(t.status==="pausado"||t.status==="reprovado")return false;
-            if(t.contentType==="folder")return false;
-            return true; // mesmo filtro do Calendário de publicações
-          }).length;
-          return <React.Fragment>
-            <div title="Posts com status APROVADO — prontos pra você agendar/postar" style={{background:"rgba(236,72,153,0.25)",border:"1px solid rgba(236,72,153,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
-              <span style={{color:"#fbcfe8",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_aFazer}</span>
-              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Posts a fazer</div>
-            </div>
-            <div title="Posts no Calendário de publicações desta semana (segunda a domingo)" style={{background:"rgba(6,182,212,0.22)",border:"1px solid rgba(6,182,212,0.45)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
-              <span style={{color:"#a5f3fc",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{_pubSemana}</span>
-              <div style={{color:"rgba(255,255,255,0.85)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,whiteSpace:"nowrap"}}>Publicações na semana</div>
-            </div>
-          </React.Fragment>;
-        })()}
         {lateMes.length>0&&<div style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 4px 12px rgba(220,38,38,0.35)"}}>
           <span style={{fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{lateMes.length}</span>
           <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,opacity:.95}}>Atrasadas</div>
@@ -21133,7 +21123,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     const _hasFreela = _assList.some(function(id){return _freelas.indexOf(String(id||"").toLowerCase())>=0;});
                     const _semPagamento = !t.referenceMonth && _hasFreela && !(t.status==="rascunhos"||_dead);
                     // Alerta 2: card SEM tipo de conteúdo (arte única / carrossel / foto de obra / vídeo…)
-                    const _semTipo = !t.contentType && !_dead;
+                    // Tipo de conteúdo serve pra classificar o PAGAMENTO por demanda —
+                    // card só com sócios/coordenação (sem equipe de produção) não precisa dele.
+                    const _semTipo = !t.contentType && !_dead && _demTemProducao(t);
                     if(!_semPagamento && !_semTipo) return null;
                     const _dot=function(title,children){
                       return <div title={title} style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>{children}</div>;
@@ -42238,10 +42230,16 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={currentUser||CURRENT_USER} cardPerms={dashCardPerms}/>}
 
     {/* Banner "Visualizando como X" quando admin está vendo o dashboard de outro */}
-    {isViewing&&<div style={{background:"#f59e0b",color:"#fff",borderRadius:10,
-        padding:"8px 14px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8,
-        maxWidth:860,margin:"0 auto",width:"100%"}}>
-      👁 Visualizando dashboard de <strong>{user.name}</strong>
+    {isViewing&&<div style={{maxWidth:860,margin:"0 auto",width:"100%"}}>
+      <div style={{display:"inline-flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%)",border:"1px solid #fed7aa",borderRadius:12,padding:"7px 15px 7px 9px",boxShadow:"0 2px 10px rgba(234,88,12,.10)",alignSelf:"flex-start"}}>
+      <span style={{width:27,height:27,borderRadius:9,background:"linear-gradient(135deg,#f59e0b,#ea580c)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px rgba(234,88,12,.35)"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </span>
+      <span style={{lineHeight:1.2}}>
+        <span style={{display:"block",color:"#c2410c",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Visualizando como</span>
+        <span style={{display:"block",color:"#7c2d12",fontSize:13.5,fontWeight:800,letterSpacing:-.25}}>{user.name}</span>
+      </span>
+    </div>
     </div>}
 
     {/* ═══ TAB BAR (pago por demanda / André tem pagamentos) ═══ */}
@@ -46384,12 +46382,68 @@ function LoadingScreen({msg}){
   );
 }
 
+// ── Tela "Definir nova senha" (chegou pelo link de Esqueci minha senha) ──
+function _PxNovaSenha({onDone}){
+  const [s1,setS1]=useState("");
+  const [s2,setS2]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
+  const salvar=async function(){
+    if(busy)return;
+    if(!s1||s1.length<6){setErr("A senha precisa de no mínimo 6 caracteres.");return;}
+    if(s1!==s2){setErr("As senhas não conferem.");return;}
+    setBusy(true);setErr("");
+    try{
+      const r=await _sb.auth.updateUser({password:s1});
+      if(r&&r.error){setErr("Erro: "+r.error.message);setBusy(false);return;}
+      // Mantém o cofre dos sócios atualizado com a senha nova (linha própria via RLS)
+      try{
+        const u=(await _sb.auth.getUser()).data.user;
+        if(u){
+          const {data:p}=await _sb.from("profiles").select("team_id,user_type").eq("id",u.id).maybeSingle();
+          if(p&&p.team_id&&p.user_type!=="client"){
+            await _sb.from("team_login_secrets").upsert({team_id:p.team_id,senha:s1,email:u.email||null,updated_by:u.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
+          }
+        }
+      }catch(_e){console.warn("[recovery] cofre:",_e&&_e.message||_e);}
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Senha nova salva! Você já está logado.",4500);
+      onDone&&onDone();
+    }catch(e){setErr("Erro: "+((e&&e.message)||e));setBusy(false);}
+  };
+  const inp={width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px",fontSize:14,color:"#0f172a",outline:"none",fontFamily:"inherit"};
+  return <div style={{position:"fixed",inset:0,background:"#fafafa",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",padding:20,boxSizing:"border-box",zIndex:99999}}>
+    <div style={{width:"100%",maxWidth:380}}>
+      <div style={{textAlign:"center",marginBottom:26}}>
+        <img src="/logo-pixels.png" alt="Pixels" style={{height:48,width:"auto",maxWidth:220,objectFit:"contain",marginBottom:18}}/>
+        <h1 style={{color:"#0f172a",fontWeight:700,fontSize:20,letterSpacing:-.4,margin:0}}>Definir nova senha</h1>
+        <p style={{color:"#64748b",fontSize:12.5,marginTop:6,marginBottom:0}}>Você chegou pelo link de recuperação — escolha a senha nova pra usar daqui pra frente.</p>
+      </div>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 22px 20px",boxShadow:"0 8px 30px rgba(15,23,42,.06)",display:"flex",flexDirection:"column",gap:12}}>
+        <div>
+          <div style={{color:"#334155",fontSize:12,fontWeight:700,marginBottom:6}}>Nova senha</div>
+          <input type="password" value={s1} onChange={function(e){setS1(e.target.value);}} placeholder="mín. 6 caracteres" style={inp} autoFocus/>
+        </div>
+        <div>
+          <div style={{color:"#334155",fontSize:12,fontWeight:700,marginBottom:6}}>Repete a nova senha</div>
+          <input type="password" value={s2} onChange={function(e){setS2(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")salvar();}} placeholder="igual à de cima" style={inp}/>
+        </div>
+        {err&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#b91c1c",borderRadius:9,padding:"9px 12px",fontSize:12,fontWeight:600}}>{err}</div>}
+        <button onClick={salvar} disabled={busy}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"13px",fontWeight:700,fontSize:14,cursor:busy?"default":"pointer",opacity:busy?.6:1,fontFamily:"inherit",marginTop:2}}>
+          {busy?"Salvando…":"Salvar nova senha e entrar"}
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
 // ── AgencyOS ──────────────────────────────────────────────────
 export default function AgencyOS(){
   const cachedProfile = ls.get(PROFILE_KEY);
   const initAuth = cachedProfile?(cachedProfile.user_type==="client"?"portal":"app"):"loading";
 
   const [authState,setAuthState]           = useState(initAuth);
+  const [recoveryMode,setRecoveryMode]     = useState(false); // link "Esqueci minha senha" → tela de nova senha
   const [currentProfile,setCurrentProfile] = useState(cachedProfile?.user_type!=="client"?cachedProfile:null);
   const [clientPortalData,setClientPortal] = useState(cachedProfile?.user_type==="client"?cachedProfile:null);
 
@@ -46973,6 +47027,7 @@ export default function AgencyOS(){
     const {data:{subscription}}=_sb.auth.onAuthStateChange((event,session)=>{
       if(!active) return;
       clearTimeout(safety);
+      if(event==="PASSWORD_RECOVERY"){ setRecoveryMode(true); }
       if(event==="SIGNED_OUT"||!session){
         tokenRef.current=null;
         ls.del(PROFILE_KEY);
@@ -47425,6 +47480,7 @@ export default function AgencyOS(){
     }
   };
 
+  if(recoveryMode) return <_PxNovaSenha onDone={function(){setRecoveryMode(false);}}/>;
   if(authState==="loading") return <LoadingScreen msg="Carregando..."/>;
   if(authState==="login") return(
     <LoginScreen
@@ -82933,41 +82989,6 @@ function _MtzForm({inicial, cadeiras, onSalvar, onFechar}){
           <div style={_MTZ_LBL}>Atribuições</div>
           <_MtzListaEdit itens={f.atribuicoes} onChange={function(v){set("atribuicoes",v);}} placeholder="Ex: Agendar publicações" addLabel="Adicionar atribuição"/>
         </div>
-        <div>
-          <div style={_MTZ_LBL}>Entregas recorrentes</div>
-          <_MtzListaEdit itens={f.entregas} onChange={function(v){set("entregas",v);}} placeholder="Ex: Planejamento editorial mensal" addLabel="Adicionar entrega"/>
-        </div>
-        <div>
-          <div style={_MTZ_LBL}>Interfaces — com quem essa cadeira se relaciona</div>
-          {_outras.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-            {_outras.map(function(c){
-              const _on=f.interfaces.indexOf(c.nome)>=0;
-              return <button key={c.id} type="button"
-                onClick={function(){ set("interfaces",_on?f.interfaces.filter(function(x){return x!==c.nome;}):f.interfaces.concat([c.nome])); }}
-                style={{background:_on?"#7c3aed":"#f5f3ff",color:_on?"#fff":"#7c3aed",border:"1px solid "+(_on?"#7c3aed":"#ede9fe"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_MTZ_FF,transition:"all .12s"}}>
-                {c.nome.split("|")[0].split(" e ")[0].trim()}
-              </button>;
-            })}
-          </div>}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:f.interfaces.length?8:0}}>
-            {f.interfaces.map(function(nm,i){
-              return <span key={i} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:99,padding:"4px 6px 4px 11px",fontSize:11.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
-                {nm}
-                <button type="button" onClick={function(){set("interfaces",f.interfaces.filter(function(_,j){return j!==i;}));}}
-                  style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,display:"inline-flex"}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </span>;
-            })}
-          </div>
-          <div style={{display:"flex",gap:7}}>
-            <input value={novaInterface} onChange={function(e){setNovaInterface(e.target.value);}} placeholder="Outra interface — ex: Direção, Clientes"
-              onKeyDown={function(e){ if(e.key==="Enter"&&novaInterface.trim()){ set("interfaces",f.interfaces.concat([novaInterface.trim()])); setNovaInterface(""); } }}
-              style={Object.assign({},_MTZ_INP,{padding:"8px 12px",fontSize:12.5})}/>
-            <button type="button" onClick={function(){ if(novaInterface.trim()){ set("interfaces",f.interfaces.concat([novaInterface.trim()])); setNovaInterface(""); } }}
-              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"0 14px",fontSize:12,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:_MTZ_FF,flexShrink:0}}>Adicionar</button>
-          </div>
-        </div>
       </div>
       <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
         <button onClick={onFechar} type="button"
@@ -83022,20 +83043,6 @@ function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
                 <span style={{color:"#334155",fontSize:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
               </div>;
-            })}
-          </div>
-        </_Sec>}
-        {(r.entregas||[]).length>0&&<_Sec t="Entregas recorrentes" cor="#16a34a">
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {r.entregas.map(function(e,i){
-              return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700}}>{e}</span>;
-            })}
-          </div>
-        </_Sec>}
-        {(r.interfaces||[]).length>0&&<_Sec t="Interfaces" cor="#0284c7">
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {r.interfaces.map(function(e,i){
-              return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:700}}>{e}</span>;
             })}
           </div>
         </_Sec>}
@@ -83168,12 +83175,12 @@ function PageMatrizResponsabilidades({isMob}){
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 14px 34px "+cor+"22";e.currentTarget.style.borderColor=cor+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.04)";e.currentTarget.style.borderColor="#e8ebf0";}}>
           {/* Banner com a cor do responsável */}
-          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:"16px 20px 15px",display:"flex",alignItems:"center",gap:13,position:"relative",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:"18px 22px 17px",display:"flex",alignItems:"center",gap:15,position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.12)",filter:"blur(2px)",pointerEvents:"none"}}/>
-            <div style={{width:46,height:46,borderRadius:"50%",overflow:"hidden",border:"2.5px solid rgba(255,255,255,0.85)",boxShadow:"0 4px 12px rgba(0,0,0,.18)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:76,height:76,borderRadius:"50%",overflow:"hidden",border:"3px solid rgba(255,255,255,0.9)",boxShadow:"0 6px 16px rgba(0,0,0,.22)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {u&&typeof UserAvatar==="function"
-                ? <UserAvatar user={u} size={42} border={false}/>
-                : <span style={{color:cor,fontSize:16,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+                ? <UserAvatar user={u} size={70} border={false}/>
+                : <span style={{color:cor,fontSize:26,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
             </div>
             <div style={{minWidth:0}}>
               <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.25,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
@@ -83191,33 +83198,18 @@ function PageMatrizResponsabilidades({isMob}){
                 <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_atr.length}</span>
                 <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
               </div>
-              <div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"6px 16px"}}>
-                {_atr.map(function(a,i){
-                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
-                    <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    </span>
-                    <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+              <div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",gap:18}}>
+                {(isMob?[_atr]:[_atr.slice(0,Math.ceil(_atr.length/2)),_atr.slice(Math.ceil(_atr.length/2))]).map(function(_col,_ci){
+                  return <div key={_ci} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:7}}>
+                    {_col.map(function(a,i){
+                      return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                        <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </span>
+                        <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                      </div>;
+                    })}
                   </div>;
-                })}
-              </div>
-            </div>}
-            {(r.entregas||[]).length>0&&<div>
-              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
-                <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Entregas recorrentes</span>
-                <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
-              </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {(r.entregas||[]).map(function(e,i){
-                  return <span key={i} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:700}}>{e}</span>;
-                })}
-              </div>
-            </div>}
-            {(r.interfaces||[]).length>0&&<div style={{paddingTop:12,borderTop:"1px solid #f1f4f8",marginTop:"auto"}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <span style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginRight:2}}>Interfaces</span>
-                {(r.interfaces||[]).map(function(e,i){
-                  return <span key={i} style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:99,padding:"3px 11px",fontSize:10.5,fontWeight:700}}>{e}</span>;
                 })}
               </div>
             </div>}
@@ -83243,7 +83235,7 @@ function PageMatrizResponsabilidades({isMob}){
               : <span style={{width:34,height:34,borderRadius:"50%",background:"#7c3aed14",border:"1px solid #7c3aed2b",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
             <div style={{minWidth:0,flex:1}}>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.3}}>{r.nome}</div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2}}>{r.responsavel_nome||"—"}{(r.interfaces||[]).length?(" · interfaces: "+(r.interfaces||[]).join(", ")):""}</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2}}>{r.responsavel_nome||"—"}</div>
             </div>
           </div>
         </Fragment>;
