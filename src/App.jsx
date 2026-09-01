@@ -83171,6 +83171,9 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     "R$ 250 mil em vendas no mês a partir do canal digital",
     "R$ 500 mil em vendas no mês a partir do canal digital",
     "R$ 1 milhão em vendas no mês a partir do canal digital",
+    "R$ 2 milhões em vendas no mês a partir do canal digital",
+    "R$ 5 milhões em vendas no mês a partir do canal digital",
+    "R$ 10 milhões em vendas no mês a partir do canal digital",
   ];
   // Identifica a carta de venda pelo VALOR (não pelo texto exato) + se é mensal.
   // Retorna "t:100000" (total) / "m:50000" (mensal) / null (não é carta de venda).
