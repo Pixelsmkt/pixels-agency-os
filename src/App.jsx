@@ -37141,6 +37141,18 @@ function _cardPodeSerResp(u){
   // canEdit: editarDemanda OR level<=2 OR isAssigned OR eh executor (designer/editor sempre podem subir arquivo)
   const _isExecutor=user&&(user.dash==="designer"||user.dash==="editor");
   const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned||_isExecutor;
+  // Mover de coluna (pedido 2026-09-01):
+  //  · estrategista (level<=2, já cai no canEdit) move pra QUALQUER coluna;
+  //  · social media (dash "social" sem canEdit) só move aprovados <-> Publicadas.
+  const _isSocialOnly=!canEdit&&!!(user&&user.dash==="social");
+  const _MV_APROV=["aprovado","aprovacao_final"]; // Aprovado internamente / pelo cliente
+  const _MV_PUB="agendado";                        // coluna "Publicadas"
+  const _socialPodeMover=function(fromId,toId){
+    if(_MV_APROV.indexOf(fromId)>=0) return toId===_MV_PUB;
+    if(fromId===_MV_PUB) return _MV_APROV.indexOf(toId)>=0;
+    return false;
+  };
+  const canMoveCol=canEdit||(_isSocialOnly&&(_MV_APROV.indexOf(task.status)>=0||task.status===_MV_PUB));
   // ── Permissão pra REFERÊNCIAS ── só quem cria cartão (sócio/coord) ou criador da própria demanda
   const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name)||user.dash==="designer"||user.dash==="editor"||user.dash==="coordinator";
 
@@ -38736,9 +38748,13 @@ function _cardPodeSerResp(u){
               {col&&(()=>{
                 const _moveTo=function(newId){
                   if(!newId||newId===task.status||typeof setTasks!=="function")return;
+                  if(_isSocialOnly&&!_socialPodeMover(task.status,newId)){
+                    if(typeof pixelsToast!=="undefined")pixelsToast.warning("Social media só move entre aprovados e Publicadas.");
+                    return;
+                  }
                   const _now=new Date().toISOString();
                   const _newCol=(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).find(function(c){return c.id===newId;});
-                  const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:user.name,note:"Movido via header do modal"};
+                  const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:user.name,note:"Movido por "+user.name+": "+col.label+" → "+(_newCol&&_newCol.label||newId)};
                   // Update local (otimista)
                   setTasks(function(prev){
                     return (prev||[]).map(function(t){
@@ -38769,19 +38785,22 @@ function _cardPodeSerResp(u){
                   setShowColPicker(false);
                 };
                 return <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-                  <button type="button" disabled={!canEdit} onClick={function(e){e.preventDefault();e.stopPropagation();if(canEdit)setShowColPicker(function(v){return !v;});}} title={canEdit?"Trocar coluna":undefined}
-                    style={{background:col.color+"1e",color:col.color,border:"none",borderRadius:7,padding:"5px 12px",fontSize:11.5,fontWeight:700,letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:5,cursor:canEdit?"pointer":"default",transition:"all .12s"}}
-                    onMouseEnter={function(e){if(canEdit)e.currentTarget.style.background=col.color+"2d";}}
+                  <button type="button" disabled={!canMoveCol} onClick={function(e){e.preventDefault();e.stopPropagation();if(canMoveCol)setShowColPicker(function(v){return !v;});}} title={canMoveCol?"Trocar coluna":undefined}
+                    style={{background:col.color+"1e",color:col.color,border:"none",borderRadius:7,padding:"5px 12px",fontSize:11.5,fontWeight:700,letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:5,cursor:canMoveCol?"pointer":"default",transition:"all .12s"}}
+                    onMouseEnter={function(e){if(canMoveCol)e.currentTarget.style.background=col.color+"2d";}}
                     onMouseLeave={function(e){e.currentTarget.style.background=col.color+"1e";}}>
                     {col.label}
-                    {canEdit&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.7}}><polyline points="6 9 12 15 18 9"/></svg>}
+                    {canMoveCol&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.7}}><polyline points="6 9 12 15 18 9"/></svg>}
                   </button>
                   {/* Dropdown com todas as colunas coloridas */}
-                  {showColPicker&&canEdit&&<>
+                  {showColPicker&&canMoveCol&&<>
                     <div onMouseDown={function(e){ if(e.target!==e.currentTarget) return; setShowColPicker(false); }} style={{position:"fixed",inset:0,zIndex:299,background:"transparent"}}/>
                     <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:300,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,boxShadow:"0 16px 40px rgba(15,23,42,0.14), 0 3px 10px rgba(15,23,42,0.06)",padding:6,minWidth:220,maxHeight:360,overflowY:"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
                       <div style={{fontSize:9.5,fontWeight:800,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6,padding:"6px 10px 4px"}}>Mover pra coluna</div>
-                      {(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).map(function(c){
+                      {(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).filter(function(c){
+                        if(!_isSocialOnly) return true;
+                        return c.id===task.status||_socialPodeMover(task.status,c.id);
+                      }).map(function(c){
                         const _sel=c.id===task.status;
                         return <button key={c.id} type="button" onClick={function(e){e.preventDefault();e.stopPropagation();_moveTo(c.id);}}
                           style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"7px 10px",background:_sel?c.color+"14":"transparent",border:"none",borderRadius:8,cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:"background .12s"}}
@@ -83047,36 +83066,38 @@ function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, o
 
   /* ── FRENTE ── */
   return <div style={{clipPath:_CQ_CUT,padding:"1.5px",position:"relative",
-    background:_desb?_moldOk:"linear-gradient(150deg,#e8ebf1,#dfe3ea 55%,#e8ebf1)",
-    filter:_desb?"drop-shadow(0 14px 28px "+_somb+")":"drop-shadow(0 2px 6px rgba(15,23,42,.06))",
+    background:_desb?_moldOk:"linear-gradient(150deg,#f0f2f7,#e4e8f0 55%,#f0f2f7)",
+    filter:_desb?"drop-shadow(0 14px 28px "+_somb+")":"drop-shadow(0 6px 16px rgba(15,23,42,.07))",
     animation:revelada?"pxCqReveal .6s cubic-bezier(.34,1.3,.5,1) both":"none",
     transition:"transform .2s cubic-bezier(.4,0,.2,1), filter .2s"}}
     onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-4px)";}}
     onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
     <div style={{clipPath:_CQ_CUT_IN,position:"relative",overflow:"hidden",minHeight:isMob?218:248,boxSizing:"border-box",
-      background:_desb?_bg:"linear-gradient(158deg,#fbfcfe 0%,#f2f4f8 55%,#eaedf3 100%)",
+      background:_desb?_bg:"linear-gradient(168deg,#ffffff 0%,#f8fafc 60%,#f1f4f9 100%)",
       padding:"18px 15px 15px",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-      {/* textura */}
-      <div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:_desb?.06:.5,
-        backgroundImage:"repeating-linear-gradient(135deg,"+(_desb?"#fff":"#dfe3ea")+" 0 1px,transparent 1px 9px)"}}/>
+      {/* textura só nas desbloqueadas; bloqueada ganha um halo de cor sutil */}
+      {_desb&&<div style={{position:"absolute",inset:0,pointerEvents:"none",opacity:.06,
+        backgroundImage:"repeating-linear-gradient(135deg,#fff 0 1px,transparent 1px 9px)"}}/>}
+      {!_desb&&<div style={{position:"absolute",inset:0,pointerEvents:"none",
+        background:"radial-gradient(120% 85% at 50% -12%,"+(_ouro?"rgba(240,180,41,.10)":"rgba(159,67,246,.09)")+", transparent 58%)"}}/>}
       {_desb&&<div style={{position:"absolute",top:"-40%",left:"-60%",width:"55%",height:"180%",transform:"rotate(18deg)",pointerEvents:"none",
         background:"linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent)",animation:"pxCqShine 3.6s ease-in-out infinite"}}/>}
 
       {/* medalhão hexagonal */}
       <div style={{width:58,height:58,clipPath:_CQ_HEX,flexShrink:0,marginTop:4,
-        background:_desb?("linear-gradient(150deg,"+_CQ_OURO2+","+_CQ_OURO+")"):"#dde2ea",
+        background:_desb?("linear-gradient(150deg,"+_CQ_OURO2+","+_CQ_OURO+")"):("linear-gradient(150deg,"+(_ouro?"#f4e3b8":"#e2d5f7")+",#dde2ea)"),
         display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{width:52,height:52,clipPath:_CQ_HEX,background:_desb?(_ouro?"#3d2603":"#2a0f52"):"#f1f4f8",
+        <div style={{width:52,height:52,clipPath:_CQ_HEX,background:_desb?(_ouro?"#3d2603":"#2a0f52"):"#ffffff",
           display:"flex",alignItems:"center",justifyContent:"center"}}>
           {_desb
             ? (typeof Ico==="function"&&<Ico n={c.icone||"award"} size={24} color={_CQ_OURO2}/>)
-            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a3adbb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
+            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={_ouro?"#d9a821":"#a678e8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.75}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
         </div>
       </div>
 
       {/* título + descrição */}
       <div style={{textAlign:"center",flex:1,minWidth:0,width:"100%",position:"relative"}}>
-        <div style={{color:_desb?"#fff":"#3b4454",fontSize:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,
+        <div style={{color:_desb?"#fff":"#1e293b",fontSize:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,
           textShadow:_desb?"0 1px 8px rgba(0,0,0,.35)":"none"}}>{c.titulo}</div>
         {c.descricao&&<div style={{color:_desb?"rgba(255,255,255,.68)":"#8a93a3",fontSize:11,fontWeight:500,lineHeight:1.45,marginTop:5}}>{c.descricao}</div>}
       </div>
@@ -83088,8 +83109,9 @@ function _CqCarta({c, nova, revelada, onRevelar, canEdit, onEditar, onExcluir, o
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             Conquistamos em {_cqBR(c.unlocked_at)||"—"}
           </span>
-        : <span style={{background:"#eef1f5",border:"1px solid #e2e8f0",color:"#8a93a3",
-            borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.4,whiteSpace:"nowrap"}}>Vamos conquistar juntos</span>}
+        : <span style={{background:"#fff",border:"1px solid "+(_ouro?"#f0e2bd":"#e6dcf5"),color:_ouro?"#c09122":"#9d7bd8",
+            borderRadius:99,padding:"3.5px 12px",fontSize:9.5,fontWeight:800,letterSpacing:.6,whiteSpace:"nowrap",textTransform:"uppercase",
+            boxShadow:"0 1px 3px rgba(15,23,42,.05)"}}>Vamos conquistar juntos</span>}
 
       {/* ── controles do sócio (nunca aparecem pro cliente) ── */}
       {canEdit&&<div style={{display:"flex",gap:5,width:"100%",justifyContent:"center",position:"relative",flexWrap:"wrap"}}>
