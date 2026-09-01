@@ -46530,19 +46530,28 @@ export default function AgencyOS(){
       // foram postados. Publicados já foram — não precisam de versão leve. Rascunhos,
       // produção (demanda/execução), pausados, reprovados e internos ficam de fora.
       const _OK_STATUS={avaliacao:1,aprovacao_final:1,aprovado:1,agendado:1,ajustes:1,alteracao_copy:1};
+      const _tsFile=function(fl){
+        const v=(fl&&(fl.addedAtIso||fl.addedAt))||"";const st=String(v);
+        if(/^\d{4}-\d{2}-\d{2}T/.test(st)){const d=new Date(st);return isNaN(d.getTime())?0:d.getTime();}
+        const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+        if(m){const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0);return isNaN(d.getTime())?0:d.getTime();}
+        return 0;
+      };
       const cands=[];
       for(const t of rows){
         if(!t||!Array.isArray(t.files))continue;
         if(!_OK_STATUS[t.status])continue;
-        for(const fl of t.files){
-          if(!fl||!fl.url||fl.uploading||fl.isAnnotation)continue;
-          const isVid=String(fl.type||"").startsWith("video/")||/\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(fl.url||""));
-          if(!isVid)continue;
-          if(fl.previewUrl)continue;
-          if(!fl.storagePath)continue;
-          if(typeof fl.size==="number" && fl.size<=20*1024*1024)continue;
-          cands.push({taskId:t.id,file:fl});
-        }
+        // Só a ÚLTIMA versão de vídeo do card — versões antigas substituídas não precisam de leve
+        const _vids=t.files.filter(function(fl){
+          if(!fl||!fl.url||fl.uploading||fl.isAnnotation)return false;
+          return String(fl.type||"").startsWith("video/")||/\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(fl.url||""));
+        }).sort(function(a,b){return _tsFile(b)-_tsFile(a);});
+        const fl=_vids[0];
+        if(!fl)continue;
+        if(fl.previewUrl)continue;
+        if(!fl.storagePath)continue;
+        if(typeof fl.size==="number" && fl.size<=20*1024*1024)continue;
+        cands.push({taskId:t.id,file:fl});
       }
       if(cands.length===0||stopped)return;
       console.log("[backfill] candidatos sem versão leve:",cands.length);
@@ -46559,11 +46568,21 @@ export default function AgencyOS(){
         try{ await sb.rpc("pixels_finish_preview",{p_path:c.file.storagePath,p_ok:ok}); }catch(_){}
         await _sleep(4000); // respiro entre vídeos
       }
-      if(feitos>0 && !stopped && typeof pixelsToast!=="undefined"){
-        try{ pixelsToast.success("Versões leves geradas em segundo plano: "+feitos+".",6000); }catch(_){}
+      if(feitos>0) console.log("[backfill] versões leves geradas nesta passada:",feitos);
+    };
+    // Ciclo contínuo: primeira passada 20s após abrir; depois re-varre a cada 10 min
+    // (pega vídeos novos/versões novas cuja compressão do upload falhou) — sem toast, silencioso.
+    const loop=async()=>{
+      await run();
+      while(!stopped){
+        await _sleep(600000); // 10 min
+        if(stopped)break;
+        await _waitVisible();
+        if(stopped)break;
+        try{ await run(); }catch(_){}
       }
     };
-    run();
+    loop();
     return ()=>{ stopped=true; abortRef.current=true; window.__pxBackfillRan=false; };
   },[authState]);
 
