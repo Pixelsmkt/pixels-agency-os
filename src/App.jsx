@@ -52602,12 +52602,12 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
           </span>}
           <span style={{flex:1}}/>
           <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
-            padding:"2px 9px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
+            padding:"2px 9px",fontSize:9,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,textTransform:"uppercase",letterSpacing:.5}}>{st.label}</span>
         </div>
 
         {/* Titulo + previsão */}
         <div style={{color:"#0f172a",fontSize:13,fontWeight:400,letterSpacing:-.05,lineHeight:1.4,
-          textDecoration:_fim?"line-through":"none",opacity:_fim?.7:1}}>{d.titulo}</div>
+          opacity:_fim?.75:1}}>{d.titulo}</div>
         {d.prazo&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>Previsão de entrega: {_br(d.prazo)}</div>}
 
         {/* Rodapé: progresso em destaque */}
@@ -52658,8 +52658,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
                       ? <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                       : (_tAnd?<span style={{width:5,height:5,borderRadius:"50%",background:_tst.c}}/>:null)}
                   </span>
-                  <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.35,
-                    textDecoration:_tok?"line-through":"none"}}>{t.nome}</span>
+                  <span style={{flex:1,minWidth:0,color:_tok?"#94a3b8":"#334155",fontSize:11.5,fontWeight:500,lineHeight:1.35}}>{typeof pxDemTexto==="function"?pxDemTexto(t.nome):t.nome}</span>
                   {t.prazo&&!_tok&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_br(t.prazo)}</span>}
                   {(function(){
                     const _tr=(typeof _demMembro==="function")?_demMembro(t.resp):null;
@@ -52667,7 +52666,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
                       {typeof UserAvatar==="function"&&<UserAvatar user={_tr} size={16} border={false}/>}
                     </span>:null;
                   })()}
-                  {(!t.prazo||_tok)&&<span style={{color:_tst.c,fontSize:9.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0}}>{_tst.l}</span>}
+                  {(!t.prazo||_tok)&&<span style={{color:_tst.c,fontSize:8.5,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,textTransform:"uppercase",letterSpacing:.4}}>{_tst.l}</span>}
                 </div>;
               })}
         </div>}
@@ -80071,6 +80070,19 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
   </div>;
 }
 
+/* ── Normalizador de texto das tarefas/etapas ──
+   Regra da casa (pedido 2026-09-01): sem pontuação e símbolos (!?.:; emojis...),
+   sem CAIXA ALTA, espaços colapsados, primeira letra maiúscula.
+   Mantém letras acentuadas, números e hífen (pré-moldados etc). ── */
+function pxDemTexto(v){
+  var s=String(v==null?"":v);
+  s=s.replace(/[^0-9A-Za-z\u00C0-\u00FF\s\-]/g,"");
+  s=s.replace(/\s+/g," ").trim();
+  if(!s) return s;
+  var letras=s.replace(/[^A-Za-z\u00C0-\u00FF]/g,"");
+  if(letras.length>3&&letras===letras.toUpperCase()) s=s.toLowerCase();
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
 /* ═══════════════════════════════════════════════════════════════════════
    DEMANDAS DO CLIENTE — Estrategia > Clientes > aba Demandas
    ───────────────────────────────────────────────────────────────────────
@@ -80447,7 +80459,7 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
     onSalvar(Object.assign({},d,{tarefas:lista}));
   };
   const _addTarefa=function(){
-    const _n=String(rascunho.nome||"").trim();
+    const _n=pxDemTexto(rascunho.nome);
     if(!_n){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Dá um nome pra tarefa."); return; }
     const _t=Object.assign({id:_demNovoId(), done_at:"", done_by:""}, rascunho, {nome:_n});
     if(_t.status==="concluida"){
@@ -80756,7 +80768,7 @@ function _DemTarefaLinha({t, cat, canEdit, isMob, emEdicao, setEmEdicao, onPatch
       {/* Nome */}
       {emEdicao && canEdit
         ? <input autoFocus defaultValue={t.nome}
-            onBlur={function(e){ const v=e.target.value.trim(); if(v&&v!==t.nome) onPatch({nome:v}); setEmEdicao(false); }}
+            onBlur={function(e){ const v=pxDemTexto(e.target.value); if(v&&v!==t.nome) onPatch({nome:v}); setEmEdicao(false); }}
             onKeyDown={function(e){ if(e.key==="Enter") e.currentTarget.blur(); if(e.key==="Escape") setEmEdicao(false); }}
             style={Object.assign({},_DEM_INP,{padding:"5px 9px",fontSize:12.5})}/>
         : <span onClick={function(){ if(canEdit) setEmEdicao(true); }}
@@ -81447,7 +81459,7 @@ function _DemandaModal({inicial, onSalvar, onFechar, isMob, clientes, cats, semC
                 <input value={t.nome} placeholder={"Etapa "+(i+1)+" — ex: Briefing com o cliente"} autoFocus={!t.nome}
                   onChange={function(e){_setEtapa(t.id,"nome",e.target.value);}}
                   onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); _addEtapa(); } }}
-                  onFocus={_demFoco} onBlur={_demBlur} style={_DEM_INP}/>
+                  onFocus={_demFoco} onBlur={function(e){_setEtapa(t.id,"nome",pxDemTexto(e.target.value));_demBlur(e);}} style={_DEM_INP}/>
                 {!isMob&&<div style={{display:"flex",justifyContent:"center"}}>
                   <_DemRespPicker mini valor={t.resp} onChange={function(v){_setEtapa(t.id,"resp",v);}}/>
                 </div>}
