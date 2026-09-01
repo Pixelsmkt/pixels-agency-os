@@ -52701,24 +52701,33 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   // ── KANBAN (pedido 2026-09-01, v2): igual ao quadro do Demandas interno —
   //    coluna com barra de título sólida + contador, corpo cinza, minHeight —
   //    mas monocromático: tons CRESCENTES da cor do cliente, coluna a coluna. ──
-  const _kmix=function(f){ // escala de tom: f<1 escurece a cor do cliente (mistura com preto), f=1 = cor viva cheia
+  const _kmix=function(f){ // escada de tons em HSL: f=0 bem escuro → f=1 bem vivo, degraus proporcionais
     try{
       var h=String(_c).replace("#","");
       if(h.length===3) h=h.split("").map(function(x){return x+x;}).join("");
-      var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
-      var m=function(v){return Math.round(v*f);};
-      return "rgb("+m(r)+","+m(g)+","+m(b)+")";
+      var r=parseInt(h.substr(0,2),16)/255,g=parseInt(h.substr(2,2),16)/255,b=parseInt(h.substr(4,2),16)/255;
+      var mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,hue=0,sat=0;
+      if(mx!==mn){
+        var d=mx-mn;
+        sat=l>0.5?d/(2-mx-mn):d/(mx+mn);
+        if(mx===r)hue=((g-b)/d+(g<b?6:0))/6; else if(mx===g)hue=((b-r)/d+2)/6; else hue=((r-g)/d+4)/6;
+      }
+      var lMin=Math.max(.10,l*.42);                 // degrau mais escuro
+      var lMax=Math.max(l,Math.min(.60,l*1.22));    // degrau mais vivo (um tico acima da cor base)
+      var L=lMin+(lMax-lMin)*f;
+      var S=Math.min(1,sat*1.05);
+      return "hsl("+Math.round(hue*360)+","+Math.round(S*100)+"%,"+Math.round(L*100)+"%)";
     }catch(_){ return _c; }
   };
   const _kIco=function(id){
     try{ if(typeof DEM_STATUS!=="undefined"){ var x=DEM_STATUS.find(function(y){return y.id===id;}); if(x&&x.ico) return x.ico; } }catch(_){}
     return "dot";
   };
-  const _KCOLS=[ // crescente: do tom escuro até a cor bem viva
-    {id:"nao_iniciada",label:"Recebidas",       f:.45},
-    {id:"andamento",   label:"Em andamento",    f:.6},
-    {id:"aguardando",  label:"Aguardando você", f:.74},
-    {id:"revisao",     label:"Em revisão",      f:.88},
+  const _KCOLS=[ // degraus IGUAIS na escada de tons: escuro → bem vivo
+    {id:"nao_iniciada",label:"Recebidas",       f:0},
+    {id:"andamento",   label:"Em andamento",    f:.25},
+    {id:"aguardando",  label:"Aguardando você", f:.5},
+    {id:"revisao",     label:"Em revisão",      f:.75},
     {id:"concluida",   label:"Concluídas",      f:1},
   ];
   const _kanCols=_KCOLS.map(function(col){
@@ -52726,7 +52735,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   });
   // Pausadas: só se existirem, no fim, tom mais claro
   const _pausadas=_vis2.filter(function(d){return d.status==="pausada";});
-  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",f:.38,items:_pausadas});
+  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",f:0,items:_pausadas});
   // Nada perdido: status desconhecido cai na primeira coluna
   (function(){
     const _ok={}; _kanCols.forEach(function(c){c.items.forEach(function(d){_ok[d.id]=1;});});
