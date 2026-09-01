@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 34/34 | Nao editar diretamente
+// Modulos: 35/35 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -31270,7 +31270,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["ferramentas","Ferramentas"],["senhas","Senhas"],["storage","Storage"]];
+const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["ferramentas","Ferramentas"],["redes","Redes sociais"],["senhas","Senhas"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -32650,6 +32650,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
 
       {/* Tab Storage — só admins */}
       {mainTab==="ferramentas"&&isMePartner&&<ToolsVault user={CURRENT_USER}/>}
+      {mainTab==="redes"&&typeof PageRedesSociais!=="undefined"&&<PageRedesSociais isMob={typeof _pxMob==="function"?_pxMob():false}/>}
       {mainTab==="senhas"&&_podeSenhas&&<PasswordVault user={CURRENT_USER}/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
@@ -33381,6 +33382,253 @@ function StorageManager({tasks}){
     {/* Log */}
     {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
       {log.map((l,i)=><div key={i} style={{color:C.ts,fontSize:12}}>{l}</div>)}
+    </div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 09b_redes_sociais.jsx — Acessos > Redes sociais
+// Contas de redes sociais de TODOS os clientes: rede, @, login e senha,
+// agrupadas por cliente. Tabela client_social_accounts (RLS agência).
+// ═══════════════════════════════════════════════════════════════════
+
+const RS_REDES=[
+  {id:"instagram",label:"Instagram",cor:"#E1306C",prefix:"https://instagram.com/"},
+  {id:"facebook", label:"Facebook", cor:"#1877F2",prefix:"https://facebook.com/"},
+  {id:"tiktok",   label:"TikTok",   cor:"#0f172a",prefix:"https://tiktok.com/@"},
+  {id:"youtube",  label:"YouTube",  cor:"#FF0000",prefix:"https://youtube.com/@"},
+  {id:"linkedin", label:"LinkedIn", cor:"#0A66C2",prefix:"https://linkedin.com/company/"},
+  {id:"google",   label:"Google Perfil",cor:"#4285F4",prefix:""},
+  {id:"outro",    label:"Outro",    cor:"#64748b",prefix:""},
+];
+function _rsRede(id){ return RS_REDES.find(function(r){return r.id===id;})||RS_REDES[RS_REDES.length-1]; }
+function _RsIcon({rede,size}){
+  const s=size||14;
+  const p={width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(rede==="instagram")return <svg {...p}><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg>;
+  if(rede==="facebook") return <svg {...p}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>;
+  if(rede==="tiktok")   return <svg {...p}><path d="M9 12a4 4 0 104 4V4c.7 2.4 2.6 4.2 5 4.6"/></svg>;
+  if(rede==="youtube")  return <svg {...p}><rect x="2" y="5.5" width="20" height="13" rx="4"/><polygon points="10 9.5 15.5 12 10 14.5 10 9.5" fill="currentColor" stroke="none"/></svg>;
+  if(rede==="linkedin") return <svg {...p}><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4V9h4v1.5A5.4 5.4 0 0116 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
+  if(rede==="google")   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 12h8"/><path d="M12 12v-4"/></svg>;
+  return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
+}
+
+function PageRedesSociais({isMob}){
+  const B1="#e2e8f0", TX="#0f172a", TS="#475569", TD="#94a3b8", AC="#7c3aed";
+  const [contas,setContas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [busca,setBusca]=useState("");
+  const [reveal,setReveal]=useState({});
+  const [form,setForm]=useState(null); // {id?,client_id,network,handle,login,senha,obs}
+  const [busy,setBusy]=useState(false);
+
+  const _load=async function(){
+    try{
+      const sb=window._sb; if(!sb)return;
+      const {data,error}=await sb.from("client_social_accounts").select("*").order("client_id").order("network");
+      if(error){console.warn("[redes] load:",error.message);return;}
+      setContas(data||[]);
+    }catch(e){console.warn("[redes]",e);}finally{setLoading(false);}
+  };
+  useEffect(function(){_load();},[]);
+
+  const _copy=function(v,lbl){ if(!v)return; try{navigator.clipboard.writeText(v);if(typeof pixelsToast!=="undefined")pixelsToast.success((lbl||"Copiado")+"!",1800);}catch(_){}};
+  const _salvar=async function(){
+    if(!form||!form.client_id){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escolhe o cliente.");return;}
+    if(!(form.handle||"").trim()&&!(form.login||"").trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preenche pelo menos o @ ou o login.");return;}
+    setBusy(true);
+    try{
+      const sb=window._sb;
+      const row={client_id:form.client_id,network:form.network||"instagram",handle:String(form.handle||"").trim().replace(/^@+/,""),login:String(form.login||"").trim(),senha:form.senha||"",rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),obs:form.obs||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+      const r=form.id
+        ? await sb.from("client_social_accounts").update(row).eq("id",form.id)
+        : await sb.from("client_social_accounts").insert(row);
+      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);setBusy(false);return;}
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Conta salva!",2200);
+      setForm(null);setBusy(false);_load();
+    }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e&&e.message||e));setBusy(false);}
+  };
+  const _excluir=function(c){
+    const go=async function(){
+      try{const sb=window._sb;const r=await sb.from("client_social_accounts").delete().eq("id",c.id);
+        if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
+        setContas(function(p){return p.filter(function(x){return x.id!==c.id;});});
+      }catch(_){}}
+    if(typeof pixelsConfirm==="function")pixelsConfirm({title:"Excluir conta?",message:(_rsRede(c.network).label)+" de "+(c.handle?("@"+c.handle):c.login)+" será removida.",confirmLabel:"Excluir",danger:true,onConfirm:go});
+    else if(window.confirm("Excluir essa conta?"))go();
+  };
+
+  const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
+  const _qn=busca.trim().toLowerCase();
+  const _match=function(cl){
+    if(!_qn)return true;
+    if(cl.name.toLowerCase().indexOf(_qn)>=0)return true;
+    return contas.some(function(c){return c.client_id===cl.id&&((c.handle||"").toLowerCase().indexOf(_qn)>=0||(c.login||"").toLowerCase().indexOf(_qn)>=0||(c.rec_email||"").toLowerCase().indexOf(_qn)>=0||_rsRede(c.network).label.toLowerCase().indexOf(_qn)>=0);});
+  };
+  const _visiveis=_clientes.filter(_match);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:11,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente, @, login..."
+          style={{background:"#fff",border:"1px solid "+B1,borderRadius:10,padding:"9px 14px 9px 34px",color:TX,fontSize:12.5,outline:"none",width:260,fontWeight:500}}/>
+      </div>
+      <span style={{flex:1}}/>
+      <button onClick={function(){setForm({client_id:_clientes[0]?_clientes[0].id:"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
+        style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:800,fontSize:12.5,cursor:"pointer",boxShadow:"0 4px 14px "+AC+"44",display:"inline-flex",alignItems:"center",gap:7}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova conta
+      </button>
+    </div>
+
+    {loading&&<div style={{padding:"40px 0",textAlign:"center",color:TD,fontSize:12.5}}>Carregando contas…</div>}
+
+    {/* Grid por cliente */}
+    {!loading&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14,alignItems:"start"}}>
+      {_visiveis.map(function(cl){
+        const _minhas=contas.filter(function(c){return c.client_id===cl.id;});
+        const _cor=cl.color||AC;
+        return <div key={cl.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+          {/* header do cliente */}
+          <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,"+_cor+"0d,#fff)"}}>
+            {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id]
+              ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:9,padding:"4px 8px",height:30,display:"inline-flex",alignItems:"center"}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:64,objectFit:"contain"}}/></div>
+              : <span style={{width:30,height:30,borderRadius:9,background:_cor+"18",color:_cor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>}
+            <span style={{color:TX,fontWeight:800,fontSize:13.5,letterSpacing:-.2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
+            <button title={"Adicionar conta de "+cl.name} onClick={function(){setForm({client_id:cl.id,network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
+              style={{background:_cor+"14",border:"1px solid "+_cor+"33",borderRadius:8,width:26,height:26,color:_cor,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          {/* contas */}
+          {_minhas.length===0
+            ? <div style={{padding:"16px",color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma conta registrada ainda.</div>
+            : <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+              {_minhas.map(function(c){
+                const R=_rsRede(c.network);
+                const _rev=!!reveal[c.id];
+                const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
+                return <div key={c.id} style={{border:"1px solid #eef1f5",borderRadius:12,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6,background:"#fcfcfd"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:26,height:26,borderRadius:8,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 6px "+R.cor+"55"}}><_RsIcon rede={c.network} size={14}/></span>
+                    {c.handle
+                      ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,color:TX,fontWeight:800,fontSize:13,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
+                      : <span style={{color:TS,fontWeight:700,fontSize:12}}>{R.label}</span>}
+                    <span style={{flex:1}}/>
+                    {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={{color:TD,display:"inline-flex",padding:2}}
+                      onMouseEnter={function(e){e.currentTarget.style.color=R.cor;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
+                    <button title="Editar" onClick={function(){setForm({id:c.id,client_id:c.client_id,network:c.network,handle:c.handle||"",login:c.login||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
+                      style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:2,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    <button title="Excluir" onClick={function(){_excluir(c);}}
+                      style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:2,display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+                  </div>
+                  {(c.login||c.senha)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {c.login&&<button title="Copiar login" onClick={function(){_copy(c.login,"Login copiado");}}
+                      style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",color:TS,fontSize:11.5,fontWeight:600,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%"}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login}</span></button>}
+                    {c.senha&&<span style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",display:"inline-flex",alignItems:"center",gap:7}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                      <span style={{color:TX,fontSize:11.5,fontWeight:700,letterSpacing:_rev?0:1.5}}>{_rev?c.senha:"••••••"}</span>
+                      <button title={_rev?"Ocultar":"Mostrar"} onClick={function(){setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex"}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
+                      <button title="Copiar senha" onClick={function(){_copy(c.senha,"Senha copiada");}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex"}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
+                    </span>}
+                  </div>}
+                  {(c.rec_email||c.rec_telefone)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {c.rec_email&&<button title="Copiar e-mail de recuperação" onClick={function(){_copy(c.rec_email,"E-mail de recuperação copiado");}}
+                      style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"4px 10px",color:"#92400e",fontSize:10.5,fontWeight:700,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,minWidth:0,maxWidth:"100%"}}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>rec: {c.rec_email}</span></button>}
+                    {c.rec_telefone&&<button title="Copiar telefone de recuperação" onClick={function(){_copy(c.rec_telefone,"Telefone de recuperação copiado");}}
+                      style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"4px 10px",color:"#92400e",fontSize:10.5,fontWeight:700,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.81.37 1.6.72 2.34a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.74-1.29a2 2 0 012.11-.45c.74.35 1.53.6 2.34.72A2 2 0 0122 16.92z"/></svg>
+                      rec: {c.rec_telefone}</button>}
+                  </div>}
+                  {c.obs&&!/^https?:/.test(c.obs)&&<div style={{color:TD,fontSize:10.5,lineHeight:1.4}}>{c.obs}</div>}
+                </div>;
+              })}
+            </div>}
+        </div>;
+      })}
+      {_visiveis.length===0&&<div style={{gridColumn:"1 / -1",padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:16,border:"1px dashed "+B1}}>Nenhum cliente encontrado.</div>}
+    </div>}
+
+    {/* Modal nova conta / editar */}
+    {form&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setForm(null);}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(3px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:16,border:"1px solid "+B1,width:"100%",maxWidth:460,boxShadow:"0 24px 60px rgba(0,0,0,.28)",overflow:"hidden"}}>
+        <div style={{padding:"16px 22px 13px",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{color:TX,fontWeight:800,fontSize:16,letterSpacing:-.2}}>{form.id?"Editar conta":"Nova conta de rede social"}</div>
+        </div>
+        <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Cliente</div>
+            <select value={form.client_id} onChange={function(e){setForm(Object.assign({},form,{client_id:e.target.value}));}}
+              style={{width:"100%",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:13,color:TX,outline:"none",fontFamily:"inherit",cursor:"pointer"}}>
+              {_clientes.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+            </select>
+          </div>
+          <div>
+            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Rede</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {RS_REDES.map(function(r){
+                const _on=form.network===r.id;
+                return <button key={r.id} type="button" onClick={function(){setForm(Object.assign({},form,{network:r.id}));}}
+                  style={{background:_on?r.cor:"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?r.cor:B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+                  <_RsIcon rede={r.id} size={11}/>{r.label}</button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>@ do perfil</div>
+            <input value={form.handle} onChange={function(e){setForm(Object.assign({},form,{handle:e.target.value}));}} placeholder="usuario (sem @)"
+              style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:13,fontWeight:700,color:TX,outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Login / e-mail</div>
+              <input value={form.login} onChange={function(e){setForm(Object.assign({},form,{login:e.target.value}));}} placeholder="email de acesso"
+                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            </div>
+            <div>
+              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Senha</div>
+              <input value={form.senha} onChange={function(e){setForm(Object.assign({},form,{senha:e.target.value}));}} placeholder="senha da conta"
+                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>E-mail de recuperação</div>
+              <input value={form.rec_email} onChange={function(e){setForm(Object.assign({},form,{rec_email:e.target.value}));}} placeholder="email de recuperação"
+                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            </div>
+            <div>
+              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Telefone de recuperação</div>
+              <input value={form.rec_telefone} onChange={function(e){setForm(Object.assign({},form,{rec_telefone:e.target.value}));}} placeholder="(00) 0 0000-0000"
+                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            </div>
+          </div>
+          <div>
+            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Observação (opcional)</div>
+            <input value={form.obs} onChange={function(e){setForm(Object.assign({},form,{obs:e.target.value}));}} placeholder="ex: 2FA no celular do Gustavo · link do perfil"
+              style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+          </div>
+        </div>
+        <div style={{padding:"13px 22px 17px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
+          <button onClick={function(){setForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:TS,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={_salvar} disabled={busy} style={{background:AC,border:"none",borderRadius:9,padding:"10px 20px",color:"#fff",fontWeight:800,fontSize:13,cursor:busy?"default":"pointer",opacity:busy?.6:1,fontFamily:"inherit"}}>{busy?"Salvando…":"Salvar"}</button>
+        </div>
+      </div>
     </div>}
   </div>;
 }
