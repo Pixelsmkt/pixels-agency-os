@@ -33398,7 +33398,7 @@ const RS_REDES=[
   {id:"tiktok",   label:"TikTok",   cor:"#0f172a",prefix:"https://tiktok.com/@"},
   {id:"youtube",  label:"YouTube",  cor:"#FF0000",prefix:"https://youtube.com/@"},
   {id:"linkedin", label:"LinkedIn", cor:"#0A66C2",prefix:"https://linkedin.com/company/"},
-  {id:"google",   label:"Google Perfil",cor:"#4285F4",prefix:""},
+  {id:"google",   label:"Gmail",    cor:"#EA4335",prefix:""},
   {id:"outro",    label:"Outro",    cor:"#64748b",prefix:""},
 ];
 function _rsRede(id){ return RS_REDES.find(function(r){return r.id===id;})||RS_REDES[RS_REDES.length-1]; }
@@ -33410,7 +33410,7 @@ function _RsIcon({rede,size}){
   if(rede==="tiktok")   return <svg {...p}><path d="M9 12a4 4 0 104 4V4c.7 2.4 2.6 4.2 5 4.6"/></svg>;
   if(rede==="youtube")  return <svg {...p}><rect x="2" y="5.5" width="20" height="13" rx="4"/><polygon points="10 9.5 15.5 12 10 14.5 10 9.5" fill="currentColor" stroke="none"/></svg>;
   if(rede==="linkedin") return <svg {...p}><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4V9h4v1.5A5.4 5.4 0 0116 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
-  if(rede==="google")   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 12h8"/><path d="M12 12v-4"/></svg>;
+  if(rede==="google")   return <svg {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>;
   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
 
@@ -33440,7 +33440,7 @@ function PageRedesSociais({isMob}){
     setBusy(true);
     try{
       const sb=window._sb;
-      const row={client_id:form.client_id,network:form.network||"instagram",handle:String(form.handle||"").trim().replace(/^@+/,""),login:String(form.login||"").trim(),senha:form.senha||"",rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),obs:form.obs||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+      const row={client_id:form.client_id,network:form.network||"instagram",handle:String(form.handle||"").trim().replace(/^@+/,""),login:String(form.login||"").trim(),senha:form.senha||"",rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),unidade:form.client_id==="bioter"?(form.unidade||""):"",obs:form.obs||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
       const r=form.id
         ? await sb.from("client_social_accounts").update(row).eq("id",form.id)
         : await sb.from("client_social_accounts").insert(row);
@@ -33460,13 +33460,23 @@ function PageRedesSociais({isMob}){
   };
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
+  // Bioter é POR UNIDADE: vira um card do Grupo + um card por unidade
+  const _cards=[];
+  _clientes.forEach(function(c){
+    if(c.id==="bioter"&&typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS.length){
+      _cards.push(Object.assign({},c,{_unidade:"",_nome:"Grupo Bioter"}));
+      BIOTER_UNITS.forEach(function(u){ _cards.push(Object.assign({},c,{_unidade:u.id,_nome:"Bioter "+(u.pickerLabel||u.label)})); });
+    } else {
+      _cards.push(Object.assign({},c,{_unidade:"",_nome:c.name}));
+    }
+  });
   const _qn=busca.trim().toLowerCase();
   const _match=function(cl){
     if(!_qn)return true;
-    if(cl.name.toLowerCase().indexOf(_qn)>=0)return true;
-    return contas.some(function(c){return c.client_id===cl.id&&((c.handle||"").toLowerCase().indexOf(_qn)>=0||(c.login||"").toLowerCase().indexOf(_qn)>=0||(c.rec_email||"").toLowerCase().indexOf(_qn)>=0||_rsRede(c.network).label.toLowerCase().indexOf(_qn)>=0);});
+    if(cl._nome.toLowerCase().indexOf(_qn)>=0)return true;
+    return contas.some(function(c){return c.client_id===cl.id&&(c.unidade||"")===(cl._unidade||"")&&((c.handle||"").toLowerCase().indexOf(_qn)>=0||(c.login||"").toLowerCase().indexOf(_qn)>=0||(c.rec_email||"").toLowerCase().indexOf(_qn)>=0||_rsRede(c.network).label.toLowerCase().indexOf(_qn)>=0);});
   };
-  const _visiveis=_clientes.filter(_match);
+  const _visiveis=_cards.filter(_match);
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
@@ -33477,7 +33487,7 @@ function PageRedesSociais({isMob}){
           style={{background:"#fff",border:"1px solid "+B1,borderRadius:10,padding:"9px 14px 9px 34px",color:TX,fontSize:12.5,outline:"none",width:260,fontWeight:500}}/>
       </div>
       <span style={{flex:1}}/>
-      <button onClick={function(){setForm({client_id:_clientes[0]?_clientes[0].id:"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
+      <button onClick={function(){setForm({client_id:_clientes[0]?_clientes[0].id:"",unidade:"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
         style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:800,fontSize:12.5,cursor:"pointer",boxShadow:"0 4px 14px "+AC+"44",display:"inline-flex",alignItems:"center",gap:7}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nova conta
@@ -33489,16 +33499,16 @@ function PageRedesSociais({isMob}){
     {/* Grid por cliente */}
     {!loading&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14,alignItems:"start"}}>
       {_visiveis.map(function(cl){
-        const _minhas=contas.filter(function(c){return c.client_id===cl.id;});
+        const _minhas=contas.filter(function(c){return c.client_id===cl.id&&(c.unidade||"")===(cl._unidade||"");});
         const _cor=cl.color||AC;
-        return <div key={cl.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+        return <div key={cl.id+"_"+(cl._unidade||"")} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
           {/* header do cliente */}
           <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,"+_cor+"0d,#fff)"}}>
             {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id]
               ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:9,padding:"4px 8px",height:30,display:"inline-flex",alignItems:"center"}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:64,objectFit:"contain"}}/></div>
               : <span style={{width:30,height:30,borderRadius:9,background:_cor+"18",color:_cor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>}
-            <span style={{color:TX,fontWeight:800,fontSize:13.5,letterSpacing:-.2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
-            <button title={"Adicionar conta de "+cl.name} onClick={function(){setForm({client_id:cl.id,network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
+            <span style={{color:TX,fontWeight:800,fontSize:13.5,letterSpacing:-.2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl._nome}</span>
+            <button title={"Adicionar conta de "+cl._nome} onClick={function(){setForm({client_id:cl.id,unidade:cl._unidade||"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
               style={{background:_cor+"14",border:"1px solid "+_cor+"33",borderRadius:8,width:26,height:26,color:_cor,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
@@ -33521,7 +33531,7 @@ function PageRedesSociais({isMob}){
                     {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={{color:TD,display:"inline-flex",padding:2}}
                       onMouseEnter={function(e){e.currentTarget.style.color=R.cor;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
-                    <button title="Editar" onClick={function(){setForm({id:c.id,client_id:c.client_id,network:c.network,handle:c.handle||"",login:c.login||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
+                    <button title="Editar" onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:c.unidade||"",network:c.network,handle:c.handle||"",login:c.login||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
                       style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:2,display:"inline-flex"}}
                       onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
@@ -33578,6 +33588,16 @@ function PageRedesSociais({isMob}){
               {_clientes.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
             </select>
           </div>
+          {form.client_id==="bioter"&&typeof BIOTER_UNITS!=="undefined"&&<div>
+            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Unidade Bioter</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {[{id:"",label:"Grupo"}].concat(BIOTER_UNITS.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){
+                const _on=(form.unidade||"")===u.id;
+                return <button key={u.id||"grupo"} type="button" onClick={function(){setForm(Object.assign({},form,{unidade:u.id}));}}
+                  style={{background:_on?"#0f172a":"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?"#0f172a":B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>{u.label}</button>;
+              })}
+            </div>
+          </div>}
           <div>
             <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Rede</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
@@ -82905,25 +82925,44 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
 
   // Trilha padrão de vendas — vem automático em TODO cliente, ordem crescente.
   // (sócio pode desbloquear/editar/excluir depois)
+  // Lane TOTAL (acumulado) — ordem crescente
   const _TRILHA_VENDAS=[
     "R$ 100 mil em vendas a partir do canal digital",
+    "R$ 500 mil em vendas a partir do canal digital",
     "R$ 1 milhão em vendas a partir do canal digital",
+    "R$ 5 milhões em vendas a partir do canal digital",
     "R$ 10 milhões em vendas a partir do canal digital",
+    "R$ 20 milhões em vendas a partir do canal digital",
+    "R$ 30 milhões em vendas a partir do canal digital",
+    "R$ 40 milhões em vendas a partir do canal digital",
+    "R$ 50 milhões em vendas a partir do canal digital",
     "R$ 100 milhões em vendas a partir do canal digital",
     "R$ 1 bilhão em vendas a partir do canal digital",
   ];
-  // Detecta o NÍVEL da carta de venda (1..5) por valor — não pelo texto exato.
-  // Assim "pelo/através/a partir do canal digital" e "100.000/100 mil" contam como o mesmo tier.
+  // Lane MENSAL — quanto batemos dentro de um mês
+  const _TRILHA_MENSAL=[
+    "R$ 50 mil em vendas no mês a partir do canal digital",
+    "R$ 100 mil em vendas no mês a partir do canal digital",
+    "R$ 250 mil em vendas no mês a partir do canal digital",
+    "R$ 500 mil em vendas no mês a partir do canal digital",
+    "R$ 1 milhão em vendas no mês a partir do canal digital",
+  ];
+  // Identifica a carta de venda pelo VALOR (não pelo texto exato) + se é mensal.
+  // Retorna "t:100000" (total) / "m:50000" (mensal) / null (não é carta de venda).
   const _tierVenda=function(titulo){
     const t=String(titulo||"").toLowerCase();
-    if(t.indexOf("digital")<0||t.indexOf("venda")<0) return 0;
-    if(/\bbilh/.test(t)||/1\.000\.000\.000/.test(t)) return 5;
-    if(/100\s*milh/.test(t)||/100\.000\.000/.test(t)) return 4;
-    if(/10\s*milh/.test(t)||/10\.000\.000/.test(t)) return 3;
-    if(/milh/.test(t)||/1\.000\.000/.test(t)) return 2;
-    if(/100\s*mil\b/.test(t)||/100\.000/.test(t)) return 1;
-    return 0;
+    if(t.indexOf("digital")<0||t.indexOf("venda")<0) return null;
+    const m=t.match(/r?\$?\s*([\d.,]+)\s*(mil(?!h)|milh|bilh)?/);
+    if(!m) return null;
+    let n=parseFloat(String(m[1]).replace(/\./g,"").replace(",","."));
+    if(isNaN(n)||n<=0) return null;
+    if(m[2]==="mil") n*=1e3;
+    else if(m[2]==="milh") n*=1e6;
+    else if(m[2]==="bilh") n*=1e9;
+    const mensal=/no m[eê]s/.test(t);
+    return (mensal?"m:":"t:")+n;
   };
+  const _tierValor=function(k){ return k?parseFloat(k.slice(2)):NaN; };
   const _seedTentado=useRef(false);
   const _carregar=async function(){
     if(!sb||!_rootId){ setLoading(false); return; }
@@ -82935,7 +82974,7 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
       if(canEdit && !_seedTentado.current){
         _seedTentado.current=true;
         const _tiersTem={}; _lista.forEach(function(c){ const _t=_tierVenda(c.titulo); if(_t)_tiersTem[_t]=true; });
-        const _faltam=_TRILHA_VENDAS.filter(function(t){ return !_tiersTem[_tierVenda(t)]; });
+        const _faltam=_TRILHA_VENDAS.concat(_TRILHA_MENSAL).filter(function(t){ return !_tiersTem[_tierVenda(t)]; });
         if(_faltam.length>0){
           const _base=_lista.length;
           const _rows=_faltam.map(function(t,i){
@@ -83113,20 +83152,55 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
                   animation:p.anim+" "+p.dur+"s cubic-bezier(.18,.62,.42,1) "+p.delay+"s both",boxShadow:"0 1px 2px rgba(15,23,42,.14)"}}/>;
               })}
             </div>}
-            <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(auto-fill,minmax(160px,1fr))":"repeat(auto-fill,minmax(215px,1fr))",gap:isMob?11:16}}>
-              {_visiveis.map(function(c){
-                const _nova=c.desbloqueada&&vistas.indexOf(c.id)<0&&!reveladas[c.id];
-                return <_CqCarta key={c.id} c={c} isMob={isMob}
-                  nova={c.desbloqueada&&vistas.indexOf(c.id)<0}
-                  revelada={!!reveladas[c.id]}
-                  onRevelar={function(){_revelar(c);}}
-                  canEdit={canEdit&&!_nova}
-                  onEditar={function(){setModal(c);}}
-                  onExcluir={function(){_excluir(c);}}
-                  onToggleDesb={function(){_toggleDesb(c);}}
-                  onResetReveal={function(){_resetRevelacao(c);}}/>;
-              })}
-            </div>
+            {(function(){
+              const _renderCartas=function(list){
+                return <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(auto-fill,minmax(160px,1fr))":"repeat(auto-fill,minmax(215px,1fr))",gap:isMob?11:16}}>
+                  {list.map(function(c){
+                    const _nova=c.desbloqueada&&vistas.indexOf(c.id)<0&&!reveladas[c.id];
+                    return <_CqCarta key={c.id} c={c} isMob={isMob}
+                      nova={c.desbloqueada&&vistas.indexOf(c.id)<0}
+                      revelada={!!reveladas[c.id]}
+                      onRevelar={function(){_revelar(c);}}
+                      canEdit={canEdit&&!_nova}
+                      onEditar={function(){setModal(c);}}
+                      onExcluir={function(){_excluir(c);}}
+                      onToggleDesb={function(){_toggleDesb(c);}}
+                      onResetReveal={function(){_resetRevelacao(c);}}/>;
+                  })}
+                </div>;
+              };
+              const _laneHead=function(lbl,sub,cor,count,total){
+                return <div style={{display:"flex",alignItems:"center",gap:9,margin:"4px 0 12px"}}>
+                  <span style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,"+cor+","+cor+"bb)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px "+cor+"44",flexShrink:0}}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  </span>
+                  <div>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.25,lineHeight:1.2}}>{lbl}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</div>
+                  </div>
+                  <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"2px 10px",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{count}/{total}</span>
+                  <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
+                </div>;
+              };
+              const _byVal=function(a,b){ return _tierValor(_tierVenda(a.titulo))-_tierValor(_tierVenda(b.titulo)); };
+              const _tot=_visiveis.filter(function(c){const k=_tierVenda(c.titulo);return k&&k[0]==="t";}).sort(_byVal);
+              const _men=_visiveis.filter(function(c){const k=_tierVenda(c.titulo);return k&&k[0]==="m";}).sort(_byVal);
+              const _out=_visiveis.filter(function(c){return !_tierVenda(c.titulo);});
+              return <div style={{display:"flex",flexDirection:"column",gap:22}}>
+                {_tot.length>0&&<div>
+                  {_laneHead("Conquistas totais","Vendas acumuladas a partir do canal digital","#f0b429",_tot.filter(function(c){return c.desbloqueada;}).length,_tot.length)}
+                  {_renderCartas(_tot)}
+                </div>}
+                {_men.length>0&&<div>
+                  {_laneHead("Conquistas do mês","Quanto batemos dentro de um único mês","#7c3aed",_men.filter(function(c){return c.desbloqueada;}).length,_men.length)}
+                  {_renderCartas(_men)}
+                </div>}
+                {_out.length>0&&<div>
+                  {_laneHead("Outras conquistas","Marcos especiais fora da régua de vendas","#0ea5e9",_out.filter(function(c){return c.desbloqueada;}).length,_out.length)}
+                  {_renderCartas(_out)}
+                </div>}
+              </div>;
+            })()}
           </div>
     }
 
