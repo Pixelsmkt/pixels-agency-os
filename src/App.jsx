@@ -56340,8 +56340,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         const _cover=(_th&&_th.url)||t.cover||null;
         const _ehVideo=!!(_th&&_th.video);
         return <div
-          onClick={function(){ if(_cover&&!_ehVideo) setPubLightbox({url:_cover,title:t.title||""}); }}
-          style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:(_cover&&!_ehVideo)?"zoom-in":"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
+          onClick={function(){ if(_cover) setPubLightbox({url:_cover,title:t.title||"",video:_ehVideo}); }}
+          style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:_cover?(_ehVideo?"pointer":"zoom-in"):"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"88";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor=futura?cl.color+"55":"#e2e8f0";}}>
           <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
@@ -56418,8 +56418,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     {/* Lightbox das Publicações */}
     {pubLightbox&&<div onClick={function(){setPubLightbox(null);}}
       style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.86)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)"}}>
-      <img src={pubLightbox.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
-        style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>
+      {pubLightbox.video
+        ? <video src={pubLightbox.url} controls autoPlay playsInline onClick={function(e){e.stopPropagation();}}
+            style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block",background:"#000"}}/>
+        : <img src={pubLightbox.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
+            style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>}
       <button onClick={function(){setPubLightbox(null);}} title="Fechar"
         style={{position:"fixed",top:18,right:18,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -83065,9 +83068,6 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     "R$ 1 milhão em vendas a partir do canal digital",
     "R$ 5 milhões em vendas a partir do canal digital",
     "R$ 10 milhões em vendas a partir do canal digital",
-    "R$ 20 milhões em vendas a partir do canal digital",
-    "R$ 30 milhões em vendas a partir do canal digital",
-    "R$ 40 milhões em vendas a partir do canal digital",
     "R$ 50 milhões em vendas a partir do canal digital",
     "R$ 100 milhões em vendas a partir do canal digital",
     "R$ 1 bilhão em vendas a partir do canal digital",
