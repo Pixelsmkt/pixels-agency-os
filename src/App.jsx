@@ -33608,6 +33608,19 @@ function PageRedesSociais({isMob}){
                     {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={{color:TD,display:"inline-flex",padding:2}}
                       onMouseEnter={function(e){e.currentTarget.style.color=R.cor;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
+                    {(c.handle||c.login||c.senha)&&<button title={"Copiar tudo num clique ("+[c.handle?"@":null,c.login?"login":null,c.senha?"senha":null].filter(Boolean).join(" + ")+")"}
+                      onClick={function(){
+                        var _ls=[];
+                        if(c.handle)_ls.push("@"+c.handle);
+                        if(c.login)_ls.push("Login: "+c.login);
+                        if(c.senha)_ls.push("Senha: "+c.senha);
+                        _copy(_ls.join("\n"),"Acesso copiado");
+                      }}
+                      style={{background:R.cor+"14",border:"1px solid "+R.cor+"33",borderRadius:7,width:24,height:24,color:R.cor,cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                      onMouseEnter={function(e){e.currentTarget.style.background=R.cor;e.currentTarget.style.color="#fff";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background=R.cor+"14";e.currentTarget.style.color=R.cor;}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>}
                     <button title="Editar" onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:c.unidade||"",network:c.network,handle:c.handle||"",login:c.login||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
                       style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:2,display:"inline-flex"}}
                       onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
@@ -50587,24 +50600,26 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 // Clientes que montam o proprio pacote no portal (calculadora + save no Supabase).
 // Pra liberar pra outro cliente e so acrescentar o client_id aqui.
 const PORTAL_CALC_CLIENTS=["lerofibras"];
+// Ordem + seções definidas pelo Gustavo (2026-09-01). `sec` = cabeçalho de grupo
+// no menu lateral; primeiro bloco (visão geral) fica sem cabeçalho.
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
-  {id:"servicos",    ico:"package",     label:"Serviços"},
-  {id:"planejamento",ico:"layers",      label:"Planejamento"},
   {id:"performance", ico:"trendingUp",  label:"Performance"},
-  {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
-  {id:"demandas",    ico:"zap",         label:"Demandas"},
-  {id:"briefing",    ico:"fileText",    label:"Briefing"},
-  {id:"marcos",      ico:"flame",       label:"Checkpoints"},
-  {id:"conquistas",  ico:"star",        label:"Conquistas"},
-  {id:"playbook",    ico:"book",        label:"Playbook"},
   {id:"metas",       ico:"target",      label:"Metas"},
-  {id:"calendario",  ico:"calendar",    label:"Calendário"},
-  {id:"publicacoes", ico:"check",       label:"Publicações"},
+  {id:"conquistas",  ico:"star",        label:"Conquistas"},
+  // {id:"servicos",    ico:"package",     label:"Serviços"}, // removida momentaneamente a pedido (2026-09-01)
+  {id:"planejamento",ico:"layers",      label:"Planejamento", sec:"Estratégia"},
+  {id:"briefing",    ico:"fileText",    label:"Briefing",     sec:"Estratégia"},
+  {id:"parcerias",   ico:"users",       label:"Parcerias",    sec:"Estratégia"},
+  {id:"concorrencia",ico:"eye",         label:"Concorrência", sec:"Estratégia"},
+  {id:"playbook",    ico:"book",        label:"Playbook",     sec:"Estratégia"},
+  {id:"demandas",    ico:"zap",         label:"Demandas",     sec:"Operação"},
+  {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações",   sec:"Operação"},
+  {id:"marcos",      ico:"flame",       label:"Checkpoints",  sec:"Operação"},
+  {id:"calendario",  ico:"calendar",    label:"Calendário",   sec:"Operação"},
+  {id:"publicacoes", ico:"check",       label:"Publicações",  sec:"Operação"},
   // {id:"analises",    ico:"chart",       label:"Análises"}, // DESATIVADA por enquanto (pedido 2026-08-31) — automação do Reportei ainda não resolve pro cliente
-  {id:"parcerias",   ico:"users",       label:"Parcerias"},
-  {id:"concorrencia",ico:"eye",         label:"Concorrência"},
-  {id:"nps",         ico:"sparkles",    label:"NPS"},
+  {id:"nps",         ico:"sparkles",    label:"NPS",          sec:"Relacionamento"},
 ];
 const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
@@ -56142,19 +56157,31 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
       {isMob
         ? <div className="pxPortalTabs" style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto",overflowY:"hidden",flexWrap:"nowrap",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",marginBottom:14}}>
-            {TABS.map(function(t){
+            {TABS.map(function(t,_i){
               const active=tab===t.id;
-              return <button key={t.id} onClick={function(){setTab(t.id);}}
+              const _prevSec=_i>0?(TABS[_i-1].sec||""):"";
+              const _divide=(t.sec||"")&&(t.sec||"")!==_prevSec&&_i>0;
+              return <React.Fragment key={t.id}>
+                {_divide&&<span style={{width:1,alignSelf:"stretch",background:"#e2e8f0",margin:"8px 4px",flexShrink:0}}/>}
+                <button onClick={function(){setTab(t.id);}}
                 style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
                 <Ico n={t.ico||"dot"} size={13}/>
                 {t.label}
-              </button>;
+              </button></React.Fragment>;
             })}
           </div>
         : <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#fff",border:"1px solid "+C.b1,borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
-            {TABS.map(function(t){
+            {TABS.map(function(t,_i){
               const active=tab===t.id;
-              return <button key={t.id} onClick={function(){setTab(t.id);}}
+              const _prevSec=_i>0?(TABS[_i-1].sec||""):"";
+              const _sec=t.sec||"";
+              const _header=_sec&&_sec!==_prevSec
+                ? <div key={"sec-"+_sec} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 4px"}}>
+                    <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>{_sec}</span>
+                    <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+                  </div>
+                : null;
+              return <React.Fragment key={t.id}>{_header}<button onClick={function(){setTab(t.id);}}
                 style={{background:active?cl.color+"12":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?cl.color:C.ts,fontWeight:active?700:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%"}}
                 onMouseEnter={function(e){if(!active)e.currentTarget.style.background="#f8fafc";}}
                 onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
@@ -56162,7 +56189,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
                   <Ico n={t.ico||"dot"} size={13} color={active?cl.color:"#94a3b8"}/>
                 </span>
                 <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</span>
-              </button>;
+              </button></React.Fragment>;
             })}
           </div>
       }
