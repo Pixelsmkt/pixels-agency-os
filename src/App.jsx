@@ -40942,10 +40942,9 @@ function _cardPodeSerResp(u){
                   return <button key={c.id} type="button" disabled={!canEdit}
                     onClick={function(){
                       setClient(c.id);
+                      // NÃO auto-marca "grupo": deixa as unidades vazias pra pessoa
+                      // escolher direto a unidade sem ter que desmarcar antes (2026-09-01)
                       if(c.id!=="bioter") setBioterUnit("");
-                      // Ao selecionar Grupo Bioter como cliente, auto-marca "grupo" nas unidades
-                      // (equivalente a clicar Grupo Bioter — TODAS em Unidades Bioter)
-                      else setBioterUnit("grupo");
                     }}
                     style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?_corSel+"14":"#fff",border:"1.5px solid "+(isSel?_corSel:"#e2e8f0"),borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?_corSel:"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",fontFamily:"inherit",minWidth:0}}
                     onMouseEnter={function(ev){if(canEdit&&!isSel){ev.currentTarget.style.borderColor=_corSel+"66";ev.currentTarget.style.background=_corSel+"08";}}}
