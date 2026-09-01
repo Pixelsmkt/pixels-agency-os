@@ -52712,8 +52712,8 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
         sat=l>0.5?d/(2-mx-mn):d/(mx+mn);
         if(mx===r)hue=((g-b)/d+(g<b?6:0))/6; else if(mx===g)hue=((b-r)/d+2)/6; else hue=((r-g)/d+4)/6;
       }
-      var lMin=Math.max(.10,l*.42);                 // degrau mais escuro
-      var lMax=Math.max(l,Math.min(.60,l*1.22));    // degrau mais vivo (um tico acima da cor base)
+      var lMin=Math.max(.08,l*.30);                 // degrau mais escuro (quase preto da cor)
+      var lMax=Math.max(l,Math.min(.62,l*1.55));    // degrau mais vivo (bem acima da cor base)
       var L=lMin+(lMax-lMin)*f;
       var S=Math.min(1,sat*1.05);
       return "hsl("+Math.round(hue*360)+","+Math.round(S*100)+"%,"+Math.round(L*100)+"%)";
