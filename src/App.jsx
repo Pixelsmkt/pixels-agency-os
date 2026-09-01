@@ -56186,40 +56186,47 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:"none",margin:0,padding:isMob?"14px 12px 32px":"18px 26px 40px",boxSizing:"border-box",width:"100%"}}>
 
-    {/* ── TOPO unificado (pedido 2026-09-01): Portal do Cliente | logo Pixels | cliente ── */}
-    <div style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,padding:isMob?"13px 16px":"15px 26px",
-      display:"flex",alignItems:"center",gap:isMob?12:20,boxShadow:"0 3px 14px rgba(15,23,42,.06)",flexWrap:isMob?"wrap":"nowrap"}}>
+    {/* ── TOPO unificado v2 (2026-09-01): compacto, ancorado à esquerda, com divisórias ── */}
+    <div style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,padding:isMob?"12px 16px":"13px 22px",
+      display:"inline-flex",alignItems:"center",gap:isMob?12:22,boxShadow:"0 3px 14px rgba(15,23,42,.06)",
+      alignSelf:"flex-start",maxWidth:"100%",flexWrap:isMob?"wrap":"nowrap",boxSizing:"border-box"}}>
 
-      {/* esquerda — título */}
+      {/* título */}
       <div style={{minWidth:0,flexShrink:0}}>
-        <div style={{color:C.tx,fontWeight:800,fontSize:isMob?15:17.5,letterSpacing:-.35,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:isMob?15:16.5,letterSpacing:-.35,display:"flex",alignItems:"center",gap:9,whiteSpace:"nowrap"}}>
           <span style={{width:30,height:30,borderRadius:9,background:cl.color+"14",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <Ico n="globe" size={16} color={cl.color}/>
           </span>
-          Portal do Cliente
+          <span>
+            Portal do Cliente
+            {!isMob&&<span style={{display:"block",color:C.td,fontSize:10,marginTop:1,fontWeight:500,letterSpacing:0}}>Visão exclusiva · sem informações internas</span>}
+          </span>
         </div>
-        {!isMob&&<div style={{color:C.td,fontSize:10.5,marginTop:2,fontWeight:500,whiteSpace:"nowrap",paddingLeft:38}}>Visão exclusiva · sem informações internas</div>}
       </div>
 
-      {/* centro — logo da Pixels em evidência */}
-      <div style={{flex:1,display:"flex",justifyContent:"center",minWidth:0,order:isMob?3:0,width:isMob?"100%":"auto"}}>
-        {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS.pixels&&
-          <img src={CLIENT_LOGOS.pixels} alt="Pixels" style={{height:isMob?24:32,objectFit:"contain",display:"block"}}/>}
-      </div>
+      {/* divisória */}
+      {!isMob&&<span style={{width:1,alignSelf:"stretch",background:"linear-gradient(180deg,transparent,#e5e9f0,transparent)",flexShrink:0}}/>}
 
-      {/* direita — identidade do cliente */}
-      <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0,flexShrink:0,marginLeft:isMob?"auto":0}}>
-        <div style={{textAlign:"right",minWidth:0}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:13.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
-          <div style={{color:C.td,fontSize:10.5,marginTop:1,whiteSpace:"nowrap"}}>{cl.sector}</div>
-        </div>
+      {/* logo da Pixels */}
+      {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS.pixels&&
+        <img src={CLIENT_LOGOS.pixels} alt="Pixels" style={{height:isMob?22:28,objectFit:"contain",display:"block",flexShrink:0}}/>}
+
+      {/* divisória */}
+      {!isMob&&<span style={{width:1,alignSelf:"stretch",background:"linear-gradient(180deg,transparent,#e5e9f0,transparent)",flexShrink:0}}/>}
+
+      {/* identidade do cliente */}
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flexShrink:0}}>
         {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-          ?<div style={{width:46,height:46,borderRadius:12,background:"#fff",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:5,boxSizing:"border-box"}}>
+          ?<div style={{width:40,height:40,borderRadius:11,background:"#fff",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:4,boxSizing:"border-box"}}>
             <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
           </div>
-          :<div style={{width:42,height:42,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:15,flexShrink:0,letterSpacing:-.3}}>
+          :<div style={{width:38,height:38,borderRadius:11,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:14,flexShrink:0,letterSpacing:-.3}}>
             {cl.name.slice(0,2).toUpperCase()}
           </div>}
+        <div style={{minWidth:0}}>
+          <div style={{color:C.tx,fontWeight:800,fontSize:13,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:1,whiteSpace:"nowrap"}}>{cl.sector}</div>
+        </div>
       </div>
     </div>
 
@@ -56713,40 +56720,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
           canEdit={!lockedClientId && typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level<=2}
           onGoTab={setTab} tabsOk={TABS.map(function(t){return t.id;})}/>
 
-        {/* Grid de cards por aba — resumo + CTA de navegação */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-          <_NavCard tab="aprovacoes" accent="#059669" icon="checkCircle" title="Aprovações"
-            hint={_aguardando>0?_aguardando+" demanda"+(_aguardando>1?"s":"")+" aguardando sua aprovação":"Nada pendente por ora"}
-            badges={_aguardando>0?[{label:"Pendente",color:"#059669",bg:"#dcfce7"}]:[]}/>
-          <_NavCard tab="demandas" accent="#0284c7" icon="zap" title="Demandas"
-            hint={_demandasAbertas>0?_demandasAbertas+" ativa"+(_demandasAbertas>1?"s":"")+" · "+_demandasMes+" entregue"+(_demandasMes===1?"":"s")+" no mês":"Solicite arte, vídeo ou tráfego"}
-            badges={_demandasAbertas>0?[{label:"Em andamento",color:"#0284c7",bg:"#dbeafe"}]:[]}/>
-          <_NavCard tab="briefing" accent="#a855f7" icon="fileText" title="Briefing"
-            hint="Informações do seu negócio, produtos e público" badges={[]}/>
-          <_NavCard tab="marcos" accent="#d97706" icon="award" title="Checkpoints"
-            hint="Acompanhe eventos, captações e entregas do projeto" badges={[]}/>
-          <_NavCard tab="conquistas" accent="#eab308" icon="star" title="Conquistas"
-            hint="Nosso álbum de vitórias — cartas que desbloqueamos juntos" badges={[]}/>
-          <_NavCard tab="metas" accent="#dc2626" icon="target" title="Metas"
-            hint="Seguidores, engajamento, leads e vendas do mês" badges={[]}/>
-          <_NavCard tab="planejamento" accent="#7c3aed" icon="calendar" title="Planejamento"
-            hint="Planejamento mensal e trimestral do conteúdo" badges={[]}/>
-          <_NavCard tab="calendario" accent="#0891b2" icon="calendar" title="Calendário"
-            hint="Publicações agendadas + eventos do cliente" badges={_proximasPubs.length>0?[{label:_proximasPubs.length+" próx. 7d",color:"#0891b2",bg:"#cffafe"}]:[]}/>
-          <_NavCard tab="publicacoes" accent="#16a34a" icon="image" title="Publicações"
-            hint={_publicadasMes>0?_publicadasMes+" publicada"+(_publicadasMes===1?"":"s")+" este mês":"Feed do Instagram das entregas"} badges={[]}/>
-          <_NavCard tab="performance" accent="#f59e0b" icon="trendingUp" title="Performance"
-            hint="Funil digital + faturamento vindo de campanhas" badges={[]}/>
-          {/* Análises desativada por enquanto (2026-08-31)
-          <_NavCard tab="analises" accent="#8b5cf6" icon="barChart" title="Análises"
-            hint="Dashboard Reportei com métricas completas" badges={[]}/> */}
-          <_NavCard tab="nps" accent="#0ea5e9" icon="star" title="NPS"
-            hint="Avalie a Pixels — sua opinião conta" badges={[]}/>
-          <_NavCard tab="parcerias" accent="#ec4899" icon="users" title="Parcerias"
-            hint="Mapeamento de influencers e estratégias locais" badges={[]}/>
-          <_NavCard tab="concorrencia" accent="#64748b" icon="eye" title="Concorrência"
-            hint="Movimentos dos seus concorrentes no digital" badges={[]}/>
-        </div>
+        {/* Grid de NavCards removido (2026-09-01) — repetia o menu lateral; o resumo agora são os widgets */}
 
         {/* Próximas publicações — só se houver */}
         {_proximasPubs.length>0 && <div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:12,padding:"14px 16px"}}>
