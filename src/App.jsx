@@ -50811,7 +50811,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     window._sb.from("tasks")
       .select("id,title,status,publish_date,publish_time,bioter_unit,client,content_type,cover,files,caption")
       .eq("client",cl.id).is("deleted_at",null)
-      .in("status",["agendado","publicado","aprovacao_final"])
+      .in("status",["demanda","recebida","execucao","ajustes","avaliacao","alteracao_copy","aprovado","agendado","publicado","aprovacao_final"])
       .not("publish_date","is",null)
       .then(function(r){
         if(off||!r||!Array.isArray(r.data))return;
@@ -50828,7 +50828,10 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
   const _filterUnit = _isBioter && selUnit && selUnit!=="grupo" && selUnit!=="_minhas_";
   const publicacoes=(_srcTasks||[]).filter(function(t){
     if(t.deletedAt||!t.publishDate||t.client!==cl.id)return false;
-    if(t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="aprovacao_final")return false;
+    // Calendário mostra o pipeline INTEIRO (cliente vê só o card com título — a arte
+    // continua restrita à aba Publicações, que só mostra aprovadas).
+    if(t.status==="rascunhos"||t.status==="pausado"||t.status==="reprovado")return false;
+    if(t.contentType==="folder")return false;
     if(_filterUnit){
       const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
       // Mesma regra do calendário interno: sem unidade = grupo (vale pra todas);
@@ -50916,8 +50919,8 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     return cl?cl.color:"#475569";
   };
   // Cor do badge de status
-  const statusColor={agendado:"#7c3aed",publicado:"#059669",aprovacao_final:"#14b8a6"};
-  const statusLabel={agendado:"Agendada",publicado:"Publicada",aprovacao_final:"Aprovada"};
+  const statusColor={agendado:"#7c3aed",publicado:"#059669",aprovacao_final:"#14b8a6",aprovado:"#14b8a6",demanda:"#06b6d4",recebida:"#06b6d4",execucao:"#06b6d4",ajustes:"#06b6d4",avaliacao:"#06b6d4",alteracao_copy:"#06b6d4"};
+  const statusLabel={agendado:"Agendada",publicado:"Publicada",aprovacao_final:"Aprovada",aprovado:"Aprovada",demanda:"Em produção",recebida:"Em produção",execucao:"Em produção",ajustes:"Em produção",avaliacao:"Em produção",alteracao_copy:"Em produção"};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Header: titulo + seletor de mes (igual interno) */}
