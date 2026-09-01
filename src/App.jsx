@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 35/35 | Nao editar diretamente
+// Modulos: 36/36 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -50619,6 +50619,18 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 // Clientes que montam o proprio pacote no portal (calculadora + save no Supabase).
 // Pra liberar pra outro cliente e so acrescentar o client_id aqui.
 const PORTAL_CALC_CLIENTS=["lerofibras"];
+// Tom "neon" da cor do cliente — ícones do menu lateral do portal (pedido 2026-09-01)
+function pxNeonColor(hex){
+  try{
+    var h=String(hex||"").replace("#","");
+    if(h.length===3)h=h.split("").map(function(x){return x+x;}).join("");
+    var r=parseInt(h.substr(0,2),16)/255,g=parseInt(h.substr(2,2),16)/255,b=parseInt(h.substr(4,2),16)/255;
+    var mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,hue=0,sat=0;
+    if(mx!==mn){var d=mx-mn;sat=l>0.5?d/(2-mx-mn):d/(mx+mn);
+      if(mx===r)hue=((g-b)/d+(g<b?6:0))/6;else if(mx===g)hue=((b-r)/d+2)/6;else hue=((r-g)/d+4)/6;}
+    return "hsl("+Math.round(hue*360)+",100%,68%)";
+  }catch(_){return "#7dffc4";}
+}
 // Ordem + seções definidas pelo Gustavo (2026-09-01). `sec` = cabeçalho de grupo
 // no menu lateral; primeiro bloco (visão geral) fica sem cabeçalho.
 const PORTAL_ALL_TABS=[
@@ -56125,6 +56137,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   // criou — esses ele rastreia em todas as etapas.)
   // STATUSES_VISIVEIS_CLIENTE = pós aprovação interna.
   const STATUSES_VISIVEIS_CLIENTE=["aprovado","aprovacao_final","agendado","publicado"];
+  // Badge da aba Aprovações: quantos materiais esperam aprovação do cliente
+  const _aprovPend=clTasks.filter(function(t){return t.status==="aprovado";}).length;
   const clTasksVisiveis=clTasks.filter(function(t){return STATUSES_VISIVEIS_CLIENTE.indexOf(t.status)>=0;});
   // Reset selUnit ao trocar de cliente (se cliente novo nao for bioter)
   useEffect(function(){
@@ -56172,13 +56186,41 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:"none",margin:0,padding:isMob?"14px 12px 32px":"18px 26px 40px",boxSizing:"border-box",width:"100%"}}>
 
-    {/* Header — sem emoji, tipografia limpa */}
-    <div>
-      <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4,display:"flex",alignItems:"center",gap:8}}>
-        <Ico n="globe" size={20} color={cl.color}/>
-        Portal do cliente
+    {/* ── TOPO unificado (pedido 2026-09-01): Portal do Cliente | logo Pixels | cliente ── */}
+    <div style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,padding:isMob?"13px 16px":"15px 26px",
+      display:"flex",alignItems:"center",gap:isMob?12:20,boxShadow:"0 3px 14px rgba(15,23,42,.06)",flexWrap:isMob?"wrap":"nowrap"}}>
+
+      {/* esquerda — título */}
+      <div style={{minWidth:0,flexShrink:0}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:isMob?15:17.5,letterSpacing:-.35,display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap"}}>
+          <span style={{width:30,height:30,borderRadius:9,background:cl.color+"14",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="globe" size={16} color={cl.color}/>
+          </span>
+          Portal do Cliente
+        </div>
+        {!isMob&&<div style={{color:C.td,fontSize:10.5,marginTop:2,fontWeight:500,whiteSpace:"nowrap",paddingLeft:38}}>Visão exclusiva · sem informações internas</div>}
       </div>
-      <div style={{color:C.td,fontSize:11.5,marginTop:3,fontWeight:500}}>Visão exclusiva do cliente · sem informações internas</div>
+
+      {/* centro — logo da Pixels em evidência */}
+      <div style={{flex:1,display:"flex",justifyContent:"center",minWidth:0,order:isMob?3:0,width:isMob?"100%":"auto"}}>
+        {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS.pixels&&
+          <img src={CLIENT_LOGOS.pixels} alt="Pixels" style={{height:isMob?24:32,objectFit:"contain",display:"block"}}/>}
+      </div>
+
+      {/* direita — identidade do cliente */}
+      <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0,flexShrink:0,marginLeft:isMob?"auto":0}}>
+        <div style={{textAlign:"right",minWidth:0}}>
+          <div style={{color:C.tx,fontWeight:800,fontSize:13.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
+          <div style={{color:C.td,fontSize:10.5,marginTop:1,whiteSpace:"nowrap"}}>{cl.sector}</div>
+        </div>
+        {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+          ?<div style={{width:46,height:46,borderRadius:12,background:"#fff",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:5,boxSizing:"border-box"}}>
+            <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+          </div>
+          :<div style={{width:42,height:42,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:15,flexShrink:0,letterSpacing:-.3}}>
+            {cl.name.slice(0,2).toUpperCase()}
+          </div>}
+      </div>
     </div>
 
     {/* Barrinha horizontal de clientes — 1 clique pra alternar. Só sócios sem lock. */}
@@ -56210,21 +56252,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       </div>
     ) : null}
 
-    {/* Client bar — refinada */}
-    <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"14px 18px",border:"1px solid "+cl.color+"28",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-      {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-        ?<div style={{width:54,height:54,borderRadius:12,background:"#fff",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:6,boxSizing:"border-box"}}>
-          <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
-        </div>
-        :<div style={{width:46,height:46,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:17,flexShrink:0,letterSpacing:-.3}}>
-          {cl.name.slice(0,2).toUpperCase()}
-        </div>
-      }
-      <div>
-        <div style={{color:C.tx,fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
-        <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
-      </div>
-    </div>
+    {/* Client bar antiga removida — identidade do cliente agora vive no topo unificado (2026-09-01) */}
 
     {/* Seletor de unidade (so pra Bioter) — pills horizontais com Grupo Bioter no fim */}
     {isBioter&&availableUnits.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"2px 0"}}>
@@ -56246,7 +56274,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
     {/* Tabs — desktop quebra em linhas (sem barra de rolagem); mobile desliza
         no dedo com a scrollbar escondida (padrão de app touch). */}
-    <style>{".pxPortalTabs::-webkit-scrollbar{display:none}.pxPortalSide::-webkit-scrollbar{width:6px}.pxPortalSide::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:9px}"}</style>
+    <style>{".pxPortalTabs::-webkit-scrollbar{display:none}.pxPortalSide::-webkit-scrollbar{width:6px}.pxPortalSide::-webkit-scrollbar-thumb{background:rgba(255,255,255,.35);border-radius:9px}"}</style>
     {/* ── LAYOUT: sidebar (desktop) + conteúdo · mobile mantém a barra no topo ── */}
     <div style={isMob?{display:"block"}:{display:"flex",gap:18,alignItems:"flex-start"}}>
 
@@ -56262,31 +56290,36 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
                 style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
                 <Ico n={t.ico||"dot"} size={13}/>
                 {t.label}
+                {t.id==="aprovacoes"&&_aprovPend>0&&<span style={{minWidth:18,height:18,borderRadius:99,background:"#dc2626",color:"#fff",fontSize:9.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 5px",fontFeatureSettings:"'tnum'"}}>+{_aprovPend}</span>}
               </button></React.Fragment>;
             })}
           </div>
-        : <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:"#fff",border:"1px solid "+C.b1,borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+        : (function(){
+            const _neon=(typeof pxNeonColor==="function")?pxNeonColor(cl.color):"#7dffc4";
+            return <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:cl.color,border:"none",borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+cl.color+"55"}}>
             {TABS.map(function(t,_i){
               const active=tab===t.id;
               const _prevSec=_i>0?(TABS[_i-1].sec||""):"";
               const _sec=t.sec||"";
               const _header=_sec&&_sec!==_prevSec
                 ? <div key={"sec-"+_sec} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 4px"}}>
-                    <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>{_sec}</span>
-                    <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)"}}/>
+                    <span style={{color:"rgba(255,255,255,.72)",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>{_sec}</span>
+                    <span style={{flex:1,height:1,background:"linear-gradient(90deg,rgba(255,255,255,.35),transparent)"}}/>
                   </div>
                 : null;
               return <React.Fragment key={t.id}>{_header}<button onClick={function(){setTab(t.id);}}
-                style={{background:active?cl.color+"12":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?cl.color:C.ts,fontWeight:active?700:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%"}}
-                onMouseEnter={function(e){if(!active)e.currentTarget.style.background="#f8fafc";}}
+                style={{background:active?"#fff":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?"#334155":"#fff",fontWeight:active?800:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%",boxShadow:active?"0 3px 10px rgba(0,0,0,.16)":"none"}}
+                onMouseEnter={function(e){if(!active)e.currentTarget.style.background="rgba(255,255,255,.12)";}}
                 onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
-                <span style={{width:26,height:26,borderRadius:8,background:active?cl.color+"18":"#f1f5f9",color:active?cl.color:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Ico n={t.ico||"dot"} size={13} color={active?cl.color:"#94a3b8"}/>
+                <span style={{width:26,height:26,borderRadius:8,background:active?"#eef1f5":"rgba(255,255,255,.13)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Ico n={t.ico||"dot"} size={13} color={active?"#334155":_neon}/>
                 </span>
                 <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</span>
+                {t.id==="aprovacoes"&&_aprovPend>0&&<span style={{minWidth:22,height:22,borderRadius:99,background:"#dc2626",color:"#fff",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 6px",flexShrink:0,fontFeatureSettings:"'tnum'",boxShadow:"0 2px 6px rgba(220,38,38,.45)"}}>+{_aprovPend}</span>}
               </button></React.Fragment>;
             })}
-          </div>
+          </div>;
+          })()
       }
 
       {/* ── CONTEÚDO ── */}
@@ -56440,7 +56473,17 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         return <div
           onClick={function(){
             if(_ehVideo){ if(!_tocando) setPubPlaying(t.id); return; } // vídeo toca no próprio card
-            if(_cover) setPubLightbox({url:_cover,title:t.title||""});
+            if(!_cover) return;
+            // Carrossel: abre o lightbox com TODAS as lâminas finais do post
+            const _fin=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(t):[];
+            const _pool=(_fin.length>0?_fin:(t.files||[]).filter(function(f){
+              return f && f.url && !f.isAnnotation && !f.isRef && f.tipo!=="referencia" && f.tipo!=="material";
+            }));
+            const _items=_pool.map(function(f){
+              return {url:f.url, video:(typeof _pxEhVideo==="function")?_pxEhVideo(f):false, preview:f.previewUrl||f.preview_url||null};
+            });
+            if(_items.length===0) _items.push({url:_cover,video:false,preview:null});
+            setPubLightbox({items:_items, idx:0, title:t.title||""});
           }}
           style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:_cover?(_ehVideo&&!_tocando?"pointer":(_ehVideo?"default":"zoom-in")):"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"88";}}
@@ -56520,19 +56563,50 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       );
     })()}
 
-    {/* Lightbox das Publicações */}
-    {pubLightbox&&<div onClick={function(){setPubLightbox(null);}}
-      style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.86)",display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)"}}>
-      {pubLightbox.video
-        ? <video src={pubLightbox.url} controls autoPlay playsInline onClick={function(e){e.stopPropagation();}}
-            style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block",background:"#000"}}/>
-        : <img src={pubLightbox.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
-            style={{maxWidth:"92vw",maxHeight:"90vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>}
-      <button onClick={function(){setPubLightbox(null);}} title="Fechar"
-        style={{position:"fixed",top:18,right:18,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>}
+    {/* Lightbox das Publicações — carrossel com todas as lâminas */}
+    {pubLightbox&&(function(){
+      const _items=Array.isArray(pubLightbox.items)&&pubLightbox.items.length>0
+        ? pubLightbox.items
+        : [{url:pubLightbox.url,video:!!pubLightbox.video,preview:null}];
+      const _n=_items.length;
+      const _i=Math.min(Math.max(pubLightbox.idx||0,0),_n-1);
+      const _cur=_items[_i];
+      const _ir=function(d){ setPubLightbox(Object.assign({},pubLightbox,{items:_items,idx:(_i+d+_n)%_n})); };
+      const _navBtn=function(dir){
+        return <button onClick={function(e){e.stopPropagation();_ir(dir);}} title={dir>0?"Próxima lâmina":"Lâmina anterior"}
+          style={{position:"fixed",top:"50%",transform:"translateY(-50%)",[dir>0?"right":"left"]:18,
+            background:"rgba(255,255,255,0.14)",border:"1px solid rgba(255,255,255,0.25)",borderRadius:"50%",width:46,height:46,
+            color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,0.28)";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.14)";}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">{dir>0?<polyline points="9 18 15 12 9 6"/>:<polyline points="15 18 9 12 15 6"/>}</svg>
+        </button>;
+      };
+      return <div onClick={function(){setPubLightbox(null);}}
+        style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 76px",backdropFilter:"blur(4px)"}}>
+        {_cur.video
+          ? <video key={_i} src={_cur.preview||_cur.url} controls autoPlay playsInline onClick={function(e){e.stopPropagation();}}
+              style={{maxWidth:"88vw",maxHeight:"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block",background:"#000"}}/>
+          : <img key={_i} src={_cur.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
+              style={{maxWidth:"88vw",maxHeight:"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>}
+        {_n>1&&_navBtn(-1)}
+        {_n>1&&_navBtn(1)}
+        {/* contador + bolinhas */}
+        {_n>1&&<div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",display:"flex",alignItems:"center",gap:10,background:"rgba(0,0,0,0.45)",borderRadius:99,padding:"7px 14px",backdropFilter:"blur(4px)"}} onClick={function(e){e.stopPropagation();}}>
+          <span style={{color:"#fff",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_i+1} / {_n}</span>
+          <span style={{display:"inline-flex",gap:5}}>
+            {_items.map(function(_,k){
+              return <button key={k} onClick={function(e){e.stopPropagation();setPubLightbox(Object.assign({},pubLightbox,{items:_items,idx:k}));}}
+                style={{width:k===_i?18:7,height:7,borderRadius:99,border:"none",padding:0,cursor:"pointer",background:k===_i?"#fff":"rgba(255,255,255,0.4)",transition:"all .15s"}}/>;
+            })}
+          </span>
+        </div>}
+        <button onClick={function(){setPubLightbox(null);}} title="Fechar"
+          style={{position:"fixed",top:18,right:18,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>;
+    })()}
 
     {/* ── CHAT ── */}
     {tab==="chat"&&(
@@ -56629,6 +56703,10 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             </div>;
           })}
         </div>
+
+        {/* Widgets personalizáveis do cliente (pedido 2026-09-01) */}
+        {typeof PortalWidgets==="function"&&<PortalWidgets cl={cl} isMob={isMob} onGoTab={setTab}
+          selUnit={isBioter?(selUnit==="_minhas_"?(_unitLocked||"grupo"):(selUnit==="grupo"?"":(selUnit||""))):""}/>}
 
         {/* Linha do tempo do projeto (o Pacote contratado agora vive na aba Serviços) */}
         <PortalJornadaProjeto cl={cl} isMob={isMob} mostrar="timeline"
@@ -57163,6 +57241,302 @@ function _PortalPlaybookEditModal({section, accent, catSuggestions, onSave, onCl
         </button>
       </div>
     </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 13b_portal_widgets.jsx — Widgets personalizáveis do Dashboard do portal
+// O cliente escolhe o que importa pra ele (Performance, Metas, Conquistas,
+// Demandas) via "+ Adicionar widget". Config salva em portal_widgets
+// (por cliente+unidade), dados ao vivo via realtime + refresh periódico.
+// ═══════════════════════════════════════════════════════════════════
+
+const PW_DEFS=[
+  {id:"performance",label:"Performance",ico:"trendingUp",cor:"#f59e0b",desc:"Funil do mês: leads, oportunidades e vendas"},
+  {id:"metas",      label:"Metas",      ico:"target",    cor:"#dc2626",desc:"Pilares combinados e onde estamos agora"},
+  {id:"conquistas", label:"Conquistas", ico:"star",      cor:"#f0b429",desc:"Cartas desbloqueadas do álbum de vitórias"},
+  {id:"demandas",   label:"Demandas",   ico:"zap",       cor:"#0284c7",desc:"Andamento das suas solicitações em tempo real"},
+];
+
+function PortalWidgets({cl, selUnit, isMob, onGoTab}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _rootId=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?"bioter":((cl&&cl.id)||"");
+  const _unidade=(cl&&cl.id&&cl.id.indexOf("bioter_")===0)?cl.id.slice("bioter_".length):(selUnit||"");
+  const _cor=(cl&&cl.color)||"#7c3aed";
+
+  const [widgets,setWidgets]=useState(null); // null = carregando
+  const [picker,setPicker]=useState(false);
+  const [tick,setTick]=useState(0); // refresh periódico dos dados
+
+  // ── Config: carrega + realtime ──
+  useEffect(function(){
+    if(!sb||!_rootId){setWidgets([]);return;}
+    let alive=true;
+    const _load=function(){
+      sb.from("portal_widgets").select("widgets").eq("client_id",_rootId).eq("unidade",_unidade||"").maybeSingle()
+        .then(function(r){ if(alive) setWidgets(Array.isArray(r&&r.data&&r.data.widgets)?r.data.widgets:[]); })
+        .catch(function(){ if(alive) setWidgets([]); });
+    };
+    _load();
+    let ch=null;
+    try{
+      ch=sb.channel("pw-"+_rootId+"-"+(_unidade||"g"))
+        .on("postgres_changes",{event:"*",schema:"public",table:"portal_widgets",filter:"client_id=eq."+_rootId},function(){ if(alive)_load(); })
+        .subscribe();
+    }catch(_){}
+    return function(){ alive=false; try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[_rootId,_unidade]);
+
+  // ── Dados ao vivo: refresh a cada 60s (além do realtime de cada widget) ──
+  useEffect(function(){
+    const t=setInterval(function(){ setTick(function(v){return v+1;}); },60000);
+    return function(){ clearInterval(t); };
+  },[]);
+
+  const _persist=function(next){
+    setWidgets(next);
+    if(!sb||!_rootId) return;
+    sb.from("portal_widgets").upsert({client_id:_rootId,unidade:_unidade||"",widgets:next,
+      updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER?CURRENT_USER.id:"cliente"),updated_at:new Date().toISOString()},
+      {onConflict:"client_id,unidade"})
+      .then(function(r){ if(r&&r.error){ console.warn("[widgets]",r.error.message); if(typeof pixelsToast!=="undefined")pixelsToast.error("Não consegui salvar os widgets: "+r.error.message); } })
+      .catch(function(){});
+  };
+  const _add=function(id){ if((widgets||[]).indexOf(id)===-1) _persist((widgets||[]).concat([id])); setPicker(false); };
+  const _remove=function(id){ _persist((widgets||[]).filter(function(w){return w!==id;})); };
+
+  if(widgets===null) return null; // carregando — não pisca nada
+
+  const _defs=(widgets||[]).map(function(id){ return PW_DEFS.find(function(d){return d.id===id;}); }).filter(Boolean);
+  const _disponiveis=PW_DEFS.filter(function(d){ return (widgets||[]).indexOf(d.id)===-1; });
+
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {/* Header da seção */}
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.15}}>Meus widgets</span>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>o que importa pra você, sempre à vista</span>
+      <span style={{flex:1}}/>
+      {_disponiveis.length>0&&<button type="button" onClick={function(){setPicker(true);}}
+        style={{background:"#fff",border:"1.5px dashed "+_cor+"66",color:_cor,borderRadius:9,padding:"6px 13px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background=_cor+"0d";e.currentTarget.style.borderColor=_cor;}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"66";}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Adicionar widget
+      </button>}
+    </div>
+
+    {/* Vazio: convite */}
+    {_defs.length===0&&<button type="button" onClick={function(){setPicker(true);}}
+      style={{background:_cor+"06",border:"1.5px dashed "+_cor+"3d",borderRadius:14,padding:"22px 16px",textAlign:"center",cursor:"pointer",fontFamily:"inherit"}}>
+      <div style={{color:_cor,fontSize:12.5,fontWeight:800}}>Monte seu dashboard</div>
+      <div style={{color:"#94a3b8",fontSize:11,marginTop:3}}>Adicione widgets de Performance, Metas, Conquistas ou Demandas</div>
+    </button>}
+
+    {/* Grid de widgets */}
+    {_defs.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
+      {_defs.map(function(d){
+        return <div key={d.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:14,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(135deg,"+d.cor+"0e,#fff)"}}>
+            <span style={{width:26,height:26,borderRadius:8,background:d.cor+"16",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n={d.ico} size={14} color={d.cor}/></span>
+            <button type="button" onClick={function(){if(onGoTab)onGoTab(d.id);}} title={"Abrir "+d.label}
+              style={{background:"none",border:"none",padding:0,color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15,cursor:"pointer",fontFamily:"inherit"}}>{d.label}</button>
+            <span style={{flex:1}}/>
+            <button type="button" onClick={function(){_remove(d.id);}} title="Remover widget"
+              style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,display:"inline-flex",borderRadius:6}}
+              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div style={{padding:"12px 13px",flex:1}}>
+            {d.id==="performance"&&<_PwPerformance rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
+            {d.id==="metas"&&<_PwMetas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
+            {d.id==="conquistas"&&<_PwConquistas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
+            {d.id==="demandas"&&<_PwDemandas rootId={_rootId} unidade={_unidade} tick={tick} cor={d.cor}/>}
+          </div>
+          <button type="button" onClick={function(){if(onGoTab)onGoTab(d.id);}}
+            style={{background:"transparent",border:"none",borderTop:"1px solid #f4f6f8",padding:"9px 13px",color:d.cor,fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"background .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=d.cor+"0a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+            Veja mais
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>;
+      })}
+    </div>}
+
+    {/* Modal: escolher widget */}
+    {picker&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setPicker(false);}}
+      style={{position:"fixed",inset:0,zIndex:340,background:"rgba(10,12,16,.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,backdropFilter:"blur(3px)"}}>
+      <div style={{background:"#fff",borderRadius:18,padding:"20px 20px 16px",width:"100%",maxWidth:430,boxShadow:"0 30px 70px rgba(0,0,0,.3)"}}>
+        <div style={{color:"#0f172a",fontSize:15.5,fontWeight:800,letterSpacing:-.3}}>Adicionar widget</div>
+        <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,marginBottom:14}}>Escolha o que fica em destaque no seu dashboard</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {PW_DEFS.map(function(d){
+            const _ja=(widgets||[]).indexOf(d.id)!==-1;
+            return <button key={d.id} type="button" disabled={_ja} onClick={function(){_add(d.id);}}
+              style={{display:"flex",alignItems:"center",gap:11,background:_ja?"#f8fafc":"#fff",border:"1px solid "+(_ja?"#eef1f5":"#e2e8f0"),borderRadius:12,padding:"11px 13px",cursor:_ja?"default":"pointer",textAlign:"left",fontFamily:"inherit",opacity:_ja?.55:1,transition:"all .12s"}}
+              onMouseEnter={function(e){if(!_ja){e.currentTarget.style.borderColor=d.cor+"77";e.currentTarget.style.boxShadow="0 5px 14px "+d.cor+"1c";}}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor=_ja?"#eef1f5":"#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+              <span style={{width:34,height:34,borderRadius:10,background:d.cor+"14",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={d.ico} size={16} color={d.cor}/></span>
+              <span style={{flex:1,minWidth:0}}>
+                <span style={{display:"block",color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{d.label}</span>
+                <span style={{display:"block",color:"#94a3b8",fontSize:10.5,marginTop:1,lineHeight:1.4}}>{d.desc}</span>
+              </span>
+              {_ja
+                ? <span style={{color:"#94a3b8",fontSize:10,fontWeight:800,flexShrink:0}}>JÁ ADICIONADO</span>
+                : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={d.cor} strokeWidth="2.8" strokeLinecap="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+            </button>;
+          })}
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:14}}>
+          <button type="button" onClick={function(){setPicker(false);}}
+            style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"8px 18px",color:"#475569",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ── hook interno: fetch + realtime + refresh periódico ── */
+function _pwLive(fetchFn, table, filterId, deps){
+  const [data,setData]=useState(null);
+  useEffect(function(){
+    let alive=true;
+    const _run=function(){ fetchFn().then(function(d){ if(alive) setData(d); }).catch(function(){}); };
+    _run();
+    let ch=null;
+    try{
+      if(window._sb&&table){
+        ch=window._sb.channel("pwl-"+table+"-"+filterId+"-"+Math.random().toString(36).slice(2,7))
+          .on("postgres_changes",{event:"*",schema:"public",table:table,filter:"client_id=eq."+filterId},function(){ if(alive)_run(); })
+          .subscribe();
+      }
+    }catch(_){}
+    return function(){ alive=false; try{ if(ch) window._sb.removeChannel(ch); }catch(_){} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },deps);
+  return data;
+}
+function _pwNum(v){ return Number(v||0).toLocaleString("pt-BR"); }
+const _PW_VAZIO=function(msg){ return <div style={{color:"#b6bec9",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>{msg}</div>; };
+
+/* ── PERFORMANCE — funil do mês ao vivo ── */
+function _PwPerformance({rootId, unidade, tick, cor}){
+  const _now=new Date(), _m=_now.getMonth()+1, _y=_now.getFullYear();
+  const _u=unidade||"grupo";
+  const data=_pwLive(function(){
+    return window._sb.from("media_funnel_entries").select("stages")
+      .eq("client_id",rootId).eq("unit",_u).eq("month",_m).eq("year",_y).maybeSingle()
+      .then(function(r){ return (r&&r.data&&Array.isArray(r.data.stages))?r.data.stages:[]; });
+  },"media_funnel_entries",rootId,[rootId,_u,tick]);
+  if(data===null) return _PW_VAZIO("Carregando...");
+  const stages=(data||[]).filter(function(s){return s;});
+  if(stages.length===0) return _PW_VAZIO("Funil de "+["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][_m-1]+" ainda não preenchido.");
+  // Resumo: só o começo e o fim do funil — o detalhe fica na aba
+  const _pick=[stages[0], stages.length>=3?stages[stages.length-2]:null, stages.length>=2?stages[stages.length-1]:null].filter(Boolean);
+  return <div style={{display:"grid",gridTemplateColumns:"repeat("+_pick.length+",1fr)",gap:8}}>
+    {_pick.map(function(s,i){
+      return <div key={i} style={{textAlign:"center"}}>
+        <div style={{color:i===_pick.length-1?"#16a34a":cor,fontSize:21,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_pwNum(Number(s.quantity)||0)}</div>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,marginTop:4,textTransform:"uppercase",letterSpacing:.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.label||("Etapa "+(i+1))}</div>
+      </div>;
+    })}
+  </div>;
+}
+
+/* ── METAS — pilares do ciclo ao vivo ── */
+const _PW_PILARES=[
+  {key:"seguidores",label:"Seguidores"},{key:"alcance",label:"Alcance"},{key:"engajamento",label:"Engajamento"},
+  {key:"leads",label:"Leads"},{key:"vendas",label:"Vendas digital"},{key:"faturamento",label:"Faturamento"},{key:"roi",label:"ROI"},
+];
+function _PwMetas({rootId, unidade, tick, cor}){
+  const data=_pwLive(function(){
+    return window._sb.from("clients").select("metas").eq("client_id",rootId).maybeSingle()
+      .then(function(r){
+        const all=(r&&r.data&&r.data.metas&&typeof r.data.metas==="object")?r.data.metas:{};
+        if(unidade&&all.byUnit&&all.byUnit[unidade]&&typeof all.byUnit[unidade]==="object") return all.byUnit[unidade];
+        const root={}; Object.keys(all).forEach(function(k){ if(k!=="byUnit") root[k]=all[k]; });
+        return root;
+      });
+  },"clients",rootId,[rootId,unidade,tick]);
+  if(data===null) return _PW_VAZIO("Carregando...");
+  const _rows=_PW_PILARES.map(function(p){
+    const m=data[p.key]; if(!m||typeof m!=="object") return null;
+    const tg=Number(m.target)||0, cu=Number(m.current)||0;
+    if(!tg) return null;
+    return {label:p.label,target:tg,current:cu,pct:Math.min(100,Math.round(cu/tg*100)),ok:cu>=tg};
+  }).filter(Boolean);
+  if(_rows.length===0) return _PW_VAZIO("Nenhuma meta com alvo definido ainda.");
+  const _ok=_rows.filter(function(r){return r.ok;}).length;
+  const _pctGeral=Math.round(_rows.reduce(function(a,r){return a+r.pct;},0)/_rows.length);
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_ok}<span style={{color:"#b6bec9",fontWeight:700}}>/{_rows.length}</span></span>
+      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>metas atingidas</span>
+      <span style={{marginLeft:"auto",color:_ok===_rows.length?"#16a34a":cor,fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_pctGeral}%</span>
+    </div>
+    <div style={{background:"#f1f5f9",borderRadius:99,height:8,overflow:"hidden"}}>
+      <div style={{width:Math.max(3,_pctGeral)+"%",height:"100%",borderRadius:99,background:_ok===_rows.length?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+cor+","+cor+"bb)",transition:"width .4s"}}/>
+    </div>
+  </div>;
+}
+
+/* ── CONQUISTAS — progresso do álbum ao vivo ── */
+function _PwConquistas({rootId, unidade, tick, cor}){
+  const data=_pwLive(function(){
+    return window._sb.from("client_conquistas").select("titulo,unidade,unlocked_at").eq("client_id",rootId)
+      .then(function(r){ return (r&&r.data)||[]; });
+  },"client_conquistas",rootId,[rootId,unidade,tick]);
+  if(data===null) return _PW_VAZIO("Carregando...");
+  const cards=(data||[]).filter(function(c){
+    if(!unidade) return true;
+    const u=c.unidade||"grupo";
+    return u===unidade||u==="grupo";
+  });
+  if(cards.length===0) return _PW_VAZIO("O álbum ainda está sendo montado.");
+  const _desb=cards.filter(function(c){return !!c.unlocked_at;});
+  const _ultima=_desb.slice().sort(function(a,b){return String(b.unlocked_at).localeCompare(String(a.unlocked_at));})[0];
+  const _pct=Math.round(_desb.length/cards.length*100);
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_desb.length}</span>
+      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>de {cards.length} conquistadas</span>
+    </div>
+    <div style={{background:"#f1f5f9",borderRadius:99,height:8,overflow:"hidden"}}>
+      <div style={{width:Math.max(3,_pct)+"%",height:"100%",borderRadius:99,background:"linear-gradient(90deg,#f0b429,#ffd868)",transition:"width .4s"}}/>
+    </div>
+
+  </div>;
+}
+
+/* ── DEMANDAS — andamento ao vivo ── */
+function _PwDemandas({rootId, unidade, tick, cor}){
+  const data=_pwLive(function(){
+    return window._sb.from("client_demandas").select("status,unidade").eq("client_id",rootId)
+      .eq("portal_visivel",true).is("deleted_at",null)
+      .then(function(r){ return (r&&r.data)||[]; });
+  },"client_demandas",rootId,[rootId,unidade,tick]);
+  if(data===null) return _PW_VAZIO("Carregando...");
+  const dems=(data||[]).filter(function(d){
+    if(!unidade) return true;
+    const u=d.unidade||"";
+    return !u||u==="grupo"||u===unidade;
+  });
+  if(dems.length===0) return _PW_VAZIO("Nenhuma demanda por aqui ainda.");
+  const _n=function(st){ return dems.filter(function(d){return d.status===st;}).length; };
+  const _itens=[
+    {l:"Em andamento",v:_n("andamento"),c:cor},
+    {l:"Aguardando você",v:_n("aguardando"),c:"#b45309"},
+    {l:"Em revisão",v:_n("revisao"),c:"#7c3aed"},
+    {l:"Concluídas",v:_n("concluida"),c:"#16a34a"},
+  ];
+  return <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+    {_itens.map(function(k,i){
+      return <div key={i} style={{textAlign:"center"}}>
+        <div style={{color:k.c,fontSize:19,fontWeight:800,letterSpacing:-.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
+        <div style={{color:"#94a3b8",fontSize:8.5,fontWeight:800,marginTop:4,textTransform:"uppercase",letterSpacing:.3,lineHeight:1.25}}>{k.l}</div>
+      </div>;
+    })}
   </div>;
 }
 
