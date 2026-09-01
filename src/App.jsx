@@ -1634,26 +1634,69 @@ function pxLoadFreelaAjustes(){
     }).catch(function(){});
   }catch(_){}
 }
-function pxGetFreelaAjuste(freelaId, month){
-  var m=(typeof window!=="undefined"&&window.__pxFreelaAjustes)||{};
-  var a=m[freelaId+":"+month];
-  return a?{valor:Number(a.valor)||0,motivo:a.motivo||""}:{valor:0,motivo:""};
+/* Cada chave pode guardar UM ajuste (formato legado {valor,motivo}) ou uma
+   LISTA de ajustes [{valor,motivo},...]. _pxAjList normaliza pra lista. */
+function _pxAjList(raw){
+  if(!raw) return [];
+  if(Array.isArray(raw)) return raw.filter(function(x){return x&&typeof x==="object";});
+  if(typeof raw==="object") return [raw]; // legado: objeto único
+  return [];
 }
-function pxSetFreelaAjuste(freelaId, month, valor, motivo){
+function pxGetFreelaAjustes(freelaId, month){
+  var m=(typeof window!=="undefined"&&window.__pxFreelaAjustes)||{};
+  return _pxAjList(m[freelaId+":"+month]).map(function(a){
+    return {valor:Number(a.valor)||0,motivo:a.motivo||""};
+  });
+}
+function pxGetFreelaAjuste(freelaId, month){
+  // Compat: soma de todos os ajustes da chave + motivos concatenados.
+  var lst=pxGetFreelaAjustes(freelaId,month);
+  var v=0, ms=[];
+  lst.forEach(function(a){v+=a.valor; if(a.motivo)ms.push(a.motivo);});
+  return {valor:v,motivo:ms.join(" · ")};
+}
+function _pxSaveAjustes(cur){
+  var sb=window._sb; if(!sb) return Promise.resolve(false);
+  window.__pxFreelaAjustes=cur;
+  try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
+  return sb.from("team_data").upsert({tipo:"pagamento_ajustes",dados:cur},{onConflict:"tipo"}).then(function(r){
+    if(r&&r.error){console.warn("[ajustes] save:",r.error.message);if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar ajuste: "+r.error.message);return false;}
+    return true;
+  });
+}
+function pxAddFreelaAjuste(freelaId, month){
   try{
-    var sb=window._sb; if(!sb) return Promise.resolve(false);
     var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
     var key=freelaId+":"+month;
-    var v=Number(valor)||0;
-    if(!v && !(motivo||"").trim()){ delete cur[key]; }
-    else cur[key]={valor:v,motivo:motivo||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
-    window.__pxFreelaAjustes=cur;
-    try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
-    return sb.from("team_data").upsert({tipo:"pagamento_ajustes",dados:cur},{onConflict:"tipo"}).then(function(r){
-      if(r&&r.error){console.warn("[ajustes] save:",r.error.message);if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar ajuste: "+r.error.message);return false;}
-      if(typeof pixelsToast!=="undefined")pixelsToast.success("Ajuste salvo.",2000);
-      return true;
+    var lst=_pxAjList(cur[key]).slice();
+    lst.push({valor:0,motivo:"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()});
+    cur[key]=lst;
+    return _pxSaveAjustes(cur);
+  }catch(e){return Promise.resolve(false);}
+}
+function pxUpdateFreelaAjuste(freelaId, month, idx, valor, motivo){
+  try{
+    var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
+    var key=freelaId+":"+month;
+    var lst=_pxAjList(cur[key]).slice();
+    if(idx<0||idx>=lst.length) return Promise.resolve(false);
+    lst[idx]={valor:Number(valor)||0,motivo:motivo||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+    if(lst.length===0){ delete cur[key]; } else cur[key]=lst;
+    return _pxSaveAjustes(cur).then(function(ok){
+      if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Ajuste salvo.",1800);
+      return ok;
     });
+  }catch(e){return Promise.resolve(false);}
+}
+function pxRemoveFreelaAjuste(freelaId, month, idx){
+  try{
+    var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
+    var key=freelaId+":"+month;
+    var lst=_pxAjList(cur[key]).slice();
+    if(idx<0||idx>=lst.length) return Promise.resolve(false);
+    lst.splice(idx,1);
+    if(lst.length===0){ delete cur[key]; } else cur[key]=lst;
+    return _pxSaveAjustes(cur);
   }catch(e){return Promise.resolve(false);}
 }
 function calcDesignerPayments(tasks, designerId, refMonth){
@@ -1711,7 +1754,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
       out.total+=out.ajuste;
     } else if(!refMonth && typeof window!=="undefined" && window.__pxFreelaAjustes){
       Object.keys(window.__pxFreelaAjustes).forEach(function(k){
-        if(k.indexOf(designerId+":")===0){ const _v=Number(window.__pxFreelaAjustes[k].valor)||0; out.ajuste+=_v; out.total+=_v; }
+        if(k.indexOf(designerId+":")===0){ _pxAjList(window.__pxFreelaAjustes[k]).forEach(function(a){const _v=Number(a.valor)||0; out.ajuste+=_v; out.total+=_v;}); }
       });
     }
   }catch(_){}
@@ -2055,24 +2098,45 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                 <span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>
               </div>:null;
             }
-            const _aj=(typeof pxGetFreelaAjuste==="function")?pxGetFreelaAjuste(fr.id,refMonth):{valor:0,motivo:""};
+            const _ajs=(typeof pxGetFreelaAjustes==="function")?pxGetFreelaAjustes(fr.id,refMonth):[];
             if(!_souSocio&&!c.ajuste) return null;
             return <div style={{padding:"10px 18px 12px",borderTop:"1px dashed #eef0f3",display:"flex",flexDirection:"column",gap:6}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Ajuste do mês <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>· bônus (+) ou desconto (use −), além das demandas</span></div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{_ajs.length>1?"Ajustes do mês":"Ajuste do mês"} <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>· bônus (+) ou desconto (use −), além das demandas</span></div>
               {_souSocio
-                ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <input key={fr.id+"_"+refMonth+"_v_"+_ajTick} type="text" defaultValue={_aj.valor?String(_aj.valor).replace(".",","):""} placeholder="0,00"
-                      onBlur={function(e){var v=parseFloat(String(e.target.value||"").replace(",","."))||0;if(v!==(Number(_aj.valor)||0)&&typeof pxSetFreelaAjuste==="function")pxSetFreelaAjuste(fr.id,refMonth,v,_aj.motivo||"");}}
-                      style={{width:104,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
-                    <input key={fr.id+"_"+refMonth+"_m_"+_ajTick} type="text" defaultValue={_aj.motivo||""} placeholder="Motivo — ex: bônus de meta · desconto de adiantamento"
-                      onBlur={function(e){var m=e.target.value;if(m!==(_aj.motivo||"")&&typeof pxSetFreelaAjuste==="function")pxSetFreelaAjuste(fr.id,refMonth,Number(_aj.valor)||0,m);}}
-                      style={{flex:1,minWidth:0,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,color:"#334155",outline:"none",fontFamily:"inherit"}}/>
-                    {!!c.ajuste&&<span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>}
-                  </div>
-                : <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-                    <span style={{color:"#64748b",fontSize:12}}>{c.ajusteMotivo||"Ajuste"}</span>
-                    <span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>
-                  </div>}
+                ? <React.Fragment>
+                    {_ajs.map(function(_aj,_i){
+                      return <div key={fr.id+"_"+refMonth+"_"+_i+"_"+_ajTick} style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <input type="text" defaultValue={_aj.valor?String(_aj.valor).replace(".",","):""} placeholder="0,00"
+                          onBlur={function(e){var v=parseFloat(String(e.target.value||"").replace(",","."))||0;if(v!==(Number(_aj.valor)||0)&&typeof pxUpdateFreelaAjuste==="function")pxUpdateFreelaAjuste(fr.id,refMonth,_i,v,_aj.motivo||"");}}
+                          style={{width:104,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
+                        <input type="text" defaultValue={_aj.motivo||""} placeholder="Motivo — ex: bônus de meta · desconto de adiantamento"
+                          onBlur={function(e){var m=e.target.value;if(m!==(_aj.motivo||"")&&typeof pxUpdateFreelaAjuste==="function")pxUpdateFreelaAjuste(fr.id,refMonth,_i,Number(_aj.valor)||0,m);}}
+                          style={{flex:1,minWidth:0,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,color:"#334155",outline:"none",fontFamily:"inherit"}}/>
+                        {!!_aj.valor&&<span style={{color:_aj.valor>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{(_aj.valor>0?"+":"")+fmtBRL(_aj.valor)}</span>}
+                        <button type="button" title="Remover este ajuste"
+                          onClick={function(e){e.stopPropagation();e.preventDefault();if(typeof pxRemoveFreelaAjuste==="function")pxRemoveFreelaAjuste(fr.id,refMonth,_i);}}
+                          style={{width:26,height:26,flexShrink:0,border:"1px solid #fecaca",background:"#fff",color:"#dc2626",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:800,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>×</button>
+                      </div>;
+                    })}
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <button type="button"
+                        onClick={function(e){e.stopPropagation();e.preventDefault();if(typeof pxAddFreelaAjuste==="function")pxAddFreelaAjuste(fr.id,refMonth);}}
+                        style={{border:"1px dashed #cbd5e1",background:"transparent",color:"#64748b",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                        onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#334155";}}
+                        onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>+ Adicionar ajuste</button>
+                      {_ajs.length>1&&!!c.ajuste&&<span style={{marginLeft:"auto",color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>Soma: {(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>}
+                    </div>
+                  </React.Fragment>
+                : <React.Fragment>
+                    {_ajs.filter(function(a){return a.valor||a.motivo;}).map(function(_aj,_i){
+                      return <div key={_i} style={{display:"flex",justifyContent:"space-between",gap:8}}>
+                        <span style={{color:"#64748b",fontSize:12}}>{_aj.motivo||"Ajuste"}</span>
+                        <span style={{color:_aj.valor>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(_aj.valor>0?"+":"")+fmtBRL(_aj.valor)}</span>
+                      </div>;
+                    })}
+                  </React.Fragment>}
             </div>;
           })()}
 
@@ -33401,6 +33465,7 @@ const RS_REDES=[
   {id:"google",   label:"Email",    cor:"#EA4335",prefix:""},
   {id:"gads",     label:"Google Ads",cor:"#4285F4",prefix:""},
   {id:"gdrive",   label:"Google Drive",cor:"#34A853",prefix:""},
+  {id:"gmb",      label:"Google Perfil de Empresa",cor:"#1A73E8",prefix:""},
   {id:"outro",    label:"Outro",    cor:"#64748b",prefix:""},
 ];
 function _rsRede(id){ return RS_REDES.find(function(r){return r.id===id;})||RS_REDES[RS_REDES.length-1]; }
@@ -33414,6 +33479,7 @@ function _RsIcon({rede,size}){
   if(rede==="linkedin") return <svg {...F}><path d="M4.98 3.4a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM3 9.4h4V21H3zM9.2 9.4H13v1.6h.05c.55-1 1.85-2 3.7-2 3.95 0 4.7 2.6 4.7 6V21h-4v-5.3c0-1.3-.05-3-1.85-3-1.85 0-2.15 1.45-2.15 2.9V21h-4V9.4z"/></svg>;
   if(rede==="google")   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>;
   if(rede==="gads")     return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><line x1="8.2" y1="4.8" x2="16.6" y2="19.2" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/><line x1="15.8" y1="4.8" x2="12.2" y2="11" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/><circle cx="5.8" cy="19.2" r="2.6" fill="currentColor"/></svg>;
+  if(rede==="gmb")      return <svg {...F}><path fillRule="evenodd" clipRule="evenodd" d="M12 2.2a7.1 7.1 0 00-7.1 7.1c0 5.15 6.25 11.9 6.5 12.2a.8.8 0 001.2 0c.25-.3 6.5-7.05 6.5-12.2A7.1 7.1 0 0012 2.2zm0 9.85a2.75 2.75 0 110-5.5 2.75 2.75 0 010 5.5z"/></svg>;
   if(rede==="gdrive")   return <svg {...F}><polygon points="9.05,3.4 14.95,3.4 21.5,14.75 15.6,14.75"/><polygon points="7.95,5.35 2.5,14.85 5.85,20.6 11.3,11.1"/><polygon points="8.15,20.6 20.75,20.6 17.75,15.6 11.2,15.6"/></svg>;
   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
@@ -55924,20 +55990,23 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   //   "chapeco" / etc → só essa unidade
   const clTasks=(function(){
     if(!isBioter||selUnit==="grupo")return clTasksAll;
+    // "brasil" = pseudo-unidade que vale pra TODAS as unidades brasileiras
+    // (todas menos paraguay). Card marcado "brasil" aparece em chapeco, toledo, etc.
+    const _unitHit=function(units, unitId){
+      if(units.indexOf(unitId)!==-1) return true;
+      return units.indexOf("brasil")!==-1 && unitId!=="paraguay";
+    };
     if(selUnit==="_minhas_" && _hasLockedUnits){
       return clTasksAll.filter(function(t){
         const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
         // Locked units NÃO veem "grupo" (é conteúdo interno; cliente unidade só vê própria)
-        return units.some(function(u){return _lockedUnits.indexOf(u)!==-1;});
+        return _lockedUnits.some(function(u){return _unitHit(units,u);});
       });
     }
     return clTasksAll.filter(function(t){
       const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
-      // Se cliente tá locked (viu só unidade dele), NÃO mostra "grupo" — só a própria unidade
-      if(_hasLockedUnits) return units.indexOf(selUnit)!==-1;
-      // Sócio selecionando unidade específica: mostra APENAS aquela unidade (nao inclui grupo/collab)
-      // — quando quiser ver todos, seleciona "Grupo Bioter"
-      return units.indexOf(selUnit)!==-1;
+      // Match exato OU card "brasil" (vale pra qualquer unidade menos paraguay)
+      return _unitHit(units,selUnit);
     });
   })();
 
