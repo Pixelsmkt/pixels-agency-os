@@ -33406,17 +33406,18 @@ const RS_REDES=[
 function _rsRede(id){ return RS_REDES.find(function(r){return r.id===id;})||RS_REDES[RS_REDES.length-1]; }
 function _RsIcon({rede,size}){
   const s=size||14;
-  const p={width:s,height:s,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
-  if(rede==="instagram")return <svg {...p}><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/></svg>;
-  if(rede==="facebook") return <svg {...p}><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>;
-  if(rede==="tiktok")   return <svg {...p}><path d="M9 12a4 4 0 104 4V4c.7 2.4 2.6 4.2 5 4.6"/></svg>;
-  if(rede==="youtube")  return <svg {...p}><rect x="2" y="5.5" width="20" height="13" rx="4"/><polygon points="10 9.5 15.5 12 10 14.5 10 9.5" fill="currentColor" stroke="none"/></svg>;
-  if(rede==="linkedin") return <svg {...p}><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4V9h4v1.5A5.4 5.4 0 0116 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
-  if(rede==="google")   return <svg {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>;
-  if(rede==="gads")     return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><line x1="8.2" y1="4.6" x2="16.6" y2="19" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round"/><line x1="15.8" y1="4.6" x2="12" y2="11.2" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round"/><circle cx="5.9" cy="19" r="2.5" fill="currentColor"/></svg>;
-  if(rede==="gdrive")   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M9.1 3.5h5.8l6.1 10.6-2.9 5.4H5.9L3 14.1z"/><path d="M9.1 3.5L12 8.6l-6.1 11"/><path d="M14.9 3.5L12 8.6l3.2 5.5H21"/></svg>;
-  return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
+  const F={width:s,height:s,viewBox:"0 0 24 24",fill:"currentColor"};
+  if(rede==="instagram")return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.2"/><circle cx="12" cy="12" r="4.3"/><circle cx="17.3" cy="6.7" r="1.15" fill="currentColor" stroke="none"/></svg>;
+  if(rede==="facebook") return <svg {...F}><path d="M13.4 21v-7.1h2.4l.45-2.9H13.4V9.15c0-.85.3-1.5 1.55-1.5h1.4V5.05c-.35-.05-1.15-.1-2.05-.1-2.05 0-3.45 1.25-3.45 3.55V11H8.4v2.9h2.45V21h2.55z"/></svg>;
+  if(rede==="tiktok")   return <svg {...F}><path d="M14.7 3c.35 2.15 1.85 3.75 4 3.95v2.7c-1.5 0-2.85-.5-4-1.35v5.9c0 3.05-2.15 5.05-5 5.05-2.75 0-4.9-1.95-4.9-4.7 0-2.65 2.05-4.65 4.8-4.65.35 0 .7.05 1.05.1v2.8c-.3-.1-.65-.2-1-.2-1.25 0-2.15.9-2.15 2.05 0 1.15.9 2.05 2.15 2.05 1.35 0 2.35-.95 2.35-2.45V3h2.7z"/></svg>;
+  if(rede==="youtube")  return <svg {...F}><path d="M21.6 7.2a2.4 2.4 0 00-1.7-1.7C18.4 5.1 12 5.1 12 5.1s-6.4 0-7.9.4A2.4 2.4 0 002.4 7.2 25.4 25.4 0 002 12a25.4 25.4 0 00.4 4.8 2.4 2.4 0 001.7 1.7c1.5.4 7.9.4 7.9.4s6.4 0 7.9-.4a2.4 2.4 0 001.7-1.7A25.4 25.4 0 0022 12a25.4 25.4 0 00-.4-4.8zM10.1 15.1V8.9L15.5 12z"/></svg>;
+  if(rede==="linkedin") return <svg {...F}><path d="M4.98 3.4a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM3 9.4h4V21H3zM9.2 9.4H13v1.6h.05c.55-1 1.85-2 3.7-2 3.95 0 4.7 2.6 4.7 6V21h-4v-5.3c0-1.3-.05-3-1.85-3-1.85 0-2.15 1.45-2.15 2.9V21h-4V9.4z"/></svg>;
+  if(rede==="google")   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>;
+  if(rede==="gads")     return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><line x1="8.2" y1="4.8" x2="16.6" y2="19.2" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/><line x1="15.8" y1="4.8" x2="12.2" y2="11" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round"/><circle cx="5.8" cy="19.2" r="2.6" fill="currentColor"/></svg>;
+  if(rede==="gdrive")   return <svg {...F}><polygon points="9.05,3.4 14.95,3.4 21.5,14.75 15.6,14.75"/><polygon points="7.95,5.35 2.5,14.85 5.85,20.6 11.3,11.1"/><polygon points="8.15,20.6 20.75,20.6 17.75,15.6 11.2,15.6"/></svg>;
+  return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
+
 
 function PageRedesSociais({isMob}){
   const B1="#e2e8f0", TX="#0f172a", TS="#475569", TD="#94a3b8", AC="#7c3aed";
@@ -33453,14 +33454,20 @@ function PageRedesSociais({isMob}){
       setForm(null);setBusy(false);_load();
     }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e&&e.message||e));setBusy(false);}
   };
-  const _excluir=function(c){
-    const go=async function(){
-      try{const sb=window._sb;const r=await sb.from("client_social_accounts").delete().eq("id",c.id);
-        if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
-        setContas(function(p){return p.filter(function(x){return x.id!==c.id;});});
-      }catch(_){}}
-    if(typeof pixelsConfirm==="function")pixelsConfirm({title:"Excluir conta?",message:(_rsRede(c.network).label)+" de "+(c.handle?("@"+c.handle):c.login)+" será removida.",confirmLabel:"Excluir",danger:true,onConfirm:go});
-    else if(window.confirm("Excluir essa conta?"))go();
+  const _excluir=async function(c){
+    const _lbl=_rsRede(c.network).label+(c.handle?(" @"+c.handle):"");
+    const ok=(typeof pixelsConfirm==="function")
+      ? await pixelsConfirm("A conta "+_lbl+" será removida do registro.",{danger:true,title:"Excluir conta?"})
+      : window.confirm("Excluir a conta "+_lbl+"?");
+    if(!ok)return;
+    try{
+      const sb=window._sb;
+      const r=await sb.from("client_social_accounts").delete().eq("id",c.id).select("id");
+      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao excluir: "+r.error.message);return;}
+      if(!r||!r.data||r.data.length===0){if(typeof pixelsToast!=="undefined")pixelsToast.error("Não consegui excluir (sem permissão).");return;}
+      setContas(function(p){return p.filter(function(x){return x.id!==c.id;});});
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Conta excluída.",2200);
+    }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+((e&&e.message)||e));}
   };
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
@@ -33527,7 +33534,7 @@ function PageRedesSociais({isMob}){
                 const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
                 return <div key={c.id} style={{border:"1px solid #eef1f5",borderRadius:12,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6,background:"#fcfcfd"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{width:26,height:26,borderRadius:8,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 6px "+R.cor+"55"}}><_RsIcon rede={c.network} size={14}/></span>
+                    <span style={{width:30,height:30,borderRadius:9,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+R.cor+"55"}}><_RsIcon rede={c.network} size={17}/></span>
                     {c.handle
                       ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,color:TX,fontWeight:800,fontSize:13,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
                       : <span style={{color:TS,fontWeight:700,fontSize:12}}>{R.label}</span>}
@@ -44421,7 +44428,7 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
           style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",transition:"all .12s"}}>
           <Ico n="edit" size={14}/>
         </button>
-        <button title="Excluir" onClick={function(e){e.stopPropagation();if(typeof pixelsConfirm==="function"){pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.title||"Demanda")+'" será removida.',confirmLabel:"Excluir",danger:true,onConfirm:function(){deleteDem&&deleteDem(d.client_id,d.id);}});}else if(confirm("Excluir demanda?")){deleteDem&&deleteDem(d.client_id,d.id);}}}
+        <button title="Excluir" onClick={async function(e){e.stopPropagation();const _ok=(typeof pixelsConfirm==="function")?await pixelsConfirm('"'+(d.title||"Demanda")+'" será removida.',{title:"Excluir demanda?",danger:true}):confirm("Excluir demanda?");if(_ok){deleteDem&&deleteDem(d.client_id,d.id);}}}
           onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";}}
           onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}
           style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",cursor:"pointer",transition:"all .12s"}}>
@@ -50793,18 +50800,43 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
   const MONTHS=PORTAL_MONTHS;
   const WEEKDAYS=PORTAL_WEEKDAYS;
 
+  // ── SYNC GARANTIDO com o calendário interno: se as tasks não chegaram via prop
+  //    (contexto sem estado carregado), busca direto do Supabase só o que importa
+  //    pro cliente. Assim o calendário do portal NUNCA fica vazio à toa. ──
+  const [tasksDb,setTasksDb]=useState(null);
+  useEffect(function(){
+    if((tasks||[]).length>0){ setTasksDb(null); return; }
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb) return;
+    let off=false;
+    window._sb.from("tasks")
+      .select("id,title,status,publish_date,publish_time,bioter_unit,client,content_type,cover,files,caption")
+      .eq("client",cl.id).is("deleted_at",null)
+      .in("status",["agendado","publicado","aprovacao_final"])
+      .not("publish_date","is",null)
+      .then(function(r){
+        if(off||!r||!Array.isArray(r.data))return;
+        setTasksDb(r.data.map(function(x){return {id:x.id,title:x.title,status:x.status,publishDate:x.publish_date,publishTime:x.publish_time,bioterUnit:x.bioter_unit,client:x.client,contentType:x.content_type,cover:x.cover,files:x.files,caption:x.caption};}));
+      });
+    return function(){off=true;};
+  },[cl&&cl.id,(tasks||[]).length]);
+  const _srcTasks=(tasks&&tasks.length>0)?tasks:(tasksDb||[]);
+
   // Mostra: agendados + publicados + aprovacao_final (esses 3 estados ja foram aprovados pelo cliente)
   // Filtro por unidade Bioter: se usuario tem unidade travada (ex: Rodrigo=chapeco), so mostra posts dessa unidade
   // Cards "grupo" (Grupo Bioter) tambem aparecem porque aplicam a todos
   const _isBioter = cl && cl.id==="bioter";
   const _filterUnit = _isBioter && selUnit && selUnit!=="grupo" && selUnit!=="_minhas_";
-  const publicacoes=(tasks||[]).filter(function(t){
+  const publicacoes=(_srcTasks||[]).filter(function(t){
     if(t.deletedAt||!t.publishDate||t.client!==cl.id)return false;
     if(t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="aprovacao_final")return false;
     if(_filterUnit){
       const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
-      // Aceita: unidade especifica OU grupo (posts do grupo inteiro tambem aparecem pra cada unidade)
-      if(units.indexOf(selUnit)===-1 && units.indexOf("grupo")===-1) return false;
+      // Mesma regra do calendário interno: sem unidade = grupo (vale pra todas);
+      // "grupo" vale pra todas; "brasil" vale pra todas menos Paraguay.
+      if(units.length>0){
+        const _matchBrasil=units.indexOf("brasil")>=0 && selUnit!=="paraguay";
+        if(units.indexOf(selUnit)===-1 && units.indexOf("grupo")===-1 && !_matchBrasil) return false;
+      }
     }
     return true;
   }).sort(function(a,b){return (a.publishTime||"00:00").localeCompare(b.publishTime||"00:00");});
@@ -50892,7 +50924,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     <div style={{display:"flex",alignItems:"flex-start",flexWrap:"wrap",gap:12,justifyContent:"space-between"}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Calendário de Publicações</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{thisMonth.length} publicação{thisMonth.length!==1?"ões":""}{eventsThisMonth.length>0?" + "+eventsThisMonth.length+" sinalizaç"+(eventsThisMonth.length>1?"ões":"ão"):""} em {MONTHS[calMonth.getMonth()]}</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{thisMonth.length} {thisMonth.length===1?"publicação":"publicações"}{eventsThisMonth.length>0?" + "+eventsThisMonth.length+" sinalizaç"+(eventsThisMonth.length>1?"ões":"ão"):""} em {MONTHS[calMonth.getMonth()]}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
         <button onClick={function(){setShowNewEvent(true);}}
