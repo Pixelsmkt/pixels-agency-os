@@ -52574,8 +52574,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   const _TST={afazer:{l:"A fazer",c:"#94a3b8"},andamento:{l:"Em andamento",c:"#2563eb"},
     aguardando:{l:"Aguardando",c:"#b45309"},revisao:{l:"Em revisão",c:"#7c3aed"},concluida:{l:"Concluída",c:"#16a34a"}};
 
-  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
-    {_vis2.map(function(d){
+  const _renderCard=function(d, hideStatus){
       const st=_ST[d.status]||_ST.nao_iniciada;
       const cat=(typeof _demCat==="function")?_demCat(d.categoria):null;
       const ts=Array.isArray(d.tarefas)?d.tarefas:[];
@@ -52601,8 +52600,8 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
             {cat.label}
           </span>}
           <span style={{flex:1}}/>
-          <span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
-            padding:"2px 9px",fontSize:9,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,textTransform:"uppercase",letterSpacing:.5}}>{st.label}</span>
+          {!hideStatus&&<span style={{background:st.bg,color:st.cor,border:"1px solid "+st.cor+"2e",borderRadius:99,
+            padding:"2px 9px",fontSize:9,fontWeight:800,whiteSpace:"nowrap",flexShrink:0,textTransform:"uppercase",letterSpacing:.5}}>{st.label}</span>}
         </div>
 
         {/* Titulo + previsão */}
@@ -52670,6 +52669,61 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
                 </div>;
               })}
         </div>}
+      </div>;
+  };
+
+  // Concluídas: continua em grid (seção "Entregas concluídas")
+  if(modo==="concluidas"){
+    return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
+      {_vis2.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d)}</React.Fragment>; })}
+    </div>;
+  }
+
+  // ── KANBAN (pedido 2026-09-01): colunas por status, tudo em tons da cor
+  //    do cliente — sem as cores internas por status. ──
+  const _KCOLS=[
+    {id:"nao_iniciada",label:"Recebidas"},
+    {id:"andamento",   label:"Em andamento"},
+    {id:"aguardando",  label:"Aguardando você"},
+    {id:"revisao",     label:"Em revisão"},
+  ];
+  const _kanCols=_KCOLS.map(function(col){
+    return Object.assign({},col,{items:_vis2.filter(function(d){return d.status===col.id;})});
+  });
+  // Pausadas só aparecem se existirem
+  const _pausadas=_vis2.filter(function(d){return d.status==="pausada";});
+  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",items:_pausadas});
+  // Nada perdido: status desconhecido cai na primeira coluna
+  const _conhecidos=_kanCols.reduce(function(acc,c){return acc.concat(c.items.map(function(d){return d.id;}));},[]);
+  _vis2.forEach(function(d){ if(_conhecidos.indexOf(d.id)===-1) _kanCols[0].items.push(d); });
+
+  if(isMob){
+    // Mobile: colunas empilhadas (só as que têm card)
+    return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {_kanCols.filter(function(c){return c.items.length>0;}).map(function(col){
+        return <div key={col.id} style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
+            <span style={{color:_c,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{col.label}</span>
+            <span style={{background:_c+"15",color:_c,fontSize:10,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'"}}>{col.items.length}</span>
+          </div>
+          {col.items.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d,true)}</React.Fragment>; })}
+        </div>;
+      })}
+    </div>;
+  }
+
+  return <div style={{display:"grid",gridTemplateColumns:"repeat("+_kanCols.length+",minmax(235px,1fr))",gap:10,alignItems:"start",overflowX:"auto",paddingBottom:4}}>
+    {_kanCols.map(function(col){
+      return <div key={col.id} style={{background:_c+"07",border:"1px solid "+_c+"1c",borderRadius:14,padding:"10px 9px 9px",display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,padding:"0 3px"}}>
+          <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
+          <span style={{color:_c,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</span>
+          <span style={{marginLeft:"auto",background:_c+"15",color:_c,fontSize:10,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{col.items.length}</span>
+        </div>
+        {col.items.length===0
+          ? <div style={{border:"1.5px dashed "+_c+"26",borderRadius:11,padding:"18px 10px",textAlign:"center",color:_c+"88",fontSize:10.5,fontWeight:600}}>Nada aqui agora</div>
+          : col.items.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d,true)}</React.Fragment>; })}
       </div>;
     })}
   </div>;
