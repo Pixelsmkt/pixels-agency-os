@@ -51490,7 +51490,7 @@ function _pxThumbDaTask(tk){
   const img=pool.filter(_pxEhImagem)[0];
   if(img) return {url:img.url, video:false, n:pool.length};
   const vid=pool.filter(_pxEhVideo)[0];
-  if(vid) return {url:vid.url, video:true, n:pool.length};
+  if(vid) return {url:vid.url, video:true, n:pool.length, preview:vid.previewUrl||vid.preview_url||null};
   if(tk.cover) return {url:tk.cover, video:_PX_VID_RE.test(String(tk.cover)), n:pool.length||1};
   return null;
 }
@@ -52566,7 +52566,7 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
   });
   // modo: default = só ATIVAS; "concluidas" = só entregues (pra seção separada)
   const _vis2=_vis.filter(function(d){
-    return (modo==="concluidas") ? d.status==="concluida" : d.status!=="concluida";
+    return (modo==="concluidas") ? d.status==="concluida" : true; // concluídas entram no kanban (coluna própria)
   });
   if(dems===null||_vis2.length===0) return null;
 
@@ -52679,53 +52679,68 @@ function _PortalDemandasProjeto({cl, isMob, modo}){
     </div>;
   }
 
-  // ── KANBAN (pedido 2026-09-01): colunas por status, tudo em tons da cor
-  //    do cliente — sem as cores internas por status. ──
+  // ── KANBAN (pedido 2026-09-01, v2): igual ao quadro do Demandas interno —
+  //    coluna com barra de título sólida + contador, corpo cinza, minHeight —
+  //    mas monocromático: tons CRESCENTES da cor do cliente, coluna a coluna. ──
+  const _kmix=function(f){ // mistura a cor do cliente com branco (f = fração da cor)
+    try{
+      var h=String(_c).replace("#","");
+      if(h.length===3) h=h.split("").map(function(x){return x+x;}).join("");
+      var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
+      var m=function(v){return Math.round(v*f+255*(1-f));};
+      return "rgb("+m(r)+","+m(g)+","+m(b)+")";
+    }catch(_){ return _c; }
+  };
+  const _kIco=function(id){
+    try{ if(typeof DEM_STATUS!=="undefined"){ var x=DEM_STATUS.find(function(y){return y.id===id;}); if(x&&x.ico) return x.ico; } }catch(_){}
+    return "dot";
+  };
   const _KCOLS=[
-    {id:"nao_iniciada",label:"Recebidas"},
-    {id:"andamento",   label:"Em andamento"},
-    {id:"aguardando",  label:"Aguardando você"},
-    {id:"revisao",     label:"Em revisão"},
+    {id:"nao_iniciada",label:"Recebidas",       f:.38},
+    {id:"andamento",   label:"Em andamento",    f:.54},
+    {id:"aguardando",  label:"Aguardando você", f:.7},
+    {id:"revisao",     label:"Em revisão",      f:.85},
+    {id:"concluida",   label:"Concluídas",      f:1},
   ];
   const _kanCols=_KCOLS.map(function(col){
-    return Object.assign({},col,{items:_vis2.filter(function(d){return d.status===col.id;})});
+    return Object.assign({},col,{items:_vis2.filter(function(d){return (d.status||"nao_iniciada")===col.id;})});
   });
-  // Pausadas só aparecem se existirem
+  // Pausadas: só se existirem, no fim, tom mais claro
   const _pausadas=_vis2.filter(function(d){return d.status==="pausada";});
-  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",items:_pausadas});
+  if(_pausadas.length) _kanCols.push({id:"pausada",label:"Pausadas",f:.26,items:_pausadas});
   // Nada perdido: status desconhecido cai na primeira coluna
-  const _conhecidos=_kanCols.reduce(function(acc,c){return acc.concat(c.items.map(function(d){return d.id;}));},[]);
-  _vis2.forEach(function(d){ if(_conhecidos.indexOf(d.id)===-1) _kanCols[0].items.push(d); });
+  (function(){
+    const _ok={}; _kanCols.forEach(function(c){c.items.forEach(function(d){_ok[d.id]=1;});});
+    _vis2.forEach(function(d){ if(!_ok[d.id]) _kanCols[0].items.push(d); });
+  })();
+
+  const _KanCol=function(col){
+    const _head=_kmix(col.f);
+    const _claro=col.f<.6; // header claro → texto na cor do cliente; forte → branco
+    const _txt=_claro?_c:"#fff";
+    return <div key={col.id} style={{background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:14,
+      display:"flex",flexDirection:"column",minHeight:isMob?0:200,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:7,padding:"8px 12px",background:_head}}>
+        {typeof Ico==="function"&&<Ico n={_kIco(col.id)} size={13} color={_txt}/>}
+        <span style={{color:_txt,fontSize:12,fontWeight:700,letterSpacing:.1,flex:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{col.label}</span>
+        <span style={{background:_claro?"rgba(255,255,255,.65)":"rgba(255,255,255,.25)",color:_txt,fontSize:10.5,fontWeight:700,borderRadius:99,padding:"0 8px",fontFeatureSettings:"'tnum'"}}>{col.items.length}</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 9px",flex:1}}>
+        {col.items.length===0
+          ? <div style={{border:"1.5px dashed #dbe2ea",borderRadius:10,padding:"18px 10px",textAlign:"center",color:"#b6bec9",fontSize:10.5,fontWeight:600}}>Nada aqui agora</div>
+          : col.items.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d,true)}</React.Fragment>; })}
+      </div>
+    </div>;
+  };
 
   if(isMob){
-    // Mobile: colunas empilhadas (só as que têm card)
-    return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {_kanCols.filter(function(c){return c.items.length>0;}).map(function(col){
-        return <div key={col.id} style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
-            <span style={{color:_c,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{col.label}</span>
-            <span style={{background:_c+"15",color:_c,fontSize:10,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'"}}>{col.items.length}</span>
-          </div>
-          {col.items.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d,true)}</React.Fragment>; })}
-        </div>;
-      })}
+    // Mobile: colunas empilhadas (só as com card)
+    return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {_kanCols.filter(function(c){return c.items.length>0;}).map(_KanCol)}
     </div>;
   }
-
-  return <div style={{display:"grid",gridTemplateColumns:"repeat("+_kanCols.length+",minmax(235px,1fr))",gap:10,alignItems:"start",overflowX:"auto",paddingBottom:4}}>
-    {_kanCols.map(function(col){
-      return <div key={col.id} style={{background:_c+"07",border:"1px solid "+_c+"1c",borderRadius:14,padding:"10px 9px 9px",display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:7,padding:"0 3px"}}>
-          <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
-          <span style={{color:_c,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</span>
-          <span style={{marginLeft:"auto",background:_c+"15",color:_c,fontSize:10,fontWeight:800,borderRadius:99,padding:"1px 8px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{col.items.length}</span>
-        </div>
-        {col.items.length===0
-          ? <div style={{border:"1.5px dashed "+_c+"26",borderRadius:11,padding:"18px 10px",textAlign:"center",color:_c+"88",fontSize:10.5,fontWeight:600}}>Nada aqui agora</div>
-          : col.items.map(function(d){ return <React.Fragment key={d.id}>{_renderCard(d,true)}</React.Fragment>; })}
-      </div>;
-    })}
+  return <div style={{display:"grid",gridTemplateColumns:"repeat("+_kanCols.length+",minmax(205px,1fr))",gap:10,alignItems:"stretch",overflowX:"auto",paddingBottom:6}}>
+    {_kanCols.map(_KanCol)}
   </div>;
 }
 
@@ -53498,8 +53513,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           <span style={{background:cl.color+"15",color:cl.color,fontSize:12,fontWeight:800,
             borderRadius:99,padding:"3px 11px",fontFeatureSettings:"'tnum'",flexShrink:0}}>{g.items.length}</span>
         </div>}
-        {g._entregues&&typeof _PortalDemandasProjeto==="function"&&
-          <_PortalDemandasProjeto cl={cl} isMob={isMob} modo="concluidas"/>}
+        {/* client_demandas concluídas agora vivem na coluna "Concluídas" do kanban acima (2026-09-01) */}
         {(!g._entregues)&&
         
 
@@ -55933,6 +55947,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   //   "grupo" → vê tudo do Bioter (todas unidades)
   //   "" ou null → cliente não-Bioter (sem filtro de unidade)
   const [pubLightbox,setPubLightbox]=useState(null);
+  const [pubPlaying,setPubPlaying]=useState(null); // vídeo tocando INLINE no card de Publicações
   const _lockedUnits = (lockedUnit && lockedUnit!=="grupo")
     ? String(lockedUnit).split(",").map(function(s){return s.trim();}).filter(Boolean)
     : [];
@@ -56392,23 +56407,33 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         const _th=(typeof _pxThumbDaTask==="function")?_pxThumbDaTask(t):null;
         const _cover=(_th&&_th.url)||t.cover||null;
         const _ehVideo=!!(_th&&_th.video);
+        // Versão leve (preview comprimido) quando existe — carrega e toca MUITO mais rápido
+        const _src=_ehVideo?((_th&&_th.preview)||_cover):_cover;
+        const _tocando=_ehVideo&&pubPlaying===t.id;
         return <div
-          onClick={function(){ if(_cover) setPubLightbox({url:_cover,title:t.title||"",video:_ehVideo}); }}
-          style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:_cover?(_ehVideo?"pointer":"zoom-in"):"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
+          onClick={function(){
+            if(_ehVideo){ if(!_tocando) setPubPlaying(t.id); return; } // vídeo toca no próprio card
+            if(_cover) setPubLightbox({url:_cover,title:t.title||""});
+          }}
+          style={{background:"#fff",border:"1px solid "+(futura?cl.color+"55":"#e2e8f0"),borderRadius:10,overflow:"hidden",cursor:_cover?(_ehVideo&&!_tocando?"pointer":(_ehVideo?"default":"zoom-in")):"default",transition:"all .15s",display:"flex",flexDirection:"column"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"88";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor=futura?cl.color+"55":"#e2e8f0";}}>
           <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             {_cover
               ? (_ehVideo
-                  // Vídeo: renderiza o frame real. Antes a busca da capa só
-                  // aceitava type image/*, então post de vídeo ficava em branco.
-                  ? <video src={_cover+"#t=0.5"} preload="metadata" muted playsInline
-                      style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>
+                  ? (_tocando
+                      // Player inline: controls + autoplay, usando a versão leve
+                      ? <video key="play" src={_src} controls autoPlay playsInline
+                          onClick={function(e){e.stopPropagation();}}
+                          style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#000"}}/>
+                      // Thumb: frame da versão leve (metadata só), sem baixar o vídeo inteiro
+                      : <video key="thumb" src={_src+"#t=0.5"} preload="metadata" muted playsInline
+                          style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>)
                   : <img src={_cover} alt={t.title||""} loading="lazy" referrerPolicy="no-referrer"
                       style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>)
               : <Ico n="image" size={28} color="#cbd5e1"/>}
 
-            {_ehVideo&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+            {_ehVideo&&!_tocando&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
               <span style={{width:38,height:38,borderRadius:"50%",background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               </span>
