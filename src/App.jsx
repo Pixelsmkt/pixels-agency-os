@@ -33552,17 +33552,15 @@ function PageRedesSociais({isMob}){
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
                   </div>
                   {(c.login||c.senha)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {c.login&&<button title="Copiar login" onClick={function(){_copy(c.login,"Login copiado");}}
+                    {c.login&&<button title="Copiar login + senha num clique" onClick={function(){var _txt="Login: "+c.login+(c.senha?("\nSenha: "+c.senha):"");_copy(_txt,"Login e senha copiados");}}
                       style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",color:TS,fontSize:11.5,fontWeight:600,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%"}}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login}</span></button>}
-                    {c.senha&&<span style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",display:"inline-flex",alignItems:"center",gap:7}}>
+                    {c.senha&&<span title={c.login?"":"Clique no cadeado pra copiar a senha"} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",display:"inline-flex",alignItems:"center",gap:7,cursor:c.login?"default":"copy"}} onClick={function(){if(!c.login)_copy(c.senha,"Senha copiada");}}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                       <span style={{color:TX,fontSize:11.5,fontWeight:700,letterSpacing:_rev?0:1.5}}>{_rev?c.senha:"••••••"}</span>
                       <button title={_rev?"Ocultar":"Mostrar"} onClick={function(){setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex"}}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
-                      <button title="Copiar senha" onClick={function(){_copy(c.senha,"Senha copiada");}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex"}}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
                     </span>}
                   </div>}
                   {(c.rec_email||c.rec_telefone)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
