@@ -33400,6 +33400,7 @@ const RS_REDES=[
   {id:"linkedin", label:"LinkedIn", cor:"#0A66C2",prefix:"https://linkedin.com/company/"},
   {id:"google",   label:"Email",    cor:"#EA4335",prefix:""},
   {id:"gads",     label:"Google Ads",cor:"#4285F4",prefix:""},
+  {id:"gdrive",   label:"Google Drive",cor:"#34A853",prefix:""},
   {id:"outro",    label:"Outro",    cor:"#64748b",prefix:""},
 ];
 function _rsRede(id){ return RS_REDES.find(function(r){return r.id===id;})||RS_REDES[RS_REDES.length-1]; }
@@ -33412,7 +33413,8 @@ function _RsIcon({rede,size}){
   if(rede==="youtube")  return <svg {...p}><rect x="2" y="5.5" width="20" height="13" rx="4"/><polygon points="10 9.5 15.5 12 10 14.5 10 9.5" fill="currentColor" stroke="none"/></svg>;
   if(rede==="linkedin") return <svg {...p}><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4V9h4v1.5A5.4 5.4 0 0116 8z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>;
   if(rede==="google")   return <svg {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>;
-  if(rede==="gads")     return <svg {...p}><path d="M3 3v18h18"/><path d="M7 14l4-5 4 3 5-7"/></svg>;
+  if(rede==="gads")     return <svg width={s} height={s} viewBox="0 0 24 24" fill="none"><line x1="8.2" y1="4.6" x2="16.6" y2="19" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round"/><line x1="15.8" y1="4.6" x2="12" y2="11.2" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round"/><circle cx="5.9" cy="19" r="2.5" fill="currentColor"/></svg>;
+  if(rede==="gdrive")   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M9.1 3.5h5.8l6.1 10.6-2.9 5.4H5.9L3 14.1z"/><path d="M9.1 3.5L12 8.6l-6.1 11"/><path d="M14.9 3.5L12 8.6l3.2 5.5H21"/></svg>;
   return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
 
