@@ -4777,7 +4777,8 @@ function PxVideoThumb(props){
   var _st=useState(meta.thumb||null), thumb=_st[0], setThumb=_st[1];
   useEffect(function(){
     if(meta.thumb){ setThumb(meta.thumb); return; }
-    if(!meta.preview){ setThumb(null); return; }
+    setThumb(null);
+    if(!meta.preview)return;
     var alive=true;
     pxCaptureFrame(meta.preview).then(function(d){
       if(!alive)return;
@@ -33723,6 +33724,26 @@ function _ArmazenamentoPanel({tasks}){
     };
   }, [_realBytes, _realFiles, _realLoading, _realError]);
 
+  // Limpeza SÓ DE VÍDEOS (02/09/2026): vídeo é 80% dos bytes; imagens ficam e o
+  // card guarda a miniatura do vídeo como imagem, então portal/portfólio não perdem capa.
+  const _isVideoFile = function(f){
+    if(!f||!f.url) return false;
+    if(f.purged) return false;
+    if(String(f.type||"").startsWith("video/")) return true;
+    return /\.(mp4|mov|webm|m4v|mkv|avi)(\?|#|$)/i.test(String(f.name||f.url||""));
+  };
+  // Path da versão leve (previewPath gravado, ou extraído da previewUrl)
+  const _previewPathOf = function(f){
+    if(!f) return null;
+    if(f.previewPath) return f.previewPath;
+    if(!f.previewUrl) return null;
+    try{
+      const _m = String(f.previewUrl).match(/\/storage\/v1\/object\/(?:public|sign)\/agency-files\/(.+?)(?:\?|$)/);
+      if(_m && _m[1]) return decodeURIComponent(_m[1]);
+    }catch(_){}
+    return null;
+  };
+
   // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
   const _candidatos = React.useMemo(function(){
     const _now = Date.now();
@@ -33730,9 +33751,9 @@ function _ArmazenamentoPanel({tasks}){
     const _list = (tasks||[]).filter(function(t){
       if(!t || t.deletedAt) return false;
       if(t.status !== "publicado" && t.status !== "reprovado") return false;
-      // Precisa ter arquivos pra fazer sentido limpar
+      // Precisa ter VÍDEO no Storage pra fazer sentido limpar
       const _files = Array.isArray(t.files) ? t.files : [];
-      const _hasFiles = _files.some(function(f){ return f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0); });
+      const _hasFiles = _files.some(function(f){ return _isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0); });
       if(!_hasFiles) return false;
       // Idade
       const _dtStr = t.completedAt || t.colEnteredAt || t.updated_at || t.updatedAt;
@@ -33758,8 +33779,14 @@ function _ArmazenamentoPanel({tasks}){
     _list.forEach(function(t){
       const _files = Array.isArray(t.files) ? t.files : [];
       _files.forEach(function(f){
-        if(!(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
+        if(!(_isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
         _totalFiles++;
+        // Versão leve (-preview) sai junto
+        const _pp = _previewPathOf(f);
+        if(_pp){
+          if(_realSizeMap && typeof _realSizeMap[_pp]==="number") _totalBytes += _realSizeMap[_pp];
+          else if(typeof f.previewSize==="number") _totalBytes += f.previewSize;
+        }
         // Prioridade 1: Map real do bucket walk (fonte da verdade)
         if(_realSizeMap){
           const _p = _pathOf(f);
@@ -33814,36 +33841,59 @@ function _ArmazenamentoPanel({tasks}){
     const _ok = typeof pixelsConfirm==="function"
       ? await pixelsConfirm({
           title:"Limpar arquivos antigos?",
-          message:"Vai remover "+_candidatos.totalFiles+" arquivos ("+_sizeLbl+") de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+_lbl+".\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
+          message:"Vai remover "+_candidatos.totalFiles+" vídeos ("+_sizeLbl+", original + versão leve) de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+_lbl+".\n\nImagens, cards, histórico e comentários SÃO PRESERVADOS. A miniatura de cada vídeo fica no card. O Drive já tem backup completo.",
           confirmLabel:"Liberar "+_sizeLbl,
           danger:true
         })
-      : confirm("Limpar "+_candidatos.totalFiles+" arquivos ("+_sizeLbl+")? Cards permanecem, só arquivos apagados.");
+      : confirm("Limpar "+_candidatos.totalFiles+" vídeos ("+_sizeLbl+")? Cards e imagens permanecem, só vídeos apagados.");
     if(!_ok) return;
     setBusy(true);
     if(typeof pixelsToast!=="undefined") pixelsToast.info("Limpando... "+_candidatos.totalFiles+" arquivos", 3000);
     let _cleaned = 0, _errors = 0;
     for(const _t of _candidatos.cards){
       try{
-        const _files = Array.isArray(_t.files) ? _t.files : [];
+        // Lê o files ATUAL do banco (não o state, que pode estar defasado)
+        const _sel = await window._sb.from("tasks").select("files").eq("id",_t.id).maybeSingle();
+        const _files = (_sel && _sel.data && Array.isArray(_sel.data.files)) ? _sel.data.files : (Array.isArray(_t.files) ? _t.files : []);
         const _paths = [];
+        const _vidIds = new Set();
         _files.forEach(function(f){
-          if(!f || !f.url) return;
+          if(!_isVideoFile(f)) return;
           const _p = f.storagePath || _extractPath(f.url);
-          if(_p) _paths.push(_p);
+          if(!_p) return;
+          _paths.push(_p);
+          const _pp = _previewPathOf(f);
+          if(_pp) _paths.push(_pp);
+          _vidIds.add(f.id||f.url);
         });
-        if(_paths.length > 0){
-          const {error} = await window._sb.storage.from("agency-files").remove(_paths);
-          if(error){ console.warn("[armazenamento] remove err task",_t.id,":",error.message); _errors++; }
-          else { _cleaned += _paths.length; }
-        }
-        // Atualiza task.files = [] e adiciona timeline entry
+        if(_paths.length === 0) continue;
+        // Apaga do Storage e confere o que REALMENTE saiu (RLS pode filtrar em silêncio)
+        const {data:_removed, error} = await window._sb.storage.from("agency-files").remove(_paths);
+        if(error){ console.warn("[armazenamento] remove err task",_t.id,":",error.message); _errors++; continue; }
+        const _gone = new Set((Array.isArray(_removed)?_removed:[]).map(function(o){ return o && o.name; }).filter(Boolean));
+        const _nRemoved = _paths.filter(function(pth){ return _gone.has(pth); }).length;
+        if(_nRemoved===0 && _paths.length>0){ console.warn("[armazenamento] nada removido (permissão?) task",_t.id,_paths); _errors++; continue; }
+        _cleaned += _nRemoved;
+        // Vídeo vira "miniatura" (imagem) no card: mantém capa no portal/portfólio, some o player
+        const _nowIso2 = new Date().toISOString();
+        const _newFiles = _files.map(function(f){
+          if(!f || !_vidIds.has(f.id||f.url)) return f;
+          const _thumb = (f.thumbnail && String(f.thumbnail).length>32) ? f.thumbnail : null;
+          return Object.assign({}, f, {
+            url:_thumb, type:_thumb?"image/jpeg":"video/purged", storagePath:null,
+            previewUrl:null, previewPath:null, previewSize:null,
+            name:(f.name||"video")+(_thumb?" (miniatura)":""),
+            purged:true, purgedAt:_nowIso2, purgedSize:(typeof f.size==="number"?f.size:null), purgedType:f.type||null, purgedName:f.name||null,
+            size:null,
+          });
+        });
         const _newTl = (_t.timeline||[]).concat([{
-          type:"system", label:"Arquivos removidos (limpeza automática > "+(meses===1?"1 mês":(meses+" meses"))+")",
-          at:new Date().toISOString(), atFmt:(new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})),
-          user:CURRENT_USER.name, note:_paths.length+" arquivos removidos do Storage. Drive preserva a cópia."
+          type:"system", label:"Vídeos removidos do Storage (limpeza > "+(meses===1?"1 mês":(meses+" meses"))+")",
+          at:_nowIso2, atFmt:(new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})),
+          user:CURRENT_USER.name, note:_nRemoved+" arquivos removidos (original + versão leve). Miniatura preservada no card. Drive tem a cópia."
         }]);
-        await window._sb.from("tasks").update({files:[], timeline:_newTl, updated_at:new Date().toISOString()}).eq("id", _t.id);
+        const _upd = await window._sb.from("tasks").update({files:_newFiles, timeline:_newTl, updated_at:_nowIso2}).eq("id", _t.id);
+        if(_upd && _upd.error){ console.warn("[armazenamento] update task",_t.id,_upd.error.message); _errors++; }
       }catch(e){ console.warn("[armazenamento] task",_t.id,e); _errors++; }
     }
     setBusy(false);
@@ -33865,6 +33915,7 @@ function _ArmazenamentoPanel({tasks}){
       else pixelsToast.success(_cleaned+" arquivos removidos (~"+_candidatos.totalMB+" MB liberados)!", 5000);
     }
     setPreview(null);
+    _fetchRealUsage();
   }
 
   // Calcula quanto tempo desde a última limpeza (dias)
@@ -33967,7 +34018,7 @@ function _ArmazenamentoPanel({tasks}){
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.25}}>Liberar espaço</div>
-          <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Apaga arquivos antigos do Storage. Card, histórico e comentários ficam preservados.</div>
+          <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Apaga só os vídeos antigos do Storage (original + versão leve). Imagens, miniaturas, card, histórico e comentários ficam preservados.</div>
         </div>
         {ultimaLimpeza && <div style={{color:"#64748b",fontSize:11,fontWeight:600,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,background:"#f8fafc",padding:"6px 10px",borderRadius:8,border:"1px solid #e2e8f0"}}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -33999,7 +34050,7 @@ function _ArmazenamentoPanel({tasks}){
         <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.cards.length}</div>
       </div>
       <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Arquivos</div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Vídeos</div>
         <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.totalFiles}</div>
       </div>
       <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #ede9fe",borderRadius:10,padding:"12px 14px"}}>
@@ -34023,7 +34074,7 @@ function _ArmazenamentoPanel({tasks}){
         {busy ? "Limpando..." : "Limpar arquivos"}
       </button>
       <span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",flex:1,minWidth:200}}>
-        Preserva card, histórico, comentários e demand_history. Só remove bytes do Storage.
+        Só vídeos. Preserva imagens, miniaturas, card, histórico, comentários e demand_history.
       </span>
     </div>
     </div>
@@ -36459,7 +36510,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // prefere o player que está realmente na tela agora
       const v = (_a&&_a.isConnected)?_a:((_b&&_b.isConnected)?_b:(_a||_b));
       if(!v) return;
-      v.currentTime = Math.max(0, Number(seconds)||0);
+      const _t = Math.max(0, Number(seconds)||0);
+      // Player pode estar com preload="none" (controle de egress): sem metadata ainda,
+      // espera o loadedmetadata pra posicionar — senão o seek cai no 0.
+      if(v.readyState===0){
+        v.addEventListener("loadedmetadata", function(){ try{ v.currentTime=_t; }catch(_){} }, {once:true});
+        try{ v.load(); }catch(_){}
+      } else {
+        v.currentTime = _t;
+      }
       const p = v.play(); if(p && p.catch) p.catch(function(){});
     }catch(_){}
   }
@@ -46674,7 +46733,9 @@ export default function AgencyOS(){
       if(stopped)return;
       const sb=window._sb; if(!sb)return;
       let rows=null;
-      try{ const r=await sb.from("tasks").select("id,status,files").not("files","is",null); rows=r&&r.data; }catch(_){ return; }
+      // Só os status elegíveis (mesma lista de _OK_STATUS abaixo) — evita puxar o
+      // JSON de files de 1.800 cards a cada 10 min em cada aba (egress).
+      try{ const r=await sb.from("tasks").select("id,status,files").not("files","is",null).is("deleted_at",null).in("status",["avaliacao","aprovacao_final","aprovado","agendado","ajustes","alteracao_copy"]); rows=r&&r.data; }catch(_){ return; }
       if(!rows||stopped)return;
       // Só vídeos que ainda vão passar por aprovação ou já aprovados/agendados que NÃO
       // foram postados. Publicados já foram — não precisam de versão leve. Rascunhos,
@@ -47053,6 +47114,19 @@ export default function AgencyOS(){
   const tokenRef   = useRef(getToken());  // token atual
   const pendingRef = useRef(new Set());   // IDs pendentes de confirmação
   const saveTimer  = useRef(null);
+  // Polling INCREMENTAL (controle de egress 02/09/2026): a tabela tasks inteira
+  // tem ~8 MB em JSON; baixar tudo a cada 30 s em cada aba aberta dava ~80 GB/dia.
+  // Guarda o maior updated_at visto e pede só `updated_at > since`; a cada 20
+  // polls (10 min) faz uma carga completa como rede de segurança.
+  const lastSyncRef = useRef(null);
+  const pollCountRef = useRef(0);
+  const _noteMaxUpdated = (data)=>{
+    try{
+      let mx=lastSyncRef.current||null;
+      for(const r of data){ if(r&&r.updated_at&&(!mx||r.updated_at>mx)) mx=r.updated_at; }
+      lastSyncRef.current=mx;
+    }catch(_){}
+  };
 
   // Permissions
   const [livePerms,setLivePerms] = useState(()=>{
@@ -47082,6 +47156,7 @@ export default function AgencyOS(){
       if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
       const data = await res.json();
       if(Array.isArray(data)&&data.length>0){
+        _noteMaxUpdated(data);
         const rows = data.map(rowToTask);
         setTasksRaw(rows);
         ls.set(TASKS_KEY,rows);
@@ -47259,28 +47334,47 @@ export default function AgencyOS(){
       tokenRef.current=tok;
       if(pendingRef.current.size>0) return; // aguarda confirmações pendentes
       try{
-        const res=await fetch(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`,{
+        pollCountRef.current++;
+        const _since=lastSyncRef.current;
+        const _incremental=!!_since && (pollCountRef.current%20!==0);
+        let _url=`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`;
+        if(_incremental){
+          // 10 s de sobreposição pra não perder escrita com relógio/commit atrasado
+          const _sinceIso=new Date(new Date(_since).getTime()-10000).toISOString();
+          _url+=`&updated_at=gt.${encodeURIComponent(_sinceIso)}`;
+        }
+        const res=await fetch(_url,{
           headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
         });
         if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
         const data=await res.json();
         if(!active||!Array.isArray(data)||data.length===0) return;
+        _noteMaxUpdated(data);
         const rows=data.map(rowToTask);
         setTasksRaw(prev=>{
-          // Preserva cards locais ainda não confirmados
           const sbIds=new Set(rows.map(t=>String(t.id)));
-          const localOnly=prev.filter(t=>!sbIds.has(String(t.id)));
-          const merged=[
-            ...rows.map(sb=>{
-              const loc=prev.find(l=>String(l.id)===String(sb.id));
-              if(!loc) return sb;
-              if(pendingRef.current.has(String(sb.id))) return loc;
-              // Prefere files do Supabase se tiver urls do Storage; senão mantém local
-              const sbHasStorageFiles=(sb.files||[]).some(f=>f.url&&!f.url.startsWith("data:"));
-              return sbHasStorageFiles?sb:(loc.files?.length>0?{...sb,files:loc.files}:sb);
-            }),
-            ...localOnly
-          ];
+          const _mergeOne=(sb,loc)=>{
+            if(!loc) return sb;
+            if(pendingRef.current.has(String(sb.id))) return loc;
+            // Prefere files do Supabase se tiver urls do Storage; senão mantém local
+            const sbHasStorageFiles=(sb.files||[]).some(f=>f&&((f.url&&!f.url.startsWith("data:"))||f.purged));
+            return sbHasStorageFiles?sb:(loc.files?.length>0?{...sb,files:loc.files}:sb);
+          };
+          let merged;
+          if(_incremental){
+            // Só o que mudou: substitui no lugar, acrescenta os novos no fim
+            const byId=new Map(rows.map(r=>[String(r.id),r]));
+            merged=prev.map(loc=>{ const sb=byId.get(String(loc.id)); return sb?_mergeOne(sb,loc):loc; });
+            const prevIds=new Set(prev.map(t=>String(t.id)));
+            rows.forEach(sb=>{ if(!prevIds.has(String(sb.id))) merged.push(sb); });
+          } else {
+            // Carga completa: preserva cards locais ainda não confirmados
+            const localOnly=prev.filter(t=>!sbIds.has(String(t.id)));
+            merged=[
+              ...rows.map(sb=>_mergeOne(sb,prev.find(l=>String(l.id)===String(sb.id)))),
+              ...localOnly
+            ];
+          }
           ls.set(TASKS_KEY,merged);
           return merged;
         });
