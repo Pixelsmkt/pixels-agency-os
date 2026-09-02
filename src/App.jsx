@@ -25716,6 +25716,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _isVideoTask=(t)=>{
     const ct=String(t.contentType||t.tipo||"").toLowerCase();
     if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video"||ct==="video_complexo"||ct==="video_feira")return true;
+    // A TAG manda (02/09/2026): card com tipo definido (carrossel, arte única, story...)
+    // fica em Avaliação de design mesmo que alguma lâmina/anexo seja vídeo.
+    // Setor e arquivos só decidem quando o card NÃO tem tipo.
+    if(ct)return false;
     const sect=String(t.sector||"").toLowerCase();
     if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
     // Fallback: detecta pelo arquivo anexado. Se o card tem vídeo (mime video/* ou extensão),
