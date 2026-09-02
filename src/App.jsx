@@ -2068,9 +2068,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                         ? (media.isVideo
                             ? (media.thumbnail
                                 ? <img src={media.thumbnail} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                                : <video src={media.url} preload="metadata" muted playsInline
-                                    onLoadedMetadata={function(e){try{e.target.currentTime = e.target.duration>0.5?0.5:0.1;}catch(_){}}}
-                                    style={{width:"100%",height:"100%",objectFit:"cover",background:"#0f172a"}}/>)
+                                : <PxVideoThumb src={media.url} style={{width:"100%",height:"100%",objectFit:"cover",background:"#0f172a"}}/>)
                             : <img src={media.url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>)
                         : (cl?cl.name.slice(0,2).toUpperCase():"?")
                       }
@@ -2264,9 +2262,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                           ? (_media.isVideo
                               ? (_media.thumbnail
                                   ? <img src={_media.thumbnail} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                                  : <video src={_media.url} preload="metadata" muted playsInline
-                                      onLoadedMetadata={function(e){try{e.target.currentTime=e.target.duration>0.5?0.5:0.1;}catch(_){}}}
-                                      style={{width:"100%",height:"100%",objectFit:"cover",background:"#0f172a"}}/>)
+                                  : <PxVideoThumb src={_media.url} style={{width:"100%",height:"100%",objectFit:"cover",background:"#0f172a"}}/>)
                               : <img src={_media.url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>)
                           : <span style={{color:cl&&cl.color?cl.color:"#94a3b8",fontSize:13,fontWeight:800}}>{cl?cl.name.slice(0,2).toUpperCase():"?"}</span>
                         }
@@ -4084,98 +4080,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
   return null;
 }
 
-// ═══ _VideoThumb v5: placeholder roxo + auto-regen + callback onCaptured ═══
-// Estratégia:
-//   • Estado inicial = placeholder roxo bonito (nunca preto)
-//   • Em background: canvas capture do frame com preload=metadata
-//   • Se conseguir: upgrade pra <img>, cacheia local, chama onCaptured(dataURL)
-//   • onCaptured deixa o CardModal PERSISTIR no Supabase → outros users veem
-//   • Sem timeout curto — deixa rodar até 60s pra .mov gigantes do iPhone
+// ═══ _VideoThumb v6 (02/09/2026): delega pro PxVideoThumb — nunca baixa o original ═══
+// A v5 carregava o vídeo cru (preload=metadata + seek) a cada montagem do card
+// no kanban; quando a captura falhava (timeout 60s em .mov de 300 MB) não
+// cacheava e repetia na próxima montagem. Foi a maior fonte de egress do Supabase.
 function _VideoThumb(props){
-  const src = props.src || "";
-  const styleExt = props.style || {};
-  const onCaptured = props.onCaptured; // callback opcional pra persistir
-  const [thumbUrl, setThumbUrl] = useState(null);
-
-  useEffect(function(){
-    if(!src) return;
-    const cacheKey = "vt5:" + src.split("?")[0];
-    // 1) Cache local (instantâneo)
-    try{
-      const cached = window.localStorage && localStorage.getItem(cacheKey);
-      if(cached){ setThumbUrl(cached); return; }
-    }catch(_){}
-
-    // 2) Captura em background — SEM timeout curto (pra arquivos grandes)
-    let done = false;
-    const v = document.createElement("video");
-    v.crossOrigin = "anonymous";
-    v.muted = true;
-    v.playsInline = true;
-    v.preload = "metadata";
-    v.src = src;
-    function cleanup(){ try{ v.src=""; v.remove(); }catch(_){} }
-    function finish(data){
-      if(done) return;
-      done = true;
-      cleanup();
-      if(data){
-        setThumbUrl(data);
-        try{ localStorage.setItem(cacheKey, data); }catch(_){/* quota */}
-        // Notifica o pai pra PERSISTIR no Supabase (outros users veem depois)
-        if(typeof onCaptured === "function"){
-          try{ onCaptured(data); }catch(_){}
-        }
-      }
-    }
-    v.onloadedmetadata = function(){
-      try{
-        const dur = v.duration;
-        v.currentTime = (dur > 3) ? 1.5 : Math.min(dur*0.2, dur-0.01);
-      }catch(_){ finish(null); }
-    };
-    v.onseeked = function(){
-      try{
-        const canvas = document.createElement("canvas");
-        const w = v.videoWidth || 400;
-        const h = v.videoHeight || 300;
-        const scale = 480 / w;
-        canvas.width = Math.round(w * scale);
-        canvas.height = Math.round(h * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL("image/jpeg", 0.72);
-        finish(data);
-      }catch(e){ finish(null); }
-    };
-    v.onerror = function(){ finish(null); };
-    // Timeout LONGO: 60s (arquivos gigantes .mov iPhone precisam de tempo)
-    const timer = setTimeout(function(){ finish(null); }, 60000);
-    return function(){ clearTimeout(timer); done = true; cleanup(); };
-  },[src]);
-
-  // Thumb capturado — mostra img real
-  if(thumbUrl){
-    return <div style={Object.assign({position:"relative",width:"100%",height:"100%",background:"#0f172a",overflow:"hidden"}, styleExt)}>
-      <img src={thumbUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-    </div>;
-  }
-
-  // Estado padrão: placeholder roxo com pulse sutil (indica processando)
-  return <div style={Object.assign({width:"100%",height:"100%",background:"linear-gradient(135deg,#4c1d95 0%,#312e81 55%,#0f172a 100%)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,color:"#c4b5fd",position:"relative",overflow:"hidden"}, styleExt)}>
-    <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 30% 20%, rgba(167,139,250,0.15) 0%, transparent 50%)",pointerEvents:"none"}}/>
-    <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{position:"relative",zIndex:1,filter:"drop-shadow(0 2px 6px rgba(0,0,0,0.3))"}}>
-      <rect x="2" y="2" width="20" height="20" rx="2.5"/>
-      <line x1="7" y1="2" x2="7" y2="22"/>
-      <line x1="17" y1="2" x2="17" y2="22"/>
-      <line x1="2" y1="12" x2="22" y2="12"/>
-      <line x1="2" y1="7" x2="7" y2="7"/>
-      <line x1="2" y1="17" x2="7" y2="17"/>
-      <line x1="17" y1="17" x2="22" y2="17"/>
-      <line x1="17" y1="7" x2="22" y2="7"/>
-    </svg>
-    <div style={{position:"relative",zIndex:1,color:"#e9d5ff",fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Vídeo</div>
-  </div>;
+  return <PxVideoThumb src={props.src} file={props.file} style={props.style} onClick={props.onClick} onCaptured={props.onCaptured}/>;
 }
 
 // Dados estratégicos e mapas mentais de todos os clientes
@@ -4697,6 +4607,24 @@ function pixelsPersistPreview(taskId,fileId,previewUrl,previewPath,previewSize){
   });
 }
 
+// Aplica um patch em um item de tasks.files (por id). Best-effort, na fila de escrita.
+function pixelsPersistFilePatch(taskId,fileId,patch){
+  return _pixelsQueueFilesWrite(async function(){
+    try{
+      var sb=window._sb; if(!sb||!taskId||!fileId)return false;
+      var sel=await sb.from("tasks").select("files").eq("id",taskId).maybeSingle();
+      var current=sel&&sel.data; if(!current||!Array.isArray(current.files))return false;
+      var hit=false;
+      var updated=current.files.map(function(f){ if(f&&f.id===fileId){hit=true;return Object.assign({},f,patch);} return f; });
+      if(!hit)return false;
+      var upd=await sb.from("tasks").update({files:updated}).eq("id",taskId);
+      if(upd&&upd.error)return false;
+      try{ pxRegisterFiles(updated); }catch(_){}
+      return true;
+    }catch(_){ return false; }
+  });
+}
+
 // Baixa o original, gera o preview e persiste. Retorna {ok,skipped,previewUrl,previewSize}.
 async function pixelsBackfillOneVideo(taskId,file,onProgress,abortRef){
   var sb=window._sb;
@@ -4714,6 +4642,12 @@ async function pixelsBackfillOneVideo(taskId,file,onProgress,abortRef){
     try{var r=await fetch(file.url);if(r.ok)orig=await r.blob();}catch(_){}
   }
   if(!orig)return {ok:false,reason:"download"};
+  // 1b) thumbnail a partir do blob já baixado (miniaturas nunca mais tocam no original)
+  var thumbDataUrl=null;
+  if(!(file.thumbnail&&String(file.thumbnail).length>32)){
+    try{ thumbDataUrl=await pixelsMakeThumbFromBlob(orig); }catch(_){ thumbDataUrl=null; }
+    if(thumbDataUrl){ try{ await pixelsPersistFilePatch(taskId,file.id,{thumbnail:thumbDataUrl}); }catch(_){} }
+  }
   if(orig.size<=PREVIEW_MIN_SIZE)return {ok:false,skipped:true,reason:"pequeno"};
   // 2) comprime
   var blob=await pixelsGenerateVideoPreview(orig,onProgress,abortRef);
@@ -4730,6 +4664,156 @@ async function pixelsBackfillOneVideo(taskId,file,onProgress,abortRef){
   var previewUrl=pub&&pub.data&&pub.data.publicUrl;
   await pixelsPersistPreview(taskId,file.id,previewUrl,pPath,blob.size);
   return {ok:true,previewUrl:previewUrl,previewSize:blob.size,previewPath:pPath};
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Controle de EGRESS de vídeo (02/09/2026)
+// Problema: <video preload="metadata"> + seek em miniaturas baixava o ORIGINAL
+// inteiro (100-300 MB, moov no fim do arquivo) a cada montagem do componente —
+// dezenas de vezes por sessão. ~60 GB/dia de saída do Supabase.
+// Regra daqui em diante:
+//   • miniatura NUNCA carrega vídeo: usa `thumbnail` (frame capturado no upload)
+//     ou placeholder; captura de frame só a partir da versão leve, 1 por vez.
+//   • player toca a versão leve (previewUrl) quando existe; o original só entra
+//     com preload="none" (não baixa nada até o clique) ou em "baixar original".
+// Registro global url→{preview,thumb} alimentado por pxRegisterTasks(tasks).
+// ═══════════════════════════════════════════════════════════════════
+window.__pxVidMeta = window.__pxVidMeta || {};
+function _pxUrlKey(u){ return String(u||"").split("#")[0].split("?")[0]; }
+function pxRegisterFiles(files){
+  if(!Array.isArray(files))return;
+  var M=window.__pxVidMeta;
+  for(var i=0;i<files.length;i++){
+    var f=files[i]; if(!f||!f.url)continue;
+    var k=_pxUrlKey(f.url);
+    var m=M[k]||(M[k]={});
+    var p=f.previewUrl||f.preview_url||null;
+    var t=(f.thumbnail&&String(f.thumbnail).length>32)?f.thumbnail:null;
+    if(p)m.preview=p;
+    if(t)m.thumb=t;
+  }
+}
+function pxRegisterTasks(tasks){
+  if(!Array.isArray(tasks))return;
+  for(var i=0;i<tasks.length;i++){ var t=tasks[i]; if(t&&Array.isArray(t.files))pxRegisterFiles(t.files); }
+}
+function pxVidMeta(src,file){
+  var m=window.__pxVidMeta[_pxUrlKey(src)]||{};
+  var preview=(file&&(file.previewUrl||file.preview_url))||m.preview||null;
+  var thumb=(file&&file.thumbnail&&String(file.thumbnail).length>32)?file.thumbnail:(m.thumb||null);
+  if(preview&&_pxUrlKey(preview)===_pxUrlKey(src))preview=null;
+  return {preview:preview,thumb:thumb};
+}
+// Fonte pra tocar: versão leve se existir, senão o original.
+function pxPlaySrc(src,file){ var m=pxVidMeta(src,file); return m.preview||src; }
+function pxThumbOf(src,file){ return pxVidMeta(src,file).thumb; }
+
+// Captura de frame em fila (1 por vez na aba) a partir de uma URL; usada só pra
+// versões leves (~20 MB). Cache positivo e NEGATIVO em localStorage pra não
+// repetir download a cada montagem.
+window.__pxThumbQueue = window.__pxThumbQueue || Promise.resolve();
+function pxCaptureFrame(url){
+  var key="vt6:"+_pxUrlKey(url);
+  try{ var c=localStorage.getItem(key); if(c){ if(c.indexOf("data:")===0)return Promise.resolve(c); if(c.indexOf("fail:")===0&&Date.now()-parseInt(c.slice(5),10)<7*864e5)return Promise.resolve(null); } }catch(_){}
+  var run=function(){ return new Promise(function(resolve){
+    var done=false,timer=null;
+    var v=document.createElement("video");
+    var finish=function(data){
+      if(done)return; done=true; clearTimeout(timer);
+      try{v.pause();v.removeAttribute("src");v.load();v.remove();}catch(_){}
+      try{ localStorage.setItem(key, data?data:("fail:"+Date.now())); }catch(_){}
+      resolve(data||null);
+    };
+    try{
+      v.crossOrigin="anonymous"; v.muted=true; v.playsInline=true; v.preload="metadata";
+      v.onloadedmetadata=function(){ try{ var d=v.duration; v.currentTime=(isFinite(d)&&d>3)?1.5:Math.max(0,Math.min((d||0)*0.2,(d||0.2)-0.01)); }catch(_){ finish(null); } };
+      v.onseeked=function(){
+        try{
+          var w=v.videoWidth||400,h=v.videoHeight||300,scale=Math.min(1,480/w);
+          var canvas=document.createElement("canvas");
+          canvas.width=Math.round(w*scale); canvas.height=Math.round(h*scale);
+          canvas.getContext("2d").drawImage(v,0,0,canvas.width,canvas.height);
+          finish(canvas.toDataURL("image/jpeg",0.72));
+        }catch(e){ finish(null); }
+      };
+      v.onerror=function(){ finish(null); };
+      timer=setTimeout(function(){ finish(null); },45000);
+      v.src=url;
+    }catch(_){ finish(null); }
+  }); };
+  var p=window.__pxThumbQueue.then(run,run);
+  window.__pxThumbQueue=p.catch(function(){});
+  return p;
+}
+
+// Gera thumbnail (dataURL jpeg 320px) a partir de um File/Blob local — sem rede.
+function pixelsMakeThumbFromBlob(blob){
+  return new Promise(function(resolve){
+    try{
+      var v=document.createElement("video"),done=false,u=URL.createObjectURL(blob);
+      var fin=function(d){ if(done)return; done=true; try{URL.revokeObjectURL(u);}catch(_){} resolve(d||null); };
+      v.preload="metadata"; v.muted=true; v.playsInline=true;
+      v.onloadedmetadata=function(){ try{ v.currentTime=Math.min(1,(v.duration||2)/2); }catch(_){ fin(null); } };
+      v.onseeked=function(){
+        try{
+          var w=Math.min(320,v.videoWidth||320),r=w/(v.videoWidth||320);
+          var c=document.createElement("canvas"); c.width=w; c.height=Math.round((v.videoHeight||180)*r);
+          c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+          fin(c.toDataURL("image/jpeg",0.6));
+        }catch(_){ fin(null); }
+      };
+      v.onerror=function(){ fin(null); };
+      setTimeout(function(){ fin(null); },8000);
+      v.src=u;
+    }catch(_){ resolve(null); }
+  });
+}
+
+// Miniatura de vídeo que NÃO baixa o original. Ordem: thumbnail salvo → frame
+// capturado da versão leve (fila) → placeholder. Nunca toca no arquivo cru.
+function PxVideoThumb(props){
+  var src=props.src||"", file=props.file||null;
+  var meta=pxVidMeta(src,file);
+  var _st=useState(meta.thumb||null), thumb=_st[0], setThumb=_st[1];
+  useEffect(function(){
+    if(meta.thumb){ setThumb(meta.thumb); return; }
+    if(!meta.preview){ setThumb(null); return; }
+    var alive=true;
+    pxCaptureFrame(meta.preview).then(function(d){
+      if(!alive)return;
+      if(d){ setThumb(d); if(typeof props.onCaptured==="function"){ try{props.onCaptured(d);}catch(_){} } }
+    });
+    return function(){ alive=false; };
+  },[src, meta.preview, meta.thumb]);
+  var st=Object.assign({width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"},props.style||{});
+  if(thumb) return <img src={thumb} alt="" draggable={false} onClick={props.onClick} style={st}/>;
+  var ph=Object.assign({},st,{background:"linear-gradient(135deg,#4c1d95 0%,#312e81 55%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",color:"#c4b5fd",position:"relative"});
+  return <div onClick={props.onClick} style={ph}>
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.9}}>
+      <rect x="2" y="2" width="20" height="20" rx="2.5"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/>
+    </svg>
+  </div>;
+}
+
+// Player: toca a versão leve quando existe. Original entra só com preload="none"
+// (nada é baixado até o usuário dar play). `original` força o arquivo cru.
+function PxVideo(props){
+  var src=props.src||"", file=props.file||null;
+  var meta=pxVidMeta(src,file);
+  var real=(props.original||!meta.preview)?src:meta.preview;
+  var isPreview=real!==src;
+  var _fb=useState(false), fellBack=_fb[0], setFellBack=_fb[1];
+  if(fellBack)real=src;
+  var preload=props.preload||(isPreview&&!fellBack?"metadata":"none");
+  var rest={};
+  for(var k in props){ if(props.hasOwnProperty(k)&&k!=="src"&&k!=="file"&&k!=="original"&&k!=="preload"&&k!=="poster"&&k!=="onError"&&k!=="videoRef")rest[k]=props[k]; }
+  var onError=function(e){
+    var me=e&&e.currentTarget&&e.currentTarget.error;
+    if(me&&me.code===1)return;
+    if(isPreview&&!fellBack){ console.warn("[video] versão leve falhou, caindo pro original:",src); setFellBack(true); return; }
+    if(typeof props.onError==="function")props.onError(e);
+  };
+  return <video {...rest} ref={props.videoRef} key={real} src={real} poster={props.poster||meta.thumb||undefined} preload={preload} onError={onError}/>;
 }
 
 // ======= 01_dashboard.jsx =======
@@ -20963,7 +21047,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
                       :<div style={{height:200,background:_lastIsVideo?"#0f172a":"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
                         {_videoNeedsPlayer
-                          ? <_VideoThumb src={thumbUrl} style={{pointerEvents:"none"}} onCaptured={function(d){if(lastVisual&&lastVisual.id)_persistKanbanThumb(t.id,lastVisual.id,d);}}/>
+                          ? <_VideoThumb src={thumbUrl} file={lastVisual} style={{pointerEvents:"none"}} onCaptured={function(d){if(lastVisual&&lastVisual.id)_persistKanbanThumb(t.id,lastVisual.id,d);}}/>
                           : <img src={thumbUrl} alt="" loading="lazy"
                               style={{display:"block",width:"100%",height:"100%",objectFit:"cover",pointerEvents:"none"}}
                               onError={function(e){e.currentTarget.style.display="none";}}/>
@@ -24292,7 +24376,7 @@ function _ApprovImg({src,idx,onFail,previewSrc}){
     </div>;
   }
   if(_isVideoUrl(src)){
-    return <video src={realSrc} controls playsInline preload="metadata"
+    return <video src={realSrc} controls playsInline preload={(_hasPreview&&!previewFailed)?"metadata":"none"} poster={pxThumbOf(src)||undefined}
       onLoadedMetadata={e=>{
         const ph=e.currentTarget.nextElementSibling;
         if(ph&&ph.style)ph.style.display="none";
@@ -25003,7 +25087,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
               {_isVid
                 ? <div style={{position:"relative",width:"100%",height:54,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center"}}>
                     {/* Preview frame do vídeo (primeiro frame carregado) */}
-                    <video src={src+"#t=0.5"} preload="metadata" muted playsInline
+                    <PxVideoThumb src={src}
                       style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                     {/* Overlay Play + label VÍDEO */}
                     <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0.15) 0%,rgba(0,0,0,0.55) 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -25196,7 +25280,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   }
                 };
                 return <>
-                  <video ref={videoRef} key={currentSrc} src={_previewByUrl[currentSrc]||currentSrc} controls
+                  <video ref={videoRef} key={currentSrc} src={_previewByUrl[currentSrc]||currentSrc} controls preload={_previewByUrl[currentSrc]?"metadata":"none"} poster={pxThumbOf(currentSrc)||undefined}
                     onError={function(e){
                       // Preview quebrado não é vídeo quebrado — cai pro original uma vez
                       const _el=e.currentTarget;
@@ -25419,7 +25503,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
                       const _isVid = r.type && r.type.startsWith("video/");
                       return <div key={r.id} style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #e5e7eb",background:"#0f172a",aspectRatio:"1 / 1"}}>
                         {_isVid
-                          ? <><video src={r.url} preload="metadata" muted playsInline
+                          ? <><PxVideoThumb src={r.url} file={r}
                               style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"}}/>
                             <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
                               <span style={{width:34,height:34,borderRadius:"50%",background:"rgba(15,23,42,0.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.4)"}}>
@@ -26590,7 +26674,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               return(<div key={src+"_"+i} onClick={()=>setImgIdx(i)}
                 style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
                 {_isVideoUrl(src)
-                  ? <><video src={_playSrc(src)} preload="metadata" muted playsInline
+                  ? <><PxVideoThumb src={src}
                       style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s",background:"#0f172a"}}/>
                     <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
                       <span style={{width:28,height:28,borderRadius:"50%",background:"rgba(15,23,42,0.72)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.3)"}}>
@@ -27139,7 +27223,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 if(_isVid){
                   // Player nativo — controls do browser, roda inline na proporção original
                   return <div key={i} style={{borderRadius:10,overflow:"hidden",border:"1px solid "+C.b1,background:"#0f172a",position:"relative"}}>
-                    <video src={src2} controls preload="metadata" playsInline
+                    <PxVideo src={src2} controls playsInline
                       style={{width:"100%",height:"auto",display:"block",background:"#0f172a",maxHeight:520,objectFit:"contain"}}/>
                   </div>;
                 }
@@ -38312,7 +38396,7 @@ function _cardPodeSerResp(u){
       <div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"90vw",maxHeight:"90vh",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
         {(function(){
           const _isVid = lightbox.url && /\.(mp4|m4v|mov|webm|mkv|ogv|avi|wmv|3gp)(\?|#|$|\/)/i.test(lightbox.url);
-          if(_isVid) return <video src={lightbox.url} controls autoPlay style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)",background:"#000"}}/>;
+          if(_isVid) return <PxVideo src={lightbox.url} controls autoPlay preload="auto" style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)",background:"#000"}}/>;
           return <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>;
         })()}
         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -38410,20 +38494,8 @@ function _cardPodeSerResp(u){
         return <div data-cover-wrap="1" onClick={function(){setLightbox({url:last.url,name:last.name||"capa",storagePath:last.storagePath});}} title="Clique pra abrir em tela cheia"
           style={{background:_isVideo?"#0f172a":"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:240,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"pointer",position:"relative",flexShrink:0}}>
           {_isVideo
-            ? <><video src={last.url} preload="metadata" muted playsInline
-                onLoadedMetadata={function(e){try{e.target.currentTime = e.target.duration>0.6?0.5:0.1;}catch(_){}}}
-                onSeeked={function(e){try{const v=e.target;const p=v.play();if(p&&p.then)p.then(function(){try{v.pause();}catch(_){}}).catch(function(){});else{try{v.pause();}catch(_){}}}catch(_){}}}
-                onError={function(e){
-                  // Tenta regen URL via storagePath (bucket agency-files atual)
-                  if(last.storagePath && !e.currentTarget.dataset.retried){
-                    e.currentTarget.dataset.retried="1";
-                    try{const sb=window._sb; if(sb){const{data}=sb.storage.from("agency-files").getPublicUrl(last.storagePath); if(data&&data.publicUrl&&data.publicUrl!==last.url){e.currentTarget.src=data.publicUrl; e.currentTarget.load(); return;}}}catch(_){}
-                  }
-                  console.warn("[Cover video 404]",{name:last.name,url:last.url,storagePath:last.storagePath});
-                  // Esconde o container inteiro do cover — deixa o card limpo em vez de player quebrado
-                  const wrap=e.currentTarget.closest("[data-cover-wrap]"); if(wrap) wrap.style.display="none";
-                }}
-                style={{maxWidth:"100%",maxHeight:240,objectFit:"contain",display:"block",background:"#0f172a"}}/>
+            ? <><PxVideoThumb src={last.url} file={last}
+                style={{width:"100%",maxHeight:240,objectFit:"cover",display:"block",background:"#0f172a"}}/>
               <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,rgba(15,23,42,0.10) 0%,rgba(15,23,42,0.45) 100%)",pointerEvents:"none"}}>
                 <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,255,255,0.95)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.5)"}}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="#0f172a" style={{marginLeft:3}}><polygon points="6 4 20 12 6 20 6 4"/></svg>
@@ -38732,7 +38804,7 @@ function _cardPodeSerResp(u){
                 {/* VÍDEO — player grande. ARTE — grid simétrica, todos do mesmo tamanho. */}
                 {_isV
                   ? <div style={{background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
-                      <video ref={_briefVideoRef} src={_last.url} controls preload="metadata" playsInline
+                      <PxVideo videoRef={_briefVideoRef} src={_last.url} file={_last} controls playsInline
                         style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
                     </div>
                   : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(4,1fr)",gap:8}}>
@@ -38995,7 +39067,7 @@ function _cardPodeSerResp(u){
                             const _vidUrl = _findAjusteVideoUrl();
                             if(!_vidUrl) return null;
                             return <div style={{marginBottom:12,background:"#0f172a",borderRadius:8,overflow:"hidden"}}>
-                              <video ref={_ajusteVideoRef} src={_vidUrl} controls
+                              <PxVideo videoRef={_ajusteVideoRef} src={_vidUrl} controls
                                 style={{maxWidth:"100%",maxHeight:"60vh",width:"auto",height:"auto",objectFit:"contain",display:"block",margin:"0 auto",background:"#0f172a"}}/>
                             </div>;
                           })()}
@@ -39607,7 +39679,7 @@ function _cardPodeSerResp(u){
                       </div>
                       <div style={{background:_v?"#0f172a":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",maxHeight:420,overflow:"hidden"}}>
                         {_v
-                          ? <video src={_last.url} controls preload="metadata" playsInline style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                          ? <PxVideo src={_last.url} file={_last} controls playsInline style={{width:"100%",maxHeight:420,display:"block",background:"#0f172a",objectFit:"contain"}}/>
                           : <img src={_last.url} alt={_last.name||"Arquivo final"} referrerPolicy="no-referrer"
                               onClick={function(){setLightbox({url:_last.url,name:_last.name,storagePath:_last.storagePath});}}
                               style={{width:"100%",maxHeight:420,objectFit:"contain",display:"block",cursor:"zoom-in"}}/>}
@@ -39653,7 +39725,7 @@ function _cardPodeSerResp(u){
                           onMouseDown={canEdit?function(e){e.currentTarget.style.cursor="grabbing";}:undefined}
                           onMouseUp={canEdit?function(e){e.currentTarget.style.cursor="grab";}:undefined}>
                           {_isVideo ? (
-                            <video src={a.url} controls preload="metadata" playsInline
+                            <PxVideo src={a.url} file={a} controls playsInline
                               onClick={function(e){e.stopPropagation();}}
                               style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                           ) : (<>
@@ -39728,7 +39800,7 @@ function _cardPodeSerResp(u){
                       const _lam=(typeof a.laminaIdx==="number" && a.laminaTotal>1) ? a : null;
                       return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #fed7aa",aspectRatio:"1",background:"#fff7ed"}}>
                         {_isVideo
-                          ? <video src={a.url} preload="metadata" muted playsInline
+                          ? <PxVideoThumb src={a.url} file={a}
                               onClick={function(){setLightbox({url:a.url,name:a.name,storagePath:a.storagePath,isVideo:true});}}
                               style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in",background:"#0f172a"}}/>
                           : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
@@ -39853,7 +39925,7 @@ function _cardPodeSerResp(u){
                     return(<div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #a5f3fc",background:"#0f172a",transition:"all .15s",aspectRatio:"1"}}
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#22d3ee";e.currentTarget.style.boxShadow="0 6px 16px rgba(8,145,178,0.18)";}}
                       onMouseLeave={function(e){e.currentTarget.style.borderColor="#a5f3fc";e.currentTarget.style.boxShadow="none";}}>
-                      <video src={a.url} controls preload="metadata" playsInline
+                      <PxVideo src={a.url} file={a} controls playsInline
                         onClick={function(e){e.stopPropagation();}}
                         style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                       <div style={{position:"absolute",top:6,left:6,background:"#0891b2",color:"#fff",borderRadius:99,padding:"3px 10px 3px 8px",fontSize:10,fontWeight:700,letterSpacing:.15,boxShadow:"0 2px 6px rgba(8,145,178,0.4)",maxWidth:"78%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>
@@ -39999,7 +40071,7 @@ function _cardPodeSerResp(u){
                       onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.18)";}}
                       onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";e.currentTarget.style.boxShadow="none";}}>
                       {/* Player nativo — mostra primeiro frame + controls pra play inline */}
-                      <video src={a.url} controls preload="metadata" playsInline
+                      <PxVideo src={a.url} file={a} controls playsInline
                         onClick={function(e){e.stopPropagation();}}
                         style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"cover"}}/>
                       {/* Badge REF (topo esquerda) */}
@@ -46969,6 +47041,8 @@ export default function AgencyOS(){
     const c=ls.get(TASKS_KEY);
     return Array.isArray(c)&&c.length>0?c:[];
   });
+  // Registro global url→{previewUrl,thumbnail} pros players/miniaturas (controle de egress)
+  useEffect(()=>{ try{ if(typeof pxRegisterTasks==="function") pxRegisterTasks(tasks); }catch(_){} },[tasks]);
   const [loaded,setLoaded] = useState(()=>{
     const hasCache=ls.get(TASKS_KEY)?.length>0 ?? false;
     const hasSession=!!getToken();
@@ -50960,7 +51034,7 @@ function PortalCard({task, cl}){
                 onClick={()=>{const w=window.open("","_blank","width=900,height=700");if(w){try{const u=new URL(f.url);w.document.title=f.name||"Imagem";Object.assign(w.document.body.style,{margin:"0",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"});const img=w.document.createElement("img");img.src=u.toString();Object.assign(img.style,{maxWidth:"100%",maxHeight:"100vh",objectFit:"contain"});w.document.body.appendChild(img);}catch(e){w.close();}}}}>
                 {f.type?.startsWith("image/")
                   ?<img src={f.url} alt={f.name} style={{width:"100%",height:finalFiles.length>1?140:280,objectFit:"cover",display:"block"}}/>
-                  :<video src={f.url} style={{width:"100%",height:finalFiles.length>1?140:280,objectFit:"cover",display:"block"}} controls/>
+                  :<PxVideo src={f.url} file={f} style={{width:"100%",height:finalFiles.length>1?140:280,objectFit:"cover",display:"block"}} controls/>
                 }
               </div>
             ))}
@@ -51973,7 +52047,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
           <div style={{position:"relative",background:"#f1f5f9",borderRadius:14,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #e2e8f0",aspectRatio:"1/1",maxHeight:520}}>
             {lastMedia
               ? (lastMedia.isVideo
-                  ? <video key={lastMedia.url} src={lastMedia.url} controls preload="metadata" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>
+                  ? <PxVideo key={lastMedia.url} src={lastMedia.url} file={lastMedia} controls style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>
                   : <img src={lastMedia.url} alt="material" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>)
               : <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:60,color:"#94a3b8"}}>
                   <Ico n="image" size={36}/>
@@ -52010,7 +52084,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
                 onMouseLeave={function(e){if(!isActive){e.currentTarget.style.opacity="0.75";}}}>
                 {m.isVideo
                   ? <>
-                      <video src={m.url} preload="metadata" muted style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                      <PxVideoThumb src={m.url} file={m} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                       <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(180deg,rgba(15,23,42,0.10),rgba(15,23,42,0.45))",pointerEvents:"none"}}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20 6 4"/></svg>
                       </div>
@@ -52181,7 +52255,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob, viewerIsPixels, current
                       title={_t.video?r.title:"Ver em tamanho maior"}
                       style={{position:"relative",width:52,height:52,borderRadius:9,overflow:"hidden",flexShrink:0,background:"#f1f5f9",border:"1px solid #e9ebef",cursor:_t.video?"default":"zoom-in"}}>
                       {_t.video
-                        ? <video src={_t.url+"#t=0.5"} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"}}/>
+                        ? <PxVideoThumb src={_t.url} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",background:"#0f172a"}}/>
                         : <img src={_t.url} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
                       {_t.video&&<span style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(15,23,42,0.32)",color:"#fff",pointerEvents:"none"}}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -56378,11 +56452,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
               ? (_ehVideo
                   ? (_tocando
                       // Player inline: controls + autoplay, usando a versão leve
-                      ? <video key="play" src={_src} controls autoPlay playsInline
+                      ? <PxVideo key="play" src={_cover} controls autoPlay preload="auto" playsInline
                           onClick={function(e){e.stopPropagation();}}
                           style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#000"}}/>
-                      // Thumb: frame da versão leve (metadata só), sem baixar o vídeo inteiro
-                      : <video key="thumb" src={_src+"#t=0.5"} preload="metadata" muted playsInline
+                      // Thumb: frame salvo no upload ou capturado da versão leve — nunca baixa o vídeo
+                      : <PxVideoThumb key="thumb" src={_cover}
                           style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#0f172a"}}/>)
                   : <img src={_cover} alt={t.title||""} loading="lazy" referrerPolicy="no-referrer"
                       style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>)
@@ -56470,7 +56544,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       return <div onClick={function(){setPubLightbox(null);}}
         style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 76px",backdropFilter:"blur(4px)"}}>
         {_cur.video
-          ? <video key={_i} src={_cur.preview||_cur.url} controls autoPlay playsInline onClick={function(e){e.stopPropagation();}}
+          ? <PxVideo key={_i} src={_cur.url} controls autoPlay preload="auto" playsInline onClick={function(e){e.stopPropagation();}}
               style={{maxWidth:"88vw",maxHeight:"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block",background:"#000"}}/>
           : <img key={_i} src={_cur.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
               style={{maxWidth:"88vw",maxHeight:"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>}
@@ -56880,7 +56954,7 @@ function PortalPlaybookCliente({cl, canEdit, isMob}){
                     const _cap = m.caption||"";
                     return <div key={i} style={{position:"relative",background:"#0f172a",overflow:"hidden",minWidth:0}}>
                       {_isVid
-                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"auto",display:"block"}}/>
+                        ? <><PxVideoThumb src={m.url} file={m} style={{width:"100%",height:"auto",display:"block"}}/>
                           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
                             <span style={{width:52,height:52,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(0,0,0,.5)"}}>
                               <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
@@ -57063,7 +57137,7 @@ function _PortalPlaybookEditModal({section, accent, catSuggestions, onSave, onCl
                   return <div key={i} style={{display:"flex",flexDirection:"column",gap:6}}>
                     <div style={{position:"relative",aspectRatio:"1/1",background:"#0f172a",borderRadius:8,overflow:"hidden"}}>
                       {_isVid
-                        ? <><video src={m.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                        ? <><PxVideoThumb src={m.url} file={m} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                           <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
                             <span style={{width:30,height:30,borderRadius:"50%",background:"rgba(15,23,42,.78)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
@@ -83521,7 +83595,6 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
     "R$ 10 milhões em vendas a partir do canal digital",
     "R$ 50 milhões em vendas a partir do canal digital",
     "R$ 100 milhões em vendas a partir do canal digital",
-    "R$ 1 bilhão em vendas a partir do canal digital",
   ];
   // Lane MENSAL — quanto batemos dentro de um mês
   const _TRILHA_MENSAL=[
