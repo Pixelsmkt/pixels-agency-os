@@ -10858,10 +10858,6 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   const PILARES = [
     {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9", redes:true,
      desc:"Crescimento da audiência em cada rede",             unit:"", scope:"acumulado"},
-    {key:"alcance",     label:"Alcance",     ico:"eye",         color:"#6366f1",
-     desc:"Pessoas únicas que viram publicações no mês",       unit:"", scope:"mensal"},
-    {key:"engajamento", label:"Engajamento", ico:"heart",       color:"#ec4899",
-     desc:"Taxa média de engajamento por publicação",          unit:"%", scope:"mensal"},
     {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
      desc:"Leads gerados via tráfego pago e orgânico",         unit:"", scope:"mensal"},
     {key:"vendas",      label:"Vendas digital",     ico:"trending-up", color:"#16a34a",
@@ -10924,6 +10920,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   })();
 
   const [metas,setMetas] = useState(_initialMetas);
+  const [redeSel,setRedeSel] = useState("instagram"); // rede exibida no card Seguidores
   const [savedAt,setSavedAt] = useState(0);
 
   useEffect(function(){
@@ -11054,7 +11051,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Metas — {unitLabel || cl.name}</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>7 pilares fixos: o que combinamos no início do ciclo e onde estamos agora</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>5 pilares fixos: o que combinamos no início do ciclo e onde estamos agora</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -11095,18 +11092,18 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
         const status = ok ? {label:"Meta atingida", color:"#16a34a", bg:"#dcfce7", border:"#bbf7d0"}
                           : pct>=70 ? {label:"No caminho",      color:"#a16207", bg:"#fef3c7", border:"#fde68a"}
                           : pct>=40 ? {label:"Em progresso",    color:"#9a3412", bg:"#ffedd5", border:"#fed7aa"}
-                          : tgt===0 ? {label:"Nao definida",    color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"}
+                          : tgt===0 ? {label:"Não definida",    color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"}
                                     : {label:"Atrasada",        color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
 
         return <div key={p.key} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:12,fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
           <div style={{display:"flex",alignItems:"center",gap:11}}>
-            <div style={{width:38,height:38,borderRadius:11,background:p.color+"15",border:"1px solid "+p.color+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {typeof Ico==="function" && <Ico n={p.ico} size={18} color={p.color}/>}
+            <div style={{width:38,height:38,borderRadius:11,background:p.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+p.color+"55"}}>
+              {typeof Ico==="function" && <Ico n={p.ico} size={18} color="#fff"/>}
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{p.label}</div>
               <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>
-                {p.scope==="acumulado"?"Total acumulado":"Por mes"}
+                {p.scope==="acumulado"?"Total acumulado":"Por mês"}
               </div>
             </div>
             <span style={{background:status.bg,color:status.color,border:"1px solid "+status.border,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>
@@ -11114,29 +11111,31 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             </span>
           </div>
 
-          {_slotsDoPilar.map(function(slotKey, si){
-            const rede = p.redes ? REDES[si] : null;
+          {(function(){
+            // Pilar por rede: mostra UMA rede por vez (setinha alterna) pra manter a altura dos outros cards
+            const rede = p.redes ? (REDES.find(function(r){return r.id===redeSel;})||REDES[0]) : null;
+            const slotKey = rede ? _slotKey(p, rede.id) : p.key;
             const sm = _readSnapshot(slotKey, refMonth);
             const stgt = Number(sm.target||0), scur = Number(sm.current||0);
-            const spct = stgt>0 ? Math.min(100, Math.round(scur/stgt*100)) : 0;
-            const sok = stgt>0 && scur>=stgt;
             const corNum = rede ? rede.cor : p.color;
-            return <div key={slotKey} style={{display:"flex",flexDirection:"column",gap:10,paddingTop:si>0?12:0,borderTop:si>0?"1px solid #f1f5f9":"none"}}>
+            const _idx = rede ? REDES.findIndex(function(r){return r.id===rede.id;}) : -1;
+            const _alt = function(d){ if(!rede) return; const n=(_idx+d+REDES.length)%REDES.length; setRedeSel(REDES[n].id); };
+            const _seta = function(d, titulo){
+              return <button type="button" title={titulo} onClick={function(e){e.preventDefault();e.stopPropagation();_alt(d);}}
+                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",flexShrink:0,padding:0}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">{d<0?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}</svg>
+              </button>;
+            };
+            return <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {rede && <div style={{display:"flex",alignItems:"center",gap:7}}>
+                {_seta(-1,"Rede anterior")}
                 <span style={{width:22,height:22,borderRadius:6,background:rede.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_logoRede(rede.id,13)}</span>
-                <span style={{color:rede.cor,fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{rede.label}</span>
+                <span style={{color:rede.cor,fontSize:11.5,fontWeight:800,letterSpacing:-.1,flex:1}}>{rede.label}</span>
+                {_seta(1,"Próxima rede")}
               </div>}
               <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
-                <div>
-                  <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Atual</div>
-                  <div style={{position:"relative"}}>
-                    <input type="number" inputMode="decimal" value={scur||""} placeholder="0"
-                      onChange={function(e){ setField(slotKey,"current",e.target.value); }}
-                      disabled={readOnly}
-                      style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:corNum,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
-                    {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
-                  </div>
-                </div>
                 <div>
                   <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Meta</div>
                   <div style={{position:"relative"}}>
@@ -11147,18 +11146,19 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
                     {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
                   </div>
                 </div>
-              </div>
-              <div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
-                  <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Progresso</span>
-                  <span style={{color:sok?"#15803d":corNum,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{spct}%</span>
-                </div>
-                <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
-                  <div style={{width:spct+"%",height:"100%",background:sok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+corNum+","+corNum+"cc)",borderRadius:99,transition:"width .35s"}}/>
+                <div>
+                  <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Executado</div>
+                  <div style={{position:"relative"}}>
+                    <input type="number" inputMode="decimal" value={scur||""} placeholder="0"
+                      onChange={function(e){ setField(slotKey,"current",e.target.value); }}
+                      disabled={readOnly}
+                      style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:corNum,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
+                    {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
+                  </div>
                 </div>
               </div>
             </div>;
-          })}
+          })()}
 
           <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45}}>{p.desc}</div>
         </div>;
@@ -57308,7 +57308,6 @@ function _PwPerformance({rootId, unidade, tick, cor}){
 const _PW_PILARES=[
   {key:"seguidores_facebook", label:"Seguidores · Facebook"},
   {key:"seguidores_instagram",label:"Seguidores · Instagram", legado:"seguidores"},
-  {key:"alcance",label:"Alcance"},{key:"engajamento",label:"Engajamento"},
   {key:"leads",label:"Leads"},{key:"vendas",label:"Vendas digital"},{key:"faturamento",label:"Faturamento"},{key:"roi",label:"ROI"},
 ];
 function _PwMetas({rootId, unidade, tick, cor}){
