@@ -33663,15 +33663,14 @@ function _ArmazenamentoPanel({tasks}){
     // de TODOS os buckets em uma chamada (~1 s). O walk recursivo abaixo (~500 list()
     // sequenciais, 2-3 min) fica só como fallback.
     try{
+      // v2: a função devolve UM jsonb ({total_bytes,total_files,buckets,agency:[[name,size]...]}).
+      // (A v1 devolvia linhas e o PostgREST cortava em 1.000 — mostrou 2,63 GB.)
       const _rpc = await window._sb.rpc("pixels_storage_usage");
-      if(_rpc && !_rpc.error && Array.isArray(_rpc.data) && _rpc.data.length>0){
-        let _b = 0, _n = 0; const _m = {};
-        _rpc.data.forEach(function(o){
-          const _sz = Number(o.size)||0;
-          _b += _sz; _n++;
-          if(o.bucket==="agency-files") _m[o.name] = _sz;
-        });
-        setRealBytes(_b); setRealFiles(_n); setRealSizeMap(_m);
+      const _d = _rpc && !_rpc.error && _rpc.data && typeof _rpc.data==="object" ? _rpc.data : null;
+      if(_d && typeof _d.total_bytes!=="undefined" && Array.isArray(_d.agency)){
+        const _m = {};
+        _d.agency.forEach(function(row){ if(Array.isArray(row)) _m[String(row[0])] = Number(row[1])||0; });
+        setRealBytes(Number(_d.total_bytes)||0); setRealFiles(Number(_d.total_files)||0); setRealSizeMap(_m);
         setRealLoading(false);
         return;
       }
@@ -33733,7 +33732,7 @@ function _ArmazenamentoPanel({tasks}){
     return {
       bytes:_bytes, files:_files,
       gbUsed:_gbUsed, gbFree:_gbFree, pct:_pct,
-      usedLabel: _hasReal ? (_gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB") : "—",
+      usedLabel: _hasReal ? (_gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB") : (_realLoading ? "Calculando…" : "—"),
       freeLabel: _hasReal ? _gbFree.toFixed(1)+" GB" : "—",
       isReal: _hasReal,
       isLoading: _realLoading,
