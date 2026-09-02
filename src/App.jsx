@@ -83837,13 +83837,14 @@ function CConquistasAlbum({cl, canEdit, selUnit, isMob}){
               const _men=_visiveis.filter(function(c){const k=_tierVenda(c.titulo);return k&&k[0]==="m";}).sort(_byVal);
               const _out=_visiveis.filter(function(c){return !_tierVenda(c.titulo);});
               return <div style={{display:"flex",flexDirection:"column",gap:22}}>
-                {_tot.length>0&&<div>
-                  {_laneHead("Conquistas totais","Vendas acumuladas a partir do canal digital","#f0b429",_tot.filter(function(c){return c.desbloqueada;}).length,_tot.length)}
-                  {_renderCartas(_tot)}
-                </div>}
+                {/* Mês primeiro (meta mais próxima), totais depois — pedido de 02/09 */}
                 {_men.length>0&&<div>
                   {_laneHead("Conquistas do mês","Quanto batemos dentro de um único mês","#7c3aed",_men.filter(function(c){return c.desbloqueada;}).length,_men.length)}
                   {_renderCartas(_men)}
+                </div>}
+                {_tot.length>0&&<div>
+                  {_laneHead("Conquistas totais","Vendas acumuladas a partir do canal digital","#f0b429",_tot.filter(function(c){return c.desbloqueada;}).length,_tot.length)}
+                  {_renderCartas(_tot)}
                 </div>}
                 {_out.length>0&&<div>
                   {_laneHead("Outras conquistas","Marcos especiais fora da régua de vendas","#0ea5e9",_out.filter(function(c){return c.desbloqueada;}).length,_out.length)}
