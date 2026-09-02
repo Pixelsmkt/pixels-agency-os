@@ -8457,54 +8457,63 @@ const META_ADS_DEMO=(clId)=>[
 ];
 
 function ClienteConcorrencia({cl,tab,setTab,readOnly}){
-  // ═══ CONCORRÊNCIA v2 — benchmark real, entrada manual ═══
+  // ═══ CONCORRÊNCIA v3 — lista única, sem abas ═══
   // Persistência: clients.concorrencia_data (JSONB)
-  // Estrutura:
-  // { instagram: { self:{...}, competitors:[...], posts:[...] }, tiktok:{...}, ... }
+  //   { _v:2, competitors:[ {id, name, logo, redes:{instagram, facebook, tiktok, youtube}} ] }
+  // Formato antigo (por rede: instagram.competitors[] etc.) é migrado na leitura e preservado no JSON.
+  // Benchmark e "Posts virais" foram descontinuados (decisão 02/09/2026).
 
-  const CONC_PLATFORMS = [
-    {id:"instagram", label:"Instagram", color:"#E4405F", icon:"instagram"},
-    {id:"tiktok",    label:"TikTok",    color:"#010101", icon:"tiktok"},
-    {id:"youtube",   label:"YouTube",   color:"#FF0000", icon:"youtube"},
-    {id:"facebook",  label:"Facebook",  color:"#1877F2", icon:"facebook"},
-  ];
-
-  const POST_TYPES = [
-    {id:"reels",     label:"Reels"},
-    {id:"foto",      label:"Foto"},
-    {id:"carrossel", label:"Carrossel"},
-    {id:"video",     label:"Vídeo"},
-    {id:"short",     label:"Short"},
-    {id:"live",      label:"Live"},
+  const REDES = [
+    {id:"instagram", label:"Instagram", cor:"#E4405F", ph:"@perfil ou link"},
+    {id:"facebook",  label:"Facebook",  cor:"#1877F2", ph:"nome da página ou link"},
+    {id:"tiktok",    label:"TikTok",    cor:"#111827", ph:"@usuario ou link"},
+    {id:"youtube",   label:"YouTube",   cor:"#FF0000", ph:"@canal ou link"},
   ];
 
   const _isSocio = (typeof CURRENT_USER!=="undefined")&&CURRENT_USER&&CURRENT_USER.level===1;
   const _canEdit = !readOnly && (_isSocio || (typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level<=2));
 
-  const [platform, setPlatform] = useState("instagram");
   const [data, setData] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showCompModal, setShowCompModal] = useState(null); // objeto competitor ou {} pra novo
-  const [showPostModal, setShowPostModal] = useState(null); // objeto post ou {competitor_id} pra novo
-  const [sortBy, setSortBy] = useState("engagement"); // engagement | views | likes | comments | date
+  const [modal, setModal] = useState(null); // {} novo | competitor pra editar | null
 
-  // Carrega concorrencia_data do Supabase
+  // Migra o formato por-rede pra lista única. Agrupa pelo nome normalizado.
+  function _migrar(d){
+    if(d && Array.isArray(d.competitors)) return d;
+    const byName = {}; const ordem = [];
+    REDES.forEach(function(r){
+      const plat = d && d[r.id];
+      (plat && Array.isArray(plat.competitors) ? plat.competitors : []).forEach(function(c){
+        const k = String(c.name||c.handle||"").trim().toLowerCase();
+        if(!k) return;
+        if(!byName[k]){ byName[k] = {id:c.id||("cmp-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)), name:c.name||c.handle||"", logo:c.logo||"", redes:{}}; ordem.push(k); }
+        if(c.handle && !byName[k].redes[r.id]) byName[k].redes[r.id] = c.handle;
+      });
+    });
+    return Object.assign({}, d||{}, {_v:2, competitors: ordem.map(function(k){return byName[k];})});
+  }
+
   useEffect(function(){
     if(!cl || !cl.id || typeof window==="undefined" || !window._sb){ setLoading(false); return; }
     let alive = true;
     window._sb.from("clients").select("concorrencia_data").eq("client_id",cl.id).maybeSingle()
       .then(function(r){
         if(!alive) return;
-        const d = (r && r.data && r.data.concorrencia_data) || {};
-        setData(d);
+        const raw = (r && r.data && r.data.concorrencia_data) || {};
+        const mig = _migrar(raw);
+        setData(mig);
         setLoading(false);
+        // Persiste a migração uma vez (só quem pode editar), preservando as chaves antigas
+        if(_canEdit && !(raw && Array.isArray(raw.competitors)) && mig.competitors.length>0){
+          window._sb.from("clients").upsert({client_id:cl.id, concorrencia_data:mig},{onConflict:"client_id"}).then(function(){}).catch(function(){});
+        }
       })
       .catch(function(){ if(alive) setLoading(false); });
     return function(){ alive=false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[cl.id]);
 
-  // Salva no Supabase (debounced-ish — chama direto)
   function save(next){
     setData(next);
     if(!cl || !cl.id || typeof window==="undefined" || !window._sb) return;
@@ -8520,515 +8529,178 @@ function ClienteConcorrencia({cl,tab,setTab,readOnly}){
       .catch(function(e){ setSaving(false); console.warn("[concorrencia save ex]", e); });
   }
 
-  // Helpers pra manipular platform data
-  function getPlat(p){
-    p = p || platform;
-    return (data[p] || { self:{}, competitors:[], posts:[] });
-  }
-  function updatePlat(p, patch){
-    const cur = getPlat(p);
-    const next = Object.assign({}, data);
-    next[p] = Object.assign({}, cur, patch);
-    save(next);
-  }
-
-  // ── Concorrentes CRUD ──
-  function addCompetitor(comp){
-    const cur = getPlat();
-    const id = "cmp-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
-    const withId = Object.assign({id:id}, comp);
-    const next = Object.assign({}, cur, {competitors: (cur.competitors||[]).concat([withId])});
-    updatePlat(platform, next);
-  }
-  function updateCompetitor(id, patch){
-    const cur = getPlat();
-    const next = Object.assign({}, cur, {
-      competitors: (cur.competitors||[]).map(function(c){ return c.id===id ? Object.assign({},c,patch) : c; })
-    });
-    updatePlat(platform, next);
-  }
+  const _comps = Array.isArray(data.competitors) ? data.competitors : [];
+  function _setComps(list){ save(Object.assign({}, data, {_v:2, competitors:list})); }
+  function addCompetitor(c){ _setComps(_comps.concat([Object.assign({id:"cmp-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)}, c)])); }
+  function updateCompetitor(id, patch){ _setComps(_comps.map(function(c){ return c.id===id ? Object.assign({},c,patch) : c; })); }
   function delCompetitor(id){
-    if(!confirm("Excluir este concorrente? Os posts associados também serão apagados.")) return;
-    const cur = getPlat();
-    const next = Object.assign({}, cur, {
-      competitors: (cur.competitors||[]).filter(function(c){ return c.id!==id; }),
-      posts: (cur.posts||[]).filter(function(p){ return p.competitor_id!==id; })
-    });
-    updatePlat(platform, next);
-  }
-  // ── Posts CRUD ──
-  function addPost(post){
-    const cur = getPlat();
-    const id = "pst-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
-    const withId = Object.assign({id:id, created_at:new Date().toISOString()}, post);
-    updatePlat(platform, Object.assign({}, cur, {posts:(cur.posts||[]).concat([withId])}));
-  }
-  function updatePost(id, patch){
-    const cur = getPlat();
-    updatePlat(platform, Object.assign({}, cur, {
-      posts:(cur.posts||[]).map(function(p){ return p.id===id ? Object.assign({},p,patch) : p; })
-    }));
-  }
-  function delPost(id){
-    if(!confirm("Excluir este post viral?")) return;
-    const cur = getPlat();
-    updatePlat(platform, Object.assign({}, cur, {posts:(cur.posts||[]).filter(function(p){ return p.id!==id; })}));
+    const go = function(){ _setComps(_comps.filter(function(c){ return c.id!==id; })); };
+    if(typeof pixelsConfirm==="function"){ pixelsConfirm("Excluir este concorrente?",{danger:true,okText:"Excluir",cancelText:"Cancelar"}).then(function(y){ if(y) go(); }); }
+    else if(confirm("Excluir este concorrente?")) go();
   }
 
-  // Update self benchmark (handle, followers, engagement)
-  function updateSelf(patch){
-    const cur = getPlat();
-    updatePlat(platform, Object.assign({}, cur, {self: Object.assign({}, cur.self||{}, patch)}));
+  // Monta a URL pública a partir do que foi digitado (handle ou link). Link https comum:
+  // no celular o iOS/Android abrem o app nativo sozinhos; no desktop abre o navegador.
+  function _urlRede(redeId, v){
+    let x = String(v||"").trim();
+    if(!x) return "";
+    if(/^https?:\/\//i.test(x)) return x;
+    if(/^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/|$)/i.test(x)) return "https://"+x.replace(/^\/+/,"");
+    x = x.replace(/^@/,"").replace(/^\/+|\/+$/g,"");
+    if(redeId==="instagram") return "https://instagram.com/"+x;
+    if(redeId==="facebook")  return "https://facebook.com/"+x;
+    if(redeId==="tiktok")    return "https://tiktok.com/@"+x;
+    if(redeId==="youtube")   return "https://youtube.com/@"+x;
+    return "";
+  }
+  function _handlePrincipal(c){
+    const r = c.redes||{};
+    const v = r.instagram||r.facebook||r.tiktok||r.youtube||"";
+    if(!v) return "";
+    if(/^https?:\/\//i.test(v)) return v.replace(/^https?:\/\/(www\.)?/i,"");
+    return v.charAt(0)==="@" ? v : "@"+v;
   }
 
-  // Compute benchmark
-  function _num(v){ return Number(v)||0; }
-  function _fmt(n){
-    if(!n) return "0";
-    if(n >= 1000000) return (n/1000000).toFixed(1).replace(".0","") + "M";
-    if(n >= 10000) return (n/1000).toFixed(0) + "k";
-    if(n >= 1000) return (n/1000).toFixed(1).replace(".0","") + "k";
-    return String(Math.round(n));
+  function _LogoSvg(id, sz){
+    if(id==="facebook") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>;
+    if(id==="tiktok")   return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M16.6 5.82a4.28 4.28 0 0 1-1.06-2.82h-3.2v12.4a2.6 2.6 0 1 1-2.6-2.6c.27 0 .53.04.78.12V9.66a5.83 5.83 0 0 0-.78-.06 5.8 5.8 0 1 0 5.8 5.8V9.03a7.5 7.5 0 0 0 4.36 1.4V7.23a4.3 4.3 0 0 1-3.3-1.41z"/></svg>;
+    if(id==="youtube")  return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.5 15.6V8.4l6.3 3.6z"/></svg>;
+    return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16M12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.13 1.38C1.35 2.68.93 3.35.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.79.72 1.46 1.38 2.13.67.66 1.34 1.08 2.13 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56.79-.3 1.46-.72 2.13-1.38.66-.67 1.08-1.34 1.38-2.13.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91-.3-.79-.72-1.46-1.38-2.13C21.32 1.35 20.65.93 19.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0z"/><path d="M12 5.84A6.16 6.16 0 1 0 18.16 12 6.16 6.16 0 0 0 12 5.84zM12 16a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/><circle cx="18.41" cy="5.59" r="1.44"/></svg>;
   }
-  function _engageRate(p){
-    // views > 0 ? engagement/views : engagement
-    const eng = _num(p.likes)+_num(p.comments)+_num(p.shares);
-    const views = _num(p.views);
-    if(views>0) return (eng/views)*100;
-    return 0;
-  }
-
-  const _cur = getPlat();
-  const _self = _cur.self || {};
-  const _comps = _cur.competitors || [];
-  const _posts = _cur.posts || [];
-
-  // Maior concorrente (por avg_engagement)
-  const _maiorComp = _comps.slice().sort(function(a,b){ return _num(b.avg_engagement) - _num(a.avg_engagement); })[0];
-
-  // Posts ordenados
-  const _postsSorted = _posts.slice().sort(function(a,b){
-    if(sortBy==="engagement") return (_num(b.likes)+_num(b.comments)+_num(b.shares)) - (_num(a.likes)+_num(a.comments)+_num(a.shares));
-    if(sortBy==="views") return _num(b.views) - _num(a.views);
-    if(sortBy==="likes") return _num(b.likes) - _num(a.likes);
-    if(sortBy==="comments") return _num(b.comments) - _num(a.comments);
-    if(sortBy==="date") return String(b.date||"").localeCompare(String(a.date||""));
-    return 0;
-  });
-
-  const _platCfg = CONC_PLATFORMS.find(function(p){return p.id===platform;}) || CONC_PLATFORMS[0];
-  const _accent = _platCfg.color;
-
-  function _lookupCompetitor(id){ return _comps.find(function(c){return c.id===id;}); }
 
   const FF = "'Inter',system-ui,sans-serif";
+  const ACC = "#E4405F";
 
   if(loading) return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontFamily:FF}}>Carregando concorrência…</div>;
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:FF}}>
 
-    {/* ── Platform tabs ── */}
-    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-      {CONC_PLATFORMS.map(function(p){
-        const active = platform===p.id;
-        return <button key={p.id} onClick={function(){setPlatform(p.id);}}
-          style={{background:active?p.color:"#fff",color:active?"#fff":"#475569",border:"1.5px solid "+(active?p.color:"#e2e8f0"),borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,letterSpacing:-.1,transition:"all .15s"}}>
-          {p.label}
-        </button>;
-      })}
-      {saving && <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,alignSelf:"center"}}>salvando…</span>}
-    </div>
-
-    {/* ── Bloco Benchmark ── */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+    <section style={{background:"#fff",border:"1px solid #e9eef5",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 3px rgba(15,23,42,.05)"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap",marginBottom:18}}>
         <div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Benchmark · {_platCfg.label}</div>
-          <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:2}}>Compare seu desempenho com a média dos concorrentes cadastrados</div>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.2}}>Concorrentes</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:3}}>Cadastre aqui uma vez e clique na rede pra abrir o perfil</div>
         </div>
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
-        {/* Handle */}
-        <div style={{background:"linear-gradient(135deg,"+_accent+"08,transparent)",border:"1px solid "+_accent+"22",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:4,position:"relative"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,display:"flex",alignItems:"center",gap:5}}>
-            Seu handle
-            {_canEdit && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={_accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>}
-          </div>
-          {_canEdit
-            ? <input value={_self.handle||""} onChange={function(e){updateSelf({handle:e.target.value});}} placeholder="@handle_do_cliente"
-                style={{border:"1px solid "+(_self.handle?"transparent":_accent+"44"),outline:"none",background:_self.handle?"transparent":"#fff",fontSize:16,fontWeight:800,color:"#0f172a",padding:"6px 8px",fontFamily:FF,letterSpacing:-.3,borderRadius:7,transition:"all .12s",width:"100%",boxSizing:"border-box"}}
-                onFocus={function(e){e.currentTarget.style.borderColor=_accent;e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="0 0 0 3px "+_accent+"22";}}
-                onBlur={function(e){e.currentTarget.style.borderColor=_self.handle?"transparent":_accent+"44";e.currentTarget.style.background=_self.handle?"transparent":"#fff";e.currentTarget.style.boxShadow="none";}}/>
-            : <div style={{fontSize:16,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>{_self.handle||"—"}</div>
-          }
-        </div>
-        {/* Seguidores */}
-        <div style={{background:"linear-gradient(135deg,"+_accent+"08,transparent)",border:"1px solid "+_accent+"22",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:4}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,display:"flex",alignItems:"center",gap:5}}>
-            Seus seguidores
-            {_canEdit && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={_accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>}
-          </div>
-          {_canEdit
-            ? <input type="number" value={_self.followers||""} onChange={function(e){updateSelf({followers:_num(e.target.value)});}} placeholder="0"
-                style={{border:"1px solid "+(_self.followers?"transparent":_accent+"44"),outline:"none",background:_self.followers?"transparent":"#fff",fontSize:22,fontWeight:800,color:"#0f172a",padding:"6px 8px",fontFamily:FF,letterSpacing:-.6,fontFeatureSettings:"'tnum'",borderRadius:7,transition:"all .12s",width:"100%",boxSizing:"border-box"}}
-                onFocus={function(e){e.currentTarget.style.borderColor=_accent;e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="0 0 0 3px "+_accent+"22";}}
-                onBlur={function(e){e.currentTarget.style.borderColor=_self.followers?"transparent":_accent+"44";e.currentTarget.style.background=_self.followers?"transparent":"#fff";e.currentTarget.style.boxShadow="none";}}/>
-            : <div style={{fontSize:22,fontWeight:800,color:"#0f172a",letterSpacing:-.6}}>{_fmt(_num(_self.followers))}</div>
-          }
-        </div>
-        {/* Seu engajamento */}
-        <div style={{background:"linear-gradient(135deg,"+_accent+"08,transparent)",border:"1px solid "+_accent+"22",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:4}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,display:"flex",alignItems:"center",gap:5}}>
-            Seu engajamento médio
-            {_canEdit && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={_accent} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>}
-          </div>
-          {_canEdit
-            ? <input type="number" value={_self.avg_engagement||""} onChange={function(e){updateSelf({avg_engagement:_num(e.target.value)});}} placeholder="0"
-                style={{border:"1px solid "+(_self.avg_engagement?"transparent":_accent+"44"),outline:"none",background:_self.avg_engagement?"transparent":"#fff",fontSize:22,fontWeight:800,color:"#0f172a",padding:"6px 8px",fontFamily:FF,letterSpacing:-.6,fontFeatureSettings:"'tnum'",borderRadius:7,transition:"all .12s",width:"100%",boxSizing:"border-box"}}
-                onFocus={function(e){e.currentTarget.style.borderColor=_accent;e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="0 0 0 3px "+_accent+"22";}}
-                onBlur={function(e){e.currentTarget.style.borderColor=_self.avg_engagement?"transparent":_accent+"44";e.currentTarget.style.background=_self.avg_engagement?"transparent":"#fff";e.currentTarget.style.boxShadow="none";}}/>
-            : <div style={{fontSize:22,fontWeight:800,color:"#0f172a",letterSpacing:-.6}}>{_fmt(_num(_self.avg_engagement))}</div>
-          }
-        </div>
-        {/* Maior concorrente */}
-        <div style={{background:_maiorComp?"linear-gradient(135deg,#fee2e2,#fef2f2)":"#f8fafc",border:"1px solid "+(_maiorComp?"#fca5a5":"#e2e8f0"),borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:4}}>
-          <div style={{color:_maiorComp?"#b91c1c":"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Maior concorrente</div>
-          {_maiorComp
-            ? <>
-                <div style={{fontSize:14,fontWeight:800,color:"#0f172a",letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_maiorComp.name||"—"}</div>
-                <div style={{fontSize:11,color:"#dc2626",fontWeight:700}}>{_fmt(_num(_maiorComp.avg_engagement))} de engajamento médio</div>
-              </>
-            : <div style={{fontSize:12,color:"#94a3b8",fontStyle:"italic"}}>Cadastre concorrentes abaixo</div>
-          }
-        </div>
-      </div>
-    </section>
-
-    {/* ── Concorrentes cadastrados ── */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-        <div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Concorrentes cadastrados</div>
-          <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:2}}>Perfis que monitoramos como benchmark</div>
-        </div>
-        {_canEdit && <button onClick={function(){setShowCompModal({});}}
-          style={{background:_accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,boxShadow:"0 4px 10px "+_accent+"33"}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Adicionar concorrente
-        </button>}
-      </div>
-
-      {_comps.length===0
-        ? <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,background:"#f8fafc",borderRadius:11,border:"1px dashed #cbd5e1"}}>Nenhum concorrente cadastrado ainda.</div>
-        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
-            {_comps.map(function(c){
-              return <div key={c.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 13px",display:"flex",gap:11,alignItems:"center",position:"relative",transition:"all .15s"}}
-                onMouseEnter={function(e){e.currentTarget.style.borderColor=_accent+"55";}}
-                onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";}}>
-                <div style={{width:44,height:44,borderRadius:"50%",background:c.logo?"#fff":_accent+"22",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",border:"1px solid "+_accent+"33"}}>
-                  {c.logo
-                    ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                    : <span style={{color:_accent,fontSize:15,fontWeight:800}}>{(c.name||"?").charAt(0).toUpperCase()}</span>
-                  }
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name||"—"}</div>
-                  <div style={{color:_accent,fontSize:11,fontWeight:600,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.handle||""}</div>
-                  <div style={{display:"flex",gap:8,marginTop:5,color:"#64748b",fontSize:10.5,fontWeight:500}}>
-                    <span title="Seguidores"><b>{_fmt(_num(c.followers))}</b> seg</span>
-                    <span title="Engajamento médio"><b>{_fmt(_num(c.avg_engagement))}</b> eng</span>
-                  </div>
-                </div>
-                {_canEdit && <div style={{display:"flex",gap:3,flexDirection:"column"}}>
-                  <button onClick={function(e){e.stopPropagation();setShowCompModal(c);}} title="Editar"
-                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:22,height:22,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b"}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </button>
-                  <button onClick={function(e){e.stopPropagation();delCompetitor(c.id);}} title="Excluir"
-                    style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626"}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
-                  </button>
-                </div>}
-              </div>;
-            })}
-          </div>
-      }
-    </section>
-
-    {/* ── Posts virais ── */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
-        <div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Posts virais monitorados</div>
-          <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:2}}>Registro dos conteúdos que performaram bem — com insights da Pixels</div>
-        </div>
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          {/* Ordenação */}
-          <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}}
-            style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:11.5,fontWeight:600,color:"#475569",background:"#fff",cursor:"pointer",fontFamily:FF,outline:"none"}}>
-            <option value="engagement">Ordenar: Engajamento</option>
-            <option value="views">Ordenar: Visualizações</option>
-            <option value="likes">Ordenar: Curtidas</option>
-            <option value="comments">Ordenar: Comentários</option>
-            <option value="date">Ordenar: Data</option>
-          </select>
-          {_canEdit && _comps.length>0 && <button onClick={function(){setShowPostModal({});}}
-            style={{background:_accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,boxShadow:"0 4px 10px "+_accent+"33"}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Registrar post viral
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+          {saving && <span style={{color:"#94a3b8",fontSize:11}}>salvando…</span>}
+          {_canEdit && <button type="button" onClick={function(){setModal({});}}
+            style={{background:ACC,color:"#fff",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 3px 10px rgba(228,64,95,.3)"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Adicionar concorrente
           </button>}
         </div>
       </div>
 
       {_comps.length===0
-        ? <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,background:"#f8fafc",borderRadius:11,border:"1px dashed #cbd5e1"}}>Cadastre pelo menos um concorrente antes de registrar posts virais.</div>
-        : _postsSorted.length===0
-          ? <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,background:"#f8fafc",borderRadius:11,border:"1px dashed #cbd5e1"}}>Nenhum post viral registrado ainda. Use "Registrar post viral" pra começar.</div>
-          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {_postsSorted.map(function(p,idx){
-                const comp = _lookupCompetitor(p.competitor_id);
-                const engTotal = _num(p.likes)+_num(p.comments)+_num(p.shares);
-                const engRate = _engageRate(p);
-                const pt = POST_TYPES.find(function(t){return t.id===p.type;});
-                return <div key={p.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:12,display:"grid",gridTemplateColumns:"48px 90px 1fr auto",gap:12,alignItems:"center",transition:"all .15s"}}
-                  onMouseEnter={function(e){e.currentTarget.style.borderColor=_accent+"55";e.currentTarget.style.boxShadow="0 4px 12px "+_accent+"12";}}
-                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-                  {/* Rank */}
-                  <div style={{width:48,height:48,borderRadius:11,background:idx===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":idx===1?"linear-gradient(135deg,#9ca3af,#6b7280)":idx===2?"linear-gradient(135deg,#c2410c,#9a3412)":_accent+"14",color:idx<3?"#fff":_accent,fontSize:16,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>#{idx+1}</div>
-                  {/* Thumbnail */}
-                  <div style={{width:90,height:90,borderRadius:8,background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #e2e8f0"}}>
-                    {p.thumbnail
-                      ? <img src={p.thumbnail} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                      : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                    }
+        ? <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,background:"#f8fafc",borderRadius:12,border:"1px dashed #cbd5e1"}}>
+            Nenhum concorrente cadastrado ainda.{_canEdit?" Clique em “Adicionar concorrente”.":""}
+          </div>
+        : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+            {_comps.map(function(c){
+              const redes = c.redes||{};
+              return <div key={c.id} style={{border:"1px solid #e9eef5",borderRadius:15,padding:"15px 16px 14px",background:"#fff",transition:"box-shadow .18s,transform .18s",position:"relative"}}
+                onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 22px rgba(15,23,42,.09)";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
+                <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:13}}>
+                  <div style={{width:42,height:42,borderRadius:13,background:"#f1f5fb",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:16,color:"#64748b",flexShrink:0,boxShadow:"inset 0 0 0 1px #e4ebf5",overflow:"hidden"}}>
+                    {c.logo
+                      ? <img src={c.logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+                      : (c.name||"?").charAt(0).toUpperCase()}
                   </div>
-                  {/* Conteúdo */}
-                  <div style={{minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      {pt && <span style={{background:_accent+"15",color:_accent,fontSize:9.5,fontWeight:800,padding:"2px 8px",borderRadius:5,letterSpacing:.3,textTransform:"uppercase"}}>{pt.label}</span>}
-                      {comp && <span style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{comp.name}</span>}
-                      {p.date && <span style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginLeft:"auto"}}>{(function(){try{return new Date(p.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});}catch(_){return p.date;}})()}</span>}
-                    </div>
-                    <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>{p.title||"(sem título)"}</div>
-                    {/* Métricas */}
-                    <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:"#475569"}}>
-                      {_num(p.likes)>0 && <span style={{display:"inline-flex",alignItems:"center",gap:3}}><svg width="11" height="11" viewBox="0 0 24 24" fill="#e11d48" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg><b>{_fmt(_num(p.likes))}</b></span>}
-                      {_num(p.views)>0 && <span style={{display:"inline-flex",alignItems:"center",gap:3}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><b>{_fmt(_num(p.views))}</b></span>}
-                      {_num(p.comments)>0 && <span style={{display:"inline-flex",alignItems:"center",gap:3}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><b>{_fmt(_num(p.comments))}</b></span>}
-                      {_num(p.shares)>0 && <span style={{display:"inline-flex",alignItems:"center",gap:3}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg><b>{_fmt(_num(p.shares))}</b></span>}
-                      {engRate>0 && <span style={{color:"#059669",fontWeight:700}}>{engRate.toFixed(1)}% eng.</span>}
-                    </div>
-                    {/* Insight */}
-                    {p.insights && <div style={{background:"#faf5ff",borderLeft:"3px solid "+_accent,padding:"6px 10px",borderRadius:"0 6px 6px 0",color:"#0f172a",fontSize:11.5,lineHeight:1.5,marginTop:2,fontStyle:"italic"}}>
-                      <b style={{fontStyle:"normal",color:_accent}}>Insight Pixels:</b> {p.insights}
-                    </div>}
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.25,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name||"—"}</div>
+                    <div style={{fontSize:10.5,color:"#94a3b8",marginTop:3,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_handlePrincipal(c)}</div>
                   </div>
-                  {/* Ações */}
-                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                    {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" title="Ver original"
-                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:26,height:26,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",textDecoration:"none"}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    </a>}
-                    {_canEdit && <>
-                      <button onClick={function(){setShowPostModal(p);}} title="Editar"
-                        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:26,height:26,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed"}}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                      </button>
-                      <button onClick={function(){delPost(p.id);}} title="Excluir"
-                        style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:26,height:26,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626"}}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
-                      </button>
-                    </>}
-                  </div>
-                </div>;
-              })}
-            </div>
+                  {_canEdit && <div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button type="button" onClick={function(e){e.stopPropagation();setModal(c);}} title="Editar"
+                      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:26,height:26,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4z"/></svg>
+                    </button>
+                    <button type="button" onClick={function(e){e.stopPropagation();delCompetitor(c.id);}} title="Excluir"
+                      style={{background:"#fff",border:"1px solid #fecaca",borderRadius:7,width:26,height:26,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#ef4444"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                    </button>
+                  </div>}
+                </div>
+                {/* Logos das redes: colorido quando cadastrada (clicável), cinza apagado quando não */}
+                <div style={{display:"flex",gap:9,paddingTop:12,borderTop:"1px solid #f4f7fb"}}>
+                  {REDES.map(function(r){
+                    const url = _urlRede(r.id, redes[r.id]);
+                    const base = {width:40,height:40,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",flexShrink:0,transition:"transform .15s,box-shadow .15s"};
+                    if(!url) return <span key={r.id} title={r.label+" não cadastrado"} style={Object.assign({},base,{background:"#f4f7fb",color:"#cbd5e1",cursor:"not-allowed",boxShadow:"inset 0 0 0 1px #eaf0f6"})}>{_LogoSvg(r.id,20)}</span>;
+                    return <a key={r.id} href={url} target="_blank" rel="noopener noreferrer" title={"Abrir no "+r.label}
+                      style={Object.assign({},base,{background:r.cor,color:"#fff",boxShadow:"0 3px 10px "+r.cor+"59"})}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px) scale(1.05)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
+                      {_LogoSvg(r.id,20)}
+                    </a>;
+                  })}
+                </div>
+              </div>;
+            })}
+          </div>
       }
+
+      {_comps.length>0 && <div style={{marginTop:16,display:"flex",gap:20,flexWrap:"wrap",fontSize:11,color:"#64748b",alignItems:"center"}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:7}}><i style={{width:14,height:14,borderRadius:4,background:ACC,display:"inline-block"}}/> Rede cadastrada — clica e abre o perfil</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:7}}><i style={{width:14,height:14,borderRadius:4,background:"#f4f7fb",boxShadow:"inset 0 0 0 1px #eaf0f6",display:"inline-block"}}/> Não cadastrada</span>
+      </div>}
     </section>
 
-    {/* ── Modal: novo/editar concorrente ── */}
-    {showCompModal && <_ConcCompModal accent={_accent} initial={showCompModal} onClose={function(){setShowCompModal(null);}} onSave={function(v){
-      if(showCompModal.id) updateCompetitor(showCompModal.id, v); else addCompetitor(v);
-      setShowCompModal(null);
-    }}/>}
-
-    {/* ── Modal: novo/editar post ── */}
-    {showPostModal && <_ConcPostModal accent={_accent} initial={showPostModal} competitors={_comps} postTypes={POST_TYPES} onClose={function(){setShowPostModal(null);}} onSave={function(v){
-      if(showPostModal.id) updatePost(showPostModal.id, v); else addPost(v);
-      setShowPostModal(null);
+    {modal && <_ConcCompModal redes={REDES} logoSvg={_LogoSvg} initial={modal} onClose={function(){setModal(null);}} onSave={function(v){
+      if(modal.id) updateCompetitor(modal.id, v); else addCompetitor(v);
+      setModal(null);
     }}/>}
 
   </div>;
 }
 
-// ── Sub: modal Concorrente ──
-function _ConcCompModal({accent,initial,onClose,onSave}){
+// ── Sub: modal Concorrente — nome + as quatro redes juntas ──
+function _ConcCompModal({redes,logoSvg,initial,onClose,onSave}){
   const [name,setName]=useState(initial.name||"");
-  const [handle,setHandle]=useState(initial.handle||"");
-  const [followers,setFollowers]=useState(initial.followers||"");
-  const [engagement,setEngagement]=useState(initial.avg_engagement||"");
   const [logo,setLogo]=useState(initial.logo||"");
-  const [uploading,setUploading]=useState(false);
-  const _logoFileRef=useRef(null);
+  const [rd,setRd]=useState(Object.assign({instagram:"",facebook:"",tiktok:"",youtube:""}, initial.redes||{}));
   const FF="'Inter',system-ui,sans-serif";
-  async function _uploadLogo(file){
-    if(!file) return;
-    if(!file.type.startsWith("image/")){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Só imagens são permitidas.");
-      return;
-    }
-    if(file.size > 5*1024*1024){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Máx 5MB.");
-      return;
-    }
-    setUploading(true);
-    try{
-      const sb = window._sb;
-      if(!sb) throw new Error("Supabase offline");
-      const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
-      const rnd = Math.random().toString(36).slice(2,11);
-      const path = "concorrencia-logos/"+Date.now()+"-"+rnd+"."+ext;
-      const {error:upErr} = await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false});
-      if(upErr) throw upErr;
-      const {data} = sb.storage.from("agency-files").getPublicUrl(path);
-      setLogo(data.publicUrl);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Logo enviada!",2500);
-    }catch(err){
-      if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro no upload: "+(err.message||"desconhecido"));
-    }finally{
-      setUploading(false);
-    }
+  const _temAlguma = Object.keys(rd).some(function(k){return String(rd[k]||"").trim();});
+  const inp={width:"100%",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:FF,outline:"none",background:"#fbfdff",boxSizing:"border-box",color:"#0f172a"};
+  const lbl={display:"block",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",color:"#94a3b8",marginBottom:6};
+  function salvar(){
+    if(!name.trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Informe o nome do concorrente.",3000); return; }
+    if(!_temAlguma){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Cadastre pelo menos uma rede social.",3000); return; }
+    const clean={}; Object.keys(rd).forEach(function(k){ const v=String(rd[k]||"").trim(); if(v) clean[k]=v; });
+    onSave({name:name.trim(), logo:logo.trim(), redes:clean});
   }
-  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:FF}}>
-    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(500px,94%)",padding:"24px 26px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)"}}>
-      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{initial.id?"Editar concorrente":"Novo concorrente"}</div>
-      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18,fontWeight:500}}>Dados manuais do perfil monitorado</div>
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Nome do concorrente *</div>
-          <input value={name} onChange={function(e){setName(e.target.value);}} placeholder="Ex: AgroTech BR"
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>@ handle</div>
-          <input value={handle} onChange={function(e){setHandle(e.target.value);}} placeholder="@agrotechbr"
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Seguidores</div>
-            <input type="number" value={followers} onChange={function(e){setFollowers(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Engajamento médio</div>
-            <input type="number" value={engagement} onChange={function(e){setEngagement(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
-        </div>
-        <div>
-          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Logo</div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <div style={{width:44,height:44,borderRadius:9,border:"1px solid #e2e8f0",background:logo?"#fff":"#f8fafc",overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {logo
-                ? <img src={logo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              }
-            </div>
-            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
-              <input value={logo} onChange={function(e){setLogo(e.target.value);}} placeholder="Cole URL ou envie do PC"
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 10px",fontSize:12,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/>
-              <div style={{display:"flex",gap:6}}>
-                <input type="file" accept="image/*" ref={_logoFileRef} style={{display:"none"}}
-                  onChange={function(e){ const f=e.target.files&&e.target.files[0]; if(f) _uploadLogo(f); e.target.value=""; }}/>
-                <button type="button" onClick={function(){ if(_logoFileRef.current) _logoFileRef.current.click(); }} disabled={uploading}
-                  style={{background:uploading?"#f1f5f9":"#f8fafc",color:uploading?"#94a3b8":"#475569",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 10px",fontSize:11.5,fontWeight:600,cursor:uploading?"wait":"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:5}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  {uploading?"Enviando…":"Enviar do PC"}
-                </button>
-                {logo && <button type="button" onClick={function(){ setLogo(""); }}
-                  style={{background:"#fff",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 10px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:FF}}>Remover</button>}
-              </div>
-            </div>
-          </div>
-        </div>
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,zIndex:600,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:16,paddingTop:70,fontFamily:FF}}>
+    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 30px 70px rgba(15,23,42,0.25)",border:"1px solid #f1f5f9",overflow:"hidden",maxHeight:"88vh",overflowY:"auto"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid #f2f6fa",display:"flex",alignItems:"center",gap:10}}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <b style={{fontSize:14,fontWeight:800,color:"#0f172a",flex:1}}>{initial.id?"Editar concorrente":"Adicionar concorrente"}</b>
+        <button type="button" onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:20,lineHeight:1,padding:"2px 6px"}}>×</button>
       </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
-        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:FF}}>Cancelar</button>
-        <button onClick={function(){
-          if(!name.trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nome obrigatório"); return; }
-          onSave({name:name.trim(),handle:handle.trim(),followers:Number(followers)||0,avg_engagement:Number(engagement)||0,logo:logo.trim()});
-        }} style={{background:accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,boxShadow:"0 4px 10px "+accent+"44"}}>Salvar</button>
-      </div>
-    </div>
-  </div>;
-}
-
-// ── Sub: modal Post viral ──
-function _ConcPostModal({accent,initial,competitors,postTypes,onClose,onSave}){
-  const [competitorId,setCompetitorId]=useState(initial.competitor_id||(competitors[0]&&competitors[0].id)||"");
-  const [url,setUrl]=useState(initial.url||"");
-  const [type,setType]=useState(initial.type||"reels");
-  const [title,setTitle]=useState(initial.title||"");
-  const [likes,setLikes]=useState(initial.likes||"");
-  const [views,setViews]=useState(initial.views||"");
-  const [comments,setComments]=useState(initial.comments||"");
-  const [shares,setShares]=useState(initial.shares||"");
-  const [date,setDate]=useState(initial.date||"");
-  const [insights,setInsights]=useState(initial.insights||"");
-  const [thumbnail,setThumbnail]=useState(initial.thumbnail||"");
-  const FF="'Inter',system-ui,sans-serif";
-  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(e); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:FF,overflowY:"auto"}}>
-    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(680px,94%)",padding:"24px 26px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)",marginBottom:60}}>
-      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{initial.id?"Editar post viral":"Registrar post viral"}</div>
-      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18,fontWeight:500}}>Preencha os dados que conseguir extrair do post da concorrência</div>
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Concorrente *</div>
-            <select value={competitorId} onChange={function(e){setCompetitorId(e.target.value);}}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",background:"#fff",cursor:"pointer"}}>
-              {competitors.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
-            </select>
-          </div>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Tipo</div>
-            <select value={type} onChange={function(e){setType(e.target.value);}}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",background:"#fff",cursor:"pointer"}}>
-              {postTypes.map(function(t){return <option key={t.id} value={t.id}>{t.label}</option>;})}
-            </select>
-          </div>
+      <div style={{padding:"18px 20px 20px"}}>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Nome</label>
+          <input value={name} onChange={function(e){setName(e.target.value);}} placeholder="Ex: LJS Soluções Ambientais" style={inp} autoFocus/>
         </div>
-        <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Link do post</div>
-          <input value={url} onChange={function(e){setUrl(e.target.value);}} placeholder="https://instagram.com/p/..."
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título / legenda curta *</div>
-          <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Produtividade leiteira +40% com tecnologia"
-            style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr 1fr",gap:8}}>
-          <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Curtidas</div>
-            <input type="number" value={likes} onChange={function(e){setLikes(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
-          <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Visualizações</div>
-            <input type="number" value={views} onChange={function(e){setViews(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
-          <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Comentários</div>
-            <input type="number" value={comments} onChange={function(e){setComments(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
-          <div><div style={{fontSize:10,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>Compart.</div>
-            <input type="number" value={shares} onChange={function(e){setShares(e.target.value);}} placeholder="0"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12.5,fontFamily:FF,outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/></div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Redes sociais — deixe em branco o que não tiver</label>
+          {redes.map(function(r){
+            return <div key={r.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}>
+              <span style={{width:32,height:32,borderRadius:9,background:r.cor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{logoSvg(r.id,16)}</span>
+              <input value={rd[r.id]||""} onChange={function(e){const v=e.target.value;setRd(function(p){return Object.assign({},p,{[r.id]:v});});}}
+                placeholder={r.ph+" — opcional"} style={Object.assign({},inp,{flex:1})}/>
+            </div>;
+          })}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 2fr",gap:10}}>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Data do post</div>
-            <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
-          <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Thumbnail (URL da imagem/vídeo)</div>
-            <input value={thumbnail} onChange={function(e){setThumbnail(e.target.value);}} placeholder="Cole URL do frame ou screenshot"
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box"}}/></div>
+        <div style={{marginBottom:16}}>
+          <label style={lbl}>Logo (URL) — opcional</label>
+          <input value={logo} onChange={function(e){setLogo(e.target.value);}} placeholder="https://…" style={inp}/>
         </div>
-        <div><div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Insight da Pixels</div>
-          <textarea value={insights} onChange={function(e){setInsights(e.target.value);}} placeholder="O que aprender com esse post? Que gancho aplicar no cliente?"
-            rows={3} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:FF,outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.5}}/></div>
-      </div>
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
-        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:FF}}>Cancelar</button>
-        <button onClick={function(){
-          if(!competitorId){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione um concorrente"); return; }
-          if(!title.trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Título obrigatório"); return; }
-          onSave({competitor_id:competitorId,url:url.trim(),type:type,title:title.trim(),likes:Number(likes)||0,views:Number(views)||0,comments:Number(comments)||0,shares:Number(shares)||0,date:date,insights:insights.trim(),thumbnail:thumbnail.trim()});
-        }} style={{background:accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:FF,boxShadow:"0 4px 10px "+accent+"44"}}>Salvar</button>
+        <button type="button" onClick={salvar}
+          style={{background:"#0f172a",border:"none",borderRadius:10,padding:"11px 0",width:"100%",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:FF}}>
+          {initial.id?"Salvar alterações":"Salvar concorrente"}
+        </button>
       </div>
     </div>
   </div>;
@@ -11183,22 +10855,74 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   const _currentYM = _ymKey(new Date());
   const [refMonth, setRefMonth] = useState(_currentYM);
 
+  // redes:true => o pilar tem um número POR REDE (Facebook e Instagram), guardados em
+  // metas["<key>_facebook"] / metas["<key>_instagram"]. Os demais seguem em metas["<key>"].
+  // Dado legado em metas["seguidores"] (sem rede) é lido como Instagram — era a rede
+  // que preenchia esse número na prática.
   const PILARES = [
-    {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9",
-     desc:"Crescimento da audiência (Instagram, TikTok, etc)", unit:"", scope:"acumulado"},
-    {key:"alcance",     label:"Alcance",     ico:"eye",         color:"#6366f1",
+    {key:"seguidores",  label:"Seguidores",          color:"#4F46E5", clara:"#c7cbf7", bg:"#eceffe", redes:true,
+     desc:"Crescimento da audiência em cada rede",             unit:"", scope:"acumulado"},
+    {key:"alcance",     label:"Alcance",             color:"#0EA5E9", clara:"#b3e3f9", bg:"#e6f5fd", redes:true,
      desc:"Pessoas únicas que viram publicações no mês",       unit:"", scope:"mensal"},
-    {key:"engajamento", label:"Engajamento", ico:"heart",       color:"#ec4899",
+    {key:"engajamento", label:"Engajamento",         color:"#E11D48", clara:"#fbc5d1", bg:"#ffeaf0", redes:true,
      desc:"Taxa média de engajamento por publicação",          unit:"%", scope:"mensal"},
-    {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
+    {key:"leads",       label:"Leads",               color:"#D97706", clara:"#f6d49b", bg:"#fdf1de", redes:false,
      desc:"Leads gerados via tráfego pago e orgânico",         unit:"", scope:"mensal"},
-    {key:"vendas",      label:"Vendas digital",     ico:"trending-up", color:"#16a34a",
+    {key:"vendas",      label:"Vendas digital",      color:"#059669", clara:"#a9e2c8", bg:"#e3f6ee", redes:false,
      desc:"Vendas/conversões atribuídas ao marketing",         unit:"",  scope:"mensal"},
-    {key:"faturamento", label:"Faturamento digital",ico:"dollar",      color:"#14b8a6",
+    {key:"faturamento", label:"Faturamento digital", color:"#0D9488", clara:"#a3ddd7", bg:"#e0f4f2", redes:false,
      desc:"Receita gerada por canais digitais (R$)",           unit:"",  scope:"mensal"},
-    {key:"roi",         label:"ROI",                ico:"chart",       color:"#7c3aed",
+    {key:"roi",         label:"ROI",                 color:"#7C3AED", clara:"#cfbdf8", bg:"#f0eafe", redes:false,
      desc:"Retorno sobre investimento em mídia paga",          unit:"x", scope:"mensal"},
   ];
+  const REDES = [
+    {id:"facebook",  label:"Facebook",  cor:"#1877F2", corEsc:"#0B5FCE", borda:"#d6e6fd", fundo:"#f7fbff", barra:"#4d94f7"},
+    {id:"instagram", label:"Instagram", cor:"#E4405F", corEsc:"#C1304A", borda:"#fbdde3", fundo:"#fffafb", barra:"#f0748a"},
+  ];
+  // Chave real no objeto metas: "seguidores_instagram" ou "leads"
+  const _mk = function(p, rede){ return p.redes ? (p.key+"_"+(rede||"instagram")) : p.key; };
+  // Todos os "slots" que contam no cabeçalho (3 pilares x 2 redes + 4 = 10)
+  const SLOTS = PILARES.reduce(function(acc,p){
+    if(p.redes) REDES.forEach(function(r){ acc.push({p:p, rede:r, key:_mk(p,r.id)}); });
+    else acc.push({p:p, rede:null, key:p.key});
+    return acc;
+  },[]);
+
+  // Ícones duotone (camada clara atrás + sólida na frente), um desenho por pilar
+  function _MetaIco({k, cor, clara, size}){
+    const sz=size||22;
+    const P={width:sz,height:sz,viewBox:"0 0 24 24",style:{display:"block"}};
+    if(k==="seguidores") return <svg {...P}>
+      <circle cx="5.6" cy="8.4" r="2.5" fill={clara}/><path d="M.9 17.4c0-2.4 2.1-3.9 4.7-3.9s4.7 1.5 4.7 3.9z" fill={clara}/>
+      <circle cx="18.4" cy="8.4" r="2.5" fill={clara}/><path d="M13.7 17.4c0-2.4 2.1-3.9 4.7-3.9s4.7 1.5 4.7 3.9z" fill={clara}/>
+      <circle cx="12" cy="7.1" r="3.5" fill={cor}/><path d="M5.4 20.2c0-3.3 3-5.4 6.6-5.4s6.6 2.1 6.6 5.4z" fill={cor}/></svg>;
+    if(k==="alcance") return <svg {...P} fill="none" strokeLinecap="round">
+      <path d="M4.3 4.3a10.9 10.9 0 0 0 0 15.4" stroke={clara} strokeWidth="2.1"/><path d="M19.7 4.3a10.9 10.9 0 0 1 0 15.4" stroke={clara} strokeWidth="2.1"/>
+      <path d="M8 8a5.6 5.6 0 0 0 0 8" stroke={cor} strokeWidth="2.3"/><path d="M16 8a5.6 5.6 0 0 1 0 8" stroke={cor} strokeWidth="2.3"/>
+      <circle cx="12" cy="12" r="2.7" fill={cor}/></svg>;
+    if(k==="engajamento") return <svg {...P}>
+      <path d="M12 2.6c-5.4 0-9.8 3.5-9.8 7.9 0 2.4 1.3 4.6 3.4 6.1v3.5c0 .6.7 1 1.2.6l3.1-2.3c.7.1 1.4.1 2.1.1 5.4 0 9.8-3.5 9.8-7.9S17.4 2.6 12 2.6z" fill={clara}/>
+      <path d="M12 15.1l-3.3-3.1a2.5 2.5 0 0 1 0-3.6 2.6 2.6 0 0 1 3.3-.1 2.6 2.6 0 0 1 3.3.1 2.5 2.5 0 0 1 0 3.6L12 15.1z" fill={cor}/></svg>;
+    if(k==="leads") return <svg {...P}>
+      <path d="M3.4 2.8h4.2v8.4a4.4 4.4 0 0 0 8.8 0V2.8h4.2v8.4a8.6 8.6 0 0 1-17.2 0z" fill={clara}/>
+      <rect x="3.4" y="2.8" width="4.2" height="3.9" rx=".7" fill={cor}/><rect x="16.4" y="2.8" width="4.2" height="3.9" rx=".7" fill={cor}/></svg>;
+    if(k==="vendas") return <svg {...P}>
+      <path d="M4.9 7h14.2l1.1 12.1a1.8 1.8 0 0 1-1.8 2H5.6a1.8 1.8 0 0 1-1.8-2z" fill={clara}/>
+      <path d="M8.5 8.6V6.3a3.5 3.5 0 0 1 7 0v2.3" stroke={cor} strokeWidth="2.1" fill="none" strokeLinecap="round"/>
+      <path d="M9.1 14.2l2.1 2.1 3.8-3.9" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+    if(k==="faturamento") return <svg {...P}>
+      <rect x="1.8" y="5.6" width="20.4" height="12.8" rx="2.4" fill={clara}/><circle cx="12" cy="12" r="3.3" fill={cor}/>
+      <rect x="4.2" y="9.4" width="2.1" height="5.2" rx="1" fill={cor}/><rect x="17.7" y="9.4" width="2.1" height="5.2" rx="1" fill={cor}/></svg>;
+    return <svg {...P}>
+      <circle cx="12" cy="12" r="9.5" fill={clara}/>
+      <path d="M6.8 15.4l3.4-4 2.7 2.5 4-5" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M14.2 8.9h3.1V12" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  }
+  const _LogoRede = function({id, size}){
+    const sz=size||15;
+    if(id==="facebook") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>;
+    return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16M12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.13 1.38C1.35 2.68.93 3.35.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.79.72 1.46 1.38 2.13.67.66 1.34 1.08 2.13 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56.79-.3 1.46-.72 2.13-1.38.66-.67 1.08-1.34 1.38-2.13.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91-.3-.79-.72-1.46-1.38-2.13C21.32 1.35 20.65.93 19.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0z"/><path d="M12 5.84A6.16 6.16 0 1 0 18.16 12 6.16 6.16 0 0 0 12 5.84zM12 16a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/><circle cx="18.41" cy="5.59" r="1.44"/></svg>;
+  };
 
   function _legacyToPilares(arr){
     const out={};
@@ -11312,7 +11036,12 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   }
 
   function _readSnapshot(key, ym){
-    const m = metas[key] || {};
+    // Fallback: "seguidores_instagram" sem dado lê o legado "seguidores" (número antigo sem rede)
+    let m = metas[key] || {};
+    if((!m||Object.keys(m).length===0) && /_instagram$/.test(key)){
+      const legado = metas[key.replace(/_instagram$/,"")];
+      if(legado && typeof legado==="object") m = legado;
+    }
     if(m.history && m.history[ym]) return {target:Number(m.history[ym].target||0), current:Number(m.history[ym].current||0)};
     // Fallback: se ainda não tem history mas é o mês atual, usa o root (legado)
     if(ym===_currentYM) return {target:Number(m.target||0), current:Number(m.current||0)};
@@ -11334,9 +11063,12 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
     const prevSnap = _readSnapshot(key, refMonth);
     history[refMonth] = Object.assign({}, prevSnap, {[field]: safeVal});
     const nextPilar = Object.assign({}, cur, {history:history});
-    // Mantém root current/target sincronizados com o mês CORRENTE (não com refMonth) pra leituras legacy
+    // Mantém root current/target sincronizados com o mês CORRENTE (não com refMonth) pra leituras legacy.
+    // Copia OS DOIS campos do snapshot (não só o editado): o widget do portal (13b) lê a raiz, e um
+    // pilar por rede recém-criado a partir do legado nasceria sem target e sumiria de lá.
     if(refMonth===_currentYM){
-      nextPilar[field] = safeVal;
+      nextPilar.target  = Number(history[refMonth].target||0);
+      nextPilar.current = Number(history[refMonth].current||0);
     }
     const next = Object.assign({}, metas, {[key]: nextPilar});
     persist(next);
@@ -11344,11 +11076,71 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
 
   const FF="'Inter',system-ui,-apple-system,sans-serif";
 
-  const atingidos = PILARES.filter(function(p){
-    const snap = _readSnapshot(p.key, refMonth);
+  const atingidos = SLOTS.filter(function(sl){
+    const snap = _readSnapshot(sl.key, refMonth);
     if(!snap.target) return false;
     return snap.current >= snap.target;
   }).length;
+
+  // ── Bloco ATUAL / META / PROGRESSO — usado dentro de cada rede e nos pilares de negócio ──
+  function _Campos({p, slotKey, cor, corTxt, borda, fundo, barra}){
+    const m = _readSnapshot(slotKey, refMonth);
+    const tgt = Number(m.target||0), cur = Number(m.current||0);
+    const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
+    const ok = tgt>0 && cur>=tgt;
+    const inp = {width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":(fundo||"#fff"),border:"1px solid "+(borda||"#e2e8f0"),borderRadius:9,padding:"8px 10px",fontSize:16,fontWeight:800,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"};
+    const lbl = {color:"#94a3b8",fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:4};
+    return <>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div>
+          <div style={lbl}>Atual</div>
+          <div style={{position:"relative"}}>
+            <input type="number" inputMode="decimal" value={cur||""} placeholder="0" disabled={readOnly}
+              onChange={function(e){ setField(slotKey,"current",e.target.value); }}
+              style={Object.assign({},inp,{color:corTxt||cor})}/>
+            {p.unit && <span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:10,fontWeight:700,pointerEvents:"none"}}>{p.unit}</span>}
+          </div>
+        </div>
+        <div>
+          <div style={lbl}>Meta</div>
+          <div style={{position:"relative"}}>
+            <input type="number" inputMode="decimal" value={tgt||""} placeholder="0" disabled={readOnly}
+              onChange={function(e){ setField(slotKey,"target",e.target.value); }}
+              style={Object.assign({},inp,{color:"#0f172a"})}/>
+            {p.unit && <span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:10,fontWeight:700,pointerEvents:"none"}}>{p.unit}</span>}
+          </div>
+        </div>
+      </div>
+      <div style={{marginTop:11}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+          <span style={{color:"#94a3b8",fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Progresso</span>
+          <span style={{color:ok?"#15803d":cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+        </div>
+        <div style={{background:"#eef2f7",borderRadius:99,height:6,overflow:"hidden"}}>
+          <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+(barra||cor)+","+cor+")",borderRadius:99,transition:"width .35s"}}/>
+        </div>
+      </div>
+    </>;
+  }
+  function _Secao({titulo, chip}){
+    return <div style={{display:"flex",alignItems:"center",gap:11,margin:"6px 0 0"}}>
+      <span style={{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:1.1,color:"#64748b"}}>{titulo}</span>
+      {chip&&<span style={{fontSize:10,fontWeight:800,color:"#94a3b8",background:"#fff",border:"1px solid #e9eef5",borderRadius:99,padding:"3px 10px"}}>{chip}</span>}
+      <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e9eef5,transparent)"}}/>
+    </div>;
+  }
+  const _CardTop = function({p}){
+    return <div style={{padding:"14px 17px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f2f6fa"}}>
+      <div style={{width:40,height:40,borderRadius:13,background:p.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 0 0 1px rgba(15,23,42,.05)"}}>
+        {_MetaIco({k:p.key, cor:p.color, clara:p.clara})}
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{p.label}</div>
+        <div style={{color:"#94a3b8",fontSize:9.5,marginTop:2,textTransform:"uppercase",letterSpacing:.7,fontWeight:800}}>{p.scope==="acumulado"?"Total acumulado":"Por mês"}</div>
+      </div>
+    </div>;
+  };
+  const _cardSty = {background:"#fff",border:"1px solid #e9eef5",borderRadius:18,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.05)",fontFamily:FF};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:FF}}>
 
@@ -11382,75 +11174,46 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-        <div style={{background:atingidos===PILARES.length?"#dcfce7":"#f1f5f9",color:atingidos===PILARES.length?"#15803d":"#0f172a",border:"1px solid "+(atingidos===PILARES.length?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1}}>
-          {atingidos}/{PILARES.length} atingidas
+        <div style={{background:atingidos===SLOTS.length?"#dcfce7":"#0f172a",color:atingidos===SLOTS.length?"#15803d":"#fff",border:"1px solid "+(atingidos===SLOTS.length?"#bbf7d0":"#0f172a"),borderRadius:99,padding:"6px 14px",fontSize:11,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"'tnum'"}}>
+          {atingidos}/{SLOTS.length} atingidas
         </div>
       </div>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12}}>
-      {PILARES.map(function(p){
-        const m = _readSnapshot(p.key, refMonth);
-        const tgt = Number(m.target||0);
-        const cur = Number(m.current||0);
-        const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
-        const ok = tgt>0 && cur>=tgt;
-        const status = ok ? {label:"Meta atingida", color:"#16a34a", bg:"#dcfce7", border:"#bbf7d0"}
-                          : pct>=70 ? {label:"No caminho",      color:"#a16207", bg:"#fef3c7", border:"#fde68a"}
-                          : pct>=40 ? {label:"Em progresso",    color:"#9a3412", bg:"#ffedd5", border:"#fed7aa"}
-                          : tgt===0 ? {label:"Nao definida",    color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"}
-                                    : {label:"Atrasada",        color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
-
-        return <div key={p.key} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:12,fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:11}}>
-            <div style={{width:38,height:38,borderRadius:11,background:p.color+"15",border:"1px solid "+p.color+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {typeof Ico==="function" && <Ico n={p.ico} size={18} color={p.color}/>}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{p.label}</div>
-              <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>
-                {p.scope==="acumulado"?"Total acumulado":"Por mes"}
-              </div>
-            </div>
-            <span style={{background:status.bg,color:status.color,border:"1px solid "+status.border,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>
-              {status.label}
-            </span>
+    {/* ═══ REDES SOCIAIS — Facebook e Instagram lado a lado ═══ */}
+    {_Secao({titulo:"Redes sociais", chip:"Facebook + Instagram"})}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax("+(_pxMob()?"280px":"330px")+",1fr))",gap:14}}>
+      {PILARES.filter(function(p){return p.redes;}).map(function(p){
+        return <div key={p.key} style={_cardSty}>
+          {_CardTop({p:p})}
+          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr"}}>
+            {REDES.map(function(r,i){
+              return <div key={r.id} style={{padding:"13px 15px 15px",borderLeft:(i>0&&!_pxMob())?"1px solid #f2f6fa":"none",borderTop:(i>0&&_pxMob())?"1px solid #f2f6fa":"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
+                  <div style={{width:26,height:26,borderRadius:8,background:r.cor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 9px "+r.cor+"55"}}>
+                    {_LogoRede({id:r.id})}
+                  </div>
+                  <b style={{fontSize:11.5,fontWeight:800,color:r.corEsc,letterSpacing:-.1}}>{r.label}</b>
+                </div>
+                {_Campos({p:p, slotKey:_mk(p,r.id), cor:r.cor, corTxt:r.corEsc, borda:r.borda, fundo:r.fundo, barra:r.barra})}
+              </div>;
+            })}
           </div>
+          <div style={{padding:"10px 17px 13px",fontSize:11,color:"#94a3b8",lineHeight:1.45,borderTop:"1px solid #f6f9fc",background:"#fcfdfe"}}>{p.desc}</div>
+        </div>;
+      })}
+    </div>
 
-          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
-            <div>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Atual</div>
-              <div style={{position:"relative"}}>
-                <input type="number" inputMode="decimal" value={cur||""} placeholder="0"
-                  onChange={function(e){ setField(p.key,"current",e.target.value); }}
-                  disabled={readOnly}
-                  style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:p.color,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
-                {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
-              </div>
-            </div>
-            <div>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Meta</div>
-              <div style={{position:"relative"}}>
-                <input type="number" inputMode="decimal" value={tgt||""} placeholder="0"
-                  onChange={function(e){ setField(p.key,"target",e.target.value); }}
-                  disabled={readOnly}
-                  style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:"#0f172a",outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
-                {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
-              </div>
-            </div>
+    {/* ═══ RESULTADO DO NEGÓCIO — número único, todos os canais somados ═══ */}
+    {_Secao({titulo:"Resultado do negócio", chip:"Todos os canais somados"})}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(238px,1fr))",gap:14}}>
+      {PILARES.filter(function(p){return !p.redes;}).map(function(p){
+        return <div key={p.key} style={_cardSty}>
+          {_CardTop({p:p})}
+          <div style={{padding:"14px 17px 16px"}}>
+            {_Campos({p:p, slotKey:p.key, cor:p.color})}
           </div>
-
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
-              <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Progresso</span>
-              <span style={{color:ok?"#15803d":p.color,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
-            </div>
-            <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+p.color+","+p.color+"cc)",borderRadius:99,transition:"width .35s"}}/>
-            </div>
-          </div>
-
-          <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45}}>{p.desc}</div>
+          <div style={{padding:"10px 17px 13px",fontSize:11,color:"#94a3b8",lineHeight:1.45,borderTop:"1px solid #f6f9fc",background:"#fcfdfe"}}>{p.desc}</div>
         </div>;
       })}
     </div>
@@ -52985,17 +52748,22 @@ function PortalTimeline({cl, clTasks, isMob}){
 ─────────────────────────────────────────────────────────────────────── */
 // Tipos UNIFICADOS — usados em Portal cliente, Sprint do DashSocio e Demanda Interna.
 // "material" resume os antigos folder/feira/comercial (que agora viram aliases de display).
+// routesFluxo:true => vira CARD na linha de produção (tasks). O resto vira demanda
+// em Estratégia > Demandas (client_demandas). Banner e Folder entraram na produção em 09/2026.
 const TIPOS_DEMANDA_CLIENTE = [
-  {id:"arte",        label:"Arte para redes sociais",   routesFluxo:true,  contentType:"arte"},
-  {id:"video",       label:"Vídeo",                     routesFluxo:true,  contentType:""},
-  {id:"trafego",     label:"Tráfego pago",              routesFluxo:false, contentType:"trafego"},
-  {id:"material",    label:"Material",                  routesFluxo:false, contentType:"material"},
-  {id:"operacional", label:"Operacional",               routesFluxo:false, contentType:"operacional"},
-  {id:"outro",       label:"Outro",                     routesFluxo:false},
+  {id:"arte",        label:"Card / Arte",        routesFluxo:true,  contentType:"arte",      ico:"image"},
+  {id:"carrossel",   label:"Carrossel",          routesFluxo:true,  contentType:"carrossel", ico:"image"},
+  {id:"video",       label:"Vídeo",              routesFluxo:true,  contentType:"",          ico:"film"},
+  {id:"banner",      label:"Banner",             routesFluxo:true,  contentType:"banner",    ico:"image"},
+  {id:"folder",      label:"Folder",             routesFluxo:true,  contentType:"folder",    ico:"image"},
+  {id:"trafego",     label:"Tráfego pago",       routesFluxo:false, contentType:"trafego"},
+  {id:"material",    label:"Material",           routesFluxo:false, contentType:"material"},
+  {id:"operacional", label:"Operacional",        routesFluxo:false, contentType:"operacional"},
+  {id:"outro",       label:"Outro",              routesFluxo:false},
 ];
-// Legacy: cards antigos com tipo "folder", "feira" ou "comercial" continuam funcionando
-// mas são exibidos como "Material" no UI. Use _normalizarTipoDemanda() pra display.
-const _LEGACY_TIPO_DEMANDA_MAP = {folder:"material", feira:"material", comercial:"material"};
+// Legacy: cards antigos com tipo "feira" ou "comercial" são exibidos como "Material".
+// "folder" saiu daqui — agora é um tipo de produção próprio.
+const _LEGACY_TIPO_DEMANDA_MAP = {feira:"material", comercial:"material"};
 function _normalizarTipoDemanda(id){ return _LEGACY_TIPO_DEMANDA_MAP[id]||id||"outro"; }
 
 function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}){
@@ -53014,7 +52782,65 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
   const [solDescricao,setSolDescricao]=useState("");
   const [solPrioridade,setSolPrioridade]=useState("media");
   const [solEnviando,setSolEnviando]=useState(false);
+  const [solOpen,setSolOpen]=useState(false);          // modal "Nova solicitação"
+  const [solFiles,setSolFiles]=useState([]);           // anexos escolhidos (File[]), máx 5 x 100 MB
+  const [solUploadPct,setSolUploadPct]=useState(null); // progresso do upload (0-100) ou null
+  const SOL_MAX_FILES=5, SOL_MAX_BYTES=100*1024*1024;
   const [verEntregues,setVerEntregues]=useState(true); // seção "Entregas concluídas" — sempre aberta
+
+  // ── Upload de anexo do portal pro bucket agency-files ──
+  // Até ~40 MB vai por POST simples; acima disso usa TUS (o proxy do Supabase corta POST grande).
+  const _portalUploadFile=async function(file,path,onPct){
+    const sb=window._sb;
+    const SMART=40*1024*1024;
+    if(file.size<=SMART){
+      const r=await sb.storage.from("agency-files").upload(path,file,{upsert:false,contentType:file.type||"application/octet-stream",cacheControl:"31536000"});
+      if(r&&r.error)throw r.error;
+      if(onPct)onPct(100);
+      return;
+    }
+    const {data:{session}}=await sb.auth.getSession();
+    const token=session&&session.access_token;
+    if(!token)throw new Error("Sessão expirada. Entre de novo.");
+    const sbUrl=sb.supabaseUrl||(sb.rest&&sb.rest.url?sb.rest.url.replace("/rest/v1",""):"");
+    if(!sbUrl)throw new Error("URL do Supabase não configurada");
+    const b64=function(x){try{return btoa(unescape(encodeURIComponent(x)));}catch(_){return btoa(x);}};
+    const meta=["bucketName "+b64("agency-files"),"objectName "+b64(path),"contentType "+b64(file.type||"application/octet-stream"),"cacheControl "+b64("31536000")].join(",");
+    const cr=await fetch(sbUrl+"/storage/v1/upload/resumable",{method:"POST",headers:{"Authorization":"Bearer "+token,"Tus-Resumable":"1.0.0","Upload-Length":String(file.size),"Upload-Metadata":meta,"x-upsert":"false"}});
+    if(!cr.ok)throw new Error("Falha ao iniciar upload ("+cr.status+")");
+    const loc=cr.headers.get("Location")||cr.headers.get("location");
+    if(!loc)throw new Error("Upload sem endereço de destino");
+    const upUrl=loc.indexOf("http")===0?loc:sbUrl+loc;
+    const CHUNK=6*1024*1024; let off=0;
+    while(off<file.size){
+      const end=Math.min(off+CHUNK,file.size);
+      const pr=await fetch(upUrl,{method:"PATCH",headers:{"Authorization":"Bearer "+token,"Tus-Resumable":"1.0.0","Upload-Offset":String(off),"Content-Type":"application/offset+octet-stream"},body:file.slice(off,end)});
+      if(!pr.ok)throw new Error("Falha no envio ("+pr.status+")");
+      const _prevOff=off;
+      off=Number(pr.headers.get("Upload-Offset")||pr.headers.get("upload-offset")||end);
+      // Guarda: se o servidor não avançou (ou devolveu lixo), aborta em vez de sair com arquivo incompleto
+      if(!isFinite(off)||off<=_prevOff)throw new Error("Upload não avançou — tente de novo");
+      if(onPct)onPct(Math.round(off/file.size*100));
+    }
+  };
+  const _addSolFiles=function(list){
+    const arr=Array.from(list||[]);
+    const next=solFiles.slice();
+    for(const f of arr){
+      if(next.length>=SOL_MAX_FILES){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Máximo de "+SOL_MAX_FILES+" arquivos por solicitação.",3500);break;}
+      if(f.size>SOL_MAX_BYTES){if(typeof pixelsToast!=="undefined")pixelsToast.warning(f.name+": acima de 100 MB, não anexado.",4000);continue;}
+      if(next.some(function(x){return x.name===f.name&&x.size===f.size;}))continue;
+      next.push(f);
+    }
+    setSolFiles(next);
+  };
+  const _fmtBytes=function(b){b=Number(b)||0;if(b<1024*1024)return Math.max(1,Math.round(b/1024))+" KB";return (b/1024/1024).toFixed(b<10*1024*1024?1:0)+" MB";};
+  const _fecharSol=function(){
+    if(solEnviando)return;
+    setSolOpen(false);
+    // Cancelou: não pode carregar anexo velho pra próxima solicitação
+    setSolFiles([]);setSolUploadPct(null);
+  };
 
   // Prazo padrão por prioridade (dias úteis)
   const PRAZO_POR_PRIORIDADE={baixa:30,media:14,alta:5,urgente:1};
@@ -53041,10 +52867,35 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       return;
     }
     setSolEnviando(true);
+    // Se o insert falhar depois do upload, apaga os arquivos que ficaram sem referência
+    let _pathsSubidos=[];
+    const _limparOrfaos=function(){
+      if(!_pathsSubidos.length||!window._sb)return;
+      try{window._sb.storage.from("agency-files").remove(_pathsSubidos).then(function(){}).catch(function(){});}catch(_){}
+      _pathsSubidos=[];
+    };
+    // Sobe os anexos (até 5 x 100 MB) e devolve a lista já com URL pública
+    const _uploadSolFiles=async function(prefix){
+      const out=[];
+      const total=solFiles.reduce(function(a,f){return a+f.size;},0)||1;
+      let done=0;
+      for(const f of solFiles){
+        const ext=(f.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
+        const path=prefix+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+"."+ext;
+        await _portalUploadFile(f,path,function(pct){
+          setSolUploadPct(Math.min(99,Math.round((done+f.size*pct/100)/total*100)));
+        });
+        done+=f.size;
+        const {data}=window._sb.storage.from("agency-files").getPublicUrl(path);
+        out.push({name:f.name,type:f.type||"application/octet-stream",size:f.size,url:data.publicUrl,path:path});
+      }
+      setSolUploadPct(solFiles.length?100:null);
+      return out;
+    };
     const _ehCategoria = String(solTipo||"").indexOf("cat:")===0;
     const tipoCfg=_ehCategoria
       ? {id:solTipo, routesFluxo:false}
-      : (TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;})||TIPOS_DEMANDA_CLIENTE[5]);
+      : (TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;})||TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id==="outro";}));
     const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
     const now=new Date().toISOString();
     const status=tipoCfg.routesFluxo?"rascunhos":"interno_demanda";
@@ -53068,7 +52919,10 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           }
           const _catMap={trafego:"trafego", material:"grafico", operacional:"outros", outro:"outros"};
           const _prioMap={baixa:"baixa", media:"normal", alta:"alta", urgente:"urgente"};
+          const _anexos=await _uploadSolFiles("demandas/"+_rootId);
+          _pathsSubidos=_anexos.map(function(a){return a.path;});
           const r=await window._sb.from("client_demandas").insert({
+            anexos:_anexos.map(function(a){return Object.assign({},a,{addedAt:new Date().toISOString(),addedBy:"Cliente: "+cl.name});}),
             client_id:_rootId,
             titulo:solTitulo.trim(),
             categoria:_ehCategoria?solTipo.slice(4):(_catMap[solTipo]||"outros"),
@@ -53085,17 +52939,27 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           });
           if(r&&r.error)throw r.error;
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! A equipe vai organizar as etapas e você acompanha o progresso por aqui.",4200);
-          setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");
+          setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");setSolFiles([]);setSolOpen(false);
         }catch(e){
+          _limparOrfaos();
           if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
         }
       }
+      setSolUploadPct(null);
       setSolEnviando(false);
       return;
     }
 
     if(typeof window!=="undefined"&&window._sb){
       try{
+        const _up=await _uploadSolFiles("tasks/"+id);
+        _pathsSubidos=_up.map(function(a){return a.path;});
+        const _nowFmtUp=new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        // Mesmo formato dos anexos do card. tipo "referencia": material que o cliente mandou.
+        const _filesTask=_up.map(function(a){
+          return {id:"pf-"+Date.now()+"-"+Math.random().toString(36).slice(2,8),name:a.name,type:a.type,size:a.size,url:a.url,storagePath:a.path,
+            uploading:false,progress:100,addedAt:_nowFmtUp,addedAtIso:now,addedBy:"Cliente: "+cl.name,tipo:"referencia"};
+        });
         const payload={
           id, title:solTitulo.trim(), status:status,
           description:solDescricao.trim(),
@@ -53110,7 +52974,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             user:"Cliente: "+cl.name,
           }],
           created_by:"portal_"+cl.id, created_at:now, col_entered_at:now,
-          tags:[], comments:[], files:[], watchers:[], cover:null,
+          tags:[], comments:[], files:_filesTask, watchers:[], cover:null,
           ajustar:false, is_alteracao:false, score:null,
           publish_date:null, publish_time:"09:00", bioter_unit:"",
           deadline_time:"", deleted_at:null,
@@ -53127,7 +52991,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
             origem:"portal", tipo_solicitacao:solTipo,
             contentType:contentType, content_type:contentType,
             assignee:assignee, assignees:assignee?[assignee]:[],
-            checklist:[], comments:[], files:[], tags:[], watchers:[],
+            checklist:[], comments:[], files:_filesTask, tags:[], watchers:[],
             timeline:payload.timeline,
             createdAt:now, created_at:now,
             colEnteredAt:now, col_entered_at:now,
@@ -53144,13 +53008,15 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
           };
           setTasks(function(prev){return [].concat(prev||[],[novoTaskReact]);});
         }
-        if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi pra equipe de design/vídeo.":"Sua solicitação está registrada."),4000);
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi direto pra equipe de produção.":"Sua solicitação está registrada."),4000);
         // Reset
-        setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");
+        setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");setSolFiles([]);setSolOpen(false);
       }catch(e){
+        _limparOrfaos();
         if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
       }
     }
+    setSolUploadPct(null);
     setSolEnviando(false);
   };
 
@@ -53183,6 +53049,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       video_short: {label:"Short",       color:"#dc2626", icon:"film"},
       foto:        {label:"Ajuste de template",color:"#ea580c", icon:"image"},
       banner:      {label:"Banner",      color:"#0891b2", icon:"image"},
+      folder:      {label:"Folder",      color:"#0e7490", icon:"image"},
       material:    {label:"Material",    color:"#475569", icon:"package"},
       trafego:     {label:"Tráfego",     color:"#f59e0b", icon:"megaphone"},
       operacional: {label:"Operacional", color:"#10b981", icon:"settings"},
@@ -53516,8 +53383,16 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
       </div>
       <div style={{minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Minhas demandas</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações que você enviou à equipe Pixels — acompanhe o andamento de cada uma.</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Acompanhe aqui suas solicitações</div>
       </div>
+      {/* Botão roxo Pixels — abre o cartão de Nova solicitação */}
+      <button type="button" onClick={function(){setSolOpen(true);}}
+        style={{marginLeft:"auto",background:"#7c3aed",color:"#fff",border:"none",borderRadius:12,padding:isMob?"11px 16px":"12px 22px",fontWeight:800,fontSize:isMob?13:14,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.2,display:"inline-flex",alignItems:"center",gap:9,boxShadow:"0 6px 18px rgba(124,58,237,.32)",transition:"all .15s",flexShrink:0}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#6d28d9";e.currentTarget.style.transform="translateY(-1px)";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#7c3aed";e.currentTarget.style.transform="";}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova solicitação
+      </button>
     </div>
 
 
@@ -53532,7 +53407,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
         <Ico n="zap" size={26} color={cl.color}/>
       </div>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Nenhuma demanda ainda</div>
-      <div style={{color:"#64748b",fontSize:12.5,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.55}}>Use o formulário acima pra enviar sua primeira solicitação pra equipe.</div>
+      <div style={{color:"#64748b",fontSize:12.5,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.55}}>Clique em “Nova solicitação” pra enviar sua primeira demanda pra equipe.</div>
     </div>}
 
     {/* Seções por sprint — visual compacto e clean */}
@@ -53648,91 +53523,154 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     })}
 
     {/* ── Separador forte entre "minhas demandas" e o formulário ── */}
-    <div style={{height:1,background:"#e2e8f0",margin:"14px 0 4px"}}/>
+    {/* ═══ MODAL: Nova solicitação (cartão) ═══ */}
+    {solOpen&&(function(){
+      const _lbl={color:"#475569",fontSize:10,fontWeight:800,marginBottom:6,textTransform:"uppercase",letterSpacing:.6};
+      const _inp={width:"100%",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13.5,fontFamily:"inherit",outline:"none",background:"#fafbfc",boxSizing:"border-box",color:"#0f172a"};
+      const _chip=function(active,cor){return {background:active?cor+"14":"#fff",color:active?cor:"#64748b",border:"1.5px solid "+(active?cor:"#e2e8f0"),borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:active?800:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:6};};
+      const _tipoAtual=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;});
+      const _vaiProducao=!!(_tipoAtual&&_tipoAtual.routesFluxo);
+      return <div onMouseDown={function(e){if(e.target===e.currentTarget)_fecharSol();}}
+        style={{position:"fixed",inset:0,zIndex:700,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:isMob?"flex-end":"flex-start",justifyContent:"center",padding:isMob?0:16,paddingTop:isMob?0:56,fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{background:"#fff",borderRadius:isMob?"20px 20px 0 0":20,width:"100%",maxWidth:660,maxHeight:isMob?"94vh":"88vh",overflow:"auto",boxShadow:"0 30px 70px rgba(15,23,42,0.28)",border:"1px solid #f1f5f9"}}>
 
-    {/* Form de Nova Solicitação inline */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"flex",alignItems:"center",gap:9}}>
-        <Ico n="zap" size={20} color={cl.color}/>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
-      </div>
+          {/* cabeçalho */}
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"18px 22px 16px",borderBottom:"1px solid #f1f5f9",position:"sticky",top:0,background:"#fff",zIndex:2}}>
+            <div style={{width:40,height:40,borderRadius:12,background:"#f3e8ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ico n="zap" size={19} color="#7c3aed"/>
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16.5,letterSpacing:-.3}}>Nova solicitação</div>
+              <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1}}>Conte o que precisa. A equipe recebe na hora.</div>
+            </div>
+            <button type="button" onClick={_fecharSol} title="Fechar"
+              style={{background:"none",border:"none",width:34,height:34,borderRadius:9,color:"#94a3b8",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+              onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="none";e.currentTarget.style.color="#94a3b8";}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
 
-      {/* Linha 1: título */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Título *</div>
-        <input value={solTitulo} onChange={function(e){setSolTitulo(e.target.value);}} maxLength={200}
-          placeholder="Ex: Banner promocional para Black Friday"
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",boxSizing:"border-box"}}/>
-      </div>
+          <div style={{padding:"18px 22px 8px",display:"flex",flexDirection:"column",gap:16}}>
+            {/* Título */}
+            <div>
+              <div style={_lbl}>Título *</div>
+              <input value={solTitulo} onChange={function(e){setSolTitulo(e.target.value);}} maxLength={200} autoFocus
+                placeholder="Ex: Banner promocional para Black Friday" style={_inp}/>
+            </div>
 
-      {/* Linha 2: descrição */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Descrição</div>
-        <textarea value={solDescricao} onChange={function(e){setSolDescricao(e.target.value);}} maxLength={5000} rows={3}
-          placeholder="Detalhe o que precisa, referências, prazos, etc..."
-          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",resize:"vertical",boxSizing:"border-box"}}/>
-      </div>
+            {/* Descrição */}
+            <div>
+              <div style={_lbl}>Descrição</div>
+              <textarea value={solDescricao} onChange={function(e){setSolDescricao(e.target.value);}} maxLength={5000} rows={4}
+                placeholder="Detalhe o que precisa, referências, prazos, etc…" style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+            </div>
 
-      {/* Linha 3: tipo — MESMAS categorias de Estrategia > Clientes > Demandas.
-          Arte/video continuam separados porque vao direto pro fluxo de producao;
-          o resto vira uma demanda (client_demandas) com a categoria escolhida. */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Conteúdo pras redes <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· vai direto pra equipe de produção</span></div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {TIPOS_DEMANDA_CLIENTE.filter(function(o){return o.routesFluxo;}).map(function(opt){
-            const active=solTipo===opt.id;
-            return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
-              style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
-              {opt.label}
-            </button>;
-          })}
+            {/* Tipo de conteúdo — vai direto pra produção */}
+            <div>
+              <div style={_lbl}>Tipo de conteúdo <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· vai direto pra equipe de produção</span></div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {TIPOS_DEMANDA_CLIENTE.filter(function(o){return o.routesFluxo;}).map(function(opt){
+                  const active=solTipo===opt.id;
+                  return <button key={opt.id} type="button" onClick={function(){setSolTipo(opt.id);}} style={_chip(active,"#7c3aed")}>
+                    {typeof Ico==="function"&&opt.ico&&<Ico n={opt.ico} size={12} color={active?"#7c3aed":"#94a3b8"}/>}
+                    {opt.label}
+                  </button>;
+                })}
+              </div>
+            </div>
+
+            {/* Projeto / demanda — acompanhada por etapas */}
+            <div>
+              <div style={_lbl}>Projeto / demanda <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· acompanhada por etapas</span></div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {(typeof DEM_CATEGORIAS!=="undefined"?DEM_CATEGORIAS:[]).map(function(c){
+                  const _id="cat:"+c.id; const active=solTipo===_id;
+                  return <button key={_id} type="button" onClick={function(){setSolTipo(_id);}} style={_chip(active,c.cor)}>
+                    {typeof Ico==="function"&&<Ico n={c.ico} size={11} color={active?c.cor:"#94a3b8"}/>}
+                    {c.label}
+                  </button>;
+                })}
+              </div>
+            </div>
+
+            {/* Prioridade */}
+            <div>
+              <div style={_lbl}>Prioridade</div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {[
+                  {id:"baixa",   l:"Baixa",   c:"#64748b", dias:30},
+                  {id:"media",   l:"Média",   c:"#f97316", dias:14},
+                  {id:"alta",    l:"Alta",    c:"#ef4444", dias:5},
+                  {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
+                ].map(function(pr){
+                  const active=solPrioridade===pr.id;
+                  return <button key={pr.id} type="button" onClick={function(){setSolPrioridade(pr.id);}} style={Object.assign({},_chip(active,pr.c),{borderRadius:11,padding:"8px 13px"})}>
+                    {pr.l}
+                    <span style={{display:"inline-flex",alignItems:"center",gap:3,opacity:.8,fontSize:10.5,fontWeight:600}}>
+                      <Ico n="clock" size={11}/> {pr.dias} {pr.dias===1?"dia útil":"dias úteis"}
+                    </span>
+                  </button>;
+                })}
+              </div>
+            </div>
+
+            {/* Anexos */}
+            <div>
+              <div style={_lbl}>Anexos <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· até {SOL_MAX_FILES} arquivos, 100 MB cada</span></div>
+              <input id="sol-file-input" type="file" multiple style={{display:"none"}}
+                onChange={function(e){_addSolFiles(e.target.files);e.target.value="";}}/>
+              <div
+                onDragOver={function(e){e.preventDefault();}}
+                onDrop={function(e){e.preventDefault();_addSolFiles(e.dataTransfer.files);}}
+                onClick={function(){if(solFiles.length<SOL_MAX_FILES){const el=document.getElementById("sol-file-input");if(el)el.click();}}}
+                style={{border:"1.5px dashed "+(solFiles.length>=SOL_MAX_FILES?"#e2e8f0":"#c4b5fd"),borderRadius:12,padding:"14px 16px",background:solFiles.length>=SOL_MAX_FILES?"#fafbfc":"#faf5ff",cursor:solFiles.length>=SOL_MAX_FILES?"default":"pointer",display:"flex",alignItems:"center",gap:11,transition:"all .15s"}}>
+                <div style={{width:34,height:34,borderRadius:10,background:"#fff",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#7c3aed"}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{solFiles.length>=SOL_MAX_FILES?"Limite de arquivos atingido":"Clique ou arraste arquivos aqui"}</div>
+                  <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{solFiles.length} de {SOL_MAX_FILES} · imagens, vídeos, PDF, documentos</div>
+                </div>
+              </div>
+              {solFiles.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:8}}>
+                {solFiles.map(function(f,i){
+                  return <div key={f.name+"_"+f.size} style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 11px"}}>
+                    <div style={{width:28,height:28,borderRadius:8,background:"#f3e8ff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <Ico n={String(f.type||"").indexOf("video/")===0?"film":String(f.type||"").indexOf("image/")===0?"image":"file"} size={13} color="#7c3aed"/>
+                    </div>
+                    <div style={{minWidth:0,flex:1}}>
+                      <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                      <div style={{color:"#94a3b8",fontSize:10.5}}>{_fmtBytes(f.size)}</div>
+                    </div>
+                    {!solEnviando&&<button type="button" onClick={function(){setSolFiles(solFiles.filter(function(_,j){return j!==i;}));}} title="Remover"
+                      style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16,lineHeight:1,padding:"2px 6px"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#ef4444";}} onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>×</button>}
+                  </div>;
+                })}
+              </div>}
+            </div>
+          </div>
+
+          {/* rodapé */}
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",position:"sticky",bottom:0,background:"#fff",flexWrap:"wrap"}}>
+            <div style={{color:"#94a3b8",fontSize:11.5,flex:1,minWidth:160}}>
+              {solEnviando
+                ? (solUploadPct!=null&&solFiles.length>0?("Enviando anexos… "+solUploadPct+"%"):"Enviando…")
+                : (_vaiProducao?"Vai direto pra equipe de produção.":"Vai pra Estratégia › Demandas, acompanhada por etapas.")}
+            </div>
+            <button type="button" onClick={_fecharSol} disabled={solEnviando}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 16px",color:"#475569",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button type="button" onClick={enviarSolicitacao} disabled={solEnviando}
+              style={{background:solEnviando?"#a78bfa":"#7c3aed",color:"#fff",border:"none",borderRadius:11,padding:"10px 20px",fontWeight:800,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 4px 14px rgba(124,58,237,.3)"}}
+              onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.background="#6d28d9";}}
+              onMouseLeave={function(e){if(!solEnviando)e.currentTarget.style.background="#7c3aed";}}>
+              {solEnviando?"Enviando…":<><Ico n="send" size={13}/> Enviar solicitação</>}
+            </button>
+          </div>
         </div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,margin:"12px 0 6px",textTransform:"uppercase",letterSpacing:.5}}>Projeto / demanda <span style={{color:"#94a3b8",fontWeight:600,textTransform:"none",letterSpacing:0}}>· acompanhada por etapas</span></div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {(typeof DEM_CATEGORIAS!=="undefined"?DEM_CATEGORIAS:[]).map(function(c){
-            const _id="cat:"+c.id;
-            const active=solTipo===_id;
-            return <button key={_id} onClick={function(){setSolTipo(_id);}}
-              style={{background:active?c.cor+"15":"#fff",color:active?c.cor:"#64748b",border:"1px solid "+(active?c.cor:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",display:"inline-flex",alignItems:"center",gap:5}}>
-              {typeof Ico==="function"&&<Ico n={c.ico} size={11} color={active?c.cor:"#94a3b8"}/>}
-              {c.label}
-            </button>;
-          })}
-        </div>
-      </div>
-
-      {/* Linha 4: prioridade — prazo de entrega já indicado em cada opção */}
-      <div>
-        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[
-            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:30},
-            {id:"media",   l:"Média",   c:"#f97316", dias:14},
-            {id:"alta",    l:"Alta",    c:"#ef4444", dias:5},
-            {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
-          ].map(function(p){
-            const active=solPrioridade===p.id;
-            return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
-              style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
-              {p.l}
-              <span style={{display:"inline-flex",alignItems:"center",gap:3,opacity:.85,fontSize:10.5}}>
-                <Ico n="clock" size={11}/> {p.dias} {p.dias===1?"dia útil":"dias úteis"}
-              </span>
-            </button>;
-          })}
-        </div>
-      </div>
-
-      {/* Botão Enviar — à esquerda, com mais respiro */}
-      <div style={{display:"flex",justifyContent:"flex-start",marginTop:14}}>
-        <button onClick={enviarSolicitacao} disabled={solEnviando}
-          style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
-          onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
-          onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
-          {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
-        </button>
-      </div>
-    </div>
+      </div>;
+    })()}
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
@@ -53981,7 +53919,7 @@ function NovaDemandaModal({cl, onClose}){
     }
     setEnviando(true);
     const _deadlineAuto=_calcDeadlineISO(prioridade);
-    const tipoCfg=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===tipo;})||TIPOS_DEMANDA_CLIENTE[5];
+    const tipoCfg=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===tipo;})||TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id==="outro";});
     const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
     const now=new Date().toISOString();
 
@@ -57418,8 +57356,15 @@ function _PwPerformance({rootId, unidade, tick, cor}){
 }
 
 /* ── METAS — pilares do ciclo ao vivo ── */
+// Seguidores/Alcance/Engajamento são POR REDE (chaves "<pilar>_facebook" / "<pilar>_instagram").
+// "legado" = chave antiga sem rede, lida como Instagram quando a nova ainda não existe.
 const _PW_PILARES=[
-  {key:"seguidores",label:"Seguidores"},{key:"alcance",label:"Alcance"},{key:"engajamento",label:"Engajamento"},
+  {key:"seguidores_facebook", label:"Seguidores · Facebook"},
+  {key:"seguidores_instagram",label:"Seguidores · Instagram", legado:"seguidores"},
+  {key:"alcance_facebook",    label:"Alcance · Facebook"},
+  {key:"alcance_instagram",   label:"Alcance · Instagram",    legado:"alcance"},
+  {key:"engajamento_facebook",label:"Engajamento · Facebook"},
+  {key:"engajamento_instagram",label:"Engajamento · Instagram",legado:"engajamento"},
   {key:"leads",label:"Leads"},{key:"vendas",label:"Vendas digital"},{key:"faturamento",label:"Faturamento"},{key:"roi",label:"ROI"},
 ];
 function _PwMetas({rootId, unidade, tick, cor}){
@@ -57434,7 +57379,9 @@ function _PwMetas({rootId, unidade, tick, cor}){
   },"clients",rootId,[rootId,unidade,tick]);
   if(data===null) return _PW_VAZIO("Carregando...");
   const _rows=_PW_PILARES.map(function(p){
-    const m=data[p.key]; if(!m||typeof m!=="object") return null;
+    let m=data[p.key];
+    if((!m||typeof m!=="object")&&p.legado) m=data[p.legado];
+    if(!m||typeof m!=="object") return null;
     const tg=Number(m.target)||0, cu=Number(m.current)||0;
     if(!tg) return null;
     return {label:p.label,target:tg,current:cu,pct:Math.min(100,Math.round(cu/tg*100)),ok:cu>=tg};
@@ -73432,7 +73379,7 @@ const DG_SPRINT_TIPOS = [
   {id:"outro",       label:"Outro",                     color:"#64748b", icon:"box"},
 ];
 // Legacy mapping pra cards antigos
-const _DG_LEGACY_TIPO = {folder:"material", feira:"material", comercial:"material", copy:"arte", relatorio:"outro", reuniao:"outro"};
+const _DG_LEGACY_TIPO = {feira:"material", comercial:"material", copy:"arte", relatorio:"outro", reuniao:"outro"};
 function _dgNormalizarTipo(id){ return _DG_LEGACY_TIPO[id]||id||"outro"; }
 // Auto-inferir tipo a partir do titulo quando o tipo real e vago (outro/vazio).
 // Usado nos cards do Sprint DashSocio pra pegar tags certas de tipos como
@@ -73577,6 +73524,82 @@ function _DGSec({title, sub, right, icon, accent}){
     </div>
     {right}
   </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  NOVAS SOLICITAÇÕES DO PORTAL — aviso pros sócios
+//  Lê public.notifications (type = 'portal_solicitacao'). As linhas são criadas
+//  por trigger no banco quando o cliente envia algo pelo portal — funciona
+//  entre navegadores diferentes (o sistema de alertas antigo era localStorage).
+// ═══════════════════════════════════════════════════════════════
+function _DGPortalSolicitacoes({isMob}){
+  const [itens,setItens]=useState([]);
+  const [aberto,setAberto]=useState(true);
+  const _load=function(){
+    const sb=window._sb; if(!sb)return;
+    sb.from("notifications").select("id,title,body,meta,created_at,read")
+      .eq("type","portal_solicitacao").eq("read",false)
+      .order("created_at",{ascending:false}).limit(30)
+      .then(function(r){ if(r&&!r.error&&Array.isArray(r.data))setItens(r.data); });
+  };
+  useEffect(function(){
+    _load();
+    const sb=window._sb; if(!sb||!sb.channel)return;
+    let ch=null;
+    try{
+      ch=sb.channel("dg-portal-solicitacoes")
+        .on("postgres_changes",{event:"*",schema:"public",table:"notifications"},function(){_load();})
+        .subscribe();
+    }catch(_){}
+    return function(){ try{ if(ch)sb.removeChannel(ch); }catch(_){} };
+  },[]);
+  const _marcar=function(ids){
+    const sb=window._sb; if(!sb||!ids.length)return;
+    setItens(function(p){return p.filter(function(n){return ids.indexOf(n.id)<0;});});
+    sb.from("notifications").update({read:true}).in("id",ids).then(function(r){ if(r&&r.error)_load(); });
+  };
+  const _quando=function(iso){
+    try{const d=new Date(iso),diff=(Date.now()-d.getTime())/60000;
+      if(diff<1)return "agora"; if(diff<60)return Math.round(diff)+" min";
+      if(diff<60*24)return Math.round(diff/60)+" h";
+      return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    }catch(_){return "";}
+  };
+  if(itens.length===0)return null;
+  return <section style={{background:"#fff",border:"1.5px solid #ddd6fe",borderRadius:16,overflow:"hidden",boxShadow:"0 6px 20px rgba(124,58,237,.10)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 16px",background:"linear-gradient(90deg,#f5f3ff,#fff)",cursor:"pointer"}} onClick={function(){setAberto(!aberto);}}>
+      <div style={{position:"relative",width:38,height:38,borderRadius:11,background:DG_PURPLE,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(124,58,237,.35)"}}>
+        <Ico n="zap" size={17} color="#fff"/>
+        <span style={{position:"absolute",top:-6,right:-6,minWidth:20,height:20,borderRadius:99,background:"#ef4444",color:"#fff",fontSize:10.5,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 5px",border:"2px solid #fff"}}>{itens.length}</span>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{itens.length===1?"Nova solicitação do portal":itens.length+" novas solicitações do portal"}</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Clientes enviaram pedidos que ainda ninguém viu</div>
+      </div>
+      <button type="button" onClick={function(e){e.stopPropagation();_marcar(itens.map(function(n){return n.id;}));}}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,whiteSpace:"nowrap"}}>Marcar todas como vistas</button>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"",transition:"transform .18s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    {aberto&&<div style={{padding:"6px 10px 10px",display:"flex",flexDirection:"column",gap:6}}>
+      {itens.map(function(n){
+        const m=n.meta||{};
+        const prod=m.destino==="producao";
+        return <div key={n.id} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",borderRadius:11,background:"#fafafa",border:"1px solid #f1f5f9"}}>
+          <span style={{fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",padding:"3px 8px",borderRadius:99,background:prod?"#ede9fe":"#e0f2fe",color:prod?"#6d28d9":"#0369a1",whiteSpace:"nowrap",flexShrink:0}}>{prod?"Produção":"Demandas"}</span>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.title}</div>
+            <div style={{color:"#64748b",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.body}</div>
+          </div>
+          <span style={{color:"#94a3b8",fontSize:10.5,whiteSpace:"nowrap",flexShrink:0}}>{_quando(n.created_at)}</span>
+          <button type="button" onClick={function(){_marcar([n.id]);}} title="Marcar como vista"
+            style={{background:"none",border:"1px solid #e2e8f0",borderRadius:8,width:28,height:28,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";}} onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </button>
+        </div>;
+      })}
+    </div>}
+  </section>;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -75056,6 +75079,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.6,marginTop:4,lineHeight:1.15}}>Sua semana num só lugar</div>
       <div style={{color:"#64748b",fontSize:12.5,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
     </div>
+
+    {/* ══════════ NOVAS SOLICITAÇÕES DO PORTAL — some quando não há nada novo ══════════ */}
+    <_DGPortalSolicitacoes isMob={isMob}/>
 
     {/* ══════════ AVALIAÇÕES PENDENTES — filtrado por sócio (Vinicius=copys+vídeo+internas; Gustavo=design+internas) ══════════ */}
     {(function(){
@@ -81037,6 +81063,26 @@ function _DemandaDetalhe({d, cat, prog, canEdit, isMob, onEditar, onExcluir, onS
     </div>
     {d.descricao && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",
       color:"#475569",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{d.descricao}</div>}
+    {/* Anexos enviados pelo cliente no portal (client_demandas.anexos) */}
+    {Array.isArray(d.anexos)&&d.anexos.length>0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"10px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:8}}>Anexos do cliente · {d.anexos.length}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {d.anexos.map(function(a,i){
+          const _t=String(a.type||"");
+          const _ico=_t.indexOf("video/")===0?"film":_t.indexOf("image/")===0?"image":"file";
+          const _mb=a.size?(a.size<1024*1024?Math.max(1,Math.round(a.size/1024))+" KB":(a.size/1024/1024).toFixed(a.size<10*1024*1024?1:0)+" MB"):"";
+          return <a key={(a.path||a.url||"")+i} href={a.url} target="_blank" rel="noopener noreferrer"
+            style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,background:"#f8fafc",border:"1px solid #f1f5f9",textDecoration:"none",color:"inherit"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.background="#faf5ff";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#f1f5f9";e.currentTarget.style.background="#f8fafc";}}>
+            <span style={{width:26,height:26,borderRadius:7,background:"#ede9fe",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={_ico} size={12} color="#7c3aed"/></span>
+            <span style={{flex:1,minWidth:0,color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name||"arquivo"}</span>
+            {_mb&&<span style={{color:"#94a3b8",fontSize:10.5,flexShrink:0}}>{_mb}</span>}
+            <Ico n="download" size={12} color="#94a3b8"/>
+          </a>;
+        })}
+      </div>
+    </div>}
     </>}
 
     {/* ── Tarefas ── */}
