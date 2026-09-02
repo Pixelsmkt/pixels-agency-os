@@ -26224,12 +26224,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     _filesDesc=[..._vids,..._imgs];
   }else if(tab==="publicacao"){
     // Carrossel/Arte única podem misturar imagens e vídeos (ex: post carrossel com vídeo).
-    // Renderiza vídeos junto com imagens pra editor/designer verem tudo.
-    let _imgs=_extractImgs(_filesAtuais,isFinalImg);
-    if(_imgs.length===0)_imgs=_extractImgs(_filesAtuais,isAnyImg);
-    let _vids=_extractImgs(_filesAtuais,isFinalVideo);
-    if(_vids.length===0)_vids=_extractImgs(_filesAtuais,isAnyVideo);
-    _filesDesc=[..._imgs,..._vids];
+    // ORDEM = ordem do array files (drag&drop da aba Arquivos do card), imagens e
+    // vídeos INTERCALADOS como no carrossel real. (Antes juntava [imagens..., vídeos...]
+    // e a lâmina em vídeo ia sempre pro fim, ignorando a ordem definida no card.)
+    _filesDesc=_extractImgs(_filesAtuais,function(f){return isFinalImg(f)||isFinalVideo(f);});
+    if(_filesDesc.length===0)_filesDesc=_extractImgs(_filesAtuais,function(f){return isAnyImg(f)||isAnyVideo(f);});
   }else{
     // Aba "copys" e outras: mostra imagens + vídeos como referências
     // (Hellen precisa ver os vídeos anexados antes de aprovar a copy)
