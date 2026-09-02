@@ -33724,6 +33724,30 @@ function _ArmazenamentoPanel({tasks}){
     };
   }, [_realBytes, _realFiles, _realLoading, _realError]);
 
+  // Backup no Drive VERIFICADO: sync_fotos_drive.py confere arquivo por arquivo no
+  // disco e espelha em public.drive_sync_log (kind='verified'). Só vídeo que consta
+  // lá pode ser apagado do Storage. Chave = "<nome>|<48 últimos chars da url>".
+  const [_driveLog, setDriveLog] = useState(null);   // Set de "task_id\u0000file_key" | null = carregando
+  const [_driveLogAt, setDriveLogAt] = useState(null); // última verificação (ISO)
+  const [_driveErr, setDriveErr] = useState(null);
+  const _loadDriveLog = React.useCallback(async function(){
+    if(!window._sb){ setDriveErr("Supabase não conectado"); setDriveLog(new Set()); return; }
+    try{
+      const _set = new Set(); let _max = null; let _from = 0;
+      while(true){
+        const {data, error} = await window._sb.from("drive_sync_log").select("task_id,file_key,synced_at").eq("kind","verified").range(_from, _from+999);
+        if(error){ setDriveErr(error.message); break; }
+        (data||[]).forEach(function(r){ _set.add(String(r.task_id)+"\u0000"+String(r.file_key)); if(r.synced_at && (!_max || r.synced_at>_max)) _max = r.synced_at; });
+        if(!data || data.length<1000) break;
+        _from += 1000;
+      }
+      setDriveLog(_set); setDriveLogAt(_max);
+    }catch(e){ setDriveErr((e&&e.message)||"erro"); setDriveLog(new Set()); }
+  }, []);
+  useEffect(function(){ _loadDriveLog(); }, [_loadDriveLog]);
+  const _driveKey = function(f){ return (String((f&&f.name)||"?"))+"|"+String((f&&f.url)||"").slice(-48); };
+  const _inDrive = function(taskId, f){ return !!(_driveLog && _driveLog.has(String(taskId)+"\u0000"+_driveKey(f))); };
+
   // Limpeza SÓ DE VÍDEOS (02/09/2026): vídeo é 80% dos bytes; imagens ficam e o
   // card guarda a miniatura do vídeo como imagem, então portal/portfólio não perdem capa.
   const _isVideoFile = function(f){
@@ -33751,9 +33775,9 @@ function _ArmazenamentoPanel({tasks}){
     const _list = (tasks||[]).filter(function(t){
       if(!t || t.deletedAt) return false;
       if(t.status !== "publicado" && t.status !== "reprovado") return false;
-      // Precisa ter VÍDEO no Storage pra fazer sentido limpar
+      // Precisa ter VÍDEO no Storage, COM cópia verificada no Drive
       const _files = Array.isArray(t.files) ? t.files : [];
-      const _hasFiles = _files.some(function(f){ return _isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0); });
+      const _hasFiles = _files.some(function(f){ return _isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0) && _inDrive(t.id, f); });
       if(!_hasFiles) return false;
       // Idade
       const _dtStr = t.completedAt || t.colEnteredAt || t.updated_at || t.updatedAt;
@@ -33775,11 +33799,26 @@ function _ArmazenamentoPanel({tasks}){
     // SO conta arquivos com tamanho REAL do bucket walk.
     // Ordem: Map do bucket (fonte da verdade) → f.size (fallback) → ignora
     let _totalFiles = 0, _totalBytes = 0, _missing = 0, _fromMap = 0, _fromSize = 0;
+    let _semBackup = 0, _semBackupBytes = 0;
     const _debugMisses = [];
+    // Vídeos elegíveis por idade/status mas SEM cópia verificada no Drive — ficam de fora
+    (tasks||[]).forEach(function(t){
+      if(!t || t.deletedAt) return;
+      if(t.status !== "publicado" && t.status !== "reprovado") return;
+      const _dtStr = t.completedAt || t.colEnteredAt || t.updated_at || t.updatedAt;
+      const _dt = _dtStr ? new Date(_dtStr).getTime() : NaN;
+      if(isNaN(_dt) || (_now - _dt) <= _limitMs) return;
+      (Array.isArray(t.files)?t.files:[]).forEach(function(f){
+        if(!(_isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
+        if(_inDrive(t.id, f)) return;
+        _semBackup++; if(typeof f.size==="number") _semBackupBytes += f.size;
+      });
+    });
     _list.forEach(function(t){
       const _files = Array.isArray(t.files) ? t.files : [];
       _files.forEach(function(f){
         if(!(_isVideoFile(f) && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
+        if(!_inDrive(t.id, f)) return;
         _totalFiles++;
         // Versão leve (-preview) sai junto
         const _pp = _previewPathOf(f);
@@ -33808,7 +33847,7 @@ function _ArmazenamentoPanel({tasks}){
         _missing++;
       });
     });
-    const _ready = !!_realSizeMap;
+    const _ready = !!_realSizeMap && !!_driveLog;
     if(_ready && _debugMisses.length>0){
       console.info("[armazenamento] paths nao encontrados no bucket (exemplos):", _debugMisses);
     }
@@ -33820,8 +33859,11 @@ function _ArmazenamentoPanel({tasks}){
       fromMap: _fromMap,
       fromSize: _fromSize,
       ready: _ready,
+      semBackup: _semBackup,
+      semBackupMB: Math.round(_semBackupBytes/(1024*1024)),
+      driveVazio: !!_driveLog && _driveLog.size===0,
     };
-  }, [tasks, meses, _realSizeMap]);
+  }, [tasks, meses, _realSizeMap, _driveLog]);
 
   // Extrai storagePath de uma URL do Supabase (fallback quando f.storagePath não existe)
   function _extractPath(url){
@@ -33859,6 +33901,7 @@ function _ArmazenamentoPanel({tasks}){
         const _vidIds = new Set();
         _files.forEach(function(f){
           if(!_isVideoFile(f)) return;
+          if(!_inDrive(_t.id, f)) return; // sem cópia verificada no Drive: NÃO apaga
           const _p = f.storagePath || _extractPath(f.url);
           if(!_p) return;
           _paths.push(_p);
@@ -33916,6 +33959,7 @@ function _ArmazenamentoPanel({tasks}){
     }
     setPreview(null);
     _fetchRealUsage();
+    _loadDriveLog();
   }
 
   // Calcula quanto tempo desde a última limpeza (dias)
@@ -34043,6 +34087,14 @@ function _ArmazenamentoPanel({tasks}){
         <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:10.5,fontWeight:800,padding:"4px 9px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Reprovado</span>
       </div>
 
+    {/* Backup no Drive — fonte: drive_sync_log (verificado no disco pelo sync_fotos_drive.py) */}
+    {_driveLog && _candidatos.driveVazio && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#991b1b",fontSize:12,fontWeight:600,lineHeight:1.45}}>
+      Nenhum arquivo com backup verificado no Drive{_driveErr?" ("+_driveErr+")":""}. O <code style={{fontSize:11}}>sync_fotos_drive.py</code> precisa estar rodando no PC da agência — ele confere cada arquivo no disco e registra aqui. Enquanto isso a limpeza fica bloqueada.
+    </div>}
+    {_driveLog && !_candidatos.driveVazio && <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#166534",fontSize:12,fontWeight:600,lineHeight:1.45,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <span>Só entra na limpeza vídeo com cópia <b>verificada no Google Drive</b>{_driveLogAt?" · última verificação "+new Date(_driveLogAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}.</span>
+      {_candidatos.semBackup>0 && <span style={{background:"#fff7ed",color:"#9a3412",border:"1px solid #fed7aa",borderRadius:6,padding:"3px 8px",fontSize:11}}>{_candidatos.semBackup} vídeo{_candidatos.semBackup>1?"s":""} (~{_candidatos.semBackupMB} MB) sem backup — ficam no Storage</span>}
+    </div>}
     {/* Preview */}
     <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"repeat(3, 1fr)",gap:10,marginBottom:14}}>
       <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
