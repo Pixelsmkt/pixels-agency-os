@@ -4817,6 +4817,29 @@ function PxVideo(props){
   return <video {...rest} ref={props.videoRef} key={real} src={real} poster={props.poster||meta.thumb||undefined} preload={preload} onError={onError}/>;
 }
 
+// ═══ Classificação vídeo × design de um card (fonte ÚNICA — 02/09/2026) ═══
+// Usada pela tela de Avaliações (06_aprovacoes) E pelos contadores do menu
+// (17_gestao_midia). Eram duas cópias e divergiam: card ia pra uma aba e o
+// badge vermelho contava na outra. A TAG (contentType) manda; setor e arquivos
+// só decidem quando o card não tem tipo definido.
+function pxIsVideoTask(t){
+  if(!t)return false;
+  var ct=String(t.contentType||t.tipo||"").toLowerCase();
+  if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video"||ct==="video_complexo"||ct==="video_feira"||ct==="video_dinamico")return true;
+  if(ct)return false;
+  var sect=String(t.sector||"").toLowerCase();
+  if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
+  var isVidByUrl=function(u){return typeof u==="string" && /\.(mp4|m4v|mov|webm|mkv|ogv|avi|wmv|3gp)(\?|#|$|\/)/i.test(u);};
+  var files=Array.isArray(t.files)?t.files:[];
+  for(var i=0;i<files.length;i++){
+    var f=files[i]; if(!f||f.isAnnotation===true||!f.url)continue;
+    if(String(f.type||"").toLowerCase().indexOf("video/")===0)return true;
+    if(isVidByUrl(f.url))return true;
+  }
+  if(t.cover&&isVidByUrl(t.cover))return true;
+  return false;
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -25713,29 +25736,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
   // Vinicius pediu (2026-06): cards de vídeo/corte vão pra sub-aba "Avaliação de vídeo".
-  const _isVideoTask=(t)=>{
-    const ct=String(t.contentType||t.tipo||"").toLowerCase();
-    if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video"||ct==="video_complexo"||ct==="video_feira")return true;
-    // A TAG manda (02/09/2026): card com tipo definido (carrossel, arte única, story...)
-    // fica em Avaliação de design mesmo que alguma lâmina/anexo seja vídeo.
-    // Setor e arquivos só decidem quando o card NÃO tem tipo.
-    if(ct)return false;
-    const sect=String(t.sector||"").toLowerCase();
-    if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
-    // Fallback: detecta pelo arquivo anexado. Se o card tem vídeo (mime video/* ou extensão),
-    // classifica como vídeo mesmo sem tag de tipo — assim vai pra Avaliação de vídeo em vez de sumir.
-    const _isVidByUrl=function(u){return typeof u==="string" && /\.(mp4|m4v|mov|webm|mkv|ogv|avi|wmv|3gp)(\?|#|$|\/)/i.test(u);};
-    const files=Array.isArray(t.files)?t.files:[];
-    const hasVideoFile=files.some(function(f){
-      if(!f||f.isAnnotation===true||!f.url)return false;
-      const type=String(f.type||"").toLowerCase();
-      if(type.indexOf("video/")===0)return true;
-      return _isVidByUrl(f.url);
-    });
-    if(hasVideoFile)return true;
-    if(t.cover && _isVidByUrl(t.cover))return true;
-    return false;
-  };
+  // Fonte única: pxIsVideoTask (00b_preview_util.jsx) — mesma regra na tela e no badge do menu.
+  const _isVideoTask=(t)=>pxIsVideoTask(t);
   const _pubAll=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao"));
   const pubQueue=_pubAll.filter(t=>!_isVideoTask(t)); // mantém o nome legado; agora = só design
   const pubVideoQueue=_pubAll.filter(t=>_isVideoTask(t));
@@ -39784,6 +39786,9 @@ function _cardPodeSerResp(u){
                     const _v    = isVid(_last);
                     // Destaque grande so pra video. Arte fica na grid simetrica abaixo.
                     if(!_v) return null;
+                    // Carrossel: a lâmina em vídeo fica na grid, na posição dela — nada de
+                    // puxar pro topo (regra do card de vídeo, não do carrossel).
+                    if(String(contentType||task.contentType||"").toLowerCase()==="carrossel") return null;
                     const _li   = finItems.findIndex(function(x){return x.id===_last.id;});
                     const _when = _pxFileWhen(_last);
                     const _mb   = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
@@ -47707,25 +47712,8 @@ export default function AgencyOS(){
   };
   // Pendências de aprovação — para destaque vermelho no menu
   // Contagens granulares por sub-aba pra mostrar badge ao lado de cada filho.
-  const _isVideoTask=(t)=>{
-    const ct=String(t.contentType||t.tipo||"").toLowerCase();
-    if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video"||ct==="video_complexo"||ct==="video_feira")return true;
-    const sect=String(t.sector||"").toLowerCase();
-    if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
-    // Fallback: detecta pelo arquivo anexado (mesmo comportamento do 06_aprovacoes.jsx).
-    // Sem isso, cards com vídeo mas sem tag ficam na fila mas fora do contador do sidebar.
-    const _isVidByUrl=function(u){return typeof u==="string" && /\.(mp4|m4v|mov|webm|mkv|ogv|avi|wmv|3gp)(\?|#|$|\/)/i.test(u);};
-    const files=Array.isArray(t.files)?t.files:[];
-    const hasVideoFile=files.some(function(f){
-      if(!f||f.isAnnotation===true||!f.url)return false;
-      const type=String(f.type||"").toLowerCase();
-      if(type.indexOf("video/")===0)return true;
-      return _isVidByUrl(f.url);
-    });
-    if(hasVideoFile)return true;
-    if(t.cover && _isVidByUrl(t.cover))return true;
-    return false;
-  };
+  // Fonte única: pxIsVideoTask (00b_preview_util.jsx) — mesma regra na tela e no badge do menu.
+  const _isVideoTask=(t)=>pxIsVideoTask(t);
   // Alinhado com copyQueue do 06_aprovacoes.jsx: TODOS os cards em status "demanda" entram (sem filtrar `ajustar`,
   // que era flag legada da época pré-coluna "Alteração de copy"). Garante badge da sidebar = contador da paginação.
   const pendingCopys=tasks.filter(t=>!t.deletedAt&&t.status==="demanda").length;
