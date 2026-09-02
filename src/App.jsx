@@ -33659,6 +33659,24 @@ function _ArmazenamentoPanel({tasks}){
     if(!window._sb){ setRealError("Supabase não conectado"); return; }
     setRealLoading(true);
     setRealError(null);
+    // Caminho rápido (02/09/2026): RPC pixels_storage_usage() devolve todos os objetos
+    // de TODOS os buckets em uma chamada (~1 s). O walk recursivo abaixo (~500 list()
+    // sequenciais, 2-3 min) fica só como fallback.
+    try{
+      const _rpc = await window._sb.rpc("pixels_storage_usage");
+      if(_rpc && !_rpc.error && Array.isArray(_rpc.data) && _rpc.data.length>0){
+        let _b = 0, _n = 0; const _m = {};
+        _rpc.data.forEach(function(o){
+          const _sz = Number(o.size)||0;
+          _b += _sz; _n++;
+          if(o.bucket==="agency-files") _m[o.name] = _sz;
+        });
+        setRealBytes(_b); setRealFiles(_n); setRealSizeMap(_m);
+        setRealLoading(false);
+        return;
+      }
+      if(_rpc && _rpc.error) console.warn("[armazenamento] rpc pixels_storage_usage:", _rpc.error.message, "— usando walk");
+    }catch(e){ console.warn("[armazenamento] rpc falhou, usando walk:", e && e.message||e); }
     try{
       let _totalBytes = 0, _totalFiles = 0;
       let _failed = false;
@@ -34007,7 +34025,7 @@ function _ArmazenamentoPanel({tasks}){
           </span>}
           {_uso.hasError && <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Erro: {_uso.errorMsg}</span>}
         </div>
-        <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Uso atual do Supabase Storage. Plano Pro: 100 GB. Drive tem backup completo.</div>
+        <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Uso atual do Supabase Storage (todos os buckets). Plano Pro: 100 GB.</div>
       </div>
       <button onClick={_fetchRealUsage} disabled={_realLoading} title="Recalcular a partir do bucket"
         style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,color:"#475569",cursor:_realLoading?"not-allowed":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:_realLoading?.6:1,flexShrink:0}}>
