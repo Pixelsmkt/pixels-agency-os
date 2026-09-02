@@ -10859,7 +10859,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
     {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9", redes:true,
      desc:"Crescimento da audiência em cada rede",             unit:"", scope:"acumulado"},
     {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
-     desc:"Leads gerados via tráfego pago e orgânico",         unit:"", scope:"mensal"},
+     desc:"Leads gerados via tráfego pago",         unit:"", scope:"mensal"},
     {key:"vendas",      label:"Vendas digital",     ico:"trending-up", color:"#16a34a",
      desc:"Vendas/conversões atribuídas ao marketing",         unit:"",  scope:"mensal"},
     {key:"faturamento", label:"Faturamento digital",ico:"dollar",      color:"#14b8a6",
@@ -11051,7 +11051,6 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Metas — {unitLabel || cl.name}</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>5 pilares fixos: o que combinamos no início do ciclo e onde estamos agora</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -11103,7 +11102,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{p.label}</div>
               <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>
-                {p.scope==="acumulado"?"Total acumulado":"Por mês"}
+                {p.scope==="acumulado"?"Nas redes sociais":"Por mês"}
               </div>
             </div>
             <span style={{background:status.bg,color:status.color,border:"1px solid "+status.border,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>
@@ -11119,21 +11118,19 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             const stgt = Number(sm.target||0), scur = Number(sm.current||0);
             const corNum = rede ? rede.cor : p.color;
             const _idx = rede ? REDES.findIndex(function(r){return r.id===rede.id;}) : -1;
-            const _alt = function(d){ if(!rede) return; const n=(_idx+d+REDES.length)%REDES.length; setRedeSel(REDES[n].id); };
-            const _seta = function(d, titulo){
-              return <button type="button" title={titulo} onClick={function(e){e.preventDefault();e.stopPropagation();_alt(d);}}
-                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",flexShrink:0,padding:0}}
-                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
-                onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">{d<0?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}</svg>
-              </button>;
-            };
             return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {rede && <div style={{display:"flex",alignItems:"center",gap:7}}>
-                {_seta(-1,"Rede anterior")}
-                <span style={{width:22,height:22,borderRadius:6,background:rede.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_logoRede(rede.id,13)}</span>
-                <span style={{color:rede.cor,fontSize:11.5,fontWeight:800,letterSpacing:-.1,flex:1}}>{rede.label}</span>
-                {_seta(1,"Próxima rede")}
+              {rede && <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {/* Seletor de rede: os dois logos lado a lado, o escolhido colorido, o outro cinza claro */}
+                {REDES.map(function(r){
+                  const on = r.id===rede.id;
+                  return <button key={r.id} type="button" title={on?r.label:("Ver "+r.label)} onClick={function(e){e.preventDefault();e.stopPropagation();setRedeSel(r.id);}}
+                    style={{display:"inline-flex",alignItems:"center",gap:6,background:"none",border:"none",padding:0,cursor:on?"default":"pointer",fontFamily:FF,transition:"opacity .15s"}}
+                    onMouseEnter={function(e){if(!on)e.currentTarget.style.opacity=".75";}}
+                    onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+                    <span style={{width:22,height:22,borderRadius:6,background:on?r.cor:"#e2e8f0",color:on?"#fff":"#cbd5e1",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s"}}>{_logoRede(r.id,13)}</span>
+                    {on && <span style={{color:r.cor,fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{r.label}</span>}
+                  </button>;
+                })}
               </div>}
               <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
                 <div>
@@ -11165,9 +11162,6 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
       })}
     </div>
 
-    <div style={{background:"#f8fafc",border:"0.5px dashed #cbd5e1",borderRadius:12,padding:"11px 14px",color:"#64748b",fontSize:11.5,lineHeight:1.5,fontFamily:FF}}>
-      Atualizado em tempo real entre Estrategia &gt; Clientes e o Portal do cliente. Socios e gestores editam, cliente acompanha em modo leitura no portal.
-    </div>
 
   </div>;
 }
