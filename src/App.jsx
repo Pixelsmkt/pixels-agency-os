@@ -10855,71 +10855,35 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   const _currentYM = _ymKey(new Date());
   const [refMonth, setRefMonth] = useState(_currentYM);
 
-  // redes:true => o pilar tem um número POR REDE (Facebook e Instagram), guardados em
-  // metas["<key>_facebook"] / metas["<key>_instagram"]. Os demais seguem em metas["<key>"].
-  // Dado legado em metas["seguidores"] (sem rede) é lido como Instagram — era a rede
-  // que preenchia esse número na prática.
   const PILARES = [
-    {key:"seguidores",  label:"Seguidores",          color:"#4F46E5", clara:"#c7cbf7", bg:"#eceffe", redes:true,
+    {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9", redes:true,
      desc:"Crescimento da audiência em cada rede",             unit:"", scope:"acumulado"},
-    {key:"alcance",     label:"Alcance",             color:"#0EA5E9", clara:"#b3e3f9", bg:"#e6f5fd", redes:true,
+    {key:"alcance",     label:"Alcance",     ico:"eye",         color:"#6366f1",
      desc:"Pessoas únicas que viram publicações no mês",       unit:"", scope:"mensal"},
-    {key:"engajamento", label:"Engajamento",         color:"#E11D48", clara:"#fbc5d1", bg:"#ffeaf0", redes:true,
+    {key:"engajamento", label:"Engajamento", ico:"heart",       color:"#ec4899",
      desc:"Taxa média de engajamento por publicação",          unit:"%", scope:"mensal"},
-    {key:"leads",       label:"Leads",               color:"#D97706", clara:"#f6d49b", bg:"#fdf1de", redes:false,
+    {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
      desc:"Leads gerados via tráfego pago e orgânico",         unit:"", scope:"mensal"},
-    {key:"vendas",      label:"Vendas digital",      color:"#059669", clara:"#a9e2c8", bg:"#e3f6ee", redes:false,
+    {key:"vendas",      label:"Vendas digital",     ico:"trending-up", color:"#16a34a",
      desc:"Vendas/conversões atribuídas ao marketing",         unit:"",  scope:"mensal"},
-    {key:"faturamento", label:"Faturamento digital", color:"#0D9488", clara:"#a3ddd7", bg:"#e0f4f2", redes:false,
+    {key:"faturamento", label:"Faturamento digital",ico:"dollar",      color:"#14b8a6",
      desc:"Receita gerada por canais digitais (R$)",           unit:"",  scope:"mensal"},
-    {key:"roi",         label:"ROI",                 color:"#7C3AED", clara:"#cfbdf8", bg:"#f0eafe", redes:false,
+    {key:"roi",         label:"ROI",                ico:"chart",       color:"#7c3aed",
      desc:"Retorno sobre investimento em mídia paga",          unit:"x", scope:"mensal"},
   ];
+
+  // Seguidores tem um número por rede: metas["seguidores_facebook"] e metas["seguidores_instagram"].
+  // O legado metas["seguidores"] (sem rede) é lido como Instagram até a primeira edição.
   const REDES = [
-    {id:"facebook",  label:"Facebook",  cor:"#1877F2", corEsc:"#0B5FCE", borda:"#d6e6fd", fundo:"#f7fbff", barra:"#4d94f7"},
-    {id:"instagram", label:"Instagram", cor:"#E4405F", corEsc:"#C1304A", borda:"#fbdde3", fundo:"#fffafb", barra:"#f0748a"},
+    {id:"facebook",  label:"Facebook",  cor:"#1877F2"},
+    {id:"instagram", label:"Instagram", cor:"#E4405F"},
   ];
-  // Chave real no objeto metas: "seguidores_instagram" ou "leads"
-  const _mk = function(p, rede){ return p.redes ? (p.key+"_"+(rede||"instagram")) : p.key; };
-  // Todos os "slots" que contam no cabeçalho (3 pilares x 2 redes + 4 = 10)
+  const _slotKey = function(p, redeId){ return p.redes ? (p.key+"_"+redeId) : p.key; };
   const SLOTS = PILARES.reduce(function(acc,p){
-    if(p.redes) REDES.forEach(function(r){ acc.push({p:p, rede:r, key:_mk(p,r.id)}); });
-    else acc.push({p:p, rede:null, key:p.key});
+    if(p.redes) REDES.forEach(function(r){ acc.push(_slotKey(p,r.id)); }); else acc.push(p.key);
     return acc;
   },[]);
-
-  // Ícones duotone (camada clara atrás + sólida na frente), um desenho por pilar
-  function _MetaIco({k, cor, clara, size}){
-    const sz=size||22;
-    const P={width:sz,height:sz,viewBox:"0 0 24 24",style:{display:"block"}};
-    if(k==="seguidores") return <svg {...P}>
-      <circle cx="5.6" cy="8.4" r="2.5" fill={clara}/><path d="M.9 17.4c0-2.4 2.1-3.9 4.7-3.9s4.7 1.5 4.7 3.9z" fill={clara}/>
-      <circle cx="18.4" cy="8.4" r="2.5" fill={clara}/><path d="M13.7 17.4c0-2.4 2.1-3.9 4.7-3.9s4.7 1.5 4.7 3.9z" fill={clara}/>
-      <circle cx="12" cy="7.1" r="3.5" fill={cor}/><path d="M5.4 20.2c0-3.3 3-5.4 6.6-5.4s6.6 2.1 6.6 5.4z" fill={cor}/></svg>;
-    if(k==="alcance") return <svg {...P} fill="none" strokeLinecap="round">
-      <path d="M4.3 4.3a10.9 10.9 0 0 0 0 15.4" stroke={clara} strokeWidth="2.1"/><path d="M19.7 4.3a10.9 10.9 0 0 1 0 15.4" stroke={clara} strokeWidth="2.1"/>
-      <path d="M8 8a5.6 5.6 0 0 0 0 8" stroke={cor} strokeWidth="2.3"/><path d="M16 8a5.6 5.6 0 0 1 0 8" stroke={cor} strokeWidth="2.3"/>
-      <circle cx="12" cy="12" r="2.7" fill={cor}/></svg>;
-    if(k==="engajamento") return <svg {...P}>
-      <path d="M12 2.6c-5.4 0-9.8 3.5-9.8 7.9 0 2.4 1.3 4.6 3.4 6.1v3.5c0 .6.7 1 1.2.6l3.1-2.3c.7.1 1.4.1 2.1.1 5.4 0 9.8-3.5 9.8-7.9S17.4 2.6 12 2.6z" fill={clara}/>
-      <path d="M12 15.1l-3.3-3.1a2.5 2.5 0 0 1 0-3.6 2.6 2.6 0 0 1 3.3-.1 2.6 2.6 0 0 1 3.3.1 2.5 2.5 0 0 1 0 3.6L12 15.1z" fill={cor}/></svg>;
-    if(k==="leads") return <svg {...P}>
-      <path d="M3.4 2.8h4.2v8.4a4.4 4.4 0 0 0 8.8 0V2.8h4.2v8.4a8.6 8.6 0 0 1-17.2 0z" fill={clara}/>
-      <rect x="3.4" y="2.8" width="4.2" height="3.9" rx=".7" fill={cor}/><rect x="16.4" y="2.8" width="4.2" height="3.9" rx=".7" fill={cor}/></svg>;
-    if(k==="vendas") return <svg {...P}>
-      <path d="M4.9 7h14.2l1.1 12.1a1.8 1.8 0 0 1-1.8 2H5.6a1.8 1.8 0 0 1-1.8-2z" fill={clara}/>
-      <path d="M8.5 8.6V6.3a3.5 3.5 0 0 1 7 0v2.3" stroke={cor} strokeWidth="2.1" fill="none" strokeLinecap="round"/>
-      <path d="M9.1 14.2l2.1 2.1 3.8-3.9" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-    if(k==="faturamento") return <svg {...P}>
-      <rect x="1.8" y="5.6" width="20.4" height="12.8" rx="2.4" fill={clara}/><circle cx="12" cy="12" r="3.3" fill={cor}/>
-      <rect x="4.2" y="9.4" width="2.1" height="5.2" rx="1" fill={cor}/><rect x="17.7" y="9.4" width="2.1" height="5.2" rx="1" fill={cor}/></svg>;
-    return <svg {...P}>
-      <circle cx="12" cy="12" r="9.5" fill={clara}/>
-      <path d="M6.8 15.4l3.4-4 2.7 2.5 4-5" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M14.2 8.9h3.1V12" stroke={cor} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-  }
-  const _LogoRede = function({id, size}){
-    const sz=size||15;
+  const _logoRede = function(id, sz){
     if(id==="facebook") return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.96.93-1.96 1.89v2.25h3.33l-.53 3.49h-2.8V24C19.61 23.1 24 18.1 24 12.07z"/></svg>;
     return <svg width={sz} height={sz} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41-.56-.22-.96-.48-1.38-.9-.42-.42-.68-.82-.9-1.38-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16M12 0C8.74 0 8.33.01 7.05.07 5.78.13 4.9.33 4.14.63c-.79.3-1.46.72-2.13 1.38C1.35 2.68.93 3.35.63 4.14.33 4.9.13 5.78.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.06 1.27.26 2.15.56 2.91.3.79.72 1.46 1.38 2.13.67.66 1.34 1.08 2.13 1.38.76.3 1.64.5 2.91.56C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c1.27-.06 2.15-.26 2.91-.56.79-.3 1.46-.72 2.13-1.38.66-.67 1.08-1.34 1.38-2.13.3-.76.5-1.64.56-2.91.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.06-1.27-.26-2.15-.56-2.91-.3-.79-.72-1.46-1.38-2.13C21.32 1.35 20.65.93 19.86.63c-.76-.3-1.64-.5-2.91-.56C15.67.01 15.26 0 12 0z"/><path d="M12 5.84A6.16 6.16 0 1 0 18.16 12 6.16 6.16 0 0 0 12 5.84zM12 16a4 4 0 1 1 4-4 4 4 0 0 1-4 4z"/><circle cx="18.41" cy="5.59" r="1.44"/></svg>;
   };
@@ -11036,9 +11000,8 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
   }
 
   function _readSnapshot(key, ym){
-    // Fallback: "seguidores_instagram" sem dado lê o legado "seguidores" (número antigo sem rede)
     let m = metas[key] || {};
-    if((!m||Object.keys(m).length===0) && /_instagram$/.test(key)){
+    if(Object.keys(m).length===0 && /_instagram$/.test(key)){
       const legado = metas[key.replace(/_instagram$/,"")];
       if(legado && typeof legado==="object") m = legado;
     }
@@ -11063,9 +11026,7 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
     const prevSnap = _readSnapshot(key, refMonth);
     history[refMonth] = Object.assign({}, prevSnap, {[field]: safeVal});
     const nextPilar = Object.assign({}, cur, {history:history});
-    // Mantém root current/target sincronizados com o mês CORRENTE (não com refMonth) pra leituras legacy.
-    // Copia OS DOIS campos do snapshot (não só o editado): o widget do portal (13b) lê a raiz, e um
-    // pilar por rede recém-criado a partir do legado nasceria sem target e sumiria de lá.
+    // Mantém root current/target sincronizados com o mês CORRENTE (não com refMonth) pra leituras legacy
     if(refMonth===_currentYM){
       nextPilar.target  = Number(history[refMonth].target||0);
       nextPilar.current = Number(history[refMonth].current||0);
@@ -11076,71 +11037,11 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
 
   const FF="'Inter',system-ui,-apple-system,sans-serif";
 
-  const atingidos = SLOTS.filter(function(sl){
-    const snap = _readSnapshot(sl.key, refMonth);
+  const atingidos = SLOTS.filter(function(k){
+    const snap = _readSnapshot(k, refMonth);
     if(!snap.target) return false;
     return snap.current >= snap.target;
   }).length;
-
-  // ── Bloco ATUAL / META / PROGRESSO — usado dentro de cada rede e nos pilares de negócio ──
-  function _Campos({p, slotKey, cor, corTxt, borda, fundo, barra}){
-    const m = _readSnapshot(slotKey, refMonth);
-    const tgt = Number(m.target||0), cur = Number(m.current||0);
-    const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
-    const ok = tgt>0 && cur>=tgt;
-    const inp = {width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":(fundo||"#fff"),border:"1px solid "+(borda||"#e2e8f0"),borderRadius:9,padding:"8px 10px",fontSize:16,fontWeight:800,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"};
-    const lbl = {color:"#94a3b8",fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:4};
-    return <>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <div>
-          <div style={lbl}>Atual</div>
-          <div style={{position:"relative"}}>
-            <input type="number" inputMode="decimal" value={cur||""} placeholder="0" disabled={readOnly}
-              onChange={function(e){ setField(slotKey,"current",e.target.value); }}
-              style={Object.assign({},inp,{color:corTxt||cor})}/>
-            {p.unit && <span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:10,fontWeight:700,pointerEvents:"none"}}>{p.unit}</span>}
-          </div>
-        </div>
-        <div>
-          <div style={lbl}>Meta</div>
-          <div style={{position:"relative"}}>
-            <input type="number" inputMode="decimal" value={tgt||""} placeholder="0" disabled={readOnly}
-              onChange={function(e){ setField(slotKey,"target",e.target.value); }}
-              style={Object.assign({},inp,{color:"#0f172a"})}/>
-            {p.unit && <span style={{position:"absolute",right:9,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:10,fontWeight:700,pointerEvents:"none"}}>{p.unit}</span>}
-          </div>
-        </div>
-      </div>
-      <div style={{marginTop:11}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
-          <span style={{color:"#94a3b8",fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Progresso</span>
-          <span style={{color:ok?"#15803d":cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
-        </div>
-        <div style={{background:"#eef2f7",borderRadius:99,height:6,overflow:"hidden"}}>
-          <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+(barra||cor)+","+cor+")",borderRadius:99,transition:"width .35s"}}/>
-        </div>
-      </div>
-    </>;
-  }
-  function _Secao({titulo, chip}){
-    return <div style={{display:"flex",alignItems:"center",gap:11,margin:"6px 0 0"}}>
-      <span style={{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:1.1,color:"#64748b"}}>{titulo}</span>
-      {chip&&<span style={{fontSize:10,fontWeight:800,color:"#94a3b8",background:"#fff",border:"1px solid #e9eef5",borderRadius:99,padding:"3px 10px"}}>{chip}</span>}
-      <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e9eef5,transparent)"}}/>
-    </div>;
-  }
-  const _CardTop = function({p}){
-    return <div style={{padding:"14px 17px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f2f6fa"}}>
-      <div style={{width:40,height:40,borderRadius:13,background:p.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"inset 0 0 0 1px rgba(15,23,42,.05)"}}>
-        {_MetaIco({k:p.key, cor:p.color, clara:p.clara})}
-      </div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{p.label}</div>
-        <div style={{color:"#94a3b8",fontSize:9.5,marginTop:2,textTransform:"uppercase",letterSpacing:.7,fontWeight:800}}>{p.scope==="acumulado"?"Total acumulado":"Por mês"}</div>
-      </div>
-    </div>;
-  };
-  const _cardSty = {background:"#fff",border:"1px solid #e9eef5",borderRadius:18,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.05)",fontFamily:FF};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:FF}}>
 
@@ -11174,46 +11075,92 @@ function CMetas({cl, accentColor, readOnly, unitId, unitLabel}){
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
-        <div style={{background:atingidos===SLOTS.length?"#dcfce7":"#0f172a",color:atingidos===SLOTS.length?"#15803d":"#fff",border:"1px solid "+(atingidos===SLOTS.length?"#bbf7d0":"#0f172a"),borderRadius:99,padding:"6px 14px",fontSize:11,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"'tnum'"}}>
+        <div style={{background:atingidos===SLOTS.length?"#dcfce7":"#f1f5f9",color:atingidos===SLOTS.length?"#15803d":"#0f172a",border:"1px solid "+(atingidos===SLOTS.length?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1}}>
           {atingidos}/{SLOTS.length} atingidas
         </div>
       </div>
     </div>
 
-    {/* ═══ REDES SOCIAIS — Facebook e Instagram lado a lado ═══ */}
-    {_Secao({titulo:"Redes sociais", chip:"Facebook + Instagram"})}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax("+(_pxMob()?"280px":"330px")+",1fr))",gap:14}}>
-      {PILARES.filter(function(p){return p.redes;}).map(function(p){
-        return <div key={p.key} style={_cardSty}>
-          {_CardTop({p:p})}
-          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr"}}>
-            {REDES.map(function(r,i){
-              return <div key={r.id} style={{padding:"13px 15px 15px",borderLeft:(i>0&&!_pxMob())?"1px solid #f2f6fa":"none",borderTop:(i>0&&_pxMob())?"1px solid #f2f6fa":"none"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
-                  <div style={{width:26,height:26,borderRadius:8,background:r.cor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 9px "+r.cor+"55"}}>
-                    {_LogoRede({id:r.id})}
-                  </div>
-                  <b style={{fontSize:11.5,fontWeight:800,color:r.corEsc,letterSpacing:-.1}}>{r.label}</b>
-                </div>
-                {_Campos({p:p, slotKey:_mk(p,r.id), cor:r.cor, corTxt:r.corEsc, borda:r.borda, fundo:r.fundo, barra:r.barra})}
-              </div>;
-            })}
-          </div>
-          <div style={{padding:"10px 17px 13px",fontSize:11,color:"#94a3b8",lineHeight:1.45,borderTop:"1px solid #f6f9fc",background:"#fcfdfe"}}>{p.desc}</div>
-        </div>;
-      })}
-    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12}}>
+      {PILARES.map(function(p){
+        // Pilar por rede: status do card = pior rede (se alguma está definida)
+        const _slotsDoPilar = p.redes ? REDES.map(function(r){return _slotKey(p,r.id);}) : [p.key];
+        const _snaps = _slotsDoPilar.map(function(k){ return _readSnapshot(k, refMonth); });
+        const _defs = _snaps.filter(function(sn){return sn.target>0;});
+        const m = _defs.length ? _defs.reduce(function(a,b){ return (a.current/a.target) <= (b.current/b.target) ? a : b; }) : (_snaps[0]||{target:0,current:0});
+        const tgt = Number(m.target||0);
+        const cur = Number(m.current||0);
+        const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
+        const ok = _defs.length>0 && _defs.every(function(sn){return sn.current>=sn.target;});
+        const status = ok ? {label:"Meta atingida", color:"#16a34a", bg:"#dcfce7", border:"#bbf7d0"}
+                          : pct>=70 ? {label:"No caminho",      color:"#a16207", bg:"#fef3c7", border:"#fde68a"}
+                          : pct>=40 ? {label:"Em progresso",    color:"#9a3412", bg:"#ffedd5", border:"#fed7aa"}
+                          : tgt===0 ? {label:"Nao definida",    color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"}
+                                    : {label:"Atrasada",        color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
 
-    {/* ═══ RESULTADO DO NEGÓCIO — número único, todos os canais somados ═══ */}
-    {_Secao({titulo:"Resultado do negócio", chip:"Todos os canais somados"})}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(238px,1fr))",gap:14}}>
-      {PILARES.filter(function(p){return !p.redes;}).map(function(p){
-        return <div key={p.key} style={_cardSty}>
-          {_CardTop({p:p})}
-          <div style={{padding:"14px 17px 16px"}}>
-            {_Campos({p:p, slotKey:p.key, cor:p.color})}
+        return <div key={p.key} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:12,fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:11}}>
+            <div style={{width:38,height:38,borderRadius:11,background:p.color+"15",border:"1px solid "+p.color+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {typeof Ico==="function" && <Ico n={p.ico} size={18} color={p.color}/>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{p.label}</div>
+              <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>
+                {p.scope==="acumulado"?"Total acumulado":"Por mes"}
+              </div>
+            </div>
+            <span style={{background:status.bg,color:status.color,border:"1px solid "+status.border,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>
+              {status.label}
+            </span>
           </div>
-          <div style={{padding:"10px 17px 13px",fontSize:11,color:"#94a3b8",lineHeight:1.45,borderTop:"1px solid #f6f9fc",background:"#fcfdfe"}}>{p.desc}</div>
+
+          {_slotsDoPilar.map(function(slotKey, si){
+            const rede = p.redes ? REDES[si] : null;
+            const sm = _readSnapshot(slotKey, refMonth);
+            const stgt = Number(sm.target||0), scur = Number(sm.current||0);
+            const spct = stgt>0 ? Math.min(100, Math.round(scur/stgt*100)) : 0;
+            const sok = stgt>0 && scur>=stgt;
+            const corNum = rede ? rede.cor : p.color;
+            return <div key={slotKey} style={{display:"flex",flexDirection:"column",gap:10,paddingTop:si>0?12:0,borderTop:si>0?"1px solid #f1f5f9":"none"}}>
+              {rede && <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <span style={{width:22,height:22,borderRadius:6,background:rede.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{_logoRede(rede.id,13)}</span>
+                <span style={{color:rede.cor,fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{rede.label}</span>
+              </div>}
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
+                <div>
+                  <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Atual</div>
+                  <div style={{position:"relative"}}>
+                    <input type="number" inputMode="decimal" value={scur||""} placeholder="0"
+                      onChange={function(e){ setField(slotKey,"current",e.target.value); }}
+                      disabled={readOnly}
+                      style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:corNum,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
+                    {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
+                  </div>
+                </div>
+                <div>
+                  <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Meta</div>
+                  <div style={{position:"relative"}}>
+                    <input type="number" inputMode="decimal" value={stgt||""} placeholder="0"
+                      onChange={function(e){ setField(slotKey,"target",e.target.value); }}
+                      disabled={readOnly}
+                      style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:"#0f172a",outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
+                    {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Progresso</span>
+                  <span style={{color:sok?"#15803d":corNum,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{spct}%</span>
+                </div>
+                <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
+                  <div style={{width:spct+"%",height:"100%",background:sok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+corNum+","+corNum+"cc)",borderRadius:99,transition:"width .35s"}}/>
+                </div>
+              </div>
+            </div>;
+          })}
+
+          <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45}}>{p.desc}</div>
         </div>;
       })}
     </div>
@@ -57356,15 +57303,12 @@ function _PwPerformance({rootId, unidade, tick, cor}){
 }
 
 /* ── METAS — pilares do ciclo ao vivo ── */
-// Seguidores/Alcance/Engajamento são POR REDE (chaves "<pilar>_facebook" / "<pilar>_instagram").
+// Seguidores é POR REDE (chaves "seguidores_facebook" / "seguidores_instagram").
 // "legado" = chave antiga sem rede, lida como Instagram quando a nova ainda não existe.
 const _PW_PILARES=[
   {key:"seguidores_facebook", label:"Seguidores · Facebook"},
   {key:"seguidores_instagram",label:"Seguidores · Instagram", legado:"seguidores"},
-  {key:"alcance_facebook",    label:"Alcance · Facebook"},
-  {key:"alcance_instagram",   label:"Alcance · Instagram",    legado:"alcance"},
-  {key:"engajamento_facebook",label:"Engajamento · Facebook"},
-  {key:"engajamento_instagram",label:"Engajamento · Instagram",legado:"engajamento"},
+  {key:"alcance",label:"Alcance"},{key:"engajamento",label:"Engajamento"},
   {key:"leads",label:"Leads"},{key:"vendas",label:"Vendas digital"},{key:"faturamento",label:"Faturamento"},{key:"roi",label:"ROI"},
 ];
 function _PwMetas({rootId, unidade, tick, cor}){
