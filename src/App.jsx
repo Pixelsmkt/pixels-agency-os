@@ -56148,8 +56148,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   const _abaInicial = (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0) ? "calculadora" : (initTab||"dashboard");
   const [tab,setTab]=useState(_abaInicial);
   // Trocou pra um cliente com calculadora? cai na aba dela tambem.
+  // Trocou pra um cliente SEM calculadora enquanto estava nela? volta pro dashboard
+  // (a aba ficava presa em "calculadora" e o Monte seu pacote aparecia em todo mundo). 2026-09-03
   useEffect(function(){
     if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0) setTab("calculadora");
+    else setTab(function(t){return t==="calculadora"?"dashboard":t;});
   },[selCl]);
   const [analisesSub,setAnalisesSub]=useState("trafego");
   // Portal Análises — iframe do Reportei
@@ -56490,7 +56493,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob} currentClientUser={currentClientUser}/>}
 
     {/* ── MONTE SEU PACOTE ── calculadora comercial com autosave por cliente */}
-    {tab==="calculadora"&&typeof _CalculadoraModular==="function"&&<_CalculadoraModular isMob={isMob} persistClientId={selCl}/>}
+    {tab==="calculadora"&&PORTAL_CALC_CLIENTS.indexOf(selCl)>=0&&typeof _CalculadoraModular==="function"&&<_CalculadoraModular isMob={isMob} persistClientId={selCl}/>}
     {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
       // Briefing no portal: CLIENTE + gestor Pixels podem editar (cliente conhece a propria empresa melhor que ninguem).
       // Bioter: passa unitId pra isolar briefing por unidade.
