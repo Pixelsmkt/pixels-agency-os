@@ -50562,6 +50562,40 @@ function pxNeonColor(hex){
     return "hsl("+Math.round(hue*360)+",100%,68%)";
   }catch(_){return "#7dffc4";}
 }
+// Acento fixo por cliente pros ícones da sidebar (quando a cor da marca é cinza/neutra
+// o neon calculado sai com um matiz aleatório — Arabutã #666766 virava verde). 2026-09-03
+const PORTAL_SIDE_ACCENT={ arabuta:"#ff5252" };
+// Luminância relativa (WCAG) de "#rrggbb" ou "hsl(h,s%,l%)"
+function _pxLum(c){
+  try{
+    var r,g,b,m=String(c||"").trim();
+    if(m.indexOf("hsl")===0){
+      var p=m.replace(/[^\d.,]/g,"").split(",").map(Number),h=p[0]/360,s=p[1]/100,l=p[2]/100;
+      var q=l<0.5?l*(1+s):l+s-l*s,pp=2*l-q;
+      var f=function(t){t<0&&(t+=1);t>1&&(t-=1);return t<1/6?pp+(q-pp)*6*t:t<1/2?q:t<2/3?pp+(q-pp)*(2/3-t)*6:pp;};
+      r=f(h+1/3);g=f(h);b=f(h-1/3);
+    }else{
+      var x=m.replace("#","");if(x.length===3)x=x.split("").map(function(y){return y+y;}).join("");
+      r=parseInt(x.substr(0,2),16)/255;g=parseInt(x.substr(2,2),16)/255;b=parseInt(x.substr(4,2),16)/255;
+    }
+    var lin=function(v){return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);};
+    return 0.2126*lin(r)+0.7152*lin(g)+0.0722*lin(b);
+  }catch(_){return 0.5;}
+}
+// Cor do ícone da sidebar: acento fixo do cliente > neon (se contrastar com o fundo) > branco.
+// Fundos saturados (roxo Pixels, azul Clem, laranja Acreforte) deixavam o neon do mesmo
+// matiz quase invisível — nesses casos cai pra branco. 2026-09-03
+function pxSideIconColor(cl){
+  try{
+    var id=cl&&cl.id, bg=cl&&cl.color;
+    if(cl&&cl.sideAccent) return cl.sideAccent;
+    if(id&&PORTAL_SIDE_ACCENT[id]) return PORTAL_SIDE_ACCENT[id];
+    var neon=pxNeonColor(bg);
+    var l1=_pxLum(neon),l2=_pxLum(bg);
+    var ratio=(Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);
+    return ratio>=2.4?neon:"#fff";
+  }catch(_){return "#fff";}
+}
 // Ordem + seções definidas pelo Gustavo (2026-09-01). `sec` = cabeçalho de grupo
 // no menu lateral; primeiro bloco (visão geral) fica sem cabeçalho.
 const PORTAL_ALL_TABS=[
@@ -56408,7 +56442,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             })}
           </div>
         : (function(){
-            const _neon=(typeof pxNeonColor==="function")?pxNeonColor(cl.color):"#7dffc4";
+            const _neon=(typeof pxSideIconColor==="function")?pxSideIconColor(cl):((typeof pxNeonColor==="function")?pxNeonColor(cl.color):"#fff");
             return <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:cl.color,border:"none",borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+cl.color+"55"}}>
             {TABS.map(function(t,_i){
               const active=tab===t.id;
