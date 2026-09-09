@@ -2531,11 +2531,62 @@ function _dismissToast(toast){
   toast.style.transform="translateX(100%)";toast.style.opacity="0";
   setTimeout(()=>{try{toast.remove();}catch{}},250);
 }
+// Notificação "estilo Instagram" (09/09/2026): cartão branco no canto superior direito com
+// logo do cliente, título em negrito e subtítulo; clicável (leva pra tela). Fica 8 s.
+// Se a aba estiver em segundo plano e o navegador permitir, também dispara Notification nativa.
+function _showNovidade(o){
+  o=o||{};
+  const container=_ensureToastContainer();
+  if(!container){console.log("[novidade]",o.titulo,o.sub);return;}
+  const toast=document.createElement("div");
+  Object.assign(toast.style,{
+    background:"#fff",color:"#0f172a",padding:"11px 14px 11px 11px",borderRadius:"14px",
+    boxShadow:"0 12px 40px rgba(15,23,42,0.22), 0 0 0 1px rgba(15,23,42,0.06)",fontSize:"13px",
+    display:"flex",alignItems:"center",gap:"11px",pointerEvents:"auto",cursor:"pointer",
+    fontFamily:"'Inter',system-ui,sans-serif",transform:"translateX(110%)",opacity:"0",
+    transition:"all .3s cubic-bezier(.22,1,.36,1)",minWidth:"280px",maxWidth:"360px",
+  });
+  const logo=document.createElement("div");
+  Object.assign(logo.style,{width:"42px",height:"42px",borderRadius:"12px",background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"});
+  if(o.logo){ const img=document.createElement("img"); img.src=o.logo; img.alt=""; Object.assign(img.style,{width:"80%",height:"80%",objectFit:"contain"}); logo.appendChild(img); }
+  else { const ab=document.createElement("span"); ab.textContent=String(o.cliente||"?").slice(0,2).toUpperCase(); Object.assign(ab.style,{fontWeight:"900",fontSize:"12px",color:o.cor||"#7c3aed"}); logo.appendChild(ab); }
+  const dot=document.createElement("span");
+  Object.assign(dot.style,{position:"absolute",right:"-3px",bottom:"-3px",width:"16px",height:"16px",borderRadius:"50%",background:o.cor||"#7c3aed",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"9px",fontWeight:"900"});
+  dot.textContent=o.icone||"!"; logo.appendChild(dot);
+  const txt=document.createElement("div"); Object.assign(txt.style,{minWidth:0,flex:"1"});
+  const t1=document.createElement("div"); t1.textContent=o.titulo||"Novidade"; Object.assign(t1.style,{fontWeight:"800",fontSize:"13px",letterSpacing:"-.1px",lineHeight:"1.3"});
+  const t2=document.createElement("div"); t2.textContent=o.sub||""; Object.assign(t2.style,{color:"#64748b",fontSize:"12px",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"});
+  txt.appendChild(t1); if(o.sub) txt.appendChild(t2);
+  const x=document.createElement("button"); x.type="button"; x.textContent="×"; x.title="Fechar";
+  Object.assign(x.style,{background:"transparent",border:"none",color:"#94a3b8",fontSize:"18px",cursor:"pointer",padding:"0 2px",lineHeight:"1",flexShrink:0});
+  x.onclick=function(e){e.stopPropagation();_dismissToast(toast);};
+  toast.appendChild(logo); toast.appendChild(txt); toast.appendChild(x);
+  toast.onclick=function(){ try{ if(typeof o.onClick==="function") o.onClick(); }catch(_){} _dismissToast(toast); };
+  container.appendChild(toast);
+  requestAnimationFrame(function(){toast.style.transform="translateX(0)";toast.style.opacity="1";});
+  setTimeout(function(){_dismissToast(toast);},o.duration||8000);
+  // Aba em segundo plano → notificação do sistema (se já tiver permissão)
+  try{
+    if(document.hidden&&typeof Notification!=="undefined"&&Notification.permission==="granted"){
+      const n=new Notification(o.titulo||"Pixels",{body:o.sub||"",icon:o.logo||undefined,tag:"pixels-"+(o.tag||Date.now())});
+      n.onclick=function(){ try{window.focus();}catch(_){} try{ if(typeof o.onClick==="function") o.onClick(); }catch(_){} try{n.close();}catch(_){} };
+    }
+  }catch(_){}
+}
+// Pede permissão de notificação nativa no primeiro clique do usuário (o navegador exige gesto)
+function pxPedirPermissaoNotificacao(){
+  try{
+    if(typeof Notification==="undefined"||Notification.permission!=="default") return;
+    const once=function(){ try{ Notification.requestPermission(); }catch(_){} document.removeEventListener("click",once,true); };
+    document.addEventListener("click",once,true);
+  }catch(_){}
+}
 const pixelsToast={
   success:(m,d)=>_showToast("success",m,d),
   error:(m,d)=>_showToast("error",m,d||5000),
   info:(m,d)=>_showToast("info",m,d),
   warning:(m,d)=>_showToast("warning",m,d||4500),
+  novidade:(o)=>_showNovidade(o),
 };
 
 // Modal de input custom (substitui prompt())
@@ -48665,6 +48716,54 @@ export default function AgencyOS(){
     return function(){ try{ delete window.pixelsNav; }catch(e){} };
   },[nav]);
 
+  // ── Novidades em Avaliações → notificação no canto (estilo Instagram), 09/09/2026 ──
+  // Vigia as três filas (Copys = status "demanda"; Design/Vídeo = status "avaliacao") e, quando
+  // entra card novo que NÃO foi movido por mim, mostra o cartão no topo direito; clicar leva pra fila.
+  // Ignora a primeira carga. Se a aba estiver em segundo plano, dispara Notification do navegador.
+  const _avalPrevRef=useRef(null);
+  useEffect(function(){
+    if(!loaded) return;
+    if(!(effectivePerms&&effectivePerms.verAprovacoes)) return;
+    const _fila=function(t){
+      if(!t||t.deletedAt) return null;
+      if(t.status==="demanda") return "aprovacoes_copys";
+      if(t.status==="avaliacao") return pxIsVideoTask(t)?"aprovacoes_video":"aprovacoes_publicacao";
+      return null;
+    };
+    const atual=new Map();
+    (tasks||[]).forEach(function(t){ const f=_fila(t); if(f) atual.set(String(t.id),f); });
+    if(_avalPrevRef.current===null){ _avalPrevRef.current=atual; pxPedirPermissaoNotificacao&&pxPedirPermissaoNotificacao(); return; }
+    const prev=_avalPrevRef.current; _avalPrevRef.current=atual;
+    const novos=[];
+    atual.forEach(function(f,id){
+      if(prev.get(id)===f) return;                     // já estava nessa fila
+      if(pendingRef.current.has(id)) return;           // fui eu que movi (sync local em andamento)
+      const t=(tasks||[]).find(function(x){return String(x.id)===id;}); if(!t) return;
+      const ult=(t.timeline||[])[(t.timeline||[]).length-1];
+      if(ult&&ult.user&&CURRENT_USER&&ult.user===CURRENT_USER.name) return; // último evento foi meu
+      novos.push({t:t,fila:f});
+    });
+    if(!novos.length||typeof pixelsToast==="undefined"||!pixelsToast.novidade) return;
+    const _lbl={aprovacoes_copys:["Nova copy pra avaliar","✎"],aprovacoes_publicacao:["Nova arte pra avaliar","★"],aprovacoes_video:["Novo vídeo pra avaliar","▶"]};
+    const _cl=function(t){ return (typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===t.client;})||null; };
+    if(novos.length<=3){
+      novos.forEach(function(n,i){
+        const c=_cl(n.t); const l=_lbl[n.fila]||["Novidade em Avaliações","!"];
+        const quem=(n.t.timeline||[]).slice().reverse().map(function(e){return e&&e.user;}).find(Boolean)||"";
+        setTimeout(function(){
+          pixelsToast.novidade({logo:c&&(typeof CLIENT_LOGOS!=="undefined"?CLIENT_LOGOS[c.id]:null)||null,cliente:c?c.name:(n.t.client||""),cor:c&&c.color,icone:l[1],
+            titulo:l[0]+(c?" · "+c.name.replace(/^Grupo /,""):""),sub:(n.t.title||"")+(quem?" — "+quem:""),tag:"aval-"+n.t.id,
+            onClick:function(){ nav(n.fila); }});
+        },i*350);
+      });
+    } else {
+      const porFila={}; novos.forEach(function(n){ porFila[n.fila]=(porFila[n.fila]||0)+1; });
+      const fila=Object.keys(porFila).sort(function(a,b){return porFila[b]-porFila[a];})[0];
+      pixelsToast.novidade({icone:"!",cliente:"Pixels",titulo:novos.length+" novidades em Avaliações",sub:Object.keys(porFila).map(function(k){return porFila[k]+" "+({aprovacoes_copys:"copy(s)",aprovacoes_publicacao:"arte(s)",aprovacoes_video:"vídeo(s)"}[k]||k);}).join(" · "),tag:"aval-lote",onClick:function(){ nav(fila); }});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[tasks,loaded]);
+
   // ── Datas comemorativas → cards automáticos no Calendário de publicações (09/09/2026) ──
   // Roda depois da carga completa das tasks, só pra sócios + Hellen (quem usa o Planejamento),
   // e de novo (com debounce) quando o calendário interno muda. Idempotente: ver pxGerarCardsComemorativos.
@@ -48768,6 +48867,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
+      case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
@@ -48867,6 +48967,7 @@ export default function AgencyOS(){
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
@@ -77994,9 +78095,9 @@ function _EventoEditModal({evento, onSave, onClose}){
    - Janela: hoje até +PX_AUTOCOM_DIAS dias (365 = ano inteiro pra frente; nunca datas passadas). Recorrência anual/mensal é
      expandida dentro da janela (Dia dos Pais de 2027 nasce sozinho quando
      entrar na janela).
-   - Bioter: "bioter" marcado → 1 card unidade "grupo"; "bioter_brasil" →
-     1 card unidade "brasil" (+ unidades fora do BR marcadas, ex. Paraguay);
-     unidade avulsa → card daquela unidade.
+   - Bioter: todas as do Brasil marcadas (ou "bioter"/"bioter_brasil") → 1 card
+     Collab Brasil (unidade "brasil", português). Paraguay nunca entra no collab:
+     card próprio (espanhol). 6 marcadas = 2 cards. Só algumas → 1 por unidade.
    - Idempotente: o id do card é determinístico
      ("autocom-<evento>-<data>-<cliente>[-<unidade>]"). Antes de criar,
      confere no state E no Supabase (inclusive apagados) — apagou, não volta;
@@ -78009,21 +78110,32 @@ const PX_AUTOCOM_DIAS = 365; // um ano pra frente: todas as datas futuras do Pla
 function pxAutoComTargets(clientIds){
   const ids=(Array.isArray(clientIds)?clientIds:[]).map(String).filter(Boolean);
   const out=[];
-  const _isBR=function(unitId){
-    try{ const u=(typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]).find(function(x){return x.id===unitId;}); return !!(u&&u.pais==="BR"); }catch(_){ return true; }
-  };
+  // Unidades Bioter conhecidas (fonte: BIOTER_GROUP_UNITS; fallback fixo)
+  let unidades=[];
+  try{ unidades=(typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]).filter(function(u){return u&&u.id&&String(u.id).indexOf("bioter_")===0&&u.id!=="bioter_brasil";}).map(function(u){return {id:u.id,br:u.pais==="BR"};}); }catch(_){}
+  if(!unidades.length) unidades=["chapeco","toledo","castro","gloria","uberlandia"].map(function(u){return {id:"bioter_"+u,br:true};}).concat([{id:"bioter_paraguay",br:false}]);
+  const _isBR=function(id){ const u=unidades.find(function(x){return x.id===id;}); return u?u.br:true; };
   const hasGrupo=ids.indexOf("bioter")>=0, hasBrasil=ids.indexOf("bioter_brasil")>=0;
   ids.forEach(function(id){
     if(id==="bioter"||id==="bioter_brasil"||id.indexOf("bioter_")===0) return;
     out.push({client:id, unit:null});
   });
-  if(hasGrupo){ out.push({client:"bioter", unit:"grupo"}); return out; }
-  if(hasBrasil) out.push({client:"bioter", unit:"brasil"});
-  ids.forEach(function(id){
-    if(id.indexOf("bioter_")!==0||id==="bioter_brasil") return;
-    if(hasBrasil&&_isBR(id)) return; // já coberto pelo card "brasil"
-    out.push({client:"bioter", unit:id.slice("bioter_".length)});
-  });
+  const marcadas=ids.filter(function(id){ return id.indexOf("bioter_")===0&&id!=="bioter_brasil"; });
+  const todasBR=unidades.filter(function(u){return u.br;}).map(function(u){return u.id;});
+  const todasForaBR=unidades.filter(function(u){return !u.br;}).map(function(u){return u.id;});
+  const temTodasBR=todasBR.length>0&&todasBR.every(function(id){return marcadas.indexOf(id)>=0;});
+  // Regra (09/09/2026): todas as do Brasil marcadas (ou token "bioter"/"bioter_brasil")
+  // → 1 post Collab Brasil (unidade "brasil", em português). Paraguay NUNCA entra no
+  // collab: vira card próprio (em espanhol). Ex.: Natal/Revéillon com as 6 marcadas =
+  // 2 cards (Collab Brasil + Paraguay). Só algumas unidades → 1 card por unidade
+  // (ex.: Dia do Café = só Uberlândia).
+  if(hasGrupo||hasBrasil||temTodasBR){
+    out.push({client:"bioter", unit:"brasil"});
+    const foraBR=hasGrupo ? todasForaBR : marcadas.filter(function(id){ return !_isBR(id); });
+    foraBR.forEach(function(id){ out.push({client:"bioter", unit:id.slice("bioter_".length)}); });
+    return out;
+  }
+  marcadas.forEach(function(id){ out.push({client:"bioter", unit:id.slice("bioter_".length)}); });
   return out;
 }
 function pxAutoComExpandir(ev, startISO, endISO){
