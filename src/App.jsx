@@ -18582,9 +18582,21 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   const tasksByDay=date=>{
     if(!date) return [];
     const ds=fmtDay(date);
+    // Ordem no dia: cards do mesmo cliente ficam juntos (Bioter: Brasil/Grupo → matrizes
+    // Chapecó, Toledo, Castro → filiais Uberlândia, Glória, Paraguay); dentro do cliente, por horário.
+    const _UNIT_ORD={brasil:0,grupo:0,chapeco:1,toledo:2,castro:3,uberlandia:4,gloria:5,paraguay:6};
+    const _grupo=t=>{
+      const c=String(t.client||"");
+      if(c.indexOf("bioter")!==0) return "1|"+c;
+      const u=String(t.bioterUnit||"").split(",")[0].trim();
+      const o=_UNIT_ORD[u]!==undefined?_UNIT_ORD[u]:0;
+      return "0|"+o;
+    };
     return agendados
       .filter(t=>t.publishDate===ds)
       .sort((a,b)=>{
+        const ga=_grupo(a), gb=_grupo(b);
+        if(ga!==gb) return ga.localeCompare(gb);
         const ta=a.publishTime||"00:00";
         const tb=b.publishTime||"00:00";
         return ta.localeCompare(tb);
