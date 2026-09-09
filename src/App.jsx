@@ -69848,7 +69848,41 @@ function _ajustarAltura(el){
 }
 
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
-function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag, canEdit, accent}){
+/* Cores dos scripts em SEQUÊNCIA CONTÍNUA entre Onboarding e Ongoing (09/09/2026):
+   o arco-íris da linha de produção é esticado sobre o TOTAL de scripts das duas seções —
+   Onboarding começa no vermelho e Ongoing continua de onde parou, terminando no roxo.
+   Cada seção publica quantos scripts tem em window.__pxScriptsN e avisa via evento. */
+function _pxScriptsRainbow(){
+  return (typeof KANBAN_COLS!=="undefined" && Array.isArray(KANBAN_COLS) && KANBAN_COLS.length)
+    ? KANBAN_COLS.filter(function(c){ return c && c.color && ["rascunhos","pausado","reprovado"].indexOf(c.id)<0; }).map(function(c){ return c.color; })
+    : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
+}
+function _pxCorSequencial(i, total){
+  const stops=_pxScriptsRainbow();
+  if(stops.length<2) return stops[0]||"#7c3aed";
+  const n=Math.max(1,(total||1)-1);
+  const t=Math.max(0,Math.min(1,(i||0)/n))*(stops.length-1);
+  const k=Math.min(stops.length-2,Math.floor(t)), f=t-k;
+  const h=function(x){ const m=String(x).replace("#",""); return [parseInt(m.slice(0,2),16),parseInt(m.slice(2,4),16),parseInt(m.slice(4,6),16)]; };
+  const a=h(stops[k]), b=h(stops[k+1]);
+  const c=a.map(function(v,j){ return Math.round(v+(b[j]-v)*f); });
+  return "#"+c.map(function(v){ return ("0"+v.toString(16)).slice(-2); }).join("");
+}
+function _usePxScriptsN(secao, n){
+  const [outros,setOutros]=useState(function(){ return (window.__pxScriptsN||{}); });
+  useEffect(function(){
+    window.__pxScriptsN=Object.assign({},window.__pxScriptsN||{}); window.__pxScriptsN[secao]=n;
+    try{ window.dispatchEvent(new CustomEvent("pixels:scripts-n")); }catch(_){}
+  },[secao,n]);
+  useEffect(function(){
+    const h=function(){ setOutros(Object.assign({},window.__pxScriptsN||{})); };
+    window.addEventListener("pixels:scripts-n",h); return function(){ window.removeEventListener("pixels:scripts-n",h); };
+  },[]);
+  const onb=outros.onboarding||0, ong=outros.ongoing||0;
+  return { offset: secao==="ongoing"?onb:0, total: (secao==="onboarding"?n:onb)+(secao==="ongoing"?n:ong) };
+}
+
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, total, drag, canEdit, accent}){
   const _ro = canEdit===false;   // somente leitura
   // So vira draggable enquanto o mouse esta segurando o handle — assim continua
   // dando pra selecionar texto no textarea normalmente.
@@ -69861,10 +69895,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   // kanban (KANBAN_COLS, sem as cinzas): Copys → Alteração → Demanda → Execução → Ajustes →
   // Avaliação → Aprovado → Aprovado cliente → Publicadas. Pela POSIÇÃO do card na seção, então
   // criar/apagar/arrastar rebalanceia sozinho e a sequência nunca quebra. Texto sempre branco.
-  const _RAINBOW = (typeof KANBAN_COLS!=="undefined" && Array.isArray(KANBAN_COLS) && KANBAN_COLS.length)
-    ? KANBAN_COLS.filter(function(c){ return c && c.color && ["rascunhos","pausado","reprovado"].indexOf(c.id)<0; }).map(function(c){ return c.color; })
-    : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
-  const _cor = _RAINBOW[((typeof idx==="number"?idx:0)%_RAINBOW.length+_RAINBOW.length)%_RAINBOW.length];
+  const _cor = _pxCorSequencial(typeof idx==="number"?idx:0, total||1);
   const _acc = accent || "#7c3aed"; // cor da seção: só no botão Copiar
   const _hx  = String(_cor).replace("#","");
   const _r   = parseInt(_hx.substring(0,2),16)||0;
@@ -70032,6 +70063,7 @@ function _OnboardingScripts({cl, startDate, accent}){
 
   const _podeEditar = _scriptsPodeEditar();
   const _drag = _useScriptDrag(scripts, _persist, "onboarding");
+  const _seq = _usePxScriptsN("onboarding", scripts.length);
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
 
   return <div
@@ -70081,7 +70113,7 @@ function _OnboardingScripts({cl, startDate, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
+              _INP={_INP} cl={cl} idx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
@@ -70180,6 +70212,7 @@ function _OngoingScripts({cl, accent}){
 
   const _podeEditar = _scriptsPodeEditar();
   const _drag = _useScriptDrag(scripts, _persist, "ongoing");
+  const _seq = _usePxScriptsN("ongoing", scripts.length);
   const _INP = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,fontWeight:500,outline:"none",fontFamily:_ONB_FF,boxSizing:"border-box"};
   const _accent = accent || "#7c3aed";
 
@@ -70228,7 +70261,7 @@ function _OngoingScripts({cl, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
+              _INP={_INP} cl={cl} idx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
