@@ -14249,7 +14249,7 @@ function CScriptsTab({cl, isMob}){
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Tons fixos (não a cor do cliente), usados só no filete/ícone: Onboarding roxo, Ongoing azul */}
     {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#7c3aed"/>}
-    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#0284c7"/>}
+    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#7c3aed"/>}
   </div>;
 }
 
@@ -69902,7 +69902,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   // Avaliação → Aprovado → Aprovado cliente → Publicadas. Pela POSIÇÃO do card na seção, então
   // criar/apagar/arrastar rebalanceia sozinho e a sequência nunca quebra. Texto sempre branco.
   const _cor = _pxCorSequencial(typeof idx==="number"?idx:0, total||1);
-  const _acc = accent || "#7c3aed"; // cor da seção: só no botão Copiar
+  const _acc = _cor; // botão Copiar no mesmo tom do título do card (rainbow)
   const _hx  = String(_cor).replace("#","");
   const _r   = parseInt(_hx.substring(0,2),16)||0;
   const _g   = parseInt(_hx.substring(2,4),16)||0;
