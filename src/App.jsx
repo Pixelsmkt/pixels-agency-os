@@ -68328,6 +68328,8 @@ const ONBOARDING_BLOCKS = [
       ]},
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas"},
       {id:"d1_portal_acesso", label:"Acesso ao portal do cliente"}, // (08/09) unificou "Criar acesso" + "Criação e envio do acesso"
+      // (09/09) Sem isso não dá pra publicar em conjunto (collab)
+      {id:"d1_paginas_meta", label:"Criar as páginas no Instagram e no Facebook (cliente ainda não tem) ou vincular páginas no Meta Business"},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
         {id:"d1_brief_gpt", label:"Criação do agente no GPT e upload do briefing"},
@@ -68455,6 +68457,8 @@ const ONBOARDING_BLOCKS_STARTER = [
       ]},
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas (3 parcelas)"},
       {id:"d1_portal_acesso", label:"Acesso ao portal do cliente"}, // (08/09) unificou "Criar acesso" + "Criação e envio do acesso"
+      // (09/09) Sem isso não dá pra publicar em conjunto (collab)
+      {id:"d1_paginas_meta", label:"Criar as páginas no Instagram e no Facebook (cliente ainda não tem) ou vincular páginas no Meta Business"},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
         {id:"d1_brief_gpt", label:"Criação do agente no GPT e upload do briefing"},
