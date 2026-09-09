@@ -48878,7 +48878,7 @@ export default function AgencyOS(){
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
       case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
-      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
+      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
@@ -48978,7 +48978,7 @@ export default function AgencyOS(){
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
-      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
+      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -82855,6 +82855,8 @@ function _pbProdutoUploadImg(pi, updFn){
 // as cadeiras por abas. Quem tem uma cadeira só (designer, editor, social, Erick) já
 // cai direto nela, sem abas.
 const PB_CADEIRAS = [
+  {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
+   blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
    blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto","pb-checklist"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
@@ -82868,12 +82870,13 @@ let _PB_CADEIRA_ATUAL = null; // id da cadeira em exibição (null = tudo)
 function _pbBlocoVisivel(id){
   if(!_PB_CADEIRA_ATUAL) return true;
   const c = PB_CADEIRAS.find(function(x){ return x.id===_PB_CADEIRA_ATUAL; });
-  return !c || c.blocos.indexOf(id)>=0;
+  return !c || !c.blocos || c.blocos.indexOf(id)>=0;
 }
 function _pbCadeirasDoUsuario(u){
   const isAdmin = u.level===1 || u.id==="ellen";
   if(isAdmin) return PB_CADEIRAS.slice();
   const ids = [];
+  if(u.dash==="coordinator") ids.push("estrategia"); // estrategista: playbook inteiro
   if(u.dash==="social") ids.push("social");
   if(u.dash==="designer") ids.push("design");
   if(u.dash==="editor") ids.push("video");
@@ -82892,7 +82895,8 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const isSocial       = effectiveUser.dash === "social"; // social media (Luiza e futuras contratações)
 
   // UNIFICADO: sem sub-abas de área. Um playbook por cliente com tudo junto.
-  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial;
+  const isEstrategista = effectiveUser.dash === "coordinator";
+  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial || isEstrategista;
   const _cadeiras = _pbCadeirasDoUsuario(effectiveUser);
   const [cadeira, setCadeira] = useState(function(){
     try{ const _s=localStorage.getItem("pixels-pb-cadeira"); if(_s&&_cadeiras.some(function(c){return c.id===_s;})) return _s; }catch(_){}
