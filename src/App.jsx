@@ -48646,7 +48646,6 @@ export default function AgencyOS(){
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
-      case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
@@ -48746,7 +48745,6 @@ export default function AgencyOS(){
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
-      case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
@@ -49782,6 +49780,8 @@ function useQGData(clients,year,month){
       window._sb.from("media_goals").select("*").in("client_id",ids).eq("ref_month",year+"-"+String(month).padStart(2,"0")),
       // Meta Ads (fonte única de gasto/leads): dia a dia, nível conta, do começo do mês e das últimas 10 semanas
       window._sb.from("ads_daily").select("ad_account_id,data,gasto,leads,conversas").eq("nivel","conta").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(3000),
+      // nível campanha: só pra saber quanto do gasto foi em campanhas de LEAD (custo por lead não usa engajamento/seguidores/etc.)
+      window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto").eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(20000),
       window._pxAdsAccounts?Promise.resolve({data:window._pxAdsAccounts}):window._sb.from("ads_accounts").select("*"),
     ]).then(function(rs){
       if(!alive) return;
@@ -49791,7 +49791,7 @@ function useQGData(clients,year,month){
       const goals={}; (rs[5].data||[]).forEach(function(r){ goals[r.client_id]=r; });
       rs.forEach(function(r,i){ if(r.error) console.warn("[qg data]",i,r.error.message); });
       if(rs[7]&&rs[7].data&&!window._pxAdsAccounts) window._pxAdsAccounts=rs[7].data;
-      setData({budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsAccounts:(rs[7]&&rs[7].data)||[],loading:false});
+      setData({budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsCamp:(rs[7]&&rs[7].data)||[],adsAccounts:(rs[8]&&rs[8].data)||[],loading:false});
     }).catch(function(e){ console.warn("[qg data]",e&&e.message); if(alive) setData(function(p){return Object.assign({},p,{loading:false});}); });
     return function(){ alive=false; };
   },[idsKey,year,month,tick]);
@@ -49818,7 +49818,12 @@ function useQGData(clients,year,month){
 /* ─── META ADS como fonte única: gasto/leads da API por cliente e intervalo ─── */
 function _qgAdsConta(mc,data){ if(!mc||!data||!data.adsAccounts||!data.adsAccounts.length||typeof adsContaDoCliente!=="function") return null; const r=adsContaDoCliente(mc,data.adsAccounts); return (r&&r.conta&&!r.compartilhada)?r.conta:null; }
 /* lead = leads (formulário) + conversas (WhatsApp) — colunas já separadas no banco, sem sobreposição (definição 09/09/2026) */
-function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,leads:0,dias:0,conta:acc}; const o={gasto:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); o.leads+=Number(r.leads||0)+Number(r.conversas||0); if(Number(r.gasto||0)>0) o.dias++; }); return o; }
+function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; const o={gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); o.leads+=Number(r.leads||0)+Number(r.conversas||0); if(Number(r.gasto||0)>0) o.dias++; });
+  /* gasto só em campanhas de lead (formulário / WhatsApp) — é o que divide o custo por lead; sem linhas de campanha, assume o gasto todo */
+  const camp=(data.adsCamp||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
+  if(camp.length&&typeof _adsClassifica==="function"&&typeof _adsEhLead==="function"){ const cache={}; camp.forEach(function(r){ const k=r.campaign_id; if(!(k in cache)) cache[k]=_adsEhLead(_adsClassifica(r.objetivo,[],r.campaign_nome)); if(cache[k]) o.gastoLead+=Number(r.gasto||0); }); }
+  else o.gastoLead=o.gasto;
+  return o; }
 function qgCalcCliente(mc,data,year,month,filtro){
   filtro=filtro||{};
   const fPlat=filtro.plataforma||"todos", fProd=filtro.produto||"todos", fReg=filtro.regiao||"todos";
@@ -49851,7 +49856,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const funVendas=stages.length>=2?stQ(stages[stages.length-1],platQ):0;
 
   let orcamento,gasto,gastoFonte,leads,leadsFonte,qualificados,qualFonte,oportunidades,vendas,vendasFonte,receita;
-  let adsMes=null;
+  let adsMes=null; let gastoLead=null;
   if(filtrando){
     orcamento=sum(linhas,"orcamento"); gasto=sum(linhas,"gasto"); gastoFonte="linhas";
     leads=sum(linhas,"leads"); leadsFonte="linhas"; qualificados=sum(linhas,"qualificados"); qualFonte="linhas";
@@ -49868,7 +49873,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
     // gasto: Meta API (+ Google dos fechamentos/linhas) > fechamentos semanais > linhas > 0
     const cInv=fPlat==="meta"?sum(closingsMes,"investimento_meta"):fPlat==="google"?sum(closingsMes,"investimento_google"):sum(closingsMes,"investimento");
     const gInvGoogle=Math.max(sum(closingsMes,"investimento_google"),sum(linhasTodas.filter(function(b){return b.plataforma==="google";}),"gasto"));
-    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoFonte="meta_api"; }
+    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoLead=adsMes.gastoLead+(fPlat==="todos"?gInvGoogle:0); gastoFonte="meta_api"; }
     else if(closingsMes.length&&cInv>0){ gasto=cInv; gastoFonte="fechamentos"; }
     else if(linhas.length&&sum(linhas,"gasto")>0){ gasto=sum(linhas,"gasto"); gastoFonte="linhas"; }
     else { gasto=0; gastoFonte="nenhuma"; }
@@ -49891,7 +49896,8 @@ function qgCalcCliente(mc,data,year,month,filtro){
   }
   const saldo=orcamento-gasto;
   const usoPct=orcamento>0?gasto/orcamento*100:null;
-  const cpl=_qgDiv(gasto,leads), cpq=_qgDiv(gasto,qualificados), cac=_qgDiv(gasto,vendas), ticket=_qgDiv(receita,vendas);
+  if(gastoLead===null) gastoLead=gasto;
+  const cpl=_qgDiv(gastoLead,leads), cpq=_qgDiv(gasto,qualificados), cac=_qgDiv(gasto,vendas), ticket=_qgDiv(receita,vendas);
   const roas=_qgDiv(receita,gasto);
   const roiPct=(gasto>0&&receita>0)?((receita-gasto)/gasto*100):null;
   // situação dos dados
@@ -49916,7 +49922,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
     const ld=adsP?adsP.leads:(cLeadsP>0?cLeadsP:(stages.length&&stQ(stages[0],p)>0?stQ(stages[0],p):sum(ls,"leads")));
     const vd=vs.length||(stages.length>=2?stQ(stages[stages.length-1],p):0)||sum(ls,"vendas");
     const rc=vs.length?sum(vs,"value"):sum(ls,"receita");
-    porPlat[p]={orcamento:orc,gasto:gst,saldo:orc-gst,leads:ld,vendas:vd,receita:rc,cpl:_qgDiv(gst,ld),roas:_qgDiv(rc,gst),ativa:_qgPlataformas(mc).indexOf(p)>=0||orc>0||gst>0};
+    porPlat[p]={orcamento:orc,gasto:gst,gastoLead:adsP?adsP.gastoLead:gst,saldo:orc-gst,leads:ld,vendas:vd,receita:rc,cpl:_qgDiv(adsP?adsP.gastoLead:gst,ld),roas:_qgDiv(rc,gst),ativa:_qgPlataformas(mc).indexOf(p)>=0||orc>0||gst>0};
   });
   // por produto / região (linhas + vendas + fechamentos)
   const agrupa=function(chaveLinha,chaveVenda,chaveClosing){
@@ -49936,7 +49942,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const _adsAcc=_qgAdsConta(mc,data); const _adsUlt=_adsAcc?(data.ads||[]).filter(function(r){return r.ad_account_id===_adsAcc.ad_account_id;}).map(function(r){return r.data+"T23:59:00";}).sort().pop():null;
   const ultimaAtualizacao=[mc.ultima_atualizacao,_adsUlt,funil&&(funil.updated_at||funil.submitted_at),roi&&roi.updated_at].concat(closingsCliente.map(function(w){return w.updated_at;})).concat(linhasTodas.map(function(b){return b.updated_at;})).filter(Boolean).sort().pop()||null;
   const distribuido=sum(linhasTodas,"orcamento");
-  return {mc:mc,orcamento:orcamento,distribuido:distribuido,gasto:gasto,gastoFonte:gastoFonte,saldo:saldo,usoPct:usoPct,leads:leads,leadsFonte:leadsFonte,qualificados:qualificados,qualFonte:qualFonte,oportunidades:oportunidades,vendas:vendas,vendasFonte:vendasFonte,receita:receita,
+  return {mc:mc,orcamento:orcamento,distribuido:distribuido,gasto:gasto,gastoLead:gastoLead,gastoOutras:Math.max(0,gasto-gastoLead),gastoFonte:gastoFonte,saldo:saldo,usoPct:usoPct,leads:leads,leadsFonte:leadsFonte,qualificados:qualificados,qualFonte:qualFonte,oportunidades:oportunidades,vendas:vendas,vendasFonte:vendasFonte,receita:receita,
     cpl:cpl,cpq:cpq,cac:cac,ticket:ticket,roas:roas,roiPct:roiPct,roic:roiPct,situacao:situacao,temFunil:temFunil,temFechamento:temFechamento,funil:funil,stages:stages,roi:roi,vendasLista:vendasLista,vendasTodas:vendasTodas,
     linhas:linhas,linhasTodas:linhasTodas,closingsMes:closingsMes,closingsCliente:closingsCliente,porPlat:porPlat,porProduto:porProduto,porRegiao:porRegiao,ultimaAtualizacao:ultimaAtualizacao,filtrando:filtrando,metaApi:!!adsMes};
 }
@@ -50541,9 +50547,9 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       <div style={{height:1,background:QG.borda}}/>
       <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 20px",fontSize:13}}>
         <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3}}>{QG_MESES[month-1]}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgBRLk(c.gasto)}</b>{c.orcamento>0&&<span style={{color:QG.txt3}}> de {_qgBRLk(c.orcamento)} · {Math.round(c.usoPct)}%</span>}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgNum(c.leads)}</b><span style={{color:QG.txt3}}> leads{c.cpl?" · "+_qgBRL(c.cpl)+" cada":""}</span></span>
-        <span style={{color:QG.txt3}}>meta {m.meta?<b style={{color:m.cor}}>{Math.round(m.pct)}%</b>:<a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,cursor:"pointer"}}>definir</a>}</span>
+        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgBRL(c.gasto,2)}</b>{c.orcamento>0&&<span style={{color:QG.txt3}}> de {_qgBRLk(c.orcamento)} · {Math.round(c.usoPct)}%</span>}</span>
+        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgNum(c.leads)}</b><span style={{color:QG.txt3}}> leads{c.cpl?" · "+_qgBRL(c.cpl,2)+" cada":""}</span></span>
+        <span style={{color:QG.txt3}}>meta {m.meta?<b onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"Meta de "+_qgNum(m.meta)+" leads · clique pra editar":undefined} style={{color:m.cor,cursor:canEdit?"pointer":"default"}}>{Math.round(m.pct)}%</b>:<a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,cursor:"pointer"}}>definir</a>}</span>
         {c.vendas>0&&<span><b style={{fontSize:16,color:QG.verde}}>{_qgNum(c.vendas)}</b><span style={{color:QG.txt3}}> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</span></span>}
         {c.orcamento>0&&<span style={{flex:1,minWidth:120,maxWidth:260,marginLeft:"auto"}}><QGBar pct={c.usoPct} cor={c.usoPct>=100?QG.verm:QG.roxo} h={6}/></span>}
       </div>
@@ -50584,8 +50590,8 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       const Barra=function(pct,marca){ return <div style={{position:"relative",height:6,borderRadius:99,background:"#7a5fb0",marginTop:8,overflow:"visible"}}><div style={{width:Math.max(0,Math.min(100,pct||0))+"%",height:"100%",borderRadius:99,background:"#fff"}}/>{marca!==null&&marca!==undefined&&<div style={{position:"absolute",left:Math.min(100,marca)+"%",top:-3,width:2,height:12,background:"#e9e0fb",borderRadius:2}}/>}</div>; };
       return <>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
-        {Solido("#2f1a5e","Verba do mês · "+QG_MESES[month-1],c.orcamento>0?_qgBRLk(c.gasto)+" de "+_qgBRLk(c.orcamento):_qgBRLk(c.gasto),<span>{c.orcamento>0?<span><b style={{color:"#fff"}}>{ritmoTxt}</b> · projeção de fim do mês <b style={{color:"#fff"}}>{_qgBRLk(projecao)}</b></span>:"defina o orçamento nas plataformas abaixo"}</span>,c.orcamento>0?Barra(c.usoPct,esperado/c.orcamento*100):null)}
-        {Solido("#5a34a3","Resultado do mês",_qgNum(c.leads)+" leads",<span>custo por lead <b style={{color:"#fff"}}>{c.cpl?_qgBRL(c.cpl):"—"}</b>{m.meta?<span> · meta {_qgNum(m.meta)} ({Math.round(m.pct)}%) · {m.label}</span>:<span> · <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}</span>,m.meta?Barra(m.pct,m.fracao*100):null)}
+        {Solido("#2f1a5e","Verba do mês · "+QG_MESES[month-1],c.orcamento>0?_qgBRL(c.gasto,2)+" de "+_qgBRLk(c.orcamento):_qgBRLk(c.gasto),<span>{c.orcamento>0?<span><b style={{color:"#fff"}}>{ritmoTxt}</b> · projeção de fim do mês <b style={{color:"#fff"}}>{_qgBRLk(projecao)}</b></span>:"defina o orçamento nas plataformas abaixo"}</span>,c.orcamento>0?Barra(c.usoPct,esperado/c.orcamento*100):null)}
+        {Solido("#5a34a3","Resultado do mês",_qgNum(c.leads)+" leads",<span>custo por lead <b style={{color:"#fff"}}>{c.cpl?_qgBRL(c.cpl,2):"—"}</b>{c.gastoOutras>0.005&&<span> (só campanhas de lead · {_qgBRL(c.gastoOutras,2)} em outras finalidades fora da conta)</span>}{m.meta?<span> · meta <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title="Clique pra editar a meta" style={{color:"#fff",textDecoration:canEdit?"underline dotted":"none",cursor:canEdit?"pointer":"default"}}>{_qgNum(m.meta)}</a> ({Math.round(m.pct)}%) · {m.label}</span>:<span> · <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}</span>,m.meta?Barra(m.pct,m.fracao*100):null)}
         {Solido("#8a63cf","Semana "+_qgWeekLabel(s0.start),s0.w?_qgNum(s0.leads)+" leads":"fechamento pendente",<span>{s0.w?<span>semana anterior <b style={{color:"#fff"}}>{_qgNum(s1.leads)}</b>{s1.leads>0?" · "+(s0.leads>=s1.leads?"▲":"▼")+" "+Math.abs(Math.round((s0.leads-s1.leads)/s1.leads*100))+"%":""}</span>:<span>o Erick registra leads, investimento e observação da semana</span>}</span>,canEdit?<div style={{marginTop:6}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={{background:"#fff",color:"#2f1a5e",border:0,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:QG_FONT,minHeight:0}}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>:null)}
       </div>
 
@@ -50600,7 +50606,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
               <span style={{marginLeft:"auto",fontSize:12.5,color:QG.txt2,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6}}>Orçamento mensal <b style={{color:QG.txt,fontSize:14}}><QGInline value={Number(mc.investimento_meta)||0} type="number" fmt={_qgBRL} placeholder="definir" disabled={!canEdit} onSave={function(v){setOrcamento("meta",v);}}/></b></span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
-              {[["Gasto",_qgBRLk(c.porPlat.meta.gasto),QG.roxo,c.porPlat.meta.orcamento>0?Math.round(c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100)+"% do orçamento":undefined],["Leads",_qgNum(c.porPlat.meta.leads),QG.txt,undefined],["Custo por lead",c.porPlat.meta.cpl?_qgBRL(c.porPlat.meta.cpl):"—",QG.txt,undefined],["Saldo",c.porPlat.meta.orcamento>0?_qgBRLk(c.porPlat.meta.saldo):"—",c.porPlat.meta.saldo<0?QG.verm:QG.txt,undefined]].map(function(k){ return <div key={k[0]} style={{minWidth:0}}><div style={{color:QG.txt3,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{k[0]}</div><div style={{fontSize:18,fontWeight:800,letterSpacing:-.4,color:k[2],marginTop:2,fontFeatureSettings:"'tnum'"}}>{k[1]}</div>{k[3]&&<div style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{k[3]}</div>}</div>; })}
+              {[["Gasto",_qgBRL(c.porPlat.meta.gasto,2),QG.roxo,c.porPlat.meta.orcamento>0?Math.round(c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100)+"% do orçamento":undefined],["Leads",_qgNum(c.porPlat.meta.leads),QG.txt,undefined],["Custo por lead",c.porPlat.meta.cpl?_qgBRL(c.porPlat.meta.cpl):"—",QG.txt,undefined],["Saldo",c.porPlat.meta.orcamento>0?_qgBRLk(c.porPlat.meta.saldo):"—",c.porPlat.meta.saldo<0?QG.verm:QG.txt,undefined]].map(function(k){ return <div key={k[0]} style={{minWidth:0}}><div style={{color:QG.txt3,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{k[0]}</div><div style={{fontSize:18,fontWeight:800,letterSpacing:-.4,color:k[2],marginTop:2,fontFeatureSettings:"'tnum'"}}>{k[1]}</div>{k[3]&&<div style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{k[3]}</div>}</div>; })}
             </div>
             {c.porPlat.meta.orcamento>0&&<div style={{marginTop:10}}><QGBar pct={c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100} cor={QG.roxo} h={6} marca={esperado>0?diaRef/diasNoMes*100:null}/></div>}
             <div style={{fontSize:11.5,color:QG.txt3,marginTop:10}}>Campanhas, criativos e público estão nas abas ao lado — tudo vem da API, sem digitação.</div>
@@ -50765,7 +50771,7 @@ function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
   const html="<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'><title>"+esc(mc.name)+" · "+esc(mes)+"</title><style>"+
     "@page{size:A4;margin:16mm} body{font-family:Inter,system-ui,sans-serif;color:#17131f;margin:0;padding:24px;max-width:760px} h1{font-size:22px;margin:0;letter-spacing:-.4px} .top{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #7326d6;padding-bottom:10px;margin-bottom:18px} .top .px{font-weight:900;color:#7326d6;font-size:14px} .mute{color:#7b7590} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} .k{color:#fff;border-radius:14px;padding:14px 16px} .k small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#d9ccf5;font-weight:700} .k b{display:block;font-size:26px;margin-top:4px;letter-spacing:-.8px} .k span{font-size:11px;color:#e9e0fb} h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7b7590;margin:22px 0 6px} .lead{font-size:15px;line-height:1.45;background:#221743;color:#fff;border-radius:14px;padding:14px 16px} ul{margin:0;padding-left:18px;line-height:1.6} p{margin:0} .foot{margin-top:26px;font-size:11px;color:#7b7590;border-top:1px solid #e7e3ef;padding-top:8px}"+
     "</style></head><body><div class='top'><div><h1>"+esc(mc.name)+"</h1><div class='mute'>Relatório de mídia · "+esc(mes)+"</div></div><div class='px'>pixels</div></div>"+
-    "<div class='g'>"+kpi("#2f1a5e","Investido",_qgBRL(c.gasto),c.orcamento>0?"de "+_qgBRL(c.orcamento)+" planejados":"")+kpi("#5a34a3","Leads",_qgNum(c.leads),m&&m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"%":"")+kpi("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRL(c.receita):"")+"</div>"+
+    "<div class='g'>"+kpi("#2f1a5e","Investido",_qgBRL(c.gasto,2),c.orcamento>0?"de "+_qgBRL(c.orcamento)+" planejados":"")+kpi("#5a34a3","Leads",_qgNum(c.leads),m&&m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"%":"")+kpi("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl,2):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRL(c.receita):"")+"</div>"+
     (analise&&analise.resumo?"<h2>Leitura do mês</h2><div class='lead'>"+esc(analise.resumo)+"</div>":"")+
     "<h2>O que fizemos</h2>"+li(feitas,"Ações do mês registradas na Gestão de mídia aparecem aqui.")+
     "<h2>Próximo mês</h2>"+li(abertas,"Nenhuma ação aberta.")+
@@ -50786,8 +50792,8 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
   const ci=Math.max(0,calcs.findIndex(function(c){return c.mc.client_id===foco;}));
   const c=calcs[ci]; const m=metas[ci];
   const sum=function(k){ return calcs.reduce(function(s,x){return s+Number(x[k]||0);},0); };
-  const T={orcamento:sum("orcamento"),gasto:sum("gasto"),leads:sum("leads"),vendas:sum("vendas"),receita:sum("receita")};
-  T.cpl=_qgDiv(T.gasto,T.leads); T.roic=(T.gasto>0&&T.receita>0)?(T.receita-T.gasto)/T.gasto*100:null;
+  const T={orcamento:sum("orcamento"),gasto:sum("gasto"),gastoLead:sum("gastoLead"),leads:sum("leads"),vendas:sum("vendas"),receita:sum("receita")};
+  T.cpl=_qgDiv(T.gastoLead,T.leads); T.roic=(T.gasto>0&&T.receita>0)?(T.receita-T.gasto)/T.gasto*100:null;
   const temVendas=T.vendas>0||T.receita>0;
   const Sol=function(bg,eyebrow,big,sub){ if(typeof AdsSolido==="function") return <AdsSolido bg={bg} eyebrow={eyebrow} big={big} sub={sub}/>; return <div style={{background:bg,color:"#fff",borderRadius:18,padding:"18px 20px"}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#d9ccf5"}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:-1,marginTop:4}}>{big}</div><div style={{fontSize:12.5,color:"#e9e0fb"}}>{sub}</div></div>; };
   const semanas=_qgLastWeeks(6).reverse();
@@ -50800,9 +50806,9 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
     </div>
     {calcs.length===0?<QGCard><QGEmpty texto={"Nenhum dado de mídia em "+mesLabel+"."} alt="Cadastre orçamento nos clientes ou aguarde a coleta da Meta."/></QGCard>:<>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(temVendas?"repeat(4,1fr)":"repeat(3,1fr)"),gap:14}}>
-      {Sol("#2f1a5e","Agência · investido",_qgBRLk(T.gasto),T.orcamento>0?"de "+_qgBRLk(T.orcamento)+" planejados · "+Math.round(T.gasto/T.orcamento*100)+"%":"sem orçamento cadastrado")}
+      {Sol("#2f1a5e","Agência · investido",_qgBRL(T.gasto,2),T.orcamento>0?"de "+_qgBRLk(T.orcamento)+" planejados · "+Math.round(T.gasto/T.orcamento*100)+"%":"sem orçamento cadastrado")}
       {Sol("#5a34a3","Agência · leads",_qgNum(T.leads),"todos os clientes no mês")}
-      {Sol("#8a63cf","Agência · custo por lead",T.cpl!==null?_qgBRL(T.cpl):"—","média ponderada")}
+      {Sol("#8a63cf","Agência · custo por lead",T.cpl!==null?_qgBRL(T.cpl,2):"—","média ponderada")}
       {temVendas&&Sol("#221743","Vendas · receita",_qgNum(T.vendas)+" · "+_qgBRLk(T.receita),T.roic!==null?"ROIC "+_qgPct(T.roic):"")}
     </div>
 
@@ -50814,9 +50820,9 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
         <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}><button style={QG_BTN("sm")} onClick={function(){pxRelatorioAbrir(c.mc,c,m,year,month,acoes);}}>Relatório de 1 página · PDF</button>{onOpenClient&&<button style={QG_BTN("sm")} onClick={function(){onOpenClient(c.mc.client_id);}}>Abrir ›</button>}</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,padding:"20px 20px 0"}}>
-        {Sol("#2f1a5e","Investido",_qgBRLk(c.gasto),c.orcamento>0?"de "+_qgBRLk(c.orcamento)+" · "+Math.round(c.usoPct)+"%":"sem orçamento")}
+        {Sol("#2f1a5e","Investido",_qgBRL(c.gasto,2),c.orcamento>0?"de "+_qgBRLk(c.orcamento)+" · "+Math.round(c.usoPct)+"%":"sem orçamento")}
         {Sol("#5a34a3","Leads",_qgNum(c.leads),m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"% · "+m.label:"sem meta definida")}
-        {Sol("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRLk(c.receita)+(c.roic!==null?" · ROIC "+_qgPct(c.roic):""):"vendas e receita: o cliente lança no Portal")}
+        {Sol("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl,2):"—",(c.gastoOutras>0.005?_qgBRL(c.gastoLead,2)+" em campanhas de lead ÷ "+_qgNum(c.leads)+" · ":"")+(c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRLk(c.receita)+(c.roic!==null?" · ROIC "+_qgPct(c.roic):""):"vendas e receita: o cliente lança no Portal"))}
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1fr",gap:14,padding:"20px"}}>
         <div>{Cab("Leads por semana · últimas 6")}<div style={{paddingTop:14}}><QGMiniBarras rows={semanas.map(function(wk,i){ const sw=qgCalcSemana(c.mc,data,wk); return {label:_qgFmtD(wk.start),v:sw.leads,atual:i===semanas.length-1}; })} cor={QG.roxo}/></div></div>
@@ -50974,7 +50980,7 @@ function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,tasks,onNov
   const abrir=function(id){ setOpenClient(id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} };
   const editarMeta=async function(mc,atual){
     if(typeof pixelsPrompt!=="function") return;
-    const v=await pixelsPrompt("Meta mensal de leads · "+mc.name+" · "+QG_MESES[month-1]+"/"+year,{inputType:"number",defaultValue:atual?String(atual):"",placeholder:"ex.: 100",okText:"Salvar meta"});
+    const v=await pixelsPrompt("Meta mensal de leads · "+mc.name+" · "+QG_MESES[month-1]+"/"+year,{inputType:"number",defaultValue:atual?String(atual):"",placeholder:"ex.: 100 · 0 remove a meta",okText:"Salvar meta"});
     if(v===null||v===undefined) return; const n=parseInt(v,10)||0; const ref=year+"-"+String(month).padStart(2,"0");
     const r=await window._sb.from("media_goals").upsert({client_id:mc.client_id,ref_month:ref,meta_leads:n,updated_by:(currentUser&&currentUser.id)||"",updated_at:new Date().toISOString()},{onConflict:"client_id,ref_month"});
     if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+r.error.message); return; }
@@ -51170,6 +51176,9 @@ function QGAdsBarraPeriodo({compact}){
 /* DEFINIÇÃO DE LEAD (09/09/2026) — uma só, para todas as telas:
    lead = pessoa que chegou: formulário preenchido (leads) + conversa iniciada no WhatsApp (conversas). Sem sobreposição.
    "leads_meta" é o total que a Meta chama de lead — ele já inclui as conversas que ela qualifica; é informativo e NUNCA entra na soma. */
+const ADS_FAM_LEAD={form:1,lead_wpp:1,eng_wpp:1}; /* finalidades que geram lead — só elas entram no custo por lead */
+const _adsEhLead=function(tipo){ return !!ADS_FAM_LEAD[tipo]; };
+const ADS_DEF_CPL="Custo por lead = gasto SÓ das campanhas de lead (formulário / WhatsApp) ÷ leads. Engajamento, reconhecimento, seguidores, vídeo e tráfego têm outra finalidade e ficam fora da conta.";
 const ADS_DEF_LEAD="Lead = pessoa que chegou: formulário preenchido ou conversa iniciada no WhatsApp. Cada conversa é uma pessoa — bate com o WhatsApp do cliente. Quem respondeu ou virou negócio se marca na aba Leads.";
 /* "leads_meta" fica só no banco: a Meta só carimba lead em conversa quando a campanha está configurada pra isso, varia por conta e não dá pra auditar — não aparece na tela (decisão 09/09). */
 function _adsSubLeads(x){ x=x||{}; const f=Number(x.leads||0), c=Number(x.conversas||0); const partes=[]; if(f>0||c===0) partes.push(_adsNum(f)+" formulário"); if(c>0||f===0) partes.push(_adsNum(c)+" WhatsApp"); return partes.join(" · "); }
@@ -51293,6 +51302,11 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const entCamp={}; ent.filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
   const camps=(cur.campanhas||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:_adsResDe(c,cfg)}); });
   const leadCamps=camps.filter(function(c){return c.fam==="leads";});
+  /* custo por lead: só o gasto das campanhas cuja finalidade é lead (09/09) */
+  const somaLead=function(lista){ const o={gasto:0,res:0}; (lista||[]).forEach(function(c){ if(c.fam!=="leads") return; o.gasto+=Number(c.gasto||0); o.res+=Number(c.res||0); }); return o; };
+  const L=somaLead(camps); T.gastoLead=L.gasto; T.resLead=L.res; T.gastoOutras=Math.max(0,Number(T.gasto||0)-L.gasto); T.cpa=_adsDiv(L.gasto,L.res);
+  (function(){ const pc=((X.prev||{}).campanhas||[]).map(function(c){ const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return {fam:cfg.fam,gasto:c.gasto,res:_adsResDe(c,cfg)}; }); const Lp=somaLead(pc); prev.gastoLead=Lp.gasto; prev.cpa=_adsDiv(Lp.gasto,Lp.res); })();
+  const outrasNomes=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads"||!(Number(c.gasto||0)>0)) return; const k=c.cfg.curto||c.cfg.label; g[k]=(g[k]||0)+Number(c.gasto||0); }); return Object.keys(g).sort(function(a,b){return g[b]-g[a];}); })();
   const media=Number(T.cpa)||null;
   const verba=Number(verbaMensal)||0;
   // ritmo do mês (gasto do mês vem da série se o período cobrir; senão só verba)
@@ -51315,15 +51329,15 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const acaoLimpa=function(t){ return String(t||"").replace(/\[Pixels\]\s*/g,"").replace(/\[\d{2}\/\d{2}\/\d{2,4}\]\s*/g,"").replace(/\[Leads\s*-\s*Forms\]\s*/ig,"").replace(/\[Leads\s*-\s*Wpp\]\s*/ig,"").replace(/\[Leads\]\s*/ig,"").replace(/[\[\]]/g,"").replace(/"\s*"/g,"").replace(/\s+/g," ").trim(); };
   const acaoTitulo=function(t){ const s=acaoLimpa(t); const m=s.match(/^(.{0,80}?)(\s\(|\s—|\s-\s|:|\.\s|,\s(?:e|realocar|concentrar)\b|$)/); let ti=m?m[1]:s.slice(0,80); if(ti.length>72){ ti=ti.slice(0,72).replace(/\s\S*$/,"")+"…"; } return ti; };
   const acaoResto=function(t){ const s=acaoLimpa(t); const ti=acaoTitulo(t).replace(/…$/,""); return s.slice(ti.length).replace(/^[\s\(—:\-\.,]+/,"").replace(/\)$/,""); };
-  const tipCusto=[["O que é","quanto custou, em média, cada lead no período (gasto ÷ leads). Lead = formulário enviado ou conversa iniciada no WhatsApp."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
+  const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead (formulário / WhatsApp) ÷ leads. Campanhas de engajamento, reconhecimento, seguidores, vídeo e tráfego têm outra finalidade e não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
   return <AdsWrap>
     {compartilhada&&<div style={{fontSize:12,color:ADS.muted,marginBottom:10}}>Conta compartilhada com Bioter {compartilhada} — as praças só se distinguem pelo nome da campanha.</div>}
     {/* três números — sólidos, um tom cada */}
     {(function(){ const tipoDom=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads") g[c.tipo]=(g[c.tipo]||0)+c.gasto; }); return Object.keys(g).sort(function(x,y){return g[y]-g[x];})[0]||null; })(); const bench=tipoDom?_adsBenchCarteira(tipoDom):null; const cfgDom=tipoDom?_adsTipo(tipoDom):null;
       return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
-      <AdsSolido bg={ADS_SOL.escuro} eyebrow="Investido" big={_adsBRL0(T.gasto)} delta={_adsDelta(T.gasto,prev.gasto)} sub={verba>0?(ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:"verba do mês "+_adsBRL0(verba)):"verba mensal não definida — cadastre em Gestão"}/>
-      <AdsSolido bg={ADS_SOL.medio} eyebrow="Leads" big={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} sub={_adsSubLeads(T)} title={ADS_DEF_LEAD}/>
-      <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
+      <AdsSolido bg={ADS_SOL.escuro} eyebrow="Investido" big={_adsBRL(T.gasto)} delta={_adsDelta(T.gasto,prev.gasto)} sub={<span>{verba>0?(ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:"verba do mês "+_adsBRL0(verba)):"verba mensal não definida — cadastre em Gestão"}{T.gastoOutras>0.005&&<span style={{display:"block"}}>{_adsBRL(T.gastoLead)} em lead · {_adsBRL(T.gastoOutras)} em {outrasNomes.length?outrasNomes.join(" + ").toLowerCase():"outras finalidades"}</span>}</span>}/>
+      <AdsSolido bg={ADS_SOL.medio} eyebrow="Leads" big={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} sub={<span>{_adsSubLeads(T)}{T.resultados-T.resLead>0&&<span style={{display:"block"}}>{_adsNum(T.resultados-T.resLead)} {T.resultados-T.resLead===1?"veio":"vieram"} de campanha de outra finalidade (fora do custo por lead)</span>}</span>} title={ADS_DEF_LEAD}/>
+      <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" title={ADS_DEF_CPL} big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{_adsBRL(T.gastoLead)+" em campanhas de lead ÷ "+_adsNum(T.resLead)+(T.gastoOutras>0.005?" · outras finalidades fora da conta":"")}<br/>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
     </div>; })()}
 
     {/* leitura da IA — cabeçalho, manchete, dois painéis com destaque numérico por item */}
@@ -51963,7 +51977,9 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   const [vistaCard,setVistaCard]=useState({});
   const mudaVista=function(v){ setVista(v); setVistaCard({}); try{ localStorage.setItem("px_ads_vista",v); }catch(_){} };
   const camps=_adsCampanhasEnriquecidas(X.cur,D.ent);
-  const campIds=(function(){ if(filtro==="todas") return null; if(filtro.indexOf("camp:")===0) return [filtro.slice(5)]; if(filtro.indexOf("tipo:")===0){ const t=filtro.slice(5); return camps.filter(function(c){return c.tipo===t;}).map(function(c){return c.id;}); } return null; })();
+  const temOutras=camps.some(function(c){return c.fam!=="leads"&&Number(c.gasto||0)>0;});
+  /* "todas" = campanhas de lead (engajamento/seguidores/etc. têm outra finalidade e distorceriam o custo por lead) */
+  const campIds=(function(){ if(filtro==="todas") return temOutras?camps.filter(function(c){return c.fam==="leads";}).map(function(c){return c.id;}):null; if(filtro.indexOf("camp:")===0) return [filtro.slice(5)]; if(filtro.indexOf("tipo:")===0){ const t=filtro.slice(5); return camps.filter(function(c){return c.tipo===t;}).map(function(c){return c.id;}); } return null; })();
   const Q=useAdsQuebras(conta&&conta.ad_account_id,X.P,campIds);
   if(D.loading||X.loading||Q.loading) return <AdsLoading t="Lendo público…"/>;
   const P=X.P; const rows=Q.rows||[];
@@ -52022,7 +52038,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
       {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,ADS_SOL.medio)}
       {heroi("Gênero que rende mais",mGen,ADS_SOL.claro)}
     </div>}
-    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> resultados · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por resultado</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>Toda a conta</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
+    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> resultados · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por lead{filtro==="todas"&&temOutras?" · só campanhas de lead":""}</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>{temOutras?"Campanhas de lead":"Toda a conta"}</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Ver como</span><AdsSegVista v={vista} onChange={mudaVista}/>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase",marginLeft:isMob?0:10}}>Métrica</span><AdsSegMetrica v={metrica} onChange={setMetrica}/>
@@ -52062,8 +52078,8 @@ function _adsPainelCalc(data,accounts,clients){
   (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
   /* resultado por tipo: leads (form) ou conversas (wpp) — família leads; demais famílias não contam como lead */
   const resDe=function(r,tipo){ return Number(r.leads||0)+Number(r.conversas||0); }; /* leads = formulário, conversas = WhatsApp; sem sobreposição (definição 09/09) */
-  const vazio=function(){ return {gasto:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
-  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); a.res+=resDe(r,tipo); a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); a.leads_meta+=Number(r.leads_meta||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
+  const vazio=function(){ return {gasto:0,gastoLead:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
+  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); if(_adsEhLead(tipo)) a.gastoLead+=Number(r.gasto||0); a.res+=resDe(r,tipo); a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); a.leads_meta+=Number(r.leads_meta||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
   /* por conta */
   const contas={};
   (data.dias||[]).forEach(function(r){ const tipo=tipoCache[r.conta+"|"+r.camp]; const o=contas[r.conta]||(contas[r.conta]={conta:r.conta,client_id:r.client_id,unidade:r.unidade,j:{d1:vazio(),d7:vazio(),d15:vazio(),d30:vazio(),mes:vazio()},tipos:{},porDia:{}});
@@ -52110,7 +52126,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   if(!P.data) return <AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13,fontFamily:ADS_FONT}}>Não deu pra ler o painel{P.erro?": "+P.erro:""}.</AdsCard>;
   const C=_adsPainelCalc(P.data,accounts,clients);
   const J=[["d1",C.atrasado?_adsFmtD(C.ontem):"Ontem"],["d7","7 dias"],["d15","15 dias"],["d30","30 dias"],["mes","Este mês"]];
-  const cpl=function(x){ return x&&x.res>0?x.gasto/x.res:null; };
+  const cpl=function(x){ return x&&x.res>0?(x.gastoLead||0)/x.res:null; }; /* só gasto de campanhas de lead */
   const linhas=C.linhas.slice().sort(function(a,b){ return (b.crit.length-a.crit.length)||((b.o?b.o.j.d7.gasto:0)-(a.o?a.o.j.d7.gasto:0)); });
   const hojeIso=C.hoje;
   const prosTodos=C.prios.map(function(p){ return Object.assign({},p,{chave:_adsChaveAlerta(p.cliente.client_id,p.titulo)}); });
@@ -52171,12 +52187,12 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
 
     {/* ── 3. AGÊNCIA ── */}
     {!soClientes&&<div style={{background:ADS_SOL.painel,borderRadius:18,padding:isMob?"18px 14px":"22px 20px",color:"#fff"}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · lead = formulário enviado ou conversa iniciada no WhatsApp</span></div>
+      <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · lead = formulário enviado ou conversa iniciada no WhatsApp · custo por lead só com o gasto das campanhas de lead</span></div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
         {J.map(function(j,i){ const x=C.ag.j[j[0]]; const c=cpl(x); const bg=j[0]==="d1"?ADS_SOL.claro:j[0]==="mes"?ADS_SOL.medio:ADS_SOL.escuro; return <div key={j[0]} style={{background:bg,borderRadius:14,padding:"16px 18px",minWidth:0}}>
           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1]}</div>
           <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,margin:"8px 0 2px",color:"#fff",fontFeatureSettings:"'tnum'"}}><AdsNumAnim v={x.res} fmt={_adsNum}/><span style={{fontSize:12,fontWeight:700,color:ADS_SOL.sub,letterSpacing:0,marginLeft:6}}>leads</span></div>
-          <div style={{fontSize:12.5,color:"#fff",marginTop:6}}><b style={{fontFeatureSettings:"'tnum'"}}>{c?_adsBRL(c):"—"}</b> por lead <span style={{color:ADS_SOL.sub}}>· <AdsNumAnim v={x.gasto} fmt={_adsBRL0}/></span></div>
+          <div style={{fontSize:12.5,color:"#fff",marginTop:6}}><b style={{fontFeatureSettings:"'tnum'"}}>{c?_adsBRL(c):"—"}</b> por lead <span style={{color:ADS_SOL.sub}}>· <AdsNumAnim v={x.gasto} fmt={_adsBRL}/>{x.gasto-x.gastoLead>0.005&&<span> ({_adsBRL(x.gastoLead)} em lead)</span>}</span></div>
           <div style={{fontSize:11,color:ADS_SOL.sub,marginTop:3}}>{_adsSubLeads(x)}</div>
         </div>; })}
       </div>
@@ -52347,7 +52363,12 @@ function useAdsHistorico(accountId,campId,dias){
     const fim=_adsIso(new Date()); const ini=_adsAddDays(fim,-(dias-1));
     let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,leads,conversas,frequencia").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
     q=campId?q.eq("nivel","campanha").eq("campaign_id",campId):q.eq("nivel","conta");
-    q.then(function(r){ if(!alive) return; if(r.error) console.warn("[ads histórico]",r.error.message); setSt({loading:false,rows:r.error?[]:(r.data||[])}); });
+    /* gasto só das campanhas de lead, por dia (custo por lead não usa engajamento/seguidores/etc.) */
+    const qLead=campId?Promise.resolve({data:null}):window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,objetivo,gasto").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
+    Promise.all([q,qLead]).then(function(rr){ if(!alive) return; const r=rr[0], rl=rr[1]; if(r.error) console.warn("[ads histórico]",r.error.message); const rows=r.error?[]:(r.data||[]);
+      if(rl&&rl.data){ const porDia={}; const tipoCache={}; rl.data.forEach(function(x){ const k=x.campaign_id; if(!(k in tipoCache)) tipoCache[k]=_adsClassifica(x.objetivo,[],x.campaign_nome); if(_adsEhLead(tipoCache[k])) porDia[x.data]=(porDia[x.data]||0)+Number(x.gasto||0); }); rows.forEach(function(d){ d.gastoLead=porDia[d.data]||0; }); }
+      else rows.forEach(function(d){ d.gastoLead=Number(d.gasto||0); });
+      setSt({loading:false,rows:rows}); });
     return function(){alive=false;};
   },[accountId,campId,dias]);
   return st;
@@ -52406,12 +52427,12 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
   if(H.loading) return <AdsLoading t="Lendo histórico…"/>;
   const rows=H.rows||[];
   if(!rows.length) return <AdsWrap><QGAdsEmBreve nome="Sem histórico neste período"/></AdsWrap>;
-  const sem={}; rows.forEach(function(r){ const k=_adsSemanaIni(r.data); const o=sem[k]||(sem[k]={k:k,gasto:0,impressoes:0,alcance:0,cliques:0,leads:0,conversas:0,dias:0}); ["gasto","impressoes","alcance","cliques","leads","conversas"].forEach(function(f){ o[f]+=Number(r[f]||0); }); o.dias++; });
+  const sem={}; rows.forEach(function(r){ const k=_adsSemanaIni(r.data); const o=sem[k]||(sem[k]={k:k,gasto:0,gastoLead:0,impressoes:0,alcance:0,cliques:0,leads:0,conversas:0,dias:0}); ["gasto","gastoLead","impressoes","alcance","cliques","leads","conversas"].forEach(function(f){ o[f]+=Number(r[f]||0); }); o.dias++; });
   const hojeSem=_adsSemanaIni(_adsIso(new Date()));
-  const semanas=Object.keys(sem).sort().map(function(k){ const o=sem[k]; o.res=o.leads+o.conversas; o.cpa=_adsDiv(o.gasto,o.res); o.ctr=o.impressoes>0?o.cliques/o.impressoes*100:null; o.parcial=k===hojeSem||o.dias<7; o.lbl=_adsFmtD(k); return o; }).filter(function(o){return o.gasto>0||o.res>0;});
+  const semanas=Object.keys(sem).sort().map(function(k){ const o=sem[k]; o.res=o.leads+o.conversas; o.cpa=_adsDiv(o.gastoLead,o.res); o.ctr=o.impressoes>0?o.cliques/o.impressoes*100:null; o.parcial=k===hojeSem||o.dias<7; o.lbl=_adsFmtD(k); return o; }).filter(function(o){return o.gasto>0||o.res>0;});
   const fechadas=semanas.filter(function(o){return !o.parcial;});
-  const tot=fechadas.reduce(function(a,o){ a.gasto+=o.gasto; a.res+=o.res; return a; },{gasto:0,res:0});
-  const mediaCpa=_adsDiv(tot.gasto,tot.res); const mediaRes=fechadas.length?tot.res/fechadas.length:0; const mediaGasto=fechadas.length?tot.gasto/fechadas.length:0;
+  const tot=fechadas.reduce(function(a,o){ a.gasto+=o.gasto; a.gastoLead+=Number(o.gastoLead||0); a.res+=o.res; return a; },{gasto:0,gastoLead:0,res:0});
+  const mediaCpa=_adsDiv(tot.gastoLead,tot.res); const mediaRes=fechadas.length?tot.res/fechadas.length:0; const mediaGasto=fechadas.length?tot.gasto/fechadas.length:0;
   const mediaCtr=(function(){ const i=fechadas.reduce(function(s,o){return s+o.impressoes;},0), c=fechadas.reduce(function(s,o){return s+o.cliques;},0); return i>0?c/i*100:0; })();
   const u4=fechadas.slice(-4), a4=fechadas.slice(-8,-4);
   const agg=function(arr){ const g=arr.reduce(function(s,o){return s+o.gasto;},0), r=arr.reduce(function(s,o){return s+o.res;},0); return {gasto:g,res:r,cpa:_adsDiv(g,r)}; };
@@ -52425,7 +52446,7 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
   }
   const melhor=fechadas.filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
   const pior=fechadas.filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.cpa;}).sort(function(a,b){return b.cpa-a.cpa;})[0];
-  const METS={cpa:{lbl:"Custo por resultado",fmt:function(v){return _adsBRL(v);},cor:ADS.accent,media:mediaCpa,inverso:true,get:function(o){return o.cpa;},dica:"ponto escuro = abaixo da média · claro = 30%+ acima"},
+  const METS={cpa:{lbl:"Custo por lead",fmt:function(v){return _adsBRL(v);},cor:ADS.accent,media:mediaCpa,inverso:true,get:function(o){return o.cpa;},dica:"gasto só das campanhas de lead ÷ leads · ponto escuro = abaixo da média · claro = 30%+ acima"},
     res:{lbl:"Resultados",fmt:function(v){return _adsNum(v);},cor:"#9F43F6",media:mediaRes,inverso:false,get:function(o){return o.res;},dica:"leads + conversas por semana"},
     gasto:{lbl:"Gasto",fmt:function(v){return _adsBRL0(v);},cor:"#5e1bb5",media:mediaGasto,get:function(o){return o.gasto;},dica:"verba investida por semana"},
     ctr:{lbl:"CTR",fmt:function(v){return _adsPct(v,2);},cor:"#b26cf8",media:mediaCtr,inverso:false,get:function(o){return o.ctr;},dica:"cliques ÷ impressões"}};
