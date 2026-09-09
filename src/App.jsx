@@ -11546,14 +11546,16 @@ function _PlaybookSection({title, subtitle, icon, accent, idx, children}){
     : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
   const _i   = typeof idx==="number" ? idx : 0;
   const _cor = _RAINBOW[((_i%_RAINBOW.length)+_RAINBOW.length)%_RAINBOW.length];
-  return <div style={{background:"#fff",borderRadius:14,border:"1px solid "+_cor+"55",padding:0,overflow:"hidden",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px 11px 14px",background:_cor,boxShadow:"0 3px 10px "+_cor+"40"}}>
-      {icon && <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color="#fff"/>}
+  // Sub-seção LEVE (09/09/2026): dentro de um bloco que já tem barra sólida, outra barra
+  // sólida pesava. Aqui a cor fica só no ícone e num fio fino embaixo do cabeçalho.
+  return <div style={{background:"#fff",borderRadius:14,border:"1px solid #e9edf3",padding:0,overflow:"hidden",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px 11px 14px",background:"#fbfcfd",borderBottom:"1px solid #eef1f5"}}>
+      {icon && <div style={{width:30,height:30,borderRadius:9,background:_cor+"14",color:_cor,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {typeof Ico!=="undefined" && <Ico n={icon} size={15} color={_cor}/>}
       </div>}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#fff",fontWeight:800,fontSize:13.8,letterSpacing:-.2,lineHeight:1.25}}>{title}</div>
-        {subtitle&&<div style={{color:"rgba(255,255,255,.8)",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.25}}>{title}</div>
+        {subtitle&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
       </div>
     </div>
     <div style={{padding:"15px 20px 17px"}}>{children}</div>
@@ -32442,7 +32444,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["ferramentas","Ferramentas"],["redes","Redes sociais"],["senhas","Senhas"],["storage","Storage"]];
+const MAIN_TABS=[["clientes","Clientes"],["equipe","Time"],["ferramentas","Ferramentas"],["redes","Redes sociais"],["senhas","Senhas"],["dadospixels","Dados da Pixels"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -33356,7 +33358,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       {/* ── MAIN TAB SWITCHER ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:3,background:C.s1,borderRadius:12,padding:3}}>
-          {MAIN_TABS.filter(function(t){return t[0]!=="senhas"||_podeSenhas;}).map(([id,lbl])=>(
+          {MAIN_TABS.filter(function(t){return (t[0]!=="senhas"&&t[0]!=="dadospixels")||_podeSenhas;}).map(([id,lbl])=>(
             <button key={id} onClick={()=>setMainTab(id)}
               style={{background:mainTab===id?"linear-gradient(135deg,"+C.a+","+C.aD+")":"transparent",color:mainTab===id?"#fff":C.ts,border:"none",borderRadius:9,padding:"9px 20px",fontWeight:mainTab===id?700:400,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
               {lbl}
@@ -33824,6 +33826,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       {mainTab==="ferramentas"&&isMePartner&&<ToolsVault user={CURRENT_USER}/>}
       {mainTab==="redes"&&typeof PageRedesSociais!=="undefined"&&<PageRedesSociais isMob={typeof _pxMob==="function"?_pxMob():false}/>}
       {mainTab==="senhas"&&_podeSenhas&&<PasswordVault user={CURRENT_USER}/>}
+      {mainTab==="dadospixels"&&_podeSenhas&&<PageDadosPixels/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
     </div>
@@ -34621,6 +34624,283 @@ function StorageManager({tasks}){
     {/* Log */}
     {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
       {log.map((l,i)=><div key={i} style={{color:C.ts,fontSize:12}}>{l}</div>)}
+    </div>}
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DADOS DA PIXELS (09/09/2026) — Acessos › Dados da Pixels
+   Dados cadastrais e contas bancárias da agência, num lugar só, com botão
+   de copiar já formatado pra colar no WhatsApp / contrato / nota.
+   Tabelas `pixels_empresa` (1 linha) e `pixels_contas`, RLS só level 1.
+   ⚠ SENHAS NÃO MORAM AQUI — senha de banco, PIN e código de acesso ficam
+   no cofre (Acessos › Senhas). Aqui é só identificação da conta.
+   ═══════════════════════════════════════════════════════════════════════ */
+const _PDX_FF = "'Inter',system-ui,sans-serif";
+const _PDX_MARCAS = {
+  "nubank":{cor:"#820ad1",ini:"Nu"},
+  "banco do brasil":{cor:"#f9dd16",ini:"BB",escuro:true},
+  "conta azul":{cor:"#0d6efd",ini:"CA"},
+  "paypal":{cor:"#003087",ini:"PP"},
+  "sicoob":{cor:"#00ае4d",ini:"SI"},
+  "sicredi":{cor:"#3fa110",ini:"SC"},
+  "itau":{cor:"#ec7000",ini:"IT"},
+  "bradesco":{cor:"#cc092f",ini:"BR"},
+  "santander":{cor:"#ec0000",ini:"SA"},
+  "caixa":{cor:"#0070af",ini:"CX"},
+  "inter":{cor:"#ff7a00",ini:"IN"},
+  "mercado pago":{cor:"#009ee3",ini:"MP"},
+  "stone":{cor:"#00a868",ini:"ST"},
+  "asaas":{cor:"#1e40af",ini:"AS"},
+};
+function _pdxMarca(nome){
+  const k=String(nome||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();
+  const hit=Object.keys(_PDX_MARCAS).find(function(m){ return k.indexOf(m)>=0; });
+  if(hit) return _PDX_MARCAS[hit];
+  return {cor:"#475569", ini:(String(nome||"?").trim().slice(0,2).toUpperCase())};
+}
+function _pdxCopiar(txt, msg){
+  try{
+    navigator.clipboard.writeText(String(txt||""));
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800);
+  }catch(e){
+    if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar.");
+  }
+}
+/* Bloco pronto pra colar no WhatsApp/e-mail */
+function _pdxTextoConta(c, emp){
+  const L=[];
+  L.push(String(c.instituicao||"").toUpperCase());
+  if(c.titular||emp&&emp.razao_social) L.push("Titular: "+(c.titular||emp.razao_social));
+  if(emp&&emp.cnpj) L.push("CNPJ: "+emp.cnpj);
+  if(c.banco_codigo) L.push("Banco: "+c.banco_codigo);
+  if(c.agencia) L.push("Agência: "+c.agencia);
+  if(c.conta) L.push("Conta "+(c.tipo_conta==="poupanca"?"poupança":"corrente")+": "+c.conta);
+  if(c.chave_pix) L.push("PIX"+(c.pix_tipo?" ("+c.pix_tipo+")":"")+": "+c.chave_pix);
+  return L.join("\n");
+}
+
+function _PdxCampo({label, valor, mono, forte}){
+  if(!valor) return null;
+  return <div style={{minWidth:0}}>
+    <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#94a3b8",marginBottom:3}}>{label}</div>
+    <button onClick={function(){ _pdxCopiar(valor, label+" copiado"); }} title="Clique pra copiar"
+      style={{display:"inline-flex",alignItems:"center",gap:6,background:"none",border:"none",padding:0,cursor:"pointer",fontFamily:mono?"ui-monospace,SFMono-Regular,Menlo,monospace":_PDX_FF,fontSize:forte?14.5:13.5,fontWeight:forte?800:600,color:"#0f172a",letterSpacing:mono?.2:-.1,maxWidth:"100%",textAlign:"left"}}
+      onMouseEnter={function(e){ const s=e.currentTarget.querySelector("[data-cp]"); if(s)s.style.opacity="1"; }}
+      onMouseLeave={function(e){ const s=e.currentTarget.querySelector("[data-cp]"); if(s)s.style.opacity="0"; }}>
+      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{valor}</span>
+      <svg data-cp width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0,transition:"opacity .12s",flexShrink:0}}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </button>
+  </div>;
+}
+
+function PageDadosPixels(){
+  const [emp,setEmp]=useState(null);
+  const [contas,setContas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [editConta,setEditConta]=useState(null);
+  const [editEmp,setEditEmp]=useState(null);
+
+  const _load=async function(){
+    try{
+      setLoading(true);
+      const sb=window._sb;
+      const r1=await sb.from("pixels_empresa").select("*").eq("id",1).maybeSingle();
+      const r2=await sb.from("pixels_contas").select("*").order("ordem",{ascending:true});
+      if(r1&&r1.data) setEmp(r1.data);
+      if(r2&&r2.data) setContas(r2.data.filter(function(c){ return c.ativa!==false; }));
+    }catch(e){ console.warn("[dados-pixels] load:",e); }
+    finally{ setLoading(false); }
+  };
+  useEffect(function(){ _load(); },[]);
+
+  const _salvarEmp=async function(){
+    try{
+      const sb=window._sb;
+      const p=Object.assign({},editEmp,{id:1,updated_at:new Date().toISOString(),updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")});
+      const r=await sb.from("pixels_empresa").upsert(p,{onConflict:"id"});
+      if(r&&r.error) throw r.error;
+      setEditEmp(null); _load();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Dados da empresa salvos.");
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando."); }
+  };
+  const _salvarConta=async function(){
+    if(!String(editConta.instituicao||"").trim()){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Coloca o nome do banco.");
+      return;
+    }
+    try{
+      const sb=window._sb;
+      const p=Object.assign({},editConta,{updated_at:new Date().toISOString(),updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")});
+      if(!p.id){ delete p.id; p.ordem=(contas.length?Math.max.apply(null,contas.map(function(c){return c.ordem||0;})):0)+1; }
+      const r=p.id ? await sb.from("pixels_contas").update(p).eq("id",p.id)
+                   : await sb.from("pixels_contas").insert(p);
+      if(r&&r.error) throw r.error;
+      setEditConta(null); _load();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Conta salva.");
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro salvando conta."); }
+  };
+  const _removerConta=async function(c){
+    let ok=true;
+    if(typeof pixelsConfirm==="function") ok=await pixelsConfirm('Tirar "'+(c.instituicao||"")+'" da lista?',{title:"Remover conta",danger:true,okText:"Remover"});
+    if(!ok) return;
+    try{
+      const sb=window._sb;
+      const r=await sb.from("pixels_contas").update({ativa:false,updated_at:new Date().toISOString()}).eq("id",c.id);
+      if(r&&r.error) throw r.error;
+      _load();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Conta removida.");
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro removendo."); }
+  };
+
+  const _INP={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:13,color:"#0f172a",fontFamily:_PDX_FF,outline:"none",boxSizing:"border-box"};
+  const _LBL={fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#94a3b8",marginBottom:4,display:"block"};
+
+  if(loading) return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontFamily:_PDX_FF,fontSize:12.5}}>Carregando…</div>;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PDX_FF}}>
+
+    {/* Empresa */}
+    <div style={{background:"#fff",border:"1px solid #e6eaf0",borderRadius:18,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03), 0 8px 24px -12px rgba(15,23,42,.10)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px 12px 14px",background:"linear-gradient(120deg,#7c3aed 0%,#5b21b6 100%)"}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.16)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#fff",fontWeight:800,fontSize:14.5,letterSpacing:-.3,lineHeight:1.2}}>Dados da empresa</div>
+          <div style={{color:"rgba(255,255,255,.78)",fontSize:11.5,marginTop:2,fontWeight:500}}>Razão social, CNPJ e endereço — pra contratos, notas e cadastros</div>
+        </div>
+        <button onClick={function(){ setEditEmp(Object.assign({},emp||{})); }}
+          style={{background:"rgba(255,255,255,.16)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF,flexShrink:0}}>Editar</button>
+      </div>
+      <div style={{padding:"16px 20px 18px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:16}}>
+        <_PdxCampo label="Razão social" valor={emp&&emp.razao_social} forte/>
+        <_PdxCampo label="CNPJ" valor={emp&&emp.cnpj} mono forte/>
+        <_PdxCampo label="Nome fantasia" valor={emp&&emp.nome_fantasia}/>
+        <_PdxCampo label="Inscrição estadual" valor={emp&&emp.ie} mono/>
+        <_PdxCampo label="Endereço" valor={emp&&emp.endereco}/>
+        <_PdxCampo label="Cidade/UF" valor={emp&&emp.cidade_uf}/>
+        <_PdxCampo label="CEP" valor={emp&&emp.cep} mono/>
+        <_PdxCampo label="E-mail" valor={emp&&emp.email}/>
+        <_PdxCampo label="Telefone" valor={emp&&emp.telefone}/>
+        {(!emp||!emp.razao_social)&&<div style={{color:"#94a3b8",fontSize:12.5}}>Nada preenchido ainda — clica em Editar.</div>}
+      </div>
+    </div>
+
+    {/* Contas */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"2px 4px"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Contas da Pixels</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Clique em qualquer valor pra copiar. "Copiar dados" monta o bloco pronto pro cliente.</div>
+      </div>
+      <button onClick={function(){ setEditConta({instituicao:"",titular:(emp&&emp.razao_social)||"",agencia:"",conta:"",banco_codigo:"",tipo_conta:"corrente",chave_pix:"",pix_tipo:"CNPJ",obs:"",principal:false}); }}
+        style={{background:"#7c3aed",border:"none",color:"#fff",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,boxShadow:"0 4px 12px rgba(124,58,237,.30)"}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nova conta
+      </button>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      {contas.map(function(c){
+        const m=_pdxMarca(c.instituicao);
+        return <div key={c.id} style={{background:"#fff",border:"1px solid #e6eaf0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{width:38,height:38,borderRadius:11,background:m.cor,color:m.escuro?"#0f172a":"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0,letterSpacing:-.3,boxShadow:"0 4px 12px "+m.cor+"3d"}}>{m.ini}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:7}}>
+                <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.instituicao}</span>
+                {c.principal&&<span style={{background:"#16a34a18",color:"#16a34a",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",padding:"2px 7px",borderRadius:99,flexShrink:0}}>Principal</span>}
+              </div>
+              {c.instituicao_full&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.instituicao_full}</div>}
+            </div>
+            <button onClick={function(){ setEditConta(Object.assign({},c)); }} title="Editar"
+              style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+            </button>
+            <button onClick={function(){ _removerConta(c); }} title="Remover"
+              style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"flex",flexShrink:0}}
+              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+              onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+          <div style={{padding:"13px 14px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:13}}>
+            <_PdxCampo label="Agência" valor={c.agencia} mono forte/>
+            <_PdxCampo label={"Conta "+(c.tipo_conta==="poupanca"?"poupança":c.tipo_conta==="pagamento"?"":"corrente")} valor={c.conta} mono forte/>
+            <_PdxCampo label="Banco" valor={c.banco_codigo} mono/>
+            <_PdxCampo label="Titular" valor={c.titular}/>
+            {c.chave_pix&&<div style={{gridColumn:"span 2"}}><_PdxCampo label={"Chave PIX"+(c.pix_tipo?" · "+c.pix_tipo:"")} valor={c.chave_pix} mono/></div>}
+            {c.login&&<div style={{gridColumn:"span 2"}}><_PdxCampo label="Usuário / acesso" valor={c.login} mono/></div>}
+          </div>
+          {c.obs&&<div style={{padding:"0 14px 12px",color:"#94a3b8",fontSize:11,lineHeight:1.45}}>{c.obs}</div>}
+          <div style={{padding:"0 14px 14px"}}>
+            <button onClick={function(){ _pdxCopiar(_pdxTextoConta(c,emp),"Dados de "+c.instituicao+" copiados"); }}
+              style={{width:"100%",background:m.cor,color:m.escuro?"#0f172a":"#fff",border:"none",borderRadius:10,padding:"9px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 4px 12px "+m.cor+"3d",transition:"filter .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.filter="brightness(1.07)";}}
+              onMouseLeave={function(e){e.currentTarget.style.filter="none";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copiar dados
+            </button>
+          </div>
+        </div>;
+      })}
+      {contas.length===0&&<div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"36px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,gridColumn:"1/-1"}}>Nenhuma conta cadastrada ainda.</div>}
+    </div>
+
+    {/* Aviso: senha não mora aqui */}
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"11px 14px"}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <div style={{color:"#92400e",fontSize:11.5,lineHeight:1.5}}>
+        <strong>Senha não fica aqui.</strong> Senha de banco, PIN de transação e código de acesso ficam no cofre, em <strong>Acessos › Senhas</strong> — lá é mascarado e fica escondido até você clicar no olho. Esta tela é só a identificação das contas, pra copiar e mandar pro cliente.
+      </div>
+    </div>
+
+    {/* Modal empresa */}
+    {editEmp&&<div onMouseDown={function(e){ if(e.target===e.currentTarget) setEditEmp(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(6px)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,maxHeight:"88vh",overflow:"auto",boxShadow:"0 30px 70px rgba(15,23,42,.28)",fontFamily:_PDX_FF}}>
+        <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Dados da empresa</div>
+        </div>
+        <div style={{padding:"16px 22px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {[["razao_social","Razão social",true],["nome_fantasia","Nome fantasia",true],["cnpj","CNPJ"],["ie","Inscrição estadual"],["endereco","Endereço",true],["cidade_uf","Cidade/UF"],["cep","CEP"],["email","E-mail"],["telefone","Telefone"]].map(function(f){
+            return <div key={f[0]} style={f[2]?{gridColumn:"span 2"}:undefined}>
+              <label style={_LBL}>{f[1]}</label>
+              <input style={_INP} value={editEmp[f[0]]||""} onChange={function(e){ const v=e.target.value; setEditEmp(function(p){ const n=Object.assign({},p); n[f[0]]=v; return n; }); }}/>
+            </div>;
+          })}
+        </div>
+        <div style={{padding:"12px 22px 18px",display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #f1f5f9"}}>
+          <button onClick={function(){ setEditEmp(null); }} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF}}>Cancelar</button>
+          <button onClick={_salvarEmp} style={{background:"#7c3aed",border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF}}>Salvar</button>
+        </div>
+      </div>
+    </div>}
+
+    {/* Modal conta */}
+    {editConta&&<div onMouseDown={function(e){ if(e.target===e.currentTarget) setEditConta(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(6px)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,maxHeight:"88vh",overflow:"auto",boxShadow:"0 30px 70px rgba(15,23,42,.28)",fontFamily:_PDX_FF}}>
+        <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>{editConta.id?"Editar conta":"Nova conta"}</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:3}}>Só identificação da conta — senha e PIN vão no cofre (Acessos › Senhas).</div>
+        </div>
+        <div style={{padding:"16px 22px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          {[["instituicao","Banco / instituição"],["instituicao_full","Nome completo (opcional)"],["titular","Titular",true],["agencia","Agência"],["conta","Conta"],["banco_codigo","Código do banco"],["tipo_conta","Tipo (corrente/poupanca/pagamento)"],["pix_tipo","Tipo da chave PIX"],["chave_pix","Chave PIX"],["login","Usuário / acesso (sem senha)",true],["obs","Observação",true]].map(function(f){
+            return <div key={f[0]} style={f[2]?{gridColumn:"span 2"}:undefined}>
+              <label style={_LBL}>{f[1]}</label>
+              <input style={_INP} value={editConta[f[0]]||""} onChange={function(e){ const v=e.target.value; setEditConta(function(p){ const n=Object.assign({},p); n[f[0]]=v; return n; }); }}/>
+            </div>;
+          })}
+          <label style={{gridColumn:"span 2",display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:"#334155",fontSize:12.5,fontWeight:600}}>
+            <input type="checkbox" checked={!!editConta.principal} onChange={function(e){ const v=e.target.checked; setEditConta(function(p){ return Object.assign({},p,{principal:v}); }); }}/>
+            Conta principal da agência
+          </label>
+        </div>
+        <div style={{padding:"12px 22px 18px",display:"flex",gap:10,justifyContent:"flex-end",borderTop:"1px solid #f1f5f9"}}>
+          <button onClick={function(){ setEditConta(null); }} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF}}>Cancelar</button>
+          <button onClick={_salvarConta} style={{background:"#7c3aed",border:"none",color:"#fff",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_PDX_FF}}>Salvar</button>
+        </div>
+      </div>
     </div>}
   </div>;
 }
@@ -85601,17 +85881,17 @@ function PlaybookBlock({id, title, subtitle, icon, color, children}){
   },[_visivel]);
   if(!_visivel) return null;
   const _c = (typeof _pxCorSequencial==="function") ? _pxCorSequencial(_pos.i, _pos.n) : (color || "#7c3aed");
-  return <div id={id} ref={_ref} data-pb-block="1" style={{background:"#fff",border:"1px solid "+_c+"55",borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:_c,boxShadow:"0 3px 10px "+_c+"40"}}>
-      <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <Ico n={icon} size={18} color="#fff" strokeWidth={2.3}/>
+  return <div id={id} ref={_ref} data-pb-block="1" style={{background:"#fff",border:"1px solid #e6eaf0",borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 1px 2px rgba(15,23,42,.03), 0 8px 24px -12px rgba(15,23,42,.10)",scrollMarginTop:80}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px 12px 14px",background:"linear-gradient(120deg,"+_c+" 0%,"+_pbDarken(_c)+" 100%)"}}>
+      <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.16)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n={icon} size={17} color="#fff" strokeWidth={2.3}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
-        {subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:11.5,marginTop:2,fontWeight:500}}>{subtitle}</div>}
+        <div style={{color:"#fff",fontWeight:800,fontSize:14.5,letterSpacing:-.3,lineHeight:1.2}}>{title}</div>
+        {subtitle && <div style={{color:"rgba(255,255,255,.78)",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.35}}>{subtitle}</div>}
       </div>
     </div>
-    <div style={{padding:"16px 20px 18px"}}>{children}</div>
+    <div style={{padding:"18px 20px 20px"}}>{children}</div>
   </div>;
 }
 
