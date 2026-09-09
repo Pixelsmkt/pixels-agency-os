@@ -3031,6 +3031,71 @@ const NAV=[
  * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
+/* ═══ PxCtxMenu — menu de botão direito padrão do app (09/09/2026) ═══
+   Uso: <PxCtxMenu x y title onClose items=[{label,desc,icon:"copy"|"trash",danger,onClick}]/>
+   Fecha ao clicar fora, no Esc ou depois de escolher. */
+function PxCtxMenu({x,y,title,items,onClose}){
+  React.useEffect(function(){
+    const k=function(e){ if(e.key==="Escape") onClose&&onClose(); };
+    window.addEventListener("keydown",k); return function(){ window.removeEventListener("keydown",k); };
+  },[]);
+  const W=224, H=64+(items||[]).length*46;
+  const left=Math.max(8,Math.min(x,(window.innerWidth||1200)-W-8));
+  const top=Math.max(8,Math.min(y,(window.innerHeight||800)-H-8));
+  const ICO={
+    copy:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+    trash:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  };
+  return <>
+    <style>{"@keyframes pxCtxIn{from{opacity:0;transform:scale(.96) translateY(-4px)}to{opacity:1;transform:none}}"}</style>
+    <div onMouseDown={function(){onClose&&onClose();}} onContextMenu={function(e){e.preventDefault();onClose&&onClose();}} style={{position:"fixed",inset:0,zIndex:2999998}}/>
+    <div role="menu" style={{position:"fixed",left:left,top:top,width:W,background:"#fff",borderRadius:14,padding:6,boxShadow:"0 0 0 1px rgba(15,23,42,.06),0 18px 40px -8px rgba(15,23,42,.28),0 6px 14px rgba(15,23,42,.08)",zIndex:2999999,fontFamily:"'Inter',system-ui,sans-serif",animation:"pxCtxIn .14s cubic-bezier(.2,.8,.2,1)",transformOrigin:"top left"}}>
+      {title&&<div style={{padding:"7px 10px 8px",borderBottom:"1px solid #f1f5f9",marginBottom:4}}>
+        <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#94a3b8",marginBottom:2}}>Card</div>
+        <div style={{fontSize:12.5,fontWeight:600,color:"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{title}</div>
+      </div>}
+      {(items||[]).filter(Boolean).map(function(it,i){
+        const danger=!!it.danger;
+        return <button key={i} onClick={function(){ onClose&&onClose(); it.onClick&&it.onClick(); }}
+          style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:"none",border:"none",padding:"7px 8px",borderRadius:9,cursor:"pointer",textAlign:"left",fontFamily:"inherit",transition:"background .1s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background=danger?"#fef2f2":"#f4f6fa";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
+          <span style={{width:28,height:28,borderRadius:8,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,background:danger?"#fee2e2":"#eef2f7",color:danger?"#dc2626":"#334155"}}>{ICO[it.icon]||null}</span>
+          <span style={{minWidth:0}}>
+            <span style={{display:"block",fontSize:13,fontWeight:600,color:danger?"#dc2626":"#0f172a",lineHeight:1.2}}>{it.label}</span>
+            {it.desc&&<span style={{display:"block",fontSize:10.5,color:danger?"#ef4444":"#94a3b8",marginTop:2,lineHeight:1.2}}>{it.desc}</span>}
+          </span>
+        </button>;
+      })}
+    </div>
+  </>;
+}
+
+/* pxCardTemConteudo — o que o card já tem dentro (pra decidir se a exclusão pede confirmação).
+   Card vazio (só título/data) → apaga direto. Com arquivos, legenda, briefing, comentários
+   ou checklist → pergunta, listando o que vai junto. Retorna "" quando está vazio. */
+function pxCardTemConteudo(t){
+  if(!t) return "";
+  const p=[];
+  const nf=Array.isArray(t.files)?t.files.length:0; if(nf) p.push(nf+(nf===1?" arquivo":" arquivos"));
+  if(String(t.caption||"").trim()) p.push("legenda");
+  if(String(t.desc||t.description||"").trim()) p.push("briefing");
+  const nc=Array.isArray(t.comments)?t.comments.length:0; if(nc) p.push(nc+(nc===1?" comentário":" comentários"));
+  const nk=Array.isArray(t.checklist)?t.checklist.length:0; if(nk) p.push("checklist");
+  return p.join(", ");
+}
+/* pxExcluirComRegra — exclui direto se vazio; se tem conteúdo, confirma dizendo o que vai junto. */
+async function pxExcluirComRegra(t, fazer){
+  const tem=pxCardTemConteudo(t);
+  if(tem&&typeof pixelsConfirm==="function"){
+    const ok=await pixelsConfirm('"'+(t.title||"Card")+'" já tem conteúdo: '+tem+'. Mandar pra lixeira mesmo assim? Fica 30 dias pra restaurar.',{title:"Esse card tem conteúdo",danger:true,okText:"Mover pra lixeira",cancelText:"Cancelar"});
+    if(!ok) return false;
+  }
+  fazer();
+  if(typeof pixelsToast!=="undefined") pixelsToast.success("Card movido pra lixeira (30 dias).",2500);
+  return true;
+}
+
 function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
@@ -18934,27 +18999,15 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                 position:"relative",
               }}>
                 {day&&(<>
-                  {/* Número do dia — hoje ganha um selo arredondado (squircle) roxo
-                      com sombra e a palavra HOJE. O círculo antigo se perdia
-                      no meio dos cards coloridos. */}
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                    <div style={{
-                      color:isToday?"#fff":C.ts,
-                      fontWeight:isToday?900:600,
-                      fontSize:isToday?14:13,
-                      lineHeight:1,
-                      minWidth:isToday?30:undefined,
-                      height:isToday?30:undefined,
-                      padding:isToday?"0 8px":undefined,
-                      background:isToday?"linear-gradient(135deg,#a855f7,#7c3aed)":undefined,
-                      borderRadius:isToday?10:undefined,
-                      boxShadow:isToday?"0 4px 12px rgba(124,58,237,.38), inset 0 1px 0 rgba(255,255,255,.25)":undefined,
-                      display:"flex",alignItems:"center",
-                      justifyContent:isToday?"center":undefined,
-                      fontFeatureSettings:"'tnum'",
-                      letterSpacing:isToday?-.3:0,
-                    }}>{day.getDate()}</div>
-                    {isToday&&<span style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",fontSize:11.5,fontWeight:800,letterSpacing:.4,padding:"0 10px",height:30,display:"inline-flex",alignItems:"center",borderRadius:10,lineHeight:1,boxShadow:"0 4px 12px rgba(124,58,237,.30)",fontFamily:"'Inter',system-ui,sans-serif"}}>Hoje</span>}
+                  {/* Número do dia — hoje: uma pílula única roxa "9 · HOJE" (número + rótulo juntos) */}
+                  <div style={{display:"flex",alignItems:"center",marginBottom:6}}>
+                    {isToday
+                      ? <div style={{display:"inline-flex",alignItems:"center",height:28,padding:"0 11px 0 10px",borderRadius:999,background:"linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%)",color:"#fff",boxShadow:"0 6px 16px -4px rgba(109,40,217,.55), inset 0 1px 0 rgba(255,255,255,.22)",fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1,gap:7}}>
+                          <span style={{fontSize:14,fontWeight:900,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{day.getDate()}</span>
+                          <span style={{width:1,height:12,background:"rgba(255,255,255,.35)"}}/>
+                          <span style={{fontSize:10,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",opacity:.95}}>Hoje</span>
+                        </div>
+                      : <div style={{color:C.ts,fontWeight:600,fontSize:13,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{day.getDate()}</div>}
                   </div>
 
                   {/* Eventos sinalizados pelo cliente (cards amarelos com selo DO CLIENTE) */}
@@ -19149,35 +19202,17 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
       )}
 
       {/* ── Context Menu (botao direito) ── */}
-      {ctxMenu&&<>
-        <div onClick={function(){setCtxMenu(null);}} onContextMenu={function(e){e.preventDefault();setCtxMenu(null);}}
-          style={{position:"fixed",inset:0,zIndex:999998}}/>
-        <div style={{position:"fixed",left:Math.min(ctxMenu.x,window.innerWidth-180),top:Math.min(ctxMenu.y,window.innerHeight-100),background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:5,minWidth:160,boxShadow:"0 8px 24px rgba(0,0,0,0.18)",zIndex:999999,fontFamily:"'Inter',system-ui,sans-serif"}}>
-          <button onClick={function(){
+      {ctxMenu&&<PxCtxMenu x={ctxMenu.x} y={ctxMenu.y} title={ctxMenu.task&&ctxMenu.task.title} onClose={function(){setCtxMenu(null);}}
+        items={[
+          {label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenu.task,setTasks); }},
+          !_calExclBloq&&{label:"Excluir card",desc:pxCardTemConteudo(ctxMenu.task)?"Tem conteúdo · vai pedir confirmação":"Vai direto pra lixeira · 30 dias pra restaurar",icon:"trash",danger:true,onClick:function(){
+            // Card vazio → lixeira direto; com conteúdo → confirma dizendo o que vai junto
             const t=ctxMenu.task;
-            setCtxMenu(null);
-            pxDuplicarCardEColar(t,setTasks); // cópia física dos arquivos — ver 00b_preview_util
-          }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Duplicar card
-          </button>
-          {!_calExclBloq&&<button onClick={function(){
-            // Botão direito → Excluir: vai direto pra lixeira, sem confirmação (é reversível por 30 dias)
-            const t=ctxMenu.task;
-            if(_calExclBloq){setCtxMenu(null);return;}
-            setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
-            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).",2500);
-            setCtxMenu(null);
-          }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            Excluir card
-          </button>}
-        </div>
-      </>}
+            pxExcluirComRegra(t,function(){
+              setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
+            });
+          }},
+        ]}/>}
 
       {/* ── Modal do card ── */}
       {openCard&&(
@@ -20902,13 +20937,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [sortMode,setSortMode]=useState(function(){
     // Padrão novo: entregaDesc. Migra automaticamente quem tinha "smart"
     // (default histórico) pra o novo padrão.
+    // Designers e editores: padrão "producao" (ordem em que devem produzir — ver compareByProducao).
+    // Eles não escolhem outra ordem global; só o override por coluna (menu ⋯).
+    const _dashProd=((typeof effectiveUser!=="undefined"&&effectiveUser)||CURRENT_USER).dash;
+    if(_dashProd==="designer"||_dashProd==="editor") return "producao";
     try{
       const saved = localStorage.getItem("pixels-kanban-sort");
-      if(!saved || saved === "smart") return "entregaDesc";
+      if(!saved || saved === "smart" || saved === "producao") return "entregaDesc";
       return saved;
     }catch(e){return "entregaDesc";}
   });
   useEffect(function(){try{localStorage.setItem("pixels-kanban-sort",sortMode);}catch(e){}},[sortMode]);
+  // Trocou de usuário (ver como…): designer/editor → ordem de produção; demais → padrão
+  useEffect(function(){
+    const d=(effectiveUser||CURRENT_USER).dash;
+    if(d==="designer"||d==="editor"){ if(sortMode!=="producao") setSortMode("producao"); }
+    else if(sortMode==="producao"){ setSortMode("entregaDesc"); }
+  },[effectiveUser&&effectiveUser.id]);
   const [showTrashConfirm,setShowTrashConfirm]=useState(null);
   const [ctxMenuKanban,setCtxMenuKanban]=useState(null); // {x,y,task} pro menu botao-direito no kanban
   const [calMonth,setCalMonth]=useState(new Date());
@@ -20940,6 +20985,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(isNaN(ta))return 1;
     if(isNaN(tb))return -1;
     return asc?(ta-tb):(tb-ta);
+  };
+  // ORDEM DE PRODUÇÃO (designers/editores) — o que produzir primeiro:
+  //   1) urgente marcado;
+  //   2) data de publicação mais próxima (atrasada = mais urgente ainda);
+  //   3) sem data de publicação → prazo (deadline) mais próximo;
+  //   4) sem nada → quem entrou antes na coluna (fila).
+  const compareByProducao=function(a,b){
+    const ua=a.urgente?0:1, ub=b.urgente?0:1;
+    if(ua!==ub) return ua-ub;
+    const _d=function(v){ if(!v) return Infinity; const t=new Date(typeof v==="string"&&v.length===10?v+"T00:00:00":v).getTime(); return isNaN(t)?Infinity:t; };
+    const pa=_d(a.publishDate||a.publish_date), pb=_d(b.publishDate||b.publish_date);
+    if(pa!==pb) return pa-pb;
+    const da=_d(a.deadline), db=_d(b.deadline);
+    if(da!==db) return da-db;
+    const ea=_d(a.colEnteredAt), eb=_d(b.colEnteredAt);
+    if(ea!==eb) return ea-eb;
+    return String(a.id).localeCompare(String(b.id));
   };
   // Compara por data de entrega pra coluna atual.
   // PRIORIDADE: colEnteredAt (entrou nessa fase) > completedAt (concluiu) > publishDate > updated_at (fallback)
@@ -21526,35 +21588,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     {/* (Modal de gerenciar grupos foi removido — agora o filtro usa primeira tag = MÃE) */}
 
     {/* Context Menu (botao direito) no kanban */}
-    {ctxMenuKanban&&<>
-      <div onClick={()=>setCtxMenuKanban(null)} onContextMenu={e=>{e.preventDefault();setCtxMenuKanban(null);}} style={{position:"fixed",inset:0,zIndex:1999998}}/>
-      <div style={{position:"fixed",left:Math.min(ctxMenuKanban.x,window.innerWidth-200),top:Math.min(ctxMenuKanban.y,window.innerHeight-110),background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:5,minWidth:180,boxShadow:"0 12px 32px rgba(15,23,42,0.18),0 4px 8px rgba(15,23,42,0.06)",zIndex:1999999,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .12s ease"}}>
-        <button onClick={()=>{
+    {ctxMenuKanban&&<PxCtxMenu x={ctxMenuKanban.x} y={ctxMenuKanban.y} title={ctxMenuKanban.task&&ctxMenuKanban.task.title} onClose={function(){setCtxMenuKanban(null);}}
+      items={[
+        {label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenuKanban.task,setTasks); }},
+        canDelete&&{label:"Excluir card",desc:pxCardTemConteudo(ctxMenuKanban.task)?"Tem conteúdo · vai pedir confirmação":"Vai direto pra lixeira · 30 dias pra restaurar",icon:"trash",danger:true,onClick:function(){
+          // Card vazio → lixeira direto; com conteúdo → confirma dizendo o que vai junto
           const t=ctxMenuKanban.task;
-          setCtxMenuKanban(null);
-          pxDuplicarCardEColar(t,setTasks); // cópia física dos arquivos — ver 00b_preview_util
-        }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
-        onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";}}
-        onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          Duplicar card
-        </button>
-        {canDelete&&<div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>}
-        {canDelete&&<button onClick={()=>{
-          // Botão direito → direto pra lixeira, sem confirmação (reversível por 30 dias)
-          const _id=ctxMenuKanban.task.id;
-          setCtxMenuKanban(null);
-          if(!canDelete){pixelsToast.warning("Você não tem permissão para excluir demandas.");return;}
-          confirmDelete(_id);
-          if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).",2500);
-        }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
-        onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
-        onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          Mover pra lixeira
-        </button>}
-      </div>
-    </>}
+          pxExcluirComRegra(t,function(){ confirmDelete(t.id); });
+        }},
+      ]}/>}
 
         {showTrashConfirm&&<div onMouseDown={e=>{ if(e.target===e.currentTarget) setShowTrashConfirm(null); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .2s ease"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:0,maxWidth:420,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(15,23,42,0.30),0 8px 20px rgba(15,23,42,0.15)"}}>
@@ -21749,6 +21791,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             // Modos de ordenação por data — funcionam tanto como override por coluna
             // quanto como padrão global (sortMode). _colSort tem prioridade.
             const _sort = _colSort || sortMode;
+            if(_sort==="producao")return compareByProducao(a,b);
             if(_sort==="pubAsc")return compareByPublishDate(a,b,true);
             if(_sort==="pubDesc")return compareByPublishDate(a,b,false);
             if(_sort==="entregaDesc")return compareByCompletedAt(a,b,false);
@@ -21830,8 +21873,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 })()}
                 {colMenuOpen===col.id&&(function(){
                   const opts=[
-                    {id:"pubDesc",    label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
-                    {id:"pubAsc",     label:"Publicação mais distante",   hint:"Mais distante no topo",         icon:"calendar-desc", color:"#7c3aed"},
+                    {id:"producao",   label:"Ordem de produção",          hint:"Urgente → publica antes → prazo → fila", icon:"sparkles", color:"#ea580c"},
+                    {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
+                    {id:"pubDesc",    label:"Publicação mais distante",   hint:"Mais distante no topo",         icon:"calendar-desc", color:"#7c3aed"},
                     {id:"entregaDesc",label:"Entregas mais recentes",     hint:"Recém-entregues no topo",       icon:"check-recent", color:"#16a34a"},
                     {id:"entregaAsc", label:"Entregas mais antigas",      hint:"Mais antigas no topo",          icon:"check-old", color:"#16a34a"},
                   ];
