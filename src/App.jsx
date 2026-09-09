@@ -2915,6 +2915,7 @@ function NavIcon({id,size=18,color}){
   // ── Estratégia ──
   if(id==="planejamento")       return <svg {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill={cl}/></svg>;
   if(id==="matriz")             return <svg {...p}><rect x="9" y="2" width="6" height="5" rx="1.5"/><rect x="2" y="16" width="6" height="5" rx="1.5"/><rect x="16" y="16" width="6" height="5" rx="1.5"/><path d="M12 7v4"/><path d="M5 16v-2a2 2 0 012-2h10a2 2 0 012 2v2"/></svg>;
+  if(id==="scripts")            return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="playbooks")          return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
 }
@@ -2939,6 +2940,7 @@ const NAV=[
   {id:"demandas_central", icon:"demandas_central", label:"Demandas"},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
+  {id:"scripts",icon:"◇", label:"Scripts"},
   {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
   // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
@@ -13931,17 +13933,51 @@ function CScriptsTab({cl, isMob}){
   },[cl&&cl.id]);
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Aviso de que os scripts sao globais — evita achar que sao do cliente */}
-    <div style={{background:_cor+"0b",border:"1px solid "+_cor+"26",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-      <div style={{color:"#475569",fontSize:11.5,lineHeight:1.55,fontWeight:500}}>
-        Os scripts são <strong style={{color:"#0f172a"}}>compartilhados entre todos os clientes</strong> — editar um texto aqui muda pra todo mundo.
-        Ao copiar, os campos <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{cliente}}"}</code> e <code style={{background:"#fff",border:"1px solid "+_cor+"33",borderRadius:4,padding:"1px 5px",fontSize:11,color:_cor,fontWeight:700}}>{"{{data_inicio}}"}</code> já saem preenchidos com os dados de <strong style={{color:"#0f172a"}}>{(cl&&cl.name)||"este cliente"}</strong>.
-      </div>
-    </div>
-
     {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent={_cor}/>}
     {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent={_cor}/>}
+  </div>;
+}
+
+/* ─── PageScripts — Estratégia > Scripts (09/09/2026) ─────────────────────
+   Os scripts são globais (team_data 'onboarding_scripts' / 'ongoing_scripts'),
+   então saíram da ficha do cliente e ganharam página própria no menu Estratégia.
+   O seletor de cliente aqui só serve pra preencher {{cliente}}, {{data_inicio}}
+   e {{setor}} na hora de copiar — o texto é o mesmo pra todo mundo.           */
+function PageScripts({isMob}){
+  const _lista=(typeof CLIENTS!=="undefined"?CLIENTS:[])
+    .filter(function(c){return c&&c.status!=="interno"&&c.status!=="encerrado"&&String(c.name||"").trim();})
+    .slice().sort(function(a,b){return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"});});
+  const [clId,setClId]=useState(function(){
+    try{ const _s=localStorage.getItem("pixels-scripts-cliente"); if(_s&&_lista.some(function(c){return c.id===_s;})) return _s; }catch(_){}
+    return _lista[0]?_lista[0].id:"";
+  });
+  useEffect(function(){ try{ localStorage.setItem("pixels-scripts-cliente",clId||""); }catch(_){} },[clId]);
+  const cl=_lista.find(function(c){return c.id===clId;})||null;
+  const _cor=(cl&&cl.color)||"#7c3aed";
+  const _logo=cl&&((typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null);
+  return <div style={{fontFamily:"'Inter',system-ui,sans-serif",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#7c3aed,#6d28d9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 20px rgba(124,58,237,.3)",flexShrink:0}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Scripts</div>
+        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Mensagens padrão de onboarding e ongoing — iguais pra todos os clientes. Escolha o cliente só pra copiar com os dados preenchidos.</div>
+      </div>
+      <label style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"5px 10px 5px 6px",boxShadow:"0 2px 6px rgba(15,23,42,.04)"}}>
+        <span style={{width:26,height:26,borderRadius:7,background:"#fff",border:"1px solid "+_cor+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+          {_logo?<img src={_logo} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>:<span style={{color:_cor,fontSize:9,fontWeight:900}}>{String((cl&&cl.name)||"?").slice(0,2).toUpperCase()}</span>}
+        </span>
+        <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Copiar como</span>
+        <select value={clId} onChange={function(e){setClId(e.target.value);}}
+          style={{border:"none",background:"transparent",color:"#0f172a",fontSize:12.5,fontWeight:800,outline:"none",cursor:"pointer",fontFamily:"inherit",maxWidth:220}}>
+          {_lista.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+        </select>
+      </label>
+    </div>
+    {cl
+      ? <CScriptsTab cl={cl} isMob={isMob}/>
+      : <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>Sem clientes ativos cadastrados.</div>}
   </div>;
 }
 
@@ -15072,7 +15108,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
     {id:"producao",      label:"Produção",            ico:"target"},
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
-    {id:"scripts",       label:"Scripts",             ico:"fileText"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"metas",         label:"Metas",               ico:"target"},
     {id:"parcerias",     label:"Parcerias",           ico:"users"},
@@ -15196,7 +15231,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
     {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks} onGoTab={setTab}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
-    {tab==="scripts"&&<CScriptsTab cl={cl} isMob={isMob}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
     {tab==="marcos"&&<CDemandas cl={cl} canEdit={canEditarBriefing} selUnit={cl.id==="bioter"?selUnitBioter:undefined}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
@@ -48612,6 +48646,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       case "planejamento":         return isSocio||effectiveUser.id==="ellen";
+      case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
@@ -48711,6 +48746,7 @@ export default function AgencyOS(){
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
@@ -49781,6 +49817,7 @@ function useQGData(clients,year,month){
 // (quando produto/região filtram, os números vêm só das linhas de orçamento + vendas que batem).
 /* ─── META ADS como fonte única: gasto/leads da API por cliente e intervalo ─── */
 function _qgAdsConta(mc,data){ if(!mc||!data||!data.adsAccounts||!data.adsAccounts.length||typeof adsContaDoCliente!=="function") return null; const r=adsContaDoCliente(mc,data.adsAccounts); return (r&&r.conta&&!r.compartilhada)?r.conta:null; }
+/* lead = leads (formulário) + conversas (WhatsApp) — colunas já separadas no banco, sem sobreposição (definição 09/09/2026) */
 function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,leads:0,dias:0,conta:acc}; const o={gasto:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); o.leads+=Number(r.leads||0)+Number(r.conversas||0); if(Number(r.gasto||0)>0) o.dias++; }); return o; }
 function qgCalcCliente(mc,data,year,month,filtro){
   filtro=filtro||{};
@@ -51034,7 +51071,7 @@ const ADS_TIPOS=[
   {id:"vendas",label:"Vendas",curto:"Vendas",fam:"vendas",campo:"compras",resLbl:"compras",resSing:"compra",custoLbl:"custo por compra",cor:"#3b0f78",bg:"#e4dbf5"},
 ];
 const ADS_FAMS=[
-  {id:"leads",label:"Leads",desc:"leads de formulário + conversas no WhatsApp",campo:"resultados",resLbl:"resultados",resSing:"resultado",custoLbl:"custo por resultado"},
+  {id:"leads",label:"Leads",desc:"formulário preenchido + conversa iniciada no WhatsApp (sem sobreposição)",campo:"resultados",resLbl:"resultados",resSing:"resultado",custoLbl:"custo por resultado"},
   {id:"engajamento",label:"Engajamento",desc:"reações, comentários, salvamentos, cliques e visualizações",campo:"eng",resLbl:"engajamentos",resSing:"engajamento",custoLbl:"custo por engajamento"},
   {id:"trafego",label:"Tráfego",desc:"quem saiu do anúncio pro destino",campo:"cliques_link",resLbl:"cliques no link",resSing:"clique",custoLbl:"custo por clique"},
   {id:"reconhecimento",label:"Reconhecimento",desc:"pessoas diferentes que viram o anúncio",campo:"alcance_mil",resLbl:"mil alcançados",resSing:"mil alcançadas",custoLbl:"custo por mil alcançados"},
@@ -51130,10 +51167,16 @@ function QGAdsBarraPeriodo({compact}){
 }
 
 /* ─── dados do período (RPC ads_periodo, atual + anterior, com cache) ─── */
+/* DEFINIÇÃO DE LEAD (09/09/2026) — uma só, para todas as telas:
+   lead = pessoa que chegou: formulário preenchido (leads) + conversa iniciada no WhatsApp (conversas). Sem sobreposição.
+   "leads_meta" é o total que a Meta chama de lead — ele já inclui as conversas que ela qualifica; é informativo e NUNCA entra na soma. */
+const ADS_DEF_LEAD="Lead = pessoa que chegou: formulário preenchido ou conversa iniciada no WhatsApp. Cada conversa é uma pessoa — bate com o WhatsApp do cliente. Quem respondeu ou virou negócio se marca na aba Leads.";
+/* "leads_meta" fica só no banco: a Meta só carimba lead em conversa quando a campanha está configurada pra isso, varia por conta e não dá pra auditar — não aparece na tela (decisão 09/09). */
+function _adsSubLeads(x){ x=x||{}; const f=Number(x.leads||0), c=Number(x.conversas||0); const partes=[]; if(f>0||c===0) partes.push(_adsNum(f)+" formulário"); if(c>0||f===0) partes.push(_adsNum(c)+" WhatsApp"); return partes.join(" · "); }
 window._pxAdsPer=window._pxAdsPer||{};
 function _adsEnriquece(j){
   if(!j) return null;
-  const fix=function(x){ x=x||{}; x.gasto=Number(x.gasto||0); x.resultados=Number(x.leads||0)+Number(x.conversas||0); x.cpa=_adsDiv(x.gasto,x.resultados); x.ctr=Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null; x.cpm=Number(x.impressoes||0)>0?x.gasto/Number(x.impressoes)*1000:null; x.frequencia=Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null; return x; };
+  const fix=function(x){ x=x||{}; x.gasto=Number(x.gasto||0); x.leads_meta=Number(x.leads_meta||0); x.resultados=Number(x.leads||0)+Number(x.conversas||0); x.cpa=_adsDiv(x.gasto,x.resultados); x.ctr=Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null; x.cpm=Number(x.impressoes||0)>0?x.gasto/Number(x.impressoes)*1000:null; x.frequencia=Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null; return x; };
   const out={de:j.de,ate:j.ate,conta:fix(j.conta),serie:j.serie||[],campanhas:(j.campanhas||[]).map(fix),anuncios:(j.anuncios||[]).map(fix)};
   out.anuncios.forEach(function(a){ const base=Number(a.v3||0)||Number(a.impressoes||0); a.video=Number(a.v3||0)>0; a.r25=base>0?Number(a.p25||0)/base*100:null; a.r50=base>0?Number(a.p50||0)/base*100:null; a.r75=base>0?Number(a.p75||0)/base*100:null; a.r100=base>0?Number(a.p100||0)/base*100:null; });
   return out;
@@ -51210,7 +51253,7 @@ function AdsVar({d,inverso,sufixo}){ if(d===null||d===undefined||!isFinite(d)) r
 /* Tons sólidos (chapados, sem degradê) — escuro / médio / claro / painel escuro */
 const ADS_SOL={escuro:"#2f1a5e",medio:"#5a34a3",claro:"#8a63cf",painel:"#221743",sub:"#e9e0fb",eyebrow:"#d9ccf5"};
 /* KPI sólido — só pro número-tese de cada tela */
-function AdsSolido({bg,eyebrow,big,sub,extra,delta,inverso,style}){ return <div style={Object.assign({background:bg||ADS_SOL.escuro,color:"#fff",borderRadius:18,padding:"18px 20px",minWidth:0,display:"flex",flexDirection:"column",gap:4,fontFamily:ADS_FONT},style||{})}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFeatureSettings:"'tnum'"}}>{big}</div>{delta!==undefined&&delta!==null&&isFinite(delta)&&<div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{(delta>0?"▲ ":delta<0?"▼ ":"= ")+Math.abs(Math.round(delta))+"%"}<span style={{color:ADS_SOL.sub,fontWeight:500}}> vs. período anterior{inverso!==undefined&&Math.abs(delta)>=0.5?((inverso?delta<0:delta>0)?" · melhorou":" · piorou"):""}</span></div>}{sub&&<div style={{fontSize:12.5,color:ADS_SOL.sub,lineHeight:1.45}}>{sub}</div>}{extra}</div>; }
+function AdsSolido({bg,eyebrow,big,sub,extra,delta,inverso,style,title}){ return <div title={title||undefined} style={Object.assign({background:bg||ADS_SOL.escuro,color:"#fff",borderRadius:18,padding:"18px 20px",minWidth:0,display:"flex",flexDirection:"column",gap:4,fontFamily:ADS_FONT},style||{})}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFeatureSettings:"'tnum'"}}>{big}</div>{delta!==undefined&&delta!==null&&isFinite(delta)&&<div style={{fontSize:12,fontWeight:700,color:"#fff"}}>{(delta>0?"▲ ":delta<0?"▼ ":"= ")+Math.abs(Math.round(delta))+"%"}<span style={{color:ADS_SOL.sub,fontWeight:500}}> vs. período anterior{inverso!==undefined&&Math.abs(delta)>=0.5?((inverso?delta<0:delta>0)?" · melhorou":" · piorou"):""}</span></div>}{sub&&<div style={{fontSize:12.5,color:ADS_SOL.sub,lineHeight:1.45}}>{sub}</div>}{extra}</div>; }
 /* Esqueleto de carregamento — mantém a forma da tela enquanto lê */
 function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{width:w||"100%",height:h||12,borderRadius:7,background:"linear-gradient(90deg,#ece8f4 0%,#dcd6ea 50%,#ece8f4 100%)",backgroundSize:"200% 100%",animation:"pxsh 1.4s infinite",marginTop:mt||0}}/>; };
   return <div style={{fontFamily:ADS_FONT,maxWidth:ADS_MAXW,margin:"0 auto"}} aria-busy="true" aria-label={t||"Carregando"}>
@@ -51223,7 +51266,7 @@ function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{wi
 /* frescor dos dados: uma frase só, usada na barra de contexto */
 function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta 07:00":"coleta diária às 07:00"; }
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
-function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:(t==="lead_wpp"||t==="eng_wpp")?cv:l+cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
+function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=l+cv; }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
 function QGAdsEmBreve({nome,dica}){ return <AdsCard style={{textAlign:"center",color:ADS.muted,fontSize:13,border:"1px dashed "+ADS.line2}}>{nome}{dica?<div style={{marginTop:6,fontSize:12.5}}>{dica}</div>:null}</AdsCard>; }
 function AdsBtn({children,onClick,primary,disabled,small}){ return <button onClick={onClick} disabled={disabled} style={{background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"}}>{children}</button>; }
 
@@ -51279,7 +51322,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
     {(function(){ const tipoDom=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads") g[c.tipo]=(g[c.tipo]||0)+c.gasto; }); return Object.keys(g).sort(function(x,y){return g[y]-g[x];})[0]||null; })(); const bench=tipoDom?_adsBenchCarteira(tipoDom):null; const cfgDom=tipoDom?_adsTipo(tipoDom):null;
       return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       <AdsSolido bg={ADS_SOL.escuro} eyebrow="Investido" big={_adsBRL0(T.gasto)} delta={_adsDelta(T.gasto,prev.gasto)} sub={verba>0?(ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:"verba do mês "+_adsBRL0(verba)):"verba mensal não definida — cadastre em Gestão"}/>
-      <AdsSolido bg={ADS_SOL.medio} eyebrow="Leads" big={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} sub={_adsNum(T.leads)+" formulário · "+_adsNum(T.conversas)+" WhatsApp"}/>
+      <AdsSolido bg={ADS_SOL.medio} eyebrow="Leads" big={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} sub={_adsSubLeads(T)} title={ADS_DEF_LEAD}/>
       <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
     </div>; })()}
 
@@ -52018,9 +52061,9 @@ function _adsPainelCalc(data,accounts,clients){
   const tipoDe={}; const tipoCache={};
   (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
   /* resultado por tipo: leads (form) ou conversas (wpp) — família leads; demais famílias não contam como lead */
-  const resDe=function(r,tipo){ const l=Number(r.leads||0), c=Number(r.conversas||0); if(tipo==="form") return l; if(tipo==="lead_wpp"||tipo==="eng_wpp") return c; return l+c; };
-  const vazio=function(){ return {gasto:0,res:0,leads:0,conversas:0,impressoes:0,cliques:0}; };
-  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); a.res+=resDe(r,tipo); a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
+  const resDe=function(r,tipo){ return Number(r.leads||0)+Number(r.conversas||0); }; /* leads = formulário, conversas = WhatsApp; sem sobreposição (definição 09/09) */
+  const vazio=function(){ return {gasto:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
+  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); a.res+=resDe(r,tipo); a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); a.leads_meta+=Number(r.leads_meta||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
   /* por conta */
   const contas={};
   (data.dias||[]).forEach(function(r){ const tipo=tipoCache[r.conta+"|"+r.camp]; const o=contas[r.conta]||(contas[r.conta]={conta:r.conta,client_id:r.client_id,unidade:r.unidade,j:{d1:vazio(),d7:vazio(),d15:vazio(),d30:vazio(),mes:vazio()},tipos:{},porDia:{}});
@@ -52134,7 +52177,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1]}</div>
           <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,margin:"8px 0 2px",color:"#fff",fontFeatureSettings:"'tnum'"}}><AdsNumAnim v={x.res} fmt={_adsNum}/><span style={{fontSize:12,fontWeight:700,color:ADS_SOL.sub,letterSpacing:0,marginLeft:6}}>leads</span></div>
           <div style={{fontSize:12.5,color:"#fff",marginTop:6}}><b style={{fontFeatureSettings:"'tnum'"}}>{c?_adsBRL(c):"—"}</b> por lead <span style={{color:ADS_SOL.sub}}>· <AdsNumAnim v={x.gasto} fmt={_adsBRL0}/></span></div>
-          <div style={{fontSize:11,color:ADS_SOL.sub,marginTop:3}}>{_adsNum(x.leads)} formulário · {_adsNum(x.conversas)} WhatsApp</div>
+          <div style={{fontSize:11,color:ADS_SOL.sub,marginTop:3}}>{_adsSubLeads(x)}</div>
         </div>; })}
       </div>
 
