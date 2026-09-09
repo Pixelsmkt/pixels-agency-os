@@ -51986,19 +51986,34 @@ function AdsCapa({cr,h,radius,children,onClick,dark}){
   </div>;
 }
 /* preview em cima da tela: imagem cheia, Reel embutido (player do Facebook) ou capa + abrir na Meta */
+/* prévia oficial da Meta (/{ad}/previews): iframe com o anúncio de verdade, vídeo tocável — funciona com ads_read */
+window._pxAdsPrev=window._pxAdsPrev||{};
+function useAdsPreview(adId,formato){
+  const key=adId+"|"+formato;
+  const [st,setSt]=useState(function(){ return window._pxAdsPrev[key]||{loading:!!adId,src:null,erro:null}; });
+  useEffect(function(){ if(!adId||!window._sb) return; if(window._pxAdsPrev[key]){ setSt(window._pxAdsPrev[key]); return; } let alive=true; setSt({loading:true,src:null,erro:null});
+    window._sb.functions.invoke("ads-preview",{body:{ad_id:adId,formato:formato}}).then(function(r){ if(!alive) return; const d=r.data||{}; const o=r.error||!d.src?{loading:false,src:null,erro:(r.error&&r.error.message)||d.error||"sem prévia"}:{loading:false,src:d.src,erro:null}; window._pxAdsPrev[key]=o; setSt(o); }).catch(function(e){ if(alive) setSt({loading:false,src:null,erro:e.message||String(e)}); });
+    return function(){ alive=false; }; },[key]);
+  return st;
+}
 function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
   const cr=a.cr||{}; const reel=cr.video_permalink?("https://www.facebook.com"+(cr.video_permalink.indexOf("/")===0?"":"/")+cr.video_permalink):null;
   const mp4=cr.video_url||null; const img=cr.image_url||cr.thumbnail_url||null;
+  const [fmt,setFmt]=useState("MOBILE_FEED_STANDARD");
+  const prev=useAdsPreview(mp4?null:a.id,fmt);
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
         {mp4?<video src={mp4} poster={cr.thumbnail_url||undefined} controls autoPlay playsInline style={{width:"100%",maxHeight:"92vh",display:"block"}}/>
+        :prev.src?<iframe src={prev.src} title="Prévia do anúncio" style={{width:"100%",height:"min(92vh,760px)",border:0,display:"block",background:"#0f0d1a"}} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>
+        :prev.loading?<div style={{color:"#fff",fontSize:13,display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>{img&&<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"70vh",objectFit:"contain",display:"block",opacity:.5}}/>}<span>carregando a prévia da Meta…</span></div>
         :reel?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(reel)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
         :img?<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>
         :<div style={{color:"#fff",fontSize:13}}>sem prévia</div>}
-        {cr.video_id&&!mp4&&!reel&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>Esse vídeo é só de anúncio (não é um Reel publicado) — a Meta não libera o arquivo com a permissão atual do token. <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
+        {!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
+        {!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
       </div>
       <div style={{padding:"22px 24px",minWidth:0}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
