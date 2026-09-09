@@ -69879,7 +69879,9 @@ function _usePxScriptsN(secao, n){
   },[secao,n]);
   useEffect(function(){
     const h=function(){ setOutros(Object.assign({},window.__pxScriptsN||{})); };
-    window.addEventListener("pixels:scripts-n",h); return function(){ window.removeEventListener("pixels:scripts-n",h); };
+    window.addEventListener("pixels:scripts-n",h);
+    h(); // a outra seção pode ter publicado o número dela ANTES de esta se inscrever (ordem dos effects)
+    return function(){ window.removeEventListener("pixels:scripts-n",h); };
   },[]);
   const onb=outros.onboarding||0, ong=outros.ongoing||0;
   return { offset: secao==="ongoing"?onb:0, total: (secao==="onboarding"?n:onb)+(secao==="ongoing"?n:ong) };
