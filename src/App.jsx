@@ -50012,7 +50012,7 @@ function useQGData(clients,year,month){
       // Meta Ads (fonte única de gasto/leads): dia a dia, nível conta, do começo do mês e das últimas 10 semanas
       window._sb.from("ads_daily").select("ad_account_id,data,gasto,leads,conversas").eq("nivel","conta").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(3000),
       // nível campanha: só pra saber quanto do gasto foi em campanhas de LEAD (custo por lead não usa engajamento/seguidores/etc.)
-      window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto").eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(20000),
+      window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas").eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(20000),
       window._pxAdsAccounts?Promise.resolve({data:window._pxAdsAccounts}):window._sb.from("ads_accounts").select("*"),
     ]).then(function(rs){
       if(!alive) return;
@@ -50049,11 +50049,12 @@ function useQGData(clients,year,month){
 /* ─── META ADS como fonte única: gasto/leads da API por cliente e intervalo ─── */
 function _qgAdsConta(mc,data){ if(!mc||!data||!data.adsAccounts||!data.adsAccounts.length||typeof adsContaDoCliente!=="function") return null; const r=adsContaDoCliente(mc,data.adsAccounts); return (r&&r.conta&&!r.compartilhada)?r.conta:null; }
 /* lead = leads (formulário) + conversas (WhatsApp) — colunas já separadas no banco, sem sobreposição (definição 09/09/2026) */
-function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; const o={gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); o.leads+=Number(r.leads||0)+Number(r.conversas||0); if(Number(r.gasto||0)>0) o.dias++; });
-  /* gasto só em campanhas de lead (formulário / WhatsApp) — é o que divide o custo por lead; sem linhas de campanha, assume o gasto todo */
+function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; const o={gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); if(Number(r.gasto||0)>0) o.dias++; });
+  /* REGRA (09/09): cada campanha conta pela finalidade — formulário conta só formulário, WhatsApp conta só conversa iniciada (nunca os dois na mesma campanha).
+     E o custo por lead divide só o gasto das campanhas de lead. Por isso a soma é campanha a campanha; o nível conta só serve pro gasto total. */
   const camp=(data.adsCamp||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
-  if(camp.length&&typeof _adsClassifica==="function"&&typeof _adsEhLead==="function"){ const cache={}; camp.forEach(function(r){ const k=r.campaign_id; if(!(k in cache)) cache[k]=_adsEhLead(_adsClassifica(r.objetivo,[],r.campaign_nome)); if(cache[k]) o.gastoLead+=Number(r.gasto||0); }); }
-  else o.gastoLead=o.gasto;
+  if(camp.length&&typeof _adsClassifica==="function"&&typeof _adsEhLead==="function"){ const cache={}; camp.forEach(function(r){ const k=r.campaign_id; if(!(k in cache)) cache[k]=_adsClassifica(r.objetivo,[],r.campaign_nome); const t=cache[k]; const l=Number(r.leads||0), c=Number(r.conversas||0); o.leads+=(t==="form"?l:(t==="lead_wpp"||t==="eng_wpp")?c:l+c); if(_adsEhLead(t)) o.gastoLead+=Number(r.gasto||0); }); }
+  else { o.gastoLead=o.gasto; rows.forEach(function(r){ o.leads+=Number(r.leads||0)+Number(r.conversas||0); }); }
   return o; }
 function qgCalcCliente(mc,data,year,month,filtro){
   filtro=filtro||{};
@@ -51308,7 +51309,7 @@ const ADS_TIPOS=[
   {id:"vendas",label:"Vendas",curto:"Vendas",fam:"vendas",campo:"compras",resLbl:"compras",resSing:"compra",custoLbl:"custo por compra",cor:"#3b0f78",bg:"#e4dbf5"},
 ];
 const ADS_FAMS=[
-  {id:"leads",label:"Leads",desc:"formulário preenchido + conversa iniciada no WhatsApp (sem sobreposição)",campo:"resultados",resLbl:"resultados",resSing:"resultado",custoLbl:"custo por resultado"},
+  {id:"leads",label:"Leads",desc:"formulário (campanhas de formulário) + conversa iniciada (campanhas de WhatsApp) — cada campanha conta pela finalidade dela",campo:"resultados",resLbl:"resultados",resSing:"resultado",custoLbl:"custo por resultado"},
   {id:"engajamento",label:"Engajamento",desc:"reações, comentários, salvamentos, cliques e visualizações",campo:"eng",resLbl:"engajamentos",resSing:"engajamento",custoLbl:"custo por engajamento"},
   {id:"trafego",label:"Tráfego",desc:"quem saiu do anúncio pro destino",campo:"cliques_link",resLbl:"cliques no link",resSing:"clique",custoLbl:"custo por clique"},
   {id:"reconhecimento",label:"Reconhecimento",desc:"pessoas diferentes que viram o anúncio",campo:"alcance_mil",resLbl:"mil alcançados",resSing:"mil alcançadas",custoLbl:"custo por mil alcançados"},
@@ -51341,7 +51342,9 @@ function _adsClassifica(objetivo,conjuntos,nome){
   return "form";
 }
 // resultado da linha (campanha/anúncio já somada) segundo o tipo/família
-function _adsResDe(x,cfg){ if(!cfg||!cfg.campo) return null; if(cfg.campo==="resultados") return Number(x.leads||0)+Number(x.conversas||0); if(cfg.campo==="alcance_mil") return Number(x.alcance||0)/1000; return Number(x[cfg.campo]||0); }
+/* REGRA (09/09): cada campanha conta pela finalidade dela. Formulário → só leads de formulário (a conversa que vem
+   depois do formulário é a MESMA pessoa). WhatsApp → só conversas iniciadas. Nunca somar os dois na mesma campanha. */
+function _adsResDe(x,cfg){ if(!cfg||!cfg.campo) return null; if(cfg.campo==="resultados"){ if(cfg.id==="form") return Number(x.leads||0); if(cfg.id==="lead_wpp"||cfg.id==="eng_wpp") return Number(x.conversas||0); return Number(x.leads||0)+Number(x.conversas||0); } if(cfg.campo==="alcance_mil") return Number(x.alcance||0)/1000; return Number(x[cfg.campo]||0); }
 function AdsObjTag({tipo,small}){ const t=_adsTipo(tipo); return <span style={{display:"inline-flex",alignItems:"center",background:t.bg,color:t.cor,borderRadius:7,padding:small?"2px 7px":"4px 9px",fontSize:small?10.5:11.5,fontWeight:700,whiteSpace:"nowrap",fontFamily:ADS_FONT}}>{t.label}</span>; }
 
 /* ─── tooltip de 4 partes ─── */
@@ -51410,7 +51413,7 @@ function QGAdsBarraPeriodo({compact}){
 const ADS_FAM_LEAD={form:1,lead_wpp:1,eng_wpp:1}; /* finalidades que geram lead — só elas entram no custo por lead */
 const _adsEhLead=function(tipo){ return !!ADS_FAM_LEAD[tipo]; };
 const ADS_DEF_CPL="Custo por lead = gasto SÓ das campanhas de lead (formulário / WhatsApp) ÷ leads. Engajamento, reconhecimento, seguidores, vídeo e tráfego têm outra finalidade e ficam fora da conta.";
-const ADS_DEF_LEAD="Lead = pessoa que chegou: formulário preenchido ou conversa iniciada no WhatsApp. Cada conversa é uma pessoa — bate com o WhatsApp do cliente. Quem respondeu ou virou negócio se marca na aba Leads.";
+const ADS_DEF_LEAD="Lead = pessoa que chegou. Cada campanha conta pela finalidade dela: campanha de formulário conta o formulário preenchido (a conversa que vem depois é a mesma pessoa); campanha de WhatsApp conta a conversa iniciada. Quem respondeu ou virou negócio se marca na aba Leads.";
 /* "leads_meta" fica só no banco: a Meta só carimba lead em conversa quando a campanha está configurada pra isso, varia por conta e não dá pra auditar — não aparece na tela (decisão 09/09). */
 function _adsSubLeads(x){ x=x||{}; const f=Number(x.leads||0), c=Number(x.conversas||0); const partes=[]; if(f>0||c===0) partes.push(_adsNum(f)+" formulário"); if(c>0||f===0) partes.push(_adsNum(c)+" WhatsApp"); return partes.join(" · "); }
 window._pxAdsPer=window._pxAdsPer||{};
@@ -51506,7 +51509,7 @@ function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{wi
 /* frescor dos dados: uma frase só, usada na barra de contexto */
 function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta 07:00":"coleta diária às 07:00"; }
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
-function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=l+cv; }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
+function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:(t==="lead_wpp"||t==="eng_wpp")?cv:l+cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
 function QGAdsEmBreve({nome,dica}){ return <AdsCard style={{textAlign:"center",color:ADS.muted,fontSize:13,border:"1px dashed "+ADS.line2}}>{nome}{dica?<div style={{marginTop:6,fontSize:12.5}}>{dica}</div>:null}</AdsCard>; }
 function AdsBtn({children,onClick,primary,disabled,small}){ return <button onClick={onClick} disabled={disabled} style={{background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"}}>{children}</button>; }
 
@@ -51536,7 +51539,10 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   /* custo por lead: só o gasto das campanhas cuja finalidade é lead (09/09) */
   const somaLead=function(lista){ const o={gasto:0,res:0}; (lista||[]).forEach(function(c){ if(c.fam!=="leads") return; o.gasto+=Number(c.gasto||0); o.res+=Number(c.res||0); }); return o; };
   const L=somaLead(camps); T.gastoLead=L.gasto; T.resLead=L.res; T.gastoOutras=Math.max(0,Number(T.gasto||0)-L.gasto); T.cpa=_adsDiv(L.gasto,L.res);
-  (function(){ const pc=((X.prev||{}).campanhas||[]).map(function(c){ const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return {fam:cfg.fam,gasto:c.gasto,res:_adsResDe(c,cfg)}; }); const Lp=somaLead(pc); prev.gastoLead=Lp.gasto; prev.cpa=_adsDiv(Lp.gasto,Lp.res); })();
+  /* leads da conta = soma do resultado de cada campanha pela finalidade dela (não o total do nível conta, que soma formulário + conversa da mesma pessoa) */
+  const somaTipos=function(lista){ const o={res:0,leads:0,conversas:0}; (lista||[]).forEach(function(c){ const r=Number(c.res||0); o.res+=r; if(c.tipo==="form") o.leads+=r; else if(c.tipo==="lead_wpp"||c.tipo==="eng_wpp") o.conversas+=r; else { o.leads+=Number(c.leads||0); o.conversas+=Number(c.conversas||0); } }); return o; };
+  (function(){ const t=somaTipos(camps); T.resultados=t.res; T.leads=t.leads; T.conversas=t.conversas; T.cpa=_adsDiv(L.gasto,L.res); })();
+  (function(){ const pc=((X.prev||{}).campanhas||[]).map(function(c){ const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return {fam:cfg.fam,tipo:tipo,gasto:c.gasto,leads:c.leads,conversas:c.conversas,res:_adsResDe(c,cfg)}; }); const Lp=somaLead(pc); const tp=somaTipos(pc); prev.gastoLead=Lp.gasto; prev.resultados=tp.res; prev.leads=tp.leads; prev.conversas=tp.conversas; prev.cpa=_adsDiv(Lp.gasto,Lp.res); })();
   const outrasNomes=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads"||!(Number(c.gasto||0)>0)) return; const k=c.cfg.curto||c.cfg.label; g[k]=(g[k]||0)+Number(c.gasto||0); }); return Object.keys(g).sort(function(a,b){return g[b]-g[a];}); })();
   const media=Number(T.cpa)||null;
   const verba=Number(verbaMensal)||0;
@@ -51560,7 +51566,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const acaoLimpa=function(t){ return String(t||"").replace(/\[Pixels\]\s*/g,"").replace(/\[\d{2}\/\d{2}\/\d{2,4}\]\s*/g,"").replace(/\[Leads\s*-\s*Forms\]\s*/ig,"").replace(/\[Leads\s*-\s*Wpp\]\s*/ig,"").replace(/\[Leads\]\s*/ig,"").replace(/[\[\]]/g,"").replace(/"\s*"/g,"").replace(/\s+/g," ").trim(); };
   const acaoTitulo=function(t){ const s=acaoLimpa(t); const m=s.match(/^(.{0,80}?)(\s\(|\s—|\s-\s|:|\.\s|,\s(?:e|realocar|concentrar)\b|$)/); let ti=m?m[1]:s.slice(0,80); if(ti.length>72){ ti=ti.slice(0,72).replace(/\s\S*$/,"")+"…"; } return ti; };
   const acaoResto=function(t){ const s=acaoLimpa(t); const ti=acaoTitulo(t).replace(/…$/,""); return s.slice(ti.length).replace(/^[\s\(—:\-\.,]+/,"").replace(/\)$/,""); };
-  const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead (formulário / WhatsApp) ÷ leads. Campanhas de engajamento, reconhecimento, seguidores, vídeo e tráfego têm outra finalidade e não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
+  const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead ÷ leads (formulário nas campanhas de formulário, conversa nas de WhatsApp). Engajamento, reconhecimento, seguidores, vídeo e tráfego não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
   return <AdsWrap>
     {compartilhada&&<div style={{fontSize:12,color:ADS.muted,marginBottom:10}}>Conta compartilhada com Bioter {compartilhada} — as praças só se distinguem pelo nome da campanha.</div>}
     {/* três números — sólidos, um tom cada */}
@@ -52308,9 +52314,9 @@ function _adsPainelCalc(data,accounts,clients){
   const tipoDe={}; const tipoCache={};
   (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
   /* resultado por tipo: leads (form) ou conversas (wpp) — família leads; demais famílias não contam como lead */
-  const resDe=function(r,tipo){ return Number(r.leads||0)+Number(r.conversas||0); }; /* leads = formulário, conversas = WhatsApp; sem sobreposição (definição 09/09) */
+  const resDe=function(r,tipo){ const l=Number(r.leads||0), c=Number(r.conversas||0); if(tipo==="form") return l; if(tipo==="lead_wpp"||tipo==="eng_wpp") return c; return l+c; }; /* cada campanha conta pela finalidade (09/09) */
   const vazio=function(){ return {gasto:0,gastoLead:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
-  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); if(_adsEhLead(tipo)) a.gastoLead+=Number(r.gasto||0); a.res+=resDe(r,tipo); a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); a.leads_meta+=Number(r.leads_meta||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
+  const soma=function(a,r,tipo){ a.gasto+=Number(r.gasto||0); if(_adsEhLead(tipo)) a.gastoLead+=Number(r.gasto||0); a.res+=resDe(r,tipo); if(tipo==="form"){ a.leads+=Number(r.leads||0); } else if(tipo==="lead_wpp"||tipo==="eng_wpp"){ a.conversas+=Number(r.conversas||0); } else { a.leads+=Number(r.leads||0); a.conversas+=Number(r.conversas||0); } a.leads_meta+=Number(r.leads_meta||0); a.impressoes+=Number(r.impressoes||0); a.cliques+=Number(r.cliques||0); return a; };
   /* por conta */
   const contas={};
   (data.dias||[]).forEach(function(r){ const tipo=tipoCache[r.conta+"|"+r.camp]; const o=contas[r.conta]||(contas[r.conta]={conta:r.conta,client_id:r.client_id,unidade:r.unidade,j:{d1:vazio(),d7:vazio(),d15:vazio(),d30:vazio(),mes:vazio()},tipos:{},porDia:{}});
@@ -52418,7 +52424,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
 
     {/* ── 3. AGÊNCIA ── */}
     {!soClientes&&<div style={{background:ADS_SOL.painel,borderRadius:18,padding:isMob?"18px 14px":"22px 20px",color:"#fff"}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · lead = formulário enviado ou conversa iniciada no WhatsApp · custo por lead só com o gasto das campanhas de lead</span></div>
+      <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · cada campanha conta pela finalidade: formulário ou conversa no WhatsApp · custo por lead só com o gasto das campanhas de lead</span></div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
         {J.map(function(j,i){ const x=C.ag.j[j[0]]; const c=cpl(x); const bg=j[0]==="d1"?ADS_SOL.claro:j[0]==="mes"?ADS_SOL.medio:ADS_SOL.escuro; return <div key={j[0]} style={{background:bg,borderRadius:14,padding:"16px 18px",minWidth:0}}>
           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1]}</div>
@@ -52592,12 +52598,14 @@ function useAdsHistorico(accountId,campId,dias){
     if(!accountId||!window._sb){ setSt({loading:false,rows:[]}); return; }
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
     const fim=_adsIso(new Date()); const ini=_adsAddDays(fim,-(dias-1));
-    let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,leads,conversas,frequencia").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
+    let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,leads,conversas,frequencia,objetivo,campaign_nome").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
     q=campId?q.eq("nivel","campanha").eq("campaign_id",campId):q.eq("nivel","conta");
     /* gasto só das campanhas de lead, por dia (custo por lead não usa engajamento/seguidores/etc.) */
-    const qLead=campId?Promise.resolve({data:null}):window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,objetivo,gasto").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
+    const qLead=campId?Promise.resolve({data:null}):window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
     Promise.all([q,qLead]).then(function(rr){ if(!alive) return; const r=rr[0], rl=rr[1]; if(r.error) console.warn("[ads histórico]",r.error.message); const rows=r.error?[]:(r.data||[]);
-      if(rl&&rl.data){ const porDia={}; const tipoCache={}; rl.data.forEach(function(x){ const k=x.campaign_id; if(!(k in tipoCache)) tipoCache[k]=_adsClassifica(x.objetivo,[],x.campaign_nome); if(_adsEhLead(tipoCache[k])) porDia[x.data]=(porDia[x.data]||0)+Number(x.gasto||0); }); rows.forEach(function(d){ d.gastoLead=porDia[d.data]||0; }); }
+      /* por dia: gasto só de campanhas de lead + leads contados pela finalidade de cada campanha (formulário OU conversa, nunca os dois) */
+      if(rl&&rl.data){ const porDia={}; const tipoCache={}; rl.data.forEach(function(x){ const k=x.campaign_id; if(!(k in tipoCache)) tipoCache[k]=_adsClassifica(x.objetivo,[],x.campaign_nome); const t=tipoCache[k]; const o=porDia[x.data]||(porDia[x.data]={gastoLead:0,leads:0,conversas:0}); if(_adsEhLead(t)) o.gastoLead+=Number(x.gasto||0); if(t==="form") o.leads+=Number(x.leads||0); else if(t==="lead_wpp"||t==="eng_wpp") o.conversas+=Number(x.conversas||0); else { o.leads+=Number(x.leads||0); o.conversas+=Number(x.conversas||0); } }); rows.forEach(function(d){ const o=porDia[d.data]; d.gastoLead=o?o.gastoLead:0; if(o){ d.leads=o.leads; d.conversas=o.conversas; } }); }
+      else if(campId){ const t=_adsClassifica(rows[0]&&rows[0].objetivo,[],rows[0]&&rows[0].campaign_nome); rows.forEach(function(d){ d.gastoLead=Number(d.gasto||0); if(t==="form") d.conversas=0; else if(t==="lead_wpp"||t==="eng_wpp") d.leads=0; }); }
       else rows.forEach(function(d){ d.gastoLead=Number(d.gasto||0); });
       setSt({loading:false,rows:rows}); });
     return function(){alive=false;};
