@@ -69399,10 +69399,13 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _alvo     = !!drag && drag.overIdx===idx && drag.dragIdx!==null && drag.dragIdx!==idx;
   // Box do titulo usa a cor do cliente selecionado no portal. Tinta (texto) troca
   // pra escuro quando a cor do cliente e clara demais (Climaves, Arabuta...).
-  // Título em cor SÓLIDA seguindo o rainbow da Linha de produção (FLUXO_COLS), pela POSIÇÃO
-  // do card na seção: 1º roxo, 2º rosa, 3º amarelo, 4º laranja, 5º verde, 6º azul, e repete.
-  // Como é por índice, reordenar/criar/apagar rebalanceia sozinho — a sequência nunca quebra.
-  const _RAINBOW = ["#a140ff","#ff6eb4","#ffd000","#ff7200","#00e5a0","#4db8ff"];
+  // Título em cor SÓLIDA seguindo o rainbow da Linha de produção — as cores das colunas do
+  // kanban (KANBAN_COLS, sem as cinzas): Copys → Alteração → Demanda → Execução → Ajustes →
+  // Avaliação → Aprovado → Aprovado cliente → Publicadas. Pela POSIÇÃO do card na seção, então
+  // criar/apagar/arrastar rebalanceia sozinho e a sequência nunca quebra. Texto sempre branco.
+  const _RAINBOW = (typeof KANBAN_COLS!=="undefined" && Array.isArray(KANBAN_COLS) && KANBAN_COLS.length)
+    ? KANBAN_COLS.filter(function(c){ return c && c.color && ["rascunhos","pausado","reprovado"].indexOf(c.id)<0; }).map(function(c){ return c.color; })
+    : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
   const _cor = _RAINBOW[((typeof idx==="number"?idx:0)%_RAINBOW.length+_RAINBOW.length)%_RAINBOW.length];
   const _acc = accent || "#7c3aed"; // cor da seção: só no botão Copiar
   const _hx  = String(_cor).replace("#","");
@@ -69410,8 +69413,8 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _g   = parseInt(_hx.substring(2,4),16)||0;
   const _b   = parseInt(_hx.substring(4,6),16)||0;
   const _lum = (0.299*_r + 0.587*_g + 0.114*_b)/255;
-  const _ink = _lum>0.62 ? "#0f172a" : "#ffffff";
-  const _sub = _lum>0.62 ? "rgba(15,23,42,.55)" : "rgba(255,255,255,.75)";
+  const _ink = "#ffffff";                 // sempre branco (pedido: nada de texto preto no título)
+  const _sub = "rgba(255,255,255,.78)";
   return <div
     draggable={_pode}
     onDragStart={drag?drag.start(idx):undefined}
@@ -69434,9 +69437,9 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           {/* Mobile: setas no lugar do arraste */}
           {drag && (typeof _pxMob==="function"&&_pxMob()) && <span style={{display:"inline-flex",gap:2,flexShrink:0}} onClick={function(e){e.stopPropagation();}}>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx-1);}} disabled={idx===0} title="Subir"
-              style={{background:_lum>0.62?"rgba(15,23,42,.08)":"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
+              style={{background:"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx+1);}} title="Descer"
-              style={{background:_lum>0.62?"rgba(15,23,42,.08)":"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
+              style={{background:"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
           </span>}
           {/* Handle de arrasto — segura aqui pra reordenar */}
           {drag && !(typeof _pxMob==="function"&&_pxMob()) && <span title="Arraste pra reordenar"
@@ -69444,7 +69447,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
             onMouseUp={function(e){ e.stopPropagation(); _setPode(false); }}
             onClick={function(e){ e.stopPropagation(); }}
             style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,cursor:"grab",color:_sub,flexShrink:0,marginLeft:-2,transition:"background .12s"}}
-            onMouseEnter={function(e){ e.currentTarget.style.background=_lum>0.62?"rgba(15,23,42,.10)":"rgba(255,255,255,.22)"; }}
+            onMouseEnter={function(e){ e.currentTarget.style.background="rgba(255,255,255,.22)"; }}
             onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{pointerEvents:"none"}}>
               <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
