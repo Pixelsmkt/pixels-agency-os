@@ -2540,25 +2540,25 @@ function _showNovidade(o){
   if(!container){console.log("[novidade]",o.titulo,o.sub);return;}
   const toast=document.createElement("div");
   Object.assign(toast.style,{
-    background:"#fff",color:"#0f172a",padding:"11px 14px 11px 11px",borderRadius:"14px",
-    boxShadow:"0 12px 40px rgba(15,23,42,0.22), 0 0 0 1px rgba(15,23,42,0.06)",fontSize:"13px",
+    background:"#dc2626",color:"#fff",padding:"11px 14px 11px 11px",borderRadius:"14px",
+    boxShadow:"0 12px 40px rgba(220,38,38,0.35)",fontSize:"13px",
     display:"flex",alignItems:"center",gap:"11px",pointerEvents:"auto",cursor:"pointer",
     fontFamily:"'Inter',system-ui,sans-serif",transform:"translateX(110%)",opacity:"0",
     transition:"all .3s cubic-bezier(.22,1,.36,1)",minWidth:"280px",maxWidth:"360px",
   });
   const logo=document.createElement("div");
-  Object.assign(logo.style,{width:"42px",height:"42px",borderRadius:"12px",background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"});
+  Object.assign(logo.style,{width:"42px",height:"42px",borderRadius:"12px",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,position:"relative"});
   if(o.logo){ const img=document.createElement("img"); img.src=o.logo; img.alt=""; Object.assign(img.style,{width:"80%",height:"80%",objectFit:"contain"}); logo.appendChild(img); }
   else { const ab=document.createElement("span"); ab.textContent=String(o.cliente||"?").slice(0,2).toUpperCase(); Object.assign(ab.style,{fontWeight:"900",fontSize:"12px",color:o.cor||"#7c3aed"}); logo.appendChild(ab); }
   const dot=document.createElement("span");
-  Object.assign(dot.style,{position:"absolute",right:"-3px",bottom:"-3px",width:"16px",height:"16px",borderRadius:"50%",background:o.cor||"#7c3aed",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"9px",fontWeight:"900"});
+  Object.assign(dot.style,{position:"absolute",right:"-3px",bottom:"-3px",width:"16px",height:"16px",borderRadius:"50%",background:"#0f172a",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:"9px",fontWeight:"900"});
   dot.textContent=o.icone||"!"; logo.appendChild(dot);
   const txt=document.createElement("div"); Object.assign(txt.style,{minWidth:0,flex:"1"});
   const t1=document.createElement("div"); t1.textContent=o.titulo||"Novidade"; Object.assign(t1.style,{fontWeight:"800",fontSize:"13px",letterSpacing:"-.1px",lineHeight:"1.3"});
-  const t2=document.createElement("div"); t2.textContent=o.sub||""; Object.assign(t2.style,{color:"#64748b",fontSize:"12px",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"});
+  const t2=document.createElement("div"); t2.textContent=o.sub||""; Object.assign(t2.style,{color:"rgba(255,255,255,.85)",fontSize:"12px",marginTop:"2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"});
   txt.appendChild(t1); if(o.sub) txt.appendChild(t2);
   const x=document.createElement("button"); x.type="button"; x.textContent="×"; x.title="Fechar";
-  Object.assign(x.style,{background:"transparent",border:"none",color:"#94a3b8",fontSize:"18px",cursor:"pointer",padding:"0 2px",lineHeight:"1",flexShrink:0});
+  Object.assign(x.style,{background:"transparent",border:"none",color:"rgba(255,255,255,.75)",fontSize:"18px",cursor:"pointer",padding:"0 2px",lineHeight:"1",flexShrink:0});
   x.onclick=function(e){e.stopPropagation();_dismissToast(toast);};
   toast.appendChild(logo); toast.appendChild(txt); toast.appendChild(x);
   toast.onclick=function(){ try{ if(typeof o.onClick==="function") o.onClick(); }catch(_){} _dismissToast(toast); };
@@ -14075,9 +14075,9 @@ function CScriptsTab({cl, isMob}){
   },[cl&&cl.id]);
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Tons fixos da Pixels (não a cor do cliente): Onboarding roxo escuro, Ongoing violeta */}
-    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#5b21b6"/>}
-    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#7c3aed"/>}
+    {/* Tons fixos (não a cor do cliente), usados só no filete/ícone: Onboarding roxo, Ongoing azul */}
+    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#7c3aed"/>}
+    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#0284c7"/>}
   </div>;
 }
 
@@ -48721,6 +48721,7 @@ export default function AgencyOS(){
   // entra card novo que NÃO foi movido por mim, mostra o cartão no topo direito; clicar leva pra fila.
   // Ignora a primeira carga. Se a aba estiver em segundo plano, dispara Notification do navegador.
   const _avalPrevRef=useRef(null);
+  const _avalDesdeRef=useRef(0);
   useEffect(function(){
     if(!loaded) return;
     if(!(effectivePerms&&effectivePerms.verAprovacoes)) return;
@@ -48730,9 +48731,13 @@ export default function AgencyOS(){
       if(t.status==="avaliacao") return pxIsVideoTask(t)?"aprovacoes_video":"aprovacoes_publicacao";
       return null;
     };
+    // Só começa a vigiar depois que a carga COMPLETA do servidor chegou (o cache do localStorage
+    // vem antes e parcial — comparar cache×servidor disparava "12 novidades" ao abrir o app).
+    if(!initialFetchDoneRef.current) return;
     const atual=new Map();
     (tasks||[]).forEach(function(t){ const f=_fila(t); if(f) atual.set(String(t.id),f); });
-    if(_avalPrevRef.current===null){ _avalPrevRef.current=atual; pxPedirPermissaoNotificacao&&pxPedirPermissaoNotificacao(); return; }
+    if(_avalPrevRef.current===null){ _avalPrevRef.current=atual; _avalDesdeRef.current=Date.now(); pxPedirPermissaoNotificacao&&pxPedirPermissaoNotificacao(); return; }
+    if(Date.now()-_avalDesdeRef.current<8000){ _avalPrevRef.current=atual; return; } // ainda assentando a carga inicial
     const prev=_avalPrevRef.current; _avalPrevRef.current=atual;
     const novos=[];
     atual.forEach(function(f,id){
@@ -48741,6 +48746,9 @@ export default function AgencyOS(){
       const t=(tasks||[]).find(function(x){return String(x.id)===id;}); if(!t) return;
       const ult=(t.timeline||[])[(t.timeline||[]).length-1];
       if(ult&&ult.user&&CURRENT_USER&&ult.user===CURRENT_USER.name) return; // último evento foi meu
+      // Só o que entrou na fila AGORA (últimos 15 min) — nunca coisa antiga que só apareceu no state
+      const _ce=t.colEnteredAt?new Date(t.colEnteredAt).getTime():0;
+      if(_ce&&Date.now()-_ce>15*60*1000) return;
       novos.push({t:t,fila:f});
     });
     if(!novos.length||typeof pixelsToast==="undefined"||!pixelsToast.novidade) return;
@@ -69388,8 +69396,9 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _g   = parseInt(_hx.substring(2,4),16)||0;
   const _b   = parseInt(_hx.substring(4,6),16)||0;
   const _lum = (0.299*_r + 0.587*_g + 0.114*_b)/255;
-  const _ink = _lum>0.62 ? "#0f172a" : "#ffffff";
-  const _sub = _lum>0.62 ? "rgba(15,23,42,.55)" : "rgba(255,255,255,.72)";
+  // Visual calmo (09/09/2026): barra clara com filete na cor da seção; texto escuro sempre.
+  const _ink = "#0f172a";
+  const _sub = "rgba(15,23,42,.45)";
   return <div
     draggable={_pode}
     onDragStart={drag?drag.start(idx):undefined}
@@ -69404,15 +69413,15 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
       : <div onClick={function(){ if(!_ro) setEditingId(s.id); }} title={_ro?"":"Clique pra renomear"}
-          style={{background:_cor,color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",lineHeight:1.3}}
-          onMouseEnter={function(e){ if(_ro) return; e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
-          onMouseLeave={function(e){ if(_ro) return; e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
+          style={{background:"#f8fafc",borderLeft:"3px solid "+_cor,color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"background .12s",lineHeight:1.3}}
+          onMouseEnter={function(e){ if(_ro) return; e.currentTarget.style.background="#f1f5f9";}}
+          onMouseLeave={function(e){ if(_ro) return; e.currentTarget.style.background="#f8fafc";}}>
           {/* Mobile: setas no lugar do arraste */}
           {drag && (typeof _pxMob==="function"&&_pxMob()) && <span style={{display:"inline-flex",gap:2,flexShrink:0}} onClick={function(e){e.stopPropagation();}}>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx-1);}} disabled={idx===0} title="Subir"
-              style={{background:"rgba(255,255,255,0.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
+              style={{background:"#e2e8f0",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx+1);}} title="Descer"
-              style={{background:"rgba(255,255,255,0.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
+              style={{background:"#e2e8f0",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
           </span>}
           {/* Handle de arrasto — segura aqui pra reordenar */}
           {drag && !(typeof _pxMob==="function"&&_pxMob()) && <span title="Arraste pra reordenar"
@@ -69420,7 +69429,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
             onMouseUp={function(e){ e.stopPropagation(); _setPode(false); }}
             onClick={function(e){ e.stopPropagation(); }}
             style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,cursor:"grab",color:_sub,flexShrink:0,marginLeft:-2,transition:"background .12s"}}
-            onMouseEnter={function(e){ e.currentTarget.style.background=_lum>0.62?"rgba(15,23,42,.10)":"rgba(255,255,255,.22)"; }}
+            onMouseEnter={function(e){ e.currentTarget.style.background="rgba(15,23,42,.08)"; }}
             onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{pointerEvents:"none"}}>
               <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
@@ -69551,23 +69560,23 @@ function _OnboardingScripts({cl, startDate, accent}){
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
     style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14,background:(typeof _accent!=="undefined"?_accent:accent),borderRadius:12,padding:"12px 14px",margin:"-6px -10px 14px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.16)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:(typeof _accent!=="undefined"?_accent:accent)+"14",color:(typeof _accent!=="undefined"?_accent:accent),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
-          <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
         </div>
       </div>
       {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
-        style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.28)",borderRadius:9,padding:"7px 12px",color:"#fff",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:"#fff",color:accent,border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 2px 8px rgba(15,23,42,.12)"}}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -69699,23 +69708,23 @@ function _OngoingScripts({cl, accent}){
   return <div
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
     style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14,background:(typeof _accent!=="undefined"?_accent:accent),borderRadius:12,padding:"12px 14px",margin:"-6px -10px 14px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.16)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:(typeof _accent!=="undefined"?_accent:accent)+"14",color:(typeof _accent!=="undefined"?_accent:accent),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
-          <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,marginTop:2}}>Check-ins, reuniões, NPS, indicações e resultados de funil.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Check-ins, reuniões, NPS, indicações e resultados de funil.</div>
         </div>
       </div>
       {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
-        style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.28)",borderRadius:9,padding:"7px 12px",color:"#fff",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:"#fff",color:_accent,border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 2px 8px rgba(15,23,42,.12)"}}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
