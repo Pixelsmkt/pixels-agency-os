@@ -27371,32 +27371,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       </div>;
     })()}
 
-    {/* Drive toast — aparece apos aprovar publicacao */}
-    {lastApproved&&(()=>{
-      const cl=CLIENTS.find(c=>c.id===lastApproved.client);
-      let driveUrl=cl?.driveUrl||"";
-      try{const s=localStorage.getItem("pixels-drive-"+(cl?.id||""));if(s)driveUrl=s;}catch(e){}
-      return(<div style={{background:C.gr+"15",border:"1px solid "+C.gr+"44",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:200}}>
-          <div style={{color:C.gr,fontWeight:800,fontSize:13}}>Publicação aprovada!</div>
-          <div style={{color:C.ts,fontSize:12,marginTop:2}}>"{lastApproved.title}" está pronta para publicação.</div>
-        </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {driveUrl?(
-            <a href={driveUrl} target="_blank" rel="noopener"
-              style={{background:"linear-gradient(135deg,#1a73e8,#4285f4)",color:"#fff",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-              Abrir pasta no Drive →
-            </a>
-          ):(
-            <span style={{color:C.td,fontSize:11}}>Configure a pasta do Drive em Clientes → Informacoes</span>
-          )}
-          <button onClick={()=>setLastApproved(null)}
-            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:12,cursor:"pointer"}}>
-            Fechar
-          </button>
-        </div>
-      </div>);
-    })()}
+    {/* Faixa "Publicação aprovada / pasta do Drive" removida a pedido (09/09/2026) — o toast já avisa. */}
 
     <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1,fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
       {tab==="copys"?"Avaliação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":tab==="video"?"Avaliação de vídeo":"Avaliação de design"}
@@ -76402,9 +76377,15 @@ function _PlanejamentosClientes({isMob}){
       const _totalClientes=_clientes.length;
       // Clientes de uma data: logos pequenas empilhadas (máx. 5 + "+N"); carteira inteira vira selo "Todos"
       const _LogoStack=function(lista){
-        if(_totalClientes>0&&lista.length>=_totalClientes){
+        // "Todos": a data cobre a carteira (≥ 75% dos clientes ativos — cliente novo que ainda não
+        // entrou numa data anual não tira o selo). Tag com ∞ em vez de uma fileira de logos.
+        const _minTodos=Math.max(2,Math.ceil(_totalClientes*0.75));
+        if(_totalClientes>0&&lista.length>=_minTodos){
           return <span title={lista.map(function(c){return c.name;}).join(", ")}
-            style={{fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#6d28d9",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:99,padding:"2px 8px",whiteSpace:"nowrap"}}>Todos</span>;
+            style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#6d28d9",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:99,padding:"2px 9px 2px 7px",whiteSpace:"nowrap"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18.18 8.5c2.1 0 3.82 1.57 3.82 3.5s-1.72 3.5-3.82 3.5c-3.82 0-8.54-7-12.36-7C3.72 8.5 2 10.07 2 12s1.72 3.5 3.82 3.5c3.82 0 8.54-7 12.36-7z"/></svg>
+            Todos
+          </span>;
         }
         const _MAX=5;
         const _vis=lista.slice(0,_MAX), _resto=lista.length-_vis.length;
