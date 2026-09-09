@@ -11405,18 +11405,25 @@ function CTimeline({cl}){
 /* ─── _PlaybookSection: wrapper das seções do COrientacoes.
    CRÍTICO: top-level do módulo, NÃO redefinir dentro de componentes
    (causou bug "uma letra por vez" no input). */
-function _PlaybookSection({title, subtitle, icon, accent, children}){
-  // Sub-secao do playbook — cabecalho PADRONIZADO em preto (o prop `accent`
-  // virou legado). Faixa clara + tarja preta na lateral pra separar visualmente
-  // um bloco do outro na leitura vertical longa.
-  return <div style={{background:"#fff",borderRadius:14,border:"1px solid #eef0f3",padding:0,overflow:"hidden",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px 11px 14px",background:"#fafbfc",borderBottom:"1px solid #eef0f3",borderLeft:"3px solid #0f172a"}}>
-      {icon && <div style={{width:32,height:32,borderRadius:9,background:"#0f172a0d",border:"1px solid #0f172a1f",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color="#0f172a"/>}
+function _PlaybookSection({title, subtitle, icon, accent, idx, children}){
+  // Sub-secao do playbook — cabeçalho em COR SÓLIDA seguindo o rainbow da Linha de
+  // produção (mesmas cores das colunas do kanban, sem as cinzas — igual aos Scripts
+  // do onboarding). A cor vem da POSIÇÃO (`idx`) entre as seções visíveis, então
+  // esconder seção por cadeira rebalanceia sozinho. Texto sempre branco.
+  // `accent` virou legado (ignorado).
+  const _RAINBOW = (typeof KANBAN_COLS!=="undefined" && Array.isArray(KANBAN_COLS) && KANBAN_COLS.length)
+    ? KANBAN_COLS.filter(function(c){ return c && c.color && ["rascunhos","pausado","reprovado"].indexOf(c.id)<0; }).map(function(c){ return c.color; })
+    : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
+  const _i   = typeof idx==="number" ? idx : 0;
+  const _cor = _RAINBOW[((_i%_RAINBOW.length)+_RAINBOW.length)%_RAINBOW.length];
+  return <div style={{background:"#fff",borderRadius:14,border:"1px solid "+_cor+"55",padding:0,overflow:"hidden",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 16px 11px 14px",background:_cor,boxShadow:"0 3px 10px "+_cor+"40"}}>
+      {icon && <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color="#fff"/>}
       </div>}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.8,letterSpacing:-.2,lineHeight:1.25}}>{title}</div>
-        {subtitle&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
+        <div style={{color:"#fff",fontWeight:800,fontSize:13.8,letterSpacing:-.2,lineHeight:1.25}}>{title}</div>
+        {subtitle&&<div style={{color:"rgba(255,255,255,.8)",fontSize:11.5,marginTop:2,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
       </div>
     </div>
     <div style={{padding:"15px 20px 17px"}}>{children}</div>
@@ -11427,6 +11434,10 @@ function COrientacoes({cl, sections}){
   // sections: opcional. Array com IDs das secoes a mostrar. Se nao passar, mostra todas.
   // IDs: 'logos', 'paleta', 'fontes', 'tom', 'hashtags', 'cta', 'naofazer', 'siteredes'
   const _showSec = function(id){ return !sections || sections.indexOf(id)!==-1; };
+  // Posição da seção entre as VISÍVEIS → cor do rainbow no cabeçalho (_PlaybookSection idx)
+  const _SEC_ORDER = ["logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
+  const _secVis = _SEC_ORDER.filter(_showSec);
+  const _secIdx = function(id){ return Math.max(0,_secVis.indexOf(id)); };
   const sb=window._sb;
   const [data,setData]=useState({logos:[],paleta:[],fontes:[],tomDeVoz:"",hashtags:[],ctaPadrao:"",naoFazer:"",site:"",redes:{instagram:"",facebook:"",youtube:"",linkedin:"",tiktok:""},driveUrl:"",byUnit:{}});
   // ── Unidade Bioter ativa pra Site e redes oficiais (per-unit) ──
@@ -11594,7 +11605,7 @@ function COrientacoes({cl, sections}){
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
 
-    {_showSec("logos") && <_PlaybookSection icon="image" accent="#7c3aed" title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
+    {_showSec("logos") && <_PlaybookSection idx={_secIdx("logos")} icon="image" accent="#7c3aed" title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
         {(data.logos||[]).map((l,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,overflow:"hidden",position:"relative"}}>
@@ -11617,7 +11628,7 @@ function COrientacoes({cl, sections}){
       </div>
     </_PlaybookSection>}
 
-    {_showSec("paleta") && <_PlaybookSection icon="sparkles" accent="#ec4899" title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
+    {_showSec("paleta") && <_PlaybookSection idx={_secIdx("paleta")} icon="sparkles" accent="#ec4899" title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
       {(data.paleta||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
         {data.paleta.map((c,i)=>(
           <div key={i} style={{background:c.hex,borderRadius:10,padding:10,border:"0.5px solid "+C.b1,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",position:"relative"}}>
@@ -11647,7 +11658,7 @@ function COrientacoes({cl, sections}){
       </div>
     </_PlaybookSection>}
 
-    {_showSec("fontes") && <_PlaybookSection icon="file-text" accent="#0ea5e9" title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
+    {_showSec("fontes") && <_PlaybookSection idx={_secIdx("fontes")} icon="file-text" accent="#0ea5e9" title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
       {(data.fontes||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
         {data.fontes.map((f,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
@@ -11679,11 +11690,11 @@ function COrientacoes({cl, sections}){
       </div>
     </_PlaybookSection>}
 
-    {_showSec("tom") && <_PlaybookSection icon="message" accent="#16a34a" title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
+    {_showSec("tom") && <_PlaybookSection idx={_secIdx("tom")} icon="message" accent="#16a34a" title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
       <textarea value={data.tomDeVoz||""} onChange={e=>setData(p=>({...p,tomDeVoz:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Técnico mas acessível. Linguagem direta, evita gírias. Foca em resultado prático na fazenda. Usa produtor em vez de cliente."' rows={4} style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}}/>
     </_PlaybookSection>}
 
-    {_showSec("hashtags") && <_PlaybookSection icon="tag" accent="#7c3aed" title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
+    {_showSec("hashtags") && <_PlaybookSection idx={_secIdx("hashtags")} icon="tag" accent="#7c3aed" title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
       {(data.hashtags||[]).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         {data.hashtags.map((t)=>(
           <span key={t} style={{background:"#a140ff15",color:"#a140ff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
@@ -11698,15 +11709,15 @@ function COrientacoes({cl, sections}){
       </div>
     </_PlaybookSection>}
 
-    {_showSec("cta") && <_PlaybookSection icon="send" accent="#f59e0b" title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
+    {_showSec("cta") && <_PlaybookSection idx={_secIdx("cta")} icon="send" accent="#f59e0b" title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
       <input value={data.ctaPadrao||""} onChange={e=>setData(p=>({...p,ctaPadrao:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Acesse o link na bio →"' style={inp}/>
     </_PlaybookSection>}
 
-    {_showSec("naofazer") && <_PlaybookSection icon="alert" accent="#dc2626" title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
+    {_showSec("naofazer") && <_PlaybookSection idx={_secIdx("naofazer")} icon="alert" accent="#dc2626" title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
       <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
     </_PlaybookSection>}
 
-    {_showSec("siteredes") && <_PlaybookSection icon="globe" accent="#0d9488" title="Site e redes oficiais" subtitle={_isBioterCli?"Cada unidade tem seu site, drive e perfis próprios — trocar aba pra editar":"Pra usar em arte, em links de bio, em posts"}>
+    {_showSec("siteredes") && <_PlaybookSection idx={_secIdx("siteredes")} icon="globe" accent="#0d9488" title="Site e redes oficiais" subtitle={_isBioterCli?"Cada unidade tem seu site, drive e perfis próprios — trocar aba pra editar":"Pra usar em arte, em links de bio, em posts"}>
       {/* Tabs por unidade (só Bioter) */}
       {_isBioterCli && _bioterUnits.length>0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,paddingBottom:14,borderBottom:"1px solid #e2e8f0"}}>
         {_bioterUnits.map(function(u){
@@ -11743,15 +11754,17 @@ function COrientacoes({cl, sections}){
             else setData(function(p){return {...p,[key]:val};});
           }
         };
+        // Placeholder com o nome do PRÓPRIO cliente (só sugestão de formato — não é o @ real)
+        const _phSlug = String((cl&&(cl.nome||cl.name||cl.id))||"cliente").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"") || "cliente";
         return <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
           {[
-            {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",isRede:false},
+            {key:"site",label:"Site oficial",placeholder:"https://www."+_phSlug+".com.br",isRede:false},
             {key:"driveUrl",label:"Pasta no Drive",placeholder:"https://drive.google.com/...",isRede:false},
-            {key:"instagram",label:"Instagram",placeholder:"@bioter_oficial",isRede:true},
-            {key:"facebook",label:"Facebook",placeholder:"@bioteragro",isRede:true},
-            {key:"youtube",label:"YouTube",placeholder:"@canal-bioter",isRede:true},
-            {key:"linkedin",label:"LinkedIn",placeholder:"linkedin.com/company/bioter",isRede:true},
-            {key:"tiktok",label:"TikTok",placeholder:"@bioter",isRede:true},
+            {key:"instagram",label:"Instagram",placeholder:"@"+_phSlug,isRede:true},
+            {key:"facebook",label:"Facebook",placeholder:"@"+_phSlug,isRede:true},
+            {key:"youtube",label:"YouTube",placeholder:"@"+_phSlug,isRede:true},
+            {key:"linkedin",label:"LinkedIn",placeholder:"linkedin.com/company/"+_phSlug,isRede:true},
+            {key:"tiktok",label:"TikTok",placeholder:"@"+_phSlug,isRede:true},
           ].map(function(f){
             return <div key={f.key}>
               <div style={{color:"#64748b",fontSize:11,marginBottom:5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{f.label}</div>
