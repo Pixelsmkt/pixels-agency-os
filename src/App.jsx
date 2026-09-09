@@ -16348,7 +16348,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   // Cor padrão por categoria
   const _CAT_COLORS={
     "":"#0f172a",
-    aniversario:"#ec4899",
+    aniversario:"#0d9488",
     reuniao:"#0ea5e9",
     evento:"#a855f7",
     feira:"#f59e0b",
@@ -16626,7 +16626,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {(function(){
             const _ICO={"":<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,aniversario:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>,reuniao:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,evento:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,presenca_feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>,captacao:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,assinatura:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,operacional:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,gestao_midia:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,comemorativa:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,entrega:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M16.5 9.4L7.55 4.24"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>};
-            return [{id:"",label:"Sem categoria",color:"#64748b"},{id:"comemorativa",label:"Data comemorativa",color:"#f43f5e"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"reuniao",label:"Reunião",color:"#0ea5e9"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"entrega",label:"Entrega",color:"#0284c7"},{id:"assinatura",label:"Financeiro",color:"#16a34a"},{id:"operacional",label:"Operacional",color:"#7c3aed"},{id:"gestao_midia",label:"Gestão de mídia",color:"#2563eb"}].map(function(opt){
+            return [{id:"",label:"Sem categoria",color:"#64748b"},{id:"comemorativa",label:"Data comemorativa",color:"#f43f5e"},{id:"reuniao",label:"Reunião",color:"#0ea5e9"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"entrega",label:"Entrega",color:"#0284c7"},{id:"assinatura",label:"Financeiro",color:"#16a34a"},{id:"operacional",label:"Operacional",color:"#7c3aed"},{id:"gestao_midia",label:"Gestão de mídia",color:"#2563eb"},{id:"aniversario",label:"Aniversário",color:"#0d9488"}].map(function(opt){
               const sel=category===opt.id;
               return <button key={opt.id||"none"} type="button" onClick={function(){setCategoryAndColor(opt.id);}}
                 style={{flex:"1 1 calc(33% - 4px)",minWidth:100,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
@@ -17087,7 +17087,7 @@ function PageCalendarioInterno({isMob}){
             subtitle:u.role||"Equipe",
             icon:"🎂",
             day:day,month:month,
-            color:"#ec4899", // categoria Aniversário (rosa) — espelha chip do filtro
+            color:"#0d9488", // categoria Aniversário (rosa) — espelha chip do filtro
             id:"bday_team_"+u.id,
           });
         }
@@ -17106,7 +17106,7 @@ function PageCalendarioInterno({isMob}){
               subtitle:cl.name,
               icon:"🎁",
               day:b.day,month:b.month,
-              color:"#ec4899", // categoria Aniversário (rosa) — espelha chip do filtro
+              color:"#0d9488", // categoria Aniversário (rosa) — espelha chip do filtro
               id:"bday_client_"+cl.id+"_"+b.name,
             });
           }
@@ -17384,7 +17384,7 @@ function PageCalendarioInterno({isMob}){
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[
             {id:"todos",       label:"Todos",                                          icoColor:"#64748b"},
-            {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#ec4899", icoType:"cake"},
+            {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#0d9488", icoType:"cake"},
             {id:"comemorativas",label:"Data comemorativa", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="comemorativa";}).length:0), icoColor:"#f43f5e", icoType:"gift"},
             {id:"reunioes",    label:"Reunião",       count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="reuniao";}).length:0), icoColor:"#0ea5e9", icoType:"meeting"},
             {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
@@ -17610,7 +17610,7 @@ function PageCalendarioInterno({isMob}){
                     }
                     const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
-                    const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",entrega:"#0284c7",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#2563eb",comemorativa:"#f43f5e"};
+                    const _catColors={aniversario:"#0d9488",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",entrega:"#0284c7",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#2563eb",comemorativa:"#f43f5e"};
                     // PRIORIDADE: cor por TIPO de evento (categoria) — identidade visual do calendário interno.
                     // Cliente é identificado pela LOGO no pill, não pela cor de fundo.
                     // Eventos antigos sem categoria: infere pelo título (palavras-chave).
@@ -76069,7 +76069,7 @@ function _PlanejamentosClientes({isMob}){
     aniversario: "datas_importantes",
   };
   const _CAT_LABEL = {feira:"Feira", presenca_feira:"Presença", captacao:"Captação", entrega:"Entrega", evento:"Evento", comemorativa:"Data comemorativa", aniversario:"Aniversário"};
-  const _CAT_COLOR = {feira:"#f59e0b", presenca_feira:"#d97706", captacao:"#0891b2", entrega:"#0284c7", evento:"#a855f7", comemorativa:"#f43f5e", aniversario:"#ec4899"};
+  const _CAT_COLOR = {feira:"#f59e0b", presenca_feira:"#d97706", captacao:"#0891b2", entrega:"#0284c7", evento:"#a855f7", comemorativa:"#f43f5e", aniversario:"#0d9488"};
 
   function _eventsFor(clientId, sectionKey, periodStart, periodEnd){
     if(!Array.isArray(_intEvents) || !clientId) return [];
@@ -82828,6 +82828,38 @@ function _pbProdutoUploadImg(pi, updFn){
 // ═══════════════════════════════════════════════════════════════
 //  PagePlaybooks — Estratégia > Playbooks
 // ═══════════════════════════════════════════════════════════════
+// ═══ CADEIRAS (09/09/2026) — o playbook volta a ser separado por função ═══
+// Os DADOS continuam unificados (um playbook por cliente, gravado na raiz); o que muda
+// é a VISÃO: cada cadeira enxerga só os blocos que precisa. Admin/Hellen alternam entre
+// as cadeiras por abas. Quem tem uma cadeira só (designer, editor, social, Erick) já
+// cai direto nela, sem abas.
+const PB_CADEIRAS = [
+  {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
+   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto","pb-checklist"]},
+  {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
+   blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos","pb-checklist"]},
+  {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
+   blocos:["pb-sobre","pb-time","pb-processos","pb-equipe","pb-orientacoes-visuais","pb-contatos","pb-produtos","pb-checklist"]},
+  {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
+   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto","pb-checklist"]},
+];
+let _PB_CADEIRA_ATUAL = null; // id da cadeira em exibição (null = tudo)
+function _pbBlocoVisivel(id){
+  if(!_PB_CADEIRA_ATUAL) return true;
+  const c = PB_CADEIRAS.find(function(x){ return x.id===_PB_CADEIRA_ATUAL; });
+  return !c || c.blocos.indexOf(id)>=0;
+}
+function _pbCadeirasDoUsuario(u){
+  const isAdmin = u.level===1 || u.id==="ellen";
+  if(isAdmin) return PB_CADEIRAS.slice();
+  const ids = [];
+  if(u.dash==="social") ids.push("social");
+  if(u.dash==="designer") ids.push("design");
+  if(u.dash==="editor") ids.push("video");
+  if(u.id==="erick" || u.dash==="gestor") ids.push("midia");
+  return PB_CADEIRAS.filter(function(c){ return ids.indexOf(c.id)>=0; });
+}
+
 function PagePlaybooks({isMob, perms, viewingAs}){
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs)||CURRENT_USER) : CURRENT_USER;
   const isSocio = effectiveUser.level === 1;
@@ -82840,6 +82872,14 @@ function PagePlaybooks({isMob, perms, viewingAs}){
 
   // UNIFICADO: sem sub-abas de área. Um playbook por cliente com tudo junto.
   const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial;
+  const _cadeiras = _pbCadeirasDoUsuario(effectiveUser);
+  const [cadeira, setCadeira] = useState(function(){
+    try{ const _s=localStorage.getItem("pixels-pb-cadeira"); if(_s&&_cadeiras.some(function(c){return c.id===_s;})) return _s; }catch(_){}
+    return _cadeiras[0] ? _cadeiras[0].id : null;
+  });
+  useEffect(function(){ try{ if(cadeira) localStorage.setItem("pixels-pb-cadeira",cadeira); }catch(_){} },[cadeira]);
+  const _cadeiraCfg = _cadeiras.find(function(c){return c.id===cadeira;}) || _cadeiras[0] || null;
+  _PB_CADEIRA_ATUAL = _cadeiraCfg ? _cadeiraCfg.id : null;
   const [openClient, setOpenClient] = useState(null);
   const [search, setSearch] = useState("");
   const [store, _updateClient] = _usePlaybooksStore();
@@ -82865,10 +82905,11 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   if(openClient){
     const clCfg = (CLIENTS||[]).find(c=>c.id===openClient) || {id:openClient,name:openClient};
     const data = store[openClient] || {};
-    // UNIFICADO: area="all", cfg genérico
-    const areaCfg = {label:"Playbook", icon:"file-text", color:PB_PURPLE_DK};
+    // Dados unificados (area="all"); a cadeira só filtra os blocos visíveis
+    const areaCfg = _cadeiraCfg ? {label:_cadeiraCfg.label, icon:_cadeiraCfg.icon, color:_cadeiraCfg.color} : {label:"Playbook", icon:"file-text", color:PB_PURPLE_DK};
     return <PlaybookDetalhe
       cl={clCfg} area={"all"} areaCfg={areaCfg} data={data}
+      cadeiras={_cadeiras} cadeira={_cadeiraCfg?_cadeiraCfg.id:null} onSwitchCadeira={setCadeira}
       isAdmin={isAdmin} editMode={editMode} setEditMode={setEditMode}
       onBack={()=>{setOpenClient(null);}}
       onSwitchClient={(newId)=>{ setOpenClient(newId); }}
@@ -82898,7 +82939,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
           <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase"}}>Central de playbooks</span>
         </div>
         <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:26,letterSpacing:-.8,lineHeight:1.15}}>Playbooks</div>
-        <div style={{color:"#94a3b8",fontSize:12,marginTop:4,fontWeight:500,lineHeight:1.4}}>Um playbook por cliente — tudo no mesmo lugar.</div>
+        <div style={{color:"#94a3b8",fontSize:12,marginTop:4,fontWeight:500,lineHeight:1.4}}>{_cadeiraCfg ? ("Visão de "+_cadeiraCfg.label+" — só o que essa cadeira precisa.") : "Um playbook por cliente."}</div>
       </div>
       <div style={{display:"flex",gap:10,alignItems:"center",position:"relative",zIndex:1}}>
         <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
@@ -82911,7 +82952,19 @@ function PagePlaybooks({isMob, perms, viewingAs}){
       </div>
     </div>
 
-    {/* Sub-abas de área removidas — Playbook unificado */}
+    {/* ══ Cadeiras (Social media / Design / Vídeo / Mídia) — só aparece pra quem tem mais de uma ══ */}
+    {_cadeiras.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,overflowX:"auto"}}>
+      {_cadeiras.map(function(c){
+        const on = c.id===cadeira;
+        return <button key={c.id} type="button" onClick={function(){ setCadeira(c.id); }}
+          style={{flex:1,minWidth:130,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px 14px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:PB_INTER,fontSize:12.5,fontWeight:on?800:600,
+            background:on?c.color:"transparent",color:on?"#fff":"#475569",boxShadow:on?("0 6px 16px "+c.color+"44"):"none",transition:"all .15s",whiteSpace:"nowrap"}}
+          onMouseEnter={function(e){ if(!on) e.currentTarget.style.background="#f1f5f9"; }}
+          onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
+          <Ico n={c.icon} size={14} color={on?"#fff":c.color}/>{c.label}
+        </button>;
+      })}
+    </div>}
 
     {/* ══ Grid de clientes — mesmo estilo Carteira ══ */}
     {clientList.length === 0
@@ -83300,7 +83353,8 @@ function _PbVideoProcesses({isAdmin}){
 // ═══════════════════════════════════════════════════════════════
 //  PlaybookDetalhe — página de um cliente/área específica
 // ═══════════════════════════════════════════════════════════════
-function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onSwitchClient, onUpdate, onUpdateArea, isMob}){
+function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onSwitchClient, onUpdate, onUpdateArea, isMob, cadeiras, cadeira, onSwitchCadeira}){
+  _PB_CADEIRA_ATUAL = cadeira || null; // PlaybookBlock consulta isso pra se esconder
   // UNIFICADO: quando area==="all", areaData = MERGE de root + legacy por área.
   // Orientações visuais são mescladas de todas as áreas numa lista única.
   const areaData = (function(){
@@ -83547,6 +83601,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
+  // Cadeira: só os atalhos dos blocos que ela enxerga
+  const SECTIONS_VIS = SECTIONS.filter(function(sec){ return _pbBlocoVisivel(sec.id); });
 
   // ─────────── Layout ───────────
   return <div style={{background:PB_BG,margin:isMob?-12:-16,padding:isMob?12:20,minHeight:"100%",fontFamily:PB_INTER}}>
@@ -83607,9 +83663,23 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
         </div>;
       })()}
 
+      {/* ══ Cadeiras dentro do detalhe (admin/Hellen alternam sem voltar pra lista) ══ */}
+      {Array.isArray(cadeiras) && cadeiras.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,overflowX:"auto"}}>
+        {cadeiras.map(function(c){
+          const on = c.id===cadeira;
+          return <button key={c.id} type="button" onClick={function(){ if(typeof onSwitchCadeira==="function") onSwitchCadeira(c.id); }}
+            style={{flex:1,minWidth:130,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,padding:"9px 14px",borderRadius:10,border:"none",cursor:"pointer",fontFamily:PB_INTER,fontSize:12.5,fontWeight:on?800:600,
+              background:on?c.color:"transparent",color:on?"#fff":"#475569",boxShadow:on?("0 6px 16px "+c.color+"44"):"none",transition:"all .15s",whiteSpace:"nowrap"}}
+            onMouseEnter={function(e){ if(!on) e.currentTarget.style.background="#f1f5f9"; }}
+            onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
+            <Ico n={c.icon} size={14} color={on?"#fff":c.color}/>{c.label}
+          </button>;
+        })}
+      </div>}
+
       {/* ══════════ ANCORAS / NAV RÁPIDO ══════════ */}
       <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,display:"flex",gap:2,overflowX:isMob?"auto":"hidden",position:"sticky",top:8,zIndex:5,boxShadow:"0 2px 10px rgba(15,23,42,.04)"}}>
-        {SECTIONS.map(s=>(
+        {SECTIONS_VIS.map(s=>(
           <button key={s.id} onClick={()=>_pbScrollTo(s.id)}
             style={{flex:isMob?"0 0 auto":"1 1 0",minWidth:0,background:"transparent",border:"none",borderRadius:9,padding:"7px 6px",fontSize:11.5,fontWeight:600,color:PB_TEXT,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.color=PB_PURPLE_DK;}}
@@ -84247,7 +84317,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </PlaybookBlock>}
 
           {/* Templates específicos (só design) — vários templates por playbook (ex: Ajuste de template, Carrossel, Story...) */}
-          {hasTemplate && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
+          {hasTemplate && _pbBlocoVisivel("pb-templates") && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"flex",alignItems:"center",gap:11,paddingBottom:4,borderBottom:"1px solid "+PB_BORDER2,marginBottom:2}}>
               <div style={{width:32,height:32,borderRadius:9,background:PB_PURPLE_BG,border:"1px solid "+PB_PURPLE_BD,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <Ico n="image" size={15} color={PB_PURPLE_DK}/>
@@ -84345,7 +84415,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           })()}
 
           {/* Checklist com progresso */}
-          <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
+          {_pbBlocoVisivel("pb-checklist") && <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
               <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,#334155 0%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(15,23,42,.28)"}}>
                 <Ico n="checkCircle" size={17} color="#fff"/>
@@ -84444,7 +84514,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     </div>}
                   </>
             }
-          </div>
+          </div>}
 
           {/* Materiais (Links + Documentos) */}
           <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
@@ -84795,6 +84865,7 @@ function _PbBriefingAuto({clientId}){
 }
 
 function PlaybookBlock({id, title, subtitle, icon, color, children}){
+  if(!_pbBlocoVisivel(id)) return null; // cadeira não enxerga este bloco
   // Titulo PRETO (padrao), mas o ICONE e a tarja lateral usam a cor da secao —
   // cada bloco ganha identidade propria sem virar arco-iris de texto. E o que
   // diferencia "onde estou" num playbook muito vertical.
