@@ -83870,7 +83870,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // UNIFICADO: Orientacoes ja incluida no topo. Nao push denovo.
   // (Placeholder pra manter estrutura do if abaixo — nao adiciona nada duplicado)
   if(false){}
-  if(area==="all" || area==="video") SECTIONS.push({id:"pb-processos", label:"Processos", icon:"play"});
+  const _pbProcTopo = _PB_CADEIRA_ATUAL==="video"; // Edição de vídeo: processos técnicos no topo
+  if(area==="all" || area==="video"){ const _sp={id:"pb-processos", label:"Processos", icon:"play"}; if(_pbProcTopo) SECTIONS.unshift(_sp); else SECTIONS.push(_sp); }
   if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Social", icon:"users"});
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
@@ -83985,6 +83986,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
         {/* ───── COLUNA PRINCIPAL ───── */}
         <div style={{display:"flex",flexDirection:"column",gap:34,minWidth:0}}>
+
+          {/* Edição de vídeo: Processos técnicos vêm PRIMEIRO (o editor abre o playbook por eles) */}
+          {_pbProcTopo && (area==="all" || area==="video") && <PlaybookBlock id="pb-processos" title="Processos técnicos de vídeo" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
+            <_PbVideoProcesses isAdmin={isAdmin}/>
+          </PlaybookBlock>}
 
           {/* Sobre a empresa */}
           <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
@@ -84284,9 +84290,18 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           </PlaybookBlock>
 
           {/* Orientacoes — Logo, paleta, fontes, tom de voz — inteira aqui no topo apos Comunicacao */}
-          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
-            <COrientacoes key={"orient-"+cl.id} cl={cl}/>
-          </PlaybookBlock>}
+          {/* Seções por cadeira: Design/Vídeo não precisam de tom de voz, hashtags e CTA (isso é Social/Comunicação).
+              null = todas (Estratégia, sócios sem aba). */}
+          {(function(){
+            const _secs = _PB_CADEIRA_ATUAL==="video"  ? ["logos","paleta","fontes","siteredes"]
+                        : _PB_CADEIRA_ATUAL==="design" ? ["logos","paleta","fontes","naofazer","siteredes"]
+                        : null;
+            const _sub = _secs ? "Logo, paleta de cores, fontes e links oficiais — referência única usada nos cartões"
+                               : "Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões";
+            return typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle={_sub} icon="sparkles" color={PB_PURPLE_DK}>
+              <COrientacoes key={"orient-"+cl.id+"-"+(_PB_CADEIRA_ATUAL||"all")} cl={cl} sections={_secs||undefined}/>
+            </PlaybookBlock>;
+          })()}
 
           {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
               Pra Bioter: cada unidade tem seus próprios contatos (Chapecó, Toledo, Castro...). */}
@@ -84625,7 +84640,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Bloco Orientacoes ja renderizado no topo apos Comunicacao. Aqui: nada. */}
 
           {/* Processos técnicos — GLOBAIS pra todos os vídeos (sincronizado entre clientes via team_data) */}
-          {(area==="all" || area==="video") && <PlaybookBlock id="pb-processos" title="Processos técnicos de vídeo" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
+          {!_pbProcTopo && (area==="all" || area==="video") && <PlaybookBlock id="pb-processos" title="Processos técnicos de vídeo" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
             <_PbVideoProcesses isAdmin={isAdmin}/>
           </PlaybookBlock>}
 
