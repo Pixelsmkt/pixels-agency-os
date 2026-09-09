@@ -45618,9 +45618,11 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
 
   const TABS_TOP=[
     {id:"visao",     label:"Dashboard",   icon:"chart"},
+    {id:"clientes",  label:"Clientes",    icon:"users"},
     {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demNovas+demAndamento+demAguardando},
     {id:"relatorios",label:"Relatórios",  icon:"file-text"},
   ];
+  const _emCliente=!!openClient&&(topTab==="visao"||topTab==="clientes");
 
   // Helper: renderiza cabeçalho de seção dentro das abas
   const SectionTitle=({title,sub,right})=>(
@@ -45741,51 +45743,40 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1240,width:"100%",margin:"0 auto"}}>
 
-    {/* ══ Header premium ══ */}
-    <div style={{background:"linear-gradient(135deg, #9F43F608 0%, transparent 60%)",borderRadius:16,padding:"18px 22px",border:"1px solid #9F43F622",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-        <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.38)",flexShrink:0}}>
-          <Ico n="trending-up" size={21} color="#fff"/>
-        </div>
-        <div style={{minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?19:23,letterSpacing:-.5}}>Gestão de mídia</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontWeight:500,maxWidth:560,lineHeight:1.5}}>
-            Acompanhamento de contas, investimentos, resultados e prioridades de tráfego pago.
-          </div>
-        </div>
+    {/* ══ Topo único: título · abas · alertas · ações (modelo 1) ══ */}
+    <div style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:16,padding:isMob?"10px 12px":"10px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+        <span style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="trending-up" size={16} color="#fff"/></span>
+        <span style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,whiteSpace:"nowrap"}}>Gestão de mídia</span>
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={()=>setShowRelatorio(true)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 15px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
-          <Ico n="file-text" size={13}/> Relatório geral
+      <div style={{display:"inline-flex",background:"#f3f1f8",borderRadius:11,padding:3,gap:2,overflowX:"auto",maxWidth:"100%"}} className="scroll-x">
+        {TABS_TOP.map(t=>{
+          const active=t.id==="clientes"?(topTab==="clientes"||_emCliente):t.id==="visao"?(topTab==="visao"&&!_emCliente):topTab===t.id;
+          const ir=function(){ if(t.id==="visao"||t.id==="clientes") setOpenClient(null); setTopTab(t.id); };
+          return <button key={t.id} onClick={ir}
+            style={{background:active?"#fff":"transparent",color:active?"#0f172a":"#7b7590",border:"none",borderRadius:9,padding:"6px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:active?"0 1px 3px rgba(15,13,26,.10)":"none",whiteSpace:"nowrap",minHeight:0,transition:"all .12s"}}>
+            {t.label}
+            {typeof t.badge==="number"&&t.badge>0&&<span style={{background:active?"#9F43F614":"#e8e5f0",color:active?"#9F43F6":"#7b7590",borderRadius:99,padding:"1px 6px",fontSize:10,fontWeight:800,minWidth:16,textAlign:"center"}}>{t.badge}</span>}
+          </button>;
+        })}
+      </div>
+      <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        {typeof QGAdsSino==="function"&&<QGAdsSino onAbrirConta={function(accId){ try{ const a=(window._pxAdsAccounts||[]).find(function(x){return x.ad_account_id===accId;}); if(!a) return; const mc=(store.clients||[]).find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }); if(mc){ setTopTab("visao"); setOpenClient(mc.client_id); window.scrollTo({top:0,behavior:"smooth"}); } }catch(_){} }}/>}
+        <button onClick={()=>setShowRelatorio(true)} title="Relatório geral"
+          style={{background:"#fff",color:"#3d3853",border:"1px solid #cfc9dd",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
+          <Ico n="file-text" size={13}/>{!isMob&&" Relatório geral"}
         </button>
         <button onClick={()=>setShowNovaDemanda(true)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 15px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
+          style={{background:"#fff",color:"#3d3853",border:"1px solid #cfc9dd",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
           <Ico n="plus" size={13}/> Nova demanda
         </button>
         {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
-          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"9px 17px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
+          style={{background:"#7326d6",color:"#fff",border:"1px solid #7326d6",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
           <Ico n="plus" size={13} color="#fff"/> Novo cliente
         </button>}
       </div>
-    </div>
-
-    {/* ══ Barra global de alertas críticos (tráfego pago) — some quando não há nada ══ */}
-    {typeof QGAdsBarraGlobal==="function"&&<QGAdsBarraGlobal onAbrirConta={function(accId){ try{ const a=(window._pxAdsAccounts||[]).find(function(x){return x.ad_account_id===accId;}); if(!a) return; const mc=(store.clients||[]).find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }); if(mc){ setTopTab("visao"); setOpenClient(mc.client_id); window.scrollTo({top:0,behavior:"smooth"}); } }catch(_){} }}/>}
-
-    {/* ══ Navegação por abas (TopTabs) ══ */}
-    <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:5,overflowX:"auto"}}>
-      {TABS_TOP.map(t=>{
-        const active=topTab===t.id;
-        return <button key={t.id} onClick={()=>setTopTab(t.id)}
-          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
-          <Ico n={t.icon} size={13} color={active?"#fff":"currentColor"}/>
-          {t.label}
-          {typeof t.badge==="number"&&t.badge>0&&<span style={{background:active?"rgba(255,255,255,.25)":"#9F43F614",color:active?"#fff":"#9F43F6",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
-        </button>;
-      })}
     </div>
 
     {/* ══ Conteúdo por aba ══ */}
@@ -50548,6 +50539,35 @@ function QGPlatSecao({id,mc,c,data,year,month,canEdit,currentUser,onOrcamento}){
   </QGCard>;
 }
 
+/* ─── Seletor de cliente (topo único, modelo 1) ─────── */
+function QGClienteSeletor({mc,clients,onTrocar,nomeCurto,isMob}){
+  const [aberto,setAberto]=useState(false);
+  const [q,setQ]=useState("");
+  const ref=useRef(null);
+  useEffect(function(){ if(!aberto) return; const h=function(e){ if(ref.current&&!ref.current.contains(e.target)) setAberto(false); }; document.addEventListener("mousedown",h); return function(){ document.removeEventListener("mousedown",h); }; },[aberto]);
+  useEffect(function(){ if(!aberto) setQ(""); },[aberto]);
+  const nome=function(x){ const ehBioter=/^Bioter/.test(x.name||""); return ehBioter&&x.bioter_unit?"Bioter "+nomeCurto(x):nomeCurto(x); };
+  const lista=clients.filter(function(x){ return !q||String(x.name||"").toLowerCase().indexOf(q.toLowerCase())>=0; });
+  return <span ref={ref} style={{position:"relative",display:"inline-flex",minWidth:0}}>
+    <button onClick={function(){setAberto(!aberto);}} title="Trocar de cliente" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+(aberto?QG.roxo:"#cfc9dd"),borderRadius:10,padding:"5px 12px 5px 6px",cursor:"pointer",fontFamily:QG_FONT,minHeight:0,maxWidth:isMob?"70vw":360}}>
+      {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(mc)} size="sm"/></span>}
+      <span style={{color:QG.txt,fontWeight:800,fontSize:isMob?14:15,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mc.name}</span>
+      <span style={{color:QG.txt3,fontSize:10,flexShrink:0}}>▼</span>
+    </button>
+    {aberto&&<div style={{position:"absolute",left:0,top:44,width:300,maxWidth:"calc(100vw - 32px)",background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:8,zIndex:60,fontFamily:QG_FONT}}>
+      <input autoFocus value={q} onChange={function(e){setQ(e.target.value);}} placeholder="Buscar cliente…" style={{width:"100%",boxSizing:"border-box",border:"1px solid "+QG.borda,borderRadius:9,padding:"7px 10px",fontSize:12.5,fontFamily:QG_FONT,outline:"none",marginBottom:6}}/>
+      <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
+        {lista.length===0&&<div style={{padding:"10px 8px",fontSize:12,color:QG.txt3}}>Nenhum cliente encontrado.</div>}
+        {lista.map(function(x){ const on=x.client_id===mc.client_id; return <button key={x.client_id} onClick={function(){ setAberto(false); if(!on) onTrocar(x.client_id); }} style={{display:"flex",alignItems:"center",gap:8,background:on?QG.roxoBg:"transparent",color:on?QG.roxo:QG.txt2,border:"none",borderRadius:9,padding:"7px 9px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,textAlign:"left",minHeight:0,width:"100%"}}>
+          {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(x)} size="xs"/></span>}
+          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nome(x)}</span>
+          {on&&<span style={{marginLeft:"auto",fontSize:11}}>✓</span>}
+        </button>; })}
+      </div>
+    </div>}
+  </span>;
+}
+
 function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriodo,isMob,canEdit,tasks,onBack,onTrocar,onFechamento,onNovaLinha,onEditLinha,onEditarMeta,onAbrirCadastro,acoes,acoesApi,currentUser}){
   const c=qgCalcCliente(mc,data,year,month,{});
   const m=qgMeta(mc,data,year,month,c.leads,store);
@@ -50574,53 +50594,43 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   const subAtiva=temMeta?sub:"gestao";
   useEffect(function(){ setSub("visao"); },[mc.client_id]);
   return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:QG_FONT}}>
-    {/* ── Alternador compacto e simétrico ── */}
-    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-      <button onClick={onBack} style={Object.assign(QG_BTN("sm"),{flexShrink:0})}>‹ Dashboard</button>
-      <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax("+(isMob?120:132)+"px,1fr))",gap:6}}>
-        {clients.map(function(x){ const on=x.client_id===mc.client_id; const ehBioter=/^Bioter/.test(x.name||""); return <button key={x.client_id} onClick={function(){onTrocar(x.client_id);}} title={x.name} style={{display:"flex",alignItems:"center",gap:6,height:30,background:on?QG.roxo:"#fff",color:on?"#fff":QG.txt2,border:"1px solid "+(on?QG.roxo:QG.borda),borderRadius:8,padding:"0 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:QG_FONT,minWidth:0,minHeight:0}}>
-          {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(x)} size="xs"/></span>}
-          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ehBioter&&x.bioter_unit?<span><span style={{opacity:.7,fontWeight:600}}>Bioter </span>{nomeCurto(x)}</span>:nomeCurto(x)}</span>
-        </button>; })}
-      </div>
-    </div>
-
-    {/* ── Cabeçalho + resumo do mês ── */}
-    <QGCard pad="16px 20px">
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:14}}>
-        {typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(mc)} size="md"/>}
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}><span style={{color:QG.txt,fontWeight:900,fontSize:isMob?17:20,letterSpacing:-.5}}>{mc.name}</span>{st&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}</div>
-          <div style={{display:"flex",gap:12,alignItems:"center",marginTop:3,flexWrap:"wrap",color:QG.txt3,fontSize:12,fontWeight:600}}><span>Gestor <b style={{color:QG.txt2}}>{resp}</b></span>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}<span>Atualizado {_qgRel(c.ultimaAtualizacao)}</span></div>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+    {/* ── Cartão do cliente: seletor · resumo do mês · semana (modelo 1) ── */}
+    <QGCard pad="0" style={{overflow:"visible",borderRadius:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 18px"}}>
+        <QGClienteSeletor mc={mc} clients={clients} onTrocar={onTrocar} nomeCurto={nomeCurto} isMob={isMob}/>
+        {st&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}
+        {!isMob&&<span style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",color:QG.txt3,fontSize:12,fontWeight:600}}><span>Gestor <b style={{color:QG.txt2}}>{resp}</b></span>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}<span>atualizado {_qgRel(c.ultimaAtualizacao)}</span></span>}
+        <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
-          <button onClick={onAbrirCadastro} style={QG_BTN()}>Cadastro e acessos</button>
+          <button onClick={onAbrirCadastro} style={QG_BTN("ghost")}>Cadastro e acessos →</button>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"1fr 1fr 1.8fr 0.8fr 1fr 1fr",gap:isMob?14:16,alignItems:"start"}}>
-        <QGBig label="Orçamento" value={_qgBRLk(c.orcamento)} sub={c.orcamento>0?"saldo "+_qgBRLk(c.saldo):"defina abaixo"}/>
-        <QGBig label="Gasto" value={_qgBRLk(c.gasto)} sub={c.usoPct!==null?Math.round(c.usoPct)+"% utilizado":"não registrado"} cor={c.usoPct>=100?QG.verm:QG.roxo}/>
-        <div style={Object.assign({},divisor,{gridColumn:isMob?"span 2":undefined})}><div style={{color:QG.txt3,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Leads · meta mensal</div><QGMetaBloco leads={c.leads} m={m} compact onEditar={canEdit?function(){onEditarMeta(mc,m.meta);}:null}/></div>
-        <div style={divisor}><QGBig label="Vendas" value={c.vendas>0?_qgNum(c.vendas):"—"} cor={c.vendas>0?QG.verde:QG.txt3}/></div>
-        <div style={divisor}><QGBig label="Receita" value={c.receita>0?_qgBRLk(c.receita):"—"} cor={c.receita>0?QG.verde:QG.txt3} sub={c.vendas>0&&c.receita>0?"ticket "+_qgBRLk(c.ticket):undefined}/></div>
-        <div style={divisor}><QGBig label="ROIC" value={c.roic===null?"—":_qgPct(c.roic)} cor={c.roic===null?"#cbd5e1":_qgRoicCor(c.roic)} sub={c.roic===null?"sem dados":(c.roas!==null?"ROAS "+_qgX(c.roas):undefined)}/></div>
+      <div style={{height:1,background:QG.borda}}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"1fr 1fr 1.8fr 0.8fr 1fr 1fr",gap:isMob?14:0,padding:isMob?"14px":"14px 18px",alignItems:"start"}}>
+        {[
+          <QGBig key="o" label="Orçamento" value={_qgBRLk(c.orcamento)} sub={c.orcamento>0?"saldo "+_qgBRLk(c.saldo):"defina abaixo"} size={22}/>,
+          <QGBig key="g" label="Gasto" value={_qgBRLk(c.gasto)} sub={c.usoPct!==null?Math.round(c.usoPct)+"% utilizado":"não registrado"} cor={c.usoPct>=100?QG.verm:QG.roxo} size={22}/>,
+          <div key="l"><div style={{color:QG.txt3,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Leads · meta mensal</div><QGMetaBloco leads={c.leads} m={m} compact onEditar={canEdit?function(){onEditarMeta(mc,m.meta);}:null}/></div>,
+          <QGBig key="v" label="Vendas" value={c.vendas>0?_qgNum(c.vendas):"—"} cor={c.vendas>0?QG.verde:QG.txt3} size={22}/>,
+          <QGBig key="r" label="Receita" value={c.receita>0?_qgBRLk(c.receita):"—"} cor={c.receita>0?QG.verde:QG.txt3} sub={c.vendas>0&&c.receita>0?"ticket "+_qgBRLk(c.ticket):undefined} size={22}/>,
+          <QGBig key="i" label="ROIC" value={c.roic===null?"—":_qgPct(c.roic)} cor={c.roic===null?"#cbd5e1":_qgRoicCor(c.roic)} sub={c.roic===null?"sem dados":(c.roas!==null?"ROAS "+_qgX(c.roas):undefined)} size={22}/>
+        ].map(function(el,i){ return <div key={i} style={{minWidth:0,borderLeft:(!isMob&&i>0)?"1px solid "+QG.borda:"none",paddingLeft:(!isMob&&i>0)?18:0,paddingRight:isMob?0:12,gridColumn:(isMob&&i===2)?"span 2":undefined}}>{el}</div>; })}
       </div>
-      {/* faixa da semana + alertas */}
-      <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid #f1f4f8",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
-        <span style={{width:8,height:8,borderRadius:"50%",background:s0.w?QG.verde:QG.amar,flexShrink:0}}/>
-        <span style={{fontWeight:700,color:QG.txt}}>Semana {_qgWeekLabel(s0.start)}</span>
-        {s0.w?<span style={{color:QG.txt2}}>fechada · <b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>:<span style={{color:QG.amar,fontWeight:700}}>fechamento pendente</span>}
-        {canEdit&&<button style={s0.w?QG_BTN("sm"):Object.assign(QG_BTN("sm"),{background:QG.roxo,color:"#fff",borderColor:QG.roxo})} onClick={function(){onFechamento(mc.client_id,semanas[0]);}}>{s0.w?"Editar":"Registrar fechamento"}</button>}
-        {alertas.length>0&&<span style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</span>}
+      <div style={{background:"#f8f7fb",borderTop:"1px solid "+QG.borda,borderRadius:"0 0 16px 16px",padding:isMob?"9px 14px":"9px 18px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
+        <span style={{fontWeight:700,color:QG.txt2}}>Fechamento da semana</span>
+        <span style={{color:QG.txt3}}>{_qgWeekLabel(s0.start)}</span>
+        {s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}
+        {s0.w&&<span style={{color:QG.txt2}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}
+        {alertas.length>0&&<span style={{display:"flex",gap:6,flexWrap:"wrap"}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</span>}
+        {canEdit&&<button style={Object.assign(QG_BTN("sm"),{marginLeft:"auto"})} onClick={function(){onFechamento(mc.client_id,semanas[0]);}}>{s0.w?"Editar fechamento":"Fechar semana"}</button>}
       </div>
     </QGCard>
 
-    {/* ── Sub-abas ── */}
-    <div style={{display:"flex",gap:2,borderBottom:"1px solid "+QG.borda,overflowX:"auto",alignItems:"center"}} className="scroll-x">
-      {SUBS.map(function(t){ const on=subAtiva===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?QG.roxo:"transparent"),color:on?QG.roxo:QG.txt2,padding:"9px 14px",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",marginBottom:-1,minHeight:0}}>{t[1]}</button>; })}
+    {/* ── Sub-abas + período ── */}
+    <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:"0 10px",display:"flex",gap:2,alignItems:"center",overflowX:"auto",fontFamily:QG_FONT}} className="scroll-x">
+      {SUBS.map(function(t){ const on=subAtiva===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?QG.roxo:"transparent"),color:on?QG.roxo:QG.txt2,padding:"12px 12px 10px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0}}>{t[1]}</button>; })}
       {!temMeta&&adsAccounts&&<span style={{marginLeft:"auto",color:QG.txt3,fontSize:11.5,fontWeight:600,paddingRight:6}}>Sem conta Meta vinculada em ads_accounts</span>}
-      {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<span style={{marginLeft:"auto",paddingRight:4,paddingBottom:4}}><QGAdsBarraPeriodo compact/></span>}
+      {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<span style={{marginLeft:"auto",paddingRight:2,display:"inline-flex",alignItems:"center"}}><QGAdsBarraPeriodo compact/></span>}
     </div>
     {subAtiva==="visao"&&temMeta&&typeof QGAdsVisaoGeral==="function"&&<QGAdsVisaoGeral mc={mc} conta={adsConta.conta} compartilhada={adsConta.compartilhada} isMob={isMob} canEdit={canEdit} verbaMensal={Number(mc.investimento_meta)||0}/>}
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
@@ -51339,7 +51349,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
     {/* três números */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       <AdsHero lab="Investido" val={_adsBRL0(T.gasto)} delta={_adsDelta(T.gasto,prev.gasto)} hint={verba>0?(ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:"verba do mês "+_adsBRL0(verba)):"verba mensal não definida — cadastre em Gestão"} tip={[["O que é","total gasto na Meta no período."],["Como está",_adsBRL(T.gasto)+" em "+P.dias+" dias."],["Referência",verba>0?"verba mensal de "+_adsBRL0(verba):"cadastre a verba em Gestão pra ver o ritmo."],["Leitura",ritmo!==null?(ritmo>ritmoEsp*1.2?"ritmo acima do esperado — o mês pode estourar.":ritmo<ritmoEsp*0.8?"ritmo abaixo — vai sobrar verba.":"ritmo em dia."):""]]}/>
-      <AdsHero lab="Resultados" val={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} hint={_adsNum(T.leads)+" leads de formulário · "+_adsNum(T.conversas)+" conversas no WhatsApp"} tip={[["O que é","leads de formulário + conversas iniciadas no WhatsApp."],["Como está",_adsNum(T.resultados)+" contra "+_adsNum(prev.resultados)+" no período anterior."],["Referência","a Meta conta o envio, não a qualidade — marque os leads na aba Leads."],["Leitura",""]]}/>
+      <AdsHero lab="Resultados" val={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} hint={(function(){ const temForm=camps.some(function(c){return c.tipo==="form";}); const temWpp=camps.some(function(c){return c.tipo==="lead_wpp"||c.tipo==="eng_wpp";}); const l=Number(T.leads||0), cv=Number(T.conversas||0); const partes=[]; if(l>0) partes.push(_adsNum(l)+(temForm?" leads de formulário":(temWpp?" leads pela conversa":" leads"))); if(cv>0) partes.push(_adsNum(cv)+" conversas no WhatsApp"); return partes.join(" · ")||"nenhum resultado no período"; })()} tip={[["O que é","leads (de formulário ou gerados na conversa) + conversas iniciadas no WhatsApp."],["Como está",_adsNum(T.resultados)+" contra "+_adsNum(prev.resultados)+" no período anterior."],["Referência","a Meta conta o envio, não a qualidade — marque os leads na aba Leads."],["Leitura",""]]}/>
       <AdsHero lab="Custo por resultado" val={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso hint={prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"} cor={media&&prev.cpa?(T.cpa<prev.cpa*0.9?ADS.ok:T.cpa>prev.cpa*1.15?ADS.crit:ADS.ink):ADS.ink} tip={tipCusto}/>
     </div>
 
@@ -51650,6 +51660,32 @@ function QGAdsBarraGlobal({onAbrirConta}){
       {alertas.filter(function(a){return a.ad_account_id===id;}).map(function(a,i){ return <div key={i} style={{fontSize:12.5,color:ADS.ink2,marginTop:4}}><b style={{color:ADS.ink}}>{a.titulo}</b> — {a.detalhe} <span style={{color:ADS.muted}}>→ {a.acao}</span></div>; })}
     </div>; })}</div>}
   </div>;
+}
+
+// Sino de alertas críticos (topo único) — substitui a faixa vermelha; abre popover com os pontos por conta
+function QGAdsSino({onAbrirConta}){
+  const alertas=useAdsAlertasGlobais();
+  const accounts=useAdsAccounts();
+  const [aberto,setAberto]=useState(false);
+  const ref=useRef(null);
+  useEffect(function(){ if(!aberto) return; const h=function(e){ if(ref.current&&!ref.current.contains(e.target)) setAberto(false); }; document.addEventListener("mousedown",h); return function(){ document.removeEventListener("mousedown",h); }; },[aberto]);
+  const lista=alertas||[]; const n=lista.length;
+  const nomeConta=function(id){ const a=(accounts||[]).find(function(x){return x.ad_account_id===id;}); if(!a) return id; const un=a.unidade?{chapeco:"Chapecó",toledo:"Toledo",castro:"Castro"}[a.unidade]||a.unidade:null; const base=(typeof CLIENTS!=="undefined"?(CLIENTS.find(function(c){return c.id===a.client_id;})||{}).name:null)||a.client_id; return un?base.replace(/^Grupo\s+/,"")+" "+un:base; };
+  const contas=Array.from(new Set(lista.map(function(a){return a.ad_account_id;})));
+  return <span ref={ref} style={{position:"relative",display:"inline-flex",fontFamily:ADS_FONT}}>
+    <button onClick={function(){setAberto(!aberto);}} title={n?n+" ponto"+(n>1?"s":"")+" crítico"+(n>1?"s":"")+" no tráfego pago":"Nenhum ponto crítico"} style={{width:36,height:36,borderRadius:10,border:"1px solid "+(n?ADS.crit+"66":ADS.line2),background:n?ADS.critSoft:"#fff",color:n?ADS.crit:ADS.ink2,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,minHeight:0,minWidth:0,position:"relative"}}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      {n>0&&<span style={{position:"absolute",top:-6,right:-6,background:ADS.crit,color:"#fff",borderRadius:99,fontSize:10,fontWeight:800,minWidth:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 5px",border:"2px solid #fff"}}>{n}</span>}
+    </button>
+    {aberto&&<div style={{position:"absolute",right:0,top:44,width:400,maxWidth:"calc(100vw - 32px)",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:10,zIndex:60}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 6px 8px"}}><b style={{fontSize:13,color:ADS.ink}}>Pontos críticos · tráfego pago</b><span style={{fontSize:11,color:ADS.muted}}>{n?contas.length+" cliente"+(contas.length>1?"s":""):""}</span></div>
+      {n===0?<div style={{padding:"10px 6px 8px",fontSize:12.5,color:ADS.muted}}>Nenhum ponto crítico agora.</div>:
+      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:420,overflowY:"auto"}}>{contas.map(function(id){ return <div key={id} style={{background:ADS.surface2,borderRadius:10,padding:"9px 12px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}><b style={{fontSize:12.5,color:ADS.ink}}>{nomeConta(id)}</b>{onAbrirConta&&<AdsBtn small onClick={function(){setAberto(false);onAbrirConta(id);}}>Abrir</AdsBtn>}</div>
+        {lista.filter(function(a){return a.ad_account_id===id;}).map(function(a,i){ return <div key={i} style={{fontSize:12,color:ADS.ink2,marginTop:5,lineHeight:1.45}}><b style={{color:ADS.crit}}>{a.titulo}</b> — {a.detalhe}{a.acao?<span style={{color:ADS.muted}}> → {a.acao}</span>:null}</div>; })}
+      </div>; })}</div>}
+    </div>}
+  </span>;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -51978,7 +52014,7 @@ function QGAdsLeads({mc,conta,isMob,canEdit,currentUser}){
             <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1fr",gap:12,alignItems:"center",padding:"11px 18px",borderTop:"1px solid "+ADS.line}}>
               <div style={{minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={g.s.ad_nome}>{g.s.ad_nome}{susp&&<span title="CTR muito acima da conta — possível clique acidental" style={{color:ADS.warn,marginLeft:6,fontSize:11,fontWeight:800}}>⚠ suspeito</span>}</div>
-                <div style={{fontSize:11.5,color:ADS.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_adsNomeCurto(g.s.campaign_nome)} · {g.origem==="whatsapp"?"WhatsApp":"formulário"} · {_adsBRL0(g.s.gasto)} no dia · {_adsNum(g.n)} lead{g.n>1?"s":""}{pend>0?" · "+pend+" por conferir":" · tudo conferido"}</div>
+                <div style={{fontSize:11.5,color:ADS.muted,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_adsNomeCurto(g.s.campaign_nome)} · {g.origem==="whatsapp"?"WhatsApp":(Number(g.s.conversas||0)>0?"lead pela conversa":"lead")} · {_adsBRL0(g.s.gasto)} no dia · {_adsNum(g.n)} lead{g.n>1?"s":""}{pend>0?" · "+pend+" por conferir":" · tudo conferido"}</div>
               </div>
               <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:isMob?"flex-start":"flex-end"}}>{Array.from({length:g.n}).map(function(_,j){ return Chip(g,j); })}</div>
             </div>
