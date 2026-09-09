@@ -5155,6 +5155,97 @@ function pxFaststartFile(file){
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   pxDuplicarCard — "copiar e colar" um card COM os arquivos (09/09/2026).
+   Pedido pra Hellen fazer versões em espanhol sem refazer tudo.
+
+   Cada anexo (original + preview comprimido) é COPIADO fisicamente no
+   Storage pra `tasks/<novoId>/…`. Sem isso os dois cards apontariam pro
+   mesmo objeto e apagar um anexo num deles sumia com o arquivo do outro.
+   Se a cópia de um arquivo falhar, o anexo entra sem storagePath (só a
+   URL antiga) e a função devolve `avisos` pra quem chamou avisar.
+
+   O que vem junto: título "(cópia)", descrição, legenda, cliente/unidade,
+   setor, prioridade, tipo, tags, responsáveis, checklist (desmarcado),
+   capa, data de publicação. O que zera: comentários, histórico, status
+   (volta pra Rascunhos — a versão nova passa pelo fluxo de novo).
+   ═══════════════════════════════════════════════════════════════════════ */
+async function pxDuplicarCard(t, opts){
+  opts=opts||{};
+  const sb=window._sb;
+  const bucket=sb&&sb.storage?sb.storage.from("agency-files"):null;
+  const user=opts.user||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:{id:"",name:"Sistema"});
+  const newId=(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():("dup-"+Date.now()+"-"+Math.random().toString(36).slice(2,7));
+  const now=new Date();
+  const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  const avisos=[];
+  const urlMap={}; // url antiga → url nova (pra capa)
+  const _copiar=async function(srcPath){
+    if(!srcPath||!bucket||typeof bucket.copy!=="function") return null;
+    const base=String(srcPath).split("/").pop();
+    const dst="tasks/"+newId+"/"+base;
+    const r=await bucket.copy(srcPath,dst);
+    if(r&&r.error) throw new Error(r.error.message||"copy falhou");
+    const pub=bucket.getPublicUrl(dst);
+    return {path:dst,url:(pub&&pub.data&&pub.data.publicUrl)||null};
+  };
+  const files=[];
+  for(const f0 of (Array.isArray(t.files)?t.files:[])){
+    if(!f0||f0.uploading) continue;
+    const f=Object.assign({},f0,{id:(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():("f-"+Date.now()+"-"+Math.random().toString(36).slice(2,7))});
+    if(f0.purged){ files.push(f); continue; }
+    try{
+      if(f0.storagePath){
+        const c=await _copiar(f0.storagePath);
+        if(c){ f.storagePath=c.path; if(c.url){ urlMap[_pxUrlKey(f0.url)]=c.url; f.url=c.url; } }
+        else { f.storagePath=null; avisos.push(f0.name||"arquivo"); }
+      }
+      if(f0.previewPath){
+        const p=await _copiar(f0.previewPath);
+        if(p){ f.previewPath=p.path; if(p.url&&f0.previewUrl){ urlMap[_pxUrlKey(f0.previewUrl)]=p.url; f.previewUrl=p.url; } }
+        else { f.previewPath=null; }
+      }
+    }catch(e){
+      console.warn("[pxDuplicarCard] copia falhou:",f0.name,e&&e.message?e.message:e);
+      f.storagePath=null; f.previewPath=null; avisos.push(f0.name||"arquivo");
+    }
+    files.push(f);
+  }
+  const _cover=t.cover?(urlMap[_pxUrlKey(t.cover)]||t.cover):null;
+  const dup=Object.assign({},t,{
+    id:newId,
+    title:String(t.title||"Demanda")+" (cópia)",
+    status:"rascunhos",
+    files:files,
+    cover:_cover,
+    comments:[],
+    checklist:(t.checklist||[]).map(function(c){return Object.assign({},c,{id:"ck-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),done:false});}),
+    timeline:[{type:"created",label:"Copiado do card \""+(t.title||"")+"\" por "+user.name+(files.length?" — "+files.length+" arquivo(s) copiado(s)":""),at:now.toISOString(),atFmt:nowFmt,user:user.name}],
+    ajustar:false, isAlteracao:false, ajusteOrigin:null,
+    completedAt:null, score:null, deletedAt:null, paidAt:null,
+    colEnteredAt:now.toISOString(),
+    startDate:now.toISOString().split("T")[0],
+    createdAt:nowFmt, createdBy:user.name,
+    _isDraft:false, _planDraft:false, fromDrive:false,
+  });
+  return {dup:dup, avisos:avisos};
+}
+// Wrapper com toast + setTasks, usado pelos três "Duplicar" (CardModal, kanban, calendário)
+function pxDuplicarCardEColar(t, setTasks, onDone){
+  if(typeof pixelsToast!=="undefined") pixelsToast.info("Copiando card"+((t.files||[]).length?" e "+(t.files||[]).length+" arquivo(s)":"")+"…",2500);
+  pxDuplicarCard(t).then(function(r){
+    setTasks(function(p){ return (p||[]).concat([r.dup]); });
+    if(typeof pixelsToast!=="undefined"){
+      if(r.avisos.length) pixelsToast.warning("Card copiado, mas "+r.avisos.length+" arquivo(s) não foram copiados ("+r.avisos.slice(0,2).join(", ")+"). Eles apontam pro original.",7000);
+      else pixelsToast.success("Card copiado pra Rascunhos: \""+r.dup.title+"\".",4500);
+    }
+    if(onDone) onDone(r.dup);
+  }).catch(function(e){
+    console.warn("[pxDuplicarCardEColar]",e);
+    if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar o card: "+(e&&e.message?e.message:e));
+  });
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -13933,8 +14024,9 @@ function CScriptsTab({cl, isMob}){
   },[cl&&cl.id]);
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent={_cor}/>}
-    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent={_cor}/>}
+    {/* Tons fixos da Pixels (não a cor do cliente): Onboarding roxo escuro, Ongoing violeta */}
+    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#5b21b6"/>}
+    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#7c3aed"/>}
   </div>;
 }
 
@@ -18818,11 +18910,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         <div style={{position:"fixed",left:Math.min(ctxMenu.x,window.innerWidth-180),top:Math.min(ctxMenu.y,window.innerHeight-100),background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:5,minWidth:160,boxShadow:"0 8px 24px rgba(0,0,0,0.18)",zIndex:999999,fontFamily:"'Inter',system-ui,sans-serif"}}>
           <button onClick={function(){
             const t=ctxMenu.task;
-            const newId=(t.client||"")+"-dup-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
-            const dup=Object.assign({},t,{id:newId,publishDate:"",publishTime:"",createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema"),timeline:[{type:"created",label:"Duplicado do card #"+t.id,atFmt:new Date().toLocaleDateString("pt-BR"),user:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema")}]});
-            setTasks(function(prev){return (prev||[]).concat([dup]);});
-            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card duplicado.");
             setCtxMenu(null);
+            pxDuplicarCardEColar(t,setTasks); // cópia física dos arquivos — ver 00b_preview_util
           }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left"}}
           onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";}}
           onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
@@ -21196,11 +21285,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       <div style={{position:"fixed",left:Math.min(ctxMenuKanban.x,window.innerWidth-200),top:Math.min(ctxMenuKanban.y,window.innerHeight-110),background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:5,minWidth:180,boxShadow:"0 12px 32px rgba(15,23,42,0.18),0 4px 8px rgba(15,23,42,0.06)",zIndex:1999999,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .12s ease"}}>
         <button onClick={()=>{
           const t=ctxMenuKanban.task;
-          const newId="dup-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
-          const dup=Object.assign({},t,{id:newId,publishDate:"",publishTime:"",completedAt:null,createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema"),timeline:[{type:"created",label:"Duplicado do card #"+t.id,atFmt:new Date().toLocaleDateString("pt-BR"),user:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema")}]});
-          setTasks(p=>(p||[]).concat([dup]));
-          if(typeof pixelsToast!=="undefined")pixelsToast.success("Card duplicado.");
           setCtxMenuKanban(null);
+          pxDuplicarCardEColar(t,setTasks); // cópia física dos arquivos — ver 00b_preview_util
         }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
         onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";}}
         onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
@@ -38350,13 +38436,14 @@ function _cardPodeSerResp(u){
     // Histórico do card: registra quem editou, quando, e o texto anterior
     const _antes=(function(){ const c=(comments||[]).find(function(x){return x&&x.id===cid;}); return c?String(c.text||"").replace("AJUSTE NECESSARIO: ",""):""; })();
     const _nowD=new Date();
-    const _tl={type:"system",label:"Solicitação de ajuste editada",at:_nowD.toISOString(),
+    const _eraAjuste=(function(){ const c=(comments||[]).find(function(x){return x&&x.id===cid;}); return !!(c&&String(c.text||"").indexOf("AJUSTE NECESSARIO: ")===0); })();
+    const _tl={type:"system",label:_eraAjuste?"Solicitação de ajuste editada":"Comentário editado",at:_nowD.toISOString(),
       atFmt:_nowD.toLocaleDateString("pt-BR")+" "+_nowD.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
       user:user.name, note:(_antes?("Antes: "+_antes.slice(0,300)+(_antes.length>300?"…":"")+"\n"):"")+"Depois: "+txt.slice(0,300)+(txt.length>300?"…":"")};
     setComments(p=>p.map(_apply));
     setTasks(prev=>prev.map(t=>t.id===task.id?Object.assign({},t,{comments:(t.comments||[]).map(_apply),timeline:[...(t.timeline||[]),_tl]}):t));
     setEditingCmtId(null);setEditingCmtText("");
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Solicitação de ajuste atualizada.",2500);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success(_eraAjuste?"Solicitação de ajuste atualizada.":"Comentário atualizado.",2500);
   };
 
   const addComment=(text,type)=>{
@@ -39248,43 +39335,12 @@ function _cardPodeSerResp(u){
   };
 
   // ═══ DUPLICAR CARTÃO — clona campos, reseta status/comments/timeline ═══
+  // Copiar e colar o card COM arquivos (cópia física no Storage) — ver pxDuplicarCard (00b_preview_util)
   const duplicateCard=()=>{
-    const newId=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`t-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
-    const now=new Date();
-    const nowFmtStr=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-    const dup={
-      id:newId,
-      title:`${title} (cópia)`,
-      desc,caption,
-      assignee:assignees[0]||user.id,
-      assignees:[...(assignees||[user.id])],
-      watchers:[],
-      client,sector,priority,
-      tags:[...(task.tags||[])],
-      checklist:(checklist||[]).map(c=>({...c,id:`ck-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,done:false})),
-      // Reset estado
-      status:task.status==="demanda"?"demanda":"recebida",
-      ajustar:false,
-      isAlteracao:false,
-      cover,
-      // Limpa: arquivos, comentários, timeline (cartão novo)
-      files:[],
-      comments:[],
-      timeline:[{type:"created",label:`Demanda duplicada de "${task.title}" por ${user.name}`,at:now.toISOString(),atFmt:nowFmtStr,user:user.name}],
-      // Datas resetadas
-      startDate:now.toISOString().split("T")[0],
-      deadline:"",publishDate:"",publishTime:"11:00",
-      colEnteredAt:now.toISOString(),
-      createdAt:nowFmtStr,
-      createdBy:user.name,
-      completedAt:null,
-      score:null,
-      deletedAt:null,
-    };
-    setTasks(p=>[...p,dup]);
-    pixelsToast.success("Cartão duplicado! Procure por \""+title+" (cópia)\" no kanban.",5000);
-    setShowActionsMenu(false);
-    onClose();
+    // Usa o task mais recente do state (com os arquivos já persistidos), não os campos locais em edição
+    const _t=(tasks||[]).find(x=>String(x.id)===String(task.id))||task;
+    setShowActionsMenu&&setShowActionsMenu(false);
+    pxDuplicarCardEColar(_t,setTasks,function(){ onClose(); });
   };
 
   // ═══ OBSERVAR (WATCH) — toggle user no array watchers ═══
@@ -39404,6 +39460,10 @@ function _cardPodeSerResp(u){
   const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
   // Unificado: imagens + videos finais na ordem em que aparecem no attachments (respeita drag&drop)
   const finItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a);});
+  // Carrossel = tipo "carrossel" OU entrega com mais de um arquivo tendo pelo menos uma imagem.
+  // Uma lâmina em vídeo NÃO transforma o card em "card de vídeo": capa, destaque e grid
+  // seguem a ordem das lâminas (09/09/2026 — o vídeo da lâmina 6 tomava o card inteiro).
+  const _ehCarrossel=(String(contentType||task.contentType||"").toLowerCase()==="carrossel")||(finItems.length>1&&finItems.some(function(a){return isImg(a);}));
   const imgAdj=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a));
   const vidAdj=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isAdj(a));
   const adjItems=attachments.filter(function(a){return (isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url&&isAdj(a);});
@@ -39594,7 +39654,8 @@ function _cardPodeSerResp(u){
       {/* ── COVER: última mídia anexada (imagem OU vídeo) estilo Trello — clicável pra abrir lightbox ── */}
       {/* ESCONDE quando card está em "Ajustes" — o vídeo já aparece grande no painel de solicitação de ajuste, sem repetir */}
       {task.status!=="ajustes" && task.status!=="ajustar" && (()=>{
-        const last=[...attachments].reverse().find(a=>(isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url);
+        const _ordFin=(typeof pxOrdenarFeedStory==="function"?pxOrdenarFeedStory(finItems):finItems);
+        const last=(_ehCarrossel&&_ordFin[0])||[...attachments].reverse().find(a=>(isImg(a)||isVid(a))&&!a.isAnnotation&&!a.uploading&&a.url);
         if(!last)return null;
         const _isVideo = isVid(last);
         return <div data-cover-wrap="1" onClick={function(){setLightbox({url:last.url,name:last.name||"capa",storagePath:last.storagePath});}} title="Clique pra abrir em tela cheia"
@@ -39773,6 +39834,12 @@ function _cardPodeSerResp(u){
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
               <Ico n="link" size={16}/>
             </button>
+            {canEdit&&<button onClick={duplicateCard} title="Copiar card (com arquivos) pra Rascunhos"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #ddd6fe",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>}
             {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
@@ -39895,7 +39962,7 @@ function _cardPodeSerResp(u){
                  grande, com data e hora. Versões anteriores ficam na aba Arquivos. */}
             {finItems.length>0&&(()=>{
               const _last   = _pxLastFile(finItems) || finItems[finItems.length-1];
-              const _isV    = isVid(_last);
+              const _isV    = !_ehCarrossel && isVid(_last);
               const _when   = _pxFileWhen(_last);
               const _mb     = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
               const _noTopo = _pxEntregaNoTopo(finItems, task);
@@ -39909,7 +39976,8 @@ function _cardPodeSerResp(u){
                   <div style={{minWidth:0,flex:1}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                       <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>{_isV?"Última entrega":"Entrega"}</span>
-                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?(finItems.length+"ª versão"):(finItems.length+" artes")}</span>}
+                      {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?(finItems.length+"ª versão"):(_ehCarrossel?(finItems.length+" lâminas"):(finItems.length+" artes"))}</span>}
+                      {_ehCarrossel&&<span style={{background:"#ede9fe",color:"#4c1d95",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Carrossel</span>}
                       {_isV&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
                       {_noTopo&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
                     </div>
@@ -39938,14 +40006,19 @@ function _cardPodeSerResp(u){
                         const _num=arr.slice(0,i+1).filter(function(x){return (!isVid(x)&&typeof pxEhStory==="function"&&pxEhStory(x))===_isStory;}).length;
                         return <div key={a.id} onClick={function(e){
                             e.stopPropagation();
-                            if(_av){ setActiveTab("files"); }
-                            else { setLightbox({url:a.url,name:a.name,storagePath:a.storagePath}); }
+                            setLightbox({url:a.url,name:a.name,storagePath:a.storagePath});
                           }} title={(a.name||("#"+(i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")}
                           style={{position:"relative",borderRadius:9,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1",background:_av?"#0f172a":"#f8fafc",cursor:"pointer",transition:"transform .12s, box-shadow .12s"}}
                           onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.03)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.12)";}}
                           onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="none";}}>
                           {_av
-                            ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+                            ? <div style={{position:"relative",width:"100%",height:"100%",background:"#0f172a"}}>
+                                {typeof PxVideoThumb==="function"&&<PxVideoThumb src={a.url} file={a} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+                                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                                  <span style={{width:34,height:34,borderRadius:"50%",background:"rgba(255,255,255,0.92)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#0f172a",boxShadow:"0 4px 14px rgba(0,0,0,0.4)"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></span>
+                                </div>
+                                <span style={{position:"absolute",top:5,right:5,background:"#0f172a",color:"#fff",fontSize:8.5,fontWeight:800,padding:"2px 6px",borderRadius:5,letterSpacing:.5}}>VÍDEO</span>
+                              </div>
                             : <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                                 onError={function(e){
                                   if(a.storagePath && !e.currentTarget.dataset.retried){
@@ -40565,14 +40638,38 @@ function _cardPodeSerResp(u){
                 })}
               </div>}
 
-              {_visibleComments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
+              {_visibleComments.map(c=>{
+                // Editável pelo autor ou por sócio (pedido da Hellen, 09/09/2026). Áudio não edita.
+                const _podeEditarCmt=c.type!=="audio"&&(isAdmin||(c.user&&user&&c.user===user.name));
+                const _emEdicaoCmt=editingCmtId===c.id;
+                return <div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{c.av}</div>
-                <div style={{flex:1}}>
+                <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",gap:8,marginBottom:4,alignItems:"center"}}>
                     <span style={{color:"#1e293b",fontWeight:700,fontSize:12}}>{c.user}</span>
                     <span style={{color:"#cbd5e1",fontSize:10}}>{c.time}</span>
+                    {c.editedAt&&<span style={{color:"#b45309",fontSize:10,fontWeight:600}} title={"Editado por "+(c.editedBy||"")}>· editado</span>}
+                    {_podeEditarCmt&&!_emEdicaoCmt&&<button type="button" title="Editar comentário"
+                      onClick={function(e){e.stopPropagation();setEditingCmtId(c.id);setEditingCmtText(String(c.text||""));}}
+                      style={{marginLeft:"auto",background:"transparent",border:"none",borderRadius:6,width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",cursor:"pointer",padding:0}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#0f172a";e.currentTarget.style.background="#f1f5f9";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>}
                   </div>
-                  {c.type==="audio"&&c.audioUrl
+                  {_emEdicaoCmt
+                    ?<div>
+                        <textarea value={editingCmtText} onChange={function(e){setEditingCmtText(e.target.value);}} autoFocus rows={Math.min(14,Math.max(3,editingCmtText.split("\n").length+1))}
+                          onKeyDown={function(e){ if(e.key==="Escape"){setEditingCmtId(null);setEditingCmtText("");} else if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){editarComentario(c.id,editingCmtText);} }}
+                          onFocus={()=>setIsEditingText(true)} onBlur={()=>setIsEditingText(false)}
+                          style={{width:"100%",border:"1px solid #7c3aed",borderRadius:"0 10px 10px 10px",padding:"9px 13px",fontSize:12,lineHeight:1.5,color:"#1e293b",background:"#fff",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
+                        <div style={{display:"flex",gap:8,marginTop:6,alignItems:"center"}}>
+                          <button type="button" onClick={function(){editarComentario(c.id,editingCmtText);}} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"7px 13px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                          <button type="button" onClick={function(){setEditingCmtId(null);setEditingCmtText("");}} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                          <span style={{color:"#94a3b8",fontSize:10.5}}>Ctrl+Enter salva · Esc cancela</span>
+                        </div>
+                      </div>
+                    :c.type==="audio"&&c.audioUrl
                     ?<div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:"0 10px 10px 10px",padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}}>
                         <span style={{fontSize:16}}>🎙</span>
                         <audio src={c.audioUrl} controls style={{height:28,flex:1}}/>
@@ -40580,7 +40677,7 @@ function _cardPodeSerResp(u){
                     :<div style={{background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:"0 10px 10px 10px",padding:"9px 13px",color:"#475569",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={c.text}/></div>
                   }
                 </div>
-              </div>)}
+              </div>;})}
 
               {/* Comment input */}
               <div style={{display:"flex",gap:8,marginTop:12,alignItems:"flex-end"}}>
@@ -40809,7 +40906,7 @@ function _cardPodeSerResp(u){
                     if(!_v) return null;
                     // Carrossel: a lâmina em vídeo fica na grid, na posição dela — nada de
                     // puxar pro topo (regra do card de vídeo, não do carrossel).
-                    if(String(contentType||task.contentType||"").toLowerCase()==="carrossel") return null;
+                    if(_ehCarrossel) return null;
                     const _li   = finItems.findIndex(function(x){return x.id===_last.id;});
                     const _when = _pxFileWhen(_last);
                     const _mb   = _last.size ? (_last.size/1024/1024).toFixed(1)+" MB" : null;
@@ -48567,6 +48664,31 @@ export default function AgencyOS(){
     window.pixelsNav = nav;
     return function(){ try{ delete window.pixelsNav; }catch(e){} };
   },[nav]);
+
+  // ── Datas comemorativas → cards automáticos no Calendário de publicações (09/09/2026) ──
+  // Roda depois da carga completa das tasks, só pra sócios + Hellen (quem usa o Planejamento),
+  // e de novo (com debounce) quando o calendário interno muda. Idempotente: ver pxGerarCardsComemorativos.
+  const _tasksRefAutoCom=useRef(tasks); _tasksRefAutoCom.current=tasks;
+  useEffect(function(){
+    if(!loaded||!window._sb) return;
+    if(!(CURRENT_USER&&(CURRENT_USER.level===1||CURRENT_USER.id==="ellen"))) return;
+    if(typeof pxGerarCardsComemorativos!=="function") return;
+    let _t=null, _alive=true;
+    const _run=function(){
+      pxGerarCardsComemorativos({getTasks:function(){return _tasksRefAutoCom.current;}, setTasks:setTasks})
+        .then(function(n){ if(_alive&&n>0&&typeof pixelsToast!=="undefined") pixelsToast.info(n+(n===1?" card de data comemorativa criado":" cards de datas comemorativas criados")+" no Calendário de publicações.",5000); })
+        .catch(function(e){ console.warn("[autocom]",e&&e.message?e.message:e); });
+    };
+    const _agenda=function(){ if(_t) clearTimeout(_t); _t=setTimeout(_run,1500); };
+    _agenda();
+    let _ch=null;
+    try{
+      _ch=window._sb.channel("autocom_int_events_"+Math.random().toString(36).slice(2))
+        .on("postgres_changes",{event:"*",schema:"public",table:"internal_events"},_agenda).subscribe();
+    }catch(_){}
+    return function(){ _alive=false; if(_t) clearTimeout(_t); try{ if(_ch) window._sb.removeChannel(_ch); }catch(_){} };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[loaded]);
 
   // Listener global pra navegação cross-module (ListaView/Kanban → Chat).
   // Quem dispara: window.dispatchEvent(new CustomEvent("pixels:goto-chat",{detail:{channelId:"cliente_xxx"}}))
@@ -69150,7 +69272,7 @@ function _ajustarAltura(el){
 }
 
 /* Card individual do script — titulo editavel (com icone de lapis) + textarea alto + copy/delete. */
-function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag, canEdit}){
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, drag, canEdit, accent}){
   const _ro = canEdit===false;   // somente leitura
   // So vira draggable enquanto o mouse esta segurando o handle — assim continua
   // dando pra selecionar texto no textarea normalmente.
@@ -69159,7 +69281,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _alvo     = !!drag && drag.overIdx===idx && drag.dragIdx!==null && drag.dragIdx!==idx;
   // Box do titulo usa a cor do cliente selecionado no portal. Tinta (texto) troca
   // pra escuro quando a cor do cliente e clara demais (Climaves, Arabuta...).
-  const _cor = (cl && cl.color) || "#7c3aed";
+  const _cor = accent || (cl && cl.color) || "#7c3aed";
   const _hx  = String(_cor).replace("#","");
   const _r   = parseInt(_hx.substring(0,2),16)||0;
   const _g   = parseInt(_hx.substring(2,4),16)||0;
@@ -69181,7 +69303,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
       : <div onClick={function(){ if(!_ro) setEditingId(s.id); }} title={_ro?"":"Clique pra renomear"}
-          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",boxShadow:"0 3px 10px "+_cor+"38",lineHeight:1.3}}
+          style={{background:_cor,color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"filter .12s, box-shadow .12s",lineHeight:1.3}}
           onMouseEnter={function(e){ if(_ro) return; e.currentTarget.style.filter="brightness(1.06)";e.currentTarget.style.boxShadow="0 5px 16px "+_cor+"55";}}
           onMouseLeave={function(e){ if(_ro) return; e.currentTarget.style.filter="none";e.currentTarget.style.boxShadow="0 3px 10px "+_cor+"38";}}>
           {/* Mobile: setas no lugar do arraste */}
@@ -69328,23 +69450,23 @@ function _OnboardingScripts({cl, startDate, accent}){
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
     style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14,background:(typeof _accent!=="undefined"?_accent:accent),borderRadius:12,padding:"12px 14px",margin:"-6px -10px 14px"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"#fef3c7",border:"1px solid #fde68a",color:"#a16207",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.16)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
+          <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
         </div>
       </div>
       {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
-        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.28)",borderRadius:9,padding:"7px 12px",color:"#fff",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        style={{background:"#fff",color:accent,border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 2px 8px rgba(15,23,42,.12)"}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -69371,7 +69493,7 @@ function _OnboardingScripts({cl, startDate, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
@@ -69476,23 +69598,23 @@ function _OngoingScripts({cl, accent}){
   return <div
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
     style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14,background:(typeof _accent!=="undefined"?_accent:accent),borderRadius:12,padding:"12px 14px",margin:"-6px -10px 14px"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"#dbeafe",border:"1px solid #bfdbfe",color:"#1d4ed8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.16)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Mensagens reutilizaveis pra check-ins, reunioes, NPS, indicacoes e resultados de funil. Compartilhado entre todos os clientes.</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
+          <div style={{color:"rgba(255,255,255,.72)",fontSize:11.5,marginTop:2}}>Check-ins, reuniões, NPS, indicações e resultados de funil.</div>
         </div>
       </div>
       {!_podeEditar && <span title="Só Gustavo e Vinicius editam os scripts"
-        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#94a3b8",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
+        style={{background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.28)",borderRadius:9,padding:"7px 12px",color:"#fff",fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,fontFamily:_ONB_FF}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:_accent,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        style={{background:"#fff",color:_accent,border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 2px 8px rgba(15,23,42,.12)"}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -69518,7 +69640,7 @@ function _OngoingScripts({cl, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar}/>;
+              _INP={_INP} cl={cl} idx={_i} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
@@ -77860,6 +77982,141 @@ function _EventoEditModal({evento, onSave, onClose}){
       </div>
     </div>
   </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   pxGerarCardsComemorativos — Datas comemorativas → cards no Calendário
+   de publicações, AUTOMÁTICO (pedido 09/09/2026, pra Hellen só preencher).
+
+   Regras:
+   - Fonte: internal_events com category="comemorativa" e client_ids.
+   - Janela: hoje até +PX_AUTOCOM_DIAS dias (365 = ano inteiro pra frente; nunca datas passadas). Recorrência anual/mensal é
+     expandida dentro da janela (Dia dos Pais de 2027 nasce sozinho quando
+     entrar na janela).
+   - Bioter: "bioter" marcado → 1 card unidade "grupo"; "bioter_brasil" →
+     1 card unidade "brasil" (+ unidades fora do BR marcadas, ex. Paraguay);
+     unidade avulsa → card daquela unidade.
+   - Idempotente: o id do card é determinístico
+     ("autocom-<evento>-<data>-<cliente>[-<unidade>]"). Antes de criar,
+     confere no state E no Supabase (inclusive apagados) — apagou, não volta;
+     dois PCs ao mesmo tempo não duplicam (mesmo id → mesmo registro).
+   - Card nasce em Rascunhos, responsável Hellen, sem tipo de conteúdo,
+     publishDate = a data, título = título do evento, tag "Data comemorativa".
+   - Não apaga nem mexe em card existente se o evento mudar/for apagado.
+   ═══════════════════════════════════════════════════════════════════════ */
+const PX_AUTOCOM_DIAS = 365; // um ano pra frente: todas as datas futuras do Planejamento, e as anuais renascem sozinhas a cada ano
+function pxAutoComTargets(clientIds){
+  const ids=(Array.isArray(clientIds)?clientIds:[]).map(String).filter(Boolean);
+  const out=[];
+  const _isBR=function(unitId){
+    try{ const u=(typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]).find(function(x){return x.id===unitId;}); return !!(u&&u.pais==="BR"); }catch(_){ return true; }
+  };
+  const hasGrupo=ids.indexOf("bioter")>=0, hasBrasil=ids.indexOf("bioter_brasil")>=0;
+  ids.forEach(function(id){
+    if(id==="bioter"||id==="bioter_brasil"||id.indexOf("bioter_")===0) return;
+    out.push({client:id, unit:null});
+  });
+  if(hasGrupo){ out.push({client:"bioter", unit:"grupo"}); return out; }
+  if(hasBrasil) out.push({client:"bioter", unit:"brasil"});
+  ids.forEach(function(id){
+    if(id.indexOf("bioter_")!==0||id==="bioter_brasil") return;
+    if(hasBrasil&&_isBR(id)) return; // já coberto pelo card "brasil"
+    out.push({client:"bioter", unit:id.slice("bioter_".length)});
+  });
+  return out;
+}
+function pxAutoComExpandir(ev, startISO, endISO){
+  const _p=function(s){const a=String(s).split("-");return new Date(+a[0],+a[1]-1,+a[2]);};
+  const _f=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  if(!ev||!ev.date) return [];
+  const until=ev.recurrence_until||"";
+  const rec=ev.recurrence||"";
+  const out=[];
+  if(!rec||rec==="none"){ if(ev.date>=startISO&&ev.date<=endISO) out.push(ev.date); return out; }
+  const o=_p(ev.date), s=_p(startISO), e=_p(endISO);
+  if(rec==="yearly"){
+    for(let y=s.getFullYear(); y<=e.getFullYear(); y++){
+      // Bidirecional, igual ao Planejamento: "Natal" cadastrado em 2027-11-25 com recorrência
+      // anual vale em 2026 também (vários eventos foram cadastrados com data de 2027).
+      const c=new Date(y,o.getMonth(),o.getDate()); const iso=_f(c);
+      if(until&&iso>until) continue;
+      if(iso>=startISO&&iso<=endISO) out.push(iso);
+    }
+  } else if(rec==="monthly"){
+    let c=new Date(s.getFullYear(),s.getMonth(),o.getDate());
+    for(let i=0;i<6;i++){ const iso=_f(c); if(iso>=ev.date&&(!until||iso<=until)&&iso>=startISO&&iso<=endISO) out.push(iso); c=new Date(c.getFullYear(),c.getMonth()+1,o.getDate()); }
+  }
+  return out;
+}
+async function pxGerarCardsComemorativos(opts){
+  const sb=window._sb; if(!sb) return 0;
+  const getTasks=opts.getTasks, setTasks=opts.setTasks;
+  const r=await sb.from("internal_events").select("*").eq("category","comemorativa");
+  if(!r||r.error||!Array.isArray(r.data)) return 0;
+  const _f=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  const hoje=new Date(); const startISO=_f(hoje);
+  const endISO=_f(new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()+PX_AUTOCOM_DIAS));
+  const ativos={};
+  (typeof CLIENTS!=="undefined"?CLIENTS:[]).forEach(function(c){ if(c&&c.id&&c.status!=="encerrado") ativos[c.id]=c; });
+  // candidatos
+  const cand=[];
+  r.data.forEach(function(ev){
+    let ids=ev.client_ids;
+    if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
+    if((!ids||!ids.length)&&ev.client_id) ids=[ev.client_id];
+    if(!ids||!ids.length) return;
+    const targets=pxAutoComTargets(ids).filter(function(t){ return !!ativos[t.client]; });
+    if(!targets.length) return;
+    pxAutoComExpandir(ev,startISO,endISO).forEach(function(dateISO){
+      targets.forEach(function(t){
+        const id=("autocom-"+ev.id+"-"+dateISO+"-"+t.client+(t.unit?"-"+t.unit:"")).replace(/[^a-zA-Z0-9_-]/g,"");
+        cand.push({id:id, ev:ev, date:dateISO, client:t.client, unit:t.unit});
+      });
+    });
+  });
+  if(!cand.length) return 0;
+  // já existe no state (vivo ou na lixeira)?
+  const local=new Set((getTasks()||[]).map(function(t){return String(t.id);}));
+  let faltam=cand.filter(function(c){ return !local.has(c.id); });
+  if(!faltam.length) return 0;
+  // já existe no Supabase (inclusive apagado há mais de 30 dias, que não vem pro state)?
+  const existentes=new Set();
+  for(let i=0;i<faltam.length;i+=100){
+    const chunk=faltam.slice(i,i+100).map(function(c){return c.id;});
+    const q=await sb.from("tasks").select("id").in("id",chunk);
+    if(q&&q.error){ console.warn("[autocom] consulta falhou:",q.error.message); return 0; } // sem certeza, não cria
+    (q&&q.data||[]).forEach(function(row){ existentes.add(String(row.id)); });
+  }
+  faltam=faltam.filter(function(c){ return !existentes.has(c.id); });
+  if(!faltam.length) return 0;
+  const now=new Date();
+  const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  const novos=faltam.map(function(c){
+    return {
+      id:c.id,
+      title:(typeof smartFormatTitle==="function"?smartFormatTitle(c.ev.title||"Data comemorativa"):(c.ev.title||"Data comemorativa")),
+      desc:c.ev.description||"",
+      assignee:"ellen", assignees:["ellen"], watchers:[],
+      client:c.client, sector:"", priority:"", status:"rascunhos",
+      startDate:_f(now), deadline:c.date,
+      publishDate:c.date, publish_date:c.date, publishTime:"11:00",
+      contentType:null,
+      completedAt:null, score:null, tags:["Data comemorativa"], comments:[], files:[], cover:null, checklist:[],
+      deletedAt:null,
+      bioterUnit:c.unit||null,
+      referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
+      colEnteredAt:now.toISOString(),
+      createdAt:nowFmt, createdBy:"Automático",
+      timeline:[{type:"created",label:"Card gerado automaticamente da data comemorativa \""+(c.ev.title||"")+"\" (calendário interno)",atFmt:nowFmt,user:"Automático"}],
+    };
+  });
+  setTasks(function(prev){
+    const have=new Set((prev||[]).map(function(t){return String(t.id);}));
+    const add=novos.filter(function(t){ return !have.has(t.id); });
+    return add.length? [].concat(prev||[],add) : prev;
+  });
+  return novos.length;
 }
 
 // DashSocio v5 (2026-06-10):
