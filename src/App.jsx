@@ -50665,34 +50665,66 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
     {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="leads"&&temMeta&&typeof QGAdsLeads==="function"&&<QGAdsLeads mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="historico"&&temMeta&&typeof QGAdsHistorico==="function"&&<QGAdsHistorico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
-    {subAtiva==="gestao"&&<>
-    {/* ── Plataformas ── */}
-    {_qgPlataformas(mc).concat(["meta","google"]).filter(function(p,i,arr){return arr.indexOf(p)===i;}).map(function(p){ return <QGPlatSecao key={p} id={p} mc={mc} c={c} data={data} year={year} month={month} canEdit={canEdit} currentUser={currentUser} onOrcamento={setOrcamento}/>; })}
+    {subAtiva==="gestao"&&(function(){
+      /* ── Gestão do mês: verba · resultado · semana (sólidos) + plataformas + ações/demandas + portal ── */
+      const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month;
+      const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):diasNoMes;
+      const projecao=c.gasto>0&&diaRef>0?c.gasto/diaRef*diasNoMes:0;
+      const esperado=c.orcamento>0?c.orcamento*diaRef/diasNoMes:0;
+      const ritmo=esperado>0?c.gasto/esperado:null;
+      const ritmoTxt=ritmo===null?"sem verba definida":ritmo>1.15?"acima do ritmo · vai estourar":ritmo<0.8?"abaixo do ritmo · vai sobrar":"no ritmo";
+      const s1=Object.assign({key:semanas[1].key,start:semanas[1].start},qgCalcSemana(mc,data,semanas[1]));
+      const nAcoes=(acoes||[]).filter(function(a){return a.client_id===mc.client_id&&!a.done;}).length;
+      const Solido=function(bg,eyebrow,big,sub,extra){ return <div style={{background:"linear-gradient(135deg,"+bg+" 0%,"+bg+"e6 100%)",color:"#fff",borderRadius:18,padding:"18px 20px",boxShadow:"0 10px 26px "+bg+"33",minWidth:0,display:"flex",flexDirection:"column",gap:4}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"rgba(255,255,255,.7)"}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{big}</div><div style={{fontSize:12.5,color:"rgba(255,255,255,.8)",lineHeight:1.45}}>{sub}</div>{extra}</div>; };
+      const Barra=function(pct,marca){ return <div style={{position:"relative",height:6,borderRadius:99,background:"rgba(255,255,255,.22)",marginTop:8,overflow:"visible"}}><div style={{width:Math.max(0,Math.min(100,pct||0))+"%",height:"100%",borderRadius:99,background:"#fff"}}/>{marca!==null&&marca!==undefined&&<div style={{position:"absolute",left:Math.min(100,marca)+"%",top:-3,width:2,height:12,background:"#fff",opacity:.7,borderRadius:2}}/>}</div>; };
+      return <>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
+        {Solido("#3b0f78","Verba do mês · "+QG_MESES[month-1],c.orcamento>0?_qgBRLk(c.gasto)+" de "+_qgBRLk(c.orcamento):_qgBRLk(c.gasto),<span>{c.orcamento>0?<span><b style={{color:"#fff"}}>{ritmoTxt}</b> · projeção de fim do mês <b style={{color:"#fff"}}>{_qgBRLk(projecao)}</b></span>:"defina o orçamento nas plataformas abaixo"}</span>,c.orcamento>0?Barra(c.usoPct,esperado/c.orcamento*100):null)}
+        {Solido("#7326d6","Resultado do mês",_qgNum(c.leads)+" leads",<span>custo por lead <b style={{color:"#fff"}}>{c.cpl?_qgBRL(c.cpl):"—"}</b>{m.meta?<span> · meta {_qgNum(m.meta)} ({Math.round(m.pct)}%) · {m.label}</span>:<span> · <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}</span>,m.meta?Barra(m.pct,m.fracao*100):null)}
+        {Solido("#9F43F6","Semana "+_qgWeekLabel(s0.start),s0.w?_qgNum(s0.leads)+" leads":"fechamento pendente",<span>{s0.w?<span>semana anterior <b style={{color:"#fff"}}>{_qgNum(s1.leads)}</b>{s1.leads>0?" · "+(s0.leads>=s1.leads?"▲":"▼")+" "+Math.abs(Math.round((s0.leads-s1.leads)/s1.leads*100))+"%":""}</span>:<span>o Erick registra leads, investimento e observação da semana</span>}</span>,canEdit?<div style={{marginTop:6}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={{background:"#fff",color:"#4a1591",border:0,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:QG_FONT,minHeight:0}}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>:null)}
+      </div>
 
-    {/* ── Resultados ── */}
-    <QGCard pad="16px 20px">
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span style={{width:30,height:30,borderRadius:9,background:QG.verdeBg,color:QG.verde,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGIco name="trend" size={16} sw={2.2}/></span><span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Resultados</span><span style={{color:QG.txt3,fontSize:12,fontWeight:500}}>funil e vendas vêm do Portal do cliente · leads do fechamento semanal</span></div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.1fr 1fr",gap:18,alignItems:"start"}}>
-        <div>
-          <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Funil do mês{c.funil?" · atualizado "+_qgRel(c.funil.updated_at||c.funil.submitted_at):""}</div>
-          <QGFunil c={c}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.15fr 1fr",gap:14,alignItems:"start"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Meta pela API — só o orçamento é editável */}
+          <QGCard pad="16px 20px">
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
+              <span style={{width:30,height:30,borderRadius:9,background:QG.meta+"14",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGPlatIco id="meta" size={16}/></span>
+              <span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Meta Ads</span>
+              <span style={{fontSize:11,fontWeight:700,color:c.metaApi?QG.verde:QG.txt3,background:c.metaApi?QG.verdeBg:QG.cinzaBg,borderRadius:99,padding:"2px 8px"}}>{c.metaApi?"pela API · coleta diária":"sem conta vinculada"}</span>
+              <span style={{marginLeft:"auto",fontSize:12.5,color:QG.txt2,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6}}>Orçamento mensal <b style={{color:QG.txt,fontSize:14}}><QGInline value={Number(mc.investimento_meta)||0} type="number" fmt={_qgBRL} placeholder="definir" disabled={!canEdit} onSave={function(v){setOrcamento("meta",v);}}/></b></span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+              {[["Gasto",_qgBRLk(c.porPlat.meta.gasto),QG.roxo,c.porPlat.meta.orcamento>0?Math.round(c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100)+"% do orçamento":undefined],["Leads",_qgNum(c.porPlat.meta.leads),QG.txt,undefined],["Custo por lead",c.porPlat.meta.cpl?_qgBRL(c.porPlat.meta.cpl):"—",QG.txt,undefined],["Saldo",c.porPlat.meta.orcamento>0?_qgBRLk(c.porPlat.meta.saldo):"—",c.porPlat.meta.saldo<0?QG.verm:QG.txt,undefined]].map(function(k){ return <div key={k[0]} style={{minWidth:0}}><div style={{color:QG.txt3,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{k[0]}</div><div style={{fontSize:18,fontWeight:800,letterSpacing:-.4,color:k[2],marginTop:2,fontFeatureSettings:"'tnum'"}}>{k[1]}</div>{k[3]&&<div style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{k[3]}</div>}</div>; })}
+            </div>
+            {c.porPlat.meta.orcamento>0&&<div style={{marginTop:10}}><QGBar pct={c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100} cor={QG.roxo} h={6} marca={esperado>0?diaRef/diasNoMes*100:null}/></div>}
+            <div style={{fontSize:11.5,color:QG.txt3,marginTop:10}}>Campanhas, criativos e público estão nas abas ao lado — tudo vem da API, sem digitação.</div>
+          </QGCard>
+          <QGPlatSecao id="google" mc={mc} c={c} data={data} year={year} month={month} canEdit={canEdit} currentUser={currentUser} onOrcamento={setOrcamento}/>
         </div>
-        <div style={divisor}>
-          <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Vendas registradas{c.vendasTodas.length?" · "+c.vendasTodas.length:""}</div>
-          {c.vendasTodas.length===0?<div style={{color:QG.txt3,fontSize:12,fontWeight:500}}>Nenhuma venda no mês. O cliente (ou a equipe) lança na Calculadora de ROI do Portal e aparece aqui.</div>:
-          <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>{c.vendasTodas.slice().sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));}).slice(0,8).map(function(v){ return <tr key={v.id}><td style={Object.assign({},QG_TD,{color:QG.txt3,width:46,paddingLeft:0,padding:"7px 0"})}>{_qgFmtD(v.date)}</td><td style={Object.assign({},QG_TD,{fontWeight:700,whiteSpace:"normal",padding:"7px 8px"})}>{v.lead_name||v.product||"Venda"}<span style={{color:QG.txt3,fontWeight:500}}>{v.product&&v.lead_name?" · "+v.product:""}{v.uf?" · "+v.uf:""}</span></td><td style={Object.assign({},QG_TD,{width:20,padding:"7px 4px"})}>{QG_ORIGENS_ADS.indexOf(v.origin)>=0?<QGPlatIco id={v.origin} size={12}/>:null}</td><td style={Object.assign({},QG_TDR,{fontWeight:800,color:QG.verde,paddingRight:0,padding:"7px 0"})}>{_qgBRL(v.value)}</td></tr>; })}</tbody></table>}
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <QGCard pad="16px 20px">
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{width:30,height:30,borderRadius:9,background:QG.roxoBg,color:QG.roxo,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGIco name="list" size={16} sw={2.2}/></span><span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Próximas ações</span>{nAcoes>0&&<span style={{fontSize:11,fontWeight:800,color:QG.roxo,background:QG.roxoBg,borderRadius:99,padding:"2px 8px"}}>{nAcoes}</span>}</div>
+            {acoesApi?<QGAcoes clientId={mc.client_id} acoes={acoes} api={acoesApi} currentUser={currentUser} canEdit={canEdit}/>:<QGEmpty texto="Ações indisponíveis."/>}
+          </QGCard>
+          <QGDemandasCliente mc={mc} tasks={tasks} store={store} soSeTiver/>
         </div>
       </div>
-    </QGCard>
 
-    {/* ── Próximas ações ── */}
-    <QGCard pad="16px 20px">
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{width:30,height:30,borderRadius:9,background:QG.amarBg,color:QG.amar,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGIco name="list" size={16} sw={2.2}/></span><span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Próximas ações</span>{(function(){ const n=(acoes||[]).filter(function(a){return a.client_id===mc.client_id&&!a.done;}).length; return n>0?<span style={{fontSize:11,fontWeight:800,color:QG.amar,background:QG.amarBg,borderRadius:99,padding:"2px 8px"}}>{n}</span>:null; })()}</div>
-      {acoesApi?<QGAcoes clientId={mc.client_id} acoes={acoes} api={acoesApi} currentUser={currentUser} canEdit={canEdit}/>:<QGEmpty texto="Ações indisponíveis."/>}
-    </QGCard>
-
-    <QGDemandasCliente mc={mc} tasks={tasks} store={store} soSeTiver/>
-    </>}
+      {/* Portal: funil e vendas (só aparece quando tem algo) */}
+      {(c.temFunil||c.vendasTodas.length>0)&&<QGCard pad="16px 20px">
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}><span style={{width:30,height:30,borderRadius:9,background:QG.roxoBg,color:QG.roxo,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGIco name="trend" size={16} sw={2.2}/></span><span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Do Portal do cliente</span><span style={{color:QG.txt3,fontSize:12,fontWeight:500}}>funil e vendas que o cliente lança</span></div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.1fr 1fr",gap:18,alignItems:"start"}}>
+          <div><div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Funil do mês{c.funil?" · atualizado "+_qgRel(c.funil.updated_at||c.funil.submitted_at):""}</div><QGFunil c={c}/></div>
+          <div style={divisor}>
+            <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Vendas registradas{c.vendasTodas.length?" · "+c.vendasTodas.length:""}</div>
+            {c.vendasTodas.length===0?<div style={{color:QG.txt3,fontSize:12,fontWeight:500}}>Nenhuma venda no mês. O cliente (ou a equipe) lança na Calculadora de ROI do Portal e aparece aqui.</div>:
+            <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>{c.vendasTodas.slice().sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));}).slice(0,8).map(function(v){ return <tr key={v.id}><td style={Object.assign({},QG_TD,{color:QG.txt3,width:46,paddingLeft:0,padding:"7px 0"})}>{_qgFmtD(v.date)}</td><td style={Object.assign({},QG_TD,{fontWeight:700,whiteSpace:"normal",padding:"7px 8px"})}>{v.lead_name||v.product||"Venda"}<span style={{color:QG.txt3,fontWeight:500}}>{v.product&&v.lead_name?" · "+v.product:""}{v.uf?" · "+v.uf:""}</span></td><td style={Object.assign({},QG_TD,{textAlign:"right",fontWeight:800,color:QG.verde,padding:"7px 0"})}>{_qgBRL(v.value)}</td></tr>; })}</tbody></table>}
+          </div>
+        </div>
+      </QGCard>}
+      </>;
+    })()}
   </div>;
 }
 
@@ -52070,12 +52102,13 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
       {(nota||susp.length>0)&&<p style={{fontSize:12.5,color:ADS.ink2,margin:"14px 0 0",lineHeight:1.5,paddingTop:12,borderTop:"1px solid "+ADS.line}}>{nota}{susp.length>0&&<span> <span style={{color:ADS.warn,fontWeight:700}}>⚠ possível clique acidental</span> em {susp.map(function(x){return x.lbl+" (CTR "+_adsPct(x.ctr,2)+")";}).join(", ")} — marque a qualidade desses leads antes de aumentar verba.</span>}</p>}
     </AdsCard>;
   };
-  const heroi=function(lab,m,cor){ return <AdsCard><AdsEyebrow>{lab}</AdsEyebrow><div style={{fontSize:m&&m.lbl.length>16?24:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.1,margin:"8px 0 6px",color:cor||ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m?m.lbl:"—"}</div><div style={{fontSize:12,color:ADS.muted,lineHeight:1.4}}>{m?<span><b style={{color:ADS.ink2}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por resultado · <AdsNumAnim v={m.res} fmt={_adsNum}/> resultados</span>:"nenhum corte com 3+ resultados"}</div></AdsCard>; };
+  /* heróis sólidos: um tom de roxo Pixels por card */
+  const heroi=function(lab,m,bg){ return <div style={{background:"linear-gradient(135deg,"+bg+" 0%,"+bg+"e6 100%)",color:"#fff",borderRadius:18,padding:"18px 20px",boxShadow:"0 10px 26px "+bg+"33",minWidth:0}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:"rgba(255,255,255,.7)"}}>{lab}</div><div style={{fontSize:m&&m.lbl.length>16?24:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.1,margin:"8px 0 6px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m?m.lbl:"—"}</div><div style={{fontSize:12,color:"rgba(255,255,255,.75)",lineHeight:1.4}}>{m?<span><b style={{color:"#fff"}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por resultado · <AdsNumAnim v={m.res} fmt={_adsNum}/> resultados</span>:"nenhum corte com 3+ resultados"}</div></div>; };
   return <AdsWrap>
     {!embutido&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
-      {heroi("Faixa etária que rende mais",mIdade,ADS.ok)}
-      {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,ADS.ok)}
-      {heroi("Gênero",mGen,null)}
+      {heroi("Faixa etária que rende mais",mIdade,"#3b0f78")}
+      {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,"#7326d6")}
+      {heroi("Gênero que rende mais",mGen,"#9F43F6")}
     </div>}
     <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> resultados · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por resultado</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>Toda a conta</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
