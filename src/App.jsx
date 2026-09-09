@@ -42601,6 +42601,19 @@ function ContatosView({clientId, bioterUnit}){
 
 function OrientacoesView({clientId, bioterUnit, sector}){
   const sb=window._sb;
+  // Cadeira de quem está olhando (09/09/2026): a aba Orientações do card segue a MESMA
+  // separação do Playbook. Designer não vê "Marcar no post", social não vê "Instruções pro
+  // designer", etc. Sócios/Hellen/estrategista veem tudo. Mapa: ver PB_CADEIRAS (27_playbooks).
+  const _cadeiraCard=(function(){
+    try{
+      if(typeof _pbCadeirasDoUsuario!=="function"||typeof CURRENT_USER==="undefined") return null;
+      const cs=_pbCadeirasDoUsuario(CURRENT_USER);
+      if(!cs.length) return null;
+      if(cs.some(function(c){return !c.blocos;})) return null; // tem uma cadeira "tudo" → mostra tudo
+      return cs[0];
+    }catch(_){ return null; }
+  })();
+  const _vis=function(blocoId){ return !_cadeiraCard || !_cadeiraCard.blocos || _cadeiraCard.blocos.indexOf(blocoId)>=0; };
   const [data,setData]=useState(null);
   const [playbookData,setPlaybookData]=useState(null); // do cache do Playbook (contatos por unidade)
   const [loading,setLoading]=useState(true);
@@ -42819,7 +42832,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Do Briefing — dados não-confidenciais preenchidos no Briefing (auto) ═══ */}
-      {_briefItens.length>0&&<div>
+      {_vis("pb-briefing-auto")&&_briefItens.length>0&&<div>
         <SectionTitle label="Do Briefing" sub="Respostas do Briefing do cliente — clique pra copiar" icon="fileText" accent="#0d9488"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {_briefItens.map(function(x,i){
@@ -42837,6 +42850,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
           Mostra TODAS as orientações visuais cadastradas no Playbook deste cliente,
           sem filtrar por setor. Merge de data.orientacoes_visuais + design + video + social. */}
       {(function(){
+        if(!_vis("pb-orientacoes-visuais")) return null;
         const _ovs = _allOV;
         if(_ovs.length===0) return null;
         return <div>
@@ -42861,7 +42875,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       })()}
 
       {/* ═══ Logos ═══ */}
-      {data.logos?.length>0&&<div>
+      {_vis("pb-equipe")&&data.logos?.length>0&&<div>
         <SectionTitle label="Logos" sub="Clique pra abrir ou baixar" icon="image" accent="#7c3aed"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
           {data.logos.map((l,i)=>(
@@ -42885,7 +42899,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Paleta ═══ */}
-      {data.paleta?.length>0&&<div>
+      {_vis("pb-equipe")&&data.paleta?.length>0&&<div>
         <SectionTitle label="Paleta de cores" sub="Clique pra copiar o hex" icon="palette" accent="#ec4899"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
           {data.paleta.map((c,i)=>(
@@ -42901,7 +42915,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Fontes ═══ */}
-      {data.fontes?.length>0&&<div>
+      {_vis("pb-equipe")&&data.fontes?.length>0&&<div>
         <SectionTitle label="Fontes" sub="Baixe os arquivos pra instalar" icon="type" accent="#0ea5e9"/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {data.fontes.map((f,i)=>(
@@ -42924,13 +42938,13 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Tom de voz ═══ */}
-      {data.tomDeVoz&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-comunicacao")&&data.tomDeVoz&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Tom de voz" icon="mic" accent="#16a34a"/>
         <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{data.tomDeVoz}</div>
       </div>}
 
       {/* ═══ Big numbers (Briefing › Objetivos e números) — chamadas de impacto pras artes ═══ */}
-      {_bigNumbers.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-chamadas")&&_bigNumbers.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Big numbers" sub="Do Briefing — números de impacto pra usar como destaque nas artes (clique pra copiar)" icon="chart" accent="#dc2626"/>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {_bigNumbers.map(function(b,i){
@@ -42941,13 +42955,13 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Instruções pro designer (Playbook) — o que a imagem deste cliente deve mostrar ═══ */}
-      {_pbInstrDesigner&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-designer")&&_pbInstrDesigner&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Instruções pro designer" sub="Do Playbook — foco das imagens e o que evitar" icon="image" accent="#ea580c"/>
         <div style={{color:"#7c2d12",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbInstrDesigner}</div>
       </div>}
 
       {/* ═══ Comunicação da marca (Playbook) ═══ */}
-      {_pbComunicacao&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-comunicacao")&&_pbComunicacao&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Comunicação da marca" sub="Do Playbook — estilo e linguagem" icon="sparkles" accent="#0ea5e9"/>
         <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbComunicacao}</div>
         {_pbPilares.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
@@ -42956,13 +42970,13 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Padrão visual (Playbook › design.orientacoes) ═══ */}
-      {_pbDesignOrient&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-designer")&&_pbDesignOrient&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Padrão visual" sub="Do Playbook — regras de design deste cliente" icon="palette" accent="#7c3aed"/>
         <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbDesignOrient}</div>
       </div>}
 
       {/* ═══ Chamadas aprovadas / proibidas (Playbook) ═══ */}
-      {(_pbChamadasOk.length>0||_pbChamadasNo.length>0)&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+      {_vis("pb-chamadas")&&(_pbChamadasOk.length>0||_pbChamadasNo.length>0)&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Exemplos de chamadas" sub="Do Playbook — o que pode e o que não pode nos cards" icon="messageCircle" accent="#10b981"/>
         <div style={{display:"grid",gridTemplateColumns:(typeof _pxMob==="function"&&_pxMob())?"1fr":"1fr 1fr",gap:10}}>
           {_pbChamadasOk.length>0&&<div><div style={{color:"#166534",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Aprovadas</div>
@@ -42973,7 +42987,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Equipe do cliente (Playbook) — nome e cargo certos pro GC ═══ */}
-      {_pbEquipe.length>0&&<div>
+      {_vis("pb-time")&&_pbEquipe.length>0&&<div>
         <SectionTitle label="Equipe do cliente" sub="Quem aparece nos conteúdos — nome e cargo pro GC" icon="users" accent="#6366f1"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {_pbEquipe.map(function(m,i){
@@ -42991,7 +43005,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
-      {_pbMarcacoes.length>0&&<div>
+      {_vis("pb-marcacoes")&&_pbMarcacoes.length>0&&<div>
         <SectionTitle label="Marcar no post (@)" sub="Perfis pra marcar na publicação — clique pra copiar o @" icon="tag" accent="#0284c7"/>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
           {_pbMarcacoes.map(function(m,i){
@@ -43008,7 +43022,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Contatos do cliente (Playbook) — resumo; a aba Contatos tem o completo ═══ */}
-      {_contatosArr.length>0&&<div>
+      {_vis("pb-contatos")&&_contatosArr.length>0&&<div>
         <SectionTitle label="Contatos do cliente" sub="Do Playbook — a aba Contatos ao lado tem o detalhe" icon="phone" accent="#16a34a"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {_contatosArr.map(function(ct,i){
@@ -43027,7 +43041,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Hashtags ═══ */}
-      {data.hashtags?.length>0&&<div>
+      {_vis("pb-social")&&data.hashtags?.length>0&&<div>
         <SectionTitle label="Hashtags padrão" sub="Clique pra copiar" icon="hash" accent="#7c3aed"/>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {data.hashtags.map((t,i)=>(
