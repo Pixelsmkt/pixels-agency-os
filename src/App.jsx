@@ -69888,7 +69888,7 @@ function _usePxScriptsN(secao, n){
   return { offset: secao==="ongoing"?onb:0, total: (secao==="onboarding"?n:onb)+(secao==="ongoing"?n:ong) };
 }
 
-function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, total, drag, canEdit, accent}){
+function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _copyScript, _INP, cl, idx, corIdx, total, drag, canEdit, accent}){
   const _ro = canEdit===false;   // somente leitura
   // So vira draggable enquanto o mouse esta segurando o handle — assim continua
   // dando pra selecionar texto no textarea normalmente.
@@ -69901,7 +69901,8 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   // kanban (KANBAN_COLS, sem as cinzas): Copys → Alteração → Demanda → Execução → Ajustes →
   // Avaliação → Aprovado → Aprovado cliente → Publicadas. Pela POSIÇÃO do card na seção, então
   // criar/apagar/arrastar rebalanceia sozinho e a sequência nunca quebra. Texto sempre branco.
-  const _cor = _pxCorSequencial(typeof idx==="number"?idx:0, total||1);
+  // corIdx = posição na sequência Onboarding+Ongoing (só pra cor); idx = posição na seção (drag/reordenar)
+  const _cor = _pxCorSequencial(typeof corIdx==="number"?corIdx:(typeof idx==="number"?idx:0), total||1);
   const _acc = _cor; // botão Copiar no mesmo tom do título do card (rainbow)
   const _hx  = String(_cor).replace("#","");
   const _r   = parseInt(_hx.substring(0,2),16)||0;
@@ -70119,7 +70120,7 @@ function _OnboardingScripts({cl, startDate, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
+              _INP={_INP} cl={cl} idx={_i} corIdx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
@@ -70267,7 +70268,7 @@ function _OngoingScripts({cl, accent}){
             const _editing = editingId===s.id;
             return <_ScriptCard key={s.id} s={s} _editing={_editing} setEditingId={setEditingId}
               _updateScript={_updateScript} _deleteScript={_deleteScript} _copyScript={_copyScript}
-              _INP={_INP} cl={cl} idx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
+              _INP={_INP} cl={cl} idx={_i} corIdx={_seq.offset+_i} total={_seq.total} drag={_podeEditar?_drag:null} canEdit={_podeEditar} accent={accent}/>;
           })}
         </div>
       </>
@@ -85574,19 +85575,40 @@ function _PbBriefingAuto({clientId}){
 }
 
 function PlaybookBlock({id, title, subtitle, icon, color, children}){
-  if(!_pbBlocoVisivel(id)) return null; // cadeira não enxerga este bloco
-  // Titulo PRETO (padrao), mas o ICONE e a tarja lateral usam a cor da secao —
-  // cada bloco ganha identidade propria sem virar arco-iris de texto. E o que
-  // diferencia "onde estou" num playbook muito vertical.
-  const _c = color || "#0f172a";
-  return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 18px 14px 15px",background:"linear-gradient(135deg,"+_c+"08 0%,#f8fafc 100%)",borderBottom:"1px solid #e2e8f0",borderLeft:"4px solid "+_c}}>
-      <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+_c+" 0%,"+_pbDarken(_c)+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 5px 14px "+_c+"3d",flexShrink:0}}>
+  const _visivel = _pbBlocoVisivel(id); // cadeira não enxerga este bloco (checado depois dos hooks)
+  // Cabeçalho SÓLIDO seguindo o rainbow da Linha de produção (mesmo padrão dos Scripts
+  // e das sub-seções de Orientações): a cor vem da POSIÇÃO do bloco entre os blocos
+  // visíveis na página (lida do DOM), então esconder bloco por cadeira rebalanceia sozinho.
+  // `color` virou legado (só fallback). Texto sempre branco.
+  const _ref = useRef(null);
+  const [_pos, _setPos] = useState({i:0, n:1});
+  useEffect(function(){
+    if(!_visivel) return;
+    const calc = function(){
+      try{
+        const all = Array.prototype.slice.call(document.querySelectorAll("[data-pb-block]"));
+        const i = all.indexOf(_ref.current);
+        if(i>=0) _setPos(function(p){ return (p.i===i && p.n===all.length) ? p : {i:i, n:all.length}; });
+      }catch(_){}
+    };
+    calc();
+    try{ window.dispatchEvent(new CustomEvent("pixels:pb-blocks")); }catch(_){}
+    window.addEventListener("pixels:pb-blocks", calc);
+    return function(){
+      window.removeEventListener("pixels:pb-blocks", calc);
+      setTimeout(function(){ try{ window.dispatchEvent(new CustomEvent("pixels:pb-blocks")); }catch(_){} }, 0);
+    };
+  },[_visivel]);
+  if(!_visivel) return null;
+  const _c = (typeof _pxCorSequencial==="function") ? _pxCorSequencial(_pos.i, _pos.n) : (color || "#7c3aed");
+  return <div id={id} ref={_ref} data-pb-block="1" style={{background:"#fff",border:"1px solid "+_c+"55",borderRadius:16,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 2px 10px rgba(15,23,42,.045)",scrollMarginTop:80}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"13px 18px 13px 15px",background:_c,boxShadow:"0 3px 10px "+_c+"40"}}>
+      <div style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
         <Ico n={icon} size={18} color="#fff" strokeWidth={2.3}/>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
-        {subtitle && <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:600}}>{subtitle}</div>}
+        <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{title}</div>
+        {subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:11.5,marginTop:2,fontWeight:500}}>{subtitle}</div>}
       </div>
     </div>
     <div style={{padding:"16px 20px 18px"}}>{children}</div>
