@@ -52223,7 +52223,7 @@ function AdsArea({pontos,fmt,cor,media,inverso,chave,alt,isMob,detalhe}){
     <svg ref={ref} viewBox={"0 0 "+W+" "+H} onMouseMove={mover} onMouseLeave={function(){setHov(null);}} style={{width:"100%",height:"auto",display:"block",overflow:"visible"}}>
       <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={cor} stopOpacity=".28"/><stop offset="100%" stopColor={cor} stopOpacity="0"/></linearGradient></defs>
       {[0.25,0.5,0.75].map(function(k){ return <line key={k} x1={pl} x2={W-pr} y1={pt+(H-pt-pb)*k} y2={pt+(H-pt-pb)*k} stroke="#efedf5" strokeWidth="1"/>; })}
-      {media>0&&<g><line x1={pl} x2={W-pr} y1={y(media)} y2={y(media)} stroke={ADS.line2} strokeDasharray="5 5" strokeWidth="1.2"/><text x={pl} y={y(media)-6} fontSize="11" fill={ADS.muted} textAnchor="start" fontFamily={ADS_FONT} fontWeight="700">média {fmt(media)}</text></g>}
+      {media>0&&<line x1={pl} x2={W-pr} y1={y(media)} y2={y(media)} stroke={ADS.line2} strokeDasharray="5 5" strokeWidth="1.2"/>}
       {area&&<path d={area} fill={"url(#"+gid+")"} style={{opacity:go?1:0,transition:"opacity 1.2s ease .3s"}}/>}
       {linha&&<path d={linha} fill="none" stroke={cor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" pathLength="1" strokeDasharray="1" strokeDashoffset={go?0:1} style={{transition:"stroke-dashoffset 1.4s "+ADS_EASE}}/>}
       {parcSeg&&<path d={parcSeg} fill="none" stroke={cor} strokeWidth="3" strokeLinecap="round" strokeDasharray="6 7" opacity={go?.55:0} style={{transition:"opacity .6s ease 1.2s"}}/>}
@@ -52298,7 +52298,7 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
           </button>; })}
       </div>
       <AdsCard style={{padding:isMob?"14px 10px 8px":"18px 20px 10px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:4}}><h4 style={{margin:0,fontSize:15,fontWeight:800,letterSpacing:"-.3px"}}>{M.lbl} por semana</h4><span style={{fontSize:12,color:ADS.muted}}>{M.dica} · passe o mouse pra ver a semana</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:4}}><h4 style={{margin:0,fontSize:15,fontWeight:800,letterSpacing:"-.3px"}}>{M.lbl} por semana</h4><span style={{fontSize:12,color:ADS.muted,display:"inline-flex",gap:8,alignItems:"center"}}>{M.media>0&&<span style={{display:"inline-flex",alignItems:"center",gap:6,background:ADS.surface2,borderRadius:99,padding:"3px 10px",fontWeight:700,color:ADS.ink2}}><span style={{width:14,borderTop:"2px dashed "+ADS.line2}}/>média {M.fmt(M.media)}</span>}{M.dica} · passe o mouse pra ver a semana</span></div>
         <AdsArea pontos={pontos} fmt={M.fmt} cor={M.cor} media={M.media} inverso={M.inverso} chave={met+"|"+dias+"|"+semanas.length} isMob={isMob} alt={isMob?200:250} detalhe={function(p){ const o=p.o; return _adsBRL0(o.gasto)+" · "+_adsNum(o.res)+" resultados · "+(o.cpa?_adsBRL(o.cpa)+"/res.":"—")+" · CTR "+_adsPct(o.ctr,2); }}/>
       </AdsCard>
 
