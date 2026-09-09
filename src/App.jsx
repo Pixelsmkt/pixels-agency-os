@@ -76069,6 +76069,27 @@ function _PlanejamentosClientes({isMob}){
     aniversario: "datas_importantes",
   };
   const _CAT_LABEL = {feira:"Feira", presenca_feira:"Presença", captacao:"Captação", entrega:"Entrega", evento:"Evento", comemorativa:"Data comemorativa", aniversario:"Aniversário"};
+  // Ícone por categoria — os MESMOS traços do modal do calendário interno (03_clientes2 › _ICO)
+  const _CAT_ICO_PATHS = {
+    "":<><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></>,
+    aniversario:<><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></>,
+    reuniao:<><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></>,
+    evento:<><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+    feira:<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></>,
+    presenca_feira:<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></>,
+    captacao:<><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></>,
+    assinatura:<><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></>,
+    operacional:<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+    gestao_midia:<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+    comemorativa:<><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></>,
+    entrega:<><path d="M16.5 9.4L7.55 4.24"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></>
+  };
+  const _CatIco = function(cat, cor, size){
+    const _paths = _CAT_ICO_PATHS[cat] || _CAT_ICO_PATHS[""];
+    return <span style={{width:22,height:22,borderRadius:7,background:cor+"14",color:cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <svg width={size||13} height={size||13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">{_paths}</svg>
+    </span>;
+  };
   const _CAT_COLOR = {feira:"#f59e0b", presenca_feira:"#d97706", captacao:"#0891b2", entrega:"#0284c7", evento:"#a855f7", comemorativa:"#f43f5e", aniversario:"#0d9488"};
 
   function _eventsFor(clientId, sectionKey, periodStart, periodEnd){
@@ -76233,7 +76254,7 @@ function _PlanejamentosClientes({isMob}){
           onMouseEnter={function(e){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.background="#faf5ff";}}
           onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafafa";}}
           style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
-          <span style={{background:_c,color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>{_lbl}</span>
+          <span title={_lbl} style={{display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>{_CatIco(ev.category,_c,12)}</span>
           <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:36}}>{_fmtEvDate(ev.date)}{ev.end_date?"→"+_fmtEvDate(ev.end_date):""}</span>
           <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.title||"(sem título)"}</span>
           {ev.city && <span style={{color:"#94a3b8",fontSize:11,fontWeight:500,flexShrink:0}}>• {ev.city}</span>}
@@ -76376,7 +76397,7 @@ function _PlanejamentosClientes({isMob}){
           onMouseLeave={function(e){e.currentTarget.style.background=destacar?"#fcfbff":"transparent";}}
           style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:8,cursor:"pointer",background:destacar?"#fcfbff":"transparent"}}>
           <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",width:42,flexShrink:0}}>{_fmtEvDate(ev.date)}</span>
-          <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
+          {_CatIco(ev.category,_c)}
           <span style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,flex:"0 1 auto"}}>{ev.title}</span>
           <span style={{flexShrink:0,display:"inline-flex",marginLeft:2}}>{_LogoStack(ev.clientes)}</span>
         </div>;
