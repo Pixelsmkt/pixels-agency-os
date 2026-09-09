@@ -76004,7 +76004,7 @@ function _PlanejamentosClientes({isMob}){
           ["datas_importantes","feiras_eventos"].forEach(function(sec){
             _eventsFor(cl.id, sec, b.start, b.end).forEach(function(ev){
               const k=ev.date+"|"+String(ev.title||"").toLowerCase();
-              if(!map[k]) map[k]={date:ev.date,title:ev.title||"(sem título)",category:ev.category,clientes:[]};
+              if(!map[k]) map[k]={id:ev.id,date:ev.date,title:ev.title||"(sem título)",category:ev.category,clientes:[]};
               if(!map[k].clientes.some(function(c){return c.id===cl.id;})) map[k].clientes.push(cl);
             });
           });
@@ -76013,65 +76013,83 @@ function _PlanejamentosClientes({isMob}){
       };
       const _evM=_agrega(_bM), _evQ=_agrega(_bQ);
       if(!_evM.length&&!_evQ.length) return null;
-      // Chip do cliente: logo pequena + NOME escrito na cor (estilo da 1ª versão)
-      const _MiniLogo=function(cl){
-        const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null;
-        const _cor=cl.color||"#64748b";
-        return <span key={cl.id} title={cl.name}
-          style={{display:"inline-flex",alignItems:"center",gap:4,background:_cor+"10",border:"1px solid "+_cor+"30",
-            borderRadius:99,padding:"1px 8px 1px 3px",flexShrink:0}}>
-          <span style={{width:14,height:14,borderRadius:4,background:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-            {_src
-              ? <img src={_src} alt="" style={{maxWidth:"85%",maxHeight:"85%",objectFit:"contain",display:"block"}}/>
-              : <span style={{color:_cor,fontSize:7.5,fontWeight:900}}>{String(cl.abbr||cl.name||"?").slice(0,2).toUpperCase()}</span>}
-          </span>
-          <span style={{color:_cor,fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap"}}>
-            {String(cl.name||"").replace(/^Grupo /i,"")}
-          </span>
+      const _totalClientes=_clientes.length;
+      // Clientes de uma data: logos pequenas empilhadas (máx. 5 + "+N"); carteira inteira vira selo "Todos"
+      const _LogoStack=function(lista){
+        if(_totalClientes>0&&lista.length>=_totalClientes){
+          return <span title={lista.map(function(c){return c.name;}).join(", ")}
+            style={{fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",color:"#6d28d9",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:99,padding:"2px 8px",whiteSpace:"nowrap"}}>Todos</span>;
+        }
+        const _MAX=5;
+        const _vis=lista.slice(0,_MAX), _resto=lista.length-_vis.length;
+        return <span title={lista.map(function(c){return c.name;}).join(", ")} style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
+          {_vis.map(function(cl,i){
+            const _src=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null;
+            const _cor=cl.color||"#64748b";
+            return <span key={cl.id} style={{width:20,height:20,borderRadius:"50%",background:"#fff",border:"1.5px solid #fff",boxShadow:"0 0 0 1px "+_cor+"55",
+              display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",marginLeft:i===0?0:-6,position:"relative",zIndex:_MAX-i}}>
+              {_src
+                ? <img src={_src} alt="" style={{width:"78%",height:"78%",objectFit:"contain",display:"block"}}/>
+                : <span style={{color:_cor,fontSize:8,fontWeight:900}}>{String(cl.abbr||cl.name||"?").slice(0,2).toUpperCase()}</span>}
+            </span>;
+          })}
+          {_resto>0&&<span style={{marginLeft:-6,width:20,height:20,borderRadius:"50%",background:"#f1f5f9",border:"1.5px solid #fff",boxShadow:"0 0 0 1px #cbd5e1",
+            display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#475569",fontSize:8.5,fontWeight:800,position:"relative"}}>+{_resto}</span>}
         </span>;
       };
-      const _Col=function(titulo, sub, lista){
+      const _Linha=function(ev,i,destacar){
+        const _c=_CAT_COLOR[ev.category]||"#94a3b8";
+        const _lbl=_CAT_LABEL[ev.category]||"";
+        return <div key={i} onClick={function(){ _abrirEditarData(ev); }} title={ev.title+(_lbl?" · "+_lbl:"")+" — clique pra editar"}
+          onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
+          onMouseLeave={function(e){e.currentTarget.style.background=destacar?"#fcfbff":"transparent";}}
+          style={{display:"grid",gridTemplateColumns:"42px 8px minmax(0,1fr) auto",alignItems:"center",columnGap:8,padding:"7px 8px",borderRadius:8,cursor:"pointer",background:destacar?"#fcfbff":"transparent"}}>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_fmtEvDate(ev.date)}</span>
+          <span style={{width:7,height:7,borderRadius:"50%",background:_c}}/>
+          <span style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{ev.title}</span>
+          {_LogoStack(ev.clientes)}
+        </div>;
+      };
+      const _Col=function(titulo, sub, lista, agruparMes){
         const _gm={};
         lista.forEach(function(ev){ const k=String(ev.date).slice(0,7); (_gm[k]=_gm[k]||[]).push(ev); });
         const _ks=Object.keys(_gm).sort();
+        const _mesSel=_globalYear+"-"+_pad(_globalMonth);
         return <div style={{flex:1,minWidth:300}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}>
-            <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{titulo}</span>
-            <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</span>
+          <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,padding:"0 8px",marginBottom:6}}>
+            <span style={{display:"inline-flex",alignItems:"baseline",gap:7}}>
+              <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{titulo}</span>
+              <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{sub}</span>
+            </span>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{lista.length} {lista.length===1?"data":"datas"}</span>
           </div>
           {lista.length===0
-            ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma data no período.</div>
-            : _ks.map(function(k){
-              const _mi=parseInt(k.slice(5,7),10)-1;
-              return <div key={k}>
-                {_ks.length>1&&<div style={{color:"#c2cad6",fontSize:9,fontWeight:800,letterSpacing:1.2,margin:"9px 0 2px",display:"flex",alignItems:"center",gap:8}}>
-                  {_MES3[_mi]||k}<span style={{flex:1,height:1,background:"#f4f6f8"}}/>
-                </div>}
-                {_gm[k].map(function(ev,i){
-                  const _c=_CAT_COLOR[ev.category]||"#94a3b8";
-                  return <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 2px",borderBottom:"1px solid #e8ecf1",flexWrap:"wrap"}}>
-                    <span style={{width:6,height:6,borderRadius:"50%",background:_c,flexShrink:0}}/>
-                    <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:38}}>{_fmtEvDate(ev.date)}</span>
-                    <span style={{color:"#334155",fontSize:11.5,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.title}</span>
-                    <span style={{display:"inline-flex",gap:4,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                      {ev.clientes.map(_MiniLogo)}
-                    </span>
-                  </div>;
-                })}
-              </div>;
-            })}
+            ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic",padding:"8px 8px"}}>Nenhuma data no período.</div>
+            : <div style={{display:"flex",flexDirection:"column"}}>
+              {_ks.map(function(k){
+                const _mi=parseInt(k.slice(5,7),10)-1;
+                const _destacar=agruparMes&&k===_mesSel;
+                return <div key={k}>
+                  {agruparMes&&<div style={{color:_destacar?"#6d28d9":"#b6bfcc",fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"10px 8px 3px",display:"flex",alignItems:"center",gap:8}}>
+                    {_MES3[_mi]||k}<span style={{flex:1,height:1,background:"#eef0f3"}}/>
+                  </div>}
+                  {_gm[k].map(function(ev,i){ return _Linha(ev,i,_destacar); })}
+                </div>;
+              })}
+            </div>}
         </div>;
       };
-      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"15px 18px 16px",marginBottom:16,
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 12px 12px",marginBottom:16,
         boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"0 8px"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           <span style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2}}>Resumo do período</span>
-          <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>passe o mouse nas logos pra ver o cliente</span>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>datas do calendário interno · clique pra editar</span>
         </div>
-        <div style={{display:"flex",gap:26,flexWrap:"wrap"}}>
-          {_Col("Mensal", _MESES_NM[_globalMonth-1]+" "+_globalYear, _evM)}
-          {_Col("Trimestral", "Q"+_globalQuarter+" "+_globalYear, _evQ)}
+        <div style={{display:"flex",gap:0,flexWrap:"wrap"}}>
+          {_Col("Mensal", _MESES_NM[_globalMonth-1]+" "+_globalYear, _evM, false)}
+          <div style={{width:1,background:"#eef0f3",margin:"0 14px",alignSelf:"stretch"}}/>
+          {_Col("Trimestral", "Q"+_globalQuarter+" "+_globalYear, _evQ, true)}
         </div>
       </div>;
     })()}
