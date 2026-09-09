@@ -45765,10 +45765,6 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
         {typeof QGBusca==="function"&&<QGBusca clients={(store.clients||[]).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));})} openClient={openClient} onCliente={function(id){ setTopTab("visao"); setOpenClient(id); window.scrollTo({top:0,behavior:"smooth"}); }} onTop={function(id){ if(id==="visao"||id==="clientes") setOpenClient(null); setTopTab(id); }} acoes={[{lbl:"Nova demanda",run:function(){setShowNovaDemanda(true);}},{lbl:"Relatório geral",run:function(){setShowRelatorio(true);}}].concat(canManageClients?[{lbl:"Novo cliente",run:function(){setShowNovoCliente(true);}}]:[])}/>}
         {typeof QGAdsSino==="function"&&<QGAdsSino onAbrirConta={function(accId){ try{ const a=(window._pxAdsAccounts||[]).find(function(x){return x.ad_account_id===accId;}); if(!a) return; const mc=(store.clients||[]).find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }); if(mc){ setTopTab("visao"); setOpenClient(mc.client_id); window.scrollTo({top:0,behavior:"smooth"}); } }catch(_){} }}/>}
-        <button onClick={()=>setShowRelatorio(true)} title="Relatório geral"
-          style={{background:"#fff",color:"#3d3853",border:"1px solid #cfc9dd",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
-          <Ico n="file-text" size={13}/>{!isMob&&" Relatório geral"}
-        </button>
         <button onClick={()=>setShowNovaDemanda(true)}
           style={{background:"#fff",color:"#3d3853",border:"1px solid #cfc9dd",borderRadius:10,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minHeight:0}}>
           <Ico n="plus" size={13}/> Nova demanda
@@ -50014,7 +50010,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const usoPct=orcamento>0?gasto/orcamento*100:null;
   const cpl=_qgDiv(gasto,leads), cpq=_qgDiv(gasto,qualificados), cac=_qgDiv(gasto,vendas), ticket=_qgDiv(receita,vendas);
   const roas=_qgDiv(receita,gasto);
-  const roiPct=gasto>0?((receita-gasto)/gasto*100):null;
+  const roiPct=(gasto>0&&receita>0)?((receita-gasto)/gasto*100):null;
   // situação dos dados
   const temFunil=!!funil&&stages.some(function(s){return Number(s.quantity||0)>0;});
   const temFechamento=closingsMes.length>0;
@@ -50070,7 +50066,7 @@ function qgCalcSemana(mc,data,week){
   const adsW=_qgAdsSoma(mc,data,week.start,_fimSem);
   const inv=adsW?adsW.gasto+(w?Number(w.investimento_google||0):0):(w?Number(w.investimento||0):0), leads=adsW?adsW.leads+(w?Number(w.leads_google||0):0):(w?Number(w.leads||0):0);
   const receita=vendas.reduce(function(s,v){return s+Number(v.value||0);},0);
-  return {w:w,investimento:inv,leads:leads,leadsMeta:w?Number(w.leads_meta||0):0,leadsGoogle:w?Number(w.leads_google||0):0,qualificados:w?Number(w.qualificados||0):0,vendas:vendas.length,receita:receita,cpl:_qgDiv(inv,leads),roic:inv>0?(receita-inv)/inv*100:null};
+  return {w:w,investimento:inv,leads:leads,leadsMeta:w?Number(w.leads_meta||0):0,leadsGoogle:w?Number(w.leads_google||0):0,qualificados:w?Number(w.qualificados||0):0,vendas:vendas.length,receita:receita,cpl:_qgDiv(inv,leads),roic:(inv>0&&receita>0)?(receita-inv)/inv*100:null};
 }
 
 /* ─── META MENSAL DE LEADS + RITMO ───────────────────── */
@@ -50363,7 +50359,7 @@ function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onO
   const invMeta=calcs.reduce(function(s,c){return s+c.porPlat.meta.gasto;},0), invGoogle=calcs.reduce(function(s,c){return s+c.porPlat.google.gasto;},0);
   const orcMeta=calcs.reduce(function(s,c){return s+c.porPlat.meta.orcamento;},0), orcGoogle=calcs.reduce(function(s,c){return s+c.porPlat.google.orcamento;},0);
   const gasto=sum("gasto"), leads=sum("leads"), vendas=sum("vendas"), receita=sum("receita"), orcamento=sum("orcamento");
-  const roic=gasto>0?(receita-gasto)/gasto*100:null;
+  const roic=(gasto>0&&receita>0)?(receita-gasto)/gasto*100:null;
   const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
   const metaTotal=metas.reduce(function(s,m){return s+(m.meta||0);},0);
   const mG=metaTotal>0?(function(){ const fr=metas.find(function(m){return m.meta;}).fracao; const esperado=Math.round(metaTotal*fr); const pct=leads/metaTotal*100; const razao=esperado>0?leads/esperado:1; const st=pct>=100?["batida","Meta batida",QG.verde]:razao>=1.05?["acima","Acima do ritmo",QG.verde]:razao>=0.95?["no_ritmo","No ritmo",QG.roxo]:razao>=0.8?["atencao","Atenção",QG.amar]:["abaixo","Abaixo do ritmo",QG.verm]; return {meta:metaTotal,esperado:esperado,pct:pct,fracao:fr,status:st[0],label:st[1],cor:st[2]}; })():{meta:null,esperado:null,pct:null,fracao:0,status:"sem_meta",label:"Sem meta",cor:QG.cinza};
@@ -50372,7 +50368,7 @@ function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onO
   const fechAtual={}; (data.closings||[]).forEach(function(w){ if(w.week_key===semanas[0].key) fechAtual[w.client_id]=w; });
   const comOrc=clients.filter(function(c){return Number(c.investimento_mensal||0)>0;});
   const pendentes=comOrc.filter(function(c){return !fechAtual[c.client_id];});
-  const agg=function(wk){ const a={investimento:0,leads:0,vendas:0,receita:0}; clients.forEach(function(c){ const s=qgCalcSemana(c,data,wk); a.investimento+=s.investimento; a.leads+=s.leads; a.vendas+=s.vendas; a.receita+=s.receita; }); a.roic=a.investimento>0?(a.receita-a.investimento)/a.investimento*100:null; return a; };
+  const agg=function(wk){ const a={investimento:0,leads:0,vendas:0,receita:0}; clients.forEach(function(c){ const s=qgCalcSemana(c,data,wk); a.investimento+=s.investimento; a.leads+=s.leads; a.vendas+=s.vendas; a.receita+=s.receita; }); a.roic=(a.investimento>0&&a.receita>0)?(a.receita-a.investimento)/a.investimento*100:null; return a; };
   const s0=agg(semanas[0]), s1=agg(semanas[1]);
   const alertasBrutos=qgAlertas(calcs,fechAtual,data,store,year,month);
   const _fech=alertasBrutos.filter(function(a){return a.tipo==="fechamento";});
@@ -50384,32 +50380,16 @@ function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onO
     {/* ── Painel (Meta Ads): prioridades · clientes · agência — 17c_qg_ads.jsx ── */}
     {typeof QGAdsPainel==="function"?<QGAdsPainel clients={clients} onOpenClient={onOpenClient} isMob={isMob}/>:<QGCard><QGEmpty texto="Painel indisponível."/></QGCard>}
 
-    {/* ── Semana + alertas ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.15fr 1fr",gap:14,alignItems:"start"}}>
-      <QGCard title="Fechamentos da semana" sub={_qgWeekLabel(semanas[0].start)} right={canEdit&&<button style={QG_BTN("roxo")} onClick={function(){onFechamento((pendentes[0]||clients[0]||{}).client_id,semanas[0]);}}>Registrar fechamento</button>}>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:12}}>
-          <span style={{fontSize:30,fontWeight:900,letterSpacing:-1,color:pendentes.length===0?QG.verde:QG.txt,lineHeight:1}}>{comOrc.length-pendentes.length}<span style={{color:QG.txt3,fontSize:14,fontWeight:700,letterSpacing:0}}> de {comOrc.length} concluídos</span></span>
-          <QGBar pct={comOrc.length?(comOrc.length-pendentes.length)/comOrc.length*100:0} cor={QG.verde}/>
-        </div>
-        {pendentes.length>0?<div style={{fontSize:12.5,color:QG.txt2,lineHeight:1.9,marginBottom:14}}><span style={{color:QG.txt3,fontWeight:700}}>Pendentes: </span>{pendentes.map(function(c,i){ return <span key={c.client_id}><span onClick={function(){onFechamento(c.client_id,semanas[0]);}} style={{fontWeight:700,color:QG.txt,cursor:"pointer",borderBottom:"1px dotted #cbd5e1"}}>{c.name}</span>{i<pendentes.length-1?" · ":""}</span>; })}</div>
-          :<div style={{color:QG.verde,fontSize:12.5,fontWeight:700,marginBottom:14}}>Todos os clientes fechados nesta semana.</div>}
-        <div style={{borderTop:"1px solid #f1f4f8",paddingTop:12}}>
-          <div style={{color:QG.txt3,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Esta semana × anterior</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            {[["Leads",s0.leads,s1.leads,_qgNum,false],["Vendas",s0.vendas,s1.vendas,_qgNum,false],["Receita",s0.receita,s1.receita,_qgBRLk,false],["ROIC",s0.roic,s1.roic,function(v){return v===null?"—":_qgPct(v);},false]].map(function(m){ return <div key={m[0]} style={{minWidth:0}}><div style={{color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase"}}>{m[0]}</div><div style={{display:"flex",alignItems:"baseline",gap:6}}><span style={{fontSize:18,fontWeight:900,letterSpacing:-.5,color:m[0]==="ROIC"?_qgRoicCor(m[1]):QG.txt}}>{m[3](m[1])}</span><QGDelta cur={m[1]} prev={m[2]}/></div></div>; })}
-          </div>
-        </div>
-      </QGCard>
-
-      <QGCard title="Atenção" sub={alertas.length?alertas.length+" alerta"+(alertas.length>1?"s":""):"Tudo em ordem"} right={alertas.length>3&&<button style={QG_BTN("ghost")} onClick={function(){setVerTodos(!verTodos);}}>{verTodos?"Ver menos":"Ver todos"}</button>}>
-        {alertas.length===0?<QGEmpty texto="Nenhum alerta importante."/>:
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>{(verTodos?alertas:alertas.slice(0,3)).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3;
-          return <div key={i} onClick={function(){ if(a.tipo==="fechamento_grupo") onFechamento((pendentes[0]||{}).client_id,semanas[0]); else if(a.tipo==="fechamento") onFechamento(a.cliente.client_id,semanas[0]); else onOpenClient(a.cliente.client_id); }} style={{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",padding:"9px 11px",borderRadius:10,background:a.nivel==="critico"?QG.vermBg:a.nivel==="atencao"?QG.amarBg:"transparent",border:"1px solid "+(a.nivel==="critico"?"#fecaca":a.nivel==="atencao"?"#fde68a":"#eef0f4")}}>
-            <span style={{width:8,height:8,borderRadius:"50%",background:cor,marginTop:5,flexShrink:0}}/>
-            <div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:QG.txt}}>{a.titulo}</div><div style={{fontSize:11.5,color:QG.txt2,marginTop:1}}>{a.detalhe}</div></div>
-          </div>; })}</div>}
-      </QGCard>
-    </div>
+    {/* ── Fechamento da semana: uma faixa ── */}
+    <QGCard pad="12px 20px">
+      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",fontSize:12.5}}>
+        <span style={{fontWeight:800,color:QG.txt}}>Fechamento da semana</span><span style={{color:QG.txt3}}>{_qgWeekLabel(semanas[0].start)}</span>
+        <span style={{fontWeight:800,color:pendentes.length===0?QG.verde:QG.txt}}>{comOrc.length-pendentes.length} de {comOrc.length}</span>
+        {pendentes.length>0?<span style={{color:QG.txt2}}>pendentes: {pendentes.map(function(c,i){ return <span key={c.client_id}><span onClick={function(){onFechamento(c.client_id,semanas[0]);}} style={{fontWeight:700,color:QG.txt,cursor:"pointer",borderBottom:"1px dotted #cbd5e1"}}>{c.name}</span>{i<pendentes.length-1?" · ":""}</span>; })}</span>:<span style={{color:QG.verde,fontWeight:700}}>todos fechados</span>}
+        <span style={{marginLeft:"auto",fontSize:11.5,color:QG.txt3}}>quem não confirmar fecha sozinho segunda às 09h com os números da Meta</span>
+        {canEdit&&pendentes.length>0&&<button style={QG_BTN("sm")} onClick={function(){onFechamento((pendentes[0]||clients[0]||{}).client_id,semanas[0]);}}>Confirmar semana</button>}
+      </div>
+    </QGCard>
   </div>;
 }
 
@@ -50447,13 +50427,7 @@ function QGClientesPage({clients,data,store,year,month,setPeriodo,isMob,canEdit,
   const calcs=clients.map(function(c){ return qgCalcCliente(c,data,year,month,{}); });
   const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
   const wk=_qgLastWeeks(1)[0]; const fech={}; (data.closings||[]).forEach(function(w){ if(w.week_key===wk.key) fech[w.client_id]=w; });
-  if(typeof QGAdsPainel==="function") return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:QG_FONT}}>
-    <QGAdsPainel clients={clients} onOpenClient={onOpenClient} isMob={isMob} soClientes direita={canEdit&&onNovoCliente?<button style={Object.assign(QG_BTN("roxo"),{marginLeft:8})} onClick={onNovoCliente}>+ Novo cliente</button>:null}/>
-    <QGCard title={"Orçamento e status · "+QG_MESES[month-1]+" "+year} sub="cadastro, meta mensal, vendas e fechamento da semana · Meta Ads pela API, Google pelo fechamento" pad="16px 20px 8px" right={<><QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/><span style={{width:12}}/></>}>
-      <QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech}/>
-    </QGCard>
-  </div>;
-  return <QGCard title={"Clientes de mídia · "+clients.length} sub={"Mês "+QG_MESES[month-1]+" "+year} pad="16px 0 4px" right={<><QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>{canEdit&&onNovoCliente&&<button style={QG_BTN("roxo")} onClick={onNovoCliente}>+ Novo cliente</button>}<span style={{width:12}}/></>}>
+  return <QGCard title={"Clientes de mídia · "+clients.length} sub={QG_MESES[month-1]+" "+year+" · orçamento, gasto, leads, meta e fechamento da semana · Meta Ads pela API, Google pelo fechamento"} pad="16px 20px 8px" right={<QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>}>
     <QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech}/>
   </QGCard>;
 }
@@ -50482,7 +50456,7 @@ function QGPlatSecao({id,mc,c,data,year,month,canEdit,currentUser,onOrcamento}){
   const [nova,setNova]=useState(null); // nome da campanha nova em digitação
   const [saving,setSaving]=useState(false);
   const cor=id==="meta"?QG.meta:QG.google;
-  const roic=p.gasto>0?(p.receita-p.gasto)/p.gasto*100:null;
+  const roic=(p.gasto>0&&p.receita>0)?(p.receita-p.gasto)/p.gasto*100:null;
   const pct=p.orcamento>0?Math.min(100,p.gasto/p.orcamento*100):0;
   const nomeLinha=function(b){ return String(b.campanha||b.produto||b.servico||b.publico||b.regiao||"").trim()||"(sem nome)"; };
   const salvarLinha=function(b,patch){
@@ -50542,6 +50516,42 @@ function QGPlatSecao({id,mc,c,data,year,month,canEdit,currentUser,onOrcamento}){
   </QGCard>;
 }
 
+/* ─── Navegação de cliente: ‹ › + campo que filtra ao digitar (sem submenu) ─── */
+function QGClienteNav({mc,clients,onTrocar,isMob,compacto}){
+  const [aberto,setAberto]=useState(false);
+  const [q,setQ]=useState("");
+  const [idx,setIdx]=useState(0);
+  const ref=useRef(null); const inp=useRef(null);
+  const lista=clients.slice().sort(function(a,b){ return String(a.name).localeCompare(String(b.name),"pt-BR"); });
+  const pos=lista.findIndex(function(x){return x.client_id===mc.client_id;});
+  const norm=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); };
+  const vis=q.trim()?lista.filter(function(x){ const a=norm(x.name); return norm(q).split(/\s+/).every(function(p){return a.indexOf(p)>=0;}); }):lista;
+  useEffect(function(){ if(!aberto) return; const h=function(e){ if(ref.current&&!ref.current.contains(e.target)) setAberto(false); }; document.addEventListener("mousedown",h); return function(){ document.removeEventListener("mousedown",h); }; },[aberto]);
+  useEffect(function(){ if(aberto){ setQ(""); setIdx(Math.max(0,pos)); setTimeout(function(){ if(inp.current) inp.current.focus(); },20); } },[aberto]);
+  const ir=function(x){ setAberto(false); if(x&&x.client_id!==mc.client_id) onTrocar(x.client_id); };
+  const passo=function(d){ if(!lista.length) return; const n=(pos+d+lista.length)%lista.length; onTrocar(lista[n].client_id); };
+  const onKey=function(e){ if(e.key==="ArrowDown"){ e.preventDefault(); setIdx(function(i){return Math.min(vis.length-1,i+1);}); } else if(e.key==="ArrowUp"){ e.preventDefault(); setIdx(function(i){return Math.max(0,i-1);}); } else if(e.key==="Enter"){ e.preventDefault(); ir(vis[Math.min(idx,vis.length-1)]); } else if(e.key==="Escape"){ setAberto(false); } };
+  const seta=function(d,t){ return <button onClick={function(){passo(d);}} title={t} style={{width:32,height:32,borderRadius:9,border:"1px solid "+QG.borda,background:"#fff",color:QG.txt2,fontSize:15,cursor:"pointer",fontFamily:QG_FONT,minHeight:0,minWidth:0,padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{d<0?"‹":"›"}</button>; };
+  return <span ref={ref} style={{position:"relative",display:"inline-flex",alignItems:"center",gap:6,minWidth:0}}>
+    {seta(-1,"Cliente anterior")}
+    <span style={{position:"relative",display:"inline-flex",minWidth:0}}>
+      {!aberto?<button onClick={function(){setAberto(true);}} title="Clique e digite pra trocar de cliente" style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+QG.borda,borderRadius:10,padding:"5px 12px 5px 6px",cursor:"text",fontFamily:QG_FONT,minHeight:32,height:32,maxWidth:isMob?"58vw":360,minWidth:isMob?0:260}}>
+        {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(mc)} size="xs"/></span>}
+        <span style={{color:QG.txt,fontWeight:800,fontSize:compacto?13.5:15,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{mc.name}</span>
+        <span style={{marginLeft:"auto",color:QG.txt3,fontSize:11,flexShrink:0,paddingLeft:8}}>{pos+1}/{lista.length} ▾</span>
+      </button>
+      :<input ref={inp} value={q} onChange={function(e){ setQ(e.target.value); setIdx(0); }} onKeyDown={onKey} placeholder={"Digite o cliente… ("+lista.length+")"} style={{width:isMob?"58vw":360,height:32,border:"1px solid "+QG.roxo,borderRadius:10,padding:"5px 12px",fontSize:14,fontWeight:600,fontFamily:QG_FONT,outline:"none",color:QG.txt,boxSizing:"border-box"}}/>}
+      {aberto&&<div style={{position:"absolute",left:0,top:38,width:isMob?"58vw":360,background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:6,zIndex:60,maxHeight:360,overflowY:"auto"}}>
+        {vis.length===0&&<div style={{padding:"10px 8px",fontSize:12,color:QG.txt3}}>Nenhum cliente com esse nome.</div>}
+        {vis.map(function(x,i){ const on=x.client_id===mc.client_id; const foco=i===idx; return <div key={x.client_id} onMouseEnter={function(){setIdx(i);}} onClick={function(){ir(x);}} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",borderRadius:8,background:foco?QG.roxoBg:"transparent",color:on||foco?QG.roxo:QG.txt2,fontWeight:on?800:600,fontSize:13,cursor:"pointer"}}>
+          {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(x)} size="xs"/></span>}
+          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.name}</span>{on&&<span style={{marginLeft:"auto",fontSize:11}}>atual</span>}
+        </div>; })}
+      </div>}
+    </span>
+    {seta(1,"Próximo cliente")}
+  </span>;
+}
 /* ─── Seletor de cliente (topo único, modelo 1) — grupos (ex.: Bioter) abrem as unidades ao lado ─── */
 function QGClienteSeletor({mc,clients,onTrocar,nomeCurto,isMob}){
   const [aberto,setAberto]=useState(false);
@@ -50627,17 +50637,18 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   const subLbl=(SUBS_TODAS.find(function(t){return t[0]===subAtiva;})||[])[1]||"";
   return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:QG_FONT}}>
     {grudada&&!isMob&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:45,pointerEvents:"none"}}><div style={{maxWidth:1240,margin:"0 auto",padding:"8px 24px 0"}}><div style={{pointerEvents:"auto",background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 10px 30px rgba(15,13,26,.12)",padding:"8px 12px",display:"flex",alignItems:"center",gap:10,fontSize:12.5}}>
-      <QGClienteSeletor mc={mc} clients={clients} onTrocar={onTrocar} nomeCurto={nomeCurto} isMob={isMob}/>
+      <QGClienteNav mc={mc} clients={clients} onTrocar={onTrocar} isMob={isMob} compacto/>
       <span style={{color:QG.txt3}}>›</span><b>{subLbl}</b>
       {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<span style={{marginLeft:"auto"}}><QGAdsBarraPeriodo compact/></span>}
       {typeof _adsFrescor==="function"&&<span style={{marginLeft:temMeta&&subAtiva!=="gestao"?0:"auto",fontSize:11,color:QG.txt3,background:QG.cinzaBg,borderRadius:99,padding:"3px 9px",whiteSpace:"nowrap"}}>{_adsFrescor()}</span>}
       <button onClick={function(){ try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){ window.scrollTo(0,0); } }} style={Object.assign(QG_BTN("sm"),{padding:"4px 9px"})}>↑ topo</button>
     </div></div></div>}
     {/* ── Cartão do cliente: seletor · resumo do mês · semana (modelo 1) ── */}
-    <QGCard pad="0" style={{overflow:"visible",borderRadius:16}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 18px"}}>
-        <QGClienteSeletor mc={mc} clients={clients} onTrocar={onTrocar} nomeCurto={nomeCurto} isMob={isMob}/>
-        {st&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}
+    <QGCard pad="0" style={{overflow:"visible",borderRadius:18}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 20px"}}>
+        <QGClienteNav mc={mc} clients={clients} onTrocar={onTrocar} isMob={isMob}/>
+        {c.gasto>0?<QGPill cor={QG.verde} bg={QG.verdeBg}>ativa</QGPill>:<QGPill cor={QG.txt3} bg={QG.cinzaBg}>sem gasto no mês</QGPill>}
+        {st&&st.id!=="em_estruturacao"&&<QGPill cor={st.color} bg={st.bg}>{st.label}</QGPill>}
         {!isMob&&<span style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",color:QG.txt3,fontSize:12,fontWeight:600}}><span>Gestor <b style={{color:QG.txt2}}>{resp}</b></span>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}<span>atualizado {_qgRel(c.ultimaAtualizacao)}</span></span>}
         <div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
           <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
@@ -50645,17 +50656,15 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
         </div>
       </div>
       <div style={{height:1,background:QG.borda}}/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"1fr 1fr 1.8fr 0.8fr 1fr 1fr",gap:isMob?14:0,padding:isMob?"14px":"14px 18px",alignItems:"start"}}>
-        {[
-          <QGBig key="o" label="Orçamento" value={_qgBRLk(c.orcamento)} sub={c.orcamento>0?"saldo "+_qgBRLk(c.saldo):"defina abaixo"} size={22}/>,
-          <QGBig key="g" label="Gasto" value={_qgBRLk(c.gasto)} sub={c.usoPct!==null?Math.round(c.usoPct)+"% utilizado":"não registrado"} cor={c.usoPct>=100?QG.verm:QG.roxo} size={22}/>,
-          <div key="l"><div style={{color:QG.txt3,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Leads · meta mensal</div><QGMetaBloco leads={c.leads} m={m} compact onEditar={canEdit?function(){onEditarMeta(mc,m.meta);}:null}/></div>,
-          <QGBig key="v" label="Vendas" value={c.vendas>0?_qgNum(c.vendas):"—"} cor={c.vendas>0?QG.verde:QG.txt3} size={22}/>,
-          <QGBig key="r" label="Receita" value={c.receita>0?_qgBRLk(c.receita):"—"} cor={c.receita>0?QG.verde:QG.txt3} sub={c.vendas>0&&c.receita>0?"ticket "+_qgBRLk(c.ticket):undefined} size={22}/>,
-          <QGBig key="i" label="ROIC" value={c.roic===null?"—":_qgPct(c.roic)} cor={c.roic===null?"#cbd5e1":_qgRoicCor(c.roic)} sub={c.roic===null?"sem dados":(c.roas!==null?"ROAS "+_qgX(c.roas):undefined)} size={22}/>
-        ].map(function(el,i){ return <div key={i} style={{minWidth:0,borderLeft:(!isMob&&i>0)?"1px solid "+QG.borda:"none",paddingLeft:(!isMob&&i>0)?18:0,paddingRight:isMob?0:12,gridColumn:(isMob&&i===2)?"span 2":undefined}}>{el}</div>; })}
+      <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 20px",fontSize:13}}>
+        <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3}}>{QG_MESES[month-1]}</span>
+        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgBRLk(c.gasto)}</b>{c.orcamento>0&&<span style={{color:QG.txt3}}> de {_qgBRLk(c.orcamento)} · {Math.round(c.usoPct)}%</span>}</span>
+        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgNum(c.leads)}</b><span style={{color:QG.txt3}}> leads{c.cpl?" · "+_qgBRL(c.cpl)+" cada":""}</span></span>
+        <span style={{color:QG.txt3}}>meta {m.meta?<b style={{color:m.cor}}>{Math.round(m.pct)}%</b>:<a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,cursor:"pointer"}}>definir</a>}</span>
+        {c.vendas>0&&<span><b style={{fontSize:16,color:QG.verde}}>{_qgNum(c.vendas)}</b><span style={{color:QG.txt3}}> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</span></span>}
+        {c.orcamento>0&&<span style={{flex:1,minWidth:120,maxWidth:260,marginLeft:"auto"}}><QGBar pct={c.usoPct} cor={c.usoPct>=100?QG.verm:QG.roxo} h={6}/></span>}
       </div>
-      <div style={{background:"#f8f7fb",borderTop:"1px solid "+QG.borda,borderRadius:"0 0 16px 16px",padding:isMob?"9px 14px":"9px 18px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
+      <div style={{background:"#f8f7fb",borderTop:"1px solid "+QG.borda,borderRadius:"0 0 18px 18px",padding:isMob?"9px 14px":"10px 20px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
         <span style={{fontWeight:700,color:QG.txt2}}>Fechamento da semana</span>
         <span style={{color:QG.txt3}}>{_qgWeekLabel(s0.start)}</span>
         {s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}
@@ -50666,7 +50675,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
     </QGCard>
 
     {/* ── Sub-abas + período ── */}
-    <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:"0 10px",display:"flex",gap:2,alignItems:"center",overflowX:"auto",fontFamily:QG_FONT}} className="scroll-x">
+    <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:18,padding:"0 12px",display:"flex",gap:2,alignItems:"center",overflowX:"auto",fontFamily:QG_FONT}} className="scroll-x">
       {SUBS.map(function(t){ const on=subAtiva===t[0]; const oc=SUBS_OCULTAS.find(function(o){return o[0]===t[0];}); return <button key={t[0]} onClick={function(){setSub(t[0]);}} title={oc?"Aba oculta · "+oc[2]:undefined} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?QG.roxo:"transparent"),color:on?QG.roxo:(oc?QG.txt3:QG.txt2),padding:"12px 12px 10px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0,fontStyle:oc?"italic":"normal"}}>{t[1]}{oc&&<span style={{fontSize:9,marginLeft:4,verticalAlign:"top"}}>oculta</span>}</button>; })}
       {temMeta&&SUBS_OCULTAS.length>0&&<button onClick={function(){ setVerOcultas(!verOcultas); if(verOcultas&&SUBS_OCULTAS.some(function(o){return o[0]===sub;})) setSub("visao"); }} title={SUBS_OCULTAS.map(function(o){return o[1]+": "+o[2];}).join("\n")} style={{background:"none",border:"1px dashed "+QG.borda,borderRadius:99,color:QG.txt3,padding:"3px 9px",marginLeft:6,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0}}>{verOcultas?"esconder ocultas":SUBS_OCULTAS.length+" aba oculta"+(SUBS_OCULTAS.length>1?"s":"")}</button>}
       {!temMeta&&adsAccounts&&<span style={{marginLeft:"auto",color:QG.txt3,fontSize:11.5,fontWeight:600,paddingRight:6}}>Sem conta Meta vinculada em ads_accounts</span>}
@@ -50713,7 +50722,8 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
             {c.porPlat.meta.orcamento>0&&<div style={{marginTop:10}}><QGBar pct={c.porPlat.meta.gasto/c.porPlat.meta.orcamento*100} cor={QG.roxo} h={6} marca={esperado>0?diaRef/diasNoMes*100:null}/></div>}
             <div style={{fontSize:11.5,color:QG.txt3,marginTop:10}}>Campanhas, criativos e público estão nas abas ao lado — tudo vem da API, sem digitação.</div>
           </QGCard>
-          <QGPlatSecao id="google" mc={mc} c={c} data={data} year={year} month={month} canEdit={canEdit} currentUser={currentUser} onOrcamento={setOrcamento}/>
+          {(Number(mc.investimento_google)>0||c.linhasTodas.some(function(b){return b.plataforma==="google";}))?<QGPlatSecao id="google" mc={mc} c={c} data={data} year={year} month={month} canEdit={canEdit} currentUser={currentUser} onOrcamento={setOrcamento}/>
+          :<div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",border:"1px dashed "+QG.borda,borderRadius:12,fontSize:12.5,color:QG.txt3}}><QGPlatIco id="google" size={14}/><span>Google Ads sem orçamento neste cliente.</span>{canEdit&&<span style={{marginLeft:"auto"}}>Orçamento mensal <b style={{color:QG.txt}}><QGInline value={0} type="number" fmt={_qgBRL} placeholder="definir" onSave={function(v){setOrcamento("google",v);}}/></b></span>}</div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <QGCard pad="16px 20px">
@@ -50788,7 +50798,7 @@ function QGArvoreOrcamento({linhas,mc,onEdit,isMob}){
   const NIVEL_LBL=["Plataforma","Produto","Região","Público","Campanha",""];
   return <div style={{overflowX:"auto"}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:isMob?720:0}}>
     <thead><tr><th style={QG_TH}>Segmento</th><th style={QG_THR}>Orçamento</th><th style={QG_THR}>Gasto</th><th style={QG_THR}>Uso</th><th style={QG_THR}>Leads</th><th style={QG_THR}>Vendas</th><th style={QG_THR}>ROIC</th>{onEdit&&<th style={QG_TH}></th>}</tr></thead>
-    <tbody>{rows.map(function(r){ const t=r.tot; const uso=t.orcamento>0?t.gasto/t.orcamento*100:null; const roic=t.gasto>0?(t.receita-t.gasto)/t.gasto*100:null; const top=r.depth===0;
+    <tbody>{rows.map(function(r){ const t=r.tot; const uso=t.orcamento>0?t.gasto/t.orcamento*100:null; const roic=(t.gasto>0&&t.receita>0)?(t.receita-t.gasto)/t.gasto*100:null; const top=r.depth===0;
       return <tr key={r.id} style={{background:top?"#fafbfc":"transparent"}}>
         <td style={Object.assign({},QG_TD,{paddingLeft:12+r.depth*22,fontWeight:top?800:600})}>
           <span onClick={r.temFilhos?function(){ setAberto(Object.assign({},aberto,{[r.id]:!r.open})); }:undefined} style={{display:"inline-flex",alignItems:"center",gap:7,cursor:r.temFilhos?"pointer":"default"}}>
@@ -50886,130 +50896,53 @@ async function pxRelatorioAbrir(mc,c,m,year,month,acoes){
   pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise);
 }
 function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClient,acoes}){
-  const [foco,setFoco]=useState("todos");
   const mesLabel=QG_MESES[month-1]+" "+year;
-  const calcsAll=clients.map(function(c){ return qgCalcCliente(c,data,year,month,{}); });
-  const calcs=calcsAll.filter(function(c){ return c.orcamento>0||c.gasto>0||c.leads>0||c.vendas>0; }).sort(function(a,b){ return String(a.mc.name).localeCompare(String(b.mc.name),"pt-BR"); });
-  const sum=function(k){ return calcs.reduce(function(s,c){return s+Number(c[k]||0);},0); };
-  const T={orcamento:sum("orcamento"),gasto:sum("gasto"),leads:sum("leads"),qual:sum("qualificados"),vendas:sum("vendas"),receita:sum("receita")};
-  T.cpl=_qgDiv(T.gasto,T.leads); T.cac=_qgDiv(T.gasto,T.vendas); T.roas=_qgDiv(T.receita,T.gasto); T.roic=T.gasto>0?(T.receita-T.gasto)/T.gasto*100:null; T.ticket=_qgDiv(T.receita,T.vendas);
-  const plat=function(p){ const o={orcamento:0,gasto:0,leads:0,vendas:0,receita:0}; calcs.forEach(function(c){ const x=c.porPlat[p]; o.orcamento+=x.orcamento; o.gasto+=x.gasto; o.leads+=x.leads; o.vendas+=x.vendas; o.receita+=x.receita; }); o.cpl=_qgDiv(o.gasto,o.leads); o.roic=o.gasto>0?(o.receita-o.gasto)/o.gasto*100:null; return o; };
-  const PM=plat("meta"), PG=plat("google");
+  const calcs=clients.map(function(c){ return qgCalcCliente(c,data,year,month,{}); }).filter(function(c){ return c.orcamento>0||c.gasto>0||c.leads>0||c.vendas>0; }).sort(function(a,b){ return String(a.mc.name).localeCompare(String(b.mc.name),"pt-BR"); });
+  const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
+  const [foco,setFoco]=useState(null);
+  const ci=Math.max(0,calcs.findIndex(function(c){return c.mc.client_id===foco;}));
+  const c=calcs[ci]; const m=metas[ci];
+  const sum=function(k){ return calcs.reduce(function(s,x){return s+Number(x[k]||0);},0); };
+  const T={orcamento:sum("orcamento"),gasto:sum("gasto"),leads:sum("leads"),vendas:sum("vendas"),receita:sum("receita")};
+  T.cpl=_qgDiv(T.gasto,T.leads); T.roic=(T.gasto>0&&T.receita>0)?(T.receita-T.gasto)/T.gasto*100:null;
+  const temVendas=T.vendas>0||T.receita>0;
+  const Sol=function(bg,eyebrow,big,sub){ if(typeof AdsSolido==="function") return <AdsSolido bg={bg} eyebrow={eyebrow} big={big} sub={sub}/>; return <div style={{background:bg,color:"#fff",borderRadius:18,padding:"18px 20px"}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#d9ccf5"}}>{eyebrow}</div><div style={{fontSize:30,fontWeight:900,letterSpacing:-1,marginTop:4}}>{big}</div><div style={{fontSize:12.5,color:"#e9e0fb"}}>{sub}</div></div>; };
   const semanas=_qgLastWeeks(6).reverse();
-  const semanaRows=function(mc){ return semanas.map(function(wk,i){ const s=qgCalcSemana(mc,data,wk); return {label:_qgFmtD(wk.start),v:s.leads,atual:i===semanas.length-1}; }); };
-  const lista=foco==="todos"?calcs:calcs.filter(function(c){return c.mc.client_id===foco;});
-  const ranking=calcs.slice().sort(function(a,b){ return (b.receita-a.receita)||(b.leads-a.leads)||(b.gasto-a.gasto); });
-  const maxGasto=Math.max.apply(null,ranking.map(function(c){return c.gasto;}).concat([1]));
-  const imprimir=function(){ try{ window.print(); }catch(_){} };
-  const SecT=function(p){ return <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:10,margin:"4px 2px 10px"}}><div><span style={{color:QG.txt,fontWeight:900,fontSize:15,letterSpacing:-.3}}>{p.t}</span>{p.s&&<span style={{color:QG.txt3,fontSize:12,fontWeight:500,marginLeft:8}}>{p.s}</span>}</div>{p.right}</div>; };
-  const vazio=calcs.length===0;
-  return <div className="qg-print-root" style={{display:"flex",flexDirection:"column",gap:18,fontFamily:QG_FONT}}>
-    <style>{"@media print{ body *{visibility:hidden!important} .qg-print-root,.qg-print-root *{visibility:visible!important} .qg-print-root{position:absolute!important;left:0;top:0;width:100%;padding:12px} .qg-noprint{display:none!important} .qg-page{break-inside:avoid} }"}</style>
-    {/* ── Barra ── */}
-    <QGCard pad="14px 18px">
-      <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-        <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><QGIco name="list" size={18} cor="#fff" sw={2.2}/></div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{color:QG.txt,fontWeight:900,fontSize:17,letterSpacing:-.4}}>Relatório de mídia · {mesLabel}</div>
-          <div style={{color:QG.txt3,fontSize:12,fontWeight:500,marginTop:2}}>{calcs.length} cliente{calcs.length!==1?"s":""} ativo{calcs.length!==1?"s":""} · gerado em {new Date().toLocaleDateString("pt-BR")} · fontes: fechamentos semanais, Funil Digital e Calculadora de ROI do Portal</div>
-        </div>
-        <div className="qg-noprint" style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <QGSel value={foco} onChange={setFoco} width={170} options={[{id:"todos",label:"Todos os clientes"}].concat(calcs.map(function(c){return {id:c.mc.client_id,label:c.mc.name};}))}/>
-          <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
-          <button style={QG_BTN("roxo")} onClick={imprimir}>Imprimir / PDF</button>
+  const Cab=function(t){ return <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>{t}</div>; };
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:QG_FONT}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",margin:"0 2px"}}>
+      <span style={{fontWeight:800,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Relatórios · {mesLabel}</span>
+      <span style={{fontSize:12,color:QG.txt3}}>{calcs.length} cliente{calcs.length!==1?"s":""} com movimento · Meta pela API · vendas e receita do Portal</span>
+      <span style={{marginLeft:"auto"}}><QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/></span>
+    </div>
+    {calcs.length===0?<QGCard><QGEmpty texto={"Nenhum dado de mídia em "+mesLabel+"."} alt="Cadastre orçamento nos clientes ou aguarde a coleta da Meta."/></QGCard>:<>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(temVendas?"repeat(4,1fr)":"repeat(3,1fr)"),gap:14}}>
+      {Sol("#2f1a5e","Agência · investido",_qgBRLk(T.gasto),T.orcamento>0?"de "+_qgBRLk(T.orcamento)+" planejados · "+Math.round(T.gasto/T.orcamento*100)+"%":"sem orçamento cadastrado")}
+      {Sol("#5a34a3","Agência · leads",_qgNum(T.leads),"todos os clientes no mês")}
+      {Sol("#8a63cf","Agência · custo por lead",T.cpl!==null?_qgBRL(T.cpl):"—","média ponderada")}
+      {temVendas&&Sol("#221743","Vendas · receita",_qgNum(T.vendas)+" · "+_qgBRLk(T.receita),T.roic!==null?"ROIC "+_qgPct(T.roic):"")}
+    </div>
+
+    {/* ── por cliente: um de cada vez, com ‹ › e busca ── */}
+    <QGCard pad="0" style={{overflow:"visible"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"12px 20px",borderBottom:"1px solid "+QG.borda}}>
+        <QGClienteNav mc={c.mc} clients={calcs.map(function(x){return x.mc;})} onTrocar={setFoco} isMob={isMob}/>
+        <span style={{fontSize:12,color:QG.txt3}}>{_qgPlataformas(c.mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})} · atualizado {_qgRel(c.ultimaAtualizacao)}</span>
+        <span style={{marginLeft:"auto",display:"inline-flex",gap:6}}><button style={QG_BTN("sm")} onClick={function(){pxRelatorioAbrir(c.mc,c,m,year,month,acoes);}}>Relatório de 1 página · PDF</button>{onOpenClient&&<button style={QG_BTN("sm")} onClick={function(){onOpenClient(c.mc.client_id);}}>Abrir ›</button>}</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,padding:"20px 20px 0"}}>
+        {Sol("#2f1a5e","Investido",_qgBRLk(c.gasto),c.orcamento>0?"de "+_qgBRLk(c.orcamento)+" · "+Math.round(c.usoPct)+"%":"sem orçamento")}
+        {Sol("#5a34a3","Leads",_qgNum(c.leads),m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"% · "+m.label:"sem meta definida")}
+        {Sol("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRLk(c.receita)+(c.roic!==null?" · ROIC "+_qgPct(c.roic):""):"vendas e receita: o cliente lança no Portal")}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1fr",gap:14,padding:"20px"}}>
+        <div>{Cab("Leads por semana · últimas 6")}<div style={{paddingTop:14}}><QGMiniBarras rows={semanas.map(function(wk,i){ const sw=qgCalcSemana(c.mc,data,wk); return {label:_qgFmtD(wk.start),v:sw.leads,atual:i===semanas.length-1}; })} cor={QG.roxo}/></div></div>
+        <div>{Cab("Plataformas")}
+          {["meta","google"].map(function(p){ const x=c.porPlat[p]; if(!x.ativa&&!(x.gasto>0)) return null; return <div key={p} style={{padding:"8px 0",borderBottom:"1px solid #f1f0f5",fontSize:12.5}}><div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{display:"inline-flex",alignItems:"center",gap:6,fontWeight:700}}><QGPlatIco id={p} size={13}/>{p==="meta"?"Meta Ads":"Google Ads"}<span style={{fontSize:10.5,color:QG.txt3,fontWeight:600}}>{p==="meta"?"API":"manual"}</span></span><span style={{fontFeatureSettings:"'tnum'"}}><b>{_qgBRLk(x.gasto)}</b>{x.orcamento>0&&<span style={{color:QG.txt3}}> / {_qgBRLk(x.orcamento)}</span>}</span></div><div style={{color:QG.txt2,marginTop:3}}>{_qgNum(x.leads)} leads{x.cpl?" · "+_qgBRL(x.cpl)+" por lead":""}</div></div>; })}
         </div>
       </div>
     </QGCard>
-
-    {vazio?<QGCard><QGEmpty texto={"Nenhum dado de mídia em "+mesLabel+"."} alt="Cadastre orçamento nos clientes ou registre fechamentos semanais."/></QGCard>:<>
-    {/* ── Consolidado ── */}
-    {foco==="todos"&&<div className="qg-page">
-      <SecT t="Consolidado do mês" s="todos os clientes de tráfego pago"/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(6,1fr)",gap:10}}>
-        <QGKpi label="Investido" value={_qgBRLk(T.gasto)} sub={T.orcamento>0?"de "+_qgBRLk(T.orcamento)+" · "+Math.round(T.gasto/T.orcamento*100)+"%":"sem orçamento"} dest/>
-        <QGKpi label="Leads" value={_qgNum(T.leads)} sub={T.cpl!==null?"CPL "+_qgBRL(T.cpl):"CPL —"}/>
-        <QGKpi label="Qualificados" value={_qgNum(T.qual)} sub={T.leads>0&&T.qual>0?Math.round(T.qual/T.leads*100)+"% dos leads":"—"}/>
-        <QGKpi label="Vendas" value={_qgNum(T.vendas)} cor={T.vendas>0?QG.verde:undefined} sub={T.cac!==null?"CAC "+_qgBRL(T.cac):"CAC —"}/>
-        <QGKpi label="Receita" value={T.receita>0?_qgBRLk(T.receita):"—"} cor={T.receita>0?QG.verde:undefined} sub={T.ticket!==null?"ticket "+_qgBRL(T.ticket):"—"}/>
-        <QGKpi label="ROIC" value={T.roic===null?"—":_qgPct(T.roic)} cor={_qgRoicCor(T.roic)} sub={T.roas!==null?"ROAS "+_qgX(T.roas):"sem dados"}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.4fr",gap:14,marginTop:14,alignItems:"start"}}>
-        <QGCard title="Meta Ads × Google Ads" sub="Investimento e retorno por plataforma">
-          {[["meta",PM],["google",PG]].map(function(x){ const p=x[0],o=x[1]; const pct=o.orcamento>0?Math.min(100,o.gasto/o.orcamento*100):0; return <div key={p} style={{padding:"8px 0",borderBottom:p==="meta"?"1px solid #f1f4f8":"none"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}><QGPlat id={p} size={14}/><span style={{fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{_qgBRLk(o.gasto)}<span style={{color:QG.txt3,fontWeight:600,fontSize:11}}>{o.orcamento>0?" / "+_qgBRLk(o.orcamento):""}</span></span></div>
-            <div style={{margin:"6px 0 8px"}}><QGBar pct={pct} cor={p==="meta"?QG.meta:QG.google} h={6}/></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>{[["Leads",_qgNum(o.leads)],["CPL",o.cpl===null?"—":_qgBRL(o.cpl)],["Vendas",_qgNum(o.vendas)],["ROIC",o.roic===null?"—":_qgPct(o.roic)]].map(function(k){ return <div key={k[0]}><div style={{fontSize:9.5,fontWeight:800,color:QG.txt3,textTransform:"uppercase",letterSpacing:.5}}>{k[0]}</div><div style={{fontSize:13,fontWeight:800,color:k[0]==="ROIC"?_qgRoicCor(o.roic):QG.txt}}>{k[1]}</div></div>; })}</div>
-          </div>; })}
-        </QGCard>
-        <QGCard title="Por cliente" sub="Investido, leads, vendas, receita e ROIC · ordenado por receita" pad="16px 0 4px">
-          <div style={{overflowX:"auto"}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
-            <thead><tr><th style={QG_TH}>Cliente</th><th style={Object.assign({},QG_TH,{width:"26%"})}>Investido</th><th style={QG_THR}>Leads</th><th style={QG_THR}>CPL</th><th style={QG_THR}>Vendas</th><th style={QG_THR}>Receita</th><th style={QG_THR}>ROIC</th></tr></thead>
-            <tbody>{ranking.map(function(c){ return <tr key={c.mc.client_id} onClick={onOpenClient?function(){onOpenClient(c.mc.client_id);}:undefined} style={{cursor:onOpenClient?"pointer":"default"}}>
-              <td style={Object.assign({},QG_TD,{fontWeight:700})}><div style={{display:"flex",alignItems:"center",gap:8}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(c.mc)} size="sm"/>}<span>{c.mc.name}</span></div></td>
-              <td style={QG_TD}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{flex:1}}><QGBar pct={c.gasto/maxGasto*100} h={6}/></div><span style={{fontWeight:800,minWidth:60,textAlign:"right"}}>{_qgBRLk(c.gasto)}</span></div></td>
-              <td style={Object.assign({},QG_TDR,{fontWeight:800})}>{_qgNum(c.leads)}</td>
-              <td style={QG_TDR}>{c.cpl===null?"—":_qgBRL(c.cpl)}</td>
-              <td style={Object.assign({},QG_TDR,{color:c.vendas>0?QG.verde:QG.txt3,fontWeight:800})}>{c.vendas>0?_qgNum(c.vendas):"—"}</td>
-              <td style={Object.assign({},QG_TDR,{color:c.receita>0?QG.verde:QG.txt3,fontWeight:800})}>{c.receita>0?_qgBRLk(c.receita):"—"}</td>
-              <td style={QG_TDR}>{c.roic===null?<span style={{color:"#cbd5e1",fontWeight:800}}>—</span>:<QGRoic v={c.roic}/>}</td>
-            </tr>; })}</tbody>
-          </table></div>
-        </QGCard>
-      </div>
-    </div>}
-
-    {/* ── Um bloco por cliente ── */}
-    <div>
-      <SecT t={foco==="todos"?"Por cliente":"Cliente"} s="funil, ROI, vendas, leads por semana e plataformas"/>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {lista.map(function(c){ const mc=c.mc; const m=qgMeta(mc,data,year,month,c.leads,store); const resp=(typeof TEAM!=="undefined"?(TEAM.find(function(u){return u.id===mc.responsavel;})||{}).name:null)||"";
-          const prods=c.porProduto.filter(function(p){return p.leads>0||p.vendas>0||p.gasto>0;}).slice(0,4), regs=c.porRegiao.filter(function(p){return p.leads>0||p.vendas>0||p.gasto>0;}).slice(0,4);
-          return <section key={mc.client_id} className="qg-page" style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:isMob?"16px 14px":"18px 22px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:14}}>
-              {typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(mc)} size="md"/>}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}><span style={{color:QG.txt,fontWeight:900,fontSize:17,letterSpacing:-.4}}>{mc.name}</span>{m.meta&&<QGPill cor={m.cor} bg={m.cor+"14"}>{m.label}</QGPill>}</div>
-                <div style={{display:"flex",gap:12,alignItems:"center",marginTop:3,color:QG.txt3,fontSize:11.5,fontWeight:600,flexWrap:"wrap"}}>{_qgPlataformas(mc).map(function(p){return <QGPlat key={p} id={p} size={12}/>;})}{resp&&<span>Gestor: <b style={{color:QG.txt2}}>{resp}</b></span>}<span>Atualizado {_qgRel(c.ultimaAtualizacao)}</span></div>
-              </div>
-              <span className="qg-noprint" style={{display:"inline-flex",gap:6}}><button style={QG_BTN("sm")} onClick={function(){pxRelatorioAbrir(mc,c,m,year,month,acoes);}}>Relatório de 1 página · PDF</button>{onOpenClient&&<button style={QG_BTN("sm")} onClick={function(){onOpenClient(mc.client_id);}}>Abrir ›</button>}</span>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(6,1fr)",gap:10}}>
-              <QGKpi label="Investido" value={_qgBRLk(c.gasto)} sub={c.orcamento>0?"de "+_qgBRLk(c.orcamento)+(c.usoPct!==null?" · "+Math.round(c.usoPct)+"%":""):"sem orçamento"} dest/>
-              <QGKpi label="Leads" value={_qgNum(c.leads)} sub={m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"%":(c.cpl!==null?"CPL "+_qgBRL(c.cpl):"sem meta")} cor={m.meta?m.cor:undefined}/>
-              <QGKpi label="CPL" value={c.cpl===null?"—":_qgBRL(c.cpl)} sub={c.qualificados>0?_qgNum(c.qualificados)+" qualificados":undefined}/>
-              <QGKpi label="Vendas" value={c.vendas>0?_qgNum(c.vendas):"—"} cor={c.vendas>0?QG.verde:undefined} sub={c.cac!==null?"CAC "+_qgBRL(c.cac):undefined}/>
-              <QGKpi label="Receita" value={c.receita>0?_qgBRLk(c.receita):"—"} cor={c.receita>0?QG.verde:undefined} sub={c.ticket!==null?"ticket "+_qgBRL(c.ticket):undefined}/>
-              <QGKpi label="ROIC" value={c.roic===null?"—":_qgPct(c.roic)} cor={_qgRoicCor(c.roic)} sub={c.roas!==null?"ROAS "+_qgX(c.roas):"sem dados"}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:16,marginTop:16,alignItems:"start"}}>
-              <div>
-                <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Funil{c.funil?"":" · Portal não preenchido"}</div>
-                <QGFunil c={c} compact/>
-              </div>
-              <div style={{borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:16}}>
-                <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Plataformas</div>
-                {["meta","google"].map(function(p){ const x=c.porPlat[p]; if(!x.ativa) return null; const pct=x.orcamento>0?Math.min(100,x.gasto/x.orcamento*100):0; const roic=x.gasto>0?(x.receita-x.gasto)/x.gasto*100:null; return <div key={p} style={{marginBottom:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}><QGPlat id={p} size={12}/><span style={{fontWeight:800,fontSize:13}}>{_qgBRLk(x.gasto)}<span style={{color:QG.txt3,fontWeight:600,fontSize:10.5}}>{x.orcamento>0?" / "+_qgBRLk(x.orcamento):""}</span></span></div>
-                  <div style={{margin:"5px 0"}}><QGBar pct={pct} cor={p==="meta"?QG.meta:QG.google} h={5}/></div>
-                  <div style={{display:"flex",gap:12,fontSize:11,color:QG.txt2,fontWeight:600}}><span><b style={{color:QG.txt}}>{_qgNum(x.leads)}</b> leads</span><span>CPL <b style={{color:QG.txt}}>{x.cpl===null?"—":_qgBRL(x.cpl)}</b></span><span><b style={{color:x.vendas>0?QG.verde:QG.txt}}>{_qgNum(x.vendas)}</b> vendas</span><span>ROIC <b style={{color:_qgRoicCor(roic)}}>{roic===null?"—":_qgPct(roic)}</b></span></div>
-                </div>; })}
-                {(prods.length>0||regs.length>0)&&<div style={{marginTop:6}}>
-                  {prods.length>0&&<div style={{fontSize:11,color:QG.txt2,marginBottom:4}}><span style={{color:QG.txt3,fontWeight:800,fontSize:10,textTransform:"uppercase"}}>Produtos </span>{prods.map(function(p){return <span key={p.nome} style={{display:"inline-block",background:QG.cinzaBg,borderRadius:99,padding:"2px 8px",margin:"2px 4px 2px 0",fontWeight:700}}>{p.nome} <span style={{color:QG.txt3}}>{p.vendas>0?_qgNum(p.vendas)+" vendas":_qgNum(p.leads)+" leads"}</span></span>;})}</div>}
-                  {regs.length>0&&<div style={{fontSize:11,color:QG.txt2}}><span style={{color:QG.txt3,fontWeight:800,fontSize:10,textTransform:"uppercase"}}>Regiões </span>{regs.map(function(p){return <span key={p.nome} style={{display:"inline-block",background:QG.cinzaBg,borderRadius:99,padding:"2px 8px",margin:"2px 4px 2px 0",fontWeight:700}}>{p.nome} <span style={{color:QG.txt3}}>{p.vendas>0?_qgNum(p.vendas)+" vendas":_qgNum(p.leads)+" leads"}</span></span>;})}</div>}
-                </div>}
-              </div>
-              <div style={{borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:16}}>
-                <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Leads por semana · últimas 6</div>
-                <QGMiniBarras rows={semanaRows(mc)} cor={QG.roxo}/>
-                {c.vendasTodas.length>0&&<div style={{marginTop:12}}>
-                  <div style={{color:QG.txt3,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Últimas vendas</div>
-                  {c.vendasTodas.slice().sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));}).slice(0,4).map(function(v){ return <div key={v.id} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11.5,padding:"3px 0",borderBottom:"1px solid #f1f4f8"}}><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{color:QG.txt3}}>{_qgFmtD(v.date)}</span> {v.lead_name||v.product||"Venda"}</span><b style={{color:QG.verde,flexShrink:0}}>{_qgBRL(v.value)}</b></div>; })}
-                </div>}
-              </div>
-            </div>
-          </section>; })}
-      </div>
-    </div>
+    <div style={{fontSize:12,color:QG.txt3}}>O relatório de 1 página traz os três números do mês, a leitura da IA, o que foi feito e o que vem no próximo mês — pronto pra enviar ao cliente.</div>
     </>}
   </div>;
 }
@@ -51628,9 +51561,9 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
   const TDR=Object.assign({},TD,{textAlign:"right"},ADS_MONO);
   return <AdsWrap>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
-      <AdsHero lab="Campanhas ativas" val={<span>{nAtivas}<span style={{fontSize:20,color:ADS.muted,fontWeight:700}}> / {todas.length}</span></span>} hint={(todas.length-nAtivas)+" pausada"+(todas.length-nAtivas!==1?"s":"")+" com gasto no período"}/>
-      <AdsHero lab="Melhor custo" val={melhor?_adsBRLc(melhor.custo):"—"} cor={ADS.ok} hint={melhor?_adsNomeCurto(melhor.nome)+" · "+melhor.cfg.label+" · "+_adsNum(melhor.res)+" "+melhor.cfg.resLbl:"nenhuma campanha com 3+ resultados"}/>
-      <AdsHero lab="Pior custo" val={pior&&pior!==melhor?_adsBRLc(pior.custo):"—"} cor={ADS.crit} hint={pior&&pior!==melhor?_adsNomeCurto(pior.nome)+" · "+pior.cfg.label+" · "+_adsX(pior.custo/(medias[pior.tipo]||1))+" a média do objetivo":"—"}/>
+      <AdsSolido bg={ADS_SOL.escuro} eyebrow="Campanhas ativas" big={<span>{nAtivas}<span style={{fontSize:16,color:ADS_SOL.sub,fontWeight:700}}> / {todas.length}</span></span>} sub={(todas.length-nAtivas)+" pausada"+(todas.length-nAtivas!==1?"s":"")+" com gasto no período"}/>
+      <AdsSolido bg={ADS_SOL.medio} eyebrow="Melhor custo" big={melhor?_adsBRLc(melhor.custo):"—"} sub={melhor?_adsNomeCurto(melhor.nome)+" · "+melhor.cfg.label+" · "+_adsNum(melhor.res)+" "+melhor.cfg.resLbl:"nenhuma campanha com 3+ resultados"}/>
+      <AdsSolido bg={ADS_SOL.claro} eyebrow="Pior custo" big={pior&&pior!==melhor?_adsBRLc(pior.custo):"—"} sub={pior&&pior!==melhor?_adsNomeCurto(pior.nome)+" · "+pior.cfg.label+" · "+_adsX(pior.custo/(medias[pior.tipo]||1))+" a média do objetivo":"—"}/>
     </div>
     <AdsSec t={lista.length+" campanha"+(lista.length!==1?"s":"")} s="da mais cara pra mais barata · cada uma julgada só contra campanhas do mesmo objetivo" right={<span style={{fontSize:12,color:ADS.muted}}>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)}</span>}>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
