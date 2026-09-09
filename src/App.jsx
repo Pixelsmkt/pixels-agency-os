@@ -22346,8 +22346,15 @@ function COnboardingTimeline({cl, isMob, onGoTab, embutido}){ // embutido: sem b
                 <div style={{fontSize:11,color:"#64748b",fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.subtitle}</div>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontSize:12,fontWeight:800,color:f.temAtraso&&!passado?"#b91c1c":"#0f172a",whiteSpace:"nowrap"}}>{f.planejada?_otFmt(f.planejada):"sem data"}</div>
-                <div style={{fontSize:10.5,color:"#94a3b8",fontWeight:700}}>{f.feitos}/{f.total}</div>
+                {/* (09/09) data com ícone de calendário, e etapas como pill "N de M etapas" — o "19/21" solto parecia outra data */}
+                <div style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:12,fontWeight:800,color:f.temAtraso&&!passado?"#b91c1c":"#0f172a",whiteSpace:"nowrap"}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.7}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  {f.planejada?_otFmt(f.planejada):"sem data"}
+                </div>
+                <div style={{marginTop:3,display:"inline-flex",alignItems:"center",gap:4,background:passado?"#dcfce7":"#f1f5f9",color:passado?"#15803d":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,whiteSpace:"nowrap"}}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  {f.feitos} de {f.total} etapas
+                </div>
               </div>
             </div>
             <div style={{height:4,background:"#eef0f4",borderRadius:99,overflow:"hidden",marginTop:7}}><div style={{width:(f.total?f.feitos/f.total*100:0)+"%",height:"100%",background:passado?"#16a34a":corFase,borderRadius:99}}/></div>
@@ -33961,6 +33968,78 @@ function ToolsVault({user}){
 }
 
 /* ─── PASSWORD VAULT (cofre de senhas — só sócios) ─── */
+/* ═══ COFRE DE SENHAS — v2 (09/09/2026) ═══════════════════════════════════
+   Organizado por SEÇÃO (categoria), linhas compactas em vez de card grande,
+   favicon do serviço (Google s2) ou logo do cliente, monograma como fallback.
+   Categorias = PV_CATS (id gravado em team_passwords.category). Ids antigos
+   (servico/interno/ferramenta) caem em "outro".                             */
+const PV_CATS = [
+  {id:"cliente",    label:"Clientes",             desc:"Portal e contas dos clientes",        color:"#16a34a", icon:"users"},
+  {id:"email",      label:"E-mails & Workspace",  desc:"Gmail, Titan, Locaweb e-mail",       color:"#dc2626", icon:"mail"},
+  {id:"sites",      label:"Sites & hospedagem",   desc:"Domínios, WordPress, Vercel, FTP",   color:"#0ea5e9", icon:"globe"},
+  {id:"social",     label:"Redes sociais",        desc:"Instagram, Facebook, LinkedIn",      color:"#ec4899", icon:"share"},
+  {id:"gestao",     label:"Gestão & operação",    desc:"Asana, CRM, assinatura, IA, freelas",color:"#7c3aed", icon:"grid"},
+  {id:"financeiro", label:"Financeiro & fiscal",  desc:"Asaas, Conta Azul, NF, certificado", color:"#f59e0b", icon:"dollar"},
+  {id:"criativo",   label:"Criativos & mídia",    desc:"Adobe, bancos de imagem e vídeo",    color:"#f97316", icon:"image"},
+  {id:"cursos",     label:"Cursos & comunidades", desc:"Mentorias, plataformas de curso",    color:"#0d9488", icon:"book"},
+  {id:"outro",      label:"Outros",               desc:"Sem categoria definida",             color:"#64748b", icon:"lock"},
+];
+function _pvCat(id){ return PV_CATS.find(function(c){return c.id===id;}) || PV_CATS[PV_CATS.length-1]; }
+function _PvIco({n,size,color}){
+  const s=size||14, c=color||"currentColor";
+  const P={fill:"none",stroke:c,strokeWidth:2.2,strokeLinecap:"round",strokeLinejoin:"round",width:s,height:s,viewBox:"0 0 24 24"};
+  switch(n){
+    case "users":  return <svg {...P}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
+    case "mail":   return <svg {...P}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>;
+    case "globe":  return <svg {...P}><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
+    case "share":  return <svg {...P}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>;
+    case "grid":   return <svg {...P}><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>;
+    case "dollar": return <svg {...P}><path d="M12 2v20"/><path d="M17 5.5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+    case "image":  return <svg {...P}><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>;
+    case "book":   return <svg {...P}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>;
+    case "copy":   return <svg {...P}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+    case "eye":    return <svg {...P}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+    case "eyeoff": return <svg {...P}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>;
+    case "ext":    return <svg {...P}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
+    case "edit":   return <svg {...P}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case "trash":  return <svg {...P}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>;
+    case "chev":   return <svg {...P}><polyline points="6 9 12 15 18 9"/></svg>;
+    case "search": return <svg {...P}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+    case "plus":   return <svg {...P} strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case "note":   return <svg {...P}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+    default:       return <svg {...P}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+  }
+}
+// Domínio pro favicon: pela URL, senão pelo nome do serviço (mapa), senão nada (monograma)
+const _PV_DOMAINS = [
+  ["gmail","google.com"],["google workspace","google.com"],["titan","titan.email"],["locaweb","locaweb.com.br"],["hostgator","hostgator.com.br"],
+  ["wix","wix.com"],["vercel","vercel.com"],["elementor","elementor.com"],["wordpress","wordpress.org"],
+  ["instagram","instagram.com"],["facebook","facebook.com"],["linkedin","linkedin.com"],["tiktok","tiktok.com"],["youtube","youtube.com"],
+  ["asana","asana.com"],["clickup","clickup.com"],["trello","trello.com"],["buffer","buffer.com"],["mlabs","mlabs.com.br"],["reportei","reportei.com"],
+  ["rd station","rdstation.com"],["ekyte","ekyte.com"],["lusha","lusha.com"],["econodata","econodata.com.br"],["empresaqui","empresaqui.com.br"],
+  ["autentique","autentique.com.br"],["d4sign","d4sign.com.br"],["chatgpt","openai.com"],["opus","opus.pro"],["fiverr","fiverr.com"],["workana","workana.com"],
+  ["asaas","asaas.com"],["conta azul","contaazul.com"],["paypal","paypal.com"],["adobe","adobe.com"],["freepik","freepik.com"],["motion array","motionarray.com"],
+  ["wetransfer","wetransfer.com"],["finclass","finclass.com"],["staage","staage.com"],["cademi","cademi.com.br"],["nova legião","cademi.com.br"],
+  ["meta","meta.com"],["canva","canva.com"],["notion","notion.so"],["supabase","supabase.com"],["github","github.com"],["figma","figma.com"],
+];
+function _pvDomain(it){
+  const u=String(it.url||"").trim();
+  if(u){ try{ return new URL(u.indexOf("://")>0?u:"https://"+u).hostname; }catch(_){ } }
+  const l=String(it.label||"").toLowerCase();
+  for(let i=0;i<_PV_DOMAINS.length;i++){ if(l.indexOf(_PV_DOMAINS[i][0])>=0) return _PV_DOMAINS[i][1]; }
+  return "";
+}
+function _PvAvatar({it,cat}){
+  const [err,setErr]=useState(false);
+  const _cli=(typeof CLIENTS!=="undefined"&&it.client_id)?(CLIENTS.find(function(c){return c.id===it.client_id;})||null):null;
+  const box={width:32,height:32,borderRadius:9,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",background:"#fff",border:"1px solid #eef0f3"};
+  if(_cli) return <div style={Object.assign({},box,{padding:3})}><ClientLogo clientId={_cli.id} size="sm"/></div>;
+  const dom=_pvDomain(it);
+  if(dom&&!err) return <div style={box}><img src={"https://www.google.com/s2/favicons?domain="+encodeURIComponent(dom)+"&sz=64"} alt="" width={18} height={18} style={{display:"block"}} onError={function(){setErr(true);}}/></div>;
+  const ini=String(it.label||"?").replace(/[^A-Za-zÀ-ÿ0-9 ]/g,"").trim().split(/\s+/).slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase()||"?";
+  return <div style={Object.assign({},box,{background:cat.color+"14",border:"1px solid "+cat.color+"2e",color:cat.color,fontSize:11,fontWeight:800,letterSpacing:-.2})}>{ini}</div>;
+}
+
 function PasswordVault({user}){
   const [items,setItems] = useState([]);
   const [loading,setLoading] = useState(true);
@@ -33968,27 +34047,24 @@ function PasswordVault({user}){
   const [search,setSearch] = useState("");
   const [showPwd,setShowPwd] = useState({});
   const [catFilter,setCatFilter] = useState("");
+  const [collapsed,setCollapsed] = useState({});
+  const [notesOpen,setNotesOpen] = useState({});
 
-  const CATS = [
-    {id:"cliente", label:"Cliente",  color:"#16a34a"},
-    {id:"servico", label:"Serviço",  color:"#7c3aed"},
-    {id:"interno", label:"Interno",  color:"#0ea5e9"},
-    {id:"outro",   label:"Outro",    color:"#64748b"},
-  ];
-  const _catOf = (id)=>CATS.find(c=>c.id===id)||CATS[3];
+  const CATS = PV_CATS;
+  const _catOf = function(id){ return _pvCat(id); };
 
   const _load = async ()=>{
     try{
       setLoading(true);
       const sb=window._sb;
-      const{data,error}=await sb.from("team_passwords").select("*").order("updated_at",{ascending:false});
+      const{data,error}=await sb.from("team_passwords").select("*").order("label",{ascending:true});
       if(!error&&data)setItems(data);
     }catch(e){console.warn("[vault] load:",e);}
     finally{setLoading(false);}
   };
   useEffect(()=>{_load();},[]);
 
-  const _new = ()=>setEditing({id:"",label:"",category:"cliente",client_id:"",username:"",password:"",url:"",notes:""});
+  const _new = ()=>setEditing({id:"",label:"",category:"gestao",client_id:"",username:"",password:"",url:"",notes:""});
   const _edit = (it)=>setEditing({...it});
   const _close = ()=>setEditing(null);
 
@@ -34050,160 +34126,157 @@ function PasswordVault({user}){
     }
   };
 
+  const _catId = function(it){ const c=String(it.category||"outro"); return CATS.some(function(x){return x.id===c;})?c:"outro"; };
   const _filtered = items.filter(it=>{
     if(!search.trim())return true;
     const s=search.toLowerCase();
     return String(it.label||"").toLowerCase().includes(s)
         || String(it.username||"").toLowerCase().includes(s)
         || String(it.client_id||"").toLowerCase().includes(s)
-        || String(it.url||"").toLowerCase().includes(s);
+        || String(it.url||"").toLowerCase().includes(s)
+        || String(it.notes||"").toLowerCase().includes(s);
   });
 
   const _mob=(typeof _pxMob==="function"&&_pxMob());
-  const _porCat = _filtered.filter(it=>!catFilter||String(it.category||"outro")===catFilter);
-  const _cnt = (cid)=>items.filter(it=>String(it.category||"outro")===cid).length;
+  const _cnt = (cid)=>items.filter(it=>_catId(it)===cid).length;
   const _dt = (v)=>{ try{ const d=new Date(v); if(isNaN(d))return""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; } };
+  // Seções na ordem de PV_CATS, só as que têm item (após busca/filtro)
+  const _secoes = CATS.map(function(c){
+    return {cat:c, list:_filtered.filter(function(it){ return _catId(it)===c.id && (!catFilter||catFilter===c.id); })
+      .sort(function(a,b){ return String(a.label).localeCompare(String(b.label),"pt-BR"); })};
+  }).filter(function(s){ return s.list.length>0; });
+  const _total = _secoes.reduce(function(n,s){ return n+s.list.length; },0);
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,width:"100%"}}>
+  const _iconBtn = function(title,onClick,ico,hover){
+    return <button type="button" title={title} onClick={onClick}
+      style={{background:"transparent",border:"none",cursor:"pointer",padding:5,borderRadius:7,color:"#94a3b8",display:"inline-flex",flexShrink:0,transition:"all .12s"}}
+      onMouseEnter={function(e){e.currentTarget.style.color=hover||"#7c3aed";e.currentTarget.style.background=(hover||"#7c3aed")+"12";}}
+      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
+      <_PvIco n={ico} size={13}/>
+    </button>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,width:"100%"}}>
 
     {/* ══ HERO ══ */}
-    <div style={{position:"relative",overflow:"hidden",borderRadius:18,background:"linear-gradient(135deg,#0f172a 0%,#312e81 48%,#6d28d9 100%)",padding:_mob?"18px 16px":"22px 24px",color:"#fff",boxShadow:"0 16px 38px rgba(49,46,129,.28)"}}>
+    <div style={{position:"relative",overflow:"hidden",borderRadius:18,background:"linear-gradient(135deg,#0f172a 0%,#312e81 48%,#6d28d9 100%)",padding:_mob?"16px 16px":"18px 22px",color:"#fff",boxShadow:"0 16px 38px rgba(49,46,129,.28)"}}>
       <div style={{position:"absolute",right:-50,top:-70,width:230,height:230,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.14),transparent 68%)",pointerEvents:"none"}}/>
       <div style={{position:"relative",display:"flex",alignItems:_mob?"flex-start":"center",gap:13,flexDirection:_mob?"column":"row"}}>
-        <div style={{width:44,height:44,borderRadius:13,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><circle cx="12" cy="11" r="2.2"/><path d="M12 13.2V16"/></svg>
+        <div style={{width:42,height:42,borderRadius:13,background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><circle cx="12" cy="11" r="2.2"/><path d="M12 13.2V16"/></svg>
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:800,fontSize:_mob?17:19,letterSpacing:-.4}}>Cofre de senhas</div>
-          <div style={{fontSize:12.5,opacity:.78,marginTop:3,fontWeight:500}}>Credenciais de portal, contas de cliente e serviços — visível só pros sócios</div>
+          <div style={{fontWeight:800,fontSize:_mob?17:19,letterSpacing:-.4,display:"flex",alignItems:"center",gap:10}}>Cofre de senhas
+            <span style={{background:"rgba(255,255,255,.16)",border:"1px solid rgba(255,255,255,.22)",borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800}}>{items.length}</span>
+          </div>
+          <div style={{fontSize:12.5,opacity:.78,marginTop:3,fontWeight:500}}>Credenciais da agência e dos clientes, por seção — visível só pros sócios · texto puro no Supabase (RLS level 1), nada de banco.</div>
         </div>
         <button onClick={_new} type="button"
           style={{background:"#fff",border:"none",borderRadius:11,padding:"10px 16px",color:"#312e81",fontSize:12.5,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px rgba(0,0,0,.24)",flexShrink:0,fontFamily:"inherit",letterSpacing:-.1,transition:"all .15s",width:_mob?"100%":"auto"}}
           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 9px 24px rgba(0,0,0,.32)";}}
           onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 18px rgba(0,0,0,.24)";}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nova senha
+          <_PvIco n="plus" size={13}/> Nova senha
         </button>
-      </div>
-      <div style={{position:"relative",marginTop:14,display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.14)",borderRadius:11,padding:"9px 12px"}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fcd34d" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5h.01"/></svg>
-        <div style={{fontSize:11.5,opacity:.85,fontWeight:500,lineHeight:1.45}}>
-          Senhas ficam em texto puro no Supabase, com RLS liberando só pra <strong style={{fontWeight:800}}>level 1</strong>. Não use pra credenciais bancárias.
-        </div>
       </div>
     </div>
 
-    {/* ══ BUSCA + FILTROS ══ */}
+    {/* ══ BUSCA + SEÇÕES (chips) ══ */}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <div style={{position:"relative",display:"flex",alignItems:"center",width:_mob?"100%":320}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:12,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por título, login, cliente..."
-          style={{width:"100%",background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"10px 14px 10px 35px",color:"#0f172a",fontSize:12.5,outline:"none",fontFamily:"inherit",fontWeight:500,transition:"all .15s"}}
+      <div style={{position:"relative",display:"flex",alignItems:"center",width:_mob?"100%":300}}>
+        <span style={{position:"absolute",left:12,display:"inline-flex",pointerEvents:"none"}}><_PvIco n="search" size={14} color="#94a3b8"/></span>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar título, login, cliente, obs…"
+          style={{width:"100%",background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"9px 14px 9px 35px",color:"#0f172a",fontSize:12.5,outline:"none",fontFamily:"inherit",fontWeight:500,transition:"all .15s"}}
           onFocus={e=>{e.currentTarget.style.borderColor="#a855f7";e.currentTarget.style.boxShadow="0 0 0 3px rgba(168,85,247,.14)";}}
           onBlur={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";}}/>
       </div>
-      <div style={{display:"inline-flex",gap:3,background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:3,flexWrap:"wrap"}}>
-        {[{id:"",label:"Todas",color:"#0f172a"}].concat(CATS).map(c=>{
+      <div style={{display:"flex",gap:5,flexWrap:"wrap",flex:1,minWidth:0}}>
+        {[{id:"",label:"Todas",color:"#0f172a",icon:"lock"}].concat(CATS.filter(function(c){return _cnt(c.id)>0;})).map(c=>{
           const _on=catFilter===c.id;
           const _n=c.id?_cnt(c.id):items.length;
-          return <button key={c.id||"all"} type="button" onClick={()=>setCatFilter(c.id)}
-            style={{background:_on?c.color:"transparent",color:_on?"#fff":"#64748b",border:"none",borderRadius:8,padding:"7px 13px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
+          return <button key={c.id||"all"} type="button" onClick={()=>setCatFilter(_on&&c.id?"":c.id)}
+            style={{background:_on?c.color:"#fff",color:_on?"#fff":"#475569",border:"1px solid "+(_on?c.color:"#e2e8f0"),borderRadius:99,padding:"6px 11px 6px 9px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
+            <span style={{display:"inline-flex",color:_on?"#fff":c.color}}><_PvIco n={c.icon} size={12}/></span>
             {c.label}
-            <span style={{background:_on?"rgba(255,255,255,.22)":"#f1f5f9",color:_on?"#fff":"#94a3b8",borderRadius:99,padding:"1px 6px",fontSize:10,fontWeight:800,lineHeight:1.5}}>{_n}</span>
+            <span style={{background:_on?"rgba(255,255,255,.22)":"#f1f5f9",color:_on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,lineHeight:1.6}}>{_n}</span>
           </button>;
         })}
       </div>
     </div>
 
-    {/* ══ LISTA (cards) ══ */}
+    {/* ══ SEÇÕES ══ */}
     {loading
       ? <div style={{textAlign:"center",color:C.td,fontSize:13,padding:"40px"}}>Carregando…</div>
-      : _porCat.length===0
+      : _total===0
         ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:16,padding:"48px 20px",textAlign:"center"}}>
             <div style={{color:"#334155",fontWeight:700,fontSize:14,marginBottom:5}}>{(search||catFilter)?"Nada encontrado":"Nenhuma senha cadastrada ainda"}</div>
             <div style={{color:"#94a3b8",fontSize:12}}>{(search||catFilter)?"Ajuste a busca ou o filtro.":"Clique em + Nova senha pra começar."}</div>
           </div>
-        : <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(330px,1fr))",gap:12}}>
-            {_porCat.map(it=>{
-              const cat=_catOf(it.category);
-              const showPw=!!showPwd[it.id];
-              const _cli=(typeof CLIENTS!=="undefined"&&it.client_id)?(CLIENTS.find(c=>c.id===it.client_id)||null):null;
-              return <div key={it.id}
-                style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:15,padding:"14px 15px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"all .15s",position:"relative",overflow:"hidden"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor=cat.color+"55";e.currentTarget.style.boxShadow="0 6px 18px "+cat.color+"1f";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";e.currentTarget.style.transform="";}}>
-                <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:cat.color}}/>
-                {/* topo */}
-                <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                  <div style={{width:38,height:38,borderRadius:11,background:cat.color+"14",border:"1px solid "+cat.color+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",color:cat.color,flexShrink:0,overflow:"hidden",padding:_cli?4:0}}>
-                    {_cli
-                      ? <ClientLogo clientId={_cli.id} size="sm"/>
-                      : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4,flexWrap:"wrap"}}>
-                      <span style={{background:cat.color+"14",color:cat.color,borderRadius:6,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{cat.label}</span>
-                      {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" title={it.url}
-                        style={{color:"#94a3b8",fontSize:10.5,textDecoration:"none",fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,maxWidth:170,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}
-                        onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                        {String(it.url).replace(/^https?:\/\//,"").split("/")[0]}
-                      </a>}
+        : _secoes.map(function(sec){
+            const cat=sec.cat; const _col=!!collapsed[cat.id] && !search;
+            return <div key={cat.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
+              {/* cabeçalho da seção — cor sólida */}
+              <div onClick={function(){ setCollapsed(function(p){ const n=Object.assign({},p); n[cat.id]=!n[cat.id]; return n; }); }}
+                style={{display:"flex",alignItems:"center",gap:11,padding:"11px 16px 11px 14px",background:cat.color,color:"#fff",cursor:"pointer",userSelect:"none"}}>
+                <div style={{width:30,height:30,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <_PvIco n={cat.icon} size={15} color="#fff"/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.2}}>{cat.label}</div>
+                  <div style={{fontSize:11,opacity:.8,fontWeight:500,marginTop:1}}>{cat.desc}</div>
+                </div>
+                <span style={{background:"rgba(255,255,255,.2)",borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800}}>{sec.list.length}</span>
+                <span style={{display:"inline-flex",transition:"transform .15s",transform:_col?"rotate(-90deg)":"none",opacity:.85}}><_PvIco n="chev" size={14} color="#fff"/></span>
+              </div>
+              {/* linhas compactas */}
+              {!_col && <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(440px,1fr))",gap:0,padding:6}}>
+                {sec.list.map(function(it){
+                  const showPw=!!showPwd[it.id];
+                  const _dom=String(it.url||"").replace(/^https?:\/\//,"").split("/")[0];
+                  const _hasNotes=!!String(it.notes||"").trim();
+                  const _nOpen=!!notesOpen[it.id];
+                  return <div key={it.id} style={{display:"flex",flexDirection:"column",borderRadius:11,margin:2,transition:"background .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f8f7fc";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 8px",minHeight:48}}>
+                      <_PvAvatar it={it} cat={cat}/>
+                      {/* título + login */}
+                      <div style={{flex:"1 1 0",minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+                          <span style={{color:"#0f172a",fontWeight:750,fontSize:12.8,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
+                          {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" title={it.url} onClick={function(e){e.stopPropagation();}}
+                            style={{color:"#94a3b8",display:"inline-flex",flexShrink:0}} onMouseEnter={function(e){e.currentTarget.style.color=cat.color;}} onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}><_PvIco n="ext" size={11}/></a>}
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0,marginTop:1}}>
+                          <span style={{color:it.username?"#64748b":"#cbd5e1",fontSize:11,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username||"sem login"}</span>
+                          {it.username && <button type="button" title="Copiar login" onClick={function(){_copy(it.username,"Login");}}
+                            style={{background:"transparent",border:"none",cursor:"pointer",padding:2,color:"#cbd5e1",display:"inline-flex",flexShrink:0}}
+                            onMouseEnter={function(e){e.currentTarget.style.color=cat.color;}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}><_PvIco n="copy" size={10}/></button>}
+                        </div>
+                      </div>
+                      {/* senha */}
+                      <div style={{display:"flex",alignItems:"center",gap:2,background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:9,padding:"3px 4px 3px 10px",flexShrink:0,maxWidth:_mob?150:210}}>
+                        <span style={{color:it.password?"#334155":"#cbd5e1",fontSize:11.5,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:showPw?0:60,letterSpacing:showPw?"normal":".12em"}}>
+                          {it.password?(showPw?it.password:"••••••••"):"—"}
+                        </span>
+                        {it.password && _iconBtn(showPw?"Ocultar":"Mostrar", function(){ setShowPwd(function(p){ const n=Object.assign({},p); n[it.id]=!showPw; return n; }); }, showPw?"eyeoff":"eye", "#0f172a")}
+                        {it.password && _iconBtn("Copiar senha", function(){_copy(it.password,"Senha");}, "copy", cat.color)}
+                      </div>
+                      {/* ações */}
+                      <div style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
+                        {_hasNotes && _iconBtn(_nOpen?"Esconder observações":"Ver observações", function(){ setNotesOpen(function(p){ const n=Object.assign({},p); n[it.id]=!_nOpen; return n; }); }, "note", "#f59e0b")}
+                        {_iconBtn("Editar", function(){_edit(it);}, "edit", "#7c3aed")}
+                        {_iconBtn("Excluir", function(){_delete(it);}, "trash", "#dc2626")}
+                      </div>
                     </div>
-                  </div>
-                </div>
-                {/* usuario */}
-                <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"8px 11px",display:"flex",alignItems:"center",gap:8}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span style={{color:it.username?"#334155":"#94a3b8",fontSize:11.5,fontFamily:"monospace",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username||"—"}</span>
-                  {it.username && <button onClick={()=>_copy(it.username,"Usuário")} title="Copiar usuário" type="button"
-                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
-                    onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                  </button>}
-                </div>
-                {/* senha */}
-                <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"8px 11px",display:"flex",alignItems:"center",gap:8}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                  <span style={{color:it.password?"#334155":"#94a3b8",fontSize:11.5,fontFamily:"monospace",fontWeight:500,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:showPw?"normal":".15em"}}>
-                    {it.password?(showPw?it.password:"•".repeat(Math.min(String(it.password).length,14))):"—"}
-                  </span>
-                  {it.password && <button onClick={()=>setShowPwd(p=>({...p,[it.id]:!showPw}))} title={showPw?"Ocultar":"Mostrar"} type="button"
-                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
-                    onMouseEnter={e=>e.currentTarget.style.color="#0f172a"} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
-                    {showPw
-                      ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                      : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-                  </button>}
-                  {it.password && <button onClick={()=>_copy(it.password,"Senha")} title="Copiar senha" type="button"
-                    style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:"#64748b",display:"inline-flex",flexShrink:0}}
-                    onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color="#64748b"}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                  </button>}
-                </div>
-                {/* rodape */}
-                <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:9,borderTop:"1px solid #f1f5f9"}}>
-                  <div style={{flex:1,minWidth:0,color:"#94a3b8",fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {it.updated_at?("Atualizado em "+_dt(it.updated_at)):""}
-                  </div>
-                  <button onClick={()=>_edit(it)} title="Editar" type="button"
-                    style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-                    onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";e.currentTarget.style.color=C.a;}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.color="#475569";}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    Editar
-                  </button>
-                  <button onClick={()=>_delete(it)} title="Excluir" type="button"
-                    style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"6px 10px",color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",transition:"all .12s"}}
-                    onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                  </button>
-                </div>
-              </div>;
-            })}
-          </div>
+                    {_nOpen && _hasNotes && <div style={{margin:"0 8px 8px 50px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"7px 10px",fontSize:11.5,color:"#78350f",lineHeight:1.5,whiteSpace:"pre-wrap"}}>
+                      {it.notes}
+                      <div style={{color:"#b45309",fontSize:10,marginTop:4,opacity:.8}}>{it.updated_at?"Atualizado em "+_dt(it.updated_at):""}{it.author_name?" · "+it.author_name:""}</div>
+                    </div>}
+                  </div>;
+                })}
+              </div>}
+            </div>;
+          })
     }
 
     {/* Modal Novo/Editar */}
@@ -34216,21 +34289,22 @@ function PasswordVault({user}){
             <div style={{fontSize:11,opacity:.85,marginTop:1}}>Anote uma credencial pra consulta futura</div>
           </div>
           <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:11,maxHeight:"70vh",overflowY:"auto"}}>
-            {/* Categoria */}
+            {/* Seção */}
             <div>
-              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Categoria</div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Seção</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {CATS.map(c=>{
-                  const _on=editing.category===c.id;
+                  const _on=(editing.category||"outro")===c.id;
                   return <button key={c.id} type="button" onClick={()=>setEditing(p=>({...p,category:c.id}))}
-                    style={{background:_on?c.color:"#fff",color:_on?"#fff":c.color,border:"1px solid "+(_on?c.color:c.color+"55"),borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{c.label}</button>;
+                    style={{background:_on?c.color:"#fff",color:_on?"#fff":c.color,border:"1px solid "+(_on?c.color:c.color+"55"),borderRadius:99,padding:"5px 11px 5px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+                    <_PvIco n={c.icon} size={11}/>{c.label}</button>;
                 })}
               </div>
             </div>
             {/* Título */}
             <div>
               <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
-              <input value={editing.label} onChange={e=>setEditing(p=>({...p,label:e.target.value}))} placeholder="Ex: Portal Bioter Chapecó"
+              <input value={editing.label} onChange={e=>setEditing(p=>({...p,label:e.target.value}))} placeholder="Ex: Asana — Gustavo"
                 style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:13,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
             </div>
             {/* Cliente */}
@@ -34246,25 +34320,25 @@ function PasswordVault({user}){
             <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
               <div>
                 <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Usuário/Email</div>
-                <input value={editing.username} onChange={e=>setEditing(p=>({...p,username:e.target.value}))} placeholder="exemplo@cliente.com"
+                <input value={editing.username||""} onChange={e=>setEditing(p=>({...p,username:e.target.value}))} placeholder="exemplo@cliente.com"
                   style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
               </div>
               <div>
                 <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Senha</div>
-                <input type="text" value={editing.password} onChange={e=>setEditing(p=>({...p,password:e.target.value}))} placeholder="senha aqui"
+                <input type="text" value={editing.password||""} onChange={e=>setEditing(p=>({...p,password:e.target.value}))} placeholder="senha aqui"
                   style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
               </div>
             </div>
             {/* URL */}
             <div>
-              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL (opcional)</div>
-              <input value={editing.url} onChange={e=>setEditing(p=>({...p,url:e.target.value}))} placeholder="https://..."
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL (opcional — define o ícone)</div>
+              <input value={editing.url||""} onChange={e=>setEditing(p=>({...p,url:e.target.value}))} placeholder="https://..."
                 style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
             </div>
             {/* Notas */}
             <div>
               <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Observações</div>
-              <textarea value={editing.notes} onChange={e=>setEditing(p=>({...p,notes:e.target.value}))} placeholder="Observações adicionais..."
+              <textarea value={editing.notes||""} onChange={e=>setEditing(p=>({...p,notes:e.target.value}))} placeholder="Observações adicionais..."
                 rows={3} style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
             </div>
             {/* Botões */}
