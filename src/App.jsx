@@ -69399,15 +69399,19 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
   const _alvo     = !!drag && drag.overIdx===idx && drag.dragIdx!==null && drag.dragIdx!==idx;
   // Box do titulo usa a cor do cliente selecionado no portal. Tinta (texto) troca
   // pra escuro quando a cor do cliente e clara demais (Climaves, Arabuta...).
-  const _cor = accent || (cl && cl.color) || "#7c3aed";
+  // Título em cor SÓLIDA seguindo o rainbow da Linha de produção (FLUXO_COLS), pela POSIÇÃO
+  // do card na seção: 1º roxo, 2º rosa, 3º amarelo, 4º laranja, 5º verde, 6º azul, e repete.
+  // Como é por índice, reordenar/criar/apagar rebalanceia sozinho — a sequência nunca quebra.
+  const _RAINBOW = ["#a140ff","#ff6eb4","#ffd000","#ff7200","#00e5a0","#4db8ff"];
+  const _cor = _RAINBOW[((typeof idx==="number"?idx:0)%_RAINBOW.length+_RAINBOW.length)%_RAINBOW.length];
+  const _acc = accent || "#7c3aed"; // cor da seção: só no botão Copiar
   const _hx  = String(_cor).replace("#","");
   const _r   = parseInt(_hx.substring(0,2),16)||0;
   const _g   = parseInt(_hx.substring(2,4),16)||0;
   const _b   = parseInt(_hx.substring(4,6),16)||0;
   const _lum = (0.299*_r + 0.587*_g + 0.114*_b)/255;
-  // Visual calmo (09/09/2026): barra clara com filete na cor da seção; texto escuro sempre.
-  const _ink = "#0f172a";
-  const _sub = "rgba(15,23,42,.45)";
+  const _ink = _lum>0.62 ? "#0f172a" : "#ffffff";
+  const _sub = _lum>0.62 ? "rgba(15,23,42,.55)" : "rgba(255,255,255,.75)";
   return <div
     draggable={_pode}
     onDragStart={drag?drag.start(idx):undefined}
@@ -69415,7 +69419,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
     onDrop={drag?drag.drop(idx):undefined}
     onDragEnd={function(){ _setPode(false); if(drag) drag.end(); }}
     style={{background:"#fff",border:"1px solid "+(_alvo?_cor:(_editing?_cor:"#ebe7f6")),borderRadius:16,padding:"14px 16px 14px",transition:"border .15s, opacity .12s, transform .15s, box-shadow .15s",display:"flex",flexDirection:"column",gap:10,opacity:_dragging?0.4:1,transform:_alvo?"scale(1.012)":"none",boxShadow:_alvo?("0 0 0 3px "+_cor+"33"):"0 1px 2px rgba(15,23,42,.03)"}}
-    onMouseEnter={function(e){ if(!_alvo){ e.currentTarget.style.boxShadow="0 12px 32px "+_cor+"1f"; e.currentTarget.style.borderColor=_cor+"66"; } }}
+    onMouseEnter={function(e){ if(!_alvo){ e.currentTarget.style.boxShadow="0 12px 32px rgba(15,23,42,.10)"; e.currentTarget.style.borderColor="#d6d3e3"; } }}
     onMouseLeave={function(e){ if(!_alvo){ e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)"; e.currentTarget.style.borderColor=_editing?_cor:"#ebe7f6"; } }}>
     {/* TITULO — box colorido com a cor do cliente; clique renomeia */}
     {_editing
@@ -69424,13 +69428,15 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
       : <div onClick={function(){ if(!_ro) setEditingId(s.id); }} title={_ro?"":"Clique pra renomear"}
-          style={{color:_ink,fontWeight:800,fontSize:13,letterSpacing:-.2,cursor:_ro?"default":"pointer",padding:"2px 0",display:"flex",alignItems:"center",gap:9,lineHeight:1.3}}>
+          style={{background:_cor,color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:10,display:"flex",alignItems:"center",gap:8,lineHeight:1.3,boxShadow:"0 3px 10px "+_cor+"40",transition:"filter .12s"}}
+          onMouseEnter={function(e){ if(!_ro) e.currentTarget.style.filter="brightness(1.05)"; }}
+          onMouseLeave={function(e){ e.currentTarget.style.filter="none"; }}>
           {/* Mobile: setas no lugar do arraste */}
           {drag && (typeof _pxMob==="function"&&_pxMob()) && <span style={{display:"inline-flex",gap:2,flexShrink:0}} onClick={function(e){e.stopPropagation();}}>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx-1);}} disabled={idx===0} title="Subir"
-              style={{background:"#e2e8f0",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
+              style={{background:_lum>0.62?"rgba(15,23,42,.08)":"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:idx===0?.35:1}}>▲</button>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx+1);}} title="Descer"
-              style={{background:"#e2e8f0",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
+              style={{background:_lum>0.62?"rgba(15,23,42,.08)":"rgba(255,255,255,.22)",border:"none",color:_ink,borderRadius:7,width:34,height:34,minWidth:34,minHeight:34,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>▼</button>
           </span>}
           {/* Handle de arrasto — segura aqui pra reordenar */}
           {drag && !(typeof _pxMob==="function"&&_pxMob()) && <span title="Arraste pra reordenar"
@@ -69438,7 +69444,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
             onMouseUp={function(e){ e.stopPropagation(); _setPode(false); }}
             onClick={function(e){ e.stopPropagation(); }}
             style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,cursor:"grab",color:_sub,flexShrink:0,marginLeft:-2,transition:"background .12s"}}
-            onMouseEnter={function(e){ e.currentTarget.style.background="rgba(15,23,42,.08)"; }}
+            onMouseEnter={function(e){ e.currentTarget.style.background=_lum>0.62?"rgba(15,23,42,.10)":"rgba(255,255,255,.22)"; }}
             onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{pointerEvents:"none"}}>
               <circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>
@@ -69446,9 +69452,6 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
               <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
             </svg>
           </span>}
-          <span style={{width:28,height:28,borderRadius:9,background:_cor+"14",color:_cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          </span>
           <span style={{flex:1,minWidth:0}}>{s.titulo||"(sem título)"}</span>
           {!_ro && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -69480,9 +69483,9 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>}
         <button onClick={function(){_copyScript(s);}} type="button" title={"Copia com dados de "+((cl&&cl.name)||"cliente")+" preenchidos automaticamente"}
-          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"d9)",color:"#fff",border:"none",borderRadius:10,padding:"8px 15px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",boxShadow:"0 4px 12px "+_cor+"3d"}}
-          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 8px 18px "+_cor+"55";}}
-          onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 12px "+_cor+"3d";}}>
+          style={{background:"linear-gradient(135deg,"+_acc+","+_acc+"d9)",color:"#fff",border:"none",borderRadius:10,padding:"8px 15px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",boxShadow:"0 4px 12px "+_acc+"3d"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 8px 18px "+_acc+"55";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 12px "+_acc+"3d";}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar
         </button>
