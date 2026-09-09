@@ -76043,11 +76043,11 @@ function _PlanejamentosClientes({isMob}){
         return <div key={i} onClick={function(){ _abrirEditarData(ev); }} title={ev.title+(_lbl?" · "+_lbl:"")+" — clique pra editar"}
           onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}}
           onMouseLeave={function(e){e.currentTarget.style.background=destacar?"#fcfbff":"transparent";}}
-          style={{display:"grid",gridTemplateColumns:"42px 8px minmax(0,1fr) auto",alignItems:"center",columnGap:8,padding:"7px 8px",borderRadius:8,cursor:"pointer",background:destacar?"#fcfbff":"transparent"}}>
-          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_fmtEvDate(ev.date)}</span>
-          <span style={{width:7,height:7,borderRadius:"50%",background:_c}}/>
-          <span style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{ev.title}</span>
-          {_LogoStack(ev.clientes)}
+          style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",borderRadius:8,cursor:"pointer",background:destacar?"#fcfbff":"transparent"}}>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,fontFeatureSettings:"'tnum'",width:42,flexShrink:0}}>{_fmtEvDate(ev.date)}</span>
+          <span style={{width:7,height:7,borderRadius:"50%",background:_c,flexShrink:0}}/>
+          <span style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,flex:"0 1 auto"}}>{ev.title}</span>
+          <span style={{flexShrink:0,display:"inline-flex",marginLeft:2}}>{_LogoStack(ev.clientes)}</span>
         </div>;
       };
       const _Col=function(titulo, sub, lista, agruparMes){
