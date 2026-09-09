@@ -5315,6 +5315,37 @@ function pxNthDateInYear(origISO, year){
   while(d>last) d-=7; // "5º domingo" que não existe naquele ano → último
   return year+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
 }
+// ═══ Recorrência "anual atrelada à Páscoa" — yearly_easter (09/09/2026) ═══
+// Carnaval (Páscoa−47), Quarta de Cinzas (−46), Sexta-feira Santa (−2), Páscoa (0),
+// Corpus Christi (+60). O deslocamento sai da própria data original do evento
+// (data − Páscoa daquele ano). Sem campo novo. Páscoa pelo algoritmo de Meeus/Jones/Butcher.
+function pxEaster(year){
+  const a=year%19, b=Math.floor(year/100), c=year%100, d=Math.floor(b/4), e=b%4,
+        f=Math.floor((b+8)/25), g=Math.floor((b-f+1)/3), h=(19*a+b-d-g+15)%30,
+        i=Math.floor(c/4), k=c%4, l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31), da=((h+l-7*m+114)%31)+1;
+  return new Date(year,mo-1,da,12);
+}
+function pxEasterOffset(origISO){
+  const o=new Date(String(origISO).slice(0,10)+"T12:00");
+  return Math.round((o-pxEaster(o.getFullYear()))/86400000);
+}
+function pxEasterDateInYear(origISO, year){
+  const off=pxEasterOffset(origISO);
+  const d=pxEaster(year); d.setDate(d.getDate()+off);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function pxEasterMatch(origISO, candISO){
+  try{ return pxEasterDateInYear(origISO, Number(String(candISO).slice(0,4)))===String(candISO).slice(0,10); }catch(_){ return false; }
+}
+function pxEasterLabel(origISO){
+  try{
+    const off=pxEasterOffset(origISO);
+    const nomes={"-48":"segunda de Carnaval","-47":"terça de Carnaval","-46":"Quarta de Cinzas","-3":"Quinta-feira Santa","-2":"Sexta-feira Santa","-1":"Sábado de Aleluia","0":"Páscoa","60":"Corpus Christi"};
+    if(nomes[String(off)]) return nomes[String(off)];
+    return "Páscoa "+(off<0?"−":"+")+Math.abs(off)+" dia"+(Math.abs(off)===1?"":"s");
+  }catch(_){ return ""; }
+}
 function pxNthLabel(origISO){
   try{
     const o=new Date(String(origISO).slice(0,10)+"T12:00");
@@ -16467,7 +16498,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       window._sb.from("internal_events").select("id,title,date,recurrence").then(function(r){
         const _dup=(r&&r.data||[]).find(function(ev){ return _norm(ev.title)===_norm(title)&&String(ev.date||"").slice(5,10)===_md; });
         if(!_dup){ _dupCheckedRef.current=true; save(); return; }
-        const _msg="Já existe \""+_dup.title+"\" em "+String(_dup.date).split("-").reverse().join("/")+((_dup.recurrence==="yearly"||_dup.recurrence==="yearly_nth")?" (anual)":"")+". Criar outro vai DUPLICAR a data no Planejamento e no Calendário de publicações. Criar mesmo assim?";
+        const _msg="Já existe \""+_dup.title+"\" em "+String(_dup.date).split("-").reverse().join("/")+((_dup.recurrence==="yearly"||_dup.recurrence==="yearly_nth"||_dup.recurrence==="yearly_easter")?" (anual)":"")+". Criar outro vai DUPLICAR a data no Planejamento e no Calendário de publicações. Criar mesmo assim?";
         pixelsConfirm(_msg,{danger:true,okText:"Criar duplicado",cancelText:"Cancelar"}).then(function(yes){ if(yes){ _dupCheckedRef.current=true; save(); } });
       },function(){ _dupCheckedRef.current=true; save(); });
       return;
@@ -16643,7 +16674,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
           {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
-            const sel=recurrence===opt.id||(opt.id==="yearly"&&recurrence==="yearly_nth");
+            const sel=recurrence===opt.id||(opt.id==="yearly"&&(recurrence==="yearly_nth"||recurrence==="yearly_easter"));
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id); if(!opt.id) setRecurrenceUntil("");}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
               {opt.label}
@@ -16651,10 +16682,13 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           })}
         </div>
         {/* Data de término da recorrência — só aparece quando repete */}
-        {(recurrence==="yearly"||recurrence==="yearly_nth")&&date&&typeof pxNthLabel==="function"&&(function(){
-          // Anual: repete no mesmo dia (13/09) ou no mesmo dia da semana (2º domingo de setembro)?
+        {(recurrence==="yearly"||recurrence==="yearly_nth"||recurrence==="yearly_easter")&&date&&typeof pxNthLabel==="function"&&(function(){
+          // Anual: repete no mesmo dia (13/09), no mesmo dia da semana (2º domingo de setembro)
+          // ou atrelado à Páscoa (Carnaval, Sexta-feira Santa, Corpus Christi)? A 3ª opção só
+          // aparece se a data cai a até 70 dias da Páscoa daquele ano.
           const _dm=date.slice(8,10)+"/"+date.slice(5,7);
           const _opts=[{id:"yearly",label:"Todo dia "+_dm},{id:"yearly_nth",label:"Todo "+pxNthLabel(date)}];
+          if(typeof pxEasterOffset==="function" && Math.abs(pxEasterOffset(date))<=70) _opts.push({id:"yearly_easter",label:"Toda "+pxEasterLabel(date)+" (móvel, pela Páscoa)"});
           return <div style={{marginTop:10,display:"flex",gap:6}}>
             {_opts.map(function(o){
               const on=recurrence===o.id;
@@ -17015,6 +17049,10 @@ function PageCalendarioInterno({isMob}){
       if(ev.recurrence==="yearly_nth"){
         if(_pastEnd) return false;
         return typeof pxNthMatch==="function" && pxNthMatch(ev.date, dIso); // 2º domingo de agosto, etc.
+      }
+      if(ev.recurrence==="yearly_easter"){
+        if(_pastEnd) return false;
+        return typeof pxEasterMatch==="function" && pxEasterMatch(ev.date, dIso); // Carnaval, Sexta Santa, Páscoa, Corpus Christi
       }
       if(ev.recurrence==="yearly"){
         if(_pastEnd) return false;
@@ -17663,7 +17701,7 @@ function PageCalendarioInterno({isMob}){
                 if(_myEvs.length===0)return null;
                 return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
                   {_myEvs.slice(0,5).map(function(ev){
-                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="biweekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly"||ev.recurrence==="yearly_nth";
+                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="biweekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly"||ev.recurrence==="yearly_nth"||ev.recurrence==="yearly_easter";
                     // Cor: assinaturas SEMPRE roxo Pixels. Senão cor do cliente vinculado. Senão cor manual. Senão cor categoria. Senão preto.
                     // Lê array client_ids primeiro, fallback pro client_id legado. Renderiza cor/nome do primeiro.
                     const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
@@ -76228,10 +76266,11 @@ function _PlanejamentosClientes({isMob}){
         return _dates;
       }
       const _orig = _parse(ev.date);
-      if(ev.recurrence==="yearly_nth"){
-        // Anual no mesmo dia da semana (2º domingo de agosto…) — bidirecional como o anual
+      if(ev.recurrence==="yearly_nth"||ev.recurrence==="yearly_easter"){
+        // Anual no mesmo dia da semana (2º domingo de agosto…) ou atrelado à Páscoa
+        // (Carnaval, Sexta Santa…) — bidirecional como o anual
         for(let _y=_pStart.getFullYear(); _y<=_pEnd.getFullYear(); _y++){
-          const _iso = pxNthDateInYear(ev.date,_y);
+          const _iso = ev.recurrence==="yearly_easter" ? pxEasterDateInYear(ev.date,_y) : pxNthDateInYear(ev.date,_y);
           if(_recUntil && _iso > _recUntil) continue;
           if(_iso>=periodStart && _iso<=periodEnd) _dates.push(_iso);
         }
@@ -78341,9 +78380,9 @@ function pxAutoComExpandir(ev, startISO, endISO){
   const out=[];
   if(!rec||rec==="none"){ if(ev.date>=startISO&&ev.date<=endISO) out.push(ev.date); return out; }
   const o=_p(ev.date), s=_p(startISO), e=_p(endISO);
-  if(rec==="yearly_nth"){
+  if(rec==="yearly_nth"||rec==="yearly_easter"){
     for(let y=s.getFullYear(); y<=e.getFullYear(); y++){
-      const iso=pxNthDateInYear(ev.date,y);
+      const iso=rec==="yearly_easter" ? pxEasterDateInYear(ev.date,y) : pxNthDateInYear(ev.date,y);
       if(until&&iso>until) continue;
       if(iso>=startISO&&iso<=endISO) out.push(iso);
     }
