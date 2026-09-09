@@ -69858,15 +69858,18 @@ function _pxScriptsRainbow(){
     : ["#dc2626","#ea580c","#f97316","#f59e0b","#ca8a04","#84cc16","#16a34a","#059669","#9333ea"];
 }
 function _pxCorSequencial(i, total){
-  const stops=_pxScriptsRainbow();
-  if(stops.length<2) return stops[0]||"#7c3aed";
-  const n=Math.max(1,(total||1)-1);
-  const t=Math.max(0,Math.min(1,(i||0)/n))*(stops.length-1);
-  const k=Math.min(stops.length-2,Math.floor(t)), f=t-k;
-  const h=function(x){ const m=String(x).replace("#",""); return [parseInt(m.slice(0,2),16),parseInt(m.slice(2,4),16),parseInt(m.slice(4,6),16)]; };
-  const a=h(stops[k]), b=h(stops[k+1]);
-  const c=a.map(function(v,j){ return Math.round(v+(b[j]-v)*f); });
-  return "#"+c.map(function(v){ return ("0"+v.toString(16)).slice(-2); }).join("");
+  // Matiz contínua vermelho → laranja → âmbar → (pula o oliva) verde → teal → azul → índigo → roxo.
+  // Interpola em HSL pra nunca passar por tons lavados/mostarda; pesos garantem poucos
+  // laranjas e uma faixa boa de verdes e azuis, terminando sempre no roxo.
+  const n=Math.max(1,(total||1)-1), t=Math.max(0,Math.min(1,(i||0)/n));
+  const pts=[[0,0],[0.24,36],[0.27,115],[0.55,155],[0.72,200],[0.88,235],[1,280]];
+  let h=280;
+  for(let k=0;k<pts.length-1;k++){ const t0=pts[k][0],h0=pts[k][1],t1=pts[k+1][0],h1=pts[k+1][1]; if(t>=t0&&t<=t1){ h=h0+(h1-h0)*(t-t0)/(t1-t0); break; } }
+  const l=(h>25&&h<60)?46:(h>=60&&h<170)?38:(h>=170&&h<215)?41:47;
+  const sat=(h>=60&&h<170)?70:82;
+  const S=sat/100, L=l/100, kf=function(x){ return (x+h/30)%12; }, A=S*Math.min(L,1-L);
+  const f=function(x){ return L-A*Math.max(-1,Math.min(kf(x)-3,9-kf(x),1)); };
+  return "#"+[f(0),f(8),f(4)].map(function(v){ return ("0"+Math.round(v*255).toString(16)).slice(-2); }).join("");
 }
 function _usePxScriptsN(secao, n){
   const [outros,setOutros]=useState(function(){ return (window.__pxScriptsN||{}); });
