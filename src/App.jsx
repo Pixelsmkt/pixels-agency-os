@@ -16029,30 +16029,25 @@ function CMarcos({cl,canEdit,selUnit}){
 }
 
 // DateField moderno reutilizável do padrão Ongoing — clique abre o picker nativo
-function _MarcoDateField({value, onChange, accent}){
-  const inputRef = useRef(null);
-  function _open(){
-    try{
-      if(inputRef.current){
-        if(typeof inputRef.current.showPicker==="function") inputRef.current.showPicker();
-        else inputRef.current.focus();
-      }
-    }catch(e){ if(inputRef.current) inputRef.current.focus(); }
-  }
+function _MarcoDateField({value, onChange, accent, min, zIndex}){
+  // 09/09/2026: usa o calendário próprio do app (_PxDatePicker) no lugar do picker nativo do navegador.
   const _ac = accent || "#7c3aed";
   const hasVal = !!value;
   const labelBR = hasVal ? (value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4)) : "Selecionar data";
-  return <div onClick={function(e){e.stopPropagation();_open();}}
-    style={{display:"inline-flex",alignItems:"center",gap:8,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(hasVal?_ac+"33":"#e2e8f0"),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:600,fontFamily:"inherit",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",minWidth:160,boxSizing:"border-box"}}
-    onMouseEnter={function(e){e.currentTarget.style.borderColor=_ac+"66";e.currentTarget.style.background="#fff";}}
-    onMouseLeave={function(e){e.currentTarget.style.borderColor=hasVal?_ac+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}>
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasVal?_ac:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-    </svg>
-    <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
-    <input ref={inputRef} type="date" value={value||""} onChange={function(e){onChange&&onChange(e.target.value);}}
-      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
-  </div>;
+  const _trigger=function(p){
+    return <div onClick={function(e){e.stopPropagation();p.abrir();}}
+      style={{display:"inline-flex",alignItems:"center",gap:8,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(p.aberto?_ac:(hasVal?_ac+"33":"#e2e8f0")),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:500,cursor:"pointer",fontFamily:"inherit",boxShadow:p.aberto?"0 0 0 3px "+_ac+"1f":"none",transition:"all .12s",userSelect:"none"}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasVal||p.aberto?_ac:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
+    </div>;
+  };
+  if(typeof _PxDatePicker==="function"){
+    return <_PxDatePicker value={value||""} onChange={function(v){onChange&&onChange(v);}} accent={_ac} min={min} zIndex={zIndex||700} render={_trigger}/>;
+  }
+  return <input type="date" value={value||""} min={min} onChange={function(e){onChange&&onChange(e.target.value);}}
+    style={{padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,fontFamily:"inherit"}}/>;
 }
 
 function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
@@ -16627,18 +16622,15 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       {/* Data final (multi-dia) */}
       {endDate&&<div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Até</div>
-        <div style={{position:"relative",cursor:"pointer"}} onClick={function(e){const _i=e.currentTarget.querySelector("input[type='date']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}}>
-          <input type="date" value={endDate} min={date} onChange={function(e){setEndDate(e.target.value);}}
-            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
-        </div>
+        <_MarcoDateField value={endDate} min={date} onChange={function(v){setEndDate(v);}} accent="#7c3aed"/>
         {endDate&&endDate>date&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>Evento aparecerá em todos os dias do intervalo ({Math.floor((new Date(endDate+"T12:00")-new Date(date+"T12:00"))/86400000)+1} dias).</div>}
       </div>}
       {/* Recorrência (escondida quando evento é multi-dia) */}
       {!endDate && <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
-          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"},{id:"yearly_nth",label:"Anual · "+(typeof pxNthLabel==="function"&&date?pxNthLabel(date):"mesmo dia da semana")}].map(function(opt){
-            const sel=recurrence===opt.id;
+          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+            const sel=recurrence===opt.id||(opt.id==="yearly"&&recurrence==="yearly_nth");
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id); if(!opt.id) setRecurrenceUntil("");}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
               {opt.label}
@@ -16646,13 +16638,26 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           })}
         </div>
         {/* Data de término da recorrência — só aparece quando repete */}
+        {(recurrence==="yearly"||recurrence==="yearly_nth")&&date&&typeof pxNthLabel==="function"&&(function(){
+          // Anual: repete no mesmo dia (13/09) ou no mesmo dia da semana (2º domingo de setembro)?
+          const _dm=date.slice(8,10)+"/"+date.slice(5,7);
+          const _opts=[{id:"yearly",label:"Todo dia "+_dm},{id:"yearly_nth",label:"Todo "+pxNthLabel(date)}];
+          return <div style={{marginTop:10,display:"flex",gap:6}}>
+            {_opts.map(function(o){
+              const on=recurrence===o.id;
+              return <button key={o.id} type="button" onClick={function(){setRecurrence(o.id);}}
+                style={{flex:1,background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:9,padding:"8px 10px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+                {o.label}
+              </button>;
+            })}
+          </div>;
+        })()}
         {recurrence && <div style={{marginTop:10,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
           <div style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:700}}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="15" y1="15" x2="9" y2="15"/></svg>
             Termina em
           </div>
-          <input type="date" value={recurrenceUntil||""} min={date} onChange={function(e){setRecurrenceUntil(e.target.value);}}
-            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",outline:"none",cursor:"pointer"}}/>
+          <_MarcoDateField value={recurrenceUntil||""} min={date} onChange={function(v){setRecurrenceUntil(v);}} accent="#7c3aed"/>
           {recurrenceUntil && <button type="button" onClick={function(){setRecurrenceUntil("");}} title="Limpar (repetir pra sempre)"
             style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 6px",display:"inline-flex",alignItems:"center",gap:3}}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -58763,8 +58768,10 @@ function _pxDpLabel(iso){
   return String(p.d).padStart(2,"0")+" de "+_PX_DP_MESES[p.m-1].toLowerCase().slice(0,3)+". de "+p.y;
 }
 
-function _PxDatePicker({value, onChange, accent, render}){
+function _PxDatePicker({value, onChange, accent, render, zIndex, min}){
   const cor = accent || "#7c3aed";
+  const _z = zIndex || 400;
+  const _min = min || "";
   const sel = _pxDpParse(value);
   const hoje = new Date();
   const hojeIso = _pxDpIso(hoje.getFullYear(), hoje.getMonth()+1, hoje.getDate());
@@ -58845,7 +58852,7 @@ function _PxDatePicker({value, onChange, accent, render}){
         style={{flexShrink:0,transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
     </button>}
 
-    {aberto&&pos&&<div ref={popRef} style={{position:"fixed",left:pos.left,top:pos.top,zIndex:400,width:POP_W,
+    {aberto&&pos&&<div ref={popRef} style={{position:"fixed",left:pos.left,top:pos.top,zIndex:_z,width:POP_W,
       background:"#fff",border:"1px solid #e9ebef",borderRadius:14,boxShadow:"0 18px 44px rgba(8,10,14,0.20)",padding:12}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:9}}>
         <button type="button" onClick={function(){navegar(-1);}}
@@ -58871,13 +58878,14 @@ function _PxDatePicker({value, onChange, accent, render}){
           const iso=_pxDpIso(vY,vM,d);
           const _sel = value===iso;
           const _hoje = hojeIso===iso;
-          return <button key={iso} type="button"
-            onClick={function(){ if(onChange) onChange(iso); setAberto(false); }}
-            style={{background:_sel?cor:"transparent",color:_sel?"#fff":(_hoje?cor:"#334155"),
+          const _bloq = !!_min && iso<_min; // antes do mínimo (ex.: fim antes do início)
+          return <button key={iso} type="button" disabled={_bloq}
+            onClick={function(){ if(_bloq) return; if(onChange) onChange(iso); setAberto(false); }}
+            style={{background:_sel?cor:"transparent",color:_sel?"#fff":(_bloq?"#cbd5e1":(_hoje?cor:"#334155")),opacity:_bloq?.6:1,
               border:_hoje&&!_sel?"1px solid "+cor+"55":"1px solid transparent",
               borderRadius:8,height:28,cursor:"pointer",fontFamily:"inherit",
               fontSize:11.5,fontWeight:_sel||_hoje?800:600,transition:"background .1s",padding:0}}
-            onMouseEnter={function(e){ if(!_sel) e.currentTarget.style.background="#f4f5f7"; }}
+            onMouseEnter={function(e){ if(!_sel&&!_bloq) e.currentTarget.style.background="#f4f5f7"; }}
             onMouseLeave={function(e){ if(!_sel) e.currentTarget.style.background="transparent"; }}>
             {d}
           </button>;
@@ -78346,6 +78354,15 @@ async function pxGerarCardsComemorativos(opts){
   }
   faltam=faltam.filter(function(c){ return !existentes.has(c.id); });
   if(!faltam.length) return 0;
+  // Paraguay: título em espanhol (dicionário → IA) — decidido ANTES da 2ª trava, pra comparar
+  // o título que vai pro card (o card do Paraguay já existente está em espanhol).
+  const _titulosES={};
+  for(const c of faltam){
+    if(c.unit==="paraguay"){
+      if(_titulosES[c.ev.title]===undefined){ try{ _titulosES[c.ev.title]=await pxTituloEmEspanhol(c.ev.title); }catch(_){ _titulosES[c.ev.title]=c.ev.title; } }
+      c.tituloFinal=_titulosES[c.ev.title]||c.ev.title;
+    } else c.tituloFinal=c.ev.title;
+  }
   // 2ª trava (09/09/2026): dois EVENTOS com o mesmo título no mesmo dia (ex.: "Dia do Trabalhador
   // Rural" cadastrado duas vezes) não podem virar dois cards pro mesmo cliente. Compara por
   // título normalizado + data + cliente + unidade contra os cards automáticos já existentes.
@@ -78361,7 +78378,7 @@ async function pxGerarCardsComemorativos(opts){
   }
   const _vistos=new Set();
   faltam=faltam.filter(function(c){
-    const k=_chave(c.ev.title,c.date,c.client,c.unit);
+    const k=_chave(c.tituloFinal,c.date,c.client,c.unit);
     if(_jaTem.has(k)||_vistos.has(k)) return false;
     _vistos.add(k); return true;
   });
@@ -78369,16 +78386,17 @@ async function pxGerarCardsComemorativos(opts){
   const now=new Date();
   const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
   const novos=faltam.map(function(c){
+    const _tituloBase=c.tituloFinal||c.ev.title;
     return {
       id:c.id,
-      title:(typeof smartFormatTitle==="function"?smartFormatTitle(c.ev.title||"Data comemorativa"):(c.ev.title||"Data comemorativa")),
+      title:(typeof smartFormatTitle==="function"?smartFormatTitle(_tituloBase||"Data comemorativa"):(_tituloBase||"Data comemorativa")),
       desc:c.ev.description||"",
       assignee:"ellen", assignees:["ellen"], watchers:[],
       client:c.client, sector:"", priority:"", status:"rascunhos",
       startDate:_f(now), deadline:c.date,
       publishDate:c.date, publish_date:c.date, publishTime:"11:00",
       contentType:null,
-      completedAt:null, score:null, tags:["Data comemorativa"], comments:[], files:[], cover:null, checklist:[],
+      completedAt:null, score:null, tags:c.unit==="paraguay"?["Data comemorativa","Español"]:["Data comemorativa"], comments:[], files:[], cover:null, checklist:[],
       deletedAt:null,
       bioterUnit:c.unit||null,
       referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
@@ -78428,6 +78446,66 @@ async function pxEventosTodosIncluirCliente(novoId){
   }
   if(n>0&&typeof pixelsToast!=="undefined") pixelsToast.info("Cliente incluído em "+n+" data(s) marcadas pra todos os clientes.",4500);
   return n;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   pxTituloEmEspanhol — título do card da Bioter Paraguay em espanhol (09/09/2026).
+   1) dicionário das datas conhecidas (instantâneo, sem custo);
+   2) tradução palavra a palavra pros padrões "Dia do/da/dos/das …";
+   3) se ainda sobrar português, pergunta pra IA (Edge Function ask-claude) e
+      guarda no localStorage pra não perguntar de novo. Se a IA falhar, mantém o
+      título em português (o card ainda leva a tag "Español" pra Hellen ver).
+   ═══════════════════════════════════════════════════════════════════════ */
+const PX_ES_DICT = {
+  "natal":"Navidad", "reveillon":"Año Nuevo", "ano novo":"Año Nuevo", "carnaval":"Carnaval",
+  "pascoa":"Pascua", "sexta-feira santa":"Viernes Santo", "sexta feira santa":"Viernes Santo",
+  "dia das maes":"Día de la Madre", "dia das maes (2o domingo)":"Día de la Madre", "dia dos pais":"Día del Padre",
+  "dia do trabalho":"Día del Trabajador", "dia do trabalhador":"Día del Trabajador",
+  "dia internacional da mulher":"Día Internacional de la Mujer",
+  "dia mundial da agricultura":"Día Mundial de la Agricultura", "dia nacional da agricultura":"Día Nacional de la Agricultura",
+  "dia nacional da pecuaria":"Día Nacional de la Ganadería", "dia do pecuarista":"Día del Ganadero",
+  "dia nacional do suinocultor":"Día Nacional del Porcicultor", "dia do avicultor":"Día del Avicultor",
+  "dia do produtor rural/dia do agricultor":"Día del Productor Rural / Día del Agricultor", "dia do produtor rural":"Día del Productor Rural", "dia do agricultor":"Día del Agricultor",
+  "dia do trabalhador rural":"Día del Trabajador Rural", "dia mundial do leite":"Día Mundial de la Leche",
+  "dia mundial do meio ambiente":"Día Mundial del Medio Ambiente", "dia mundial da agua":"Día Mundial del Agua",
+  "dia das aves":"Día de las Aves", "dia internacional do cafe":"Día Internacional del Café", "dia nacional do cafe":"Día Nacional del Café",
+  "dia mundial do agronomo":"Día Mundial del Agrónomo", "dia mundial do campo":"Día Mundial del Campo", "dia do agronomo":"Día del Agrónomo", "dia do veterinario":"Día del Veterinario",
+  "dia da independencia do brasil":"Día de la Independencia de Brasil", "dia da independencia":"Día de la Independencia",
+  "dia da proclamacao da republica":"Día de la Proclamación de la República",
+  "dia do cliente":"Día del Cliente", "dia do consumidor":"Día del Consumidor", "dia da mulher":"Día de la Mujer",
+  "dia das criancas":"Día del Niño", "dia do amigo":"Día del Amigo", "dia dos namorados":"Día de los Enamorados",
+  "dia mundial da alimentacao":"Día Mundial de la Alimentación", "dia do produtor de leite":"Día del Productor de Leche",
+  "dia do engenheiro":"Día del Ingeniero", "dia da terra":"Día de la Tierra", "dia mundial do solo":"Día Mundial del Suelo",
+  "dia do meio ambiente":"Día del Medio Ambiente", "dia da arvore":"Día del Árbol", "semana do meio ambiente":"Semana del Medio Ambiente",
+};
+const PX_ES_PALAVRAS = {
+  "dia":"Día","mundial":"Mundial","nacional":"Nacional","internacional":"Internacional","semana":"Semana","mes":"Mes",
+  "do":"del","da":"de la","dos":"de los","das":"de las","de":"de","e":"y","aniversario":"Aniversario","aniversário":"Aniversario",
+  "cidade":"Ciudad","brasil":"Brasil","paraguai":"Paraguay","paraguay":"Paraguay","feliz":"Feliz","ano":"Año","novo":"Nuevo",
+};
+function _pxEsNorm(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim(); }
+async function pxTituloEmEspanhol(titulo){
+  const t=String(titulo||"").trim(); if(!t) return t;
+  const n=_pxEsNorm(t);
+  if(PX_ES_DICT[n]) return PX_ES_DICT[n];
+  // "Aniversário de Chapecó-SC" → "Aniversario de Chapecó-SC"
+  const mA=t.match(/^anivers[aá]rio\s+d[eao]s?\s+(.+)$/i); if(mA) return "Aniversario de "+mA[1];
+  // cache de traduções da IA
+  let cache={}; try{ cache=JSON.parse(localStorage.getItem("pixels-es-cache")||"{}")||{}; }catch(_){}
+  if(cache[n]) return cache[n];
+  // palavra a palavra: só aceita se TODAS as palavras forem conhecidas (senão fica meia-tradução)
+  const partes=t.split(/\s+/); const trad=[]; let ok=true;
+  for(const p of partes){ const k=_pxEsNorm(p); if(PX_ES_PALAVRAS[k]!==undefined) trad.push(PX_ES_PALAVRAS[k]); else { ok=false; break; } }
+  if(ok) return trad.join(" ");
+  // IA
+  try{
+    if(typeof askClaude==="function"){
+      const r=await askClaude({max_tokens:60,system:"Traduza o título de data comemorativa/evento do português para o espanhol (Paraguai). Responda SÓ com o título traduzido, sem aspas, sem explicação.",messages:[{role:"user",content:t}]});
+      const out=((r&&r.content)||[]).map(function(b){return b.text||"";}).join("").trim().replace(/^["“”']+|["“”']+$/g,"");
+      if(out&&out.length<120){ cache[n]=out; try{ localStorage.setItem("pixels-es-cache",JSON.stringify(cache)); }catch(_){} return out; }
+    }
+  }catch(e){ console.warn("[es] IA falhou:",e&&e.message?e.message:e); }
+  return t; // sem tradução confiável: mantém o original (a tag "Español" avisa)
 }
 
 // DashSocio v5 (2026-06-10):
