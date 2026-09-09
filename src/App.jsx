@@ -16405,6 +16405,28 @@ function _getClientBdaysDM(clientId){
   }catch(e){return [];}
 }
 
+/* ═══ Cards automáticos ↔ evento (09/09/2026) ═══════════════════════════════
+   Apagar/editar uma data no Planejamento/calendário interno limpa os cards
+   automáticos ("autocom-<evento>-…") que ficaram sem sentido — só os VAZIOS em
+   Rascunhos (sem arquivo, legenda, descrição ou comentário). Card que já teve
+   trabalho fica. Vai pra lixeira (deleted_at), e o gerador não recria: ele
+   confere o id no Supabase inclusive apagado.
+   `manter(row)` → true = o card continua válido (usado na edição).           */
+function pxAutoComLimparDoEvento(eventId, manter){
+  const sb=window._sb; if(!sb||!eventId) return Promise.resolve(0);
+  return sb.from("tasks").select("id,status,publish_date,client,bioter_unit,files,caption,description,comments")
+    .like("id","autocom-"+String(eventId)+"-%").is("deleted_at",null).then(function(r){
+      if(!r||r.error||!Array.isArray(r.data)||!r.data.length) return 0;
+      const _vazio=function(t){
+        const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
+        return String(t.status||"")==="rascunhos" && !nf && !nc && !String(t.caption||"").trim() && !String(t.description||"").trim();
+      };
+      const ids=r.data.filter(function(t){ return _vazio(t) && !(typeof manter==="function" && manter(t)); }).map(function(t){ return t.id; });
+      if(!ids.length) return 0;
+      const now=new Date().toISOString();
+      return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){ return (r2&&r2.error)?0:ids.length; });
+    });
+}
 function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [title,setTitle]=useState((initial&&initial.title)||"");
   const [description,setDescription]=useState((initial&&initial.description)||"");
@@ -16555,6 +16577,20 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     q.then(function(r){
       if(r&&r.error){_savingRef.current=false;setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
       const _savedRow=r&&r.data;
+      // (09/09) Editou data/recorrência/clientes? Cards automáticos VAZIOS que não batem mais somem;
+      // os que continuam válidos ficam (mesmo id → o gerador não duplica).
+      if(isEdit&&_savedRow&&String(_savedRow.category||"")==="comemorativa"&&typeof pxAutoComExpandir==="function"&&typeof pxAutoComTargets==="function"){
+        try{
+          const _f=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+          const _hoje=new Date(); const _ini=_f(_hoje); const _fim=_f(new Date(_hoje.getFullYear()+2,_hoje.getMonth(),_hoje.getDate()));
+          let _ids=_savedRow.client_ids; if(typeof _ids==="string"){ try{ _ids=JSON.parse(_ids); }catch(_){ _ids=[]; } }
+          if(!Array.isArray(_ids)||!_ids.length) _ids=_savedRow.client_id?[_savedRow.client_id]:[];
+          const _datas=new Set(pxAutoComExpandir(_savedRow,_ini,_fim));
+          const _alvos=new Set(pxAutoComTargets(_ids).map(function(t){ return t.client+"|"+(t.unit||""); }));
+          pxAutoComLimparDoEvento(_savedRow.id,function(t){ return _datas.has(String(t.publish_date||"").slice(0,10)) && _alvos.has(String(t.client||"")+"|"+String(t.bioter_unit||"")); })
+            .then(function(n){ if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" que não bat"+(n>1?"em":"e")+" mais com a data foi"+(n>1?"ram":"")+" removido"+(n>1?"s":"")+".",6000); }).catch(function(){});
+        }catch(_e){ console.warn("[autocom limpar]",_e); }
+      }
       // Sincronizar marco vinculado (se aplicável)
       function _doneSave(_silencioso){
         _savingRef.current=false;
@@ -16578,7 +16614,12 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         onDeleted&&onDeleted();
       }
       const _delEvento=function(){
-        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel,function(e){console.warn("[internal_events del]",e);_doneDel();});
+        // (09/09) leva junto os cards automáticos vazios do calendário de publicações
+        pxAutoComLimparDoEvento(initial.id).then(function(n){
+          if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" removido"+(n>1?"s":"")+" do calendário de publicações.",5000);
+        }).catch(function(){}).then(function(){
+          window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel,function(e){console.warn("[internal_events del]",e);_doneDel();});
+        });
       };
       // Apaga TODAS as cópias do checkpoint (uma por cliente/unidade), não só a principal.
       // Aguardado de propósito: se o evento sumisse antes, sobrariam checkpoints órfãos
@@ -60342,7 +60383,9 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
         <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
           <span style={{color:m.done||_atual?"#0f172a":"#7a8494",fontSize:12,fontWeight:m.done||_atual?800:700,letterSpacing:-.2}}>{m.l}</span>
           {/* data logo depois do título (antes ficava colada na borda direita, longe da tarefa) */}
-          <span style={{color:m.done?_c:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>· {m.due?_fmtBR(m.due):m.dia}</span>
+          <span style={{color:m.done?_c:(m.atrasado?"#b45309":"#a3adbb"),fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.8}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {m.due?_fmtBR(m.due):m.dia}</span>
           {m.done&&<span style={{background:_c+"14",color:_c,fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>{m.isMarco?m.tipoLbl:"Entregue"}</span>}
           {_atual&&!m.done&&<span style={{background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Em andamento</span>}
           {m.tab&&_tabOk(m.tab)&&m.done&&<button onClick={function(){onGoTab&&onGoTab(m.tab);}}
@@ -68605,7 +68648,7 @@ const ONBOARDING_BLOCKS_STARTER = [
     ],
   },
   {
-    id:"dia31", title:"Dia 31", subtitle:"Fechamento do mês 1 · ATIVAÇÃO DAS CAMPANHAS",
+    id:"dia31", title:"Dia 31", subtitle:"Fechamento do mês 1",
     items:[
       {id:"d31_reuniao", label:"Reunião de alinhamento do mês 1"},
       {id:"d31_relatorio", label:"Relatório do mês 1 (posicionamento e conteúdo)", doc:true, docDesc:"Relatório de fechamento do mês 1"},
