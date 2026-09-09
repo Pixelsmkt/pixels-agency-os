@@ -40080,7 +40080,8 @@ function _cardPodeSerResp(u){
                                 style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
                           <div style={{position:"absolute",bottom:5,left:5,display:"flex",gap:4,pointerEvents:"none"}}>
                             <span style={{background:"rgba(15,23,42,0.78)",color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'"}}>{_isStory?"S":"#"}{_num}</span>
-                            {!_av&&!isVid(a)&&<span style={{background:_isStory?"#ffedd5":"#ede9fe",color:_isStory?"#9a3412":"#4c1d95",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>{_isStory?"Story":"Feed"}</span>}
+                            {/* Lâmina em vídeo também leva Feed/Story: é lâmina do carrossel, não "card de vídeo" */}
+                            <span style={{background:_isStory?"#ffedd5":"#ede9fe",color:_isStory?"#9a3412":"#4c1d95",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>{_isStory?"Story":"Feed"}</span>
                           </div>
                         </div>;
                       })}
@@ -69413,7 +69414,9 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
     onDragOver={drag?drag.over(idx):undefined}
     onDrop={drag?drag.drop(idx):undefined}
     onDragEnd={function(){ _setPode(false); if(drag) drag.end(); }}
-    style={{background:"#fff",border:"1px solid "+(_alvo?_cor:(_editing?"#a78bfa":"#e2e8f0")),borderRadius:11,padding:"12px 14px",transition:"border .12s, opacity .12s, transform .12s",display:"flex",flexDirection:"column",gap:8,opacity:_dragging?0.4:1,transform:_alvo?"scale(1.012)":"none",boxShadow:_alvo?("0 0 0 3px "+_cor+"33"):"none"}}>
+    style={{background:"#fff",border:"1px solid "+(_alvo?_cor:(_editing?_cor:"#ebe7f6")),borderRadius:16,padding:"14px 16px 14px",transition:"border .15s, opacity .12s, transform .15s, box-shadow .15s",display:"flex",flexDirection:"column",gap:10,opacity:_dragging?0.4:1,transform:_alvo?"scale(1.012)":"none",boxShadow:_alvo?("0 0 0 3px "+_cor+"33"):"0 1px 2px rgba(15,23,42,.03)"}}
+    onMouseEnter={function(e){ if(!_alvo){ e.currentTarget.style.boxShadow="0 12px 32px "+_cor+"1f"; e.currentTarget.style.borderColor=_cor+"66"; } }}
+    onMouseLeave={function(e){ if(!_alvo){ e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)"; e.currentTarget.style.borderColor=_editing?_cor:"#ebe7f6"; } }}>
     {/* TITULO — box colorido com a cor do cliente; clique renomeia */}
     {_editing
       ? <input value={s.titulo||""} onChange={function(e){_updateScript(s.id,{titulo:e.target.value});}}
@@ -69421,9 +69424,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           onKeyDown={function(e){if(e.key==="Enter"){e.currentTarget.blur();}else if(e.key==="Escape"){setEditingId(null);}}}
           style={Object.assign({},_INP,{fontWeight:800,fontSize:13,background:_cor+"14",border:"1.5px solid "+_cor,color:"#0f172a",borderRadius:9,padding:"9px 12px"})}/>
       : <div onClick={function(){ if(!_ro) setEditingId(s.id); }} title={_ro?"":"Clique pra renomear"}
-          style={{background:"#f8fafc",borderLeft:"3px solid "+_cor,color:_ink,fontWeight:800,fontSize:12.5,letterSpacing:-.15,cursor:_ro?"default":"pointer",padding:"9px 12px",borderRadius:9,display:"flex",alignItems:"center",gap:8,transition:"background .12s",lineHeight:1.3}}
-          onMouseEnter={function(e){ if(_ro) return; e.currentTarget.style.background="#f1f5f9";}}
-          onMouseLeave={function(e){ if(_ro) return; e.currentTarget.style.background="#f8fafc";}}>
+          style={{color:_ink,fontWeight:800,fontSize:13,letterSpacing:-.2,cursor:_ro?"default":"pointer",padding:"2px 0",display:"flex",alignItems:"center",gap:9,lineHeight:1.3}}>
           {/* Mobile: setas no lugar do arraste */}
           {drag && (typeof _pxMob==="function"&&_pxMob()) && <span style={{display:"inline-flex",gap:2,flexShrink:0}} onClick={function(e){e.stopPropagation();}}>
             <button type="button" onClick={function(e){e.stopPropagation();drag.mover(idx,idx-1);}} disabled={idx===0} title="Subir"
@@ -69445,6 +69446,9 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
               <circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/>
             </svg>
           </span>}
+          <span style={{width:28,height:28,borderRadius:9,background:_cor+"14",color:_cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </span>
           <span style={{flex:1,minWidth:0}}>{s.titulo||"(sem título)"}</span>
           {!_ro && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_sub} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -69463,20 +69467,22 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
       onInput={function(e){ _ajustarAltura(e.target); }}
       readOnly={_ro}
       placeholder={_ro?"":"Digite ou cole o texto do script..."}
-      style={Object.assign({},_INP,{resize:"vertical",minHeight:_SCRIPT_ALT_MIN,maxHeight:_SCRIPT_ALT_MAX+80,overflowY:"auto",lineHeight:1.55,fontFamily:_ONB_FF,background:_ro?"#fbfcfd":"#fafbfc",cursor:_ro?"text":"auto"})}/>
+      onFocus={function(e){ e.currentTarget.style.borderColor=_cor; e.currentTarget.style.boxShadow="0 0 0 3px "+_cor+"1a"; }}
+      onBlur={function(e){ e.currentTarget.style.borderColor="#ede9fe"; e.currentTarget.style.boxShadow="none"; }}
+      style={Object.assign({},_INP,{resize:"vertical",minHeight:_SCRIPT_ALT_MIN,maxHeight:_SCRIPT_ALT_MAX+80,overflowY:"auto",lineHeight:1.6,fontFamily:_ONB_FF,background:"#faf9fe",border:"1px solid #ede9fe",borderRadius:12,padding:"11px 13px",color:"#334155",fontSize:12.5,cursor:_ro?"text":"auto",transition:"border-color .12s, box-shadow .12s"})}/>
     <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between",marginTop:2}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>{(s.texto||"").length} caracteres</div>
       <div style={{display:"flex",gap:6}}>
         {!_ro && <button onClick={function(){_deleteScript(s.id);}} type="button" title="Excluir script"
-          style={{background:"transparent",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:7,width:30,height:30,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
+          style={{background:"transparent",color:"#94a3b8",border:"1px solid transparent",borderRadius:9,width:32,height:32,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:_ONB_FF,transition:"all .12s"}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.background="#fef2f2";}}
           onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>}
         <button onClick={function(){_copyScript(s);}} type="button" title={"Copia com dados de "+((cl&&cl.name)||"cliente")+" preenchidos automaticamente"}
-          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#15803d";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";}}>
+          style={{background:"linear-gradient(135deg,"+_cor+","+_cor+"d9)",color:"#fff",border:"none",borderRadius:10,padding:"8px 15px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",boxShadow:"0 4px 12px "+_cor+"3d"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 8px 18px "+_cor+"55";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 12px "+_cor+"3d";}}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar
         </button>
@@ -69566,15 +69572,15 @@ function _OnboardingScripts({cl, startDate, accent}){
 
   return <div
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
-    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
+    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"1px solid #eef0f3"),borderRadius:18,padding:"18px 20px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:(typeof _accent!=="undefined"?_accent:accent)+"14",color:(typeof _accent!=="undefined"?_accent:accent),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,"+(typeof _accent!=="undefined"?_accent:accent)+","+(typeof _accent!=="undefined"?_accent:accent)+"cc)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 18px "+(typeof _accent!=="undefined"?_accent:accent)+"40"}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,display:"flex",alignItems:"center",gap:8}}>Onboarding<span style={{background:accent+"14",color:accent,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{scripts.length}</span></div>
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Contratação, kickoff e primeiros dias do projeto.</div>
         </div>
       </div>
@@ -69584,7 +69590,7 @@ function _OnboardingScripts({cl, startDate, accent}){
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 1px 2px rgba(15,23,42,.04)"}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -69715,14 +69721,14 @@ function _OngoingScripts({cl, accent}){
 
   return <div
     onDragOver={_drag.zonaOver} onDragLeave={_drag.zonaSai} onDrop={_drag.zonaDrop}
-    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"0.5px solid #e2e8f0"),borderRadius:14,padding:"16px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s"}}>
+    style={{background:_drag.deFora?"#faf5ff":"#fff",border:(_drag.deFora?"1.5px dashed #a855f7":"1px solid #eef0f3"),borderRadius:18,padding:"18px 20px 20px",fontFamily:_ONB_FF,marginTop:6,transition:"background .12s, border-color .12s",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:(typeof _accent!=="undefined"?_accent:accent)+"14",color:(typeof _accent!=="undefined"?_accent:accent),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,"+(typeof _accent!=="undefined"?_accent:accent)+","+(typeof _accent!=="undefined"?_accent:accent)+"cc)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 18px "+(typeof _accent!=="undefined"?_accent:accent)+"40"}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="14" x2="15" y2="14"/><line x1="9" y1="18" x2="13" y2="18"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Ongoing</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,display:"flex",alignItems:"center",gap:8}}>Ongoing<span style={{background:_accent+"14",color:_accent,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{scripts.length}</span></div>
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Check-ins, reuniões, NPS, indicações e resultados de funil.</div>
         </div>
       </div>
@@ -69732,7 +69738,7 @@ function _OngoingScripts({cl, accent}){
         Somente leitura
       </span>}
       {_podeEditar && <button onClick={_newScript} type="button"
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0}}
+        style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",flexShrink:0,boxShadow:"0 1px 2px rgba(15,23,42,.04)"}}
         onMouseEnter={function(e){e.currentTarget.style.opacity="0.9";}}
         onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
