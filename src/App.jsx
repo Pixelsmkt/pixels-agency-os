@@ -52281,23 +52281,23 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     </div>
 
     {/* ── 3. AGÊNCIA ── */}
-    {!soClientes&&<div>
-      <div style={{display:"flex",alignItems:"baseline",gap:10,margin:"0 2px 10px"}}><span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px",color:S.ink}}>Sob nossa gestão</span><span style={{fontSize:12,color:S.muted}}>todas as contas Meta somadas · leads = leads de formulário + conversas no WhatsApp</span></div>
+    {!soClientes&&<div style={{background:ADS_SOL.painel,borderRadius:18,padding:isMob?"18px 14px":"22px 20px",color:"#fff"}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · lead = formulário enviado ou conversa iniciada no WhatsApp</span></div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
-        {J.map(function(j,i){ const x=C.ag.j[j[0]]; const c=cpl(x); return <AdsCard key={j[0]} style={{padding:"18px 20px",borderTop:"3px solid "+(j[0]==="d1"?S.accent:S.line)}}>
-          {Eyebrow(j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1])}
-          <div style={{fontSize:28,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,margin:"8px 0 2px",color:S.ink}}><AdsNumAnim v={x.res} fmt={_adsNum}/><span style={{fontSize:12,fontWeight:700,color:S.muted,letterSpacing:0,marginLeft:6}}>leads</span></div>
-          <div style={{fontSize:12,color:S.ink2,marginTop:6}}><b style={{fontFeatureSettings:"'tnum'"}}>{c?_adsBRL(c):"—"}</b> por lead · <span style={{color:S.muted}}><AdsNumAnim v={x.gasto} fmt={_adsBRL0}/></span></div>
-          <div style={{fontSize:11,color:S.muted,marginTop:3}}>{_adsNum(x.leads)} formulário · {_adsNum(x.conversas)} WhatsApp</div>
-        </AdsCard>; })}
+        {J.map(function(j,i){ const x=C.ag.j[j[0]]; const c=cpl(x); const bg=j[0]==="d1"?ADS_SOL.claro:j[0]==="mes"?ADS_SOL.medio:ADS_SOL.escuro; return <div key={j[0]} style={{background:bg,borderRadius:14,padding:"16px 18px",minWidth:0}}>
+          <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1]}</div>
+          <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,margin:"8px 0 2px",color:"#fff",fontFeatureSettings:"'tnum'"}}><AdsNumAnim v={x.res} fmt={_adsNum}/><span style={{fontSize:12,fontWeight:700,color:ADS_SOL.sub,letterSpacing:0,marginLeft:6}}>leads</span></div>
+          <div style={{fontSize:12.5,color:"#fff",marginTop:6}}><b style={{fontFeatureSettings:"'tnum'"}}>{c?_adsBRL(c):"—"}</b> por lead <span style={{color:ADS_SOL.sub}}>· <AdsNumAnim v={x.gasto} fmt={_adsBRL0}/></span></div>
+          <div style={{fontSize:11,color:ADS_SOL.sub,marginTop:3}}>{_adsNum(x.leads)} formulário · {_adsNum(x.conversas)} WhatsApp</div>
+        </div>; })}
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.5fr 1fr",gap:14,marginTop:14}}>
-        <AdsCard style={{padding:"18px 20px 10px"}}>
+        <AdsCard style={{padding:"18px 20px 10px",color:ADS.ink}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><h4 style={{margin:0,fontSize:14,fontWeight:800,letterSpacing:"-.2px"}}>Leads por dia · 30 dias</h4><span style={{fontSize:11.5,color:S.muted}}>todas as contas · passe o mouse</span></div>
           <AdsArea pontos={dias30.map(function(d,i){ return Object.assign({},d,{lbl:(i%5===4||i===29)?d.lbl:""}); })} fmt={_adsNum} cor={S.accent} media={C.ag.j.d30.res/30} inverso={false} chave={"ag30|"+C.hoje} isMob={true} alt={190} detalhe={function(p){ return _adsBRL0(p.g)+" investidos · "+(p.v>0?_adsBRL(p.g/p.v)+" por lead":"sem lead"); }}/>
         </AdsCard>
-        <AdsCard style={{padding:"18px 20px"}}>
+        <AdsCard style={{padding:"18px 20px",color:ADS.ink}}>
           <h4 style={{margin:"0 0 10px",fontSize:14,fontWeight:800,letterSpacing:"-.2px"}}>Custo por lead por tipo de campanha</h4>
           <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 76px",gap:8,fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:S.muted,padding:"0 0 6px",borderBottom:"1px solid "+S.line}}><span>Tipo</span><span style={{textAlign:"right"}}>7 dias</span><span style={{textAlign:"right"}}>30 dias</span><span style={{textAlign:"right"}}>Leads 30d</span></div>
           {tiposLead.map(function(t){ const cfg=_adsTipo(t); const a7=C.ag.tipos7[t], a30=C.ag.tipos30[t]; const c7=cpl(a7), c30=cpl(a30); return <div key={t} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 76px",gap:8,alignItems:"center",padding:"9px 0",borderBottom:"1px solid "+S.line,fontSize:12.5}}>
