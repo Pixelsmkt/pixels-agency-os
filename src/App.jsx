@@ -49971,6 +49971,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
   const funVendas=stages.length>=2?stQ(stages[stages.length-1],platQ):0;
 
   let orcamento,gasto,gastoFonte,leads,leadsFonte,qualificados,qualFonte,oportunidades,vendas,vendasFonte,receita;
+  let adsMes=null;
   if(filtrando){
     orcamento=sum(linhas,"orcamento"); gasto=sum(linhas,"gasto"); gastoFonte="linhas";
     leads=sum(linhas,"leads"); leadsFonte="linhas"; qualificados=sum(linhas,"qualificados"); qualFonte="linhas";
@@ -49983,7 +49984,7 @@ function qgCalcCliente(mc,data,year,month,filtro){
     orcamento=orcCad>0?orcCad:sum(linhas,"orcamento");
     // Meta Ads pela API (fonte única) — quando o cliente tem conta vinculada
     const _m1=year+"-"+String(month).padStart(2,"0")+"-01", _m2=year+"-"+String(month).padStart(2,"0")+"-31";
-    const adsMes=fPlat==="google"?null:_qgAdsSoma(mc,data,_m1,_m2);
+    adsMes=fPlat==="google"?null:_qgAdsSoma(mc,data,_m1,_m2);
     // gasto: Meta API (+ Google dos fechamentos/linhas) > fechamentos semanais > linhas > 0
     const cInv=fPlat==="meta"?sum(closingsMes,"investimento_meta"):fPlat==="google"?sum(closingsMes,"investimento_google"):sum(closingsMes,"investimento");
     const gInvGoogle=Math.max(sum(closingsMes,"investimento_google"),sum(linhasTodas.filter(function(b){return b.plataforma==="google";}),"gasto"));
