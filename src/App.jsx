@@ -5297,6 +5297,33 @@ function pxDuplicarCardEColar(t, setTasks, onDone){
   });
 }
 
+// ═══ Recorrência "anual no mesmo dia da semana" — yearly_nth (09/09/2026) ═══
+// Dia dos Pais = 2º domingo de agosto, Dia das Mães = 2º domingo de maio. A regra sai da
+// própria data original do evento: mês + dia da semana + ordinal (1º..5º). Sem campo novo.
+function pxNthMatch(origISO, candISO){
+  try{
+    const o=new Date(String(origISO).slice(0,10)+"T12:00"), c=new Date(String(candISO).slice(0,10)+"T12:00");
+    return o.getMonth()===c.getMonth() && o.getDay()===c.getDay() && Math.ceil(o.getDate()/7)===Math.ceil(c.getDate()/7);
+  }catch(_){ return false; }
+}
+function pxNthDateInYear(origISO, year){
+  const o=new Date(String(origISO).slice(0,10)+"T12:00");
+  const n=Math.ceil(o.getDate()/7), dow=o.getDay(), m=o.getMonth();
+  const first=new Date(year,m,1);
+  let d=1+((dow-first.getDay()+7)%7)+(n-1)*7;
+  const last=new Date(year,m+1,0).getDate();
+  while(d>last) d-=7; // "5º domingo" que não existe naquele ano → último
+  return year+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+}
+function pxNthLabel(origISO){
+  try{
+    const o=new Date(String(origISO).slice(0,10)+"T12:00");
+    const dias=["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+    const meses=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+    return Math.ceil(o.getDate()/7)+"º "+dias[o.getDay()]+" de "+meses[o.getMonth()];
+  }catch(_){ return ""; }
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -16419,10 +16446,24 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     window.addEventListener("keydown",onKey);
     return function(){window.removeEventListener("keydown",onKey);};
   },[onClose]);
+  // Trava contra evento duplicado (09/09/2026): mesmo título + mesmo dia/mês já cadastrado
+  // (ex.: "Dia do Trabalhador Rural" criado de novo pelo Planejamento) → pergunta antes de salvar.
+  const _dupCheckedRef=useRef(false);
   function save(){
     if(_savingRef.current)return;
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
+    if(!isEdit&&!_dupCheckedRef.current){
+      const _norm=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim(); };
+      const _md=String(date||"").slice(5,10);
+      window._sb.from("internal_events").select("id,title,date,recurrence").then(function(r){
+        const _dup=(r&&r.data||[]).find(function(ev){ return _norm(ev.title)===_norm(title)&&String(ev.date||"").slice(5,10)===_md; });
+        if(!_dup){ _dupCheckedRef.current=true; save(); return; }
+        const _msg="Já existe \""+_dup.title+"\" em "+String(_dup.date).split("-").reverse().join("/")+((_dup.recurrence==="yearly"||_dup.recurrence==="yearly_nth")?" (anual)":"")+". Criar outro vai DUPLICAR a data no Planejamento e no Calendário de publicações. Criar mesmo assim?";
+        pixelsConfirm(_msg,{danger:true,okText:"Criar duplicado",cancelText:"Cancelar"}).then(function(yes){ if(yes){ _dupCheckedRef.current=true; save(); } });
+      },function(){ _dupCheckedRef.current=true; save(); });
+      return;
+    }
     _savingRef.current=true;
     setSaving(true);
     const payload={
@@ -16596,7 +16637,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       {!endDate && <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
-          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"},{id:"yearly_nth",label:"Anual · "+(typeof pxNthLabel==="function"&&date?pxNthLabel(date):"mesmo dia da semana")}].map(function(opt){
             const sel=recurrence===opt.id;
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id); if(!opt.id) setRecurrenceUntil("");}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
@@ -16952,6 +16993,10 @@ function PageCalendarioInterno({isMob}){
       if(ev.recurrence==="monthly"){
         if(_pastEnd) return false;
         return Number(ev.date.slice(8,10))===dDay && ev.date<=dIso;
+      }
+      if(ev.recurrence==="yearly_nth"){
+        if(_pastEnd) return false;
+        return typeof pxNthMatch==="function" && pxNthMatch(ev.date, dIso); // 2º domingo de agosto, etc.
       }
       if(ev.recurrence==="yearly"){
         if(_pastEnd) return false;
@@ -17600,7 +17645,7 @@ function PageCalendarioInterno({isMob}){
                 if(_myEvs.length===0)return null;
                 return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
                   {_myEvs.slice(0,5).map(function(ev){
-                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="biweekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
+                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="biweekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly"||ev.recurrence==="yearly_nth";
                     // Cor: assinaturas SEMPRE roxo Pixels. Senão cor do cliente vinculado. Senão cor manual. Senão cor categoria. Senão preto.
                     // Lê array client_ids primeiro, fallback pro client_id legado. Renderiza cor/nome do primeiro.
                     const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
@@ -76125,6 +76170,15 @@ function _PlanejamentosClientes({isMob}){
         return _dates;
       }
       const _orig = _parse(ev.date);
+      if(ev.recurrence==="yearly_nth"){
+        // Anual no mesmo dia da semana (2º domingo de agosto…) — bidirecional como o anual
+        for(let _y=_pStart.getFullYear(); _y<=_pEnd.getFullYear(); _y++){
+          const _iso = pxNthDateInYear(ev.date,_y);
+          if(_recUntil && _iso > _recUntil) continue;
+          if(_iso>=periodStart && _iso<=periodEnd) _dates.push(_iso);
+        }
+        return _dates;
+      }
       if(ev.recurrence==="yearly"){
         // Bidirecional: aparece em TODO ano no mesmo mes/dia. Ex: Dia dos Pais 09/08 aparece em qualquer ano.
         const _m = _orig.getMonth();
@@ -78229,6 +78283,14 @@ function pxAutoComExpandir(ev, startISO, endISO){
   const out=[];
   if(!rec||rec==="none"){ if(ev.date>=startISO&&ev.date<=endISO) out.push(ev.date); return out; }
   const o=_p(ev.date), s=_p(startISO), e=_p(endISO);
+  if(rec==="yearly_nth"){
+    for(let y=s.getFullYear(); y<=e.getFullYear(); y++){
+      const iso=pxNthDateInYear(ev.date,y);
+      if(until&&iso>until) continue;
+      if(iso>=startISO&&iso<=endISO) out.push(iso);
+    }
+    return out;
+  }
   if(rec==="yearly"){
     for(let y=s.getFullYear(); y<=e.getFullYear(); y++){
       // Bidirecional, igual ao Planejamento: "Natal" cadastrado em 2027-11-25 com recorrência
@@ -78283,6 +78345,26 @@ async function pxGerarCardsComemorativos(opts){
     (q&&q.data||[]).forEach(function(row){ existentes.add(String(row.id)); });
   }
   faltam=faltam.filter(function(c){ return !existentes.has(c.id); });
+  if(!faltam.length) return 0;
+  // 2ª trava (09/09/2026): dois EVENTOS com o mesmo título no mesmo dia (ex.: "Dia do Trabalhador
+  // Rural" cadastrado duas vezes) não podem virar dois cards pro mesmo cliente. Compara por
+  // título normalizado + data + cliente + unidade contra os cards automáticos já existentes.
+  const _norm=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim(); };
+  const _chave=function(titulo,date,client,unit){ return _norm(titulo)+"|"+date+"|"+client+"|"+(unit||""); };
+  const _datas=Array.from(new Set(faltam.map(function(c){return c.date;})));
+  const _jaTem=new Set();
+  (getTasks()||[]).forEach(function(t){ if(t&&String(t.id).indexOf("autocom-")===0&&!t.deletedAt) _jaTem.add(_chave(t.title,t.publishDate,t.client,t.bioterUnit)); });
+  for(let i=0;i<_datas.length;i+=50){
+    const q2=await sb.from("tasks").select("id,title,publish_date,client,bioter_unit,deleted_at").like("id","autocom-%").in("publish_date",_datas.slice(i,i+50));
+    if(q2&&q2.error){ console.warn("[autocom] consulta 2 falhou:",q2.error.message); return 0; }
+    (q2&&q2.data||[]).forEach(function(r){ if(!r.deleted_at) _jaTem.add(_chave(r.title,r.publish_date,r.client,r.bioter_unit)); });
+  }
+  const _vistos=new Set();
+  faltam=faltam.filter(function(c){
+    const k=_chave(c.ev.title,c.date,c.client,c.unit);
+    if(_jaTem.has(k)||_vistos.has(k)) return false;
+    _vistos.add(k); return true;
+  });
   if(!faltam.length) return 0;
   const now=new Date();
   const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
