@@ -49967,8 +49967,8 @@ const QG_FONT="'Inter',system-ui,sans-serif";
 const QG_ORIGENS_ADS=["meta","google"];
 
 /* ─── FORMATADORES ───────────────────────────────────── */
-const _qgBRL=function(n,dec){ const v=Number(n||0); return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:dec||0,maximumFractionDigits:dec||0}); };
-const _qgBRLk=function(n){ const v=Number(n||0); if(Math.abs(v)>=1000000) return "R$ "+(v/1000000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mi"; if(Math.abs(v)>=10000) return "R$ "+(v/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mil"; return _qgBRL(v); };
+const _qgBRL=function(n,dec){ const v=Number(n||0); const d=(dec===undefined||dec===null)?2:dec; return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }; /* regra 09/09: dinheiro com centavos */
+const _qgBRLk=function(n){ return _qgBRL(n,2); }; /* sem "12,3 mil": valor exato sempre */
 const _qgNum=function(n){ return Number(n||0).toLocaleString("pt-BR"); };
 const _qgPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return (n>0?"+":"")+Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?0:dec})+"%"; };
 const _qgX=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1})+"x"; };
@@ -50076,6 +50076,8 @@ function useQGData(clients,year,month){
       // nível campanha: só pra saber quanto do gasto foi em campanhas de LEAD (custo por lead não usa engajamento/seguidores/etc.)
       window._sb.from("ads_daily").select("ad_account_id,data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas").eq("nivel","campanha").gte("data",(function(){ const m1=year+"-"+String(month).padStart(2,"0")+"-01"; return m1<minStart?m1:minStart; })()).lt("data",(month===12?(year+1)+"-01":year+"-"+String(month+1).padStart(2,"0"))+"-01").limit(20000),
       window._pxAdsAccounts?Promise.resolve({data:window._pxAdsAccounts}):window._sb.from("ads_accounts").select("*"),
+      // classificação única de cada campanha (view do banco) — a mesma que o 17c, o coletor e a análise usam
+      window._sb.from("ads_campanhas_tipo").select("ad_account_id,campaign_id,tipo"),
     ]).then(function(rs){
       if(!alive) return;
       const funnels={}; (rs[2].data||[]).forEach(function(r){ funnels[r.client_id+"|"+(r.unit||"grupo")]=r; });
@@ -50083,8 +50085,8 @@ function useQGData(clients,year,month){
       const produtos={}; (rs[4].data||[]).forEach(function(r){ const pb=(r&&r.data)||{}; produtos[r.client_id]=(Array.isArray(pb.produtos)?pb.produtos:[]).map(function(p){ return {nome:String((p&&(p.nomePrincipalPt||p.nome))||"").trim(),unidades:Array.isArray(p&&p.unidades)?p.unidades:[]}; }).filter(function(p){return p.nome;}); });
       const goals={}; (rs[5].data||[]).forEach(function(r){ goals[r.client_id]=r; });
       rs.forEach(function(r,i){ if(r.error) console.warn("[qg data]",i,r.error.message); });
-      if(rs[7]&&rs[7].data&&!window._pxAdsAccounts) window._pxAdsAccounts=rs[7].data;
-      setData({budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsCamp:(rs[7]&&rs[7].data)||[],adsAccounts:(rs[8]&&rs[8].data)||[],loading:false});
+      if(rs[8]&&rs[8].data&&!window._pxAdsAccounts) window._pxAdsAccounts=rs[8].data; /* rs[8] = ads_accounts (rs[7] é o nível campanha) */
+      setData({budgets:rs[0].data||[],closings:rs[1].data||[],funnels:funnels,roi:roi,produtos:produtos,goals:goals,ads:(rs[6]&&rs[6].data)||[],adsCamp:(rs[7]&&rs[7].data)||[],adsAccounts:(rs[8]&&rs[8].data)||[],adsTipos:(function(){ const m={}; ((rs[9]&&rs[9].data)||[]).forEach(function(t){ m[t.ad_account_id+"|"+t.campaign_id]=t.tipo; }); return m; })(),loading:false});
     }).catch(function(e){ console.warn("[qg data]",e&&e.message); if(alive) setData(function(p){return Object.assign({},p,{loading:false});}); });
     return function(){ alive=false; };
   },[idsKey,year,month,tick]);
@@ -50109,14 +50111,21 @@ function useQGData(clients,year,month){
 // Retorna tudo que o QG precisa de um cliente no mês. `filtro` = {plataforma,produto,regiao}
 // (quando produto/região filtram, os números vêm só das linhas de orçamento + vendas que batem).
 /* ─── META ADS como fonte única: gasto/leads da API por cliente e intervalo ─── */
+/* gasto do Google no mês: fechamentos semanais ou linhas de orçamento — o maior dos dois, e sempre a mesma conta em toda tela */
+function _qgGoogleGasto(closingsMes,linhasTodas){ const sum=function(arr,k){ return (arr||[]).reduce(function(s,x){return s+Number(x[k]||0);},0); }; return Math.max(sum(closingsMes,"investimento_google"),sum((linhasTodas||[]).filter(function(b){return b.plataforma==="google";}),"gasto")); }
 function _qgAdsConta(mc,data){ if(!mc||!data||!data.adsAccounts||!data.adsAccounts.length||typeof adsContaDoCliente!=="function") return null; const r=adsContaDoCliente(mc,data.adsAccounts); return (r&&r.conta&&!r.compartilhada)?r.conta:null; }
 /* lead = leads (formulário) + conversas (WhatsApp) — colunas já separadas no banco, sem sobreposição (definição 09/09/2026) */
-function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; }); if(!rows.length) return {gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; const o={gasto:0,gastoLead:0,leads:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); if(Number(r.gasto||0)>0) o.dias++; });
-  /* REGRA (09/09): cada campanha conta pela finalidade — formulário conta só formulário, WhatsApp conta só conversa iniciada (nunca os dois na mesma campanha).
-     E o custo por lead divide só o gasto das campanhas de lead. Por isso a soma é campanha a campanha; o nível conta só serve pro gasto total. */
+/* último dia fechado do mês pedido: ontem se for o mês corrente, senão o último dia do mês */
+function _qgFimMesAteOntem(year,month){ const d=new Date(); d.setDate(d.getDate()-1); const ontem=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); const fim=year+"-"+String(month).padStart(2,"0")+"-"+String(new Date(year,month,0).getDate()).padStart(2,"0"); return ontem<fim?ontem:fim; }
+function _qgAdsSoma(mc,data,ini,fim){ const acc=_qgAdsConta(mc,data); if(!acc) return null; const rows=(data.ads||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
+  /* sem linha nenhuma no período = a API não trouxe nada (conta nova, coleta falhou): devolve null pra cair no fechamento manual — nunca "R$ 0" com selo de API */
+  if(!rows.length) return null;
+  const o={gasto:0,gastoLead:0,leads:0,leadsForm:0,conversas:0,dias:0,conta:acc}; rows.forEach(function(r){ o.gasto+=Number(r.gasto||0); if(Number(r.gasto||0)>0) o.dias++; });
+  /* REGRA (09/09): cada campanha conta pela finalidade (tipo = classificação única do banco, ads_campanhas_tipo) — formulário conta só formulário,
+     WhatsApp conta só conversa; outras finalidades não geram lead. Custo por lead divide só o gasto das campanhas de lead. */
   const camp=(data.adsCamp||[]).filter(function(r){ return r.ad_account_id===acc.ad_account_id&&r.data>=ini&&r.data<=fim; });
-  if(camp.length&&typeof _adsClassifica==="function"&&typeof _adsEhLead==="function"){ const cache={}; camp.forEach(function(r){ const k=r.campaign_id; if(!(k in cache)) cache[k]=_adsClassifica(r.objetivo,[],r.campaign_nome); const t=cache[k]; const l=Number(r.leads||0), c=Number(r.conversas||0); o.leads+=(t==="form"?l:(t==="lead_wpp"||t==="eng_wpp")?c:0); if(_adsEhLead(t)) o.gastoLead+=Number(r.gasto||0); }); }
-  else { o.gastoLead=o.gasto; rows.forEach(function(r){ o.leads+=Number(r.leads||0)+Number(r.conversas||0); }); }
+  const tipos=data.adsTipos||{};
+  camp.forEach(function(r){ const t=tipos[acc.ad_account_id+"|"+r.campaign_id]||(typeof _adsClassifica==="function"?_adsClassifica(r.objetivo,[],r.campaign_nome):"outro"); const l=Number(r.leads||0), c=Number(r.conversas||0); if(t==="form"){ o.leads+=l; o.leadsForm+=l; o.gastoLead+=Number(r.gasto||0); } else if(t==="lead_wpp"||t==="eng_wpp"){ o.leads+=c; o.conversas+=c; o.gastoLead+=Number(r.gasto||0); } });
   return o; }
 function qgCalcCliente(mc,data,year,month,filtro){
   filtro=filtro||{};
@@ -50162,19 +50171,19 @@ function qgCalcCliente(mc,data,year,month,filtro){
     const orcCad=fPlat==="meta"?Number(mc.investimento_meta||0):fPlat==="google"?Number(mc.investimento_google||0):Number(mc.investimento_mensal||0);
     orcamento=orcCad>0?orcCad:sum(linhas,"orcamento");
     // Meta Ads pela API (fonte única) — quando o cliente tem conta vinculada
-    const _m1=year+"-"+String(month).padStart(2,"0")+"-01", _m2=year+"-"+String(month).padStart(2,"0")+"-31";
+    const _m1=year+"-"+String(month).padStart(2,"0")+"-01", _m2=_qgFimMesAteOntem(year,month); /* mês = dia 1 até ONTEM (hoje é parcial) — mesma janela do 17c e do painel */
     adsMes=fPlat==="google"?null:_qgAdsSoma(mc,data,_m1,_m2);
     // gasto: Meta API (+ Google dos fechamentos/linhas) > fechamentos semanais > linhas > 0
     const cInv=fPlat==="meta"?sum(closingsMes,"investimento_meta"):fPlat==="google"?sum(closingsMes,"investimento_google"):sum(closingsMes,"investimento");
-    const gInvGoogle=Math.max(sum(closingsMes,"investimento_google"),sum(linhasTodas.filter(function(b){return b.plataforma==="google";}),"gasto"));
-    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoLead=adsMes.gastoLead+(fPlat==="todos"?gInvGoogle:0); gastoFonte="meta_api"; }
+    const gInvGoogle=_qgGoogleGasto(closingsMes,linhasTodas);
+    if(adsMes){ gasto=adsMes.gasto+(fPlat==="todos"?gInvGoogle:0); gastoLead=adsMes.gastoLead+(fPlat==="todos"?gInvGoogle:0); gastoFonte=(fPlat==="todos"&&gInvGoogle>0)?"meta_api+google_manual":"meta_api"; }
     else if(closingsMes.length&&cInv>0){ gasto=cInv; gastoFonte="fechamentos"; }
     else if(linhas.length&&sum(linhas,"gasto")>0){ gasto=sum(linhas,"gasto"); gastoFonte="linhas"; }
     else { gasto=0; gastoFonte="nenhuma"; }
     // leads: Meta API (+ Google) > fechamentos > funil > linhas
     const cLeads=fPlat==="meta"?sum(closingsMes,"leads_meta"):fPlat==="google"?sum(closingsMes,"leads_google"):sum(closingsMes,"leads");
     const gLeadsGoogle=Math.max(sum(closingsMes,"leads_google"),sum(linhasTodas.filter(function(b){return b.plataforma==="google";}),"leads"));
-    if(adsMes){ leads=adsMes.leads+(fPlat==="todos"?gLeadsGoogle:0); leadsFonte="meta_api"; }
+    if(adsMes){ leads=adsMes.leads+(fPlat==="todos"?gLeadsGoogle:0); leadsFonte=(fPlat==="todos"&&gLeadsGoogle>0)?"meta_api+google_manual":"meta_api"; }
     else if(closingsMes.length&&cLeads>0){ leads=cLeads; leadsFonte="fechamentos"; }
     else if(funLeads>0){ leads=funLeads; leadsFonte="funil"; }
     else { leads=sum(linhas,"leads"); leadsFonte=leads>0?"linhas":"nenhuma"; }
@@ -50209,9 +50218,9 @@ function qgCalcCliente(mc,data,year,month,filtro){
     const vs=vendasTodas.filter(function(v){return v.origin===p;});
     const orcCadP=Number(p==="meta"?mc.investimento_meta:mc.investimento_google)||0;
     const orc=orcCadP>0?orcCadP:sum(ls,"orcamento");
-    const adsP=p==="meta"?_qgAdsSoma(mc,data,year+"-"+String(month).padStart(2,"0")+"-01",year+"-"+String(month).padStart(2,"0")+"-31"):null;
+    const adsP=p==="meta"?_qgAdsSoma(mc,data,year+"-"+String(month).padStart(2,"0")+"-01",_qgFimMesAteOntem(year,month)):null;
     const cInvP=sum(closingsMes,p==="meta"?"investimento_meta":"investimento_google");
-    const gst=adsP?adsP.gasto:(cInvP>0?cInvP:sum(ls,"gasto"));
+    const gst=adsP?adsP.gasto:(p==="google"?_qgGoogleGasto(closingsMes,linhasTodas):(cInvP>0?cInvP:sum(ls,"gasto"))); /* Google: a MESMA conta usada no total (fechamento ou linhas, o maior) */
     const cLeadsP=sum(closingsMes,p==="meta"?"leads_meta":"leads_google");
     const ld=adsP?adsP.leads:(cLeadsP>0?cLeadsP:(stages.length&&stQ(stages[0],p)>0?stQ(stages[0],p):sum(ls,"leads")));
     const vd=vs.length||(stages.length>=2?stQ(stages[stages.length-1],p):0)||sum(ls,"vendas");
@@ -50259,7 +50268,7 @@ function qgMeta(mc,data,year,month,leads,store){
   if(meta===null&&store&&store.goals&&store.goals[mc.client_id]){ const k=year+"-"+String(month).padStart(2,"0"); const lg=store.goals[mc.client_id][k]; if(lg&&Number(lg.leads)>0) meta=Number(lg.leads); }
   const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month;
   const diasMes=new Date(year,month,0).getDate();
-  const fracao=ehMesAtual?Math.min(1,hoje.getDate()/diasMes):(new Date(year,month-1,1)<hoje?1:0);
+  const fracao=ehMesAtual?Math.min(1,Math.max(1,hoje.getDate()-1)/diasMes):(new Date(year,month-1,1)<hoje?1:0); /* até ontem — mesma régua do card de verba */
   if(!meta) return {meta:null,esperado:null,pct:null,status:"sem_meta",cor:QG.cinza,label:"Sem meta",fracao:fracao};
   const esperado=Math.round(meta*fracao); const pct=leads/meta*100;
   const razao=esperado>0?leads/esperado:(leads>0?2:1);
@@ -50282,7 +50291,7 @@ function qgAlertas(calcs,fechAtual,data,store,year,month){
     if(c.usoPct!==null&&c.usoPct>=100) out.push({nivel:"critico",cliente:c.mc,titulo:n+" estourou o orçamento",detalhe:_qgBRL(c.gasto)+" de "+_qgBRL(c.orcamento),tipo:"orcamento"});
     else if(c.usoPct!==null&&c.usoPct>=90) out.push({nivel:"atencao",cliente:c.mc,titulo:n+" com orçamento quase esgotado",detalhe:Math.round(c.usoPct)+"% usado · saldo "+_qgBRL(c.saldo),tipo:"orcamento"});
     const sems=_qgLastWeeks(3); const s0=qgCalcSemana(c.mc,data,sems[0]), s1=qgCalcSemana(c.mc,data,sems[1]), s2=qgCalcSemana(c.mc,data,sems[2]);
-    const a=s0.w?s0:s1, b=s0.w?s1:s2;
+    const a=s1, b=s2; /* só semanas fechadas — a corrente é parcial */
     if(a.w&&b.w&&b.leads>=5&&a.leads<b.leads*0.7) out.push({nivel:"atencao",cliente:c.mc,titulo:"Queda forte de leads em "+n,detalhe:_qgNum(b.leads)+" → "+_qgNum(a.leads)+" leads ("+Math.round((1-a.leads/b.leads)*100)+"%)",tipo:"leads"});
     if(c.orcamento>0&&!c.temFunil&&m.fracao>0.3) out.push({nivel:"info",cliente:c.mc,titulo:"Funil desatualizado: "+n,detalhe:"Cliente não preencheu o Funil Digital no Portal este mês",tipo:"funil"});
     if(c.orcamento>0&&!fechAtual[c.mc.client_id]) out.push({nivel:"info",cliente:c.mc,titulo:"Fechamento semanal pendente: "+n,detalhe:_qgWeekLabel(sems[0].start),tipo:"fechamento"});
@@ -50896,7 +50905,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
               <span style={{width:30,height:30,borderRadius:9,background:QG.meta+"14",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><QGPlatIco id="meta" size={16}/></span>
               <span style={{fontWeight:900,fontSize:15,letterSpacing:-.3,color:QG.txt}}>Meta Ads</span>
-              <span style={{fontSize:11,fontWeight:700,color:c.metaApi?QG.verde:QG.txt3,background:c.metaApi?QG.verdeBg:QG.cinzaBg,borderRadius:99,padding:"2px 8px"}}>{c.metaApi?"pela API · coleta diária":"sem conta vinculada"}</span>
+              <span style={{fontSize:11,fontWeight:700,color:c.metaApi?QG.verde:QG.txt3,background:c.metaApi?QG.verdeBg:QG.cinzaBg,borderRadius:99,padding:"2px 8px"}}>{c.metaApi?(c.gastoFonte==="meta_api+google_manual"?"Meta pela API · Google do fechamento":"pela API · coleta diária"):(c.gastoFonte==="fechamentos"?"do fechamento semanal (API sem dados)":"sem conta vinculada")}</span>
               <span style={{marginLeft:"auto",fontSize:12.5,color:QG.txt2,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6}}>Orçamento mensal <b style={{color:QG.txt,fontSize:14}}><QGInline value={Number(mc.investimento_meta)||0} type="number" fmt={_qgBRL} placeholder="definir" disabled={!canEdit} onSave={function(v){setOrcamento("meta",v);}}/></b></span>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
@@ -50950,7 +50959,7 @@ function QGFunil({c}){
       <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 12px"}}><span style={{fontSize:20,fontWeight:900,letterSpacing:-.5,color:c.receita>0?QG.verde:QG.txt3}}>{c.receita>0?_qgBRL(c.receita):"—"}</span><span style={{color:QG.txt2,fontSize:12.5,fontWeight:700}}>{c.receita>0?"em receita":"sem receita registrada"}</span></div>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginTop:14,borderTop:"1px solid #f1f4f8",paddingTop:14}}>
-      {[["CPL",c.cpl,function(v){return _qgBRL(v,0);}],["CAC",c.cac,function(v){return _qgBRL(v,0);}],["ROIC",c.roic,function(v){return _qgPct(v);}]].map(function(x){ const ok=x[1]!==null&&x[1]!==undefined&&isFinite(x[1]); return <div key={x[0]}><div style={{color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{x[0]}</div><div style={{fontSize:ok?20:12,fontWeight:ok?900:600,letterSpacing:ok?-.5:0,color:ok?(x[0]==="ROIC"?_qgRoicCor(x[1]):QG.txt):QG.txt3,marginTop:2}}>{ok?x[2](x[1]):"Dados insuficientes"}</div></div>; })}
+      {[["CPL",c.cpl,function(v){return _qgBRL(v,2);}],["CAC",c.cac,function(v){return _qgBRL(v,2);}],["ROIC",c.roic,function(v){return _qgPct(v);}]].map(function(x){ const ok=x[1]!==null&&x[1]!==undefined&&isFinite(x[1]); return <div key={x[0]}><div style={{color:QG.txt3,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{x[0]}</div><div style={{fontSize:ok?20:12,fontWeight:ok?900:600,letterSpacing:ok?-.5:0,color:ok?(x[0]==="ROIC"?_qgRoicCor(x[1]):QG.txt):QG.txt3,marginTop:2}}>{ok?x[2](x[1]):"Dados insuficientes"}</div></div>; })}
     </div>
   </div>;
 }
@@ -51066,7 +51075,7 @@ function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
     "@page{size:A4;margin:16mm} body{font-family:Inter,system-ui,sans-serif;color:#17131f;margin:0;padding:24px;max-width:760px} h1{font-size:22px;margin:0;letter-spacing:-.4px} .top{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #7326d6;padding-bottom:10px;margin-bottom:18px} .top .px{font-weight:900;color:#7326d6;font-size:14px} .mute{color:#7b7590} .g{display:grid;grid-template-columns:repeat(3,1fr);gap:12px} .k{color:#fff;border-radius:14px;padding:14px 16px} .k small{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#d9ccf5;font-weight:700} .k b{display:block;font-size:26px;margin-top:4px;letter-spacing:-.8px} .k span{font-size:11px;color:#e9e0fb} h2{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7b7590;margin:22px 0 6px} .lead{font-size:15px;line-height:1.45;background:#221743;color:#fff;border-radius:14px;padding:14px 16px} ul{margin:0;padding-left:18px;line-height:1.6} p{margin:0} .foot{margin-top:26px;font-size:11px;color:#7b7590;border-top:1px solid #e7e3ef;padding-top:8px}"+
     "</style></head><body><div class='top'><div><h1>"+esc(mc.name)+"</h1><div class='mute'>Relatório de mídia · "+esc(mes)+"</div></div><div class='px'>pixels</div></div>"+
     "<div class='g'>"+kpi("#2f1a5e","Investido",_qgBRL(c.gasto,2),c.orcamento>0?"de "+_qgBRL(c.orcamento)+" planejados":"")+kpi("#5a34a3","Leads",_qgNum(c.leads),m&&m.meta?"meta "+_qgNum(m.meta)+" · "+Math.round(m.pct)+"%":"")+kpi("#8a63cf","Custo por lead",c.cpl?_qgBRL(c.cpl,2):"—",c.vendas>0?_qgNum(c.vendas)+" vendas · "+_qgBRL(c.receita):"")+"</div>"+
-    (analise&&analise.resumo?"<h2>Leitura do mês</h2><div class='lead'>"+esc(analise.resumo)+"</div>":"")+
+    (analise&&analise.resumo?"<h2>Leitura · "+(analise.periodo_inicio?new Date(analise.periodo_inicio+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" a "+new Date(analise.periodo_fim+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"")+"</h2><div class='lead'>"+esc(analise.resumo)+"</div>":"")+
     "<h2>O que fizemos</h2>"+li(feitas,"Ações do mês registradas na Gestão de mídia aparecem aqui.")+
     "<h2>Próximo mês</h2>"+li(abertas,"Nenhuma ação aberta.")+
     "<div class='foot'>Fonte: API de Marketing da Meta (coleta diária) · vendas e receita informadas pelo cliente no Portal · gerado em "+new Date().toLocaleDateString("pt-BR")+"</div>"+
@@ -51075,7 +51084,7 @@ function pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise){
 }
 async function pxRelatorioAbrir(mc,c,m,year,month,acoes){
   let analise=null;
-  try{ if(window._sb&&window._pxAdsAccounts&&typeof adsContaDoCliente==="function"){ const r=adsContaDoCliente(mc,window._pxAdsAccounts); if(r&&r.conta){ const q=await window._sb.from("ads_analises").select("resumo,gerado_em").eq("ad_account_id",r.conta.ad_account_id).eq("escopo","cliente").order("gerado_em",{ascending:false}).limit(1); analise=(q.data||[])[0]||null; } } }catch(_){ }
+  try{ if(window._sb&&window._pxAdsAccounts&&typeof adsContaDoCliente==="function"){ const r=adsContaDoCliente(mc,window._pxAdsAccounts); if(r&&r.conta){ const mIni=year+"-"+String(month).padStart(2,"0")+"-01", mFim=year+"-"+String(month).padStart(2,"0")+"-31"; const q=await window._sb.from("ads_analises").select("resumo,gerado_em,periodo_inicio,periodo_fim").eq("ad_account_id",r.conta.ad_account_id).eq("escopo","cliente").gte("periodo_fim",mIni).lte("periodo_fim",mFim).order("gerado_em",{ascending:false}).limit(1); analise=(q.data||[])[0]||null; /* só leitura cujo período cai no mês do relatório */ } } }catch(_){ }
   pxRelatorioUmaPagina(mc,c,m,year,month,acoes,analise);
 }
 function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClient,acoes}){
@@ -51322,7 +51331,7 @@ const ADS_MAXW=1240;
 
 /* ─── formatadores ─── */
 const _adsBRL=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return "R$ "+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:dec===undefined?2:dec,maximumFractionDigits:dec===undefined?2:dec}); };
-const _adsBRL0=function(n){ return _adsBRL(n,0); };
+const _adsBRL0=function(n){ return _adsBRL(n,2); }; /* regra 09/09: dinheiro sempre com centavos */
 const _adsBRLc=function(n){ return (n!==null&&n!==undefined&&isFinite(n)&&n>0&&n<0.1)?_adsBRL(n,3):_adsBRL(n); };
 const _adsNum=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:0}); };
 const _adsPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?1:dec,minimumFractionDigits:dec===undefined?1:dec})+"%"; };
@@ -51393,7 +51402,9 @@ function _adsClassifica(objetivo,conjuntos,nome){
     else if(ot==="LINK_CLICKS"||ot==="LANDING_PAGE_VIEWS") t="trafego";
     else if(/OFFSITE_CONVERSIONS|VALUE|PURCHASE|APP_INSTALLS/.test(ot)) t="vendas";
     if(t) votos[t]=(votos[t]||0)+1; });
-  const top=Object.keys(votos).sort(function(a,b){return votos[b]-votos[a];})[0];
+  /* desempate FIXO (form > lead_wpp > eng_wpp > …), nunca pela ordem em que os conjuntos chegaram — mesma regra da função ads_tipo_campanha do banco */
+  const PRIO=["form","lead_wpp","eng_wpp","vendas","trafego","video","reconhecimento","seguidores","eng_post"]; let top=null, topv=0;
+  PRIO.forEach(function(t){ const v=votos[t]||0; if(v>topv){ topv=v; top=t; } });
   if(top) return top;
   if(o==="OUTCOME_LEADS"||o==="LEAD_GENERATION"||o==="MESSAGES"||o==="CONVERSIONS") return /wpp|whats/i.test(n)?"lead_wpp":(/form/i.test(n)?"form":"lead_wpp");
   if(o==="OUTCOME_ENGAGEMENT"||o==="POST_ENGAGEMENT"||o==="VIDEO_VIEWS") return /wpp|whats/i.test(n)?"eng_wpp":(/seguid/i.test(n)?"seguidores":"eng_post");
@@ -51406,7 +51417,7 @@ function _adsClassifica(objetivo,conjuntos,nome){
 // resultado da linha (campanha/anúncio já somada) segundo o tipo/família
 /* REGRA (09/09): cada campanha conta pela finalidade dela. Formulário → só leads de formulário (a conversa que vem
    depois do formulário é a MESMA pessoa). WhatsApp → só conversas iniciadas. Nunca somar os dois na mesma campanha. */
-function _adsResDe(x,cfg){ if(!cfg||!cfg.campo) return null; if(cfg.campo==="resultados"){ if(cfg.id==="form") return Number(x.leads||0); if(cfg.id==="lead_wpp"||cfg.id==="eng_wpp") return Number(x.conversas||0); return Number(x.conversas||0); } if(cfg.campo==="alcance_mil") return Number(x.alcance||0)/1000; return Number(x[cfg.campo]||0); }
+function _adsResDe(x,cfg){ if(!cfg||!cfg.campo) return null; if(cfg.campo==="resultados"){ if(x&&x.res!==undefined&&x.res!==null&&x.tipo) return Number(x.res||0); /* já veio do banco pela finalidade */ if(cfg.id==="form") return Number(x.leads||0); if(cfg.id==="lead_wpp"||cfg.id==="eng_wpp") return Number(x.conversas||0); return 0; } if(cfg.campo==="alcance_mil") return Number(x.alcance||0)/1000; return Number(x[cfg.campo]||0); }
 function AdsObjTag({tipo,small}){ const t=_adsTipo(tipo); return <span style={{display:"inline-flex",alignItems:"center",background:t.bg,color:t.cor,borderRadius:7,padding:small?"2px 7px":"4px 9px",fontSize:small?10.5:11.5,fontWeight:700,whiteSpace:"nowrap",fontFamily:ADS_FONT}}>{t.label}</span>; }
 
 /* ─── tooltip de 4 partes ─── */
@@ -51442,13 +51453,15 @@ window._pxAdsPeriodo=window._pxAdsPeriodo||{preset:"7",ini:"",fim:""};
 function _adsPeriodoCalc(p){
   p=p||window._pxAdsPeriodo; const hoje=_adsIso(new Date()); const ontem=_adsAddDays(hoje,-1);
   let ini,fim,label;
-  if(p.preset==="custom"&&p.ini&&p.fim){ ini=p.ini<=p.fim?p.ini:p.fim; fim=p.ini<=p.fim?p.fim:p.ini; if(fim>hoje) fim=hoje; label="personalizado"; }
+  if(p.preset==="hoje"){ ini=hoje; fim=hoje; label="hoje (parcial)"; }
+  else if(p.preset==="ontem"){ ini=ontem; fim=ontem; label="ontem"; }
+  else if(p.preset==="custom"&&p.ini&&p.fim){ ini=p.ini<=p.fim?p.ini:p.fim; fim=p.ini<=p.fim?p.fim:p.ini; if(fim>ontem) fim=ontem; /* dia fechado: hoje só pelo botão "Hoje" */ label="personalizado"; }
   else if(p.preset==="mes"){ ini=ontem.slice(0,8)+"01"; fim=ontem; label="este mês"; }
   else if(p.preset==="mesant"){ const d=new Date(ontem.slice(0,10)+"T12:00:00"); d.setDate(0); fim=_adsIso(d); ini=fim.slice(0,8)+"01"; label="mês passado"; }
   else { const n=Number(p.preset)||7; fim=ontem; ini=_adsAddDays(fim,-(n-1)); label="últimos "+n+" dias"; }
   const dias=Math.round((new Date(fim+"T12:00:00")-new Date(ini+"T12:00:00"))/86400000)+1;
   const prevFim=_adsAddDays(ini,-1), prevIni=_adsAddDays(prevFim,-(dias-1));
-  return {preset:p.preset,ini:ini,fim:fim,prevIni:prevIni,prevFim:prevFim,dias:dias,label:label,key:ini+"|"+fim};
+  return {preset:p.preset,ini:ini,fim:fim,prevIni:prevIni,prevFim:prevFim,dias:dias,label:label,key:ini+"|"+fim,parcial:fim>=hoje};
 }
 function useAdsPeriodo(){
   const [,tick]=useState(0);
@@ -51458,13 +51471,14 @@ function useAdsPeriodo(){
 function QGAdsBarraPeriodo({compact}){
   const {P,raw,set}=useAdsPeriodo();
   const [custom,setCustom]=useState(raw.preset==="custom");
-  const opts=[["7","7 dias"],["14","14"],["30","30"],["mes","Este mês"],["mesant","Mês passado"],["custom","Personalizado"]];
+  const opts=[["hoje","Hoje"],["ontem","Ontem"],["7","7 dias"],["14","14"],["30","30"],["mes","Este mês"],["mesant","Mês passado"],["custom","Personalizado"]];
   return <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontFamily:ADS_FONT}}>
     <div style={{display:"flex",background:"#fff",border:"1px solid "+ADS.line,borderRadius:10,overflow:"hidden"}}>
       {opts.map(function(o,i){ const on=raw.preset===o[0]; return <button key={o[0]} onClick={function(){ if(o[0]==="custom"){ setCustom(true); set({preset:"custom",ini:raw.ini||P.ini,fim:raw.fim||P.fim}); } else { setCustom(false); set({preset:o[0]}); } }} style={{border:"none",borderRight:i<opts.length-1?"1px solid "+ADS.line:"none",background:on?ADS.accent:"transparent",color:on?"#fff":ADS.ink2,padding:compact?"5px 9px":"7px 11px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",minHeight:0}}>{o[1]}</button>; })}
     </div>
-    {custom&&<span style={{display:"inline-flex",gap:4,alignItems:"center"}}><input type="date" value={raw.ini||P.ini} max={_adsIso(new Date())} onChange={function(e){ set({preset:"custom",ini:e.target.value}); }} style={{border:"1px solid "+ADS.line,borderRadius:8,padding:"5px 7px",fontSize:12,fontFamily:ADS_FONT}}/><span style={{color:ADS.muted,fontSize:12}}>a</span><input type="date" value={raw.fim||P.fim} max={_adsIso(new Date())} onChange={function(e){ set({preset:"custom",fim:e.target.value}); }} style={{border:"1px solid "+ADS.line,borderRadius:8,padding:"5px 7px",fontSize:12,fontFamily:ADS_FONT}}/></span>}
-    <span style={{fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap"}}>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · vs. {_adsFmtD(P.prevIni)} – {_adsFmtD(P.prevFim)}</span>
+    {custom&&<span style={{display:"inline-flex",gap:4,alignItems:"center"}}><input type="date" value={raw.ini||P.ini} max={_adsAddDays(_adsIso(new Date()),-1)} onChange={function(e){ set({preset:"custom",ini:e.target.value}); }} style={{border:"1px solid "+ADS.line,borderRadius:8,padding:"5px 7px",fontSize:12,fontFamily:ADS_FONT}}/><span style={{color:ADS.muted,fontSize:12}}>a</span><input type="date" value={raw.fim||P.fim} max={_adsAddDays(_adsIso(new Date()),-1)} onChange={function(e){ set({preset:"custom",fim:e.target.value}); }} style={{border:"1px solid "+ADS.line,borderRadius:8,padding:"5px 7px",fontSize:12,fontFamily:ADS_FONT}}/></span>}
+    <span style={{fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap"}}>{P.ini===P.fim?_adsFmtD(P.ini):_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)} · vs. {P.prevIni===P.prevFim?_adsFmtD(P.prevIni):_adsFmtD(P.prevIni)+" – "+_adsFmtD(P.prevFim)}</span>
+    {P.parcial&&<span style={{fontSize:11,fontWeight:700,color:ADS.warn,background:ADS.warnSoft,borderRadius:99,padding:"2px 8px",whiteSpace:"nowrap"}}>dia em andamento · dado parcial</span>}
   </div>;
 }
 
@@ -51479,25 +51493,28 @@ const ADS_DEF_LEAD="Lead = pessoa que chegou. Cada campanha conta pela finalidad
 /* "leads_meta" fica só no banco: a Meta só carimba lead em conversa quando a campanha está configurada pra isso, varia por conta e não dá pra auditar — não aparece na tela (decisão 09/09). */
 function _adsSubLeads(x){ x=x||{}; const f=Number(x.leads||0), c=Number(x.conversas||0); const partes=[]; if(f>0||c===0) partes.push(_adsNum(f)+" formulário"); if(c>0||f===0) partes.push(_adsNum(c)+" WhatsApp"); return partes.join(" · "); }
 window._pxAdsPer=window._pxAdsPer||{};
+const ADS_CACHE_MS=10*60*1000; /* 10 min: depois disso a tela relê o banco (a coleta das 07:00 muda os números) */
+function _adsCacheOk(o){ return !!(o&&o._em&&(Date.now()-o._em)<ADS_CACHE_MS); }
+function _adsLimpaCaches(){ window._pxAdsPer={}; window._pxAdsCache={}; window._pxAdsPrev={}; window._pxAdsPainel=null; }
 function _adsEnriquece(j){
   if(!j) return null;
-  const fix=function(x){ x=x||{}; x.gasto=Number(x.gasto||0); x.leads_meta=Number(x.leads_meta||0); x.resultados=Number(x.leads||0)+Number(x.conversas||0); x.cpa=_adsDiv(x.gasto,x.resultados); x.ctr=Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null; x.cpm=Number(x.impressoes||0)>0?x.gasto/Number(x.impressoes)*1000:null; x.frequencia=Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null; return x; };
-  const out={de:j.de,ate:j.ate,conta:fix(j.conta),serie:j.serie||[],campanhas:(j.campanhas||[]).map(fix),anuncios:(j.anuncios||[]).map(fix)};
+  const fix=function(x){ x=x||{}; x.gasto=Number(x.gasto||0); x.leads_meta=Number(x.leads_meta||0); x.resultados=Number(x.res||0); x.cpa=_adsDiv(x.gasto,x.resultados); /* res = resultado pela finalidade, calculado no banco */ x.ctr=Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null; x.cpm=Number(x.impressoes||0)>0?x.gasto/Number(x.impressoes)*1000:null; x.frequencia=Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null; return x; };
+  const out={de:j.de,ate:j.ate,conta:fix(j.conta),serie:j.serie||[],campanhas:(j.campanhas||[]).map(fix),conjuntos:(j.conjuntos||[]).map(fix),anuncios:(j.anuncios||[]).map(fix)};
   out.anuncios.forEach(function(a){ const base=Number(a.v3||0)||Number(a.impressoes||0); a.video=Number(a.v3||0)>0; a.r25=base>0?Number(a.p25||0)/base*100:null; a.r50=base>0?Number(a.p50||0)/base*100:null; a.r75=base>0?Number(a.p75||0)/base*100:null; a.r100=base>0?Number(a.p100||0)/base*100:null; });
   return out;
 }
 function useAdsPeriodoDados(accountId){
   const {P}=useAdsPeriodo();
   const key=accountId+"|"+P.key;
-  const [st,setSt]=useState(function(){ return window._pxAdsPer[key]||{loading:true,cur:null,prev:null}; });
+  const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsPer[key])?window._pxAdsPer[key]:{loading:true,cur:null,prev:null}; });
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,cur:null,prev:null}); return; }
-    if(window._pxAdsPer[key]){ setSt(window._pxAdsPer[key]); return; }
+    if(_adsCacheOk(window._pxAdsPer[key])){ setSt(window._pxAdsPer[key]); return; }
     let alive=true; setSt(function(p){ return Object.assign({},p,{loading:true}); });
     Promise.all([
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.ini,p_ate:P.fim}),
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.prevIni,p_ate:P.prevFim}),
-    ]).then(function(r){ if(!alive) return; if(r[0].error){ setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsEnriquece(r[0].data),prev:_adsEnriquece(r[1].error?null:r[1].data)}; window._pxAdsPer[key]=res; setSt(res); })
+    ]).then(function(r){ if(!alive) return; if(r[0].error){ setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsEnriquece(r[0].data),prev:_adsEnriquece(r[1].error?null:r[1].data),_em:Date.now()}; window._pxAdsPer[key]=res; setSt(res); })
     .catch(function(e){ if(alive) setSt({loading:false,cur:null,prev:null,erro:e.message||String(e)}); });
     return function(){ alive=false; };
   },[key]);
@@ -51507,11 +51524,11 @@ function useAdsPeriodoDados(accountId){
 /* ─── leitura da IA (sempre últimos 7 dias) + entidades (snapshot) ─── */
 window._pxAdsCache=window._pxAdsCache||{};
 function useAdsVisaoGeral(accountId){
-  const [st,setSt]=useState(function(){ return window._pxAdsCache[accountId]||{loading:true,analise:null,ent:null,erro:null}; });
+  const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsCache[accountId])?window._pxAdsCache[accountId]:{loading:true,analise:null,ent:null,erro:null}; });
   const [tick,setTick]=useState(0);
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,analise:null,ent:null,erro:null}); return; }
-    if(tick===0&&window._pxAdsCache[accountId]){ setSt(window._pxAdsCache[accountId]); return; }
+    if(tick===0&&_adsCacheOk(window._pxAdsCache[accountId])){ setSt(window._pxAdsCache[accountId]); return; }
     let alive=true; setSt(function(p){ return Object.assign({},p,{loading:true}); });
     (async function(){
       try{
@@ -51525,7 +51542,7 @@ function useAdsVisaoGeral(accountId){
           if(!e.error) ent=e.data||[];
         }
         const periodo=analise?{ini:analise.periodo_inicio,fim:analise.periodo_fim}:null;
-        const res={loading:false,analise:analise,ent:ent,periodo:periodo,erro:null};
+        const res={loading:false,analise:analise,ent:ent,periodo:periodo,erro:null,_em:Date.now()};
         window._pxAdsCache[accountId]=res;
         if(alive) setSt(res);
       }catch(e){ if(alive) setSt({loading:false,analise:null,ent:null,erro:e.message||String(e)}); }
@@ -51535,11 +51552,17 @@ function useAdsVisaoGeral(accountId){
   return Object.assign({},st,{reload:function(){ delete window._pxAdsCache[accountId]; setTick(function(x){return x+1;}); }});
 }
 // tipo (objetivo em português) de cada campanha do snapshot
-function _adsTiposDasCampanhas(ent){
-  const out={}; const camps=(ent||[]).filter(function(e){return e.nivel==="campanha";}); const conj=(ent||[]).filter(function(e){return e.nivel==="conjunto";});
-  camps.forEach(function(c){ out[c.entidade_id]=_adsClassifica(c.objetivo,conj.filter(function(x){return x.parent_id===c.entidade_id;}),c.nome); });
+/* Tipo de cada campanha. FONTE ÚNICA = coluna "tipo" que as RPCs trazem da view ads_campanhas_tipo (classificação do banco);
+   o cálculo local (_adsClassifica) só cobre campanha que ainda não está na view. */
+function _adsTiposDasCampanhas(ent,rows){
+  const out={}; (rows||[]).forEach(function(r){ if(r&&r.tipo&&(r.id||r.campaign_id)) out[r.id||r.campaign_id]=r.tipo; });
+  const camps=(ent||[]).filter(function(e){return e.nivel==="campanha";}); const conj=(ent||[]).filter(function(e){return e.nivel==="conjunto";});
+  camps.forEach(function(c){ if(!out[c.entidade_id]) out[c.entidade_id]=_adsClassifica(c.objetivo,conj.filter(function(x){return x.parent_id===c.entidade_id;}),c.nome); });
   return out;
 }
+/* totais da conta pela finalidade — calculados no banco (ads_periodo.conta): res, leads_form, conversas_wpp, gasto_lead, gasto_outras.
+   Função PURA: nunca altera o objeto do cache. Usada pela Visão geral e pelo detalhe da campanha (mesmo número nas duas). */
+function _adsTotaisConta(conta){ const c=conta||{}; const gl=Number(c.gasto_lead||0), r=Number(c.res||0); return Object.assign({},c,{resultados:r,leads:Number(c.leads_form||0),conversas:Number(c.conversas_wpp||0),gastoLead:gl,resLead:r,gastoOutras:Number(c.gasto_outras||0),cpa:_adsDiv(gl,r)}); }
 
 /* ─── primitivos visuais v2 ─── */
 function AdsWrap({children}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}>{children}</div>; }
@@ -51571,9 +51594,9 @@ function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{wi
 /* frescor dos dados: uma frase só, usada na barra de contexto */
 function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta 07:00":"coleta diária às 07:00"; }
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
-function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
+function _adsBenchCarteira(tipo){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; if(!c||!Array.isArray(c.dias)) return null; const hoje=String(c.hoje||"").slice(0,10); const ini=_adsAddDays(hoje,-7), fim=_adsAddDays(hoje,-1); const porConta={}; c.dias.forEach(function(r){ if(r.data<ini||r.data>fim) return; const t=r.tipo||_adsClassifica(r.objetivo,[],r.nome); if(t!==tipo) return; const o=porConta[r.conta]||(porConta[r.conta]={g:0,res:0}); o.g+=Number(r.gasto||0); const l=Number(r.leads||0), cv=Number(r.conversas||0); o.res+=(t==="form"?l:cv); }); const vals=Object.keys(porConta).map(function(k){return porConta[k];}).filter(function(o){return o.res>=3&&o.g>0;}).map(function(o){return o.g/o.res;}).sort(function(a,b){return a-b;}); if(vals.length<2) return null; const m=vals.length%2?vals[(vals.length-1)/2]:(vals[vals.length/2-1]+vals[vals.length/2])/2; return {mediana:m,n:vals.length}; }
 function QGAdsEmBreve({nome,dica}){ return <AdsCard style={{textAlign:"center",color:ADS.muted,fontSize:13,border:"1px dashed "+ADS.line2}}>{nome}{dica?<div style={{marginTop:6,fontSize:12.5}}>{dica}</div>:null}</AdsCard>; }
-function AdsBtn({children,onClick,primary,disabled,small}){ return <button onClick={onClick} disabled={disabled} style={{background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"}}>{children}</button>; }
+function AdsBtn({children,onClick,primary,disabled,small,style}){ return <button onClick={onClick} disabled={disabled} style={Object.assign({background:primary?ADS.accent:"#fff",color:primary?"#fff":ADS.ink,border:primary?"none":"1px solid "+ADS.line2,borderRadius:10,padding:small?"6px 11px":"9px 14px",fontSize:small?12:12.5,fontWeight:800,cursor:disabled?"default":"pointer",fontFamily:ADS_FONT,opacity:disabled?.6:1,minHeight:0,whiteSpace:"nowrap"},style||{})}>{children}</button>; }
 
 /* ═══════════════════════════════════════════════════════
    VISÃO GERAL — três números, veredito da IA (7 dias), ações do dia, onde o dinheiro está
@@ -51584,38 +51607,36 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const [atualizando,setAtualizando]=useState(false);
   const [msg,setMsg]=useState("");
   const [frentesAberto,setFrentesAberto]=useState(false);
+  const [coletando,setColetando]=useState(false);
+  /* "Hoje": puxa agora da Meta só esta conta (1 dia, sem quebras/criativos) e relê as telas */
+  const coletarHoje=async function(){ if(!window._sb||!conta) return; setColetando(true); setMsg(""); try{ const r=await window._sb.functions.invoke("sync-meta-ads",{body:{accounts:[conta.ad_account_id],days:1,breakdowns:false,creatives:false}}); if(r.error) throw new Error(r.error.message||"falha na coleta"); _adsLimpaCaches(); try{ window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){} setMsg("Coleta de hoje atualizada."); } catch(e){ setMsg("Não deu pra coletar agora: "+(e.message||e)); } setColetando(false); };
   const atualizar=async function(){
     if(!window._sb||!conta) return; setAtualizando(true); setMsg("");
-    try{ const r=await window._sb.functions.invoke("analisar-ads",{body:{account:conta.ad_account_id,dias:7,gerado_por:"manual"}}); if(r.error) throw new Error(r.error.message||"falha na análise"); setMsg("Leitura atualizada."); D.reload(); }
+    try{ const r=await window._sb.functions.invoke("analisar-ads",{body:{account:conta.ad_account_id,dias:7,gerado_por:"manual"}}); if(r.error) throw new Error(r.error.message||"falha na análise"); setMsg("Leitura atualizada."); _adsLimpaCaches(); D.reload(); try{ window.dispatchEvent(new CustomEvent("pixels:ads-periodo")); }catch(_){} }
     catch(e){ setMsg("Não deu pra atualizar: "+(e.message||e)); }
     setAtualizando(false);
   };
   if(D.loading||X.loading) return <AdsLoading t={"Lendo a conta "+conta.nome+"…"}/>;
   if(X.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro ao ler os dados: {X.erro}</AdsCard></AdsWrap>;
-  const P=X.P; const cur=X.cur||{conta:{},campanhas:[],anuncios:[]}; const prev=(X.prev||{}).conta||{};
-  const T=cur.conta||{}; const A=D.analise; const ent=D.ent||[];
-  const tipos=_adsTiposDasCampanhas(ent);
+  const P=X.P; const cur=X.cur||{conta:{},campanhas:[],anuncios:[]}; const prev=_adsTotaisConta((X.prev||{}).conta);
+  const T=_adsTotaisConta(cur.conta); const A=D.analise; const ent=D.ent||[];
+  const tipos=_adsTiposDasCampanhas(ent,cur.campanhas);
   const entCamp={}; ent.filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
   const camps=(cur.campanhas||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:_adsResDe(c,cfg)}); });
   const leadCamps=camps.filter(function(c){return c.fam==="leads";});
   /* custo por lead: só o gasto das campanhas cuja finalidade é lead (09/09) */
-  const somaLead=function(lista){ const o={gasto:0,res:0}; (lista||[]).forEach(function(c){ if(c.fam!=="leads") return; o.gasto+=Number(c.gasto||0); o.res+=Number(c.res||0); }); return o; };
-  const L=somaLead(camps); T.gastoLead=L.gasto; T.resLead=L.res; T.gastoOutras=Math.max(0,Number(T.gasto||0)-L.gasto); T.cpa=_adsDiv(L.gasto,L.res);
-  /* leads da conta = soma do resultado de cada campanha pela finalidade dela (não o total do nível conta, que soma formulário + conversa da mesma pessoa) */
-  const somaTipos=function(lista){ const o={res:0,leads:0,conversas:0}; (lista||[]).forEach(function(c){ if(c.fam!=="leads") return; const r=Number(c.res||0); o.res+=r; if(c.tipo==="form") o.leads+=r; else o.conversas+=r; }); return o; }; /* só campanhas de lead — as outras têm outro resultado (engajamento, seguidores…) e não são lead */
-  (function(){ const t=somaTipos(camps); T.resultados=t.res; T.leads=t.leads; T.conversas=t.conversas; T.cpa=_adsDiv(L.gasto,L.res); })();
-  (function(){ const pc=((X.prev||{}).campanhas||[]).map(function(c){ const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); return {fam:cfg.fam,tipo:tipo,gasto:c.gasto,leads:c.leads,conversas:c.conversas,res:_adsResDe(c,cfg)}; }); const Lp=somaLead(pc); const tp=somaTipos(pc); prev.gastoLead=Lp.gasto; prev.resultados=tp.res; prev.leads=tp.leads; prev.conversas=tp.conversas; prev.cpa=_adsDiv(Lp.gasto,Lp.res); })();
+  /* T e prev já vêm prontos do banco pela finalidade (_adsTotaisConta): resultados, leads (formulário), conversas (WhatsApp), gastoLead, gastoOutras, cpa */
   const outrasNomes=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads"||!(Number(c.gasto||0)>0)) return; const k=c.cfg.curto||c.cfg.label; g[k]=(g[k]||0)+Number(c.gasto||0); }); return Object.keys(g).sort(function(a,b){return g[b]-g[a];}); })();
   const media=Number(T.cpa)||null;
   const verba=Number(verbaMensal)||0;
   // ritmo do mês (gasto do mês vem da série se o período cobrir; senão só verba)
   const mesIni=P.fim.slice(0,8)+"01"; const gastoMes=(cur.serie||[]).filter(function(s){return s.data>=mesIni;}).reduce(function(s,x){return s+Number(x.gasto||0);},0);
-  const cobreMes=P.ini<=mesIni; const diasMes=new Date(Number(P.fim.slice(0,4)),Number(P.fim.slice(5,7)),0).getDate(); const diaAtual=Number(P.fim.slice(8,10));
+  const cobreMes=P.preset==="mes"; /* % da verba só faz sentido no mês corrente */ const diasMes=new Date(Number(P.fim.slice(0,4)),Number(P.fim.slice(5,7)),0).getDate(); const diaAtual=Number(P.fim.slice(8,10));
   const ritmo=verba>0&&cobreMes?gastoMes/verba*100:null; const ritmoEsp=diaAtual/diasMes*100;
   /* frentes por tema (nome) — só campanhas de lead; marca à parte */
   const temas={}; leadCamps.forEach(function(c){ const t=_adsTemaDe(c.nome)||"Outras"; (temas[t]=temas[t]||[]).push(c); });
-  const totGasto=leadCamps.reduce(function(s,c){return s+c.gasto;},0)||1, totRes=leadCamps.reduce(function(s,c){return s+c.resultados;},0)||1;
-  const frentes=Object.keys(temas).map(function(t){ const cs=temas[t]; const gasto=cs.reduce(function(s,c){return s+c.gasto;},0), res=cs.reduce(function(s,c){return s+c.resultados;},0); const cpa=_adsDiv(gasto,res); const pctV=gasto/totGasto*100, pctR=res/totRes*100; let n="n", lbl="na média";
+  const totGasto=leadCamps.reduce(function(s,c){return s+c.gasto;},0)||1, totRes=leadCamps.reduce(function(s,c){return s+Number(c.res||0);},0)||1;
+  const frentes=Object.keys(temas).map(function(t){ const cs=temas[t]; const gasto=cs.reduce(function(s,c){return s+c.gasto;},0), res=cs.reduce(function(s,c){return s+Number(c.res||0);},0); const cpa=_adsDiv(gasto,res); const pctV=gasto/totGasto*100, pctR=res/totRes*100; let n="n", lbl="na média";
     if(res<ADS_MIN_RESULTADOS) lbl=res===0?"sem resultado":"amostra pequena"; else if(media&&cpa){ const r=cpa/media; if(r>1.3||(pctV-pctR>=5&&r>1.05)){ n="c"; lbl="drena · "+Math.round(pctV)+"% da verba, "+Math.round(pctR)+"% dos resultados"; } else if(r<0.8||(pctR-pctV>=5&&r<0.95)){ n="o"; lbl="rende · "+Math.round(pctV)+"% da verba, "+Math.round(pctR)+"% dos resultados"; } else if(r>1.05){ n="w"; lbl="atenção"; } }
     return {t:t,cs:cs,gasto:gasto,res:res,cpa:cpa,pctV:pctV,pctR:pctR,n:n,lbl:lbl}; }).sort(function(a,b){ const o={c:0,w:1,n:2,o:3}; return (o[a.n]-o[b.n])||(b.gasto-a.gasto); });
   const marcaCamps=camps.filter(function(c){return c.fam!=="leads";}); const marcaGasto=marcaCamps.reduce(function(s,c){return s+c.gasto;},0);
@@ -51631,6 +51652,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
   const tipCusto=[["O que é","quanto custou, em média, cada lead no período: gasto SÓ das campanhas de lead ÷ leads (formulário nas campanhas de formulário, conversa nas de WhatsApp). Engajamento, reconhecimento, seguidores, vídeo e tráfego não entram."],["Como está",_adsBRL(T.cpa)+" contra "+_adsBRL(prev.cpa)+" no período anterior."],["Referência","a própria conta: campanhas acima de 1,5× essa média ficam em atenção; acima de 2× são críticas."],["Leitura",media&&prev.cpa?(T.cpa>prev.cpa*1.15?"piorou — vale olhar quais frentes puxaram o custo.":T.cpa<prev.cpa*0.85?"melhorou em relação ao período anterior.":"estável."):""]];
   return <AdsWrap>
     {compartilhada&&<div style={{fontSize:12,color:ADS.muted,marginBottom:10}}>Conta compartilhada com Bioter {compartilhada} — as praças só se distinguem pelo nome da campanha.</div>}
+    {P.parcial&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:12,padding:"10px 14px",marginBottom:14,fontSize:12.5}}><b style={{color:ADS.warn}}>Hoje é dado parcial.</b><span style={{color:ADS.ink2}}>A coleta automática roda às 07:00; o que está aqui é o que a Meta já fechou até a última coleta. A Meta ainda reatribui conversas por até 7 dias.</span><AdsBtn onClick={coletarHoje} disabled={coletando} style={{marginLeft:"auto"}}>{coletando?"Coletando…":"↻ Puxar agora da Meta"}</AdsBtn>{msg&&<span style={{fontSize:12,color:ADS.muted}}>{msg}</span>}</div>}
     {/* três números — sólidos, um tom cada */}
     {(function(){ const tipoDom=(function(){ const g={}; camps.forEach(function(c){ if(c.fam==="leads") g[c.tipo]=(g[c.tipo]||0)+c.gasto; }); return Object.keys(g).sort(function(x,y){return g[y]-g[x];})[0]||null; })(); const bench=tipoDom?_adsBenchCarteira(tipoDom):null; const cfgDom=tipoDom?_adsTipo(tipoDom):null;
       return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
@@ -51715,7 +51737,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
       </AdsSec>;
     })()}
 
-    <div style={{fontSize:11.5,color:ADS.muted,paddingTop:4}}>Conversões da Meta levam até 48 h para fechar — o último dia sempre sobe um pouco. {_adsFrescor()}.</div>
+    <div style={{fontSize:11.5,color:ADS.muted,paddingTop:4}}>A Meta reatribui conversas e leads por até 7 dias depois do clique — os últimos dias ainda sobem um pouco. {_adsFrescor()}.</div>
   </AdsWrap>;
 }
 
@@ -51734,7 +51756,7 @@ function _adsResumoPublico(p){
 }
 // campanhas do período já classificadas + status do snapshot
 function _adsCampanhasEnriquecidas(cur,ent){
-  const tipos=_adsTiposDasCampanhas(ent); const entCamp={}; (ent||[]).filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
+  const tipos=_adsTiposDasCampanhas(ent,cur&&cur.campanhas); const entCamp={}; (ent||[]).filter(function(e){return e.nivel==="campanha";}).forEach(function(e){ entCamp[e.entidade_id]=e; });
   return ((cur&&cur.campanhas)||[]).map(function(c){ const e=entCamp[c.id]||{}; const tipo=tipos[c.id]||_adsClassifica(c.objetivo,[],c.nome); const cfg=_adsTipo(tipo); const res=_adsResDe(c,cfg); const custo=cfg.campo?_adsDiv(c.gasto,res):null; return Object.assign({},c,{ent:e,tipo:tipo,cfg:cfg,fam:cfg.fam,res:res,custo:custo,ativa:e.status_efetivo==="ACTIVE",marca:!cfg.campo}); });
 }
 // média de custo por TIPO (só compara igual com igual)
@@ -51780,7 +51802,7 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
             <td style={Object.assign({},TD,{fontWeight:700,color:ADS.ink,minWidth:230})}><div style={{display:"flex",alignItems:"center",gap:8}}><span title={st[0]} style={{width:8,height:8,borderRadius:"50%",background:c.ativa?ADS.ok:"#c9c5d6",flexShrink:0}}/><span title={c.nome}>{_adsNomeCurto(c.nome)}</span>{!c.ativa&&<span style={{fontSize:11,color:ADS.muted,fontWeight:500}}>{st[0].toLowerCase()}</span>}{c.poucos&&<AdsTag n="n">amostra pequena</AdsTag>}</div></td>
             <td style={TD}><AdsObjTag tipo={c.tipo}/></td>
             <td style={TDR}>{_adsBRL0(c.gasto)}</td>
-            <td style={Object.assign({},TDR,{fontWeight:700,color:ADS.ink})}>{c.marca?"—":_adsNum(c.cfg.campo==="alcance_mil"?c.res*1000:c.res)}{!c.marca&&<div style={{fontSize:10,color:ADS.muted,fontWeight:500,fontFamily:ADS_FONT}}>{c.cfg.resLbl}</div>}</td>
+            <td style={Object.assign({},TDR,{fontWeight:700,color:ADS.ink})}>{c.marca?"—":_adsNum(c.res)}{!c.marca&&<div style={{fontSize:10,color:ADS.muted,fontWeight:500,fontFamily:ADS_FONT}}>{c.cfg.resLbl}</div>}</td>
             <td style={Object.assign({},TDR,{fontWeight:800,fontSize:15,color:c.marca?ADS.muted:_adsCor(c.nivel)})}>{c.marca?<span style={{fontSize:12,fontWeight:600}}>CPM {_adsBRL(c.cpm)}</span>:(c.custo?_adsBRLc(c.custo):<span style={{fontSize:12,color:ADS.muted}}>{c.gasto>0?"sem "+c.cfg.resSing:"sem gasto"}</span>)}</td>
             <td style={TD}>{c.marca?<span style={{fontSize:11.5,color:ADS.muted}}>marca · não se julga por custo</span>:c.poucos?<span style={{fontSize:11.5,color:ADS.muted}}>n={c.res}</span>:(todas.filter(function(x){return x.tipo===c.tipo&&!x.poucos;}).length<2?<span style={{fontSize:11.5,color:ADS.muted}}>única do objetivo</span>:<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:90}}><AdsBarra pct={Math.min(100,(r||0)/3*100)} h={7} cor={_adsCorG(c.nivel)} alt={1}/></span><b style={Object.assign({fontSize:12,color:_adsCor(c.nivel)},ADS_MONO)}>{_adsX(r)}</b></div>)}</td>
             <td style={Object.assign({},TDR,{color:_adsCor(c.marca?"n":Number(c.ctr||0)>1.5?"o":Number(c.ctr||0)>=1?"w":"c")})}>{_adsPct(c.ctr,2)}</td>
@@ -51796,6 +51818,7 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
 /* ─── dados extras de uma campanha ─── */
 function useAdsCampanha(accountId,campId,periodo){
   const [st,setSt]=useState({loading:true,anuncios:[]});
+  const pk=periodo?periodo.key:"";
   useEffect(function(){
     if(!accountId||!campId||!window._sb){ setSt({loading:false,anuncios:[]}); return; }
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
@@ -51809,7 +51832,7 @@ function useAdsCampanha(accountId,campId,periodo){
       }catch(e){ if(alive) setSt({loading:false,anuncios:[]}); }
     })();
     return function(){ alive=false; };
-  },[accountId,campId]);
+  },[accountId,campId,pk]);
   return st;
 }
 
@@ -51818,7 +51841,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
   const [sub,setSub]=useState("visao");
-  const E=useAdsCampanha(conta&&conta.ad_account_id,campId);
+  const E=useAdsCampanha(conta&&conta.ad_account_id,campId,X.P);
   if(D.loading||X.loading) return <AdsLoading t="Lendo campanha…"/>;
   const P=X.P; const A=D.analise; const M=(A&&A.metricas)||{};
   const todas=_adsCampanhasEnriquecidas(X.cur,D.ent); const medias=_adsMediaPorTipo(todas);
@@ -51831,7 +51854,8 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const media=medias[tipo]||null;
   const conjuntos=ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;});
   const conjAtivos=conjuntos.filter(function(x){return x.status_efetivo==="ACTIVE";});
-  const cjM={}; (M.conjuntos||[]).forEach(function(x){ cjM[x.id]=x; });
+  /* conjuntos: da mesma RPC do período (ads_periodo.conjuntos) — resultado pela finalidade calculado no banco; frequência = impressões ÷ alcance (o que o Gerenciador mostra) */
+  const cjM={}; ((X.cur||{}).conjuntos||[]).filter(function(x){return x.campaign_id===campId;}).forEach(function(x){ const r=Number(x.res||0); cjM[x.id]=Object.assign({},x,{resultados:r,res:r,cpa:_adsDiv(x.gasto,r),ctr:Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null,frequencia:Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null}); });
   const conjComDados=conjuntos.map(function(x){ return Object.assign({},x,{m:cjM[x.entidade_id]||null}); }).filter(function(x){ return x.m||x.status_efetivo==="ACTIVE"; });
   const anAtivos=(E.anuncios||[]).filter(function(a){return a.status_efetivo==="ACTIVE";}).length;
   const orc=(function(){ if(Number(e.orcamento)>0) return {v:Number(e.orcamento)/100,tipo:e.tipo_orcamento,nivel:"campanha"}; const s=conjAtivos.reduce(function(t,x){return t+(Number(x.orcamento)||0);},0); return s>0?{v:s/100,tipo:(conjAtivos[0]||{}).tipo_orcamento,nivel:"conjuntos"}:null; })();
@@ -51856,7 +51880,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   })();
   const NUM=[
     {lab:"Gasto",val:_adsBRL0(c&&c.gasto),d:_adsDelta(c&&c.gasto,pv.gasto),inv:true},
-    {lab:cfg.campo?cfg.resLbl:"Alcance",val:marca?_adsNum(c&&c.alcance):_adsNum(cfg.campo==="alcance_mil"?res*1000:res),d:marca?_adsDelta(c&&c.alcance,pv.alcance):_adsDelta(res,pv.res)},
+    {lab:cfg.campo?cfg.resLbl:"Alcance",val:marca?_adsNum(c&&c.alcance):_adsNum(res),d:marca?_adsDelta(c&&c.alcance,pv.alcance):_adsDelta(res,pv.res)},
     {lab:cfg.custoLbl||"CPM",val:marca?_adsBRL(c&&c.cpm):(custo?_adsBRLc(custo):"—"),cor:_adsCor(nivel),d:marca?_adsDelta(c&&c.cpm,pv.cpm):_adsDelta(custo,pv.custo),inv:true},
     {lab:"CTR",val:_adsPct(c&&c.ctr,2),cor:_adsCor(marca?"n":Number(c&&c.ctr||0)>1.5?"o":Number(c&&c.ctr||0)>=1?"w":"c"),d:_adsDelta(c&&c.ctr,pv.ctr)},
     {lab:"CPM",val:_adsBRL(c&&c.cpm),d:_adsDelta(c&&c.cpm,pv.cpm),inv:true},
@@ -51875,7 +51899,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const cjValidos=conjComDados.filter(function(x){return x.m&&Number(x.m.resultados||0)>=ADS_MIN_RESULTADOS&&x.m.cpa;});
   const piorCj=cjValidos.slice().sort(function(a,b){return b.m.cpa-a.m.cpa;})[0], melhorCj=cjValidos.slice().sort(function(a,b){return a.m.cpa-b.m.cpa;})[0];
   const invertido=piorCj&&melhorCj&&piorCj!==melhorCj&&Number(piorCj.m.gasto||0)/somaCj>0.5;
-  const mediaConta=(X.cur&&X.cur.conta&&X.cur.conta.cpa)||null;
+  const mediaConta=_adsTotaisConta(X.cur&&X.cur.conta).cpa||null; /* mesmo número da Visão geral, sem depender da ordem de navegação */
   return <AdsWrap>
     <button onClick={onVoltar} style={{background:"none",border:"none",color:ADS.accent,fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:ADS_FONT,padding:0,marginBottom:12,minHeight:0}}>‹ Campanhas</button>
     <AdsCard style={{marginBottom:16}}>
@@ -51908,7 +51932,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
       </AdsSec>}
     </>}
 
-    {sub==="conjuntos"&&<AdsSec t={"Conjuntos · "+conjComDados.length} s="fatia da verba × custo por resultado · números dos últimos 7 dias (leitura da IA) · destaque quando a verba está invertida">
+    {sub==="conjuntos"&&<AdsSec t={"Conjuntos · "+conjComDados.length} s={"fatia da verba × "+(cfg.custoLbl||"custo")+" · "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" · destaque quando a verba está invertida"}>
       {conjComDados.length===0?<div style={{fontSize:13,color:ADS.muted}}>Nenhum conjunto com dados.</div>:
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {invertido&&<div style={{background:ADS.warnSoft,border:"1px solid "+ADS.warn+"66",borderRadius:12,padding:"11px 14px",fontSize:13}}><b style={{color:ADS.warn}}>Verba invertida.</b> {_adsNomeCurto(piorCj.nome)} tem o pior custo ({_adsBRL(piorCj.m.cpa)}) e recebe {Math.round(Number(piorCj.m.gasto)/somaCj*100)}% da verba, enquanto {_adsNomeCurto(melhorCj.nome)} entrega a {_adsBRL(melhorCj.m.cpa)} com {Math.round(Number(melhorCj.m.gasto)/somaCj*100)}%.</div>}
@@ -51918,10 +51942,10 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
               <div style={{minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:8,height:8,borderRadius:"50%",background:x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6"}}/><span style={{fontWeight:800,fontSize:14}}>{x.nome}</span>{fsL&&<AdsTag n={fsL[1]}>{fsL[0]}</AdsTag>}{x.status_efetivo!=="ACTIVE"&&<span style={{fontSize:11,color:ADS.muted}}>{st2[0].toLowerCase()}</span>}{poucos2&&<AdsTag n="n">amostra pequena</AdsTag>}</div>
                 <div style={{fontSize:12,color:ADS.muted,marginTop:3}}>{_adsResumoPublico(x.publico)}{x.otimizacao?" · otimiza pra "+(x.otimizacao||"").toLowerCase().replace(/_/g," "):""}</div>
-                <div style={{display:"flex",gap:14,marginTop:8,fontSize:12,color:ADS.ink2,flexWrap:"wrap"}}><span><b style={ADS_MONO}>{_adsNum(m.impressoes)}</b> impressões</span><span>CTR <b style={Object.assign({color:_adsCor(Number(m.ctr||0)>1.5?"o":Number(m.ctr||0)>=1?"w":"c")},ADS_MONO)}>{_adsPct(m.ctr,2)}</b></span><span>freq. <b style={ADS_MONO}>{Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2})}</b></span><span><b style={ADS_MONO}>{_adsNum(m.resultados)}</b> resultados</span></div>
+                <div style={{display:"flex",gap:14,marginTop:8,fontSize:12,color:ADS.ink2,flexWrap:"wrap"}}><span><b style={ADS_MONO}>{_adsNum(m.impressoes)}</b> impressões</span><span>CTR <b style={Object.assign({color:_adsCor(Number(m.ctr||0)>1.5?"o":Number(m.ctr||0)>=1?"w":"c")},ADS_MONO)}>{_adsPct(m.ctr,2)}</b></span><span>freq. <b style={ADS_MONO}>{Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2})}</b></span><span><b style={ADS_MONO}>{_adsNum(m.resultados)}</b> {cfg.resLbl||"resultados"}</span></div>
               </div>
               <div><div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:ADS.muted,marginBottom:4}}><span>fatia da verba</span><span style={Object.assign({fontWeight:700,color:ADS.ink2},ADS_MONO)}>{Math.round(fatia)}% · {_adsBRL0(m.gasto)}</span></div><AdsBarra pct={fatia} h={10} cor="#b58ff2" alt={1}/></div>
-              <div style={{textAlign:isMob?"left":"right"}}><div style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px",color:_adsCor(n)}}>{m.cpa?_adsBRL(m.cpa):"—"}</div><div style={{fontSize:11,color:ADS.muted}}>por resultado</div></div>
+              <div style={{textAlign:isMob?"left":"right"}}><div style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px",color:_adsCor(n)}}>{m.cpa?_adsBRL(m.cpa):"—"}</div><div style={{fontSize:11,color:ADS.muted}}>por {cfg.resSing||"resultado"}</div></div>
             </div>
           </AdsCard>; })}
       </div>}
@@ -52051,9 +52075,9 @@ function AdsCapa({cr,h,radius,children,onClick,dark}){
 window._pxAdsPrev=window._pxAdsPrev||{};
 function useAdsPreview(adId,formato){
   const key=adId+"|"+formato;
-  const [st,setSt]=useState(function(){ return window._pxAdsPrev[key]||{loading:!!adId,src:null,erro:null}; });
-  useEffect(function(){ if(!adId||!window._sb) return; if(window._pxAdsPrev[key]){ setSt(window._pxAdsPrev[key]); return; } let alive=true; setSt({loading:true,src:null,erro:null});
-    window._sb.functions.invoke("ads-preview",{body:{ad_id:adId,formato:formato}}).then(function(r){ if(!alive) return; const d=r.data||{}; const o=r.error||!d.src?{loading:false,src:null,erro:(r.error&&r.error.message)||d.error||"sem prévia"}:{loading:false,src:d.src,erro:null}; window._pxAdsPrev[key]=o; setSt(o); }).catch(function(e){ if(alive) setSt({loading:false,src:null,erro:e.message||String(e)}); });
+  const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsPrev[key])?window._pxAdsPrev[key]:{loading:!!adId,src:null,erro:null}; });
+  useEffect(function(){ if(!adId||!window._sb) return; if(_adsCacheOk(window._pxAdsPrev[key])){ setSt(window._pxAdsPrev[key]); return; } let alive=true; setSt({loading:true,src:null,erro:null});
+    window._sb.functions.invoke("ads-preview",{body:{ad_id:adId,formato:formato}}).then(function(r){ if(!alive) return; const d=r.data||{}; const o=r.error||!d.src?{loading:false,src:null,erro:(r.error&&r.error.message)||d.error||"sem prévia"}:{loading:false,src:d.src,erro:null,_em:Date.now()}; window._pxAdsPrev[key]=o; setSt(o); }).catch(function(e){ if(alive) setSt({loading:false,src:null,erro:e.message||String(e)}); });
     return function(){ alive=false; }; },[key]);
   return st;
 }
@@ -52082,7 +52106,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
           <button onClick={onClose} style={{border:0,background:ADS.surface2,borderRadius:99,width:32,height:32,cursor:"pointer",fontSize:16,color:ADS.ink2,flexShrink:0,minHeight:0}}>×</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:14,marginTop:16}}>
-          {[[a.cfg.custoLbl||"CPM",a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm),a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink],[a.cfg.resLbl||"Alcance",a.cfg.campo?_adsNum(a.cfg.campo==="alcance_mil"?a.res*1000:a.res):_adsNum(a.alcance)],["Gasto",_adsBRL0(a.gasto)],["CTR",_adsPct(a.ctr,2)],["Frequência",Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],["vs. média do grupo",mediaG&&a.custo?(mediaG/a.custo>=1.15?_adsX(mediaG/a.custo)+" melhor":a.custo/mediaG>=1.15?_adsX(a.custo/mediaG)+" pior":"na média"):"—",mediaG&&a.custo?(mediaG/a.custo>=1.15?ADS.ok:a.custo/mediaG>=1.15?ADS.crit:ADS.ink):ADS.muted]].map(function(k){ return <div key={k[0]}><AdsEyebrow>{k[0]}</AdsEyebrow><div style={{fontSize:19,fontWeight:800,letterSpacing:"-.4px",marginTop:2,color:k[2]||ADS.ink}}>{k[1]}</div></div>; })}
+          {[[a.cfg.custoLbl||"CPM",a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm),a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink],[a.cfg.resLbl||"Alcance",a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance)],["Gasto",_adsBRL0(a.gasto)],["CTR",_adsPct(a.ctr,2)],["Frequência",Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],["vs. média do grupo",mediaG&&a.custo?(mediaG/a.custo>=1.15?_adsX(mediaG/a.custo)+" melhor":a.custo/mediaG>=1.15?_adsX(a.custo/mediaG)+" pior":"na média"):"—",mediaG&&a.custo?(mediaG/a.custo>=1.15?ADS.ok:a.custo/mediaG>=1.15?ADS.crit:ADS.ink):ADS.muted]].map(function(k){ return <div key={k[0]}><AdsEyebrow>{k[0]}</AdsEyebrow><div style={{fontSize:19,fontWeight:800,letterSpacing:"-.4px",marginTop:2,color:k[2]||ADS.ink}}>{k[1]}</div></div>; })}
         </div>
         {a.video&&a.r25!==null&&<div style={{marginTop:16}}><AdsEyebrow>Retenção do vídeo</AdsEyebrow><div style={{display:"flex",gap:6,marginTop:6}}>{[["início",100],["25%",a.r25],["50%",a.r50],["75%",a.r75],["fim",a.r100]].map(function(s){ return <div key={s[0]} style={{flex:1,background:"#ecebf2",borderRadius:8,height:38,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,right:0,bottom:0,height:Math.max(3,Math.min(100,s[1]||0))+"%",background:"#9b6cea",opacity:.85}}/><div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,fontWeight:800,color:"#3d3853"}}>{s[0]}{s[0]!=="início"?" · "+_adsPct(s[1],1):""}</div></div>; })}</div></div>}
         <div style={{marginTop:16}}><AdsEyebrow>Diagnóstico</AdsEyebrow>{a.diag.length===0?<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nada que se destaque.</div>:a.diag.map(function(d,j){ return <div key={j} style={{fontSize:13,color:ADS.ink2,marginTop:6,display:"flex",gap:8,lineHeight:1.4}}><span style={{color:d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.warn,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"i"}</span><span>{d[1]}</span></div>; })}</div>
@@ -52106,19 +52130,21 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const [verTodos,setVerTodos]=useState(false);
   if(D.loading||X.loading||C.loading) return <AdsLoading t="Lendo criativos…"/>;
   if(!todosAn.length) return <AdsWrap><QGAdsEmBreve nome="Sem anúncios com gasto no período" dica="Troque o período ou confira a coleta."/></AdsWrap>;
-  const P=X.P; const A=D.analise; const T=(X.cur||{}).conta||{};
-  const tipos=_adsTiposDasCampanhas(D.ent);
+  const P=X.P; const A=D.analise; const T=_adsTotaisConta((X.cur||{}).conta);
+  const tipos=_adsTiposDasCampanhas(D.ent,(X.cur||{}).campanhas);
   const campNome={}; ((X.cur||{}).campanhas||[]).forEach(function(c){ campNome[c.id]=c.nome; });
   /* enriquece cada anúncio: objetivo → família → resultado/custo */
-  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id}); });
+  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id}); });
   const fams=ADS_FAMS.filter(function(f){ return enr.some(function(a){return a.F.id===f.id;}); });
   const famAtiva=fam&&fams.find(function(f){return f.id===fam;})||null; // null = Geral
   const doGrupo=famAtiva?enr.filter(function(a){return a.F.id===famAtiva.id;}):enr.slice();
   /* médias por família (nunca cruza famílias) */
+  /* média de referência por TIPO (formulário ≠ WhatsApp ≠ engajamento): um criativo de formulário a R$ 45 não é "2× a média" só porque as conversas custam R$ 8 */
+  const mediaTipo={}; ADS_TIPOS.forEach(function(t){ const g=enr.filter(function(a){return a.tipo===t.id;}); if(!g.length) return; const gg=g.reduce(function(s,a){return s+a.gasto;},0), rr=g.reduce(function(s,a){return s+(a.res||0);},0); mediaTipo[t.id]=t.campo?_adsDiv(gg,rr):null; });
   const mediaFam={}; fams.forEach(function(f){ const g=enr.filter(function(a){return a.F.id===f.id;}); const gg=g.reduce(function(s,a){return s+a.gasto;},0), rr=g.reduce(function(s,a){return s+(a.res||0);},0); mediaFam[f.id]=f.campo?_adsDiv(gg,rr):null; });
   const ctrFam={}; fams.forEach(function(f){ const g=enr.filter(function(a){return a.F.id===f.id;}); const imp=g.reduce(function(s,a){return s+Number(a.impressoes||0);},0), cl=g.reduce(function(s,a){return s+Number(a.cliques||0);},0); ctrFam[f.id]=imp>0?cl/imp*100:null; });
   const gastoG=doGrupo.reduce(function(s,a){return s+a.gasto;},0);
-  const items=doGrupo.map(function(a){ const F=a.F; const mediaG=mediaFam[F.id]; const minRes=F.id==="reconhecimento"?1:ADS_MIN_RESULTADOS; const semMetrica=!F.campo; const poucos=!semMetrica&&a.res<minRes; const n=semMetrica||poucos?"n":_adsNivelCusto(a.custo,mediaG,Math.max(a.res,ADS_MIN_RESULTADOS)); const gastoMedio=gastoG/Math.max(doGrupo.length,1);
+  const items=doGrupo.map(function(a){ const F=a.F; const mediaG=(mediaTipo[a.tipo]!==undefined?mediaTipo[a.tipo]:mediaFam[F.id]); const minRes=F.id==="reconhecimento"?1:ADS_MIN_RESULTADOS; const semMetrica=!F.campo; const poucos=!semMetrica&&a.res<minRes; const n=semMetrica||poucos?"n":_adsNivelCusto(a.custo,mediaG,a.res); const gastoMedio=gastoG/Math.max(doGrupo.length,1);
     const diag=[];
     if(!semMetrica&&a.gasto>100&&a.res===0) diag.push(["x",_adsBRL0(a.gasto)+" gastos e nenhum "+F.resSing+" — queimando verba"]);
     if(!poucos&&!semMetrica&&a.custo&&mediaG&&a.custo<mediaG*0.8) diag.push(["v",F.custoLbl+" "+_adsX(mediaG/a.custo)+" melhor que a média dos anúncios de "+F.label.toLowerCase()]);
@@ -52134,9 +52160,9 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const ordena=function(arr){ return arr.slice().sort(function(a,b){ if(famAtiva){ const ga=a.res===0||a.semMetrica?2:(a.poucos?1:0), gb=b.res===0||b.semMetrica?2:(b.poucos?1:0); if(ga!==gb) return ga-gb; if(ga===0) return a.custo-b.custo; return b.gasto-a.gasto; } return b.gasto-a.gasto; }); };
   const rank=ordena(items);
   const principais=rank.filter(function(a){return !a.amostra;}); const pequenos=rank.filter(function(a){return a.amostra;});
-  const agCamp=(famAtiva&&famAtiva.id==="leads"&&A&&A.campeoes&&A.campeoes.campeoes&&A.campeoes.campeoes.criativo)||null;
+  const agCamp=null; /* campeão sempre eleito pelos itens do período selecionado — a análise da IA cobre outra janela (7 dias) */
   const campeao=famAtiva?((agCamp&&Number(agCamp.resultados||0)>=ADS_MIN_RESULTADOS&&items.find(function(a){return a.id===agCamp.id;}))||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo&&a.gasto>=50;})||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo;})||null):null;
-  const resFmt=function(a){ return a.F.campo==="alcance_mil"?_adsNum(a.res*1000):_adsNum(a.res); };
+  const resFmt=function(a){ return _adsNum(a.res); }; /* reconhecimento: res já é "mil alcançados" */
   const Card=function(a,i){ const aberto2=aberto===a.id; return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{background:"#fff",border:"1px solid "+(a===campeao?"#e6c56a":ADS.line),borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s"}} onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)";}}>
       <AdsCapa cr={a.cr} h={isMob?200:230} radius={0}>
         {a.selo&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:a.selo[1]==="g"?"#ffe8a3":"#fecaca",color:a.selo[1]==="g"?"#6b4d00":"#7f1d1d"}}>{a===campeao?"Campeão":a.selo[0]}</span>}
@@ -52298,13 +52324,17 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   if(D.loading||X.loading||Q.loading) return <AdsLoading t="Lendo público…"/>;
   const P=X.P; const rows=Q.rows||[];
   const base=rows.filter(function(r){return r.dimensao==="idade";});
-  const totGasto=base.reduce(function(s,r){return s+Number(r.gasto||0);},0)||rows.reduce(function(s,r){return s+Number(r.gasto||0);},0)/5||1;
+  const nDims=Object.keys(rows.reduce(function(m,r){ m[r.dimensao]=1; return m; },{})).length||1; const totGasto=base.reduce(function(s,r){return s+Number(r.gasto||0);},0)||rows.reduce(function(s,r){return s+Number(r.gasto||0);},0)/nDims||1;
   const totRes=base.reduce(function(s,r){return s+Number(r.resultados||0);},0);
   const media=_adsDiv(totGasto,totRes);
   const ctrConta=(function(){ const imp=base.reduce(function(s,x){return s+Number(x.impressoes||0);},0), cl=base.reduce(function(s,x){return s+Number(x.cliques||0);},0); return imp>0?cl/imp*100:null; })();
   const tiposPresentes=ADS_TIPOS.filter(function(t){ return camps.some(function(c){return c.tipo===t.id;}); });
   const dims=["idade","genero","posicionamento","dispositivo","regiao"];
   const chaveBase=filtro+"|"+P.key+"|"+metrica;
+  /* o que "resultado" significa no filtro atual: lead (formulário/WhatsApp) ou o resultado da outra finalidade */
+  const filtroTipo=filtro.indexOf("tipo:")===0?filtro.slice(5):filtro.indexOf("camp:")===0?((camps.find(function(c){return c.id===filtro.slice(5);})||{}).tipo||null):null;
+  const filtroEhLead=filtro==="todas"?true:_adsEhLead(filtroTipo);
+  const resNome=filtroEhLead?"lead":((_adsTipo(filtroTipo)||{}).resSing||"resultado"); const resNomePl=filtroEhLead?"leads":((_adsTipo(filtroTipo)||{}).resLbl||"resultados");
   /* melhor corte de cada dimensão pros heróis */
   const melhorDe=function(dim){ const rs=rows.filter(function(r){return r.dimensao===dim&&Number(r.resultados||0)>=ADS_MIN_RESULTADOS&&Number(r.gasto||0)>0;}).map(function(r){ return {lbl:_adsValLbl(dim,r.valor),cpa:Number(r.gasto)/Number(r.resultados),res:Number(r.resultados)}; }).sort(function(a,b){return a.cpa-b.cpa;}); return rs[0]||null; };
   const mIdade=melhorDe("idade"), mPos=melhorDe("posicionamento"), mGen=melhorDe("genero");
@@ -52352,7 +52382,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
       {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,ADS_SOL.medio)}
       {heroi("Gênero que rende mais",mGen,ADS_SOL.claro)}
     </div>}
-    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> resultados · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por lead{filtro==="todas"&&temOutras?" · só campanhas de lead":""}</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>{temOutras?"Campanhas de lead":"Toda a conta"}</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
+    <AdsSec t="Cortes de público" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · <b style={{color:ADS.ink2}}><AdsNumAnim v={totGasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={totRes} fmt={_adsNum}/></b> {resNomePl} · média <b style={{color:ADS.ink2}}><AdsNumAnim v={media||0} fmt={_adsBRL}/></b> por {resNome}{filtro==="todas"&&temOutras?" · só campanhas de lead":""}</span>} right={!campId&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}><AdsChip on={filtro==="todas"} onClick={function(){setFiltro("todas");}}>{temOutras?"Campanhas de lead":"Toda a conta"}</AdsChip>{tiposPresentes.map(function(t){ return <AdsChip key={t.id} on={filtro==="tipo:"+t.id} onClick={function(){setFiltro("tipo:"+t.id);}}>{t.label}</AdsChip>; })}{typeof QGSel==="function"&&<QGSel value={filtro.indexOf("camp:")===0?filtro:""} onChange={function(v){ if(v) setFiltro(v); }} options={[{id:"",label:"por campanha…"}].concat(camps.slice().sort(function(a,b){return String(a.nome).localeCompare(String(b.nome));}).map(function(c){return {id:"camp:"+c.id,label:_adsNomeCurto(c.nome)};}))} width={200}/>}</div>}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:14}}>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase"}}>Ver como</span><AdsSegVista v={vista} onChange={mudaVista}/>
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase",marginLeft:isMob?0:10}}>Métrica</span><AdsSegMetrica v={metrica} onChange={setMetrica}/>
@@ -52383,13 +52413,15 @@ function _adsPainelCalc(data,accounts,clients){
   const hoje=String(data.hoje||_adsIso(new Date())).slice(0,10);
   /* último dia com coleta na maioria das contas (antes das 07h o dia anterior ainda não chegou) */
   const ontemReal=_adsAddDays(hoje,-1);
-  const ontem=(function(){ const porDia={}; const contasSet={}; (data.dias||[]).forEach(function(r){ contasSet[r.conta]=1; (porDia[r.data]=porDia[r.data]||{})[r.conta]=1; }); const n=Object.keys(contasSet).length||1; const ds=Object.keys(porDia).filter(function(d){ return d<=ontemReal&&Object.keys(porDia[d]).length>=Math.ceil(n/2); }).sort(); return ds.length?ds[ds.length-1]:ontemReal; })();
+  /* janela SEMPRE ancorada em ontem (igual às telas do cliente). Se a coleta atrasou, avisa — não desloca a janela. */
+  const ontem=ontemReal;
+  const ultimoDiaColetado=(function(){ const porDia={}; const contasSet={}; (data.dias||[]).forEach(function(r){ contasSet[r.conta]=1; (porDia[r.data]=porDia[r.data]||{})[r.conta]=1; }); const n=Object.keys(contasSet).length||1; const ds=Object.keys(porDia).filter(function(d){ return d<=ontemReal&&Object.keys(porDia[d]).length>=Math.ceil(n/2); }).sort(); return ds.length?ds[ds.length-1]:null; })();
   const jan={d1:[ontem,ontem],d7:[_adsAddDays(ontem,-6),ontem],d15:[_adsAddDays(ontem,-14),ontem],d30:[_adsAddDays(ontem,-29),ontem],mes:[hoje.slice(0,8)+"01",ontem]};
   const dentro=function(d,j){ return d>=j[0]&&d<=j[1]; };
   /* classificação por campanha */
   const entPorConta={}; (data.ent||[]).forEach(function(e){ const o=entPorConta[e.conta]||(entPorConta[e.conta]={camp:{},conj:{}}); if(e.nivel==="campanha") o.camp[e.id]=e; else (o.conj[e.parent]=o.conj[e.parent]||[]).push(e); });
   const tipoDe={}; const tipoCache={};
-  (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
+  (data.dias||[]).forEach(function(r){ const k=r.conta+"|"+r.camp; if(tipoCache[k]) return; if(r.tipo){ tipoCache[k]=r.tipo; return; } /* classificação única do banco */ const o=entPorConta[r.conta]||{camp:{},conj:{}}; const c=o.camp[r.camp]||{}; tipoCache[k]=_adsClassifica(c.objetivo||r.objetivo,o.conj[r.camp]||[],c.nome||r.nome); });
   /* resultado por tipo: leads (form) ou conversas (wpp) — família leads; demais famílias não contam como lead */
   const resDe=function(r,tipo){ const l=Number(r.leads||0), c=Number(r.conversas||0); if(tipo==="form") return l; if(tipo==="lead_wpp"||tipo==="eng_wpp") return c; return 0; }; /* cada campanha conta pela finalidade (09/09); campanha que não é de lead não gera lead */
   const vazio=function(){ return {gasto:0,gastoLead:0,res:0,leads:0,conversas:0,leads_meta:0,impressoes:0,cliques:0}; };
@@ -52411,17 +52443,17 @@ function _adsPainelCalc(data,accounts,clients){
   const crit={}; (data.analises||[]).forEach(function(a){ crit[a.conta]=(Array.isArray(a.alertas)?a.alertas:[]).filter(function(x){return x.nivel==="critico";}); });
   /* liga conta → cliente (mc) */
   const linhas=[];
-  (clients||[]).forEach(function(mc){ const r=typeof adsContaDoCliente==="function"?adsContaDoCliente(mc,accounts):null; if(!r||!r.conta||r.compartilhada) return; const o=contas[r.conta.ad_account_id]; linhas.push({mc:mc,conta:r.conta,o:o||null,crit:crit[r.conta.ad_account_id]||[]}); });
+  (clients||[]).forEach(function(mc){ const r=typeof adsContaDoCliente==="function"?adsContaDoCliente(mc,accounts):null; if(!r||!r.conta) return; const o=contas[r.conta.ad_account_id]; linhas.push({mc:mc,conta:r.conta,o:r.compartilhada?null:(o||null),compartilhada:r.compartilhada||null,crit:r.compartilhada?[]:(crit[r.conta.ad_account_id]||[])}); });
   /* prioridades */
   const prios=[];
   linhas.forEach(function(l){ const o=l.o; const nome=l.mc.name;
     l.crit.forEach(function(a){ prios.push({nivel:"c",cliente:l.mc,titulo:a.titulo,detalhe:a.detalhe,acao:a.acao}); });
     if(o){ const temOntem=!!o.porDia[ontem]; if(o.j.d7.gasto>0&&o.j.d1.gasto<=0){ if(temOntem) prios.push({nivel:"c",cliente:l.mc,titulo:"Não gastou ontem",detalhe:"a conta vinha gastando "+_adsBRL0(o.j.d7.gasto/7)+"/dia nos últimos 7 dias e ontem ficou em R$ 0.",acao:"Verificar se as campanhas foram pausadas ou rejeitadas."}); else prios.push({nivel:"w",cliente:l.mc,titulo:"Coleta de ontem ainda não chegou",detalhe:"a Meta ainda não entregou os números de "+_adsFmtD(ontem)+" desta conta.",acao:"Normal até o meio da manhã; se persistir, conferir a coleta."}); }
       if(o.j.d7.gasto>=50&&o.j.d7.res===0) prios.push({nivel:"c",cliente:l.mc,titulo:"7 dias sem resultado",detalhe:_adsBRL0(o.j.d7.gasto)+" gastos nos últimos 7 dias sem nenhum lead ou conversa.",acao:"Revisar segmentação e criativos."});
-      const verba=Number(l.mc.investimento_meta||0); if(verba>0&&o.j.d30.gasto>verba*1.15) prios.push({nivel:"w",cliente:l.mc,titulo:"Acima da verba",detalhe:_adsBRL0(o.j.d30.gasto)+" em 30 dias contra verba mensal de "+_adsBRL0(verba)+".",acao:"Ajustar orçamento diário."});
-    } else if(l.conta) prios.push({nivel:"w",cliente:l.mc,titulo:"Sem dados nos últimos 30 dias",detalhe:"a conta está cadastrada mas não tem gasto coletado.",acao:"Conferir a coleta ou a conta no Gerenciador."});
+      const verba=Number(l.mc.investimento_meta||0); if(verba>0&&o.j.mes.gasto>verba*1.15) prios.push({nivel:"w",cliente:l.mc,titulo:"Acima da verba",detalhe:_adsBRL0(o.j.mes.gasto)+" no mês contra verba mensal de "+_adsBRL0(verba)+".",acao:"Ajustar orçamento diário."});
+    } else if(l.conta&&!l.compartilhada) prios.push({nivel:"w",cliente:l.mc,titulo:"Sem dados nos últimos 30 dias",detalhe:"a conta está cadastrada mas não tem gasto coletado.",acao:"Conferir a coleta ou a conta no Gerenciador."});
   });
-  return {hoje:hoje,ontem:ontem,ontemReal:ontemReal,atrasado:ontem<ontemReal,jan:jan,contas:contas,ag:ag,linhas:linhas,prios:prios,tipoCache:tipoCache};
+  return {hoje:hoje,ontem:ontem,ontemReal:ontemReal,atrasado:!!ultimoDiaColetado&&ultimoDiaColetado<ontemReal,ultimoDiaColetado:ultimoDiaColetado,coleta:data.coleta||[],jan:jan,contas:contas,ag:ag,linhas:linhas,prios:prios,tipoCache:tipoCache};
 }
 function _adsChaveAlerta(clientId,titulo){ let h=0; const t=String(titulo||""); for(let i=0;i<t.length;i++){ h=((h<<5)-h+t.charCodeAt(i))|0; } return clientId+"|"+(h>>>0).toString(36); }
 function useAdsAlertasStatus(){
@@ -52478,7 +52510,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
 
     {/* ── 2. CLIENTES ── */}
     <div>
-      <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px",color:S.ink}}>{soClientes?"Clientes de mídia · "+linhas.length:"Clientes"}</span><span style={{fontSize:12,color:S.muted}}>escolha a janela à direita · dados da Meta até {_adsFmtD(C.ontem)}</span>{direita}<span style={{marginLeft:"auto",display:"inline-flex",background:S.surface2,borderRadius:9,padding:2,gap:1}}>{J.map(function(j){ const on=jAtiva===j[0]; return <button key={j[0]} onClick={function(){setJAtiva(j[0]);}} style={{background:on?"#fff":"transparent",color:on?S.ink:S.muted,border:0,borderRadius:7,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:F,boxShadow:on?"0 1px 3px rgba(15,13,26,.12)":"none",minHeight:0}}>{j[1]}</button>; })}</span></div>
+      <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px",color:S.ink}}>{soClientes?"Clientes de mídia · "+linhas.length:"Clientes"}</span><span style={{fontSize:12,color:S.muted}}>escolha a janela à direita · janelas terminam ontem ({_adsFmtD(C.ontem)})</span>{C.atrasado&&<span style={{fontSize:11.5,fontWeight:700,color:ADS.warn,background:ADS.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)} — os números de ontem ainda não chegaram</span>}{direita}<span style={{marginLeft:"auto",display:"inline-flex",background:S.surface2,borderRadius:9,padding:2,gap:1}}>{J.map(function(j){ const on=jAtiva===j[0]; return <button key={j[0]} onClick={function(){setJAtiva(j[0]);}} style={{background:on?"#fff":"transparent",color:on?S.ink:S.muted,border:0,borderRadius:7,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:F,boxShadow:on?"0 1px 3px rgba(15,13,26,.12)":"none",minHeight:0}}>{j[1]}</button>; })}</span></div>
       <AdsCard style={{padding:0,overflow:"hidden"}}>
         {!isMob&&<div style={{display:"grid",gridTemplateColumns:"minmax(200px,1.6fr) 110px 130px 120px minmax(160px,1fr) 70px",gap:14,padding:"9px 16px",borderBottom:"1px solid "+S.line,fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:S.muted}}>
           <span>Cliente</span><span style={{textAlign:"right"}}>Leads</span><span style={{textAlign:"right"}}>Custo por lead</span><span style={{textAlign:"right"}}>Gasto</span><span>Situação</span><span/>
@@ -52489,7 +52521,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
           const situ=l.crit.length?{t:l.crit.length+" ponto"+(l.crit.length>1?"s":"")+" crítico"+(l.crit.length>1?"s":""),c:S.crit,bg:S.critSoft}:(!o?{t:"sem dados",c:S.muted,bg:S.surface2}:(o.j.d1.gasto<=0&&o.j.d7.gasto>0?(o.porDia[C.ontem]?{t:"não gastou ontem",c:S.crit,bg:S.critSoft}:{t:"sem coleta de ontem",c:S.warn,bg:S.warnSoft}):{t:"em dia",c:S.ok,bg:S.okSoft}));
           const cel=function(k){ const x=o?o.j[k]:null; return <span style={{textAlign:"right",fontWeight:900,fontSize:16,color:x&&x.res>0?S.ink:S.muted,fontFeatureSettings:"'tnum'"}}>{x?_adsNum(x.res):"—"}</span>; };
           return <div key={l.mc.client_id} onClick={function(){onOpenClient(l.mc.client_id);}} style={{display:"grid",gridTemplateColumns:isMob?"1fr auto":"minmax(200px,1.6fr) 110px 130px 120px minmax(160px,1fr) 70px",gap:14,alignItems:"center",padding:isMob?"12px 14px":"11px 16px",borderTop:i?"1px solid "+S.line:"none",cursor:"pointer",background:l.crit.length?"#fffafa":"#fff",opacity:go?1:0,transition:"opacity .4s ease "+(i*40)+"ms"}} onMouseEnter={function(e){e.currentTarget.style.background=S.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background=l.crit.length?"#fffafa":"#fff";}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}<div style={{minWidth:0}}><div style={{fontSize:13.5,fontWeight:800,letterSpacing:"-.2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.mc.name}</div><div style={{fontSize:11,color:S.muted,marginTop:1,display:"flex",gap:5,flexWrap:"wrap"}}>{tiposC.length?tiposC.map(function(t){ const cfg=_adsTipo(t); return <span key={t} style={{background:cfg.bg,color:cfg.cor,borderRadius:99,padding:"1px 7px",fontWeight:700}}>{cfg.curto}</span>; }):<span>sem campanha ativa</span>}{isMob&&o&&<span>· {_adsNum(o.j.d7.res)} leads 7d · {custo?_adsBRL(custo):"—"}</span>}</div></div></div>
+            <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}<div style={{minWidth:0}}><div style={{fontSize:13.5,fontWeight:800,letterSpacing:"-.2px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.mc.name}</div><div style={{fontSize:11,color:S.muted,marginTop:1,display:"flex",gap:5,flexWrap:"wrap"}}>{l.compartilhada?<span title="Os anúncios dessa unidade rodam na conta Meta de Toledo; os números ficam lá e não são separados por praça.">conta compartilhada (Toledo) · números na conta de Toledo</span>:tiposC.length?tiposC.map(function(t){ const cfg=_adsTipo(t); return <span key={t} style={{background:cfg.bg,color:cfg.cor,borderRadius:99,padding:"1px 7px",fontWeight:700}}>{cfg.curto}</span>; }):<span>sem campanha ativa</span>}{isMob&&o&&<span>· {_adsNum(o.j.d7.res)} leads 7d · {custo?_adsBRL(custo):"—"}</span>}</div></div></div>
             {!isMob&&cel(jAtiva)}
             {!isMob&&<span style={{textAlign:"right",fontWeight:800,fontSize:13.5,color:custo?S.ink:S.muted,fontFeatureSettings:"'tnum'"}}>{custo?_adsBRL(custo):"—"}</span>}
             {!isMob&&<span style={{textAlign:"right",fontSize:12.5,color:S.ink2,fontFeatureSettings:"'tnum'"}}>{j?_adsBRL0(j.gasto):"—"}{ritmo!==null&&jAtiva==="mes"&&<span style={{display:"block",fontSize:10.5,color:ritmo>115?S.crit:S.muted}}>{Math.round(ritmo)}% da verba</span>}</span>}
@@ -52573,10 +52605,12 @@ function QGAdsLeads({mc,conta,isMob,canEdit,currentUser}){
   if(L.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro: {L.erro}</AdsCard></AdsWrap>;
   const marcas={}; L.marcas.forEach(function(q){ const k=q.ad_id+"|"+q.data_lead; (marcas[k]=marcas[k]||[]).push(q); });
   const grupos={}; let totLeads=0;
-  L.slots.forEach(function(s){ const n=Number(s.leads||0)+Number(s.conversas||0); if(n<=0) return; totLeads+=n; const k=s.ad_id+"|"+s.data; grupos[k]={key:k,s:s,n:n,origem:Number(s.conversas||0)>=Number(s.leads||0)?"whatsapp":"formulario",marcas:(marcas[k]||[]).slice(0,n)}; });
+  const tipoCamp={}; (((X.cur||{}).campanhas)||[]).forEach(function(c){ tipoCamp[c.id]=c.tipo; });
+  L.slots.forEach(function(s){ const t=tipoCamp[s.campaign_id]||"outro"; const n=t==="form"?Number(s.leads||0):_adsEhLead(t)?Number(s.conversas||0):0; if(n<=0) return; totLeads+=n; const k=s.ad_id+"|"+s.data; grupos[k]={key:k,s:s,n:n,origem:t==="form"?"formulario":"whatsapp",marcas:(marcas[k]||[]).slice(0,n)}; });
   const lista=Object.keys(grupos).map(function(k){return grupos[k];}).sort(function(a,b){ return String(b.s.data).localeCompare(String(a.s.data))||(b.n-a.n); });
   const todas=L.marcas; const nMarc=Math.min(todas.length,totLeads); const nQual=todas.filter(function(q){return q.status==="qualificado"||q.status==="cliente";}).length; const nCli=todas.filter(function(q){return q.status==="cliente";}).length; const nDesc=todas.filter(function(q){return q.status==="descartado";}).length; const nPend=Math.max(0,totLeads-nMarc);
-  const gastoTot=L.slots.reduce(function(s,x){return s+Number(x.gasto||0);},0);
+  /* custo bruto = gasto das campanhas de lead no período (T.gastoLead, mesma fonte da Visão geral) — não só dos anúncios com resultado */
+  const gastoTot=Number(_adsTotaisConta((X.cur||{}).conta).gastoLead||0)||L.slots.reduce(function(s,x){return s+Number(x.gasto||0);},0);
   const custoBruto=_adsDiv(gastoTot,totLeads); const custoQual=nQual>0?gastoTot/nQual:null;
   const base=nMarc>=10&&nMarc/Math.max(totLeads,1)>=0.3;
   const motivos={}; todas.filter(function(q){return q.status==="descartado";}).forEach(function(q){ motivos[q.motivo_descarte||"outro"]=(motivos[q.motivo_descarte||"outro"]||0)+1; });
@@ -52674,16 +52708,19 @@ function useAdsHistorico(accountId,campId,dias){
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,rows:[]}); return; }
     let alive=true; setSt(function(p){return Object.assign({},p,{loading:true});});
-    const fim=_adsIso(new Date()); const ini=_adsAddDays(fim,-(dias-1));
-    let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,leads,conversas,frequencia,objetivo,campaign_nome").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
+    /* janela termina ONTEM (hoje é parcial) — mesma âncora das outras telas */
+    const fim=_adsAddDays(_adsIso(new Date()),-1); const ini=_adsAddDays(fim,-(dias-1));
+    /* nível conta só pra gasto/impressões/alcance/cliques; LEADS sempre pela finalidade de cada campanha (tipo do banco) */
+    let q=window._sb.from("ads_daily").select("data,gasto,impressoes,alcance,cliques,frequencia").eq("ad_account_id",accountId).gte("data",ini).lte("data",fim).order("data").limit(400);
     q=campId?q.eq("nivel","campanha").eq("campaign_id",campId):q.eq("nivel","conta");
-    /* gasto só das campanhas de lead, por dia (custo por lead não usa engajamento/seguidores/etc.) */
-    const qLead=campId?Promise.resolve({data:null}):window._sb.from("ads_daily").select("data,campaign_id,campaign_nome,objetivo,gasto,leads,conversas").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
-    Promise.all([q,qLead]).then(function(rr){ if(!alive) return; const r=rr[0], rl=rr[1]; if(r.error) console.warn("[ads histórico]",r.error.message); const rows=r.error?[]:(r.data||[]);
-      /* por dia: gasto só de campanhas de lead + leads contados pela finalidade de cada campanha (formulário OU conversa, nunca os dois) */
-      if(rl&&rl.data){ const porDia={}; const tipoCache={}; rl.data.forEach(function(x){ const k=x.campaign_id; if(!(k in tipoCache)) tipoCache[k]=_adsClassifica(x.objetivo,[],x.campaign_nome); const t=tipoCache[k]; const o=porDia[x.data]||(porDia[x.data]={gastoLead:0,leads:0,conversas:0}); if(_adsEhLead(t)) o.gastoLead+=Number(x.gasto||0); if(t==="form") o.leads+=Number(x.leads||0); else if(t==="lead_wpp"||t==="eng_wpp") o.conversas+=Number(x.conversas||0); }); rows.forEach(function(d){ const o=porDia[d.data]; d.gastoLead=o?o.gastoLead:0; if(o){ d.leads=o.leads; d.conversas=o.conversas; } }); }
-      else if(campId){ const t=_adsClassifica(rows[0]&&rows[0].objetivo,[],rows[0]&&rows[0].campaign_nome); rows.forEach(function(d){ d.gastoLead=Number(d.gasto||0); if(t==="form") d.conversas=0; else if(t==="lead_wpp"||t==="eng_wpp") d.leads=0; }); }
-      else rows.forEach(function(d){ d.gastoLead=Number(d.gasto||0); });
+    let qc=window._sb.from("ads_daily").select("data,campaign_id,gasto,leads,conversas").eq("ad_account_id",accountId).eq("nivel","campanha").gte("data",ini).lte("data",fim).limit(4000);
+    if(campId) qc=qc.eq("campaign_id",campId);
+    const qt=window._sb.from("ads_campanhas_tipo").select("campaign_id,tipo").eq("ad_account_id",accountId);
+    Promise.all([q,qc,qt]).then(function(rr){ if(!alive) return; const r=rr[0], rc=rr[1], rt=rr[2]; if(r.error) console.warn("[ads histórico]",r.error.message); const rows=r.error?[]:(r.data||[]);
+      const tipoDe={}; (rt.data||[]).forEach(function(t){ tipoDe[t.campaign_id]=t.tipo; });
+      const porDia={}; (rc.data||[]).forEach(function(x){ const t=tipoDe[x.campaign_id]||"outro"; const o=porDia[x.data]||(porDia[x.data]={gastoLead:0,leads:0,conversas:0}); if(_adsEhLead(t)) o.gastoLead+=Number(x.gasto||0); if(t==="form") o.leads+=Number(x.leads||0); else if(t==="lead_wpp"||t==="eng_wpp") o.conversas+=Number(x.conversas||0); });
+      /* dia sem linha de campanha = 0 lead (nunca herda a soma do nível conta) */
+      rows.forEach(function(d){ const o=porDia[d.data]; d.gastoLead=o?o.gastoLead:0; d.leads=o?o.leads:0; d.conversas=o?o.conversas:0; });
       setSt({loading:false,rows:rows}); });
     return function(){alive=false;};
   },[accountId,campId,dias]);
@@ -52751,19 +52788,19 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
   const mediaCpa=_adsDiv(tot.gastoLead,tot.res); const mediaRes=fechadas.length?tot.res/fechadas.length:0; const mediaGasto=fechadas.length?tot.gasto/fechadas.length:0;
   const mediaCtr=(function(){ const i=fechadas.reduce(function(s,o){return s+o.impressoes;},0), c=fechadas.reduce(function(s,o){return s+o.cliques;},0); return i>0?c/i*100:0; })();
   const u4=fechadas.slice(-4), a4=fechadas.slice(-8,-4);
-  const agg=function(arr){ const g=arr.reduce(function(s,o){return s+o.gasto;},0), r=arr.reduce(function(s,o){return s+o.res;},0); return {gasto:g,res:r,cpa:_adsDiv(g,r)}; };
+  const agg=function(arr){ const g=arr.reduce(function(s,o){return s+Number(o.gastoLead||0);},0), r=arr.reduce(function(s,o){return s+o.res;},0); return {gasto:g,res:r,cpa:_adsDiv(g,r)}; }; /* mesmo custo do gráfico: gasto das campanhas de lead */
   const U=agg(u4), Aa=agg(a4);
   const dCpa=_adsDelta(U.cpa,Aa.cpa), dRes=_adsDelta(U.res,Aa.res), dGasto=_adsDelta(U.gasto,Aa.gasto);
   let veredito=null, nv="n", titulo="—";
   if(a4.length>=3&&u4.length>=3&&U.cpa&&Aa.cpa){
-    if(dCpa<=-10&&dRes>=0){ nv="o"; titulo="Sim, está melhorando"; veredito="O custo por resultado caiu "+Math.abs(Math.round(dCpa))+"% nas últimas 4 semanas ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+") e o volume "+(dRes>0?"subiu "+Math.round(dRes)+"%":"se manteve")+"."; }
-    else if(dCpa>=10){ nv="c"; titulo="Não, está piorando"; veredito="O custo por resultado subiu "+Math.round(dCpa)+"% ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+")"+(dGasto>15?" com "+Math.round(dGasto)+"% a mais de verba":"")+". "+(dRes<0?"Volume caiu "+Math.abs(Math.round(dRes))+"%.":"Volume "+(dRes>0?"subiu "+Math.round(dRes)+"%":"estável")+", mas cada resultado está saindo mais caro."); }
-    else { nv="w"; titulo="Estável"; veredito="Custo por resultado variou "+(dCpa>0?"+":"")+Math.round(dCpa)+"% ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+") e volume "+(dRes>0?"+":"")+Math.round(dRes)+"% contra as 4 semanas anteriores."; }
+    if(dCpa<=-10&&dRes>=0){ nv="o"; titulo="Sim, está melhorando"; veredito="O custo por lead caiu "+Math.abs(Math.round(dCpa))+"% nas últimas 4 semanas ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+") e o volume "+(dRes>0?"subiu "+Math.round(dRes)+"%":"se manteve")+"."; }
+    else if(dCpa>=10){ nv="c"; titulo="Não, está piorando"; veredito="O custo por lead subiu "+Math.round(dCpa)+"% ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+")"+(dGasto>15?" com "+Math.round(dGasto)+"% a mais de verba":"")+". "+(dRes<0?"Volume caiu "+Math.abs(Math.round(dRes))+"%.":"Volume "+(dRes>0?"subiu "+Math.round(dRes)+"%":"estável")+", mas cada resultado está saindo mais caro."); }
+    else { nv="w"; titulo="Estável"; veredito="Custo por lead variou "+(dCpa>0?"+":"")+Math.round(dCpa)+"% ("+_adsBRL(Aa.cpa)+" → "+_adsBRL(U.cpa)+") e volume "+(dRes>0?"+":"")+Math.round(dRes)+"% contra as 4 semanas anteriores."; }
   }
   const melhor=fechadas.filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
   const pior=fechadas.filter(function(o){return o.res>=ADS_MIN_RESULTADOS&&o.cpa;}).sort(function(a,b){return b.cpa-a.cpa;})[0];
   const METS={cpa:{lbl:"Custo por lead",fmt:function(v){return _adsBRL(v);},cor:ADS.accent,media:mediaCpa,inverso:true,get:function(o){return o.cpa;},dica:"gasto só das campanhas de lead ÷ leads · ponto escuro = abaixo da média · claro = 30%+ acima"},
-    res:{lbl:"Resultados",fmt:function(v){return _adsNum(v);},cor:"#9F43F6",media:mediaRes,inverso:false,get:function(o){return o.res;},dica:"leads + conversas por semana"},
+    res:{lbl:"Leads",fmt:function(v){return _adsNum(v);},cor:"#9F43F6",media:mediaRes,inverso:false,get:function(o){return o.res;},dica:"leads da semana — cada campanha pela finalidade (formulário ou conversa)"},
     gasto:{lbl:"Gasto",fmt:function(v){return _adsBRL0(v);},cor:"#5e1bb5",media:mediaGasto,get:function(o){return o.gasto;},dica:"verba investida por semana"},
     ctr:{lbl:"CTR",fmt:function(v){return _adsPct(v,2);},cor:"#b26cf8",media:mediaCtr,inverso:false,get:function(o){return o.ctr;},dica:"cliques ÷ impressões"}};
   const M=METS[met];
@@ -52781,7 +52818,7 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
       <AdsSolido bg={ADS_SOL.claro} eyebrow="Pior semana" big={pior&&pior!==melhor?<AdsNumAnim v={pior.cpa} fmt={_adsBRL}/>:"—"} sub={pior&&pior!==melhor?"semana de "+pior.lbl+" · "+_adsNum(pior.res)+" leads":"—"}/>
     </div>
 
-    <AdsSec t="Semana a semana" s={<span>{semanas.length} semanas · <b style={{color:ADS.ink2}}><AdsNumAnim v={tot.gasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={tot.res} fmt={_adsNum}/></b> resultados · média <b style={{color:ADS.ink2}}><AdsNumAnim v={mediaCpa||0} fmt={_adsBRL}/></b> · a semana atual (tracejada) ainda não fechou</span>} right={<div style={{display:"flex",gap:6}}>{[30,60,90].map(function(n){ return <AdsChip key={n} on={dias===n} onClick={function(){setDias(n);}}>{n} dias</AdsChip>; })}</div>}>
+    <AdsSec t="Semana a semana" s={<span>{semanas.length} semanas · <b style={{color:ADS.ink2}}><AdsNumAnim v={tot.gasto} fmt={_adsBRL0}/></b> · <b style={{color:ADS.ink2}}><AdsNumAnim v={tot.res} fmt={_adsNum}/></b> leads · média <b style={{color:ADS.ink2}}><AdsNumAnim v={mediaCpa||0} fmt={_adsBRL}/></b> por lead (gasto das campanhas de lead) · a semana atual (tracejada) ainda não fechou</span>} right={<div style={{display:"flex",gap:6}}>{[30,60,90].map(function(n){ return <AdsChip key={n} on={dias===n} onClick={function(){setDias(n);}}>{n} dias</AdsChip>; })}</div>}>
       {/* seletor de métrica em cartões com sparkline */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,marginBottom:12}}>
         {Object.keys(METS).map(function(k){ const m=METS[k]; const on=met===k; const ult=fechadas[fechadas.length-1]; const v=ult?m.get(ult):null; const prev=fechadas[fechadas.length-2]; const d=prev&&v!==null?_adsDelta(v,m.get(prev)):null;
@@ -52805,8 +52842,8 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
       </div>}
 
       <AdsCard style={{marginTop:14,padding:"4px 10px"}}><div style={{overflowX:"auto"}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:560}}>
-        <thead><tr><th style={Object.assign({},TH,{textAlign:"left"})}>Semana</th><th style={TH}>Gasto</th><th style={TH}>Resultados</th><th style={TH}>Custo</th><th style={TH}>vs. média</th><th style={TH}>CTR</th><th style={TH}>Alcance</th></tr></thead>
-        <tbody>{semanas.slice().reverse().map(function(o){ const n=o.parcial?"n":_adsNivelCusto(o.cpa,mediaCpa,o.res); return <tr key={o.k}><td style={Object.assign({},TD,{textAlign:"left",fontWeight:700,color:ADS.ink,fontFamily:ADS_FONT})}>{o.lbl}{o.parcial&&<span style={{fontSize:10.5,color:ADS.muted,fontWeight:500}}> · {o.k===hojeSem?"em andamento":"parcial"} ({o.dias}d)</span>}</td><td style={TD}>{_adsBRL0(o.gasto)}</td><td style={Object.assign({},TD,{fontWeight:800,color:ADS.ink})}>{_adsNum(o.res)}</td><td style={Object.assign({},TD,{fontWeight:800,color:_adsCor(n)})}>{o.cpa?_adsBRL(o.cpa):"—"}</td><td style={Object.assign({},TD,{color:_adsCor(n)})}>{o.cpa&&mediaCpa?_adsX(o.cpa/mediaCpa):"—"}</td><td style={TD}>{_adsPct(o.ctr,2)}</td><td style={TD}>{_adsNum(o.alcance)}</td></tr>; })}</tbody>
+        <thead><tr><th style={Object.assign({},TH,{textAlign:"left"})}>Semana</th><th style={TH}>Gasto</th><th style={TH}>Em lead</th><th style={TH}>Leads</th><th style={TH}>Custo por lead</th><th style={TH}>vs. média</th><th style={TH}>CTR</th></tr></thead>
+        <tbody>{semanas.slice().reverse().map(function(o){ const n=o.parcial?"n":_adsNivelCusto(o.cpa,mediaCpa,o.res); return <tr key={o.k}><td style={Object.assign({},TD,{textAlign:"left",fontWeight:700,color:ADS.ink,fontFamily:ADS_FONT})}>{o.lbl}{o.parcial&&<span style={{fontSize:10.5,color:ADS.muted,fontWeight:500}}> · {o.k===hojeSem?"em andamento":"parcial"} ({o.dias}d)</span>}</td><td style={TD}>{_adsBRL(o.gasto)}</td><td style={TD}>{_adsBRL(o.gastoLead)}</td><td style={Object.assign({},TD,{fontWeight:800,color:ADS.ink})}>{_adsNum(o.res)}</td><td style={Object.assign({},TD,{fontWeight:800,color:_adsCor(n)})}>{o.cpa?_adsBRL(o.cpa):"—"}</td><td style={Object.assign({},TD,{color:_adsCor(n)})}>{o.cpa&&mediaCpa?_adsX(o.cpa/mediaCpa):"—"}</td><td style={TD}>{_adsPct(o.ctr,2)}</td></tr>; })}</tbody>
       </table></div></AdsCard>
     </AdsSec>
   </AdsWrap>;
