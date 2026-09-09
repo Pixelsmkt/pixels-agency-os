@@ -12950,6 +12950,8 @@ function NovoClienteModal({onClose,onSave}){
         try{
           if(typeof window.registerDynamicClient==="function") window.registerDynamicClient(newCl);
         }catch(e){console.warn("[registry]",e);}
+        // Cliente novo entra sozinho nas datas do calendário interno marcadas pra "todos" (09/09/2026)
+        try{ if(typeof pxEventosTodosIncluirCliente==="function") pxEventosTodosIncluirCliente(id).catch(function(){}); }catch(_){}
 
         // Seed Onboarding (agora que o cliente existe no Supabase)
         try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e);}
@@ -78309,6 +78311,41 @@ async function pxGerarCardsComemorativos(opts){
     return add.length? [].concat(prev||[],add) : prev;
   });
   return novos.length;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   pxEventosTodosIncluirCliente — cliente NOVO entra sozinho nas datas "todos"
+   (09/09/2026). Uma data conta como "todos" quando cobre ≥ 75% da carteira
+   (Bioter conta como 1, por qualquer unidade marcada; Pixels não conta).
+   Datas parciais (ex.: Dia do Café = só Uberlândia; "todos menos Paraguay"
+   continua igual porque cliente novo não é unidade Bioter) não mudam.
+   Chamado ao salvar um cliente novo em Estratégia › Clientes.
+   ═══════════════════════════════════════════════════════════════════════ */
+async function pxEventosTodosIncluirCliente(novoId){
+  const sb=window._sb; if(!sb||!novoId) return 0;
+  novoId=String(novoId);
+  if(novoId==="pixels"||novoId.indexOf("bioter")===0) return 0;
+  // carteira "de antes" (sem o novo): clientes ativos não-internos, Bioter = 1
+  const carteira=(typeof CLIENTS!=="undefined"?CLIENTS:[])
+    .filter(function(c){ return c&&c.id&&c.id!=="pixels"&&c.id!==novoId&&c.status!=="interno"&&c.status!=="encerrado"; })
+    .map(function(c){ return c.id.indexOf("bioter")===0?"bioter":c.id; });
+  const total=Array.from(new Set(carteira)).length;
+  if(total<2) return 0;
+  const minTodos=Math.ceil(total*0.75);
+  const r=await sb.from("internal_events").select("id,title,client_ids");
+  if(!r||r.error||!Array.isArray(r.data)) return 0;
+  let n=0;
+  for(const ev of r.data){
+    let ids=ev.client_ids; if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
+    if(!Array.isArray(ids)||!ids.length) continue;
+    if(ids.indexOf(novoId)>=0) continue;
+    const cobertos=new Set(ids.map(function(x){ return String(x).indexOf("bioter")===0?"bioter":String(x); }).filter(function(x){ return x!=="pixels"; }));
+    if(cobertos.size<minTodos) continue;
+    const u=await sb.from("internal_events").update({client_ids:ids.concat([novoId]),updated_at:new Date().toISOString()}).eq("id",ev.id);
+    if(!u||!u.error) n++;
+  }
+  if(n>0&&typeof pixelsToast!=="undefined") pixelsToast.info("Cliente incluído em "+n+" data(s) marcadas pra todos os clientes.",4500);
+  return n;
 }
 
 // DashSocio v5 (2026-06-10):
