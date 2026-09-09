@@ -4837,6 +4837,31 @@ async function pxThumbToStorage(taskId,fileId,dataURL){
     return url+"?v="+Date.now().toString(36);
   }catch(e){ console.warn("[thumb→storage]",e&&e.message); return dataURL; }
 }
+// Migração em segundo plano das miniaturas base64 antigas (09/09/2026): roda no app da
+// agência depois da carga inicial, 1 miniatura a cada 4 s, sem travar nada. Idempotente:
+// pula o que já é URL; se duas abas fizerem a mesma, o upload é upsert no mesmo caminho.
+window.__pxThumbMigrando = window.__pxThumbMigrando || false;
+async function pxMigrarThumbsEmBackground(tasks){
+  try{
+    if(window.__pxThumbMigrando||!window._sb||!Array.isArray(tasks)) return;
+    const fila=[];
+    tasks.forEach(function(t){ if(!t||t.deletedAt) return; (t.files||[]).forEach(function(f){ if(f&&f.id&&typeof f.thumbnail==="string"&&f.thumbnail.indexOf("data:")===0) fila.push({taskId:t.id,fileId:f.id,data:f.thumbnail}); }); });
+    if(!fila.length) return;
+    window.__pxThumbMigrando=true;
+    console.log("[thumb→storage] migrando "+fila.length+" miniatura(s) em segundo plano");
+    let ok=0;
+    for(let i=0;i<fila.length;i++){
+      const it=fila[i];
+      try{
+        const url=await pxThumbToStorage(it.taskId,it.fileId,it.data);
+        if(url&&url.indexOf("data:")!==0){ const r=await pixelsPersistFilePatch(it.taskId,it.fileId,{thumbnail:url}); if(r) ok++; }
+      }catch(_){}
+      await new Promise(function(r){ setTimeout(r,4000); });
+    }
+    console.log("[thumb→storage] concluído: "+ok+"/"+fila.length);
+  }catch(e){ console.warn("[thumb→storage] migração:",e&&e.message); }
+  finally{ window.__pxThumbMigrando=false; }
+}
 function pixelsPersistFilePatch(taskId,fileId,patch){
   return _pixelsQueueFilesWrite(async function(){
     try{
@@ -48535,6 +48560,23 @@ export default function AgencyOS(){
   };
   // Carga completa: só cards vivos + lixeira dos últimos 30 dias (a lixeira expira em 30 dias;
   // antes vinham 1.500+ cards apagados em cada carga — 2/3 do peso da tabela).
+  // PostgREST devolve NO MÁXIMO 1000 linhas por requisição (Content-Range "0-999/*").
+  // A tabela passou de 1000 linhas vivas+lixeira e o app estava recebendo só as 1000
+  // primeiras por id — cards "auto…", "plan-…" e "short-…" ficavam de fora. Pagina com Range.
+  const _fetchTodas = async (url, tok)=>{
+    const PAGE=1000; let from=0; const out=[];
+    for(let i=0;i<20;i++){
+      const res=await fetch(url,{headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok,"Range-Unit":"items","Range":from+"-"+(from+PAGE-1)}});
+      if(res.status===401){ const e=new Error("401"); e.status=401; throw e; }
+      if(!res.ok&&res.status!==206){ const e=new Error("HTTP "+res.status); e.status=res.status; throw e; }
+      const data=await res.json();
+      if(!Array.isArray(data)) return out;
+      out.push.apply(out,data);
+      if(data.length<PAGE) break;
+      from+=PAGE;
+    }
+    return out;
+  };
   const _lixeiraParam = ()=>{ const d=new Date(Date.now()-31*86400000).toISOString(); return "&or=(deleted_at.is.null,deleted_at.gte."+encodeURIComponent(d)+")"; };
   const _sinceParam = ()=>{
     const _since=lastSyncRef.current; if(!_since) return "";
@@ -48588,10 +48630,14 @@ export default function AgencyOS(){
   const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Fetch tasks do Supabase ───────────────────────────────
+  const fetchEmVooRef = useRef(false);
   const fetchTasks = async (token) => {
     const tok = token||tokenRef.current||getToken();
     if(!tok) return;
     tokenRef.current = tok;
+    // Uma carga completa por vez: o fallback síncrono e o INITIAL_SESSION chamavam as duas juntas
+    if(fetchEmVooRef.current) return;
+    fetchEmVooRef.current = true;
     try{
       // Carga inicial SEMPRE completa (03/09 20h: o cache do localStorage pode ficar PARCIAL —
       // a tabela tem 8 MB e o localStorage ~5 MB, o set falha em silêncio e sobra um pedaço.
@@ -48599,11 +48645,9 @@ export default function AgencyOS(){
       // O incremental fica só no polling, em cima do state em memória, que é completo.
       const _incremental = false;
       lastSyncRef.current = null;
-      const res = await fetch(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc${_lixeiraParam()}`,{
-        headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
-      });
-      if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
-      const data = await res.json();
+      let data;
+      try{ data = await _fetchTodas(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc${_lixeiraParam()}`, tok); }
+      catch(e){ if(e&&e.status===401){tokenRef.current=null;setAuthState("login");return;} throw e; }
       initialFetchDoneRef.current = true;
       if(Array.isArray(data)){
         if(data.length>0){
@@ -48620,6 +48664,7 @@ export default function AgencyOS(){
         setLoaded(true);
       }
     }catch{initialFetchDoneRef.current=true;setLoaded(true);}
+    finally{ fetchEmVooRef.current=false; }
   };
 
   // ── Sync para Supabase ────────────────────────────────────
@@ -48736,7 +48781,12 @@ export default function AgencyOS(){
         return;
       }
       // Atualiza token
+      const _tinhaToken=!!tokenRef.current;
       tokenRef.current=session.access_token;
+      // Carga completa de tasks SÓ na primeira sessão da aba. TOKEN_REFRESHED (a cada ~1 h)
+      // e o SIGNED_IN que o supabase-js re-emite quando a aba volta a ficar visível
+      // disparavam uma carga completa por evento — um IP fez 400 cargas/dia só trocando de aba.
+      const _precisaCarregar=!_tinhaToken||!initialFetchDoneRef.current;
       // Operações async fora do lock (setTimeout 0)
       setTimeout(async()=>{
         if(!active) return;
@@ -48757,7 +48807,7 @@ export default function AgencyOS(){
         if(!profileLoaded){
           setAuthState(function(prev){return prev==="loading"?"login":prev;});
         }
-        fetchTasks(session.access_token);
+        if(_precisaCarregar) fetchTasks(session.access_token);
       },0);
     });
 
@@ -48795,11 +48845,9 @@ export default function AgencyOS(){
         const _incremental=!!lastSyncRef.current && (pollCountRef.current%FULL_EVERY!==0);
         let _url=`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`;
         if(_incremental) _url+=_sinceParam(); else _url+=_lixeiraParam();
-        const res=await fetch(_url,{
-          headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
-        });
-        if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
-        const data=await res.json();
+        let data;
+        try{ data=await _fetchTodas(_url,tok); }
+        catch(e){ if(e&&e.status===401){tokenRef.current=null;setAuthState("login");return;} throw e; }
         if(!active||!Array.isArray(data)||data.length===0) return;
         _noteMaxUpdated(data);
         const rows=data.map(rowToTask);
@@ -48891,6 +48939,16 @@ export default function AgencyOS(){
     const iv=setInterval(poll,60000);
     return()=>clearInterval(iv);
   },[authState]); // ← removido livePerms (causava recriação do interval a cada update)
+
+  // ── Miniaturas base64 → Storage (uma vez por aba, só no app da agência, 20 s após carregar) ──
+  const thumbMigRef=useRef(false);
+  useEffect(()=>{
+    if(authState!=="app"||!loaded||thumbMigRef.current) return;
+    if(typeof pxMigrarThumbsEmBackground!=="function") return;
+    thumbMigRef.current=true;
+    const t=setTimeout(()=>{ try{ pxMigrarThumbsEmBackground(tasks); }catch(_){} },20000);
+    return ()=>clearTimeout(t);
+  },[authState,loaded]);
 
   // ── Auto-publish ──────────────────────────────────────────
   useEffect(()=>{
@@ -60553,7 +60611,7 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
           </span>
           <div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>Linha do tempo do projeto</div>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>o que entregamos e quando, do contrato ao primeiro mês</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>o que entregamos e quando, mês a mês</div>
           </div>
         </div>
         <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
@@ -60570,19 +60628,47 @@ function PortalJornadaProjeto({cl, isMob, canEdit, onGoTab, tabsOk, mostrar}){
             <div style={{color:"#cbd5e1",fontSize:11,marginTop:4}}>Entregas e checkpoints do onboarding entram automaticamente.</div>
           </div>
         : (function(){
-        // Desktop: 2 colunas (6+5) com trilho próprio — metade da altura.
-        const _metade=Math.ceil(marcosOrd.length/2);
-        const _cols=isMob?[marcosOrd]:[marcosOrd.slice(0,_metade),marcosOrd.slice(_metade)];
-        let _gIdx=-1;
-        return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:isMob?0:"0 26px",marginTop:12}}>
-          {_cols.map(function(_col,ci){
-            return <div key={ci} style={{position:"relative"}}>
-              <div style={{position:"absolute",left:13,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
-              {_col.map(function(m,i){
-                _gIdx++;
-                const _idxGlobal=_gIdx;
-                return _marcoRow(m,_idxGlobal);
-              })}
+        // ── Seções por mês do projeto (Mês 1, Mês 2, Mês 3…) com "estamos aqui" ──
+        const _starter=_presetId==="starter";
+        const _diaDe=function(m){
+          if(!m.isMarco&&m.off) return m.off;
+          if(startDate&&m.due){ const d=Math.round((new Date(m.due+"T00:00:00")-new Date(startDate+"T00:00:00"))/864e5)+1; return Math.max(1,d); }
+          return 1;
+        };
+        const _mesDe=function(dia){ return Math.max(1,Math.ceil(dia/30)); };
+        const _diaHoje=startDate?Math.round((new Date(_hoje+"T00:00:00")-new Date(startDate+"T00:00:00"))/864e5)+1:null;
+        const _mesHoje=_diaHoje!==null&&_diaHoje>=1?_mesDe(_diaHoje):null;
+        const _SUB=_starter?{1:"Contratação, setup e go-live · 2 posts por semana",2:"Campanhas ativas · 1 post por semana",3:"Consolidação e continuidade · 1 post por semana"}:{1:"Contratação, setup e primeiro mês"};
+        const _dur=_starter?90:31;
+        const grupos={};
+        marcosOrd.forEach(function(m,i){ const mes=_mesDe(_diaDe(m)); if(!grupos[mes]) grupos[mes]={mes:mes,itens:[]}; grupos[mes].itens.push({m:m,i:i}); });
+        const lista=Object.keys(grupos).map(Number).sort(function(a,b){return a-b;}).map(function(k){return grupos[k];});
+        return <div style={{display:"flex",flexDirection:"column",gap:14,marginTop:12}}>
+          {lista.map(function(g){
+            const aqui=_mesHoje===g.mes&&(_diaHoje===null||_diaHoje<=_dur+30);
+            const passado=_mesHoje!==null&&g.mes<_mesHoje;
+            const feitosG=g.itens.filter(function(x){return x.m.done;}).length;
+            const ini=startDate?(function(){ const d=new Date(startDate+"T00:00:00"); d.setDate(d.getDate()+(g.mes-1)*30); return d; })():null;
+            const fim=ini?(function(){ const d=new Date(ini); d.setDate(d.getDate()+29); return d; })():null;
+            const _f=function(d){ return d?String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"):""; };
+            const _metade=Math.ceil(g.itens.length/2);
+            const _cols=isMob?[g.itens]:[g.itens.slice(0,_metade),g.itens.slice(_metade)];
+            return <div key={g.mes} style={{border:"1px solid "+(aqui?_cor+"66":"#eef0f4"),background:aqui?_cor+"06":"#fff",borderRadius:14,padding:"12px 14px 6px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
+                <span style={{background:aqui?_cor:(passado?"#16a34a":"#eef0f4"),color:aqui||passado?"#fff":"#64748b",fontSize:10.5,fontWeight:900,letterSpacing:.6,textTransform:"uppercase",padding:"4px 10px",borderRadius:99}}>Mês {g.mes}</span>
+                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800}}>{_SUB[g.mes]||"Continuidade"}</span>
+                {ini&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_f(ini)} – {_f(fim)}</span>}
+                <span style={{marginLeft:"auto",color:feitosG===g.itens.length?"#16a34a":"#94a3b8",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{feitosG}/{g.itens.length}</span>
+                {aqui&&<span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#0f172a",color:"#fff",fontSize:10,fontWeight:900,letterSpacing:.5,textTransform:"uppercase",padding:"4px 10px",borderRadius:99}}><span style={{width:6,height:6,borderRadius:"50%",background:"#4ade80",boxShadow:"0 0 0 3px rgba(74,222,128,.25)"}}/>Estamos aqui{_diaHoje?" · dia "+_diaHoje:""}</span>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:isMob?0:"0 26px"}}>
+                {_cols.map(function(_col,ci){
+                  return <div key={ci} style={{position:"relative"}}>
+                    <div style={{position:"absolute",left:13,top:10,bottom:10,width:2,background:"#eef0f5",borderRadius:2}}/>
+                    {_col.map(function(x){ return _marcoRow(x.m,x.i); })}
+                  </div>;
+                })}
+              </div>
             </div>;
           })}
         </div>;
