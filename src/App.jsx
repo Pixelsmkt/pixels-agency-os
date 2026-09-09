@@ -1356,6 +1356,15 @@ function isPartner(userId){
 }
 // Helper: aplica PARTNER_PERMS (tudo true) se o user é sócio,
 // senão devolve o objeto perms recebido. Usar como wrapper final.
+// ── REGRA FIXA: social media (Luiza) NUNCA pode excluir nada ──
+// Vale mesmo que alguém marque "Excluir Demandas" na tela de Acessos.
+function pxExclusaoBloqueada(userOrId){
+  try{
+    const u=(userOrId&&typeof userOrId==="object")?userOrId:(TEAM||[]).find(function(t){return t.id===userOrId;});
+    if(!u)return false;
+    return u.dash==="social"||String(u.id||"").toLowerCase()==="luiza";
+  }catch(e){return false;}
+}
 function withPartnerOverride(perms, userId){
   return isPartner(userId)?{...PARTNER_PERMS}:(perms||{...DEFAULT_PERMS});
 }
@@ -18066,7 +18075,10 @@ function _pxFaseDoMes(fase,year,month){
   return null;
 }
 
-function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
+function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}){
+  // Social media (Luiza) nunca exclui — regra fixa, independe de Acessos
+  const _calUser=(viewingAs&&(TEAM||[]).find(function(u){return u.id===viewingAs;}))||CURRENT_USER;
+  const _calExclBloq=(typeof pxExclusaoBloqueada==="function")&&pxExclusaoBloqueada(_calUser);
   const tasks = propTasks||[];
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
@@ -18491,6 +18503,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         return (prev||[]).map(function(t){
           // Shorts criados nesse plano: marca como deletedAt (lixeira) — persiste no Supabase
           if(newShortIds.indexOf(t.id)>=0){
+            if(_calExclBloq)return t; // social media não apaga nem os shorts do próprio plano
             return Object.assign({},t,{deletedAt:nowIso});
           }
           const s=lastApplySnapshot.snapshot.find(function(x){return x.taskId===t.id;});
@@ -19138,20 +19151,19 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Duplicar card
           </button>
-          <button onClick={function(){
+          {!_calExclBloq&&<button onClick={function(){
+            // Botão direito → Excluir: vai direto pra lixeira, sem confirmação (é reversível por 30 dias)
             const t=ctxMenu.task;
-            pixelsConfirm("Mover este card pra lixeira? Fica 30 dias antes de ser removido permanentemente.",{danger:true,okText:"Mover pra lixeira",cancelText:"Cancelar"}).then(function(yes){
-              if(!yes)return;
-              setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
-              if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).");
-              setCtxMenu(null);
-            });
+            if(_calExclBloq){setCtxMenu(null);return;}
+            setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
+            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).",2500);
+            setCtxMenu(null);
           }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left"}}
           onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
           onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             Excluir card
-          </button>
+          </button>}
         </div>
       </>}
 
@@ -21037,7 +21049,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   const canPixelsIA   = myPerms.pixelsIA;
   const canEscanear   = myPerms.escanear;
-  const canDelete     = myPerms.excluirDemanda;
+  const _exclBloq     = (typeof pxExclusaoBloqueada==="function")&&pxExclusaoBloqueada(activeUser);
+  const canDelete     = !!myPerms.excluirDemanda && !_exclBloq; // social media (Luiza): nunca exclui
   const canCreate     = myPerms.criarDemanda;
   const canEdit       = myPerms.editarDemanda;
   const canDrag       = myPerms.arrastarCards;
@@ -21395,6 +21408,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   const confirmDelete=id=>{
+    if(!canDelete){pixelsToast.warning("Você não tem permissão para excluir demandas.");setShowTrashConfirm(null);return;}
     setTasks(p=>p.map(x=>x.id===id?{...x,deletedAt:new Date().toISOString()}:x));
     setShowTrashConfirm(null);
   };
@@ -21513,16 +21527,20 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           Duplicar card
         </button>
-        <div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>
-        <button onClick={()=>{
+        {canDelete&&<div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>}
+        {canDelete&&<button onClick={()=>{
+          // Botão direito → direto pra lixeira, sem confirmação (reversível por 30 dias)
+          const _id=ctxMenuKanban.task.id;
           setCtxMenuKanban(null);
-          setShowTrashConfirm(ctxMenuKanban.task.id);
+          if(!canDelete){pixelsToast.warning("Você não tem permissão para excluir demandas.");return;}
+          confirmDelete(_id);
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).",2500);
         }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
         onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
         onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           Mover pra lixeira
-        </button>
+        </button>}
       </div>
     </>}
 
@@ -27494,7 +27512,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(() =>{})} onClose={()=>setOpenCard(null)} currentUser={effectiveUser}
-      canDelete={isSocio||!!perms?.verLixeira}
+      canDelete={(isSocio||!!perms?.verLixeira)&&!(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(effectiveUser))}
       onTrash={(id)=>{
         if(!setTasks)return;
         const t=(tasks||[]).find(x=>x.id===id);
@@ -31758,14 +31776,17 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     savedTimer.current=setTimeout(()=>setSaved(false),2500);
   };
 
+  const _exclTravada=(typeof pxExclusaoBloqueada==="function")&&pxExclusaoBloqueada(user); // social media: exclusão sempre travada
   const toggle=(key)=>{
     if(isPartnerUser)return; // sócios sempre têm tudo
+    if(key==="excluirDemanda"&&_exclTravada){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Social media não pode excluir — regra fixa do sistema.");return;}
     setPerms(p=>({...p,[key]:!p[key]}));
     setSaved(false);
   };
 
   const save=async()=>{
     // 1. Atualiza memória e localStorage imediatamente
+    if(_exclTravada&&perms.excluirDemanda){perms.excluirDemanda=false;setPerms(p=>({...p,excluirDemanda:false}));}
     ACCESS_STORE[user.id]={...perms};
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
@@ -31812,6 +31833,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     if(isPartnerUser)return;
     const patch={};
     _itensTab.forEach(i=>{ if(i.key) patch[i.key]=v; });
+    if(_exclTravada) patch.excluirDemanda=false;
     setPerms(p=>({...p,...patch}));
     setSaved(false);
   };
@@ -31875,12 +31897,13 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
           <div style={{display:"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
             {_itensTab.map((item,idx)=>{
               if(item.section) return <div key={"s"+idx} style={{gridColumn:isMobP?"auto":"span 2",color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginTop:idx>0?10:0,paddingBottom:5,borderBottom:"1px solid #f1f5f9"}}>{item.section}</div>;
-              const on=isPartnerUser?true:(perms[item.key]||false);
-              return <div key={item.key} onClick={()=>toggle(item.key)}
+              const _travado=item.key==="excluirDemanda"&&_exclTravada;
+              const on=isPartnerUser?true:(_travado?false:(perms[item.key]||false));
+              return <div key={item.key} onClick={()=>toggle(item.key)} title={_travado?"Travado: social media nunca exclui":undefined}
                 style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"11px 14px",background:on?_tabCor+"08":"#fff",borderRadius:11,border:"1px solid "+(on?_tabCor+"40":"#eef0f3"),transition:"all .12s",cursor:isPartnerUser?"default":"pointer"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:on?"#0f172a":"#64748b",fontSize:13,fontWeight:on?700:600,letterSpacing:-.1}}>{item.label}</div>
-                  {item.desc&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{item.desc}</div>}
+                  {item.desc&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{_travado?"Travado pelo sistema — social media nunca exclui":item.desc}</div>}
                 </div>
                 <div style={{width:38,height:22,borderRadius:99,background:on?_tabCor:"#e2e8f0",position:"relative",transition:"background .18s",flexShrink:0}}>
                   <div style={{position:"absolute",top:3,left:on?19:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .18s",boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}/>
@@ -48626,7 +48649,7 @@ export default function AgencyOS(){
     });
     return base;
   });
-  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(ACCESS_STORE[uid]||{}),...(livePerms[uid]||{})};};
+  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};const _p={...DEFAULT_PERMS,...(ACCESS_STORE[uid]||{}),...(livePerms[uid]||{})};if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(u||uid))_p.excluirDemanda=false;return _p;};
   const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Fetch tasks do Supabase ───────────────────────────────
@@ -69093,9 +69116,14 @@ function useClientOnboarding(clientId){
       // Starter (08/09/2026): itens herdados do pacote completo vinham com data em dias ÚTEIS
       // (ex.: "Dia 31" caindo 14/09 em vez de 31/08). Nas fases a partir do dia 31, item pendente
       // volta pra data planejada do bloco (início + N dias corridos).
-      if(pid==="starter"&&(_ONB_BLOCK_OFFSETS[b.id]||0)>=31&&items.__start_date__){
-        // só itens herdados (ids sem "s_") — os do Starter já nascem certos, e datas ajustadas à mão neles ficam
-        const _fix=function(id){ if(String(id).indexOf("s_")===0) return; const r=next[id]; if(r&&!r.done&&r.due!==due){ next[id]=Object.assign({},r,{due:due}); changed=true; } };
+      // Item que mudou de bloco no roteiro (ex.: "Criação e aprovação de criativos" saiu do Dia 31
+      // pro Dia 14) ou herdado com data em dias úteis: se está pendente e a data dele é a data
+      // planejada de OUTRO bloco, volta pra data do bloco atual. Data ajustada à mão (que não
+      // coincide com nenhum bloco) fica como está.
+      if(pid==="starter"&&items.__start_date__){
+        const _datasBlocos=_onbPreset(pid).blocks.map(function(x){ return _onbDueFor(_start,x.id,pid); });
+        const _herdado=function(id){ return String(id).indexOf("s_")!==0; };
+        const _fix=function(id){ const r=next[id]; if(!r||r.done||r.due===due) return; const deOutroBloco=_datasBlocos.indexOf(r.due)>=0; if(deOutroBloco||(_herdado(id)&&(_ONB_BLOCK_OFFSETS[b.id]||0)>=31)){ next[id]=Object.assign({},r,{due:due}); changed=true; } };
         b.items.forEach(function(it){ _fix(it.id); if(it.sub) it.sub.forEach(function(sb){ _fix(sb.id); }); });
       }
     });
@@ -78609,6 +78637,42 @@ function pxAutoComExpandir(ev, startISO, endISO){
   }
   return out;
 }
+/* ═══════════════════════════════════════════════════════════════════════
+   pxDataValeNoParaguay — data comemorativa BRASILEIRA não vira card pro Paraguay
+   (09/09/2026). "Dia Nacional da Pecuária", "Dia do Agricultor", "Dia das Mães"
+   (2º domingo de maio) etc. são datas do Brasil — no Paraguay não existem ou caem
+   em outro dia. Só passa pro Paraguay o que é universal:
+     · título com "mundial" / "internacional";
+     · datas universais (Natal, Ano Novo, Páscoa, Carnaval, Dia da Mulher, 1º de
+       Maio, Dia da Terra, Retrospectiva…);
+     · data cadastrada SÓ pro Paraguay, ou com "Paraguay"/"Asunción" no título
+       (a Hellen marcou de propósito).
+   Tudo que tiver "nacional" ou "brasil" no título é barrado sempre.
+   ═══════════════════════════════════════════════════════════════════════ */
+const PX_PY_UNIVERSAIS=[
+  "natal","navidad","ano novo","reveillon","año nuevo","pascoa","pascua","sexta feira santa","viernes santo",
+  "carnaval","corpus christi","dia da mulher","dia internacional da mulher","dia de la mujer",
+  "dia da terra","dia de la tierra","finados","retrospectiva","black friday","dia dos avos","ano que vem","fim de ano","boas festas","felices fiestas",
+];
+function pxDataValeNoParaguay(ev, ids){
+  const _n=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g," ").trim(); };
+  const t=_n(ev&&ev.title);
+  if(!t) return false;
+  // marcada de propósito pro Paraguay
+  if(/paraguay|paraguai|asuncion|asunción/.test(t)) return true;
+  const _ids=(Array.isArray(ids)?ids:[]).map(String);
+  if(_ids.length&&_ids.every(function(id){ return id==="bioter_paraguay"; })) return true;
+  // data do Brasil — nunca
+  if(/\bnacional\b|\bbrasil/.test(t)) return false;
+  // universais
+  if(/\bmundial\b|\binternacional\b|\binternational\b/.test(t)) return true;
+  if(PX_PY_UNIVERSAIS.some(function(u){ return t.indexOf(_n(u))>=0; })) return true;
+  // 1º de Maio (título exato) — "Dia do Trabalhador Rural" (25/05) é do Brasil, não passa
+  if(/^dia (do trabalho|do trabalhador|del trabajador|del trabajo)$/.test(t)) return true;
+  // resto (Dia do Pecuarista, Dia do Agricultor, Dia das Mães, Dia dos Pais, Dia do Veterinário…) = calendário brasileiro
+  return false;
+}
+
 async function pxGerarCardsComemorativos(opts){
   const sb=window._sb; if(!sb) return 0;
   const getTasks=opts.getTasks, setTasks=opts.setTasks;
@@ -78626,7 +78690,9 @@ async function pxGerarCardsComemorativos(opts){
     if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
     if((!ids||!ids.length)&&ev.client_id) ids=[ev.client_id];
     if(!ids||!ids.length) return;
-    const targets=pxAutoComTargets(ids).filter(function(t){ return !!ativos[t.client]; });
+    const targets=pxAutoComTargets(ids).filter(function(t){ return !!ativos[t.client]; })
+      // Paraguay só recebe datas universais (ou marcadas só pra ele) — data do Brasil fica no Collab Brasil
+      .filter(function(t){ return t.unit!=="paraguay" || pxDataValeNoParaguay(ev, ids); });
     if(!targets.length) return;
     pxAutoComExpandir(ev,startISO,endISO).forEach(function(dateISO){
       targets.forEach(function(t){
@@ -87472,6 +87538,7 @@ function _DemCkBtn({d}){
   const _desfazer=async function(){
     if(!sb||st==="busy") return;
     let ok=true;
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para remover.");return;}
     if(typeof pixelsConfirm==="function")
       ok=await pixelsConfirm({title:"Tirar dos Checkpoints?",message:'"'+(d.titulo||"")+'" sai dos Checkpoints do cliente.',danger:true});
     if(!ok) return;
@@ -87987,6 +88054,7 @@ function _DemHistorico({lista, canEdit, mostrarCliente, onAbrir}){
   const _desfazer=async function(d){
     if(!sb||enviando) return;
     let ok=true;
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para remover.");return;}
     if(typeof pixelsConfirm==="function")
       ok=await pixelsConfirm({title:"Tirar dos Checkpoints?",message:'"'+(d.titulo||"")+'" sai dos Checkpoints do cliente. A entrega continua aqui no histórico.',danger:true});
     if(!ok) return;
@@ -88269,6 +88337,7 @@ function CDemandas({cl, canEdit, selUnit}){
   };
 
   const _excluirDemanda=async function(d){
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para excluir.");return;}
     let ok=true;
     if(typeof pixelsConfirm==="function"){
       ok=await pixelsConfirm({title:"Mandar pra Lixeira?",message:'"'+(d.titulo||"")+'" fica '+_DEM_LIXEIRA_DIAS+' dias na Lixeira (dá pra restaurar) e depois some de vez.',danger:true});
@@ -88295,6 +88364,7 @@ function CDemandas({cl, canEdit, selUnit}){
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro restaurando.",4000); }
   };
   const _excluirDefinitivo=async function(d){
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para excluir.");return;}
     let ok=true;
     if(typeof pixelsConfirm==="function"){
       ok=await pixelsConfirm({title:"Excluir DE VEZ?",message:'"'+(d.titulo||"")+'" será apagada agora, sem volta.',danger:true});
@@ -88730,6 +88800,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
   };
 
   const _excluirDemanda=async function(d){
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para excluir.");return;}
     let ok=true;
     if(typeof pixelsConfirm==="function"){
       ok=await pixelsConfirm({title:"Mandar pra Lixeira?",message:'"'+(d.titulo||"")+'" fica '+_DEM_LIXEIRA_DIAS+' dias na Lixeira (dá pra restaurar) e depois some de vez.',danger:true});
@@ -88756,6 +88827,7 @@ function CDemandasCentral({isMob, somenteCategorias, titulo, subtitulo, canEditP
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro restaurando.",4000); }
   };
   const _excluirDefinitivo=async function(d){
+    if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(CURRENT_USER)){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Você não tem permissão para excluir.");return;}
     let ok=true;
     if(typeof pixelsConfirm==="function"){
       ok=await pixelsConfirm({title:"Excluir DE VEZ?",message:'"'+(d.titulo||"")+'" será apagada agora, sem volta.',danger:true});
