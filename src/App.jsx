@@ -52486,16 +52486,26 @@ function _adsPublicoDetalhado(p){
   (p.interests||[]).forEach(function(i){ interesses.push(i.name||i.id); }); (p.behaviors||[]).forEach(function(i){ comportamentos.push(i.name||i.id); });
   const exclInt=[]; const exs=p.exclusions||{}; (exs.interests||[]).forEach(function(i){ exclInt.push(i.name||i.id); }); (exs.behaviors||[]).forEach(function(i){ exclInt.push(i.name||i.id); });
   const publicos=(p.custom_audiences||[]).map(function(a){return a.name||a.id;}); const exclPublicos=(p.excluded_custom_audiences||[]).map(function(a){return a.name||a.id;});
+  /* Público Advantage+ (targeting_automation.advantage_audience = 1): a Meta divide em CONTROLES (limite de verdade: localizações,
+     idade mínima = age_min, idioma) e SUGESTÕES (age_range, gênero, interesses — ela pode entregar fora deles). Sem Advantage+, tudo é regra.
+     individual_setting.geo = 1 → expansão de localização ("alcançar mais pessoas perto") ligada. Conferido contra a tela do Gerenciador em 10/09/2026. */
   const ta=p.targeting_automation||{}; const advantage=Number(ta.advantage_audience)===1;
-  const expansao=advantage||p.targeting_optimization==="expansion_all"||(Array.isArray(p.targeting_relaxation_types)&&p.targeting_relaxation_types.length>0);
+  const expansaoGeo=Number((ta.individual_setting||{}).geo)===1;
+  const expansao=p.targeting_optimization==="expansion_all"||(Array.isArray(p.targeting_relaxation_types)&&p.targeting_relaxation_types.length>0);
   const g=Array.isArray(p.genders)?p.genders:[]; const genero=g.indexOf(1)>=0&&g.indexOf(2)<0?"Homens":g.indexOf(2)>=0&&g.indexOf(1)<0?"Mulheres":"Todos os gêneros";
-  const idade=(p.age_min||p.age_max)?((p.age_min||18)+" a "+(p.age_max||65)+(Number(p.age_max||65)>=65?"+":"")+" anos"):null;
+  const fx=function(a,b){ return a+" a "+b+(Number(b)>=65?"+":"")+" anos"; };
+  const ar=Array.isArray(p.age_range)&&p.age_range.length===2?p.age_range:null;
+  /* idade que vale: sem Advantage+ = age_min–age_max (regra); com Advantage+ = age_range é SUGESTÃO e age_min é o mínimo garantido */
+  const idade=advantage?(ar?fx(ar[0],ar[1]):null):((p.age_min||p.age_max)?fx(p.age_min||18,p.age_max||65):null);
+  const idadeMin=advantage&&p.age_min?p.age_min+"+":null;
+  /* grupos de interesses como a Meta mostra: dentro do grupo é OU, entre grupos é E ("e também deve corresponder a") */
+  const grupos=(p.flexible_spec||[]).map(function(f){ const n=[]; (f.interests||[]).forEach(function(i){ n.push(i.name||i.id); }); (f.behaviors||[]).forEach(function(i){ n.push(i.name||i.id); }); return n; }).filter(function(n){return n.length;});
   /* códigos de idioma da Meta (adlocale): só os que conhecemos com certeza; os outros ficam de fora em vez de virar chute */
   const LOC={16:"Português (Brasil)",31:"Português (Portugal)",6:"Inglês (EUA)",24:"Inglês (Reino Unido)",23:"Espanhol",7:"Espanhol (Espanha)"}; const idiomas=(p.locales||[]).map(function(l){return LOC[l]||null;}).filter(Boolean);
   const plat=p.publisher_platforms||null;
   const posicoes=[]; [["facebook","facebook_positions"],["instagram","instagram_positions"],["messenger","messenger_positions"],["audience_network","audience_network_positions"]].forEach(function(pp){ (p[pp[1]]||[]).forEach(function(x){ posicoes.push(ADS_PLAT_LBL[pp[0]]+" · "+(ADS_POS_LBL[x]||String(x).replace(/_/g," "))); }); });
   const dispositivos=(p.device_platforms||[]).map(function(d){return d==="mobile"?"Celular":d==="desktop"?"Computador":d;});
-  return {idade:idade,genero:genero,locais:locais,excluidos:excluidos,tiposLocal:tiposLocal,interesses:interesses,comportamentos:comportamentos,demograficos:demograficos,exclInt:exclInt,publicos:publicos,exclPublicos:exclPublicos,advantage:advantage,expansao:expansao,idiomas:idiomas,posAuto:!plat||!plat.length,plataformas:(plat||[]).map(function(x){return ADS_PLAT_LBL[x]||x;}),posicoes:posicoes,dispositivos:dispositivos,vazio:!p||Object.keys(p).length===0};
+  return {idade:idade,idadeMin:idadeMin,grupos:grupos,expansaoGeo:expansaoGeo,genero:genero,locais:locais,excluidos:excluidos,tiposLocal:tiposLocal,interesses:interesses,comportamentos:comportamentos,demograficos:demograficos,exclInt:exclInt,publicos:publicos,exclPublicos:exclPublicos,advantage:advantage,expansao:expansao,idiomas:idiomas,posAuto:!plat||!plat.length,plataformas:(plat||[]).map(function(x){return ADS_PLAT_LBL[x]||x;}),posicoes:posicoes,dispositivos:dispositivos,vazio:!p||Object.keys(p).length===0};
 }
 /* bloco visual do público de um conjunto */
 function AdsPublicoBloco({p,isMob}){
@@ -52505,12 +52515,16 @@ function AdsPublicoBloco({p,isMob}){
   const chips=function(arr,cor){ return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{arr.map(function(x,i){ return <span key={i} style={{fontSize:11.5,background:cor||ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line}}>{x}</span>; })}</div>; };
   const temSeg=d.interesses.length||d.comportamentos.length||d.demograficos.length||d.publicos.length;
   return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"12px 20px"}}>
-    {Item("Quem",<span>{d.idade||"idade não informada"} · {d.genero}{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>)}
+    {Item("Quem",<div>
+      {d.advantage?<div>
+        <div><span style={{color:ADS.muted}}>Limite (controle):</span> <b>{d.idadeMin?"idade mínima "+d.idadeMin:"idade mínima não informada"}</b>{d.idiomas.length?" · "+d.idiomas.join(", "):""}</div>
+        <div style={{marginTop:2}}><span style={{color:ADS.muted}}>Sugestão (a Meta pode sair dela):</span> <b>{d.idade||"sem faixa sugerida"}</b> · {d.genero}</div>
+      </div>:<span><b>{d.idade||"idade não informada"}</b> · {d.genero}{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>}
+    </div>)}
     {Item("Público",<div>
-      {d.advantage&&<div><b style={{color:ADS.accent}}>Público Advantage+</b> <span style={{color:ADS.muted}}>— a Meta pode entregar além dos critérios abaixo</span></div>}
-      {!d.advantage&&d.expansao&&<div><b>Expansão de segmentação ativada</b></div>}
-      {d.interesses.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Interesses ({d.interesses.length}):</span>{chips(d.interesses)}</div>}
-      {d.comportamentos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Comportamentos:</span>{chips(d.comportamentos)}</div>}
+      {d.advantage&&<div style={{background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:9,padding:"6px 9px",marginBottom:6}}><b style={{color:ADS.warn}}>Público Advantage+ ligado</b> <span style={{color:ADS.ink2}}>— idade, gênero e interesses abaixo são <b>sugestão, não limite</b>: a Meta entrega também pra quem não se encaixa neles (sempre dentro das localizações).</span></div>}
+      {!d.advantage&&<div><b style={{color:ADS.ok}}>Público original</b> <span style={{color:ADS.muted}}>— idade, gênero e interesses são regra</span>{d.expansao?<span> · <b>expansão de segmentação ativada</b></span>:null}</div>}
+      {d.grupos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Interesses e comportamentos{d.grupos.length>1?" (todos os grupos precisam bater)":""}:</span>{d.grupos.map(function(gp,gi){ return <div key={gi} style={{marginTop:gi?4:2}}>{gi>0&&<div style={{fontSize:10.5,fontWeight:800,color:ADS.muted,letterSpacing:".06em",margin:"2px 0"}}>E TAMBÉM</div>}{chips(gp)}</div>; })}</div>}
       {d.demograficos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Dados demográficos:</span>{chips(d.demograficos)}</div>}
       {d.publicos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Públicos personalizados:</span>{chips(d.publicos,"#f6f0ff")}</div>}
       {(d.exclInt.length>0||d.exclPublicos.length>0)&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídos:</span>{chips(d.exclInt.concat(d.exclPublicos),ADS.critSoft)}</div>}
@@ -52521,6 +52535,7 @@ function AdsPublicoBloco({p,isMob}){
       {d.locais.length===0&&<span style={{color:ADS.muted}}>não informadas</span>}
       {d.locais.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{d.locais.map(function(l,i){ const st={fontSize:11.5,background:ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line,textDecoration:"none"}; return l.mapa?<a key={i} href={l.mapa} target="_blank" rel="noreferrer" title="abrir no mapa" style={st}>📍 {l.l}</a>:<span key={i} style={st}>{l.l}</span>; })}</div>}
       {d.tiposLocal.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>pessoas que {d.tiposLocal.join(" ou ")} nesses lugares</div>}
+      {d.advantage&&<div style={{fontSize:11.5,marginTop:3,color:d.expansaoGeo?ADS.warn:ADS.ok,fontWeight:700}}>{d.expansaoGeo?"Expansão de localização ligada — a Meta também entrega perto dessas áreas":"Localizações são limite (expansão de localização desligada)"}</div>}
       {d.excluidos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídas:</span>{chips(d.excluidos,ADS.critSoft)}</div>}
     </div>)}
     {Item("Onde aparece (posicionamentos configurados)",<div>
