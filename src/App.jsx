@@ -51106,24 +51106,39 @@ function QGTabelaClientes({calcs,metas,data,isMob,onOpenClient,stOpt,semanaFech}
    ABA CLIENTES — mesma tabela, com semana e novo cliente
    ═══════════════════════════════════════════════════════ */
 function QGClientesPage({clients,data,store,year,month,setPeriodo,isMob,canEdit,onOpenClient,onNovoCliente}){
-  /* Privacidade em apresentação: a lista começa VAZIA. Você digita o cliente que quer ver, ou marca "mostrar todos".
-     Nada de outro cliente aparece na tela por padrão. A preferência "mostrar todos" fica só neste navegador. */
+  /* Privacidade em apresentação: a lista começa VAZIA. Você digita, aparecem só os NOMES que batem (pra clicar);
+     clicou num nome → só aquele cliente entra na tabela. "mostrar todos" abre a carteira inteira. Nada mais aparece por padrão. */
   const [busca,setBusca]=useState("");
+  const [sel,setSel]=useState(null);           // client_id escolhido na lista
+  const [focado,setFocado]=useState(false);
   const [todos,setTodos]=useState(function(){ try{ return localStorage.getItem("px_qg_clientes_todos")==="1"; }catch(_){ return false; } });
   const mudaTodos=function(v){ setTodos(v); try{ localStorage.setItem("px_qg_clientes_todos",v?"1":"0"); }catch(_){} };
   const norm=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); };
   const termo=norm(busca.trim());
-  const visiveis=todos?clients:(termo?clients.filter(function(c){ return norm(c.name).indexOf(termo)>=0||norm(c.client_id).indexOf(termo)>=0; }):[]);
+  const sugestoes=(!sel&&termo)?clients.filter(function(c){ return norm(c.name).indexOf(termo)>=0||norm(c.client_id).indexOf(termo)>=0; }).slice(0,8):[];
+  const escolher=function(c){ setSel(c.client_id); setBusca(c.name); setFocado(false); };
+  const limpar=function(){ setSel(null); setBusca(""); };
+  const visiveis=todos?clients:(sel?clients.filter(function(c){return c.client_id===sel;}):[]);
   const calcs=visiveis.map(function(c){ return qgCalcCliente(c,data,year,month,{}); });
   const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
   const wk=_qgLastWeeks(1)[0]; const fech={}; (data.closings||[]).forEach(function(w){ if(w.week_key===wk.key) fech[w.client_id]=w; });
   const direita=<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-    <div style={{position:"relative"}}><span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:QG.txt3,fontSize:13,pointerEvents:"none"}}>⌕</span><input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisar cliente…" autoFocus={!todos} style={{border:"1px solid "+QG.line,borderRadius:10,padding:"7px 10px 7px 28px",fontSize:13,fontFamily:"inherit",width:isMob?150:220,background:"#fff",minHeight:0}}/></div>
+    <div style={{position:"relative"}}>
+      <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:QG.txt3,fontSize:13,pointerEvents:"none"}}>⌕</span>
+      <input value={busca} onChange={function(e){ setBusca(e.target.value); setSel(null); }} onFocus={function(){ setFocado(true); }} onBlur={function(){ setTimeout(function(){ setFocado(false); },150); }}
+        onKeyDown={function(e){ if(e.key==="Enter"&&sugestoes.length){ escolher(sugestoes[0]); } if(e.key==="Escape") limpar(); }}
+        placeholder="Digite o cliente…" autoFocus={!todos} style={{border:"1px solid "+(sel?QG.roxo:QG.line),borderRadius:10,padding:"7px 28px 7px 28px",fontSize:13,fontFamily:"inherit",width:isMob?150:220,background:"#fff",minHeight:0,fontWeight:sel?700:500,color:sel?QG.roxo:QG.txt}}/>
+      {busca&&<button onClick={limpar} title="Limpar" style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",border:0,background:"transparent",color:QG.txt3,cursor:"pointer",fontSize:14,minHeight:0,padding:"2px 4px"}}>×</button>}
+      {focado&&!sel&&termo&&<div style={{position:"absolute",left:0,top:38,minWidth:"100%",width:260,background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:6,zIndex:60,maxHeight:300,overflowY:"auto"}}>
+        {sugestoes.length===0?<div style={{padding:"8px 10px",fontSize:12.5,color:QG.txt3}}>Nenhum cliente com "{busca.trim()}".</div>
+        :sugestoes.map(function(c){ return <div key={c.client_id} onMouseDown={function(e){ e.preventDefault(); escolher(c); }} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700,color:QG.txt}} onMouseEnter={function(e){e.currentTarget.style.background=QG.roxoBg||"#f3ecff";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(c)} size="sm"/>}<span>{c.name}</span></div>; })}
+      </div>}
+    </div>
     <label style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:700,color:todos?QG.roxo:QG.txt2,cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}><input type="checkbox" checked={todos} onChange={function(e){ mudaTodos(e.target.checked); }} style={{accentColor:QG.roxo,width:15,height:15,margin:0}}/>mostrar todos</label>
     <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
   </div>;
-  return <QGCard title={"Clientes de mídia"+(todos||termo?" · "+visiveis.length+(todos?"":" de "+clients.length):"")} sub={QG_MESES[month-1]+" "+year+" · Meta pela API · Google pelo fechamento"} pad="16px 20px 8px" right={direita}>
-    {visiveis.length===0?<div style={{padding:"34px 12px 30px",textAlign:"center",color:QG.txt3,fontSize:13.5,lineHeight:1.6}}>{termo?<span>Nenhum cliente com "<b>{busca.trim()}</b>".</span>:<span>Digite o nome do cliente pra ver os números dele —<br/>ou marque <b>mostrar todos</b> à direita pra abrir a carteira inteira.</span>}</div>
+  return <QGCard title={"Clientes de mídia"+(todos?" · "+clients.length:"")} sub={QG_MESES[month-1]+" "+year+" · Meta pela API · Google pelo fechamento"} pad="16px 20px 8px" right={direita}>
+    {visiveis.length===0?<div style={{padding:"34px 12px 30px",textAlign:"center",color:QG.txt3,fontSize:13.5,lineHeight:1.6}}><span>Digite o nome do cliente e escolha na lista pra ver os números dele —<br/>ou marque <b>mostrar todos</b> à direita pra abrir a carteira inteira.</span></div>
     :<div className={todos?"px-sens":""}><QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech}/></div>}
   </QGCard>;
 }
@@ -52340,11 +52355,241 @@ function useAdsCampanha(accountId,campId,periodo){
   return st;
 }
 
+/* ═══════════════════════════════════════════════════════
+   ESTRUTURA DA CAMPANHA — conjuntos (público, localizações, posicionamentos) → todos os anúncios de cada conjunto
+   Fontes: ads_entidades (snapshot mais recente: conjunto.publico = targeting da Meta, raw.destination_type),
+           RPC ads_periodo (métricas de conjuntos e anúncios do período), ads_creatives (ativos: vídeos/imagens de cada anúncio,
+           inclusive os flexíveis), RPC ads_quebras_conta (posicionamento REAL de entrega da campanha).
+   Regra: só o que a Meta devolveu. Sem dado → mostra "—" ou "não informado", nunca inventa.
+   ═══════════════════════════════════════════════════════ */
+const ADS_PLAT_LBL={facebook:"Facebook",instagram:"Instagram",messenger:"Messenger",audience_network:"Audience Network",threads:"Threads",whatsapp:"WhatsApp"};
+const ADS_POS_LBL={feed:"Feed",stream:"Feed",right_hand_column:"Coluna da direita",marketplace:"Marketplace",video_feeds:"Feeds de vídeo",story:"Stories",search:"Busca",instream_video:"Vídeo in-stream",facebook_reels:"Reels",facebook_reels_overlay:"Sobreposição em Reels",profile_feed:"Feed do perfil",notification:"Notificações",explore:"Explorar",explore_home:"Início do Explorar",reels:"Reels",ig_search:"Busca",profile_reels:"Reels do perfil",messenger_home:"Caixa de entrada",sponsored_messages:"Mensagens patrocinadas",classic:"Nativo/banner",rewarded_video:"Vídeo premiado"};
+const ADS_DEST_LBL={WHATSAPP:"WhatsApp",MESSENGER:"Messenger",INSTAGRAM_DIRECT:"Direct do Instagram",MESSAGING_INSTAGRAM_DIRECT_WHATSAPP:"Direct + WhatsApp",MESSAGING_MESSENGER_WHATSAPP:"Messenger + WhatsApp",MESSAGING_INSTAGRAM_DIRECT_MESSENGER_WHATSAPP:"Messenger + Direct + WhatsApp",MESSAGING_INSTAGRAM_DIRECT_MESSENGER:"Messenger + Direct",ON_AD:"Formulário no anúncio",ON_POST:"Publicação",ON_PAGE:"Página",ON_VIDEO:"Vídeo",WEBSITE:"Site",APP:"Aplicativo",LEAD_FORM_MESSENGER:"Formulário no Messenger",INSTAGRAM_PROFILE:"Perfil do Instagram",FACEBOOK_PAGE:"Página do Facebook",SHOP_AUTOMATIC:"Loja",UNDEFINED:null};
+const ADS_OTIM_LBL={QUALITY_LEAD:"leads de qualidade",LEAD_GENERATION:"leads (formulário)",CONVERSATIONS:"conversas",REACH:"alcance",IMPRESSIONS:"impressões",LINK_CLICKS:"cliques no link",LANDING_PAGE_VIEWS:"visualizações da página",POST_ENGAGEMENT:"engajamento na publicação",PAGE_LIKES:"curtidas na página",THRUPLAY:"ThruPlay",OFFSITE_CONVERSIONS:"conversões no site",VALUE:"valor",PROFILE_VISIT:"visitas ao perfil",PROFILE_AND_PAGE_ENGAGEMENT:"engajamento no perfil",REMINDERS_SET:"lembretes",APP_INSTALLS:"instalações",VIDEO_VIEWS:"visualizações de vídeo",QUALITY_CALL:"ligações"};
+const _adsOtim=function(o){ return o?(ADS_OTIM_LBL[o]||String(o).toLowerCase().replace(/_/g," ")):null; };
+const _adsDest=function(d){ if(!d) return null; if(ADS_DEST_LBL[d]===null) return null; return ADS_DEST_LBL[d]||String(d).toLowerCase().replace(/_/g," "); };
+/* lê o targeting da Meta e devolve tudo em português — só o que existe no JSON */
+function _adsPublicoDetalhado(p){
+  p=p||{}; const geo=p.geo_locations||{}; const ex=p.excluded_geo_locations||{};
+  const km=function(x){ return x&&x.radius?" (+"+x.radius+" "+(x.distance_unit==="mile"?"mi":"km")+")":""; };
+  const PAIS={BR:"Brasil",AR:"Argentina",PY:"Paraguai",UY:"Uruguai",BO:"Bolívia",CL:"Chile",PT:"Portugal",US:"Estados Unidos",CO:"Colômbia",PE:"Peru",MX:"México"}; const pais=function(c){ return PAIS[c]||c; };
+  const ponto=function(c){ const la=Number(c.latitude), lo=Number(c.longitude); return (c.name||c.address_string||("ponto no mapa "+la.toFixed(2).replace(".",",")+", "+lo.toFixed(2).replace(".",",")))+km(c); };
+  const locais=[];
+  (geo.countries||[]).forEach(function(c){ locais.push({t:"país",l:pais(c)}); });
+  (geo.regions||[]).forEach(function(r){ locais.push({t:"estado",l:r.name||r.key}); });
+  (geo.cities||[]).forEach(function(c){ locais.push({t:"cidade",l:c.name+(c.region?" – "+c.region:"")+km(c)}); });
+  (geo.places||[]).forEach(function(c){ locais.push({t:"local",l:(c.name||"ponto no mapa")+km(c)}); });
+  (geo.custom_locations||[]).forEach(function(c){ locais.push({t:"ponto",l:ponto(c),mapa:"https://www.google.com/maps?q="+c.latitude+","+c.longitude}); });
+  (geo.zips||[]).forEach(function(z){ locais.push({t:"CEP",l:z.name||z.key}); });
+  (geo.geo_markets||[]).forEach(function(z){ locais.push({t:"mercado",l:z.name||z.key}); });
+  const excluidos=[];
+  (ex.countries||[]).forEach(function(c){ excluidos.push(pais(c)); });
+  (ex.regions||[]).forEach(function(r){ excluidos.push(r.name||r.key); });
+  (ex.cities||[]).forEach(function(c){ excluidos.push(c.name+km(c)); });
+  (ex.custom_locations||[]).forEach(function(c){ excluidos.push(ponto(c)); });
+  const LT={home:"moram",recent:"estiveram recentemente",frequently_in:"frequentam",travel_in:"em viagem"}; const tiposLocal=(geo.location_types||[]).map(function(x){return LT[x]||x;});
+  const interesses=[], comportamentos=[], demograficos=[]; (p.flexible_spec||[]).forEach(function(f){ (f.interests||[]).forEach(function(i){ interesses.push(i.name||i.id); }); (f.behaviors||[]).forEach(function(i){ comportamentos.push(i.name||i.id); }); ["life_events","industries","income","family_statuses","education_statuses","work_positions","work_employers","relationship_statuses","education_schools","politics","home_type","home_ownership","household_composition","generation","user_adclusters"].forEach(function(k){ (f[k]||[]).forEach(function(i){ demograficos.push(i.name||String(i)); }); }); });
+  (p.interests||[]).forEach(function(i){ interesses.push(i.name||i.id); }); (p.behaviors||[]).forEach(function(i){ comportamentos.push(i.name||i.id); });
+  const exclInt=[]; const exs=p.exclusions||{}; (exs.interests||[]).forEach(function(i){ exclInt.push(i.name||i.id); }); (exs.behaviors||[]).forEach(function(i){ exclInt.push(i.name||i.id); });
+  const publicos=(p.custom_audiences||[]).map(function(a){return a.name||a.id;}); const exclPublicos=(p.excluded_custom_audiences||[]).map(function(a){return a.name||a.id;});
+  const ta=p.targeting_automation||{}; const advantage=Number(ta.advantage_audience)===1;
+  const expansao=advantage||p.targeting_optimization==="expansion_all"||(Array.isArray(p.targeting_relaxation_types)&&p.targeting_relaxation_types.length>0);
+  const g=Array.isArray(p.genders)?p.genders:[]; const genero=g.indexOf(1)>=0&&g.indexOf(2)<0?"Homens":g.indexOf(2)>=0&&g.indexOf(1)<0?"Mulheres":"Todos os gêneros";
+  const idade=(p.age_min||p.age_max)?((p.age_min||18)+" a "+(p.age_max||65)+(Number(p.age_max||65)>=65?"+":"")+" anos"):null;
+  /* códigos de idioma da Meta (adlocale): só os que conhecemos com certeza; os outros ficam de fora em vez de virar chute */
+  const LOC={16:"Português (Brasil)",31:"Português (Portugal)",6:"Inglês (EUA)",24:"Inglês (Reino Unido)",23:"Espanhol",7:"Espanhol (Espanha)"}; const idiomas=(p.locales||[]).map(function(l){return LOC[l]||null;}).filter(Boolean);
+  const plat=p.publisher_platforms||null;
+  const posicoes=[]; [["facebook","facebook_positions"],["instagram","instagram_positions"],["messenger","messenger_positions"],["audience_network","audience_network_positions"]].forEach(function(pp){ (p[pp[1]]||[]).forEach(function(x){ posicoes.push(ADS_PLAT_LBL[pp[0]]+" · "+(ADS_POS_LBL[x]||String(x).replace(/_/g," "))); }); });
+  const dispositivos=(p.device_platforms||[]).map(function(d){return d==="mobile"?"Celular":d==="desktop"?"Computador":d;});
+  return {idade:idade,genero:genero,locais:locais,excluidos:excluidos,tiposLocal:tiposLocal,interesses:interesses,comportamentos:comportamentos,demograficos:demograficos,exclInt:exclInt,publicos:publicos,exclPublicos:exclPublicos,advantage:advantage,expansao:expansao,idiomas:idiomas,posAuto:!plat||!plat.length,plataformas:(plat||[]).map(function(x){return ADS_PLAT_LBL[x]||x;}),posicoes:posicoes,dispositivos:dispositivos,vazio:!p||Object.keys(p).length===0};
+}
+/* bloco visual do público de um conjunto */
+function AdsPublicoBloco({p,isMob}){
+  const d=_adsPublicoDetalhado(p);
+  if(d.vazio) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu o público deste conjunto.</div>;
+  const Item=function(t,children){ return <div style={{minWidth:0}}><AdsEyebrow>{t}</AdsEyebrow><div style={{fontSize:12.5,color:ADS.ink,marginTop:4,lineHeight:1.5}}>{children}</div></div>; };
+  const chips=function(arr,cor){ return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{arr.map(function(x,i){ return <span key={i} style={{fontSize:11.5,background:cor||ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line}}>{x}</span>; })}</div>; };
+  const temSeg=d.interesses.length||d.comportamentos.length||d.demograficos.length||d.publicos.length;
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"12px 20px"}}>
+    {Item("Quem",<span>{d.idade||"idade não informada"} · {d.genero}{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>)}
+    {Item("Público",<div>
+      {d.advantage&&<div><b style={{color:ADS.accent}}>Público Advantage+</b> <span style={{color:ADS.muted}}>— a Meta pode entregar além dos critérios abaixo</span></div>}
+      {!d.advantage&&d.expansao&&<div><b>Expansão de segmentação ativada</b></div>}
+      {d.interesses.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Interesses ({d.interesses.length}):</span>{chips(d.interesses)}</div>}
+      {d.comportamentos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Comportamentos:</span>{chips(d.comportamentos)}</div>}
+      {d.demograficos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Dados demográficos:</span>{chips(d.demograficos)}</div>}
+      {d.publicos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Públicos personalizados:</span>{chips(d.publicos,"#f6f0ff")}</div>}
+      {(d.exclInt.length>0||d.exclPublicos.length>0)&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídos:</span>{chips(d.exclInt.concat(d.exclPublicos),ADS.critSoft)}</div>}
+      {!temSeg&&!d.advantage&&<span style={{color:ADS.muted}}>Sem interesses ou públicos — público amplo (só idade, gênero e localização).</span>}
+      {!temSeg&&d.advantage&&<span style={{color:ADS.muted}}>Sem interesses definidos — a Meta escolhe quem recebe.</span>}
+    </div>)}
+    {Item("Localizações"+(d.locais.length?" ("+d.locais.length+")":""),<div>
+      {d.locais.length===0&&<span style={{color:ADS.muted}}>não informadas</span>}
+      {d.locais.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{d.locais.map(function(l,i){ const st={fontSize:11.5,background:ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line,textDecoration:"none"}; return l.mapa?<a key={i} href={l.mapa} target="_blank" rel="noreferrer" title="abrir no mapa" style={st}>📍 {l.l}</a>:<span key={i} style={st}>{l.l}</span>; })}</div>}
+      {d.tiposLocal.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>pessoas que {d.tiposLocal.join(" ou ")} nesses lugares</div>}
+      {d.excluidos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídas:</span>{chips(d.excluidos,ADS.critSoft)}</div>}
+    </div>)}
+    {Item("Onde aparece (posicionamentos configurados)",<div>
+      {d.posAuto?<div><b style={{color:ADS.accent}}>Posicionamentos Advantage+</b> <span style={{color:ADS.muted}}>— automático: a Meta distribui entre Facebook, Instagram, Messenger e Audience Network. A entrega real está na campanha, abaixo.</span></div>
+      :<div>{chips(d.posicoes.length?d.posicoes:d.plataformas)}{d.dispositivos.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>dispositivos: {d.dispositivos.join(" e ")}</div>}</div>}
+    </div>)}
+  </div>;
+}
+/* posicionamento REAL de entrega (quebra da Meta) — nível campanha */
+function AdsEntregaReal({accountId,P,campId,cfg,isMob}){
+  const Q=useAdsQuebras(accountId,P,[campId]);
+  if(Q.loading) return <div style={{fontSize:12,color:ADS.muted}}>Lendo entrega por posicionamento…</div>;
+  const rows=(Q.rows||[]).filter(function(r){return r.dimensao==="posicionamento"&&Number(r.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);});
+  if(!rows.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Sem quebra por posicionamento neste período.</div>;
+  const tot=rows.reduce(function(s,r){return s+Number(r.gasto);},0)||1; const top=rows.slice(0,8); const resto=rows.slice(8).reduce(function(s,r){return s+Number(r.gasto);},0);
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"6px 24px"}}>
+    {top.map(function(r){ const pct=Number(r.gasto)/tot*100; const res=Number(r.resultados||0); const cpa=res>0?Number(r.gasto)/res:null;
+      return <div key={r.valor} style={{display:"grid",gridTemplateColumns:"1fr 150px",gap:8,alignItems:"center",fontSize:12}}>
+        <div><div style={{display:"flex",justifyContent:"space-between",color:ADS.ink2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_adsValLbl("posicionamento",r.valor)}</span><span style={Object.assign({color:ADS.muted},ADS_MONO)}>{Math.round(pct)}% · {_adsBRL0(r.gasto)}</span></div><AdsBarra pct={pct} h={6} cor="#9F43F6" alt={1}/></div>
+        <span style={Object.assign({textAlign:"right",fontSize:11.5,color:ADS.ink2,whiteSpace:"nowrap"},ADS_MONO)}>{cfg&&cfg.campo?(res>0?_adsNum(res)+" · "+_adsBRLc(cpa):"0 "+cfg.resLbl):_adsNum(r.impressoes)+" impr."}</span>
+      </div>; })}
+    {resto>0&&<div style={{fontSize:11.5,color:ADS.muted}}>+ {rows.length-8} posicionamentos menores · {_adsBRL0(resto)}</div>}
+  </div>;
+}
+/* etiqueta de formato do anúncio, a partir dos ativos coletados */
+function _adsFormatoLbl(cr){
+  cr=cr||{}; const at=Array.isArray(cr.ativos)?cr.ativos:[]; const nv=at.filter(function(x){return x.tipo==="video";}).length, ni=at.filter(function(x){return x.tipo==="imagem";}).length;
+  const nt=Array.isArray(cr.textos)?cr.textos.length:0, nh=Array.isArray(cr.titulos)?cr.titulos.length:0;
+  if(cr.formato_meta==="flexivel") return {t:"Flexível",cor:ADS.accent,s:[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+" imagem"+(ni>1?"ns":""):null,nt>1?nt+" textos":null,nh>1?nh+" títulos":null].filter(Boolean).join(" · ")||"vários ativos",flex:true};
+  if(cr.formato_meta==="carrossel") return {t:"Carrossel",cor:"#0f766e",s:at.length+" card"+(at.length!==1?"s":""),flex:false};
+  const extra=[nt>1?nt+" textos":null,nh>1?nh+" títulos":null].filter(Boolean).join(" · ");
+  if(cr.video_id||nv) return {t:"Vídeo",cor:ADS.ink2,s:[cr.video_segundos?Math.round(cr.video_segundos)+" s":null,extra||null].filter(Boolean).join(" · "),flex:false};
+  if(cr.image_url||ni) return {t:"Imagem",cor:ADS.ink2,s:extra,flex:false};
+  return {t:"Anúncio",cor:ADS.muted,s:cr.ad_id?"":"criativo ainda não coletado",flex:false};
+}
+/* tira de miniaturas com TODOS os ativos do anúncio */
+function AdsAtivosStrip({cr,h,max,onClick}){
+  const at=(cr&&Array.isArray(cr.ativos)?cr.ativos:[]).filter(function(x){return x.thumb||x.url;}); if(at.length<2) return null;
+  const lim=max||8; const vis=at.slice(0,lim);
+  return <div style={{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}}>{vis.map(function(x,i){ return <div key={i} onClick={onClick?function(e){e.stopPropagation();onClick(i);}:undefined} title={x.tipo==="video"?"vídeo":"imagem"} style={{width:h||44,height:h||44,borderRadius:8,overflow:"hidden",position:"relative",background:"#1b1530",border:"1px solid "+ADS.line,cursor:onClick?"pointer":"default",flexShrink:0}}><img src={x.thumb||x.url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>{x.tipo==="video"&&<span style={{position:"absolute",right:3,bottom:3,width:14,height:14,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"5px solid #1b1530",borderTop:"3px solid transparent",borderBottom:"3px solid transparent",marginLeft:1}}/></span>}</div>; })}{at.length>lim&&<div style={{width:h||44,height:h||44,borderRadius:8,background:ADS.surface2,display:"grid",placeItems:"center",fontSize:11,fontWeight:800,color:ADS.ink2}}>+{at.length-lim}</div>}</div>;
+}
+/* grade de ativos dentro do lightbox — clique troca o que está sendo exibido */
+function AdsAtivosGrade({cr,sel,onSel}){
+  const at=(cr&&Array.isArray(cr.ativos)?cr.ativos:[]); const multiTxt=(Array.isArray(cr&&cr.titulos)&&cr.titulos.length>1)||(Array.isArray(cr&&cr.textos)&&cr.textos.length>1);
+  if(at.length<2&&!multiTxt) return null;
+  const f=_adsFormatoLbl(cr);
+  return <div style={{marginTop:16}}>{at.length>=2&&<><AdsEyebrow>{f.t==="Flexível"?"Ativos deste anúncio flexível":f.t==="Carrossel"?"Cards do carrossel":"Ativos"} · {at.length}</AdsEyebrow>
+    <div style={{fontSize:11.5,color:ADS.muted,marginTop:3}}>{f.t==="Flexível"?"A Meta combina esses vídeos/imagens com os textos e escolhe a variação por pessoa. Clique pra ver cada um.":"Clique pra ver cada card."}</div></>}
+    {at.length<2&&multiTxt&&<><AdsEyebrow>Variações de texto (a Meta escolhe por pessoa)</AdsEyebrow></>}
+    {at.length>=2&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:8}}>{at.map(function(x,i){ const on=sel===i; const src=x.thumb||x.url; return <div key={i} onClick={function(){onSel(on?null:i);}} style={{aspectRatio:"1",borderRadius:9,overflow:"hidden",position:"relative",background:"#1b1530",border:"2px solid "+(on?ADS.accent:"transparent"),cursor:"pointer"}}>{src?<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>:<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:10,color:"#fff"}}>sem prévia</div>}{x.tipo==="video"&&<span style={{position:"absolute",right:4,bottom:4,width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"6px solid #1b1530",borderTop:"4px solid transparent",borderBottom:"4px solid transparent",marginLeft:1}}/></span>}{x.segundos?<span style={{position:"absolute",left:4,bottom:4,fontSize:9.5,fontWeight:800,color:"#fff",background:"rgba(0,0,0,.55)",borderRadius:5,padding:"1px 4px"}}>{Math.round(x.segundos)}s</span>:null}</div>; })}</div>}
+    {multiTxt&&<div style={{marginTop:10,fontSize:12,color:ADS.ink2}}>
+      {Array.isArray(cr.titulos)&&cr.titulos.length>1&&<div><span style={{color:ADS.muted}}>Títulos ({cr.titulos.length}):</span> {cr.titulos.map(function(t,i){ return <span key={i} style={{display:"inline-block",background:ADS.surface2,borderRadius:6,padding:"2px 7px",margin:"2px 4px 2px 0"}}>{t}</span>; })}</div>}
+      {Array.isArray(cr.textos)&&cr.textos.length>1&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Textos ({cr.textos.length}):</span> {cr.textos.map(function(t,i){ return <div key={i} style={{background:ADS.surface2,borderRadius:8,padding:"6px 9px",marginTop:4,whiteSpace:"pre-wrap",fontSize:11.5}}>{String(t).slice(0,300)}</div>; })}</div>}
+    </div>}
+  </div>;
+}
+/* anúncios do período + do snapshot, agrupados por conjunto */
+function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
+  const accountId=conta&&conta.ad_account_id;
+  const cur=X.cur||{};
+  const anPeriodo=(cur.anuncios||[]).filter(function(a){return a.campaign_id===campId;});
+  const anSnap=E.anuncios||[];
+  const ids=Array.from(new Set(anPeriodo.map(function(a){return a.id;}).concat(anSnap.map(function(a){return a.entidade_id;}))));
+  const C=useAdsCriativos(accountId,ids);
+  const [aberto,setAberto]=useState(null);
+  const [verPausados,setVerPausados]=useState({});
+  const [verPublico,setVerPublico]=useState({});
+  if(C.loading) return <AdsLoading t="Lendo conjuntos e anúncios…"/>;
+  /* conjuntos: snapshot (público/config) + métricas do período */
+  const conjuntos=ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;});
+  const cjM={}; (cur.conjuntos||[]).filter(function(x){return x.campaign_id===campId;}).forEach(function(x){ const r=Number(x.res||0); cjM[x.id]=Object.assign({},x,{res:r,cpa:_adsDiv(x.gasto,r),ctr:Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null,frequencia:Number(x.alcance||0)>0?Number(x.impressoes||0)/Number(x.alcance):null}); });
+  /* anúncios: chave = id; métricas do período + status do snapshot + criativo */
+  const mapa={}; anSnap.forEach(function(a){ mapa[a.entidade_id]={id:a.entidade_id,nome:a.nome,adset_id:a.parent_id,status:a.status_efetivo,m:null}; });
+  anPeriodo.forEach(function(a){ const o=mapa[a.id]||(mapa[a.id]={id:a.id,nome:a.nome,adset_id:a.adset_id,status:null,m:null}); o.m=a; if(!o.adset_id) o.adset_id=a.adset_id; if(!o.nome) o.nome=a.nome; });
+  const anuncios=Object.keys(mapa).map(function(k){ const o=mapa[k]; const m=o.m||{}; const res=o.m?_adsResDe(m,cfg):0; const gasto=Number(m.gasto||0); const custo=cfg.campo?_adsDiv(gasto,res):null; const cr=C.cr[o.id]||{}; const imp=Number(m.impressoes||0);
+    return Object.assign({},o,{cr:cr,res:res,gasto:gasto,custo:custo,ctr:imp>0?Number(m.cliques||0)/imp*100:null,cpm:imp>0?gasto/imp*1000:null,alcance:Number(m.alcance||0),frequencia:Number(m.alcance||0)>0?imp/Number(m.alcance):null,impressoes:imp,video:!!(cr.video_id||(Array.isArray(cr.ativos)&&cr.ativos.some(function(x){return x.tipo==="video";}))),r25:m.p25!==undefined&&imp>0?Number(m.p25||0)/imp*100:null,r50:m.p50!==undefined&&imp>0?Number(m.p50||0)/imp*100:null,r75:m.p75!==undefined&&imp>0?Number(m.p75||0)/imp*100:null,r100:m.p100!==undefined&&imp>0?Number(m.p100||0)/imp*100:null,cfg:cfg,tipo:tipo,diag:[],semDiag:true,nivel:"n",campNome:(cur.campanhas||[]).filter(function(c){return c.id===campId;}).map(function(c){return c.nome;})[0]||""}); });
+  const gastoTot=anuncios.reduce(function(s,a){return s+a.gasto;},0); const resTot=anuncios.reduce(function(s,a){return s+a.res;},0); const mediaCamp=cfg.campo?_adsDiv(gastoTot,resTot):null;
+  anuncios.forEach(function(a){ a.mediaG=mediaCamp; a.nivel=cfg.campo&&a.res>=ADS_MIN_RESULTADOS?_adsNivelCusto(a.custo,mediaCamp,a.res):"n"; });
+  const porConj={}; anuncios.forEach(function(a){ const k=a.adset_id||"_"; (porConj[k]=porConj[k]||[]).push(a); });
+  const ordAn=function(arr){ return arr.slice().sort(function(a,b){ const ga=a.status==="ACTIVE"?0:1, gb=b.status==="ACTIVE"?0:1; if(ga!==gb) return ga-gb; return b.gasto-a.gasto; }); };
+  const cjLista=conjuntos.map(function(x){ return Object.assign({},x,{m:cjM[x.entidade_id]||null,an:ordAn(porConj[x.entidade_id]||[])}); });
+  /* conjuntos com métrica no período mas fora do snapshot (apagados) */
+  Object.keys(cjM).forEach(function(id){ if(!conjuntos.some(function(x){return x.entidade_id===id;})) cjLista.push({entidade_id:id,nome:cjM[id].nome||id,status_efetivo:"DELETED",publico:null,m:cjM[id],an:ordAn(porConj[id]||[]),foraSnap:true}); });
+  const orfaos=ordAn(porConj["_"]||[]);
+  cjLista.sort(function(a,b){ const ga=a.status_efetivo==="ACTIVE"?0:1, gb=b.status_efetivo==="ACTIVE"?0:1; if(ga!==gb) return ga-gb; return Number(b.m&&b.m.gasto||0)-Number(a.m&&a.m.gasto||0); });
+  const somaCj=cjLista.reduce(function(s,x){return s+Number(x.m&&x.m.gasto||0);},0)||1;
+  const nAtivos=cjLista.filter(function(x){return x.status_efetivo==="ACTIVE";}).length;
+  const abertoItem=aberto?anuncios.find(function(a){return a.id===aberto;}):null;
+  const Met=function(l,v,cor){ return <div style={{minWidth:0}}><div style={{fontSize:10.5,color:ADS.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>{l}</div><div style={Object.assign({fontSize:15,fontWeight:800,color:cor||ADS.ink,whiteSpace:"nowrap",marginTop:1},ADS_MONO)}>{v}</div></div>; };
+  const AdCard=function(a){ const f=_adsFormatoLbl(a.cr); const capa=Object.assign({},a.cr,{thumbnail_url:a.cr.thumbnail_url||(Array.isArray(a.cr.ativos)&&a.cr.ativos[0]?a.cr.ativos[0].thumb:null)}); const st=_adsStatus(a.status||"UNKNOWN"); const semGasto=a.gasto<=0;
+    const titulo=(Array.isArray(a.cr.titulos)&&a.cr.titulos[0])||a.cr.titulo||null; const texto=(Array.isArray(a.cr.textos)&&a.cr.textos[0])||a.cr.corpo||null;
+    return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{display:"grid",gridTemplateColumns:isMob?"88px 1fr":"120px 1fr",gap:14,background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:10,cursor:"pointer",opacity:a.status==="ACTIVE"||a.gasto>0?1:.75}} onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 22px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";}}>
+      <AdsCapa cr={capa} h={isMob?88:120} radius={10}/>
+      <div style={{minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:8,height:8,borderRadius:"50%",background:a.status==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:800,fontSize:13.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:isMob?"100%":420}} title={a.nome}>{a.nome}</span><span style={{fontSize:10.5,fontWeight:800,color:f.cor,textTransform:"uppercase",letterSpacing:".06em",border:"1px solid "+f.cor+"55",borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{f.t}</span>{f.s&&<span style={{fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap"}}>{f.s}</span>}{a.status&&a.status!=="ACTIVE"&&<span style={{fontSize:11,color:ADS.muted}}>{st[0].toLowerCase()}</span>}{!a.status&&<span style={{fontSize:11,color:ADS.muted}}>fora do snapshot atual</span>}</div>
+        {(titulo||texto)&&<div style={{fontSize:12,color:ADS.ink2,marginTop:4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{titulo&&<b style={{color:ADS.ink}}>{titulo} </b>}{texto?String(texto).slice(0,180):""}</div>}
+        <AdsAtivosStrip cr={a.cr} h={isMob?36:44} max={isMob?5:8} onClick={function(){setAberto(a.id);}}/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:10,marginTop:10}}>
+          {semGasto?<div style={{fontSize:12,color:ADS.muted,gridColumn:"1 / -1"}}>sem gasto no período{a.cr.cta?" · botão "+_adsCta(a.cr.cta):""}</div>:<>
+            {Met("Gasto",_adsBRLc(a.gasto))}
+            {cfg.campo?Met(cfg.resLbl,_adsNum(a.res)):Met("Alcance",_adsNum(a.alcance))}
+            {cfg.campo?Met(cfg.custoLbl,a.custo?_adsBRLc(a.custo):"—",a.res>=ADS_MIN_RESULTADOS?_adsCor(a.nivel):ADS.ink):Met("CPM",_adsBRL(a.cpm))}
+            {Met("CTR",_adsPct(a.ctr,2),_adsCor(Number(a.ctr||0)>1.5?"o":Number(a.ctr||0)>=1?"w":"c"))}
+            {Met("Impressões",_adsNum(a.impressoes))}
+          </>}
+        </div>
+      </div>
+    </div>; };
+  const ConjCard=function(x){ const m=x.m; const st=_adsStatus(x.status_efetivo); const fs=x.fase_aprendizado; const fsL=fs==="SUCCESS"?["aprendizado concluído","o"]:fs==="LEARNING"?["em aprendizado","w"]:fs==="LEARNING_LIMITED"?["aprendizado limitado","c"]:null;
+    const fatia=m?Number(m.gasto||0)/somaCj*100:0; const n=m&&m.res>=ADS_MIN_RESULTADOS?_adsNivelCusto(m.cpa,mediaConta,m.res):"n";
+    const ativos=x.an.filter(function(a){return a.status==="ACTIVE"||a.gasto>0;}); const pausados=x.an.filter(function(a){return !(a.status==="ACTIVE"||a.gasto>0);});
+    const dest=_adsDest((x.raw&&x.raw.destination_type)||x.destino); const orc=Number(x.orcamento)>0?_adsBRL(Number(x.orcamento)/100)+(x.tipo_orcamento==="diario"?"/dia":" total"):null;
+    const pubAberto=verPublico[x.entidade_id]!==undefined?verPublico[x.entidade_id]:(x.status_efetivo==="ACTIVE"||cjLista.length===1); /* aberto por padrão nos ativos (ou quando é o único) */
+    return <AdsCard key={x.entidade_id} borda={x.status_efetivo==="ACTIVE"?ADS.line2:ADS.line} style={{padding:0,overflow:"hidden",marginBottom:14}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid "+ADS.line,background:x.status_efetivo==="ACTIVE"?"#fff":ADS.surface2}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><AdsEyebrow>Conjunto de anúncios</AdsEyebrow></div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:3}}><span style={{width:9,height:9,borderRadius:"50%",background:x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:900,fontSize:16,letterSpacing:"-.3px"}}>{x.nome}</span><AdsTag n={st[1]}>{st[0]}</AdsTag>{fsL&&<AdsTag n={fsL[1]}>{fsL[0]}</AdsTag>}{x.foraSnap&&<AdsTag n="n">não está mais na conta</AdsTag>}</div>
+            <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:6,fontSize:12.5,color:ADS.ink2}}>{x.otimizacao&&<span>Otimiza pra <b>{_adsOtim(x.otimizacao)}</b></span>}{dest&&<span>Destino: <b>{dest}</b></span>}{orc&&<span>Orçamento <b>{orc}</b></span>}<span><b>{ativos.length}</b> anúncio{ativos.length!==1?"s":""} {x.status_efetivo==="ACTIVE"?(ativos.length===1?"ativo":"ativos"):"com gasto no período"}{pausados.length?" · "+pausados.length+" pausado"+(pausados.length>1?"s":"")+" sem gasto":""}</span></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat("+(isMob?3:6)+",auto)",gap:isMob?12:18,alignItems:"start"}}>
+            {m?<>
+              {Met("Gasto",_adsBRLc(m.gasto))}
+              {Met("fatia",Math.round(fatia)+"%")}
+              {cfg.campo?Met(cfg.resLbl,_adsNum(m.res)):Met("Alcance",_adsNum(m.alcance))}
+              {cfg.campo?Met(cfg.custoLbl,m.cpa?_adsBRLc(m.cpa):"—",m.res>=ADS_MIN_RESULTADOS?_adsCor(n):ADS.ink):Met("CPM",_adsBRL(Number(m.impressoes)>0?Number(m.gasto)/Number(m.impressoes)*1000:null))}
+              {Met("CTR",_adsPct(m.ctr,2))}
+              {Met("Freq.",Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2}))}
+            </>:<div style={{fontSize:12.5,color:ADS.muted}}>sem gasto no período</div>}
+          </div>
+        </div>
+      </div>
+      {!x.foraSnap&&<div style={{padding:"14px 20px",borderBottom:"1px solid "+ADS.line,background:"#fbfaff"}}>
+        <div onClick={function(){ setVerPublico(Object.assign({},verPublico,(function(o){o[x.entidade_id]=!pubAberto;return o;})({}))); }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}><span style={{fontSize:12.5,fontWeight:800}}>Público, localizações e posicionamentos</span><span style={{fontSize:11.5,color:ADS.muted}}>{pubAberto?"esconder ▴":_adsResumoPublico(x.publico)+" ▾"}</span></div>
+        {pubAberto&&<div style={{marginTop:12}}><AdsPublicoBloco p={x.publico} isMob={isMob}/></div>}
+      </div>}
+      <div style={{padding:"14px 20px"}}>
+        <div style={{fontSize:12.5,fontWeight:800,marginBottom:10}}>Anúncios deste conjunto · {x.an.length}</div>
+        {x.an.length===0&&<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum anúncio neste conjunto.</div>}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>{ativos.map(AdCard)}</div>
+        {pausados.length>0&&!verPausados[x.entidade_id]&&<div style={{marginTop:10}}><AdsChip onClick={function(){ setVerPausados(Object.assign({},verPausados,(function(o){o[x.entidade_id]=true;return o;})({}))); }}>Ver {pausados.length} pausado{pausados.length>1?"s":""} sem gasto</AdsChip></div>}
+        {pausados.length>0&&verPausados[x.entidade_id]&&<div style={{display:"flex",flexDirection:"column",gap:10,marginTop:10}}>{pausados.map(AdCard)}</div>}
+      </div>
+    </AdsCard>; };
+  return <div>
+    {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={null} mediaG={mediaCamp} onClose={function(){setAberto(null);}}/>}
+    <AdsSec t={"Conjuntos de anúncios · "+cjLista.length} s={nAtivos+" ativo"+(nAtivos!==1?"s":"")+" · cada conjunto com o público configurado na Meta e todos os seus anúncios · "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)}>
+      {cjLista.length===0&&<div style={{fontSize:13,color:ADS.muted}}>A Meta não devolveu conjuntos para esta campanha.</div>}
+      {cjLista.map(ConjCard)}
+      {orfaos.length>0&&<AdsCard style={{marginBottom:14}}><div style={{fontSize:12.5,fontWeight:800,marginBottom:10}}>Anúncios sem conjunto identificado · {orfaos.length}</div><div style={{display:"flex",flexDirection:"column",gap:10}}>{orfaos.map(AdCard)}</div></AdsCard>}
+    </AdsSec>
+    <AdsSec t="Onde os anúncios estão aparecendo de verdade" s="entrega real por posicionamento (quebra da Meta, nível campanha) · fatia do gasto e resultado em cada lugar">
+      <AdsCard><AdsEntregaReal accountId={accountId} P={P} campId={campId} cfg={cfg} isMob={isMob}/></AdsCard>
+    </AdsSec>
+  </div>;
+}
+
 /* ─── Campanha › Visão geral + Conjuntos ─── */
 function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
-  const [sub,setSub]=useState("visao");
+  const [sub,setSub]=useState("estrutura");
   const E=useAdsCampanha(conta&&conta.ad_account_id,campId,X.P);
   if(D.loading||X.loading) return <AdsLoading t="Lendo campanha…"/>;
   const P=X.P; const A=D.analise; const M=(A&&A.metricas)||{};
@@ -52397,7 +52642,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
       {etapas.map(function(et,i){ const w=Math.max(2,Math.log10(Math.max(et[1],1)+1)/Math.log10(mx+1)*100); const cmp=i===1?(F2&&F1&&F!==F2&&F2.t1?(F.t1>=F2.t1?"o":"c"):null):i===2?(F2&&F1&&F!==F2&&F2.t2?(F.t2>=F2.t2?"o":"c"):null):null;
         return <div key={et[0]} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:ADS.ink2}}><span>{et[0]}</span><span style={Object.assign({fontWeight:700},ADS_MONO)}>{_adsNum(et[1])}</span></div><AdsBarra pct={w} h={12} cor={i===2?ADS.ok:corBase} alt={i===0?.35:i===1?.6:.9}/>{et[2]!==null&&<div style={{fontSize:11.5,marginTop:2,color:cmp?_adsCor(cmp):ADS.muted,fontWeight:cmp?700:500}}>{i===1?"↓ "+_adsPct(et[2],2)+" clicam":"↓ "+_adsPct(et[2],1)+" viram "+cfg.resSing}</div>}</div>; })}
     </div>; };
-  const SUBS=[["visao","Visão geral"],["conjuntos","Conjuntos"],["criativos","Criativos"],["publico","Público"],["historico","Histórico"]];
+  const SUBS=[["estrutura","Conjuntos e anúncios"],["visao","Visão geral"],["criativos","Ranking de criativos"],["publico","Público"],["historico","Histórico"]];
   const somaCj=conjComDados.reduce(function(s,x){return s+Number(x.m&&x.m.gasto||0);},0)||1;
   const cjOrd=conjComDados.slice().sort(function(a,b){ return Number(b.m&&b.m.gasto||0)-Number(a.m&&a.m.gasto||0); });
   const cjValidos=conjComDados.filter(function(x){return x.m&&Number(x.m.resultados||0)>=ADS_MIN_RESULTADOS&&x.m.cpa;});
@@ -52455,6 +52700,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
       </div>}
     </AdsSec>}
 
+    {sub==="estrutura"&&(E.loading?<AdsLoading t="Lendo conjuntos e anúncios…"/>:<QGAdsEstrutura conta={conta} campId={campId} P={P} cfg={cfg} tipo={tipo} X={X} ent={ent} E={E} isMob={isMob} mediaConta={mediaConta}/>)}
     {sub==="criativos"&&<QGAdsCriativos mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
     {sub==="publico"&&<QGAdsPublico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
     {sub==="historico"&&<QGAdsHistorico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
@@ -52543,7 +52789,7 @@ function useAdsCriativos(accountId,ids){
     (async function(){
       try{
         const cr={};
-        for(let i=0;i<ids.length;i+=150){ const c=await window._sb.from("ads_creatives").select("ad_id,ad_nome,formato,titulo,corpo,cta,link_destino,image_url,thumbnail_url,video_id,video_url,video_permalink,video_segundos").eq("ad_account_id",accountId).in("ad_id",ids.slice(i,i+150)); (c.data||[]).forEach(function(x){ cr[x.ad_id]=x; }); }
+        for(let i=0;i<ids.length;i+=150){ const c=await window._sb.from("ads_creatives").select("ad_id,ad_nome,formato,titulo,corpo,cta,link_destino,image_url,thumbnail_url,video_id,video_url,video_permalink,video_segundos,ativos,titulos,textos,formato_meta").eq("ad_account_id",accountId).in("ad_id",ids.slice(i,i+150)); (c.data||[]).forEach(function(x){ cr[x.ad_id]=x; }); }
         if(alive) setSt({loading:false,cr:cr});
       }catch(e){ if(alive) setSt({loading:false,cr:{}}); }
     })();
@@ -52591,18 +52837,25 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   const mp4=cr.video_url||null; const img=cr.image_url||cr.thumbnail_url||null;
   const [fmt,setFmt]=useState("MOBILE_FEED_STANDARD");
   const prev=useAdsPreview(mp4?null:a.id,fmt);
+  /* ativo escolhido na grade (anúncio flexível / carrossel): vídeo pelo player do Facebook, imagem direta */
+  const [ativoSel,setAtivoSel]=useState(null); const ativos=Array.isArray(cr.ativos)?cr.ativos:[]; const at=ativoSel!==null?ativos[ativoSel]:null;
+  const atLink=at&&at.tipo==="video"&&at.permalink?("https://www.facebook.com"+(String(at.permalink).indexOf("/")===0?"":"/")+at.permalink):null;
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
-        {mp4?<video src={mp4} poster={cr.thumbnail_url||undefined} controls autoPlay playsInline style={{width:"100%",maxHeight:"92vh",display:"block"}}/>
+        {at?(atLink?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(atLink)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
+          :(at.url||at.thumb)?<div style={{position:"relative",width:"100%"}}><img src={at.url||at.thumb} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>{at.tipo==="video"&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu o link deste vídeo — só a capa. Veja pela prévia oficial ou no Gerenciador.</div>}</div>
+          :<div style={{color:"#fff",fontSize:13}}>sem prévia deste ativo</div>)
+        :mp4?<video src={mp4} poster={cr.thumbnail_url||undefined} controls autoPlay playsInline style={{width:"100%",maxHeight:"92vh",display:"block"}}/>
         :prev.src?<iframe src={prev.src} title="Prévia do anúncio" style={{width:"100%",height:"min(92vh,760px)",border:0,display:"block",background:"#0f0d1a"}} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>
         :prev.loading?<div style={{color:"#fff",fontSize:13,display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>{img&&<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"70vh",objectFit:"contain",display:"block",opacity:.5}}/>}<span>carregando a prévia da Meta…</span></div>
         :reel?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(reel)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
         :img?<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>
         :<div style={{color:"#fff",fontSize:13}}>sem prévia</div>}
-        {!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
-        {!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
+        {at&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}><button onClick={function(){setAtivoSel(null);}} style={{background:"#fff",color:ADS.ink,border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>‹ prévia do anúncio</button><span style={{background:"rgba(0,0,0,.55)",color:"#fff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700}}>{at.tipo==="video"?"vídeo":"imagem"} {ativoSel+1} de {ativos.length}</span></div>}
+        {!at&&!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
+        {!at&&!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
       </div>
       <div style={{padding:"22px 24px",minWidth:0}}>
         <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
@@ -52613,8 +52866,9 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
           {[[a.cfg.custoLbl||"CPM",a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm),a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink],[a.cfg.resLbl||"Alcance",a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance)],["Gasto",_adsBRL0(a.gasto)],["CTR",_adsPct(a.ctr,2)],["Frequência",Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],["vs. média do grupo",mediaG&&a.custo?(mediaG/a.custo>=1.15?_adsX(mediaG/a.custo)+" melhor":a.custo/mediaG>=1.15?_adsX(a.custo/mediaG)+" pior":"na média"):"—",mediaG&&a.custo?(mediaG/a.custo>=1.15?ADS.ok:a.custo/mediaG>=1.15?ADS.crit:ADS.ink):ADS.muted]].map(function(k){ return <div key={k[0]}><AdsEyebrow>{k[0]}</AdsEyebrow><div style={{fontSize:19,fontWeight:800,letterSpacing:"-.4px",marginTop:2,color:k[2]||ADS.ink}}>{k[1]}</div></div>; })}
         </div>
         {a.video&&a.r25!==null&&<div style={{marginTop:16}}><AdsEyebrow>Retenção do vídeo</AdsEyebrow><div style={{display:"flex",gap:6,marginTop:6}}>{[["início",100],["25%",a.r25],["50%",a.r50],["75%",a.r75],["fim",a.r100]].map(function(s){ return <div key={s[0]} style={{flex:1,background:"#ecebf2",borderRadius:8,height:38,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,right:0,bottom:0,height:Math.max(3,Math.min(100,s[1]||0))+"%",background:"#9b6cea",opacity:.85}}/><div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,fontWeight:800,color:"#3d3853"}}>{s[0]}{s[0]!=="início"?" · "+_adsPct(s[1],1):""}</div></div>; })}</div></div>}
-        <div style={{marginTop:16}}><AdsEyebrow>Diagnóstico</AdsEyebrow>{a.diag.length===0?<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nada que se destaque.</div>:a.diag.map(function(d,j){ return <div key={j} style={{fontSize:13,color:ADS.ink2,marginTop:6,display:"flex",gap:8,lineHeight:1.4}}><span style={{color:d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.warn,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"i"}</span><span>{d[1]}</span></div>; })}</div>
+        {!a.semDiag&&<div style={{marginTop:16}}><AdsEyebrow>Diagnóstico</AdsEyebrow>{a.diag.length===0?<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nada que se destaque.</div>:a.diag.map(function(d,j){ return <div key={j} style={{fontSize:13,color:ADS.ink2,marginTop:6,display:"flex",gap:8,lineHeight:1.4}}><span style={{color:d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.warn,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"i"}</span><span>{d[1]}</span></div>; })}</div>}
         {(cr.titulo||cr.corpo)&&<div style={{marginTop:16,fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"10px 12px"}}>{cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:4}}>{cr.titulo}</b>}<span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"").slice(0,500)}</span><div style={{marginTop:6,fontSize:11,color:ADS.muted,display:"flex",gap:10,flexWrap:"wrap"}}>{cr.cta&&<span>Botão: <b>{_adsCta(cr.cta)}</b></span>}{cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}</div></div>}
+        <AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/>
         <div style={{marginTop:16}}><AdsEyebrow>Perfil de público deste criativo · fatia da verba e custo</AdsEyebrow><div style={{marginTop:8}}><QGAdsPerfilAnuncio accountId={conta.ad_account_id} adId={a.id} periodo={P} mediaCtr={mediaCtr}/></div></div>
         <div style={{marginTop:16,display:"flex",gap:8,flexWrap:"wrap"}}><a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a></div>
       </div>
