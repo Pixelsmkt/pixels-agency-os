@@ -11590,7 +11590,8 @@ function _PBProjeto({cl, idx}){
     Promise.all([
       sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle(),
       sb.from("client_meta").select("production_schedule").eq("client_id",cl.id).maybeSingle(),
-      sb.from("tasks").select("publish_date").eq("client",cl.id).is("deleted_at",null).not("publish_date","is",null),
+      // Mesma regra do calendário: fora lixeira, pausado, reprovado e folder
+      sb.from("tasks").select("publish_date,status,content_type").eq("client",cl.id).is("deleted_at",null).not("publish_date","is",null),
     ]).then(function(rs){
       if(!vivo) return;
       let f=null;
@@ -11599,7 +11600,9 @@ function _PBProjeto({cl, idx}){
       const ps=(rs[1]&&rs[1].data&&rs[1].data.production_schedule)||null;
       if(ps&&ps.start&&ps.package) f={preset:ps.package,start:String(ps.start).slice(0,10)};
       setFase(f||false);
-      setDatas(((rs[2]&&rs[2].data)||[]).map(function(r){ return String(r.publish_date).slice(0,10); }));
+      setDatas(((rs[2]&&rs[2].data)||[])
+        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"; })
+        .map(function(r){ return String(r.publish_date).slice(0,10); }));
     }).catch(function(){ if(vivo) setFase(false); });
     return function(){ vivo=false; };
   },[cl&&cl.id]);
@@ -18263,13 +18266,22 @@ function _pxCotaMes(preset, mes){
   if(mes===2||mes===3) return 4;
   return 0;
 }
+/* Entra na conta exatamente o que APARECE no calendário — mesma regra do `agendados`.
+   Sem isso o número pulava: um card reprovado (ou pausado, ou folder) ganhava posição
+   mas não era desenhado, e a sequência ficava 5, 7, 8. Reprovou ou pausou → renumera. */
+function _pxContaNoCalendario(t){
+  if(!t||t.deletedAt||!t.publishDate) return false;
+  if(t.status==="pausado"||t.status==="reprovado") return false;
+  if(t.contentType==="folder") return false;   // material impresso, não é publicação
+  return true;
+}
 /* Devolve { [taskId]: {mes, pos, cota, preset} } pros clientes com projeto iniciado. */
 function _pxContadorProjeto(tasks, faseMap){
   const out={};
   if(!faseMap) return out;
   const porCliente={};
   (tasks||[]).forEach(function(t){
-    if(!t||t.deletedAt||!t.publishDate) return;
+    if(!_pxContaNoCalendario(t)) return;
     const f=faseMap[t.client];
     if(!f||!f.start) return;
     (porCliente[t.client]=porCliente[t.client]||[]).push(t);
