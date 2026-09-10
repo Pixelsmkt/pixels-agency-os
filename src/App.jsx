@@ -19206,7 +19206,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
       {/* ── Context Menu (botao direito) ── */}
       {ctxMenu&&<PxCtxMenu x={ctxMenu.x} y={ctxMenu.y} title={ctxMenu.task&&ctxMenu.task.title} onClose={function(){setCtxMenu(null);}}
         items={[
-          {label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenu.task,setTasks); }},
+          _canCreateFromCal&&{label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenu.task,setTasks); }},
           !_calExclBloq&&{label:"Excluir card",desc:pxCardTemConteudo(ctxMenu.task)?"Tem conteúdo · vai pedir confirmação":"Vai direto pra lixeira · 30 dias pra restaurar",icon:"trash",danger:true,onClick:function(){
             // Card vazio → lixeira direto; com conteúdo → confirma dizendo o que vai junto
             const t=ctxMenu.task;
@@ -21592,7 +21592,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     {/* Context Menu (botao direito) no kanban */}
     {ctxMenuKanban&&<PxCtxMenu x={ctxMenuKanban.x} y={ctxMenuKanban.y} title={ctxMenuKanban.task&&ctxMenuKanban.task.title} onClose={function(){setCtxMenuKanban(null);}}
       items={[
-        {label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenuKanban.task,setTasks); }},
+        canCreate&&{label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenuKanban.task,setTasks); }},
         canDelete&&{label:"Excluir card",desc:pxCardTemConteudo(ctxMenuKanban.task)?"Tem conteúdo · vai pedir confirmação":"Vai direto pra lixeira · 30 dias pra restaurar",icon:"trash",danger:true,onClick:function(){
           // Card vazio → lixeira direto; com conteúdo → confirma dizendo o que vai junto
           const t=ctxMenuKanban.task;
@@ -40204,12 +40204,8 @@ function _cardPodeSerResp(u){
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
               <Ico n="link" size={16}/>
             </button>
-            {canEdit&&<button onClick={duplicateCard} title="Copiar card (com arquivos) pra Rascunhos"
-              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #ddd6fe",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            </button>}
+            {/* Duplicar cartão removido do header (10/09/2026): ficava colado no "Copiar link" e
+                as pessoas clicavam sem querer. Duplicar segue no botão direito do card, no kanban e no calendário. */}
             {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
