@@ -7511,13 +7511,13 @@ function usePxContracts(){
 /* ─── espelho pro Financeiro (formato antigo) e pro Portal ─── */
 function pxCtToFin(c){
   const meta=pxCtClientMeta(c.client_id);
-  const base={grupo:meta.name,cor:meta.color,clientId:c.client_id,pagDia:c.pag_dia||10,metodoPag:c.metodo_pag||"PIX",dataInicio:c.data_inicio||"",envios:Array.isArray(c.envios)?c.envios:[],contatoNome:c.contato_nome||"",contatoEmail:c.contato_email||"",contatoWhats:c.contato_whats||"",observacoes:c.observacoes||"",statusContrato:c.status||"ativo",tipo:c.tipo||"mensal",servicos:Array.isArray(c.servicos)?c.servicos:[]};
+  const base={grupo:meta.name,cor:meta.color,clientId:c.client_id,pagDia:c.pag_dia||10,metodoPag:c.metodo_pag||"PIX",dataInicio:c.data_inicio||"",envios:Array.isArray(c.envios)?c.envios:[],contatoNome:c.contato_nome||"",contatoEmail:c.contato_email||"",contatoWhats:c.contato_whats||"",observacoes:c.observacoes||"",statusContrato:c.status||"ativo",tipo:c.tipo||"mensal",servicos:Array.isArray(c.servicos)?c.servicos:[],pacoteId:((c.pacote&&(c.pacote.presetId||(Array.isArray(c.pacote.presetIds)&&c.pacote.presetIds[0])))||"")};
   if(c.grupo_econ){ base.grupoEcon=true; base.unidades=(c.unidades||[]).map(function(u){ return Object.assign({},u); }); base.valor=pxCtValor(c); }
   else { base.valor=Number(c.valor_mensal)||0; }
   return base;
 }
 function pxCtFromFin(f){
-  return {client_id:f.clientId,valor_mensal:Number(f.valor)||0,data_inicio:f.dataInicio||null,tipo:f.tipo||"mensal",status:f.statusContrato||"ativo",pag_dia:f.pagDia||10,metodo_pag:f.metodoPag||"PIX",servicos:f.servicos||[],grupo_econ:!!f.grupoEcon,unidades:f.grupoEcon?(f.unidades||[]):[],contato_nome:f.contatoNome||null,contato_email:f.contatoEmail||null,contato_whats:f.contatoWhats||null,envios:f.envios||[],observacoes:f.observacoes||null};
+  return {client_id:f.clientId,valor_mensal:Number(f.valor)||0,data_inicio:f.dataInicio||null,tipo:f.tipo||"mensal",status:f.statusContrato||"ativo",pag_dia:f.pagDia||10,metodo_pag:f.metodoPag||"PIX",servicos:f.servicos||[],grupo_econ:!!f.grupoEcon,unidades:f.grupoEcon?(f.unidades||[]):[],contato_nome:f.contatoNome||null,contato_email:f.contatoEmail||null,contato_whats:f.contatoWhats||null,envios:f.envios||[],observacoes:f.observacoes||null,pacote:f.pacoteId?{presetId:f.pacoteId}:(f.pacote||undefined)};
 }
 function pxCtMirrorLocal(rows){
   try{
@@ -7689,7 +7689,7 @@ function PxContratoModal({clientId,onClose,onSaved}){
           </div>
         </div>
         :<div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"1.2fr .8fr 1fr",gap:12}}>
-          <div><span style={LBL}>Valor mensal (R$)</span><input type="number" inputMode="decimal" value={f.valor_mensal} onChange={function(e){set("valor_mensal",Number(e.target.value)||0);}} style={Object.assign({},INP,{fontSize:17,fontWeight:800})}/></div>
+          <div><span style={LBL}>Valor mensal (R$)</span><input type="number" inputMode="decimal" placeholder="0" value={(f.valor_mensal===0||f.valor_mensal===null||f.valor_mensal===undefined)?"":f.valor_mensal} onChange={function(e){ const v=e.target.value; set("valor_mensal", v===""?0:(Number(v)||0)); }} onFocus={function(e){ try{e.currentTarget.select();}catch(_){} }} style={Object.assign({},INP,{fontSize:17,fontWeight:800})}/></div>
           <div><span style={LBL}>Dia do pagamento</span><input type="number" inputMode="numeric" min={1} max={31} value={f.pag_dia} onChange={function(e){set("pag_dia",parseInt(e.target.value,10)||1);}} style={INP}/></div>
           <div><span style={LBL}>Método</span><div style={{display:"flex",gap:5}}>{["PIX","Boleto","Cartão"].map(function(m){ const on=f.metodo_pag===m; return <button key={m} type="button" onClick={function(){set("metodo_pag",m);}} style={{flex:1,padding:"9px 4px",borderRadius:9,border:"1px solid "+(on?"#a78bfa":"#e2e8f0"),background:on?"#f5f3ff":"#fff",color:on?"#7c3aed":"#64748b",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>{m}</button>; })}</div></div>
         </div>}
@@ -7728,6 +7728,23 @@ function PxContratoModal({clientId,onClose,onSaved}){
           {Array.from(new Set(PX_SERVICOS_SUG.concat(f.servicos))).map(function(s){ const on=f.servicos.indexOf(s)>=0; return <button key={s} type="button" onClick={function(){ set("servicos",on?f.servicos.filter(function(x){return x!==s;}):f.servicos.concat([s])); }} style={{padding:"6px 11px",borderRadius:99,border:"1px solid "+(on?"#a78bfa":"#e2e8f0"),background:on?"#7c3aed":"#fff",color:on?"#fff":"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{s}</button>; })}
           <input value={novoServ} onChange={function(e){setNovoServ(e.target.value);}} onKeyDown={function(e){ if(e.key==="Enter"&&novoServ.trim()){ e.preventDefault(); set("servicos",f.servicos.concat([novoServ.trim()])); setNovoServ(""); } }} placeholder="+ outro (Enter)" style={{border:"1px dashed #cbd5e1",borderRadius:99,padding:"6px 11px",fontSize:11.5,fontWeight:600,outline:"none",fontFamily:"inherit",minWidth:110,color:"#0f172a"}}/>
         </div>
+
+        <Sec ico={ico(<><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></>)} label="Envio da cobrança e NFSe"/>
+        {(function(){
+          const OPTS=[{id:"venc",label:"No dia do vencimento",off:0},{id:"5dias",label:"5 dias antes do vencimento",off:5},{id:"10dias",label:"10 dias antes do vencimento",off:10},{id:"dia1",label:"1º dia do mês do vencimento",off:null}];
+          const _envios=Array.isArray(f.envios)?f.envios:[];
+          const _diaDe=function(o){ if(o.off===null) return "dia 1"; const r=(Number(f.pag_dia)||10)-o.off; return r>=1?("dia "+r):"mês anterior"; };
+          return <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:8}}>
+            {OPTS.map(function(o){
+              const on=_envios.indexOf(o.id)>=0;
+              return <label key={o.id} style={{display:"flex",alignItems:"center",gap:9,border:"1px solid "+(on?"#a78bfa":"#e2e8f0"),background:on?"#f5f3ff":"#fff",borderRadius:10,padding:"9px 12px",cursor:"pointer"}}>
+                <input type="checkbox" checked={on} onChange={function(){ set("envios", on?_envios.filter(function(x){return x!==o.id;}):_envios.concat([o.id])); }}/>
+                <span style={{fontSize:12,fontWeight:on?800:600,color:on?"#0f172a":"#475569",flex:1,minWidth:0}}>{o.label}</span>
+                <span style={{fontSize:10,fontWeight:700,color:"#94a3b8",whiteSpace:"nowrap"}}>{_diaDe(o)}</span>
+              </label>;
+            })}
+          </div>;
+        })()}
 
         <Sec ico={ico(<><circle cx="12" cy="8" r="3.5"/><path d="M4 20a8 8 0 0 1 16 0"/></>)} label="Contato financeiro"/>
         <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr 1fr",gap:12}}>
@@ -30709,6 +30726,15 @@ function _DREEvolucaoChart({dreMonth, cores, isMob}){
 
 // Quando enviar a cobranca e a NFSe. Multipla escolha — o financeiro pode
 // mandar lembrete antes e a nota no dia, por exemplo.
+/* Contrato agora é editado SÓ no Comercial (decisão do Vinicius, 10/09/2026).
+   Aqui no Financeiro a lista é leitura — alimenta o DRE — e manda pro Comercial. */
+function _gfIrParaComercial(){
+  try{
+    if(typeof window.pixelsNav==="function"){ window.pixelsNav("comercial"); return; }
+  }catch(_){}
+  if(typeof pixelsToast!=="undefined") pixelsToast.info("Abra Comercial › Contratos pra editar.",3500);
+}
+
 const _GF_ENVIO_OPTS = [
   {id:"venc",   label:"No dia do vencimento",        off:0},
   {id:"5dias",  label:"5 dias antes do vencimento",  off:5},
@@ -30739,6 +30765,7 @@ function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose
     contatoEmail:_initDraft.contatoEmail|| "",
     contatoWhats:_initDraft.contatoWhats|| "",
     observacoes: _initDraft.observacoes || "",
+    pacoteId:    _initDraft.pacoteId    || "",
   });
   const set = function(k,v){ setD(function(p){return Object.assign({},p,{[k]:v});}); };
   const _toggleEnvio = function(id){
@@ -30827,14 +30854,48 @@ function _GFEditContratoModal({editContrato, contratos, updateContratos, onClose
         {/* ══ CONTRATO ══ */}
         <_Sec first label="Contrato" ico={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}/>
 
+        {/* Produto contratado — escolher preenche o valor de tabela, mas segue editável */}
+        {(function(){
+          const _pacs=(typeof _pjPacotesComercial==="function")?_pjPacotesComercial():[];
+          if(!_pacs.length) return null;
+          const _num=function(v){ return Number(String(v||"").replace(/[^0-9,]/g,"").replace(",",".")) || 0; };
+          const _sel=_pacs.find(function(x){return x.id===d.pacoteId;});
+          return <div>
+            <div style={_LBL}>Produto contratado</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {_pacs.map(function(pc){
+                const _on=d.pacoteId===pc.id;
+                return <button key={pc.id} type="button" onClick={function(){
+                  if(_on){ set("pacoteId",""); return; }
+                  setD(function(p){
+                    const _v=_num(pc.valor);
+                    // valor de tabela só entra se ainda não tem valor digitado (não sobrescreve negociação)
+                    return Object.assign({},p,{pacoteId:pc.id, valor:(_v>0&&(!p.valor||p.valor===0))?_v:p.valor});
+                  });
+                }}
+                  style={{background:_on?"linear-gradient(135deg,#a855f7,#7c3aed)":"#fff",color:_on?"#fff":"#475569",border:"1px solid "+(_on?"#7c3aed":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",boxShadow:_on?"0 4px 12px rgba(124,58,237,.26)":"none"}}>
+                  {pc.label}{pc.valor?<span style={{opacity:.66,marginLeft:6,fontWeight:600}}>{pc.valor}</span>:null}
+                </button>;
+              })}
+            </div>
+            {_sel&&_num(_sel.valor)>0&&Number(d.valor)!==_num(_sel.valor)&&
+              <div style={{marginTop:6,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                <span style={{color:"#94a3b8",fontSize:11}}>Tabela: {_sel.valor} — este contrato está diferente.</span>
+                <button type="button" onClick={function(){ set("valor",_num(_sel.valor)); }}
+                  style={{background:"#f5f3ff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:8,padding:"3px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Usar valor de tabela</button>
+              </div>}
+          </div>;
+        })()}
+
         <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"1fr 1fr",gap:10}}>
           <div>
             <div style={_LBL}>Valor mensal</div>
             <div style={{position:"relative",display:"flex",alignItems:"center"}}>
               <span style={{position:"absolute",left:13,color:"#94a3b8",fontSize:13,fontWeight:700,pointerEvents:"none"}}>R$</span>
-              <input type="number" inputMode="decimal" min="0" step="100" value={d.valor||0}
-                onChange={function(e){set("valor", Number(e.target.value)||0);}}
-                onFocus={_foco} onBlur={_blur}
+              <input type="number" inputMode="decimal" min="0" step="100" placeholder="0"
+                value={(d.valor===0||d.valor===null||d.valor===undefined)?"":d.valor}
+                onChange={function(e){ const v=e.target.value; set("valor", v===""?0:(Number(v)||0)); }}
+                onFocus={function(e){ _foco&&_foco(e); try{e.currentTarget.select();}catch(_){} }} onBlur={_blur}
                 style={Object.assign({},_INP,{paddingLeft:37,fontSize:15,fontWeight:800,fontFeatureSettings:"'tnum'"})}/>
             </div>
           </div>
@@ -31476,6 +31537,14 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
     {/* ════ 9. CONTRATOS ATIVOS — cards grandes coloridos com logo ════ */}
     <Block>
       <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR "+_brl(mrrContrato)+(vendasMesTotal>0?" · +"+_brl(vendasMesTotal)+" pontuais":"")+(clientesSemValor>0?" · "+clientesSemValor+" sem valor definido":"")}/>
+      <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",background:"#f8fafc",border:"1px solid #eef0f4",borderRadius:11,padding:"9px 13px",marginBottom:12}}>
+        <span style={{color:"#64748b",fontSize:11.5,fontWeight:500,flex:1,minWidth:180}}>Esta lista alimenta o DRE. O cadastro do contrato — valor, produto, cobrança e NFSe — é editado no Comercial.</span>
+        <button type="button" onClick={_gfIrParaComercial}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+          Editar no Comercial
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
         {contratos.map(function(c,idx){
           // Resolve cliente real pra pegar logo
@@ -31511,7 +31580,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               </div>
               {expanded&&<div style={{padding:"4px 16px 12px",background:"rgba(255,255,255,0.6)"}}>
                 {c.unidades.map(function(u,j){
-                  return <div key={j} onClick={function(e){e.stopPropagation();setEditContrato({grupo:c.grupo,unitIdx:j,draft:Object.assign({},u)});}} style={{padding:"7px 0",borderBottom:j<c.unidades.length-1?"1px dashed "+c.cor+"22":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,cursor:"pointer",borderRadius:6,paddingLeft:6,paddingRight:6,marginLeft:-6,marginRight:-6,transition:"background .12s"}}
+                  return <div key={j} onClick={function(e){e.stopPropagation();_gfIrParaComercial();}} style={{padding:"7px 0",borderBottom:j<c.unidades.length-1?"1px dashed "+c.cor+"22":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,cursor:"pointer",borderRadius:6,paddingLeft:6,paddingRight:6,marginLeft:-6,marginRight:-6,transition:"background .12s"}}
                     onMouseEnter={function(e){e.currentTarget.style.background=c.cor+"0d";}}
                     onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
                     <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
@@ -31527,7 +31596,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
             </div>;
           }
           // Cliente individual (sem unidades) — clicável pra editar
-          return <div key={idx} onClick={function(){setEditContrato({grupo:c.grupo,unitIdx:null,draft:Object.assign({},c)});}} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,transition:"transform .15s, box-shadow .15s",cursor:"pointer"}}
+          return <div key={idx} onClick={function(){_gfIrParaComercial();}} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,transition:"transform .15s, box-shadow .15s",cursor:"pointer"}}
             onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px "+c.cor+"22";}}
             onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
@@ -31544,7 +31613,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               {Number(c.valor)>0
                 ? <><span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
                     <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span></>
-                : <span style={{background:"#fef3c7",color:"#92400e",fontSize:11,fontWeight:800,padding:"5px 11px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:6}}>
+                : <span title="Editar em Comercial › Contratos" style={{background:"#fef3c7",color:"#92400e",fontSize:11,fontWeight:800,padding:"5px 11px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:6}}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
                     Definir valor do contrato
                   </span>}
