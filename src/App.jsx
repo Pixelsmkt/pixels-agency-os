@@ -20533,17 +20533,8 @@ function PixelsIAModal({onClose,setTasks,tasks}){
           </div>
         </div>
 
-        {/* Prioridade + Prazo */}
-        <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:12}}>
-          <div>
-            <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🎯 Prioridade</div>
-            <select value={priority} onChange={e=>setPriority(e.target.value)}
-              style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 14px",color:pc(priority),fontSize:13,fontWeight:700,cursor:"pointer",outline:"none"}}>
-              <option value="alta">🔴 Alta</option>
-              <option value="media">🟡 Média</option>
-              <option value="baixa">⚫ Baixa</option>
-            </select>
-          </div>
+        {/* Prazo — Prioridade saiu em 10/09/2026 (quem manda é o prazo) */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:12}}>
           <div>
             <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>📅 Prazo</div>
             <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
@@ -42759,28 +42750,10 @@ function _cardPodeSerResp(u){
           </div>
           )}
 
-          {/* Prioridade+Prazo */}
+          {/* Prazo — o bloco de Prioridade (baixa/média/alta) saiu em 10/09/2026:
+              o que manda é o PRAZO, e a ordem em que o card aparece pro colaborador
+              vem da data de publicação (ver "Ordem de produção" no kanban). */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div>
-              <label style={LB}><Ico n="flame" size={12} color="#94a3b8"/> Prioridade</label>
-              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr 1fr",gap:6}}>
-                {[
-                  {id:"baixa",label:"Baixa",dot:"#16a34a",bg:"#f0fdf4",bd:"#bbf7d0",fg:"#15803d"},
-                  {id:"media",label:"Média",dot:"#eab308",bg:"#fefce8",bd:"#fef08a",fg:"#854d0e"},
-                  {id:"alta", label:"Alta", dot:"#dc2626",bg:"#fff1f2",bd:"#fecaca",fg:"#be123c"},
-                ].map(function(p){
-                  const isSel = priority===p.id;
-                  return <button key={p.id} type="button" disabled={!canEdit}
-                    onClick={function(){ if(canEdit) setPriority(isSel?"":p.id); }}
-                    style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"8px 10px",background:isSel?p.bg:"#fff",border:"1.5px solid "+(isSel?p.dot:"#e2e8f0"),borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:12,color:isSel?p.fg:"#64748b",fontWeight:isSel?800:600,transition:"all .12s",fontFamily:"inherit"}}
-                    onMouseEnter={function(ev){if(canEdit&&!isSel){ev.currentTarget.style.borderColor=p.dot+"80";ev.currentTarget.style.background=p.bg;}}}
-                    onMouseLeave={function(ev){if(canEdit&&!isSel){ev.currentTarget.style.borderColor="#e2e8f0";ev.currentTarget.style.background="#fff";}}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:p.dot,flexShrink:0,boxShadow:isSel?"0 0 0 3px "+p.dot+"33":"none",transition:"box-shadow .12s"}}/>
-                    {p.label}
-                  </button>;
-                })}
-              </div>
-            </div>
             <div>
               <label style={LB}><Ico n="clock" size={12} color="#94a3b8"/> Prazo</label>
               {canEdit&&(function(){
