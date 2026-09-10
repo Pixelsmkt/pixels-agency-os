@@ -52581,6 +52581,142 @@ function _adsPublicoDetalhado(p){
   const dispositivos=(p.device_platforms||[]).map(function(d){return d==="mobile"?"Celular":d==="desktop"?"Computador":d;});
   return {idade:idade,idadeMin:idadeMin,grupos:grupos,expansaoGeo:expansaoGeo,genero:genero,locais:locais,excluidos:excluidos,tiposLocal:tiposLocal,interesses:interesses,comportamentos:comportamentos,demograficos:demograficos,exclInt:exclInt,publicos:publicos,exclPublicos:exclPublicos,advantage:advantage,expansao:expansao,idiomas:idiomas,posAuto:!plat||!plat.length,plataformas:(plat||[]).map(function(x){return ADS_PLAT_LBL[x]||x;}),posicoes:posicoes,dispositivos:dispositivos,vazio:!p||Object.keys(p).length===0};
 }
+
+/* ═══════════════════════════════════════════════════════
+   MAPA DO PÚBLICO — onde o conjunto entrega (pontos com raio, municípios, estados, países) e o que está excluído (vermelho)
+   Fundo: malha oficial do IBGE (estados + municípios), guardada no banco pela edge function geo-malhas → nenhuma divisa "dupla".
+   Leaflet carregado sob demanda (cdnjs), sem dependência no build. Botão alterna pro mapa de ruas (OpenStreetMap).
+   Regra: só o que a Meta devolveu no targeting; contorno só quando o IBGE reconhece o nome — senão o item aparece na lista com o motivo.
+   ═══════════════════════════════════════════════════════ */
+window._pxLeafletP=null;
+function _pxLeaflet(){
+  if(window.L&&window.L.map) return Promise.resolve(window.L);
+  if(window._pxLeafletP) return window._pxLeafletP;
+  window._pxLeafletP=new Promise(function(res,rej){
+    if(!document.getElementById("px-leaflet-css")){ const l=document.createElement("link"); l.id="px-leaflet-css"; l.rel="stylesheet"; l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(l); }
+    const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; s.async=true;
+    s.onload=function(){ res(window.L); }; s.onerror=function(){ const s2=document.createElement("script"); s2.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; s2.onload=function(){res(window.L);}; s2.onerror=function(){rej(new Error("não consegui carregar o mapa"));}; document.head.appendChild(s2); };
+    document.head.appendChild(s);
+  });
+  return window._pxLeafletP;
+}
+window._pxGeo=window._pxGeo||{};
+/* chama geo-malhas com cache em memória (por corpo da requisição) */
+function _pxGeoMalhas(body){
+  const k=JSON.stringify(body); if(window._pxGeo[k]) return window._pxGeo[k];
+  window._pxGeo[k]=window._sb.functions.invoke("geo-malhas",{body:body}).then(function(r){ if(r.error) throw new Error(r.error.message||"geo-malhas"); return r.data||{}; }).catch(function(e){ delete window._pxGeo[k]; throw e; });
+  return window._pxGeo[k];
+}
+const ADS_UF_SIGLA={"Santa Catarina":"SC","Rio Grande do Sul":"RS","Paraná":"PR","São Paulo":"SP","Minas Gerais":"MG","Rio de Janeiro":"RJ","Mato Grosso do Sul":"MS","Mato Grosso":"MT","Goiás":"GO","Distrito Federal":"DF","Espírito Santo":"ES","Bahia":"BA","Sergipe":"SE","Alagoas":"AL","Pernambuco":"PE","Paraíba":"PB","Rio Grande do Norte":"RN","Ceará":"CE","Piauí":"PI","Maranhão":"MA","Tocantins":"TO","Pará":"PA","Amapá":"AP","Roraima":"RR","Amazonas":"AM","Acre":"AC","Rondônia":"RO"};
+const ADS_PAIS_LBL={BR:"Brasil",AR:"Argentina",PY:"Paraguai",UY:"Uruguai",BO:"Bolívia",CL:"Chile",PT:"Portugal",US:"Estados Unidos",CO:"Colômbia",PE:"Peru",MX:"México",VE:"Venezuela",EC:"Equador"};
+/* lê o geo do targeting em listas simples */
+function _adsGeoListas(p){
+  p=p||{}; const g=p.geo_locations||{}, x=p.excluded_geo_locations||{};
+  const ufDe=function(c){ return c.region&&ADS_UF_SIGLA[c.region]?ADS_UF_SIGLA[c.region]:(c.name&&c.name.indexOf(",")>0&&ADS_UF_SIGLA[c.name.split(",")[1].trim()])||null; };
+  const km=function(c){ return c.radius?(c.distance_unit==="mile"?Math.round(c.radius*1.609):c.radius):null; };
+  const cid=function(c){ return {nome:String(c.name||"").split(",")[0].trim(),regiao:c.region||null,uf:ufDe(c),raio:km(c),key:c.key}; };
+  const pt=function(c){ return {lat:Number(c.latitude),lng:Number(c.longitude),raio:km(c)||0,cidadeId:c.primary_city_id?String(c.primary_city_id):null,nome:c.name||c.address_string||null}; };
+  return {
+    pontos:(g.custom_locations||[]).concat(g.places||[]).filter(function(c){return isFinite(Number(c.latitude));}).map(pt),
+    cidades:(g.cities||[]).map(cid), estados:(g.regions||[]).map(function(r){return {nome:r.name||r.key,uf:ADS_UF_SIGLA[r.name]||null};}), paises:(g.countries||[]).slice(),
+    exPontos:(x.custom_locations||[]).concat(x.places||[]).filter(function(c){return isFinite(Number(c.latitude));}).map(pt),
+    exCidades:(x.cities||[]).map(cid), exEstados:(x.regions||[]).map(function(r){return {nome:r.name||r.key,uf:ADS_UF_SIGLA[r.name]||null};}), exPaises:(x.countries||[]).slice(),
+    tiposLocal:g.location_types||[]
+  };
+}
+function AdsMapaPublico({p,isMob}){
+  const G=useMemo(function(){ return _adsGeoListas(p); },[p]);
+  const ref=useRef(null); const mapRef=useRef(null);
+  const [st,setSt]=useState({loading:true,erro:null,dados:null});
+  const [abertos,setAbertos]=useState({});
+  const [camadas,setCamadas]=useState({incl:true,excl:true,ruas:false});
+  const [avisos,setAvisos]=useState([]);
+  const cidadeIds=G.pontos.concat(G.exPontos).map(function(x){return x.cidadeId;}).filter(Boolean);
+  const ufs=Array.from(new Set(G.cidades.concat(G.exCidades).map(function(c){return c.uf;}).concat(G.estados.concat(G.exEstados).map(function(e){return e.uf;})).filter(Boolean)));
+  const corpo=useMemo(function(){ return {municipios:G.cidades.concat(G.exCidades).map(function(c){return {nome:c.nome,uf:c.uf,regiao:c.regiao};}),estados:ufs,brasil_ufs:true,paises:Array.from(new Set(G.paises.concat(G.exPaises).filter(function(c){return c!=="BR";}))),meta_cidades:cidadeIds}; },[p]);
+  const nenhum=!G.pontos.length&&!G.cidades.length&&!G.estados.length&&!G.paises.length;
+  useEffect(function(){ let alive=true; if(nenhum){ setSt({loading:false,erro:null,dados:null}); return; }
+    Promise.all([_pxLeaflet(),_pxGeoMalhas(corpo)]).then(function(r){ if(alive) setSt({loading:false,erro:null,dados:r[1]}); }).catch(function(e){ if(alive) setSt({loading:false,erro:e.message||String(e),dados:null}); });
+    return function(){ alive=false; }; },[corpo]);
+  /* monta o mapa */
+  useEffect(function(){
+    if(st.loading||st.erro||!st.dados||!ref.current||!window.L) return;
+    const L=window.L; const D=st.dados; const nomes=D.meta_cidades||{};
+    if(mapRef.current){ mapRef.current.remove(); mapRef.current=null; }
+    const map=L.map(ref.current,{scrollWheelZoom:true,minZoom:3,zoomSnap:.5,attributionControl:false}); mapRef.current=map;
+    map.createPane("base"); map.getPane("base").style.zIndex=250; map.createPane("mun"); map.getPane("mun").style.zIndex=260;
+    const gBase=L.layerGroup().addTo(map), gMun=L.layerGroup().addTo(map), gIncl=L.layerGroup().addTo(map), gExcl=L.layerGroup().addTo(map); map.setView([-15,-52],4); /* círculos precisam do mapa pra calcular limites */
+    const ruas=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19});
+    const tip=function(l,t){ l.bindTooltip(t,{className:"px-mapa-tip",direction:"top",sticky:true}); return l; };
+    const estBase={pane:"base",style:{color:"#7a7390",weight:1.2,fillColor:"#ffffff",fillOpacity:1,opacity:1},interactive:false};
+    if(D.brasil_ufs&&D.brasil_ufs.geojson) L.geoJSON(D.brasil_ufs.geojson,estBase).addTo(gBase);
+    Object.keys(D.estados||{}).forEach(function(uf){ const e=D.estados[uf]; if(e&&e.geojson) L.geoJSON(e.geojson,{pane:"base",style:{color:"#7a7390",weight:1.4,fillColor:"#ffffff",fillOpacity:1},interactive:false}).addTo(gBase); });
+    /* municípios de fundo (traçado intermediário do IBGE) a partir do zoom 7, só dos estados envolvidos; nomes a partir do 9 */
+    const munUF={}; const rot=L.layerGroup().addTo(map);
+    const fundoMun=function(){ const z=map.getZoom(); ref.current.classList.toggle("px-z9",z>=9); if(z<7){ return; }
+      ufs.forEach(function(uf){ if(munUF[uf]) return; munUF[uf]=true; _pxGeoMalhas({municipios_uf:[uf]}).then(function(r){ const m=r.municipios_uf&&r.municipios_uf[uf]; if(!m||!m.geojson||!mapRef.current) return; const ly=L.geoJSON(m.geojson,{pane:"mun",style:{color:"#b8b2c8",weight:.7,fill:false,opacity:.9},interactive:false}).addTo(gMun); ly.eachLayer(function(f){ const n=f.feature&&f.feature.properties&&f.feature.properties.nome; if(!n) return; L.marker(f.getBounds().getCenter(),{icon:L.divIcon({className:"px-mapa-rot",html:n,iconSize:null}),interactive:false,zIndexOffset:-1000}).addTo(rot); }); }).catch(function(){}); }); };
+    map.on("zoomend",fundoMun);
+    const marcadores=[]; const bounds=[];
+    /* pontos com raio (roxo) */
+    const nomePonto=function(x,i){ const c=x.cidadeId&&nomes[x.cidadeId]; return c&&c.nome?c.nome.replace(/\s*\(.+\)$/,""):(x.nome||("Ponto "+(i+1))); };
+    G.pontos.forEach(function(x,i){ const n=nomePonto(x,i); const c=L.circle([x.lat,x.lng],{radius:x.raio*1000,color:"#7326d6",weight:2,fillColor:"#7326d6",fillOpacity:.1}).addTo(gIncl); tip(c,"<b>"+n+"</b> · raio "+x.raio+" km<br>"+x.lat.toFixed(4).replace(".",",")+", "+x.lng.toFixed(4).replace(".",",")); L.circleMarker([x.lat,x.lng],{radius:4.5,color:"#fff",weight:2,fillColor:"#7326d6",fillOpacity:1}).addTo(gIncl); bounds.push(c.getBounds()); marcadores.push({k:"p"+i,voa:function(){ map.fitBounds(c.getBounds().pad(.3)); }}); });
+    /* municípios incluídos (verde) / excluídos (vermelho + raio) */
+    const mk=function(c){ return (c.nome||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim()+"|"+String(c.uf||"").toLowerCase(); };
+    const munSem=[];
+    G.cidades.forEach(function(c,i){ const m=(D.municipios||{})[mk(c)]; if(!m||!m.geojson){ munSem.push(c.nome); return; } const ly=L.geoJSON(m.geojson,{style:{color:"#12805a",weight:2,fillColor:"#12805a",fillOpacity:.22}}).addTo(gIncl); tip(ly,"<b>"+c.nome+" – "+(c.uf||c.regiao||"")+"</b><br>"+(c.raio?"município + raio "+c.raio+" km":"município inteiro (contorno oficial IBGE)")); if(c.raio&&m.centro){ const ci=L.circle([m.centro.lat,m.centro.lng],{radius:c.raio*1000,color:"#12805a",weight:1.5,dashArray:"5 5",fillColor:"#12805a",fillOpacity:.06}).addTo(gIncl); bounds.push(ci.getBounds()); } bounds.push(ly.getBounds()); marcadores.push({k:"c"+i,voa:function(){ map.fitBounds(ly.getBounds().pad(.4)); }}); });
+    G.exCidades.forEach(function(c,i){ const m=(D.municipios||{})[mk(c)]; if(!m||!m.geojson){ munSem.push(c.nome); return; } const ly=L.geoJSON(m.geojson,{style:{color:"#b91c1c",weight:2,fillColor:"#b91c1c",fillOpacity:.25}}).addTo(gExcl); tip(ly,"<b>"+c.nome+" – "+(c.uf||c.regiao||"")+"</b> · excluído"+(c.raio?"<br>município + raio "+c.raio+" km":"")); let alvo=ly; if(c.raio&&m.centro){ const ci=L.circle([m.centro.lat,m.centro.lng],{radius:c.raio*1000,color:"#b91c1c",weight:1.5,dashArray:"5 5",fillColor:"#b91c1c",fillOpacity:.07}).addTo(gExcl); tip(ci,"<b>"+c.nome+"</b> · exclusão · raio "+c.raio+" km"); alvo=ci; } marcadores.push({k:"x"+i,voa:function(){ map.fitBounds(alvo.getBounds().pad(.3)); }}); });
+    G.exPontos.forEach(function(x,i){ const n=nomePonto(x,i); const c=L.circle([x.lat,x.lng],{radius:x.raio*1000,color:"#b91c1c",weight:2,dashArray:"5 5",fillColor:"#b91c1c",fillOpacity:.12}).addTo(gExcl); tip(c,"<b>"+n+"</b> · excluído · raio "+x.raio+" km"); L.circleMarker([x.lat,x.lng],{radius:4,color:"#fff",weight:2,fillColor:"#b91c1c",fillOpacity:1}).addTo(gExcl); marcadores.push({k:"xp"+i,voa:function(){ map.fitBounds(c.getBounds().pad(.3)); }}); });
+    /* estados e países */
+    G.estados.forEach(function(e,i){ const m=e.uf&&(D.estados||{})[e.uf]; if(!m||!m.geojson) return; const ly=L.geoJSON(m.geojson,{style:{color:"#12805a",weight:2,fillColor:"#12805a",fillOpacity:.15}}).addTo(gIncl); tip(ly,"<b>"+e.nome+"</b> · estado inteiro"); bounds.push(ly.getBounds()); marcadores.push({k:"e"+i,voa:function(){ map.fitBounds(ly.getBounds().pad(.2)); }}); });
+    G.exEstados.forEach(function(e,i){ const m=e.uf&&(D.estados||{})[e.uf]; if(!m||!m.geojson) return; const ly=L.geoJSON(m.geojson,{style:{color:"#b91c1c",weight:2,fillColor:"#b91c1c",fillOpacity:.2}}).addTo(gExcl); tip(ly,"<b>"+e.nome+"</b> · estado excluído"); marcadores.push({k:"xe"+i,voa:function(){ map.fitBounds(ly.getBounds().pad(.2)); }}); });
+    G.paises.forEach(function(c,i){ if(c==="BR"){ if(D.brasil_ufs&&D.brasil_ufs.geojson){ const ly=L.geoJSON(D.brasil_ufs.geojson,{style:{color:"#12805a",weight:1.5,fillColor:"#12805a",fillOpacity:.12},interactive:false}).addTo(gIncl); bounds.push(ly.getBounds()); } return; } const m=(D.paises||{})[c]; if(!m||!m.geojson) return; const ly=L.geoJSON(m.geojson,{style:{color:"#12805a",weight:1.5,fillColor:"#12805a",fillOpacity:.15}}).addTo(gIncl); tip(ly,"<b>"+(ADS_PAIS_LBL[c]||c)+"</b> · país inteiro"); bounds.push(ly.getBounds()); marcadores.push({k:"n"+i,voa:function(){ map.fitBounds(ly.getBounds().pad(.1)); }}); });
+    G.exPaises.forEach(function(c,i){ const m=(D.paises||{})[c]; if(!m||!m.geojson) return; const ly=L.geoJSON(m.geojson,{style:{color:"#b91c1c",weight:1.5,fillColor:"#b91c1c",fillOpacity:.2}}).addTo(gExcl); tip(ly,"<b>"+(ADS_PAIS_LBL[c]||c)+"</b> · país inteiro excluído"); marcadores.push({k:"xn"+i,voa:function(){ map.fitBounds(ly.getBounds().pad(.1)); }}); });
+    map._px={gIncl:gIncl,gExcl:gExcl,ruas:ruas,voa:{},enquadra:function(){ if(bounds.length){ let b=bounds[0]; bounds.forEach(function(x){ b=b.extend(x); }); map.fitBounds(b.pad(.25)); } else map.setView([-15,-52],4); }};
+    marcadores.forEach(function(m){ map._px.voa[m.k]=m.voa; });
+    map._px.enquadra(); setTimeout(fundoMun,0);
+    const av=[]; if(munSem.length) av.push("Sem contorno no IBGE: "+munSem.join(", ")); (D.erros||[]).forEach(function(e){ av.push(e); }); setAvisos(av);
+    return function(){ if(mapRef.current){ mapRef.current.remove(); mapRef.current=null; } };
+  },[st]);
+  /* camadas ligadas/desligadas */
+  useEffect(function(){ const m=mapRef.current; if(!m||!m._px) return; camadas.incl?m._px.gIncl.addTo(m):m.removeLayer(m._px.gIncl); camadas.excl?m._px.gExcl.addTo(m):m.removeLayer(m._px.gExcl); camadas.ruas?m._px.ruas.addTo(m):m.removeLayer(m._px.ruas); },[camadas,st]);
+  const nomes=(st.dados&&st.dados.meta_cidades)||{};
+  const nomePonto=function(x,i){ const c=x.cidadeId&&nomes[x.cidadeId]; return c&&c.nome?c.nome.replace(/\s*\(.+\)$/,""):(x.nome||("Ponto "+(i+1))); };
+  const voa=function(k){ const m=mapRef.current; if(m&&m._px&&m._px.voa[k]) m._px.voa[k](); };
+  const Grupo=function(id,cor,titulo,sub,itens){ if(!itens.length) return null; const on=!!abertos[id];
+    return <div style={{marginBottom:8}}>
+      <div onClick={function(){ setAbertos(Object.assign({},abertos,(function(o){o[id]=!on;return o;})({}))); }} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",padding:"6px 6px",borderRadius:8,fontSize:12,fontWeight:800,userSelect:"none"}}><span style={{width:10,height:10,borderRadius:cor==="#7326d6"?"50%":3,background:cor,display:"inline-block",flexShrink:0}}/>{titulo} · {itens.length}{sub&&<span style={{fontWeight:600,color:ADS.muted}}>{sub}</span>}<span style={{marginLeft:"auto",color:ADS.muted,fontSize:11,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span></div>
+      {on&&<div style={{paddingTop:2}}>{itens.map(function(it){ return <div key={it.k} onClick={function(){ voa(it.k); }} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 8px",borderRadius:8,cursor:"pointer",fontSize:12,color:ADS.ink2}} onMouseEnter={function(e){e.currentTarget.style.background=ADS.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span><small style={{color:ADS.muted,whiteSpace:"nowrap"}}>{it.r}</small></div>; })}</div>}
+    </div>; };
+  if(nenhum) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu localizações para este conjunto.</div>;
+  const Btn=function(on,lbl,fn){ return <button onClick={fn} style={{background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink,border:"1px solid "+(on?ADS.accent:ADS.line2),borderRadius:9,padding:"5px 9px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0}}>{lbl}</button>; };
+  const LT={home:"moram",recent:"estiveram recentemente",frequently_in:"frequentam",travel_in:"em viagem"};
+  return <div style={{border:"1px solid "+ADS.line,borderRadius:14,overflow:"hidden",background:"#fff"}}>
+    <style>{".px-mapa-tip{background:#0f0d1a;color:#fff;border:0;border-radius:8px;font-size:11.5px;padding:5px 8px;box-shadow:0 6px 16px rgba(0,0,0,.25)} .px-mapa-tip::before{border-top-color:#0f0d1a} .px-mapa-rot{font-size:10px;color:#8a83a0;white-space:nowrap;transform:translate(-50%,-50%);pointer-events:none;display:none;text-shadow:0 0 3px #fff,0 0 3px #fff;font-family:"+ADS_FONT+"} .px-z9 .px-mapa-rot{display:block} .leaflet-container{font-family:"+ADS_FONT+"}"}</style>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.6fr) minmax(240px,1fr)"}}>
+      <div style={{position:"relative"}}>
+        <div ref={ref} style={{height:isMob?360:480,background:"#eef0f4"}}/>
+        {(st.loading)&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:12.5,color:ADS.muted,background:"#eef0f4"}}>Desenhando o mapa (contornos oficiais do IBGE)…</div>}
+        {st.erro&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:12.5,color:ADS.crit,background:"#eef0f4",padding:16,textAlign:"center"}}>Não consegui montar o mapa: {st.erro}</div>}
+        {!st.loading&&!st.erro&&<div style={{position:"absolute",right:10,top:10,zIndex:500,display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end"}}>{Btn(camadas.incl,"Onde entrega",function(){ setCamadas(Object.assign({},camadas,{incl:!camadas.incl})); })}{Btn(camadas.excl,"Exclusões",function(){ setCamadas(Object.assign({},camadas,{excl:!camadas.excl})); })}{Btn(false,"Enquadrar",function(){ const m=mapRef.current; if(m&&m._px) m._px.enquadra(); })}{Btn(camadas.ruas,camadas.ruas?"Fundo: ruas":"Fundo: IBGE",function(){ setCamadas(Object.assign({},camadas,{ruas:!camadas.ruas})); })}</div>}
+        {!st.loading&&!st.erro&&<div style={{position:"absolute",left:10,bottom:10,zIndex:500,background:"rgba(255,255,255,.95)",border:"1px solid "+ADS.line,borderRadius:9,padding:"6px 9px",fontSize:11,lineHeight:1.6}}>
+          {G.pontos.length>0&&<div><i style={{display:"inline-block",width:11,height:11,borderRadius:"50%",background:"rgba(115,38,214,.3)",border:"2px solid #7326d6",verticalAlign:-2,marginRight:5}}/>Ponto com raio</div>}
+          {(G.cidades.length>0||G.estados.length>0||G.paises.length>0)&&<div><i style={{display:"inline-block",width:11,height:11,borderRadius:3,background:"rgba(18,128,90,.35)",border:"2px solid #12805a",verticalAlign:-2,marginRight:5}}/>Município / estado / país incluído</div>}
+          {(G.exCidades.length>0||G.exEstados.length>0||G.exPaises.length>0||G.exPontos.length>0)&&<div><i style={{display:"inline-block",width:11,height:11,borderRadius:3,background:"rgba(185,28,28,.25)",border:"2px solid #b91c1c",verticalAlign:-2,marginRight:5}}/>Excluído</div>}
+        </div>}
+        {avisos.length>0&&<div style={{position:"absolute",left:10,top:10,zIndex:500,background:ADS.warnSoft,color:"#6b4d00",border:"1px solid #f3d38a",borderRadius:8,padding:"5px 9px",fontSize:11,maxWidth:"60%"}}>{avisos.join(" · ")}</div>}
+      </div>
+      <div style={{borderLeft:isMob?"none":"1px solid "+ADS.line,borderTop:isMob?"1px solid "+ADS.line:"none",padding:"10px 12px",maxHeight:isMob?"none":480,overflowY:"auto"}}>
+        {Grupo("pontos","#7326d6","Pontos com raio",G.pontos.length&&G.pontos.every(function(x){return x.raio===G.pontos[0].raio;})?" · "+G.pontos[0].raio+" km cada":"",G.pontos.map(function(x,i){ return {k:"p"+i,l:nomePonto(x,i),r:x.raio+" km"}; }))}
+        {Grupo("cidades","#12805a","Municípios selecionados",G.cidades.some(function(c){return c.raio;})?"":" · contorno oficial",G.cidades.map(function(c,i){ return {k:"c"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"+ "+c.raio+" km":"município"}; }))}
+        {Grupo("estados","#12805a","Estados selecionados","",G.estados.map(function(e,i){ return {k:"e"+i,l:e.nome,r:"estado"}; }))}
+        {Grupo("paises","#12805a","Países selecionados","",G.paises.map(function(c,i){ return {k:"n"+i,l:ADS_PAIS_LBL[c]||c,r:"país"}; }))}
+        {Grupo("excl","#b91c1c","Excluídos","",G.exCidades.map(function(c,i){ return {k:"x"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"município + "+c.raio+" km":"município"}; }).concat(G.exPontos.map(function(x,i){ return {k:"xp"+i,l:nomePonto(x,i),r:x.raio+" km"}; })).concat(G.exEstados.map(function(e,i){ return {k:"xe"+i,l:e.nome,r:"estado"}; })).concat(G.exPaises.map(function(c,i){ return {k:"xn"+i,l:ADS_PAIS_LBL[c]||c,r:"país"}; })))}
+        {G.tiposLocal.length>0&&<div style={{fontSize:11.5,color:ADS.muted,padding:"4px 6px"}}>pessoas que {G.tiposLocal.map(function(t){return LT[t]||t;}).join(" ou ")} nesses lugares</div>}
+      </div>
+    </div>
+  </div>;
+}
+
 /* bloco visual do público de um conjunto */
 function AdsPublicoBloco({p,isMob}){
   const d=_adsPublicoDetalhado(p);
@@ -52605,17 +52741,15 @@ function AdsPublicoBloco({p,isMob}){
       {!temSeg&&!d.advantage&&<span style={{color:ADS.muted}}>Sem interesses ou públicos — público amplo (só idade, gênero e localização).</span>}
       {!temSeg&&d.advantage&&<span style={{color:ADS.muted}}>Sem interesses definidos — a Meta escolhe quem recebe.</span>}
     </div>)}
-    {Item("Localizações"+(d.locais.length?" ("+d.locais.length+")":""),<div>
-      {d.locais.length===0&&<span style={{color:ADS.muted}}>não informadas</span>}
-      {d.locais.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{d.locais.map(function(l,i){ const st={fontSize:11.5,background:ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line,textDecoration:"none"}; return l.mapa?<a key={i} href={l.mapa} target="_blank" rel="noreferrer" title="abrir no mapa" style={st}>📍 {l.l}</a>:<span key={i} style={st}>{l.l}</span>; })}</div>}
-      {d.tiposLocal.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>pessoas que {d.tiposLocal.join(" ou ")} nesses lugares</div>}
-      {d.advantage&&<div style={{fontSize:11.5,marginTop:3,color:d.expansaoGeo?ADS.warn:ADS.ok,fontWeight:700}}>{d.expansaoGeo?"Expansão de localização ligada — a Meta também entrega perto dessas áreas":"Localizações são limite (expansão de localização desligada)"}</div>}
-      {d.excluidos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídas:</span>{chips(d.excluidos,ADS.critSoft)}</div>}
-    </div>)}
     {Item("Onde aparece (posicionamentos configurados)",<div>
       {d.posAuto?<div><b style={{color:ADS.accent}}>Posicionamentos Advantage+</b> <span style={{color:ADS.muted}}>— automático: a Meta distribui entre Facebook, Instagram, Messenger e Audience Network. A entrega real está na campanha, abaixo.</span></div>
       :<div>{chips(d.posicoes.length?d.posicoes:d.plataformas)}{d.dispositivos.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>dispositivos: {d.dispositivos.join(" e ")}</div>}</div>}
     </div>)}
+    <div style={{gridColumn:"1 / -1",minWidth:0}}>
+      <AdsEyebrow>Localizações{d.locais.length?" ("+d.locais.length+")":""}</AdsEyebrow>
+      {d.advantage&&<div style={{fontSize:11.5,margin:"4px 0 8px",color:d.expansaoGeo?ADS.warn:ADS.ok,fontWeight:700}}>{d.expansaoGeo?"Expansão de localização ligada — a Meta também entrega perto dessas áreas":"Localizações são limite (expansão de localização desligada)"}</div>}
+      <div style={{marginTop:d.advantage?0:6}}><AdsMapaPublico p={p} isMob={isMob}/></div>
+    </div>
   </div>;
 }
 /* posicionamento REAL de entrega (quebra da Meta) — nível campanha */
