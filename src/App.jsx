@@ -52780,7 +52780,7 @@ function AdsEntregaReal({accountId,P,campId,cfg,isMob}){
 function _adsFormatoLbl(cr){
   cr=cr||{}; const at=Array.isArray(cr.ativos)?cr.ativos:[]; const nv=at.filter(function(x){return x.tipo==="video";}).length, ni=at.filter(function(x){return x.tipo==="imagem";}).length;
   const nt=Array.isArray(cr.textos)?cr.textos.length:0, nh=Array.isArray(cr.titulos)?cr.titulos.length:0;
-  if(cr.formato_meta==="flexivel") return {t:"Flexível",cor:ADS.accent,s:[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+" imagem"+(ni>1?"ns":""):null,nt>1?nt+" textos":null,nh>1?nh+" títulos":null].filter(Boolean).join(" · ")||"vários ativos",flex:true};
+  if(cr.formato_meta==="flexivel") return {t:"Flexível",cor:ADS.accent,s:[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+(ni>1?" imagens":" imagem"):null,nt>1?nt+" textos":null,nh>1?nh+" títulos":null].filter(Boolean).join(" · ")||"vários ativos",flex:true};
   if(cr.formato_meta==="carrossel") return {t:"Carrossel",cor:"#0f766e",s:at.length+" card"+(at.length!==1?"s":""),flex:false};
   const extra=[nt>1?nt+" textos":null,nh>1?nh+" títulos":null].filter(Boolean).join(" · ");
   if(cr.video_id||nv) return {t:"Vídeo",cor:ADS.ink2,s:[cr.video_segundos?Math.round(cr.video_segundos)+" s":null,extra||null].filter(Boolean).join(" · "),flex:false};
@@ -52808,6 +52808,36 @@ function AdsAtivosGrade({cr,sel,onSel}){
     </div>}
   </div>;
 }
+/* ativos agrupados por anúncio (vários vídeos/imagens no mesmo anúncio) — performance de cada um vem da quebra video_asset/image_asset da Meta */
+function useAdsAtivosCampanha(accountId,campId,P){
+  const [st,setSt]=useState({loading:true,porAd:{}});
+  const key=(P&&P.key)||"";
+  useEffect(function(){ if(!accountId||!campId||!P||!window._sb){ setSt({loading:false,porAd:{}}); return; } let alive=true; setSt({loading:true,porAd:{}});
+    window._sb.rpc("ads_ativos_campanha",{p_account:accountId,p_campaign:campId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(!alive) return; const m={}; (r.error?[]:(r.data||[])).forEach(function(x){ (m[x.ad_id]=m[x.ad_id]||[]).push(x); }); setSt({loading:false,porAd:m}); }).catch(function(){ if(alive) setSt({loading:false,porAd:{}}); });
+    return function(){ alive=false; }; },[accountId,campId,key]);
+  return st;
+}
+/* tabela dos ativos agrupados de um anúncio, com performance — cada linha abre o vídeo */
+function AdsAtivosPerf({ativos,cfg,compacto,onVer,isMob}){ const isMobG=!!isMob;
+  if(!ativos||ativos.length<1) return null;
+  const tot=ativos.reduce(function(s,a){return s+Number(a.gasto||0);},0)||1;
+  const nv=ativos.filter(function(a){return a.dimensao==="video_asset";}).length, ni=ativos.length-nv;
+  const nomeCurto=function(a){ return String(a.nome||(a.dimensao==="video_asset"?"vídeo":"imagem")).replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,""); };
+  const temRet=ativos.some(function(a){return a.p25!==null&&a.p25!==undefined;});
+  return <div style={{marginTop:compacto?8:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><AdsEyebrow>{ativos.length>1?"Agrupados neste anúncio":"Ativo do anúncio"} · {[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+(ni>1?" imagens":" imagem"):null].filter(Boolean).join(" · ")}</AdsEyebrow>{ativos.length>1&&<span style={{fontSize:11,color:ADS.muted}}>a Meta escolhe qual mostrar pra cada pessoa · performance de cada um</span>}</div>
+    <div style={{display:"flex",flexDirection:"column",gap:4}}>{ativos.map(function(a,i){ const res=Number(a.resultados||0); const custo=cfg&&cfg.campo?_adsDiv(a.gasto,res):null; const ctr=Number(a.impressoes)>0?Number(a.cliques)/Number(a.impressoes)*100:null; const fatia=Number(a.gasto||0)/tot*100; const r25=Number(a.impressoes)>0&&a.dimensao==="video_asset"?Number(a.p25||0)/Number(a.impressoes)*100:null;
+      return <div key={a.dimensao+a.valor} onClick={onVer?function(e){e.stopPropagation();onVer(a);}:undefined} style={{display:"grid",gridTemplateColumns:compacto?(isMobG?"44px minmax(0,1fr) 90px 70px":"44px minmax(0,1.2fr) 100px 76px 112px 60px"):("56px minmax(0,1.4fr) 96px 70px 90px 60px"+(temRet?" 70px":"")),gap:10,alignItems:"center",padding:"6px 8px",borderRadius:10,background:ADS.surface2,cursor:onVer?"pointer":"default",fontSize:12}}>
+        <div style={{width:compacto?44:56,height:compacto?44:56,borderRadius:8,overflow:"hidden",background:"#1b1530",position:"relative",flexShrink:0}}>{a.thumb&&<img src={a.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}{a.dimensao==="video_asset"&&<span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"6px solid #1b1530",borderTop:"4px solid transparent",borderBottom:"4px solid transparent",marginLeft:1}}/></span>}</div>
+        <div style={{minWidth:0}}><div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome||""}>{nomeCurto(a)}</div><div style={{marginTop:4}}><AdsBarra pct={fatia} h={5} cor="#9F43F6" alt={1}/></div></div>
+        <div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>Gasto</div><b style={ADS_MONO}>{_adsBRLc(a.gasto)}</b><span style={{fontSize:10.5,color:ADS.muted}}> · {Math.round(fatia)}%</span></div>
+        <div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>{cfg&&cfg.campo?cfg.resLbl:"Impr."}</div><b style={ADS_MONO}>{cfg&&cfg.campo?_adsNum(res):_adsNum(a.impressoes)}</b></div>
+        {!(compacto&&isMobG)&&<div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>{cfg&&cfg.campo?cfg.custoLbl:"CPM"}</div><b style={Object.assign({color:custo?ADS.ink:ADS.muted},ADS_MONO)}>{cfg&&cfg.campo?(custo?_adsBRLc(custo):"—"):_adsBRL(Number(a.impressoes)>0?Number(a.gasto)/Number(a.impressoes)*1000:null)}</b></div>}
+        {!(compacto&&isMobG)&&<div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>CTR</div><b style={ADS_MONO}>{_adsPct(ctr,2)}</b></div>}
+        {!compacto&&temRet&&<div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>Ret. 25%</div><b style={ADS_MONO}>{r25!==null?_adsPct(r25,0):"—"}</b></div>}
+      </div>; })}</div>
+  </div>;
+}
 /* anúncios do período + do snapshot, agrupados por conjunto */
 function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const accountId=conta&&conta.ad_account_id;
@@ -52816,6 +52846,7 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const anSnap=E.anuncios||[];
   const ids=Array.from(new Set(anPeriodo.map(function(a){return a.id;}).concat(anSnap.map(function(a){return a.entidade_id;}))));
   const C=useAdsCriativos(accountId,ids);
+  const AT=useAdsAtivosCampanha(accountId,campId,P);
   const [aberto,setAberto]=useState(null);
   const [verPausados,setVerPausados]=useState({});
   const [cjSel,setCjSel]=useState(null);
@@ -52828,7 +52859,7 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const mapa={}; anSnap.forEach(function(a){ mapa[a.entidade_id]={id:a.entidade_id,nome:a.nome,adset_id:a.parent_id,status:a.status_efetivo,m:null}; });
   anPeriodo.forEach(function(a){ const o=mapa[a.id]||(mapa[a.id]={id:a.id,nome:a.nome,adset_id:a.adset_id,status:null,m:null}); o.m=a; if(!o.adset_id) o.adset_id=a.adset_id; if(!o.nome) o.nome=a.nome; });
   const anuncios=Object.keys(mapa).map(function(k){ const o=mapa[k]; const m=o.m||{}; const res=o.m?_adsResDe(m,cfg):0; const gasto=Number(m.gasto||0); const custo=cfg.campo?_adsDiv(gasto,res):null; const cr=C.cr[o.id]||{}; const imp=Number(m.impressoes||0);
-    return Object.assign({},o,{cr:cr,res:res,gasto:gasto,custo:custo,ctr:imp>0?Number(m.cliques||0)/imp*100:null,cpm:imp>0?gasto/imp*1000:null,alcance:Number(m.alcance||0),frequencia:Number(m.alcance||0)>0?imp/Number(m.alcance):null,impressoes:imp,video:!!(cr.video_id||(Array.isArray(cr.ativos)&&cr.ativos.some(function(x){return x.tipo==="video";}))),r25:m.p25!==undefined&&imp>0?Number(m.p25||0)/imp*100:null,r50:m.p50!==undefined&&imp>0?Number(m.p50||0)/imp*100:null,r75:m.p75!==undefined&&imp>0?Number(m.p75||0)/imp*100:null,r100:m.p100!==undefined&&imp>0?Number(m.p100||0)/imp*100:null,cfg:cfg,tipo:tipo,diag:[],semDiag:true,nivel:"n",campNome:(cur.campanhas||[]).filter(function(c){return c.id===campId;}).map(function(c){return c.nome;})[0]||""}); });
+    return Object.assign({},o,{cr:cr,res:res,gasto:gasto,custo:custo,ctr:imp>0?Number(m.cliques||0)/imp*100:null,cpm:imp>0?gasto/imp*1000:null,alcance:Number(m.alcance||0),frequencia:Number(m.alcance||0)>0?imp/Number(m.alcance):null,impressoes:imp,video:!!(cr.video_id||(Array.isArray(cr.ativos)&&cr.ativos.some(function(x){return x.tipo==="video";}))),r25:m.p25!==undefined&&imp>0?Number(m.p25||0)/imp*100:null,r50:m.p50!==undefined&&imp>0?Number(m.p50||0)/imp*100:null,r75:m.p75!==undefined&&imp>0?Number(m.p75||0)/imp*100:null,r100:m.p100!==undefined&&imp>0?Number(m.p100||0)/imp*100:null,ativosMeta:(AT.porAd||{})[o.id]||[],cfg:cfg,tipo:tipo,diag:[],semDiag:true,nivel:"n",campNome:(cur.campanhas||[]).filter(function(c){return c.id===campId;}).map(function(c){return c.nome;})[0]||""}); });
   const gastoTot=anuncios.reduce(function(s,a){return s+a.gasto;},0); const resTot=anuncios.reduce(function(s,a){return s+a.res;},0); const mediaCamp=cfg.campo?_adsDiv(gastoTot,resTot):null;
   anuncios.forEach(function(a){ a.mediaG=mediaCamp; a.nivel=cfg.campo&&a.res>=ADS_MIN_RESULTADOS?_adsNivelCusto(a.custo,mediaCamp,a.res):"n"; });
   const porConj={}; anuncios.forEach(function(a){ const k=a.adset_id||"_"; (porConj[k]=porConj[k]||[]).push(a); });
@@ -52842,14 +52873,14 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const nAtivos=cjLista.filter(function(x){return x.status_efetivo==="ACTIVE";}).length;
   const abertoItem=aberto?anuncios.find(function(a){return a.id===aberto;}):null;
   const Met=function(l,v,cor){ return <div style={{minWidth:0}}><div style={{fontSize:10.5,color:ADS.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>{l}</div><div style={Object.assign({fontSize:15,fontWeight:800,color:cor||ADS.ink,whiteSpace:"nowrap",marginTop:1},ADS_MONO)}>{v}</div></div>; };
-  const AdCard=function(a){ const f=_adsFormatoLbl(a.cr); const capa=Object.assign({},a.cr,{thumbnail_url:a.cr.thumbnail_url||(Array.isArray(a.cr.ativos)&&a.cr.ativos[0]?a.cr.ativos[0].thumb:null)}); const st=_adsStatus(a.status||"UNKNOWN"); const semGasto=a.gasto<=0;
+  const AdCard=function(a){ const f=_adsFormatoLbl(a.cr); const am=a.ativosMeta||[]; if(am.length>1){ const nv=am.filter(function(x){return x.dimensao==="video_asset";}).length, ni=am.length-nv; f.t="Flexível"; f.cor=ADS.accent; f.s=[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+(ni>1?" imagens":" imagem"):null].filter(Boolean).join(" · ")+" agrupados"; } const capa=Object.assign({},a.cr,{thumbnail_url:a.cr.thumbnail_url||(Array.isArray(a.cr.ativos)&&a.cr.ativos[0]?a.cr.ativos[0].thumb:null)}); const st=_adsStatus(a.status||"UNKNOWN"); const semGasto=a.gasto<=0;
     const titulo=(Array.isArray(a.cr.titulos)&&a.cr.titulos[0])||a.cr.titulo||null; const texto=(Array.isArray(a.cr.textos)&&a.cr.textos[0])||a.cr.corpo||null;
     return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{display:"grid",gridTemplateColumns:isMob?"88px 1fr":"120px 1fr",gap:14,background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:10,cursor:"pointer",opacity:a.status==="ACTIVE"||a.gasto>0?1:.75}} onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 22px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";}}>
       <AdsCapa cr={capa} h={isMob?88:120} radius={10}/>
       <div style={{minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:8,height:8,borderRadius:"50%",background:a.status==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:800,fontSize:13.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:isMob?"100%":420}} title={a.nome}>{a.nome}</span><span style={{fontSize:10.5,fontWeight:800,color:f.cor,textTransform:"uppercase",letterSpacing:".06em",border:"1px solid "+f.cor+"55",borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{f.t}</span>{f.s&&<span style={{fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap"}}>{f.s}</span>}{a.status&&a.status!=="ACTIVE"&&<span style={{fontSize:11,color:ADS.muted}}>{st[0].toLowerCase()}</span>}{!a.status&&<span style={{fontSize:11,color:ADS.muted}}>fora do snapshot atual</span>}</div>
         {(titulo||texto)&&<div style={{fontSize:12,color:ADS.ink2,marginTop:4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{titulo&&<b style={{color:ADS.ink}}>{titulo} </b>}{texto?String(texto).slice(0,180):""}</div>}
-        <AdsAtivosStrip cr={a.cr} h={isMob?36:44} max={isMob?5:8} onClick={function(){setAberto(a.id);}}/>
+        {am.length>1?<AdsAtivosPerf ativos={am} cfg={cfg} compacto isMob={isMob} onVer={function(){setAberto(a.id);}}/>:<AdsAtivosStrip cr={a.cr} h={isMob?36:44} max={isMob?5:8} onClick={function(){setAberto(a.id);}}/>}
         <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,minmax(0,1fr))",gap:10,marginTop:10}}>
           {semGasto?<div style={{fontSize:12,color:ADS.muted,gridColumn:"1 / -1"}}>sem gasto no período{a.cr.cta?" · botão "+_adsCta(a.cr.cta):""}</div>:<>
             {Met("Gasto",_adsBRLc(a.gasto))}
@@ -53171,14 +53202,14 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   const [fmt,setFmt]=useState("MOBILE_FEED_STANDARD");
   const prev=useAdsPreview(mp4?null:a.id,fmt);
   /* ativo escolhido na grade (anúncio flexível / carrossel): vídeo pelo player do Facebook, imagem direta */
-  const [ativoSel,setAtivoSel]=useState(null); const ativos=Array.isArray(cr.ativos)?cr.ativos:[]; const at=ativoSel!==null?ativos[ativoSel]:null;
-  const atLink=at&&at.tipo==="video"&&at.permalink?("https://www.facebook.com"+(String(at.permalink).indexOf("/")===0?"":"/")+at.permalink):null;
+  const [ativoSel,setAtivoSel]=useState(null); const ativos=Array.isArray(cr.ativos)?cr.ativos:[]; const at=ativoSel!==null?(typeof ativoSel==="object"?ativoSel:ativos[ativoSel]):null;
+  const atLink=at&&(at.tipo==="video"||at.dimensao==="video_asset")&&(at.permalink||at.url)?("https://www.facebook.com"+(String(at.permalink||at.url).indexOf("/")===0?"":"/")+(at.permalink||at.url)):null;
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
         {at?(atLink?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(atLink)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
-          :(at.url||at.thumb)?<div style={{position:"relative",width:"100%"}}><img src={at.url||at.thumb} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>{at.tipo==="video"&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu o link deste vídeo — só a capa. Veja pela prévia oficial ou no Gerenciador.</div>}</div>
+          :(at.url||at.thumb)?<div style={{position:"relative",width:"100%"}}><img src={at.url||at.thumb} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>{(at.tipo==="video"||at.dimensao==="video_asset")&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu o link deste vídeo — só a capa. Veja pela prévia oficial ou no Gerenciador.</div>}</div>
           :<div style={{color:"#fff",fontSize:13}}>sem prévia deste ativo</div>)
         :mp4?<video src={mp4} poster={cr.thumbnail_url||undefined} controls autoPlay playsInline style={{width:"100%",maxHeight:"92vh",display:"block"}}/>
         :prev.src?<iframe src={prev.src} title="Prévia do anúncio" style={{width:"100%",height:"min(92vh,760px)",border:0,display:"block",background:"#0f0d1a"}} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen/>
@@ -53186,7 +53217,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
         :reel?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(reel)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
         :img?<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>
         :<div style={{color:"#fff",fontSize:13}}>sem prévia</div>}
-        {at&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}><button onClick={function(){setAtivoSel(null);}} style={{background:"#fff",color:ADS.ink,border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>‹ prévia do anúncio</button><span style={{background:"rgba(0,0,0,.55)",color:"#fff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700}}>{at.tipo==="video"?"vídeo":"imagem"} {ativoSel+1} de {ativos.length}</span></div>}
+        {at&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}><button onClick={function(){setAtivoSel(null);}} style={{background:"#fff",color:ADS.ink,border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>‹ prévia do anúncio</button><span style={{background:"rgba(0,0,0,.55)",color:"#fff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700}}>{(at.tipo==="video"||at.dimensao==="video_asset")?"vídeo":"imagem"}{typeof ativoSel==="number"?" "+(ativoSel+1)+" de "+ativos.length:(at.nome?" · "+String(at.nome).replace(/\.(mp4|mov|jpg|jpeg|png)$/i,""):"")}</span></div>}
         {!at&&!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
         {!at&&!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
       </div>
@@ -53201,7 +53232,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
         {a.video&&a.r25!==null&&<div style={{marginTop:16}}><AdsEyebrow>Retenção do vídeo</AdsEyebrow><div style={{display:"flex",gap:6,marginTop:6}}>{[["início",100],["25%",a.r25],["50%",a.r50],["75%",a.r75],["fim",a.r100]].map(function(s){ return <div key={s[0]} style={{flex:1,background:"#ecebf2",borderRadius:8,height:38,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,right:0,bottom:0,height:Math.max(3,Math.min(100,s[1]||0))+"%",background:"#9b6cea",opacity:.85}}/><div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,fontWeight:800,color:"#3d3853"}}>{s[0]}{s[0]!=="início"?" · "+_adsPct(s[1],1):""}</div></div>; })}</div></div>}
         {!a.semDiag&&<div style={{marginTop:16}}><AdsEyebrow>Diagnóstico</AdsEyebrow>{a.diag.length===0?<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nada que se destaque.</div>:a.diag.map(function(d,j){ return <div key={j} style={{fontSize:13,color:ADS.ink2,marginTop:6,display:"flex",gap:8,lineHeight:1.4}}><span style={{color:d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.warn,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"i"}</span><span>{d[1]}</span></div>; })}</div>}
         {(cr.titulo||cr.corpo)&&<div style={{marginTop:16,fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"10px 12px"}}>{cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:4}}>{cr.titulo}</b>}<span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"").slice(0,500)}</span><div style={{marginTop:6,fontSize:11,color:ADS.muted,display:"flex",gap:10,flexWrap:"wrap"}}>{cr.cta&&<span>Botão: <b>{_adsCta(cr.cta)}</b></span>}{cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}</div></div>}
-        <AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/>
+        {(a.ativosMeta||[]).length>0?<AdsAtivosPerf ativos={a.ativosMeta} cfg={a.cfg} onVer={function(x){ setAtivoSel(x); }}/>:<AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/>}
         <div style={{marginTop:16}}><AdsEyebrow>Perfil de público deste criativo · fatia da verba e custo</AdsEyebrow><div style={{marginTop:8}}><QGAdsPerfilAnuncio accountId={conta.ad_account_id} adId={a.id} periodo={P} mediaCtr={mediaCtr}/></div></div>
         <div style={{marginTop:16,display:"flex",gap:8,flexWrap:"wrap"}}><a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a></div>
       </div>
