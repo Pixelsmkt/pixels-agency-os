@@ -51504,7 +51504,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   // Abas ocultas: existem no código, mas ficam fora do menu até fazerem sentido (não esquecer)
   const SUBS_OCULTAS=[["leads","Leads","conferência de qualidade — depende de o cliente (quem atende) marcar; sem fluxo com o cliente, ninguém preenche"]];
   const [verOcultas,setVerOcultas]=useState(false);
-  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
+  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Estratégia"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
@@ -51534,23 +51534,47 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
           <button onClick={onAbrirCadastro} style={QG_BTN("ghost")}>Cadastro e acessos →</button>
         </div>
       </div>
-      <div style={{height:1,background:QG.borda}}/>
-      <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 20px",fontSize:13}}>
-        <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3}}>{QG_MESES[month-1]}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgBRL(c.gasto,2)}</b>{c.orcamento>0&&<span style={{color:QG.txt3}}> de {_qgBRLk(c.orcamento)} · {Math.round(c.usoPct)}%</span>}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgNum(c.leads)}</b><span style={{color:QG.txt3}}> leads{c.cpl?" · "+_qgBRL(c.cpl,2)+" cada":""}</span></span>
-        <span style={{color:QG.txt3}}>meta {m.meta?<b onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"Meta de "+_qgNum(m.meta)+" leads · clique pra editar":undefined} style={{color:m.cor,cursor:canEdit?"pointer":"default"}}>{Math.round(m.pct)}%</b>:<a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,cursor:"pointer"}}>definir</a>}</span>
-        {c.vendas>0&&<span><b style={{fontSize:16,color:QG.verde}}>{_qgNum(c.vendas)}</b><span style={{color:QG.txt3}}> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</span></span>}
-        {c.orcamento>0&&<span style={{flex:1,minWidth:120,maxWidth:260,marginLeft:"auto"}}><QGBar pct={c.usoPct} cor={c.usoPct>=100?QG.verm:QG.roxo} h={6}/></span>}
-      </div>
-      <div style={{background:"#f8f7fb",borderTop:"1px solid "+QG.borda,borderRadius:"0 0 18px 18px",padding:isMob?"9px 14px":"10px 20px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
-        <span style={{fontWeight:700,color:QG.txt2}}>Fechamento da semana</span>
-        <span style={{color:QG.txt3}}>{_qgWeekLabel(s0.start)}</span>
-        {s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}
-        {s0.w&&<span style={{color:QG.txt2}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}
-        {alertas.length>0&&<span style={{display:"flex",gap:6,flexWrap:"wrap"}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</span>}
-        {canEdit&&<button style={Object.assign(QG_BTN("sm"),{marginLeft:"auto"})} onClick={function(){onFechamento(mc.client_id,semanas[0]);}}>{s0.w?"Editar fechamento":"Fechar semana"}</button>}
-      </div>
+      {/* ── Placar do mês (roxo escuro): verba × ritmo do mês · leads × meta × mês anterior · semana ── */}
+      {(function(){
+        const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month; const passado=new Date(year,month-1,1)<hoje&&!ehMesAtual;
+        const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):(passado?diasNoMes:0);
+        const mesPct=diasNoMes>0?diaRef/diasNoMes*100:0;
+        const projGasto=c.gasto>0&&diaRef>0?c.gasto/diaRef*diasNoMes:0; const projLeads=c.leads>0&&diaRef>0?Math.round(c.leads/diaRef*diasNoMes):0;
+        const esperado=c.orcamento>0?c.orcamento*diaRef/diasNoMes:0; const ritmo=esperado>0?c.gasto/esperado:null;
+        const ritmoTxt=ritmo===null?null:ritmo>1.15?["acima do ritmo · vai estourar","#ffb4b4"]:ritmo<0.8?["abaixo do ritmo · vai sobrar","#ffd28a"]:["no ritmo","#9fe3c3"];
+        const pm=month===1?{y:year-1,m:12}:{y:year,m:month-1}; const cp=qgCalcCliente(mc,data,pm.y,pm.m,{});
+        const dLeads=cp.leads>0?(c.leads-cp.leads)/cp.leads*100:null; const dCpl=cp.cpl&&c.cpl?(c.cpl-cp.cpl)/cp.cpl*100:null;
+        const Delta=function(d,inv){ if(d===null||!isFinite(d)) return null; const bom=inv?d<=0:d>=0; return <span style={{color:bom?"#9fe3c3":"#ffb4b4",fontWeight:800}}>{d>=0?"▲":"▼"} {Math.abs(Math.round(d))}%</span>; };
+        const Barra=function(pct,marca,cor){ return <div style={{position:"relative",height:7,borderRadius:99,background:"rgba(255,255,255,.18)",marginTop:10,overflow:"visible"}}><div style={{width:Math.max(0,Math.min(100,pct||0))+"%",height:"100%",borderRadius:99,background:cor||"#fff"}}/>{marca!==null&&marca!==undefined&&<div title={"onde o mês está: "+Math.round(marca)+"%"} style={{position:"absolute",left:Math.min(100,marca)+"%",top:-4,width:2,height:15,background:"#fff",opacity:.85,borderRadius:2}}/>}</div>; };
+        const Eye=function(t){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:"#cdbdf0"}}>{t}</div>; };
+        const grande={fontSize:isMob?24:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"};
+        const sub={fontSize:12.5,color:"#e9e0fb",lineHeight:1.5,marginTop:6};
+        return <div className="px-sens" style={{background:"#2f1a5e",color:"#fff",borderRadius:"0 0 18px 18px",padding:isMob?"16px 14px":"18px 20px",display:"grid",gridTemplateColumns:isMob?"1fr":"1.1fr 1fr .9fr",gap:isMob?16:24}}>
+          <div style={{minWidth:0}}>
+            {Eye("Verba · "+QG_MESES[month-1])}
+            <div style={grande}>{_qgBRL(c.gasto,2)}{c.orcamento>0&&<span style={{fontSize:14,fontWeight:700,color:"#cdbdf0",letterSpacing:0}}> de {_qgBRLk(c.orcamento)}</span>}</div>
+            {c.orcamento>0?<>
+              {Barra(c.usoPct,ehMesAtual?mesPct:null)}
+              <div style={sub}><b style={{color:"#fff"}}>{Math.round(c.usoPct)}% gasto</b>{ehMesAtual&&<span> · mês em <b style={{color:"#fff"}}>{Math.round(mesPct)}%</b></span>}{ritmoTxt&&<span> · <b style={{color:ritmoTxt[1]}}>{ritmoTxt[0]}</b></span>}{ehMesAtual&&projGasto>0&&<span> · fecha em <b style={{color:"#fff"}}>{_qgBRLk(projGasto)}</b></span>}</div>
+            </>:<div style={sub}>{canEdit?<a onClick={function(){ setSub("gestao"); }} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir orçamento mensal</a>:"sem orçamento definido"}</div>}
+          </div>
+          <div style={{minWidth:0}}>
+            {Eye("Leads")}
+            <div style={grande}>{_qgNum(c.leads)}{c.cpl?<span style={{fontSize:14,fontWeight:700,color:"#cdbdf0",letterSpacing:0}}> · {_qgBRL(c.cpl,2)} cada</span>:null}</div>
+            {m.meta?Barra(m.pct,m.fracao*100,m.cor===QG.verm?"#ffb4b4":m.cor===QG.amar?"#ffd28a":"#9fe3c3"):<div style={{height:7,marginTop:10}}/>}
+            <div style={sub}>{m.meta?<span>meta <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"clique pra editar a meta":undefined} style={{color:"#fff",textDecoration:canEdit?"underline dotted":"none",cursor:canEdit?"pointer":"default"}}>{_qgNum(m.meta)}</a> · <b style={{color:"#fff"}}>{Math.round(m.pct)}%</b> · <b style={{color:m.cor===QG.verm?"#ffb4b4":m.cor===QG.amar?"#ffd28a":"#9fe3c3"}}>{m.label.toLowerCase()}</b>{ehMesAtual&&projLeads>0&&<span> · fecha em ~<b style={{color:"#fff"}}>{_qgNum(projLeads)}</b></span>}</span>:<span><a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:"#fff",textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}
+              {(dLeads!==null||dCpl!==null)&&<div style={{marginTop:2,color:"#cdbdf0"}}>vs. {QG_MESES[pm.m-1].toLowerCase()}: {dLeads!==null&&<span>{Delta(dLeads,false)} leads</span>}{dLeads!==null&&dCpl!==null&&" · "}{dCpl!==null&&<span>custo {Delta(dCpl,true)}</span>}</div>}
+              {c.vendas>0&&<div style={{marginTop:2}}><b style={{color:"#9fe3c3"}}>{_qgNum(c.vendas)}</b> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</div>}
+            </div>
+          </div>
+          <div style={{minWidth:0,borderLeft:isMob?"none":"1px solid rgba(255,255,255,.14)",paddingLeft:isMob?0:20,borderTop:isMob?"1px solid rgba(255,255,255,.14)":"none",paddingTop:isMob?14:0}}>
+            {Eye("Semana "+_qgWeekLabel(s0.start))}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,flexWrap:"wrap"}}>{s0.w?<span style={{background:"rgba(159,227,195,.18)",color:"#9fe3c3",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>fechada</span>:<span style={{background:"rgba(255,210,138,.18)",color:"#ffd28a",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>pendente</span>}{s0.w&&<span style={{fontSize:13}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}</div>
+            {alertas.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?"#ffb4b4":a.nivel==="atencao"?"#ffd28a":"#cdbdf0"; return <span key={i} title={a.detalhe} style={{background:"rgba(255,255,255,.1)",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</div>}
+            {canEdit&&<div style={{marginTop:10}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={{background:"#fff",color:"#2f1a5e",border:0,borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:QG_FONT,minHeight:0}}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>}
+          </div>
+        </div>;
+      })()}
     </QGCard>
 
     {/* ── Sub-abas + período ── */}
@@ -51561,6 +51585,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
       {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<span style={{marginLeft:"auto",paddingRight:2,display:"inline-flex",alignItems:"center"}}><QGAdsBarraPeriodo compact/></span>}
     </div>
     {subAtiva==="visao"&&temMeta&&typeof QGAdsVisaoGeral==="function"&&<QGAdsVisaoGeral mc={mc} conta={adsConta.conta} compartilhada={adsConta.compartilhada} isMob={isMob} canEdit={canEdit} verbaMensal={Number(mc.investimento_meta)||0}/>}
+    {subAtiva==="estrategia"&&temMeta&&typeof QGAdsEstrategia==="function"&&<QGAdsEstrategia mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="criativos"&&temMeta&&typeof QGAdsCriativos==="function"&&<QGAdsCriativos mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
@@ -52348,50 +52373,10 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
       <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" title={ADS_DEF_CPL} big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{_adsBRL(T.gastoLead)+" em campanhas de lead ÷ "+_adsNum(T.resLead)+(T.gastoOutras>0.005?" · outras finalidades fora da conta":"")}<br/>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span className="px-sens"> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
     </div>; })()}
 
-    {/* leitura da IA — cabeçalho, manchete, dois painéis com destaque numérico por item */}
-    <AdsSec t="A leitura da IA" s={A?<span>gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima</span>:"ainda não gerada pra esta conta"}>
-      <div style={{background:"#221743",color:"#fff",borderRadius:18,padding:isMob?"18px 16px":"22px 26px 20px"}}>
-        {/* linha 1: selo + botão */}
-        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-          <span style={{display:"inline-flex",gap:7,alignItems:"center",background:criticos.length?"rgba(255,120,120,.16)":"rgba(255,255,255,.10)",border:"1px solid "+(criticos.length?"rgba(255,140,140,.35)":"rgba(255,255,255,.14)"),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase"}}><span style={{width:7,height:7,borderRadius:"50%",background:criticos.length?"#ff8a8a":"#9fe3c3"}}/>{criticos.length?criticos.length+" ponto"+(criticos.length>1?"s":"")+" crítico"+(criticos.length>1?"s":""):"leitura do dia"}</span>
-          {A&&<span style={{fontSize:11.5,color:"rgba(255,255,255,.55)"}}>últimos 7 dias · {_adsFmtD(A.periodo_inicio)} – {_adsFmtD(A.periodo_fim)}</span>}
-          {canEdit&&<button onClick={atualizar} disabled={atualizando} style={{marginLeft:"auto",background:"rgba(255,255,255,.12)",color:"#fff",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,padding:"7px 13px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:ADS_FONT,opacity:atualizando?.7:1,minHeight:0}}>{atualizando?"Analisando… ~20 s":(A?"↻ Atualizar leitura":"Gerar leitura")}</button>}
-        </div>
-        {A?<>
-          {/* manchete: 1ª frase grande, resto como apoio */}
-          {(function(){ const txt=String(A.resumo||(criticos[0]&&criticos[0].titulo)||"Conta em observação."); const m=txt.match(/^(.+?[.!?])(\s+[\s\S]*)?$/); const t1=m?m[1]:txt; const t2=m&&m[2]?m[2].trim():""; return <div style={{maxWidth:820,margin:"16px 0 0"}}>
-            <h3 style={{margin:0,fontSize:isMob?18:22,fontWeight:800,letterSpacing:"-.5px",lineHeight:1.25}}>{t1}</h3>
-            {t2&&<p style={{margin:"8px 0 0",fontSize:isMob?13:14,lineHeight:1.55,color:"rgba(255,255,255,.72)"}}>{t2}</p>}
-          </div>; })()}
-          {/* painéis */}
-          {(func.length||aten.length)?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(func.length&&aten.length?"1fr 1fr":"1fr"),gap:12,marginTop:18}}>
-            {[["Está funcionando","#9fe3c3",func],["Atenção","#ffc98a",aten]].map(function(par,pi){ const lbl=par[0], cor=par[1], its=par[2]; if(!its.length) return null;
-              const item=function(t){ const s=acaoLimpa(t).replace(/"\s*([^"]*?)\s*"/g,'"$1"'); const sp=s.split(/\s—\s|\s–\s/); const head=sp[0]; const tail=sp.slice(1).join(" — "); const mm=head.match(/R\$\s?[\d\.]+,\d{2}|\d+(?:,\d+)?\s?×|\d+(?:,\d+)?%/); return {head:head,tail:tail,num:mm?mm[0].replace(/\s/g,""):null}; };
-              return <div key={pi} style={{background:"rgba(255,255,255,.055)",border:"1px solid rgba(255,255,255,.10)",borderRadius:14,padding:"12px 14px 6px"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><span style={{width:8,height:8,borderRadius:"50%",background:cor}}/><span style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:800,color:cor}}>{lbl}</span><span style={{fontSize:10.5,color:"rgba(255,255,255,.4)",fontWeight:700}}>{its.length}</span></div>
-                {its.slice(0,3).map(function(t,i){ const it=item(t); return <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"9px 0",borderTop:i?"1px solid rgba(255,255,255,.08)":"none"}}>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{fontSize:13,fontWeight:600,lineHeight:1.45,color:"rgba(255,255,255,.92)"}}>{it.head}</div>
-                    {it.tail&&<div style={{fontSize:12,lineHeight:1.45,color:"rgba(255,255,255,.62)",marginTop:2}}>{it.tail}</div>}
-                  </div>
-                  {it.num&&<span style={{flexShrink:0,fontSize:13,fontWeight:900,letterSpacing:"-.3px",color:cor,background:"rgba(255,255,255,.07)",borderRadius:8,padding:"4px 8px",fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{it.num}</span>}
-                </div>; })}
-              </div>; })}
-          </div>:null}
-        </>:<div style={{marginTop:14}}><h3 style={{margin:"0 0 6px",fontSize:18,fontWeight:800}}>Ainda não há leitura pra {conta.nome}.</h3><p style={{margin:0,fontSize:13,color:"rgba(255,255,255,.8)"}}>A análise automática roda todo dia de manhã nas contas com gasto. {canEdit?"Você pode gerar agora (~20 s).":""}</p></div>}
-        {msg&&<div style={{marginTop:12,fontSize:12.5,color:"rgba(255,255,255,.85)"}}>{msg}</div>}
-      </div>
+    {/* leitura da IA — manchete curta, números com delta, Decidir agora / Deixe rodar */}
+    <AdsSec t="A leitura da IA" s={A?<span>gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima · o detalhe por campanha está na aba <b style={{color:ADS.ink2}}>Estratégia</b></span>:"ainda não gerada pra esta conta"}>
+      <AdsLeituraIA A={A} conta={conta} camps={camps} media={media} isMob={isMob} canEdit={canEdit} atualizar={atualizar} atualizando={atualizando} msg={msg}/>
     </AdsSec>
-
-    {/* ações do dia */}
-    {acoes.length>0&&<AdsSec t="O que fazer hoje" s="da leitura dos últimos 7 dias · do maior impacto pro menor">
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat("+Math.min(3,acoes.length)+",1fr)",gap:14}}>
-        {acoes.slice(0,3).map(function(t,i){ const n=acaoTipo(t); return <AdsCard key={i} style={{display:"flex",gap:14,alignItems:"flex-start",borderLeft:"4px solid "+_adsCor(n)}}>
-          <div style={{fontSize:26,fontWeight:900,color:ADS.line2,lineHeight:1,letterSpacing:"-1px"}}>{i+1}</div>
-          <div style={{minWidth:0}}><b style={{display:"block",fontSize:14,letterSpacing:"-.2px",lineHeight:1.3}}>{acaoTitulo(t)}</b><small style={{display:"block",color:ADS.muted,fontSize:12,marginTop:4,lineHeight:1.45}}>{acaoResto(t)}</small></div>
-        </AdsCard>; })}
-      </div>
-    </AdsSec>}
 
     {/* onde o dinheiro está — tabela objetiva por frente */}
     {(function(){
@@ -53070,9 +53055,228 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
     {sub==="historico"&&<QGAdsHistorico mc={mc} conta={conta} isMob={isMob} campId={campId} embutido/>}
   </AdsWrap>;
 }
+
+/* ═══════════════════════════════════════════════════════
+   STATUS DAS SUGESTÕES (feito / ignorado) — tabela ads_sugestoes_status · compartilhado pela leitura da IA e pela aba Estratégia
+   ═══════════════════════════════════════════════════════ */
+window._pxSug=window._pxSug||{};
+function useAdsSugestoesStatus(accountId){
+  const [st,setSt]=useState(window._pxSug[accountId]||{});
+  const ler=function(){ if(!accountId||!window._sb) return; window._sb.from("ads_sugestoes_status").select("chave,status,por,em,titulo").eq("ad_account_id",accountId).then(function(r){ const m={}; (r.data||[]).forEach(function(x){ m[x.chave]=x; }); window._pxSug[accountId]=m; setSt(m); }); };
+  useEffect(function(){ ler(); },[accountId]);
+  const marcar=async function(chave,status,extra){ if(!window._sb||!accountId) return; const por=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.name||CURRENT_USER.id))||null;
+    if(!status){ await window._sb.from("ads_sugestoes_status").delete().eq("ad_account_id",accountId).eq("chave",chave); }
+    else { await window._sb.from("ads_sugestoes_status").upsert(Object.assign({ad_account_id:accountId,chave:chave,status:status,por:por,em:new Date().toISOString()},extra||{}),{onConflict:"ad_account_id,chave"}); }
+    ler(); };
+  return {st:st,marcar:marcar};
+}
+/* abre uma campanha na aba Campanhas (de qualquer lugar) */
+function _adsAbrirCampanha(campId){ window._pxAdsCampDesejada=campId||null; try{ window.dispatchEvent(new CustomEvent("pixels:qg-sub",{detail:{sub:"campanhas"}})); }catch(_){ } }
+/* semana anterior à leitura da IA (mesma RPC das telas) */
+function useAdsSemanaAnterior(accountId,de,ate){
+  const [st,setSt]=useState(null); const key=accountId+"|"+de+"|"+ate;
+  useEffect(function(){ if(!accountId||!de||!ate||!window._sb){ setSt(null); return; } let alive=true; const d1=_adsAddDays(de,-7), d2=_adsAddDays(de,-1);
+    window._sb.rpc("ads_periodo",{p_account:accountId,p_de:d1,p_ate:d2}).then(function(r){ if(alive) setSt(r.error?null:_adsTotaisConta((r.data||{}).conta)); });
+    return function(){ alive=false; }; },[key]);
+  return st;
+}
+/* ── Leitura da IA (painel escuro): manchete curta + 3 números com delta + Decidir agora (impacto em R$, ação, feito) + Deixe rodar ── */
+function AdsLeituraIA({A,conta,camps,media,isMob,canEdit,atualizar,atualizando,msg}){
+  const accountId=conta&&conta.ad_account_id;
+  const S=useAdsSugestoesStatus(accountId);
+  const prevSem=useAdsSemanaAnterior(accountId,A&&A.periodo_inicio,A&&A.periodo_fim);
+  const [verTudo,setVerTudo]=useState(false);
+  const M=(A&&A.metricas)||{}; const tot=M.total||{}; const campsIA=Array.isArray(M.campanhas)?M.campanhas:[];
+  const alertas=Array.isArray(A&&A.alertas)?A.alertas:[]; const criticos=alertas.filter(function(a){return a.nivel==="critico";});
+  const linhas=function(t){ return String(t||"").split(/\n+/).map(function(x){return x.replace(/^[-•\d\.\)\s]+/,"").trim();}).filter(Boolean); };
+  const limpa=function(t){ return String(t||"").replace(/\[Pixels\]\s*/g,"").replace(/\[\d{2}\/\d{2}\/\d{2,4}\]\s*/g,"").replace(/\[Leads\s*-\s*Forms\]\s*/ig,"(formulário) ").replace(/\[Leads\s*-\s*Wpp\]\s*/ig,"(WhatsApp) ").replace(/\[Lead-Wpp\]\s*/ig,"(WhatsApp) ").replace(/\[Leads\]\s*/ig,"").replace(/[\[\]"]/g,"").replace(/R\$\s?(\d+)\.(\d{2})\b/g,"R$ $1,$2").replace(/(\d+)\.(\d+)×/g,"$1,$2×").replace(/\s+/g," ").trim(); };
+  const acoes=A?linhas(A.acoes):[], func=A?linhas(A.funcionando):[];
+  /* manchete: número + veredito, curta */
+  const cpa=Number(tot.cpa)||null, res=Number(tot.resultados)||0;
+  const resumo=String((A&&A.resumo)||""); const corte=resumo.search(/,\s*mas\b|\s—\s|\s–\s|\senquanto\b|;/); const apoio=resumo;
+  const manchete=res>0&&cpa?(_adsNum(res)+" leads a "+_adsBRLc(cpa)+" na semana"+(criticos.length?" — "+criticos.length+" ponto"+(criticos.length>1?"s":"")+" crítico"+(criticos.length>1?"s":""):"")):(corte>0?resumo.slice(0,corte):(resumo.match(/^(.+?[.!?])(\s|$)/)||[resumo])[0]);
+  /* campanha citada num texto → id (pelo nome, sem inventar) */
+  const campDe=function(txt){ const t=String(txt||""); const hit=campsIA.concat(camps||[]).find(function(c){ const n=String(c.nome||""); return n&&t.indexOf(n)>=0; }); if(hit) return hit; const lt=limpa(t).toLowerCase(); return (camps||[]).find(function(c){ const cur=limpa(c.nome).toLowerCase(); return cur.length>6&&lt.indexOf(cur)>=0; })||null; };
+  /* impacto em R$: quanto a campanha gastou acima do que gastaria na média (só quando dá pra calcular) */
+  const mediaIA=Number(tot.cpa)||media||null; /* mesma base da leitura (7 dias) */
+  const impacto=function(c){ const media=mediaIA; if(!c||!media) return null; const g=Number(c.gasto||0), r=Number(c.resultados||c.res||0); if(!(g>0)) return null; const ideal=r*media; return g-ideal>1?g-ideal:null; };
+  const decisoes=criticos.map(function(a,i){ const c=campDe(a.titulo)||campDe(a.detalhe); const imp=impacto(c); const chave="ia:"+(c?c.id:"x")+":"+String(a.tipo||"alerta"); return {chave:chave,c:c,titulo:limpa(a.titulo),detalhe:limpa(a.detalhe),acao:limpa(a.acao),imp:imp,nivel:"c"}; })
+    .concat(acoes.map(function(t,i){ const c=campDe(t); const s=limpa(t); const tipo=/pausar|desligar|cortar|reduzir/i.test(s)?"c":/escalar|aumentar|dobrar|subir|realocar/i.test(s)?"o":"w"; const chave="ia:acao:"+(c?c.id:i)+":"+tipo; return {chave:chave,c:c,titulo:s.split(/:\s|\s—\s|\s\(/)[0].slice(0,90),detalhe:s,acao:null,imp:impacto(c),nivel:tipo}; }));
+  /* remove duplicadas (mesma campanha + mesmo tipo) e as já feitas/ignoradas */
+  const vistas={}; const pendentes=decisoes.filter(function(d){ if(vistas[d.chave]) return false; vistas[d.chave]=1; return !S.st[d.chave]; }); const resolvidas=decisoes.filter(function(d){ return S.st[d.chave]; });
+  pendentes.sort(function(a,b){ return (b.imp||0)-(a.imp||0); });
+  const mostrar=verTudo?pendentes:pendentes.slice(0,3);
+  const Num=function(l,v,d,inv){ return <div style={{minWidth:0}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:"rgba(255,255,255,.55)"}}>{l}</div><div style={{fontSize:isMob?20:24,fontWeight:900,letterSpacing:"-.6px",marginTop:2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{v}</div>{d!==null&&d!==undefined&&isFinite(d)?<div style={{fontSize:11.5,marginTop:2}}><span style={{color:(inv?d<=0:d>=0)?"#9fe3c3":"#ffb4b4",fontWeight:800}}>{d>=0?"▲":"▼"} {Math.abs(Math.round(d))}%</span><span style={{color:"rgba(255,255,255,.5)"}}> vs. semana anterior</span></div>:<div style={{fontSize:11.5,marginTop:2,color:"rgba(255,255,255,.4)"}}>sem semana anterior</div>}</div>; };
+  const dl=prevSem&&prevSem.resultados>0?(res-prevSem.resultados)/prevSem.resultados*100:null, dc=prevSem&&prevSem.cpa&&cpa?(cpa-prevSem.cpa)/prevSem.cpa*100:null, dg=prevSem&&prevSem.gasto>0?(Number(tot.gasto||0)-prevSem.gasto)/prevSem.gasto*100:null;
+  const Btn=function(t,fn,primario){ return <button onClick={fn} style={{background:primario?"#fff":"rgba(255,255,255,.1)",color:primario?"#221743":"#fff",border:primario?0:"1px solid rgba(255,255,255,.22)",borderRadius:9,padding:"6px 11px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT,minHeight:0,whiteSpace:"nowrap"}}>{t}</button>; };
+  return <div style={{background:"#221743",color:"#fff",borderRadius:18,padding:isMob?"18px 16px":"22px 26px 18px",fontFamily:ADS_FONT}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <span style={{display:"inline-flex",gap:7,alignItems:"center",background:criticos.length?"rgba(255,120,120,.16)":"rgba(255,255,255,.10)",border:"1px solid "+(criticos.length?"rgba(255,140,140,.35)":"rgba(255,255,255,.14)"),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase"}}><span style={{width:7,height:7,borderRadius:"50%",background:criticos.length?"#ff8a8a":"#9fe3c3"}}/>{pendentes.length?pendentes.length+" decis"+(pendentes.length>1?"ões":"ão")+" pra hoje":"nada urgente"}</span>
+      {A&&<span style={{fontSize:11.5,color:"rgba(255,255,255,.55)"}}>últimos 7 dias · {_adsFmtD(A.periodo_inicio)} – {_adsFmtD(A.periodo_fim)}</span>}
+      {canEdit&&<button onClick={atualizar} disabled={atualizando} style={{marginLeft:"auto",background:"rgba(255,255,255,.12)",color:"#fff",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,padding:"7px 13px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:ADS_FONT,opacity:atualizando?.7:1,minHeight:0}}>{atualizando?"Analisando… ~20 s":(A?"↻ Atualizar leitura":"Gerar leitura")}</button>}
+    </div>
+    {!A&&<div style={{marginTop:14}}><h3 style={{margin:"0 0 6px",fontSize:18,fontWeight:800}}>Ainda não há leitura pra {conta.nome}.</h3><p style={{margin:0,fontSize:13,color:"rgba(255,255,255,.8)"}}>A análise automática roda todo dia de manhã nas contas com gasto. {canEdit?"Você pode gerar agora (~20 s).":""}</p></div>}
+    {A&&<>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.4fr) auto",gap:isMob?14:28,alignItems:"start",marginTop:16}}>
+        <div style={{minWidth:0}}>
+          <h3 style={{margin:0,fontSize:isMob?19:24,fontWeight:800,letterSpacing:"-.6px",lineHeight:1.2}}>{manchete}</h3>
+          {apoio&&<p style={{margin:"8px 0 0",fontSize:13,lineHeight:1.5,color:"rgba(255,255,255,.68)",maxWidth:720}}>{apoio}</p>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,auto)",gap:isMob?14:22}}>
+          {Num("Leads",_adsNum(res),dl,false)}
+          {Num("Custo por lead",cpa?_adsBRLc(cpa):"—",dc,true)}
+          {Num("Gasto",_adsBRLc(tot.gasto),dg,true)}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(func.length?"minmax(0,1.55fr) minmax(0,1fr)":"1fr"),gap:12,marginTop:18}}>
+        <div style={{background:"rgba(255,255,255,.055)",border:"1px solid rgba(255,255,255,.10)",borderRadius:14,padding:"12px 14px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{width:8,height:8,borderRadius:"50%",background:"#ffc98a"}}/><span style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:800,color:"#ffc98a"}}>Decidir agora</span><span style={{fontSize:10.5,color:"rgba(255,255,255,.4)",fontWeight:700}}>{pendentes.length}</span>{resolvidas.length>0&&<span style={{marginLeft:"auto",fontSize:11,color:"rgba(255,255,255,.45)"}}>{resolvidas.length} resolvida{resolvidas.length>1?"s":""}</span>}</div>
+          {pendentes.length===0&&<div style={{fontSize:12.5,color:"rgba(255,255,255,.6)",padding:"6px 0"}}>Nada pendente — o que a leitura apontou já foi tratado.</div>}
+          {mostrar.map(function(d,i){ const cor=d.nivel==="c"?"#ff8a8a":d.nivel==="o"?"#9fe3c3":"#ffc98a"; const c=d.c; const r=c?Number(c.resultados||c.res||0):0; const custo=c?Number(c.cpa||c.custo||0):0; const rel=custo&&mediaIA?custo/mediaIA:null;
+            return <div key={d.chave} style={{padding:"10px 0",borderTop:i?"1px solid rgba(255,255,255,.08)":"none",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) auto",gap:10,alignItems:"center"}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:13.5,fontWeight:700,lineHeight:1.4}}>{d.titulo}</div>
+                {(d.detalhe||d.acao)&&<div style={{fontSize:12,lineHeight:1.45,color:"rgba(255,255,255,.62)",marginTop:2}}>{d.detalhe&&d.detalhe!==d.titulo?d.detalhe:""}{d.acao?<span> <span style={{color:"#fff",fontWeight:700}}>→ {d.acao}</span></span>:null}</div>}
+                {c&&rel&&<div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}><div style={{flex:1,maxWidth:220,height:6,borderRadius:99,background:"rgba(255,255,255,.12)",position:"relative"}}><div style={{width:Math.min(100,rel/3*100)+"%",height:"100%",borderRadius:99,background:cor}}/><div title="média da conta" style={{position:"absolute",left:Math.min(100,1/3*100)+"%",top:-3,width:2,height:12,background:"#fff",opacity:.8}}/></div><span style={{fontSize:11,color:"rgba(255,255,255,.6)"}}>{_adsX(rel)} a média{d.imp?<span> · <b style={{color:"#ffc98a"}}>{_adsBRLc(d.imp)}</b> a mais do que custaria na média</span>:null}</span></div>}
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{c&&Btn("Abrir campanha",function(){ _adsAbrirCampanha(c.id); },true)}{canEdit&&Btn("Feito",function(){ S.marcar(d.chave,"feito",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}{canEdit&&Btn("Ignorar",function(){ S.marcar(d.chave,"ignorado",{campaign_id:c?c.id:null,titulo:d.titulo,client_id:conta.client_id}); })}</div>
+            </div>; })}
+          {pendentes.length>3&&<div style={{marginTop:8}}>{Btn(verTudo?"Mostrar só 3":"Ver mais "+(pendentes.length-3),function(){ setVerTudo(!verTudo); })}</div>}
+        </div>
+        {func.length>0&&<div style={{background:"rgba(255,255,255,.035)",border:"1px solid rgba(255,255,255,.08)",borderRadius:14,padding:"12px 14px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{width:8,height:8,borderRadius:"50%",background:"#9fe3c3"}}/><span style={{fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",fontWeight:800,color:"#9fe3c3"}}>Deixe rodar</span><span style={{fontSize:10.5,color:"rgba(255,255,255,.4)",fontWeight:700}}>{func.length}</span></div>
+          {func.slice(0,4).map(function(t,i){ const s=limpa(t); const sp=s.split(/\s—\s|\s–\s/); return <div key={i} style={{padding:"7px 0",borderTop:i?"1px solid rgba(255,255,255,.07)":"none",fontSize:12.5,lineHeight:1.45,color:"rgba(255,255,255,.85)"}}>{sp[0]}{sp[1]&&<span style={{color:"rgba(255,255,255,.5)"}}> — {sp.slice(1).join(" — ")}</span>}</div>; })}
+        </div>}
+      </div>
+      <div style={{marginTop:12,fontSize:11.5,color:"rgba(255,255,255,.45)",display:"flex",gap:12,flexWrap:"wrap"}}><span>Leitura gerada {_adsFmtHora(A.gerado_em)}</span><span>· próxima automática amanhã ~07:50</span>{resolvidas.length>0&&<span>· {resolvidas.filter(function(d){return S.st[d.chave]&&S.st[d.chave].status==="feito";}).length} feita{resolvidas.length>1?"s":""} · {resolvidas.filter(function(d){return S.st[d.chave]&&S.st[d.chave].status==="ignorado";}).length} ignorada{resolvidas.length>1?"s":""}</span>}</div>
+    </>}
+    {msg&&<div style={{marginTop:10,fontSize:12.5,color:"rgba(255,255,255,.85)"}}>{msg}</div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ESTRATÉGIA — uma recomendação pontual por campanha, calculada com os dados reais do período (regras abaixo), com Feito / Ignorar.
+   Regras (cada uma só dispara quando o dado existe):
+     R1 custo vs média do mesmo objetivo  · R2 gasto sem resultado · R3 CTR baixo com custo alto (criativo) · R4 CTR bom com custo alto (destino)
+     R5 ativo agrupado dominante/fraco     · R6 verba invertida entre conjuntos · R7 frequência alta (fadiga) · R8 faixa etária/posicionamento que só gasta
+     R9 aprendizado limitado               · R10 marca: CPM/frequência · R11 custo bom com verba pequena (escalar)
+   ═══════════════════════════════════════════════════════ */
+function useAdsAtivosConta(accountId,P){
+  const [st,setSt]=useState({loading:true,rows:[]}); const key=(P&&P.key)||"";
+  useEffect(function(){ if(!accountId||!P||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
+    window._sb.rpc("ads_ativos_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(alive) setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
+    return function(){ alive=false; }; },[accountId,key]);
+  return st;
+}
+/* quebras por campanha (idade + posicionamento) — uma chamada por campanha de lead com gasto */
+function useAdsQuebrasPorCampanha(accountId,P,ids){
+  const key=(ids||[]).slice().sort().join(",")+"|"+((P&&P.key)||"");
+  const [st,setSt]=useState({loading:true,por:{}});
+  useEffect(function(){ if(!accountId||!P||!ids||!ids.length||!window._sb){ setSt({loading:false,por:{}}); return; } let alive=true; setSt({loading:true,por:{}});
+    Promise.all(ids.slice(0,12).map(function(id){ return window._sb.rpc("ads_quebras_conta",{p_account:accountId,p_de:P.ini,p_ate:P.fim,p_campaigns:[id]}).then(function(r){ return [id,r.error?[]:(r.data||[])]; }).catch(function(){ return [id,[]]; }); })).then(function(arr){ if(!alive) return; const m={}; arr.forEach(function(x){ m[x[0]]=x[1]; }); setSt({loading:false,por:m}); });
+    return function(){ alive=false; }; },[accountId,key]);
+  return st;
+}
+function _adsSugestoes(ctx){
+  const camps=ctx.camps, medias=ctx.medias, ent=ctx.ent, conj=ctx.conjuntos||[], ativos=ctx.ativos||[], quebras=ctx.quebras||{};
+  const out=[];
+  const nomeC=function(c){ return _adsNomeCurto(c.nome); };
+  const brl=_adsBRLc;
+  camps.forEach(function(c){
+    const gasto=Number(c.gasto||0); if(!(gasto>0)) return;
+    const cfg=c.cfg; const marca=!cfg.campo; const res=Number(c.res||0); const custo=c.custo; const media=medias[c.tipo]||null; const rel=custo&&media?custo/media:null;
+    const ctr=Number(c.ctr||0); const freq=Number(c.frequencia||0); const nome=nomeC(c); const lbl=cfg.resSing||"resultado";
+    const add=function(regra,prio,titulo,motivo,acao,impacto){ out.push({chave:"r"+regra+":"+c.id,regra:regra,c:c,prio:prio,titulo:titulo,motivo:motivo,acao:acao,impacto:impacto||null}); };
+    if(marca){
+      if(freq>3.5) add(10,gasto*0.3,"Renovar os criativos de "+nome,"Frequência "+freq.toLocaleString("pt-BR",{maximumFractionDigits:1})+": cada pessoa já viu o anúncio mais de 3 vezes no período — o CPM tende a subir e o engajamento a cair.","Trocar ou adicionar criativos, ou ampliar o público.",null);
+      return;
+    }
+    const excesso=media&&res>0&&custo?gasto-res*media:(media&&res===0?gasto:null);
+    /* R2: gastou e não trouxe nada */
+    if(res===0&&(gasto>=100||(media&&gasto>=media*3))){ add(2,gasto,"Pausar ou trocar o criativo de "+nome,brl(gasto)+" gastos e nenhum "+lbl+" no período."+(ctr<1?" CTR de "+_adsPct(ctr,2)+" — as pessoas não clicam.":" CTR de "+_adsPct(ctr,2)+" — clicam, mas não convertem: o problema está no destino ("+(cfg.id==="form"?"formulário":"WhatsApp")+")."),ctr<1?"Pausar e subir um criativo novo (vídeo curto com gancho nos 3 primeiros segundos).":"Manter o criativo e revisar o destino: perguntas do formulário / mensagem inicial do WhatsApp.",gasto); return; }
+    if(res<ADS_MIN_RESULTADOS){ /* amostra pequena: só avisa se está caro demais */ if(rel&&rel>2&&gasto>=150) add(1,excesso||gasto*0.3,"Segurar a verba de "+nome+" até ter mais amostra","Só "+res+" "+(res===1?lbl:(cfg.resLbl||lbl+"s"))+" a "+brl(custo)+" ("+_adsX(rel)+" a média de "+brl(media)+") com "+brl(gasto)+" gastos.","Reduzir a verba diária até o custo estabilizar; reavaliar com 3+ "+lbl+"s.",excesso); return; }
+    /* R1/R3/R4: custo alto */
+    if(rel&&rel>1.5){
+      if(ctr<1) add(3,excesso||gasto*0.4,"Trocar o criativo de "+nome,brl(custo)+" por "+lbl+" ("+_adsX(rel)+" a média) com CTR de "+_adsPct(ctr,2)+" — o gargalo está antes do clique.","Testar 2 criativos novos no mesmo conjunto e pausar o atual em 3 dias se não reagir.",excesso);
+      else add(4,excesso||gasto*0.4,"Revisar o destino de "+nome,brl(custo)+" por "+lbl+" ("+_adsX(rel)+" a média), mas CTR de "+_adsPct(ctr,2)+" — as pessoas clicam e não viram "+lbl+".",cfg.id==="form"?"Encurtar o formulário (menos perguntas) e conferir o tempo de resposta do lead.":"Revisar a mensagem inicial do WhatsApp e quem responde — resposta em minutos, não horas.",excesso);
+    }
+    /* R11: custo bom com pouca verba → escalar */
+    if(rel&&rel<0.7&&res>=ADS_MIN_RESULTADOS){ const fatia=ctx.gastoLeadTotal>0?gasto/ctx.gastoLeadTotal*100:0; if(fatia<35) add(11,gasto*0.25,"Escalar "+nome,brl(custo)+" por "+lbl+" — "+_adsX(1/rel)+" melhor que a média de "+brl(media)+", com só "+Math.round(fatia)+"% da verba de lead.","Subir a verba diária em 30–50% e acompanhar 3 dias; se o custo segurar, subir de novo.",null); }
+    /* R7: fadiga */
+    if(freq>3.5) add(7,gasto*0.2,"Renovar os criativos de "+nome,"Frequência "+freq.toLocaleString("pt-BR",{maximumFractionDigits:1})+" no período — o mesmo público vendo o mesmo anúncio repetidas vezes.","Adicionar criativos novos ou ampliar o público.",null);
+    /* R5: ativos agrupados */
+    const porAd={}; ativos.filter(function(a){return a.campaign_id===c.id;}).forEach(function(a){ (porAd[a.ad_id]=porAd[a.ad_id]||[]).push(a); });
+    Object.keys(porAd).forEach(function(adId){ const arr=porAd[adId]; if(arr.length<2) return; const tot=arr.reduce(function(s,a){return s+Number(a.gasto||0);},0); if(!(tot>=50)) return; const comRes=arr.filter(function(a){return Number(a.resultados||0)>=2;}).map(function(a){ return Object.assign({},a,{cpa:Number(a.gasto)/Number(a.resultados)}); }).sort(function(a,b){return a.cpa-b.cpa;}); const melhor=comRes[0]; if(!melhor) return; const fraco=arr.filter(function(a){ return a!==melhor&&Number(a.gasto||0)>=tot*0.2&&(Number(a.resultados||0)===0||Number(a.gasto)/Number(a.resultados)>melhor.cpa*2); }).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);})[0]; if(!fraco) return;
+      const nomeAt=function(a){ return String(a.nome||"").replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,""); }; const fatiaMelhor=Number(melhor.gasto)/tot*100;
+      out.push({chave:"r5:"+adId+":"+fraco.valor,regra:5,c:c,prio:Number(fraco.gasto||0),titulo:"Concentrar a verba no vídeo \""+nomeAt(melhor)+"\" em "+nome,motivo:"No anúncio agrupado, \""+nomeAt(melhor)+"\" faz "+lbl+" a "+brl(melhor.cpa)+" com "+Math.round(fatiaMelhor)+"% da verba; \""+nomeAt(fraco)+"\" gastou "+brl(fraco.gasto)+(Number(fraco.resultados||0)?" a "+brl(Number(fraco.gasto)/Number(fraco.resultados))+" cada":" sem resultado")+".",acao:"Remover \""+nomeAt(fraco)+"\" do anúncio (ou criar um anúncio só com o melhor) e deixar a Meta concentrar.",impacto:Number(fraco.gasto||0)}); });
+    /* R6: verba invertida entre conjuntos */
+    const cjs=conj.filter(function(x){return x.campaign_id===c.id&&Number(x.gasto||0)>0;}).map(function(x){ const r=Number(x.res||0); return Object.assign({},x,{r:r,cpa:_adsDiv(x.gasto,r)}); }); if(cjs.length>=2){ const soma=cjs.reduce(function(s,x){return s+Number(x.gasto);},0)||1; const val=cjs.filter(function(x){return x.r>=ADS_MIN_RESULTADOS&&x.cpa;}); const melhor=val.slice().sort(function(a,b){return a.cpa-b.cpa;})[0]; const pior=cjs.filter(function(x){return x!==melhor&&Number(x.gasto)/soma>0.4&&(x.r===0||(x.cpa&&melhor&&x.cpa>melhor.cpa*1.8));}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);})[0]; if(melhor&&pior) add(6,Number(pior.gasto)*0.5,"Realocar verba de \""+pior.nome+"\" para \""+melhor.nome+"\" em "+nome,"\""+pior.nome+"\" leva "+Math.round(Number(pior.gasto)/soma*100)+"% da verba"+(pior.r?" a "+brl(pior.cpa)+" por "+lbl:" sem "+lbl)+"; \""+melhor.nome+"\" entrega a "+brl(melhor.cpa)+" com "+Math.round(Number(melhor.gasto)/soma*100)+"%.","Reduzir a verba do conjunto pior em 50% e passar pro melhor (ou pausar o pior).",Number(pior.gasto)*0.5); }
+    /* R9: aprendizado limitado */
+    const cjEnt=ent.filter(function(e){return e.nivel==="conjunto"&&e.parent_id===c.id&&e.status_efetivo==="ACTIVE";}); const lim=cjEnt.filter(function(e){return e.fase_aprendizado==="LEARNING_LIMITED";}); if(lim.length&&cjEnt.length>=2) add(9,gasto*0.15,"Consolidar os conjuntos de "+nome,lim.length+" de "+cjEnt.length+" conjuntos ativos em \"aprendizado limitado\" — a verba está pulverizada e nenhum junta resultados suficientes (a Meta pede ~50 por semana).","Juntar conjuntos parecidos num só (ou subir a verba dos que ficam).",null);
+    /* R8: quebras que só gastam (idade / posicionamento), só com base */
+    const q=quebras[c.id]||[]; [["idade","faixa de "],["posicionamento",""]].forEach(function(dim){ const rows=q.filter(function(r){return r.dimensao===dim[0]&&Number(r.gasto)>0;}); const tq=rows.reduce(function(s,r){return s+Number(r.gasto);},0); if(!(tq>=100)||res<5) return; const ruim=rows.filter(function(r){ return Number(r.gasto)/tq>=0.2&&Number(r.resultados||0)===0; }).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);})[0]; if(!ruim) return; const lblV=_adsValLbl(dim[0],ruim.valor); out.push({chave:"r8:"+c.id+":"+dim[0]+":"+ruim.valor,regra:8,c:c,prio:Number(ruim.gasto),titulo:(dim[0]==="idade"?"Excluir a faixa "+lblV:"Tirar o posicionamento "+lblV)+" de "+nome,motivo:lblV+" levou "+Math.round(Number(ruim.gasto)/tq*100)+"% da verba ("+brl(ruim.gasto)+") e não trouxe nenhum "+lbl+", enquanto a campanha fez "+res+".",acao:dim[0]==="idade"?(c.ent&&c.ent.publico&&c.ent.publico.targeting_automation&&Number(c.ent.publico.targeting_automation.advantage_audience)===1?"Com Advantage+ ligado a idade é só sugestão: mudar pra público original e limitar a faixa.":"Ajustar a faixa etária do conjunto."):"Editar posicionamentos manuais no conjunto e desmarcar esse.",impacto:Number(ruim.gasto)}); });
+  });
+  out.sort(function(a,b){ return (b.prio||0)-(a.prio||0); });
+  return out;
+}
+function QGAdsEstrategia({mc,conta,isMob,canEdit}){
+  const accountId=conta&&conta.ad_account_id;
+  const D=useAdsVisaoGeral(accountId);
+  const X=useAdsPeriodoDados(accountId);
+  const AT=useAdsAtivosConta(accountId,X.P);
+  const S=useAdsSugestoesStatus(accountId);
+  const camps=useMemo(function(){ return (X.cur&&D.ent)?_adsCampanhasEnriquecidas(X.cur,D.ent):[]; },[X.cur,D.ent]);
+  const leadIds=camps.filter(function(c){return c.fam==="leads"&&Number(c.gasto||0)>0;}).sort(function(a,b){return b.gasto-a.gasto;}).map(function(c){return c.id;});
+  const Q=useAdsQuebrasPorCampanha(accountId,X.P,leadIds);
+  const [filtro,setFiltro]=useState("pendentes");
+  if(D.loading||X.loading||AT.loading||Q.loading) return <AdsLoading t="Montando a estratégia…"/>;
+  const P=X.P; const medias=_adsMediaPorTipo(camps); const gastoLeadTotal=camps.filter(function(c){return c.fam==="leads";}).reduce(function(s,c){return s+Number(c.gasto||0);},0);
+  const sug=_adsSugestoes({camps:camps,medias:medias,ent:D.ent||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,gastoLeadTotal:gastoLeadTotal});
+  const pend=sug.filter(function(s){return !S.st[s.chave];}), feitas=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="feito";}), ign=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="ignorado";});
+  const lista=filtro==="pendentes"?pend:filtro==="feitas"?feitas:ign;
+  const impTot=pend.reduce(function(s,x){return s+(x.impacto||0);},0);
+  const porCamp={}; lista.forEach(function(s){ (porCamp[s.c.id]=porCamp[s.c.id]||{c:s.c,itens:[]}).itens.push(s); });
+  const ordem=Object.keys(porCamp).map(function(k){return porCamp[k];}).sort(function(a,b){ return (b.itens[0].prio||0)-(a.itens[0].prio||0); });
+  const semSug=camps.filter(function(c){return Number(c.gasto||0)>0&&!sug.some(function(s){return s.c.id===c.id;});});
+  const REG={1:"custo",2:"sem resultado",3:"criativo",4:"destino",5:"ativos agrupados",6:"verba entre conjuntos",7:"fadiga",8:"público",9:"aprendizado",10:"marca",11:"escalar"};
+  const corDe=function(r){ return r===11?ADS.ok:(r===2||r===3||r===4)?ADS.crit:ADS.warn; };
+  return <AdsWrap>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:20}}>
+      <AdsSolido bg={ADS_SOL.escuro} eyebrow="Pendentes" big={pend.length} sub={pend.length?"recomendações pontuais em "+Object.keys(pend.reduce(function(m,s){m[s.c.id]=1;return m;},{})).length+" campanha"+(Object.keys(pend.reduce(function(m,s){m[s.c.id]=1;return m;},{})).length!==1?"s":""):"nada pendente com os dados do período"}/>
+      <AdsSolido bg={ADS_SOL.medio} eyebrow="Dinheiro em jogo" big={impTot>0?_adsBRL0(impTot):"—"} sub="gasto acima do que custaria na média da conta, nas campanhas com sugestão"/>
+      <AdsSolido bg={ADS_SOL.claro} eyebrow="Já tratadas" big={feitas.length+ign.length} sub={feitas.length+" feita"+(feitas.length!==1?"s":"")+" · "+ign.length+" ignorada"+(ign.length!==1?"s":"")}/>
+    </div>
+    <AdsSec t="Estratégia por campanha" s={"uma recomendação pontual por ponto encontrado · calculada com os dados de "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" · da maior verba em jogo pra menor"} right={<div style={{display:"flex",gap:6}}>{[["pendentes","Pendentes",pend.length],["feitas","Feitas",feitas.length],["ignoradas","Ignoradas",ign.length]].map(function(o){ return <AdsChip key={o[0]} on={filtro===o[0]} onClick={function(){setFiltro(o[0]);}} n={o[2]}>{o[1]}</AdsChip>; })}</div>}>
+      {ordem.length===0&&<AdsCard style={{fontSize:13,color:ADS.muted}}>{filtro==="pendentes"?"Nenhuma recomendação pendente com os dados deste período. Amplie o período (30 dias) pra ter mais base.":"Nada aqui."}</AdsCard>}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {ordem.map(function(g){ const c=g.c; const media=medias[c.tipo]||null; const rel=c.custo&&media?c.custo/media:null;
+          return <AdsCard key={c.id} style={{padding:0,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid "+ADS.line,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:c.ativa?ADS.ok:"#c9c5d6"}}/><span style={{fontWeight:900,fontSize:15,letterSpacing:"-.3px"}} title={c.nome}>{_adsNomeCurto(c.nome)}</span><AdsObjTag tipo={c.tipo}/>{(function(){ const m=String(c.nome||"").match(/\[(\d{2}\/\d{2}\/\d{2,4})\]/); return m?<span style={{fontSize:11,color:ADS.muted}}>{m[1]}</span>:null; })()}
+              <span style={{fontSize:12.5,color:ADS.ink2,display:"flex",gap:12,flexWrap:"wrap",marginLeft:isMob?0:8}}><span><b style={ADS_MONO}>{_adsBRLc(c.gasto)}</b> gasto</span>{c.cfg.campo?<span><b style={ADS_MONO}>{_adsNum(c.res)}</b> {c.cfg.resLbl}</span>:<span><b style={ADS_MONO}>{_adsNum(c.alcance)}</b> alcance</span>}{c.cfg.campo?<span><b style={Object.assign({color:rel?(rel>1.5?ADS.crit:rel<0.8?ADS.ok:ADS.ink):ADS.ink},ADS_MONO)}>{c.custo?_adsBRLc(c.custo):"—"}</b> por {c.cfg.resSing}{rel?" · "+_adsX(rel)+" a média do objetivo":""}</span>:<span>CPM <b style={ADS_MONO}>{_adsBRL(c.cpm)}</b></span>}<span>CTR <b style={ADS_MONO}>{_adsPct(c.ctr,2)}</b></span></span>
+              <span style={{marginLeft:"auto"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn></span>
+            </div>
+            {g.itens.map(function(s,i){ const cor=corDe(s.regra); const stt=S.st[s.chave];
+              return <div key={s.chave} style={{padding:"14px 18px",borderTop:i?"1px solid "+ADS.line:"none",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) auto",gap:14,alignItems:"start",borderLeft:"4px solid "+cor}}>
+                <div style={{minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,background:cor+"14",borderRadius:6,padding:"2px 7px"}}>{REG[s.regra]}</span>{s.impacto>0&&<span style={{fontSize:11.5,color:ADS.muted}}><b style={{color:ADS.ink2}}>{_adsBRLc(s.impacto)}</b> em jogo</span>}{stt&&<span style={{fontSize:11,color:ADS.muted}}>{stt.status==="feito"?"feita":"ignorada"}{stt.por?" por "+stt.por:""} · {_adsFmtD(String(stt.em).slice(0,10))}</span>}</div>
+                  <div style={{fontSize:15,fontWeight:800,letterSpacing:"-.2px",marginTop:6,lineHeight:1.3}}>{s.titulo}</div>
+                  <div style={{fontSize:12.5,color:ADS.ink2,marginTop:4,lineHeight:1.5}}>{s.motivo}</div>
+                  <div style={{fontSize:12.5,marginTop:6,lineHeight:1.5}}><b>Como fazer:</b> {s.acao}</div>
+                </div>
+                {canEdit&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}{stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}</div>}
+              </div>; })}
+          </AdsCard>; })}
+      </div>
+      {filtro==="pendentes"&&semSug.length>0&&<div style={{marginTop:14,fontSize:12.5,color:ADS.muted}}>Sem recomendação no período (dentro do esperado ou sem base suficiente): {semSug.map(function(c){return _adsNomeCurto(c.nome);}).join(" · ")}</div>}
+      <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Regras que geram as recomendações: custo contra a média do mesmo objetivo (1,5× = revisar; 0,7× = escalar), gasto sem resultado, CTR × conversão (criativo × destino), ativo agrupado que consome sem entregar, verba invertida entre conjuntos, frequência acima de 3,5, faixa etária/posicionamento que gasta 20%+ sem resultado, aprendizado limitado. Só dispara com dado real do período; amostra menor que {ADS_MIN_RESULTADOS} resultados não é julgada.</div>
+    </AdsSec>
+  </AdsWrap>;
+}
+
 function QGAdsCampanhasTab({mc,conta,isMob,canEdit}){
-  const [campId,setCampId]=useState(null);
-  useEffect(function(){ setCampId(null); },[mc&&mc.client_id]);
+  const [campId,setCampId]=useState(function(){ const d=window._pxAdsCampDesejada||null; window._pxAdsCampDesejada=null; return d; });
+  useEffect(function(){ const d=window._pxAdsCampDesejada||null; window._pxAdsCampDesejada=null; setCampId(d); },[mc&&mc.client_id]);
   if(campId) return <QGAdsCampanha mc={mc} conta={conta} campId={campId} isMob={isMob} canEdit={canEdit} onVoltar={function(){setCampId(null);}}/>;
   return <QGAdsCampanhas mc={mc} conta={conta} isMob={isMob} onAbrir={setCampId}/>;
 }
