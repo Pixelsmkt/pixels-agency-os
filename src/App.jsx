@@ -53624,13 +53624,47 @@ function useAdsCorteDetalhe(accountId,dim,valor,campIds,de,ate){
     return function(){ alive=false; }; },[accountId,dim,String(valor),(campIds||[]).join(","),de,ate]);
   return st;
 }
+/* lead a lead: hora × anúncio (v15) — bloco de 1 hora, sem minuto */
+function _adsLeadTxt(r){ const n=Number(r.resultados||0); const t=r.tipo; if(t==="form") return _adsNum(n)+(n>1?" formulários":" formulário"); if(t==="lead_wpp"||t==="eng_wpp") return _adsNum(n)+(n>1?" conversas":" conversa")+" WhatsApp"; const cfg=_adsTipo(t)||{}; return _adsNum(n)+" "+(n>1?(cfg.resLbl||"resultados"):(cfg.resSing||"resultado")); }
+function AdsLeadALead({conta,P,campIds,filtroLbl,isMob}){
+  const LH=useAdsLeadsHora(conta&&conta.ad_account_id,campIds,P.ini,P.fim);
+  const [verTudo,setVerTudo]=useState(false);
+  const rows=(LH.rows||[]).slice().sort(function(a,b){ return String(b.data).localeCompare(String(a.data))||String(a.hora).localeCompare(String(b.hora)); });
+  const dias={}; rows.forEach(function(r){ const k=String(r.data).slice(0,10); (dias[k]=dias[k]||[]).push(r); });
+  const ks=Object.keys(dias).sort().reverse(); const tot=rows.reduce(function(s,r){return s+Number(r.resultados||0);},0);
+  const mostrar=verTudo?ks:ks.slice(0,7);
+  const primeiroDia=rows.length?rows.reduce(function(m,r){ const d=String(r.data).slice(0,10); return d<m?d:m; },"9999"):null;
+  return <AdsSec t="Quando cada lead entrou" s={<span>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · {filtroLbl} · hora do clique que gerou o lead, no fuso da conta · bloco de 1 hora (a Meta não dá o minuto)</span>}>
+    {LH.loading?<div style={{fontSize:12.5,color:ADS.muted}}>lendo hora a hora…</div>:!rows.length?<div style={{fontSize:12.5,color:ADS.muted}}>sem hora por anúncio neste período — a coleta por anúncio começou em 29/08; dias anteriores só têm a hora por campanha (na janela do corte).</div>:
+    <AdsCard style={{padding:"14px 18px"}}>
+      <div style={{fontSize:12.5,color:ADS.ink2,marginBottom:10}}><b style={{color:ADS.ink}}>{_adsNum(tot)}</b> leads em <b style={{color:ADS.ink}}>{ks.length}</b> dias{primeiroDia&&primeiroDia>P.ini?<span> · hora por anúncio disponível a partir de {_adsFmtD(primeiroDia)}</span>:null}</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"10px 22px"}}>
+        {mostrar.map(function(k){ const ls=dias[k]; const n=ls.reduce(function(s,r){return s+Number(r.resultados||0);},0); return <div key={k} style={{minWidth:0}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,borderBottom:"1px solid "+ADS.line,paddingBottom:4,marginBottom:4}}><b style={{fontSize:13}}>{_adsFmtDL(k)}</b><span style={{fontSize:11,color:ADS.muted}}>{["dom","seg","ter","qua","qui","sex","sáb"][new Date(k+"T12:00:00").getDay()]} · {_adsNum(n)} lead{n>1?"s":""}</span></div>
+          {ls.map(function(r,i){ return <div key={i} style={{display:"grid",gridTemplateColumns:"36px minmax(0,1fr) auto",gap:8,fontSize:12,alignItems:"center",padding:"2px 0"}}><b style={{fontFeatureSettings:"'tnum'"}}>{String(r.hora).padStart(2,"0")}h</b><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:ADS.ink2}} title={(r.ad_nome||r.ad_id)+" · "+(r.adset_nome||"")+" · "+(r.campaign_nome||"")}>{_adsNomeCurto(r.ad_nome||r.ad_id)}{r.adset_nome?<span style={{color:ADS.muted}}> · {_adsNomeCurto(r.adset_nome)}</span>:null}</span><span style={{whiteSpace:"nowrap",fontWeight:700,color:r.tipo==="form"?ADS.accent:ADS.ok}}>{_adsLeadTxt(r)}</span></div>; })}
+        </div>; })}
+      </div>
+      {ks.length>7&&!verTudo&&<div style={{textAlign:"center",marginTop:12}}><AdsChip onClick={function(){setVerTudo(true);}}>Ver os outros {ks.length-7} dias</AdsChip></div>}
+    </AdsCard>}
+  </AdsSec>;
+}
+function useAdsLeadsHora(accountId,campIds,de,ate){
+  const [st,setSt]=useState({loading:true,rows:[]});
+  useEffect(function(){ if(!accountId||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
+    window._sb.rpc("ads_leads_hora",{p_account:accountId,p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error) console.warn("[ads leads hora]",r.error.message); setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
+    return function(){ alive=false; }; },[accountId,(campIds||[]).join(","),de,ate]);
+  return st;
+}
 function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,onClose}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
   const hoje=_adsIso(new Date()); const ate=_adsAddDays(hoje,-1); const de=_adsAddDays(ate,-89);
   const S=useAdsCorteDetalhe(conta&&conta.ad_account_id,dim,x.valor,campIds,de,ate);
-  const [hov,setHov]=useState(null);
+  const LH=useAdsLeadsHora(conta&&conta.ad_account_id,campIds,de,ate);
+  const [hov,setHov]=useState(null); const [diaSel,setDiaSel]=useState(null); /* clique num dia → hora daquele dia */
   const d=S.data||{serie:[],cruz:[],hora:[]};
-  const serie=d.serie||[], cruz=d.cruz||[], hora=d.hora||[];
+  const serie=d.serie||[], cruz=d.cruz||[], horaTudo=d.hora||[], horaDia=d.hora_dia||[];
+  const hora=diaSel?horaDia.filter(function(h){return String(h.data).slice(0,10)===diaSel;}):horaTudo;
+  const temHoraDia={}; horaDia.forEach(function(h){ temHoraDia[String(h.data).slice(0,10)]=1; });
   /* eixo de 90 dias, um por um (dia sem entrega = 0) */
   const porDia={}; serie.forEach(function(s){ porDia[String(s.data).slice(0,10)]=s; });
   const cruzDia={}; cruz.forEach(function(c){ const k=String(c.data).slice(0,10); (cruzDia[k]=cruzDia[k]||[]).push(c); });
@@ -53662,14 +53696,14 @@ function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,on
       {!S.loading&&<>
         {/* linha do tempo */}
         <div style={{marginTop:18}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900}}>Linha do tempo</span><span style={{fontSize:12,color:ADS.muted}}>{resNomePl} por dia · passe o mouse pra ver o dia{cfg?" e o cruzamento daquele dia":""}</span></div>
+          <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900}}>Linha do tempo</span><span style={{fontSize:12,color:ADS.muted}}>{resNomePl} por dia · passe o mouse pra ver o dia{cfg?" e o cruzamento daquele dia":""} · clique no dia pra ver a hora</span></div>
           <div style={{position:"relative",marginTop:10}}>
             <svg width="100%" viewBox={"0 0 "+W+" "+(H+22)} style={{display:"block"}} onMouseLeave={function(){setHov(null);}}>
-              {dias.map(function(a,i){ const bw=W/90; const h=a.res/maxRes*(H-10); const on=hov===i; return <g key={a.data} onMouseEnter={function(){setHov(i);}}><rect x={i*bw} y={0} width={bw} height={H} fill="transparent"/><rect x={i*bw+1} y={H-h} width={Math.max(1,bw-2)} height={h} rx={2} fill={on?ADS_ROXO[900]:a.res>0?ADS_ROXO[500]:"#ecebf2"} style={{transition:"fill .15s"}}/></g>; })}
+              {dias.map(function(a,i){ const bw=W/90; const h=a.res/maxRes*(H-10); const on=hov===i; const sel=diaSel===a.data; return <g key={a.data} onMouseEnter={function(){setHov(i);}} onClick={function(){ setDiaSel(sel?null:a.data); }} style={{cursor:a.res>0?"pointer":"default"}}><rect x={i*bw} y={0} width={bw} height={H} fill="transparent"/><rect x={i*bw+1} y={H-h} width={Math.max(1,bw-2)} height={h} rx={2} fill={sel?"#12805a":on?ADS_ROXO[900]:a.res>0?ADS_ROXO[500]:"#ecebf2"} style={{transition:"fill .15s"}}/></g>; })}
               {[0,15,30,45,60,75,89].map(function(i){ return <text key={i} x={i*W/90+W/180} y={H+16} fontSize="10" fill={ADS.muted} textAnchor={i===0?"start":i===89?"end":"middle"} fontFamily={ADS_FONT}>{_adsFmtD(dias[i].data)}</text>; })}
             </svg>
             {hp&&<div style={{position:"absolute",left:(hov/90*100)+"%",top:0,transform:"translate("+(hov>60?"-100%":hov<30?"0":"-50%")+",-6px)",background:ADS.tipBg,color:ADS.tipInk,borderRadius:12,padding:"10px 13px",fontSize:12,lineHeight:1.5,pointerEvents:"none",zIndex:5,boxShadow:"0 12px 32px rgba(15,13,26,.28)",whiteSpace:"nowrap",minWidth:170}}>
-              <b>{_adsFmtDL(hp.data)}</b> · {["dom","seg","ter","qua","qui","sex","sáb"][new Date(hp.data+"T12:00:00").getDay()]}<br/><b>{_adsNum(hp.res)}</b> {hp.res===1?resNome:resNomePl} · {_adsBRL0(hp.gasto)}
+              <b>{_adsFmtDL(hp.data)}</b> · {["dom","seg","ter","qua","qui","sex","sáb"][new Date(hp.data+"T12:00:00").getDay()]}<br/><b>{_adsNum(hp.res)}</b> {hp.res===1?resNome:resNomePl} · {_adsBRL0(hp.gasto)}{hp.res>0&&<span style={{opacity:.6}}> · {temHoraDia[hp.data]?"clique pra ver a hora":"sem hora coletada"}</span>}
               {hp.cruz.length>0&&<div style={{marginTop:4,paddingTop:4,borderTop:"1px solid rgba(255,255,255,.15)",opacity:.9}}>{hp.cruz.filter(function(c){return Number(c.resultados)>0;}).sort(function(a,b){return b.resultados-a.resultados;}).map(function(c){ return <div key={c.outro}>{cfg[3](c.outro)}: <b>{_adsNum(c.resultados)}</b></div>; })}</div>}
             </div>}
           </div>
@@ -53687,14 +53721,19 @@ function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,on
           </div>
           {/* hora do dia */}
           <div style={{border:"1px solid "+ADS.line,borderRadius:14,padding:"14px 16px"}}>
-            <div style={{fontSize:13.5,fontWeight:900}}>Hora do dia</div>
-            <div style={{fontSize:11.5,color:ADS.muted,marginTop:2}}>{horaTot>0?"em que hora os "+resNomePl+" chegam · "+(d.hora_dias||0)+" dias com hora":"ainda sem hora coletada neste período"}</div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontSize:13.5,fontWeight:900}}>Hora do dia{diaSel?" · "+_adsFmtDL(diaSel):""}</span>{diaSel&&<button onClick={function(){setDiaSel(null);}} style={{background:ADS.surface2,border:0,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",color:ADS.ink2,fontFamily:ADS_FONT,minHeight:0}}>← 3 meses</button>}</div>
+            <div style={{fontSize:11.5,color:ADS.muted,marginTop:2}}>{diaSel?(horaTot>0?"em que hora os "+_adsNum(horaTot)+" "+resNomePl+" desse dia chegaram (campanhas do filtro)":"sem hora coletada nesse dia"):(horaTot>0?"em que hora os "+resNomePl+" chegam · "+(d.hora_dias||0)+" dias com hora":"ainda sem hora coletada neste período")}</div>
             {horaTot>0&&<>
               <div style={{display:"grid",gridTemplateColumns:"repeat(24,1fr)",gap:2,alignItems:"end",height:90,marginTop:12}}>{horas.map(function(a){ const on=melhorHora&&melhorHora.h===a.h; return <div key={a.h} title={String(a.h).padStart(2,"0")+"h · "+_adsNum(a.res)+" "+resNomePl+" · "+_adsBRL0(a.gasto)} style={{height:Math.max(2,a.res/maxHora*100)+"%",borderRadius:"3px 3px 1px 1px",background:on?ADS_ROXO[900]:a.res>0?ADS_ROXO[400]:"#ecebf2"}}/>; })}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(24,1fr)",marginTop:4}}>{horas.map(function(a){ return <span key={a.h} style={{fontSize:9,color:ADS.muted,textAlign:"center"}}>{a.h%3===0?a.h:""}</span>; })}</div>
               {melhorHora&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:8}}>Pico às <b>{String(melhorHora.h).padStart(2,"0")}h</b> ({_adsNum(melhorHora.res)} {resNomePl}, {Math.round(melhorHora.res/horaTot*100)}%). {(function(){ const faixa=horas.slice().sort(function(a,b){return b.res-a.res;}).slice(0,4).map(function(a){return a.h;}).sort(function(a,b){return a-b;}); const n=horas.filter(function(a){return faixa.indexOf(a.h)>=0;}).reduce(function(s,a){return s+a.res;},0); return "As 4 horas mais fortes ("+faixa.map(function(h){return h+"h";}).join(", ")+") concentram "+Math.round(n/horaTot*100)+"%."; })()}</div>}
             </>}
-            <div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>A hora é das campanhas do filtro ({filtroLbl}), no fuso da conta — a Meta não entrega hora por {ADS_DIM_LBL[dim].toLowerCase()}.</div>
+            {diaSel&&(function(){ const ls=(LH.rows||[]).filter(function(r){return String(r.data).slice(0,10)===diaSel;}); if(LH.loading) return <div style={{fontSize:12,color:ADS.muted,marginTop:10}}>lendo anúncio a anúncio…</div>; if(!ls.length) return null;
+              return <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid "+ADS.line}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS.muted}}>Hora a hora · qual anúncio trouxe</div>
+                <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:6,maxHeight:220,overflow:"auto"}}>{ls.map(function(r,i){ const n=Number(r.resultados||0); const tipoTxt=_adsLeadTxt(r);
+                  return <div key={i} style={{display:"grid",gridTemplateColumns:"38px 1fr auto",gap:8,fontSize:12,alignItems:"center"}}><b style={{fontFeatureSettings:"'tnum'",color:ADS.ink}}>{String(r.hora).padStart(2,"0")}h</b><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:ADS.ink2}} title={(r.ad_nome||r.ad_id)+" · "+(r.adset_nome||"")+" · "+(r.campaign_nome||"")}>{_adsNomeCurto(r.ad_nome||r.ad_id)}{r.adset_nome?<span style={{color:ADS.muted}}> · {_adsNomeCurto(r.adset_nome)}</span>:null}</span><b style={{whiteSpace:"nowrap",color:ADS.accent}}>{tipoTxt}</b></div>; })}</div>
+                <div style={{fontSize:10.5,color:ADS.muted,marginTop:6}}>bloco de 1 hora (a Meta não dá o minuto) · hora do clique/visualização que gerou o {resNome}</div></div>; })()}
+            <div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>A hora é a do clique/visualização que gerou o {resNome}, no fuso da conta, das campanhas do filtro ({filtroLbl}) — a Meta não entrega hora por {ADS_DIM_LBL[dim].toLowerCase()}.</div>
           </div>
         </div>
       </>}
@@ -53891,6 +53930,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>{dims.map(bloco)}</div>
       <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Passe o mouse num corte pra ver o cruzamento real da Meta (idade↔gênero, posicionamento↔aparelho — os únicos que ela entrega); clique pra abrir 3 meses por dia e a hora do dia. Só cortes com {ADS_MIN_RESULTADOS}+ resultados entram na comparação; na pizza o custo vira fatia da verba (custo não soma).</div>
     </AdsSec>
+    {!embutido&&<AdsLeadALead conta={conta} P={P} campIds={campIds} filtroLbl={filtroLbl} isMob={isMob}/>}
   </AdsWrap>;
 }
 
