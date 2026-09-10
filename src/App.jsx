@@ -52634,7 +52634,7 @@ function AdsMapaPublico({p,isMob}){
   const cidadeIds=G.pontos.concat(G.exPontos).map(function(x){return x.cidadeId;}).filter(Boolean);
   const ufs=Array.from(new Set(G.cidades.concat(G.exCidades).map(function(c){return c.uf;}).concat(G.estados.concat(G.exEstados).map(function(e){return e.uf;})).filter(Boolean)));
   const corpo=useMemo(function(){ return {municipios:G.cidades.concat(G.exCidades).map(function(c){return {nome:c.nome,uf:c.uf,regiao:c.regiao};}),estados:ufs,brasil_ufs:true,paises:Array.from(new Set(G.paises.concat(G.exPaises).filter(function(c){return c!=="BR";}))),meta_cidades:cidadeIds}; },[p]);
-  const nenhum=!G.pontos.length&&!G.cidades.length&&!G.estados.length&&!G.paises.length;
+  const nLug=G.pontos.length+G.cidades.length+G.estados.length+G.paises.length; const nenhum=nLug===0;
   useEffect(function(){ let alive=true; if(nenhum){ setSt({loading:false,erro:null,dados:null}); return; }
     Promise.all([_pxLeaflet(),_pxGeoMalhas(corpo)]).then(function(r){ if(alive) setSt({loading:false,erro:null,dados:r[1]}); }).catch(function(e){ if(alive) setSt({loading:false,erro:e.message||String(e),dados:null}); });
     return function(){ alive=false; }; },[corpo]);
@@ -52684,7 +52684,7 @@ function AdsMapaPublico({p,isMob}){
   const voa=function(k){ const m=mapRef.current; if(m&&m._px&&m._px.voa[k]) m._px.voa[k](); };
   const Grupo=function(id,cor,titulo,sub,itens){ if(!itens.length) return null; const on=!!abertos[id];
     return <div style={{marginBottom:8}}>
-      <div onClick={function(){ setAbertos(Object.assign({},abertos,(function(o){o[id]=!on;return o;})({}))); }} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",padding:"6px 6px",borderRadius:8,fontSize:12,fontWeight:800,userSelect:"none"}}><span style={{width:10,height:10,borderRadius:cor==="#7326d6"?"50%":3,background:cor,display:"inline-block",flexShrink:0}}/>{titulo} · {itens.length}{sub&&<span style={{fontWeight:600,color:ADS.muted}}>{sub}</span>}<span style={{marginLeft:"auto",color:ADS.muted,fontSize:11,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span></div>
+      <div onClick={function(){ setAbertos(Object.assign({},abertos,(function(o){o[id]=!on;return o;})({}))); }} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",padding:"6px 6px",borderRadius:8,fontSize:12,fontWeight:800,userSelect:"none"}}><span style={{width:10,height:10,borderRadius:cor==="#7326d6"?"50%":3,background:cor,display:"inline-block",flexShrink:0}}/>{titulo}<span style={{background:ADS.surface2,borderRadius:99,padding:"1px 7px",fontSize:11,color:ADS.ink2,fontWeight:700}}>{itens.length}</span>{sub&&<span style={{fontWeight:600,color:ADS.muted,fontSize:11.5}}>{sub}</span>}<span style={{marginLeft:"auto",color:ADS.muted,fontSize:11,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span></div>
       {on&&<div style={{paddingTop:2}}>{itens.map(function(it){ return <div key={it.k} onClick={function(){ voa(it.k); }} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 8px",borderRadius:8,cursor:"pointer",fontSize:12,color:ADS.ink2}} onMouseEnter={function(e){e.currentTarget.style.background=ADS.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span><small style={{color:ADS.muted,whiteSpace:"nowrap"}}>{it.r}</small></div>; })}</div>}
     </div>; };
   if(nenhum) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu localizações para este conjunto.</div>;
@@ -52705,13 +52705,15 @@ function AdsMapaPublico({p,isMob}){
         </div>}
         {avisos.length>0&&<div style={{position:"absolute",left:10,top:10,zIndex:500,background:ADS.warnSoft,color:"#6b4d00",border:"1px solid #f3d38a",borderRadius:8,padding:"5px 9px",fontSize:11,maxWidth:"60%"}}>{avisos.join(" · ")}</div>}
       </div>
-      <div style={{borderLeft:isMob?"none":"1px solid "+ADS.line,borderTop:isMob?"1px solid "+ADS.line:"none",padding:"10px 12px",maxHeight:isMob?"none":480,overflowY:"auto"}}>
-        {Grupo("pontos","#7326d6","Pontos com raio",G.pontos.length&&G.pontos.every(function(x){return x.raio===G.pontos[0].raio;})?" · "+G.pontos[0].raio+" km cada":"",G.pontos.map(function(x,i){ return {k:"p"+i,l:nomePonto(x,i),r:x.raio+" km"}; }))}
-        {Grupo("cidades","#12805a","Municípios selecionados",G.cidades.some(function(c){return c.raio;})?"":" · contorno oficial",G.cidades.map(function(c,i){ return {k:"c"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"+ "+c.raio+" km":"município"}; }))}
+      <div style={{borderLeft:isMob?"none":"1px solid "+ADS.line,borderTop:isMob?"1px solid "+ADS.line:"none",display:"flex",flexDirection:"column",maxHeight:isMob?"none":500}}>
+        <div style={{padding:"10px 12px",borderBottom:"1px solid "+ADS.line,fontSize:12,color:ADS.ink2,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span><b>{nLug+G.exCidades.length+G.exPontos.length+G.exEstados.length+G.exPaises.length}</b> itens no mapa</span><span style={{color:ADS.muted}}>clique pra voar até o lugar</span></div>
+        <div style={{overflowY:"auto",padding:"8px 8px"}}>
+        {Grupo("pontos","#7326d6","Pontos com raio",G.pontos.length&&G.pontos.every(function(x){return x.raio===G.pontos[0].raio;})?G.pontos[0].raio+" km cada":"",G.pontos.map(function(x,i){ return {k:"p"+i,l:nomePonto(x,i),r:x.raio+" km"}; }))}
+        {Grupo("cidades","#12805a","Municípios selecionados",G.cidades.some(function(c){return c.raio;})?"":"contorno oficial",G.cidades.map(function(c,i){ return {k:"c"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"+ "+c.raio+" km":"município"}; }))}
         {Grupo("estados","#12805a","Estados selecionados","",G.estados.map(function(e,i){ return {k:"e"+i,l:e.nome,r:"estado"}; }))}
         {Grupo("paises","#12805a","Países selecionados","",G.paises.map(function(c,i){ return {k:"n"+i,l:ADS_PAIS_LBL[c]||c,r:"país"}; }))}
-        {Grupo("excl","#b91c1c","Excluídos","",G.exCidades.map(function(c,i){ return {k:"x"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"município + "+c.raio+" km":"município"}; }).concat(G.exPontos.map(function(x,i){ return {k:"xp"+i,l:nomePonto(x,i),r:x.raio+" km"}; })).concat(G.exEstados.map(function(e,i){ return {k:"xe"+i,l:e.nome,r:"estado"}; })).concat(G.exPaises.map(function(c,i){ return {k:"xn"+i,l:ADS_PAIS_LBL[c]||c,r:"país"}; })))}
-        {G.tiposLocal.length>0&&<div style={{fontSize:11.5,color:ADS.muted,padding:"4px 6px"}}>pessoas que {G.tiposLocal.map(function(t){return LT[t]||t;}).join(" ou ")} nesses lugares</div>}
+        {Grupo("excl","#b91c1c","Excluídos",[G.exCidades.length?G.exCidades.length+" município"+(G.exCidades.length>1?"s":"")+(G.exCidades[0].raio?" + "+G.exCidades[0].raio+" km":""):null,G.exPaises.length?G.exPaises.length+" país"+(G.exPaises.length>1?"es":""):null,G.exEstados.length?G.exEstados.length+" estado"+(G.exEstados.length>1?"s":""):null].filter(Boolean).join(" · "),G.exCidades.map(function(c,i){ return {k:"x"+i,l:c.nome+(c.uf?" – "+c.uf:""),r:c.raio?"município + "+c.raio+" km":"município"}; }).concat(G.exPontos.map(function(x,i){ return {k:"xp"+i,l:nomePonto(x,i),r:x.raio+" km"}; })).concat(G.exEstados.map(function(e,i){ return {k:"xe"+i,l:e.nome,r:"estado"}; })).concat(G.exPaises.map(function(c,i){ return {k:"xn"+i,l:ADS_PAIS_LBL[c]||c,r:"país"}; })))}
+        </div>
       </div>
     </div>
   </div>;
@@ -52721,34 +52723,40 @@ function AdsMapaPublico({p,isMob}){
 function AdsPublicoBloco({p,isMob}){
   const d=_adsPublicoDetalhado(p);
   if(d.vazio) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu o público deste conjunto.</div>;
-  const Item=function(t,children){ return <div style={{minWidth:0}}><AdsEyebrow>{t}</AdsEyebrow><div style={{fontSize:12.5,color:ADS.ink,marginTop:4,lineHeight:1.5}}>{children}</div></div>; };
-  const chips=function(arr,cor){ return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>{arr.map(function(x,i){ return <span key={i} style={{fontSize:11.5,background:cor||ADS.surface2,color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line}}>{x}</span>; })}</div>; };
-  const temSeg=d.interesses.length||d.comportamentos.length||d.demograficos.length||d.publicos.length;
-  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"12px 20px"}}>
-    {Item("Quem",<div>
-      {d.advantage?<div>
-        <div><span style={{color:ADS.muted}}>Limite (controle):</span> <b>{d.idadeMin?"idade mínima "+d.idadeMin:"idade mínima não informada"}</b>{d.idiomas.length?" · "+d.idiomas.join(", "):""}</div>
-        <div style={{marginTop:2}}><span style={{color:ADS.muted}}>Sugestão (a Meta pode sair dela):</span> <b>{d.idade||"sem faixa sugerida"}</b> · {d.genero}</div>
-      </div>:<span><b>{d.idade||"idade não informada"}</b> · {d.genero}{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>}
-    </div>)}
-    {Item("Público",<div>
-      {d.advantage&&<div style={{background:ADS.warnSoft,border:"1px solid "+ADS.warn+"55",borderRadius:9,padding:"6px 9px",marginBottom:6}}><b style={{color:ADS.warn}}>Público Advantage+ ligado</b> <span style={{color:ADS.ink2}}>— idade, gênero e interesses abaixo são <b>sugestão, não limite</b>: a Meta entrega também pra quem não se encaixa neles (sempre dentro das localizações).</span></div>}
-      {!d.advantage&&<div><b style={{color:ADS.ok}}>Público original</b> <span style={{color:ADS.muted}}>— idade, gênero e interesses são regra</span>{d.expansao?<span> · <b>expansão de segmentação ativada</b></span>:null}</div>}
-      {d.grupos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Interesses e comportamentos{d.grupos.length>1?" (todos os grupos precisam bater)":""}:</span>{d.grupos.map(function(gp,gi){ return <div key={gi} style={{marginTop:gi?4:2}}>{gi>0&&<div style={{fontSize:10.5,fontWeight:800,color:ADS.muted,letterSpacing:".06em",margin:"2px 0"}}>E TAMBÉM</div>}{chips(gp)}</div>; })}</div>}
-      {d.demograficos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Dados demográficos:</span>{chips(d.demograficos)}</div>}
-      {d.publicos.length>0&&<div style={{marginTop:4}}><span style={{color:ADS.muted}}>Públicos personalizados:</span>{chips(d.publicos,"#f6f0ff")}</div>}
-      {(d.exclInt.length>0||d.exclPublicos.length>0)&&<div style={{marginTop:4}}><span style={{color:ADS.crit}}>Excluídos:</span>{chips(d.exclInt.concat(d.exclPublicos),ADS.critSoft)}</div>}
-      {!temSeg&&!d.advantage&&<span style={{color:ADS.muted}}>Sem interesses ou públicos — público amplo (só idade, gênero e localização).</span>}
-      {!temSeg&&d.advantage&&<span style={{color:ADS.muted}}>Sem interesses definidos — a Meta escolhe quem recebe.</span>}
-    </div>)}
-    {Item("Onde aparece (posicionamentos configurados)",<div>
-      {d.posAuto?<div><b style={{color:ADS.accent}}>Posicionamentos Advantage+</b> <span style={{color:ADS.muted}}>— automático: a Meta distribui entre Facebook, Instagram, Messenger e Audience Network. A entrega real está na campanha, abaixo.</span></div>
-      :<div>{chips(d.posicoes.length?d.posicoes:d.plataformas)}{d.dispositivos.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>dispositivos: {d.dispositivos.join(" e ")}</div>}</div>}
-    </div>)}
-    <div style={{gridColumn:"1 / -1",minWidth:0}}>
-      <AdsEyebrow>Localizações{d.locais.length?" ("+d.locais.length+")":""}</AdsEyebrow>
-      {d.advantage&&<div style={{fontSize:11.5,margin:"4px 0 8px",color:d.expansaoGeo?ADS.warn:ADS.ok,fontWeight:700}}>{d.expansaoGeo?"Expansão de localização ligada — a Meta também entrega perto dessas áreas":"Localizações são limite (expansão de localização desligada)"}</div>}
-      <div style={{marginTop:d.advantage?0:6}}><AdsMapaPublico p={p} isMob={isMob}/></div>
+  const chips=function(arr,cor){ return <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{arr.map(function(x,i){ return <span key={i} style={{fontSize:11.5,background:cor||"#fff",color:ADS.ink2,borderRadius:7,padding:"3px 8px",border:"1px solid "+ADS.line}}>{x}</span>; })}</div>; };
+  const temSeg=d.grupos.length||d.demograficos.length||d.publicos.length;
+  const Tile=function(children){ return <div style={{background:"#fbfaff",border:"1px solid "+ADS.line,borderRadius:14,padding:"14px 16px",minWidth:0}}>{children}</div>; };
+  const Linha=function(k,v){ return <div style={{display:"flex",gap:8,alignItems:"baseline",fontSize:12.5,lineHeight:1.5,flexWrap:"wrap"}}><span style={{color:ADS.muted,minWidth:82}}>{k}</span><span>{v}</span></div>; };
+  const Titulo=function(t,sub){ return <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900,letterSpacing:"-.3px"}}>{t}</span>{sub&&<span style={{fontSize:12,color:ADS.muted}}>{sub}</span>}</div>; };
+  const G=_adsGeoListas(p); const nLug=G.pontos.length+G.cidades.length+G.estados.length+G.paises.length;
+  const LT={home:"moram",recent:"estiveram recentemente",frequently_in:"frequentam",travel_in:"em viagem"};
+  return <div>
+    <div style={{marginBottom:22}}>
+      {Titulo("Público","como está configurado na Meta")}
+      {d.advantage?<div style={{background:ADS.warnSoft,border:"1px solid #f3d38a",borderRadius:10,padding:"8px 11px",fontSize:12.5,lineHeight:1.45,marginBottom:10}}><b style={{color:ADS.warn}}>Público Advantage+ ligado</b> — idade, gênero e interesses são <b>sugestão, não limite</b>: a Meta entrega também pra quem não se encaixa neles (sempre dentro das localizações).</div>
+      :<div style={{background:ADS.okSoft,border:"1px solid #bfe7d4",borderRadius:10,padding:"8px 11px",fontSize:12.5,lineHeight:1.45,marginBottom:10}}><b style={{color:ADS.ok}}>Público original</b> — idade, gênero e interesses são regra.{d.expansao?<span> <b>Expansão de segmentação ativada.</b></span>:null}</div>}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+        {Tile(<div>
+          <div style={{marginBottom:6}}><AdsEyebrow>Quem</AdsEyebrow></div>
+          {d.advantage?<>{Linha("Limite",<span><b>{d.idadeMin?"idade mínima "+d.idadeMin:"idade mínima não informada"}</b>{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>)}{Linha("Sugestão",<span><b>{d.idade||"sem faixa sugerida"}</b> · {d.genero}</span>)}</>
+          :Linha("Regra",<span><b>{d.idade||"idade não informada"}</b> · {d.genero}{d.idiomas.length?" · "+d.idiomas.join(", "):""}</span>)}
+          <div style={{marginTop:12,marginBottom:6}}><AdsEyebrow>Onde aparece</AdsEyebrow></div>
+          {d.posAuto?<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12.5}}>{["Facebook","Instagram","Messenger","Audience Network"].map(function(x){ return <span key={x} style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:8,padding:"5px 9px"}}>{x}</span>; })}<span style={{color:ADS.muted,fontSize:12}}>Posicionamentos Advantage+ (automático)</span></div>
+          :<div>{chips(d.posicoes.length?d.posicoes:d.plataformas)}{d.dispositivos.length>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4}}>dispositivos: {d.dispositivos.join(" e ")}</div>}</div>}
+        </div>)}
+        {Tile(<div>
+          <div style={{marginBottom:6}}><AdsEyebrow>Interesses e comportamentos{d.grupos.length>1?<span style={{fontWeight:600,letterSpacing:0,textTransform:"none"}}> · todos os grupos precisam bater</span>:null}</AdsEyebrow></div>
+          {d.grupos.map(function(gp,gi){ return <div key={gi}>{gi>0&&<div style={{fontSize:10,fontWeight:800,color:ADS.muted,letterSpacing:".08em",margin:"6px 0 4px"}}>E TAMBÉM</div>}{chips(gp)}</div>; })}
+          {d.demograficos.length>0&&<div style={{marginTop:8}}><span style={{fontSize:11.5,color:ADS.muted}}>Dados demográficos</span>{chips(d.demograficos)}</div>}
+          {d.publicos.length>0&&<div style={{marginTop:8}}><span style={{fontSize:11.5,color:ADS.muted}}>Públicos personalizados</span>{chips(d.publicos,"#f6f0ff")}</div>}
+          {(d.exclInt.length>0||d.exclPublicos.length>0)&&<div style={{marginTop:8}}><span style={{fontSize:11.5,color:ADS.crit}}>Excluídos</span>{chips(d.exclInt.concat(d.exclPublicos),ADS.critSoft)}</div>}
+          {!temSeg&&<span style={{fontSize:12.5,color:ADS.muted}}>{d.advantage?"Sem interesses definidos — a Meta escolhe quem recebe.":"Sem interesses ou públicos — público amplo (só idade, gênero e localização)."}</span>}
+        </div>)}
+      </div>
+    </div>
+    <div>
+      {Titulo("Localizações",<span>{nLug} lugar{nLug!==1?"es":""}{d.advantage?<span> · <b style={{color:d.expansaoGeo?ADS.warn:ADS.ok}}>{d.expansaoGeo?"expansão de localização ligada":"são limite"}</b> {d.expansaoGeo?"(a Meta também entrega perto)":"(expansão de localização desligada)"}</span>:null}{G.tiposLocal.length?" · pessoas que "+G.tiposLocal.map(function(t){return LT[t]||t;}).join(", "):""}</span>)}
+      <AdsMapaPublico p={p} isMob={isMob}/>
     </div>
   </div>;
 }
@@ -52810,7 +52818,8 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const C=useAdsCriativos(accountId,ids);
   const [aberto,setAberto]=useState(null);
   const [verPausados,setVerPausados]=useState({});
-  const [verPublico,setVerPublico]=useState({});
+  const [cjSel,setCjSel]=useState(null);
+  const abasRef=useRef(null);
   if(C.loading) return <AdsLoading t="Lendo conjuntos e anúncios…"/>;
   /* conjuntos: snapshot (público/config) + métricas do período */
   const conjuntos=ent.filter(function(x){return x.nivel==="conjunto"&&x.parent_id===campId;});
@@ -52852,48 +52861,55 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
         </div>
       </div>
     </div>; };
-  const ConjCard=function(x){ const m=x.m; const st=_adsStatus(x.status_efetivo); const fs=x.fase_aprendizado; const fsL=fs==="SUCCESS"?["aprendizado concluído","o"]:fs==="LEARNING"?["em aprendizado","w"]:fs==="LEARNING_LIMITED"?["aprendizado limitado","c"]:null;
+  const Kpi=function(l,v,cor){ return <div style={{background:"#fff",padding:"12px 16px",minWidth:0}}><AdsEyebrow>{l}</AdsEyebrow><div style={Object.assign({fontSize:19,fontWeight:900,letterSpacing:"-.5px",marginTop:2,color:cor||ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{v}</div></div>; };
+  const Fato=function(children){ return <span style={{fontSize:12,color:ADS.ink2,background:ADS.surface2,borderRadius:8,padding:"5px 9px"}}>{children}</span>; };
+  const Titulo=function(t,sub){ return <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900,letterSpacing:"-.3px"}}>{t}</span>{sub&&<span style={{fontSize:12,color:ADS.muted}}>{sub}</span>}</div>; };
+  const ConjCard=function(x,idx){ const m=x.m; const st=_adsStatus(x.status_efetivo); const fs=x.fase_aprendizado; const fsL=fs==="SUCCESS"?["aprendizado concluído","o"]:fs==="LEARNING"?["em aprendizado","w"]:fs==="LEARNING_LIMITED"?["aprendizado limitado","c"]:null;
     const fatia=m?Number(m.gasto||0)/somaCj*100:0; const n=m&&m.res>=ADS_MIN_RESULTADOS?_adsNivelCusto(m.cpa,mediaConta,m.res):"n";
     const ativos=x.an.filter(function(a){return a.status==="ACTIVE"||a.gasto>0;}); const pausados=x.an.filter(function(a){return !(a.status==="ACTIVE"||a.gasto>0);});
     const dest=_adsDest((x.raw&&x.raw.destination_type)||x.destino); const orc=Number(x.orcamento)>0?_adsBRL(Number(x.orcamento)/100)+(x.tipo_orcamento==="diario"?"/dia":" total"):null;
-    const pubAberto=verPublico[x.entidade_id]!==undefined?verPublico[x.entidade_id]:(x.status_efetivo==="ACTIVE"||cjLista.length===1); /* aberto por padrão nos ativos (ou quando é o único) */
-    return <AdsCard key={x.entidade_id} borda={x.status_efetivo==="ACTIVE"?ADS.line2:ADS.line} style={{padding:0,overflow:"hidden",marginBottom:14}}>
-      <div style={{padding:"16px 20px",borderBottom:"1px solid "+ADS.line,background:x.status_efetivo==="ACTIVE"?"#fff":ADS.surface2}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:14,flexWrap:"wrap",alignItems:"flex-start"}}>
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><AdsEyebrow>Conjunto de anúncios</AdsEyebrow></div>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:3}}><span style={{width:9,height:9,borderRadius:"50%",background:x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:900,fontSize:16,letterSpacing:"-.3px"}}>{x.nome}</span><AdsTag n={st[1]}>{st[0]}</AdsTag>{fsL&&<AdsTag n={fsL[1]}>{fsL[0]}</AdsTag>}{x.foraSnap&&<AdsTag n="n">não está mais na conta</AdsTag>}</div>
-            <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:6,fontSize:12.5,color:ADS.ink2}}>{x.otimizacao&&<span>Otimiza pra <b>{_adsOtim(x.otimizacao)}</b></span>}{dest&&<span>Destino: <b>{dest}</b></span>}{orc&&<span>Orçamento <b>{orc}</b></span>}<span><b>{ativos.length}</b> anúncio{ativos.length!==1?"s":""} {x.status_efetivo==="ACTIVE"?(ativos.length===1?"ativo":"ativos"):"com gasto no período"}{pausados.length?" · "+pausados.length+" pausado"+(pausados.length>1?"s":"")+" sem gasto":""}</span></div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat("+(isMob?3:6)+",auto)",gap:isMob?12:18,alignItems:"start"}}>
-            {m?<>
-              {Met("Gasto",_adsBRLc(m.gasto))}
-              {Met("fatia",Math.round(fatia)+"%")}
-              {cfg.campo?Met(cfg.resLbl,_adsNum(m.res)):Met("Alcance",_adsNum(m.alcance))}
-              {cfg.campo?Met(cfg.custoLbl,m.cpa?_adsBRLc(m.cpa):"—",m.res>=ADS_MIN_RESULTADOS?_adsCor(n):ADS.ink):Met("CPM",_adsBRL(Number(m.impressoes)>0?Number(m.gasto)/Number(m.impressoes)*1000:null))}
-              {Met("CTR",_adsPct(m.ctr,2))}
-              {Met("Freq.",Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2}))}
-            </>:<div style={{fontSize:12.5,color:ADS.muted}}>sem gasto no período</div>}
-          </div>
+    return <AdsCard key={x.entidade_id} style={{padding:0,overflow:"hidden"}}>
+      <div style={{padding:"18px 22px 16px"}}>
+        <AdsEyebrow>Conjunto de anúncios · {idx+1} de {cjLista.length}</AdsEyebrow>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:3}}><span style={{width:9,height:9,borderRadius:"50%",background:x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:900,fontSize:18,letterSpacing:"-.4px"}}>{x.nome}</span><AdsTag n={st[1]}>{st[0]}</AdsTag>{fsL&&<AdsTag n={fsL[1]}>{fsL[0]}</AdsTag>}{x.foraSnap&&<AdsTag n="n">não está mais na conta</AdsTag>}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{x.otimizacao&&Fato(<span>Otimiza pra <b style={{color:ADS.ink}}>{_adsOtim(x.otimizacao)}</b></span>)}{dest&&Fato(<span>Destino <b style={{color:ADS.ink}}>{dest}</b></span>)}{orc&&Fato(<span>Orçamento <b style={{color:ADS.ink}}>{orc}</b></span>)}{Fato(<span><b style={{color:ADS.ink}}>{ativos.length}</b> anúncio{ativos.length!==1?"s":""} {x.status_efetivo==="ACTIVE"?(ativos.length===1?"ativo":"ativos"):"com gasto no período"}{pausados.length?" · "+pausados.length+" pausado"+(pausados.length>1?"s":"")+" sem gasto":""}</span>)}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:1,background:ADS.line,borderTop:"1px solid "+ADS.line,borderBottom:"1px solid "+ADS.line}}>
+        {m?<>
+          {Kpi("Gasto",_adsBRLc(m.gasto))}
+          {Kpi("Fatia da verba",Math.round(fatia)+"%")}
+          {cfg.campo?Kpi(cfg.resLbl,_adsNum(m.res)):Kpi("Alcance",_adsNum(m.alcance))}
+          {cfg.campo?Kpi(cfg.custoLbl,m.cpa?_adsBRLc(m.cpa):"—",m.res>=ADS_MIN_RESULTADOS?_adsCor(n):ADS.ink):Kpi("CPM",_adsBRL(Number(m.impressoes)>0?Number(m.gasto)/Number(m.impressoes)*1000:null))}
+          {Kpi("CTR",_adsPct(m.ctr,2),_adsCor(Number(m.ctr||0)>1.5?"o":Number(m.ctr||0)>=1?"w":"c"))}
+          {Kpi("Frequência",Number(m.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:2}))}
+        </>:<div style={{background:"#fff",padding:"12px 16px",fontSize:12.5,color:ADS.muted,gridColumn:"1 / -1"}}>Sem gasto no período selecionado.</div>}
+      </div>
+      <div style={{padding:"18px 22px"}}>
+        {!x.foraSnap&&<div style={{marginBottom:22}}><AdsPublicoBloco p={x.publico} isMob={isMob}/></div>}
+        <div>
+          {Titulo("Anúncios deste conjunto",(ativos.length+" "+(x.status_efetivo==="ACTIVE"?"ativo"+(ativos.length!==1?"s":""):"com gasto"))+" · do maior gasto pro menor · clique pra abrir")}
+          {x.an.length===0&&<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum anúncio neste conjunto.</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>{ativos.map(AdCard)}</div>
+          {pausados.length>0&&!verPausados[x.entidade_id]&&<div style={{marginTop:10}}><AdsChip onClick={function(){ setVerPausados(Object.assign({},verPausados,(function(o){o[x.entidade_id]=true;return o;})({}))); }}>Ver {pausados.length} pausado{pausados.length>1?"s":""} sem gasto</AdsChip></div>}
+          {pausados.length>0&&verPausados[x.entidade_id]&&<div style={{display:"flex",flexDirection:"column",gap:10,marginTop:10}}>{pausados.map(AdCard)}</div>}
         </div>
       </div>
-      {!x.foraSnap&&<div style={{padding:"14px 20px",borderBottom:"1px solid "+ADS.line,background:"#fbfaff"}}>
-        <div onClick={function(){ setVerPublico(Object.assign({},verPublico,(function(o){o[x.entidade_id]=!pubAberto;return o;})({}))); }} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}><span style={{fontSize:12.5,fontWeight:800}}>Público, localizações e posicionamentos</span><span style={{fontSize:11.5,color:ADS.muted}}>{pubAberto?"esconder ▴":_adsResumoPublico(x.publico)+" ▾"}</span></div>
-        {pubAberto&&<div style={{marginTop:12}}><AdsPublicoBloco p={x.publico} isMob={isMob}/></div>}
-      </div>}
-      <div style={{padding:"14px 20px"}}>
-        <div style={{fontSize:12.5,fontWeight:800,marginBottom:10}}>Anúncios deste conjunto · {x.an.length}</div>
-        {x.an.length===0&&<div style={{fontSize:12.5,color:ADS.muted}}>Nenhum anúncio neste conjunto.</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>{ativos.map(AdCard)}</div>
-        {pausados.length>0&&!verPausados[x.entidade_id]&&<div style={{marginTop:10}}><AdsChip onClick={function(){ setVerPausados(Object.assign({},verPausados,(function(o){o[x.entidade_id]=true;return o;})({}))); }}>Ver {pausados.length} pausado{pausados.length>1?"s":""} sem gasto</AdsChip></div>}
-        {pausados.length>0&&verPausados[x.entidade_id]&&<div style={{display:"flex",flexDirection:"column",gap:10,marginTop:10}}>{pausados.map(AdCard)}</div>}
-      </div>
     </AdsCard>; };
+  /* abas: um conjunto por vez */
+  const selIdx=Math.max(0,cjLista.findIndex(function(x){return x.entidade_id===cjSel;}));
+  const rola=function(d){ if(abasRef.current) abasRef.current.scrollBy({left:d*260,behavior:"smooth"}); };
+  const Abas=function(){ if(cjLista.length<=1) return null;
+    return <div style={{display:"flex",alignItems:"center",gap:8,margin:"0 0 12px"}}>
+      <button onClick={function(){ rola(-1); }} style={{width:32,height:32,borderRadius:9,border:"1px solid "+ADS.line2,background:"#fff",cursor:"pointer",fontSize:16,color:ADS.ink2,display:"grid",placeItems:"center",flexShrink:0,minHeight:0,padding:0}}>‹</button>
+      <div ref={abasRef} className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",flex:1,scrollbarWidth:"none"}}>{cjLista.map(function(x,i){ const on=i===selIdx; const m=x.m; return <div key={x.entidade_id} onClick={function(){ setCjSel(x.entidade_id); }} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:12,border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent:"#fff",cursor:"pointer",whiteSpace:"nowrap",fontSize:12.5,fontWeight:700,color:on?"#fff":ADS.ink2,flexShrink:0}}><span style={{width:8,height:8,borderRadius:"50%",background:on?"#fff":(x.status_efetivo==="ACTIVE"?ADS.ok:"#c9c5d6")}}/>{x.nome}<small style={{fontWeight:600,color:on?"rgba(255,255,255,.75)":ADS.muted}}>{m?_adsBRLc(m.gasto)+(cfg.campo?" · "+_adsNum(m.res):""):"sem gasto"}</small></div>; })}</div>
+      <button onClick={function(){ rola(1); }} style={{width:32,height:32,borderRadius:9,border:"1px solid "+ADS.line2,background:"#fff",cursor:"pointer",fontSize:16,color:ADS.ink2,display:"grid",placeItems:"center",flexShrink:0,minHeight:0,padding:0}}>›</button>
+    </div>; };
   return <div>
     {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={null} mediaG={mediaCamp} onClose={function(){setAberto(null);}}/>}
-    <AdsSec t={"Conjuntos de anúncios · "+cjLista.length} s={nAtivos+" ativo"+(nAtivos!==1?"s":"")+" · cada conjunto com o público configurado na Meta e todos os seus anúncios · "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)}>
+    <AdsSec t={"Conjuntos de anúncios · "+cjLista.length} s={nAtivos+" ativo"+(nAtivos!==1?"s":"")+(cjLista.length>1?" · clique no nome pra ver o público, o mapa e os anúncios de cada um · ":" · ")+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)}>
       {cjLista.length===0&&<div style={{fontSize:13,color:ADS.muted}}>A Meta não devolveu conjuntos para esta campanha.</div>}
-      {cjLista.map(ConjCard)}
+      {Abas()}
+      {cjLista.length>0&&ConjCard(cjLista[selIdx],selIdx)}
       {orfaos.length>0&&<AdsCard style={{marginBottom:14}}><div style={{fontSize:12.5,fontWeight:800,marginBottom:10}}>Anúncios sem conjunto identificado · {orfaos.length}</div><div style={{display:"flex",flexDirection:"column",gap:10}}>{orfaos.map(AdCard)}</div></AdsCard>}
     </AdsSec>
     <AdsSec t="Onde os anúncios estão aparecendo de verdade" s="entrega real por posicionamento (quebra da Meta, nível campanha) · fatia do gasto e resultado em cada lugar">
