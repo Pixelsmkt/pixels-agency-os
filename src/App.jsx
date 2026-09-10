@@ -11619,12 +11619,20 @@ function _PBProjeto({cl, idx}){
   const diaHoje=Math.round((new Date(hojeISO+"T00:00:00")-new Date(fase.start+"T00:00:00"))/864e5)+1;
   const totalDias=Math.round((fimProj-ini0)/864e5)+1;
 
+  // Contagem SEQUENCIAL por cota, igual ao chip do calendário: os 8 primeiros
+  // conteúdos são o mês 1, os 4 seguintes o mês 2, e assim por diante — não é
+  // pela data em que caíram. As datas ao lado são o período contratado.
+  const totalConteudos=(datas||[]).filter(function(d){
+    return (typeof _pxProjMes==="function") && _pxProjMes(fase.start,d)>=1;
+  }).length;
   const linhas=[];
+  let usados=0;
   for(let n=1;n<=nMeses;n++){
     const ini=_pbProjSomaMes(fase.start,n-1);
     const fim=new Date(_pbProjSomaMes(fase.start,n)); fim.setDate(fim.getDate()-1);
     const cota=(typeof _pxCotaMes==="function")?_pxCotaMes(preset,n):0;
-    const feitos=(datas||[]).filter(function(d){ return (typeof _pxProjMes==="function")&&_pxProjMes(fase.start,d)===n; }).length;
+    const feitos=cota>0?Math.max(0,Math.min(cota,totalConteudos-usados)):0;
+    usados+=cota>0?cota:0;
     linhas.push({n:n,ini:ini,fim:fim,cota:cota,feitos:feitos,agora:mesHoje===n,passado:mesHoje>n});
   }
 
@@ -11647,13 +11655,13 @@ function _PBProjeto({cl, idx}){
           <span style={{background:l.agora?"#7c3aed":(l.passado?"#16a34a":"#eef0f4"),color:(l.agora||l.passado)?"#fff":"#64748b",fontSize:10,fontWeight:900,letterSpacing:.6,textTransform:"uppercase",padding:"4px 9px",borderRadius:99,flexShrink:0}}>Mês {l.n}</span>
           <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_pbProjFmt(l.ini)} – {_pbProjFmt(l.fim)}</span>
           <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,minWidth:0,flex:1}}>{(_PBPROJ_RITMO[preset]||{})[l.n]||""}</span>
-          {l.cota>0&&<span title={l.feitos+" conteúdo(s) com data marcada neste mês · "+l.cota+" previstos no plano"}
+          {l.cota>0&&<span title={l.feitos+" de "+l.cota+" conteúdos deste bloco já marcados — a contagem é sequencial (os "+l.cota+" seguintes da fila), não pela data"}
             style={{background:okCota?"#16a34a14":"#f1f5f9",color:okCota?"#16a34a":"#475569",fontSize:11.5,fontWeight:800,padding:"4px 10px",borderRadius:99,fontFeatureSettings:"'tnum'",flexShrink:0}}>{l.feitos}/{l.cota}</span>}
           {l.agora&&<span style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:900,letterSpacing:.5,textTransform:"uppercase",padding:"4px 9px",borderRadius:99,flexShrink:0}}>Estamos aqui</span>}
         </div>;
       })}
     </div>
-    <div style={{color:"#cbd5e1",fontSize:10.5,marginTop:9,lineHeight:1.5}}>O mês conta o período exato a partir da data de início, não o mês do calendário. O contador é o mesmo do Calendário de publicações.</div>
+    <div style={{color:"#cbd5e1",fontSize:10.5,marginTop:9,lineHeight:1.5}}>As datas são o período contratado (mês exato a partir do início). Já o contador é sequencial: os 8 primeiros conteúdos são o mês 1, os 4 seguintes o mês 2 — igual ao número que aparece no card do Calendário de publicações.</div>
   </_PlaybookSection>;
 }
 
@@ -18258,13 +18266,11 @@ function _pxProjMes(startISO, dateISO){
   if(d[2] < s[2]) m-=1;               // ainda não chegou no dia do aniversário
   return m<0 ? 0 : m+1;               // mês 1 = primeiro mês do projeto
 }
-/* Cota de conteúdos do mês. Starter: mês 1 = 8 (2 por semana), meses 2 e 3 = 4
-   (1 por semana). Fora disso não há cota fechada — mostra só a posição. */
+/* Cota de conteúdos do mês. Starter: mês 1 = 8 (2 por semana); do mês 2 em diante
+   4 (1 por semana). Outros planos não têm cota fechada — mostra só a posição. */
 function _pxCotaMes(preset, mes){
   if(String(preset||"").toLowerCase()!=="starter") return 0;
-  if(mes===1) return 8;
-  if(mes===2||mes===3) return 4;
-  return 0;
+  return mes===1 ? 8 : 4;
 }
 /* Entra na conta exatamente o que APARECE no calendário — mesma regra do `agendados`.
    Sem isso o número pulava: um card reprovado (ou pausado, ou folder) ganhava posição
@@ -18295,12 +18301,16 @@ function _pxContadorProjeto(tasks, faseMap){
       if(ha!==hb) return ha.localeCompare(hb);
       return String(a.id).localeCompare(String(b.id));
     });
-    const contador={};
+    // SEQUENCIAL POR COTA (decisão do Vinicius, 10/09): a contagem NÃO segue a data —
+    // segue a ordem de entrega. Os 8 primeiros conteúdos são o mês 1 (1/8 … 8/8), os
+    // 4 seguintes o mês 2 (1/4 … 4/4), os 4 seguintes o mês 3, e assim por diante.
+    // Assim o 8º card é sempre "8/8", mesmo caindo depois da virada do mês no calendário.
+    let mes=1, pos=0, cota=_pxCotaMes(f.preset,1);
     lista.forEach(function(t){
-      const mes=_pxProjMes(f.start,t.publishDate);
-      if(mes<1) return;
-      contador[mes]=(contador[mes]||0)+1;
-      out[t.id]={mes:mes, pos:contador[mes], cota:_pxCotaMes(f.preset,mes), preset:f.preset||""};
+      if(_pxProjMes(f.start,t.publishDate)<1) return;   // antes do início do projeto: fora
+      pos++;
+      if(cota>0 && pos>cota){ mes++; pos=1; cota=_pxCotaMes(f.preset,mes); }
+      out[t.id]={mes:mes, pos:pos, cota:cota, preset:f.preset||""};
     });
   });
   return out;
@@ -34319,6 +34329,14 @@ const PV_CATS = [
   {id:"outro",      label:"Outros",               desc:"Sem categoria definida",             color:"#64748b", icon:"lock"},
 ];
 function _pvCat(id){ return PV_CATS.find(function(c){return c.id===id;}) || PV_CATS[PV_CATS.length-1]; }
+/* Tom mais escuro da mesma cor — gradiente do cabeçalho da seção */
+function _pvEscuro(hex){
+  if(!hex||hex[0]!=="#"||hex.length!==7) return hex;
+  const r=Math.max(0,parseInt(hex.slice(1,3),16)-38);
+  const g=Math.max(0,parseInt(hex.slice(3,5),16)-38);
+  const b=Math.max(0,parseInt(hex.slice(5,7),16)-38);
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
 function _PvIco({n,size,color}){
   const s=size||14, c=color||"currentColor";
   const P={fill:"none",stroke:c,strokeWidth:2.2,strokeLinecap:"round",strokeLinejoin:"round",width:s,height:s,viewBox:"0 0 24 24"};
@@ -34366,12 +34384,12 @@ function _pvDomain(it){
 function _PvAvatar({it,cat}){
   const [err,setErr]=useState(false);
   const _cli=(typeof CLIENTS!=="undefined"&&it.client_id)?(CLIENTS.find(function(c){return c.id===it.client_id;})||null):null;
-  const box={width:32,height:32,borderRadius:9,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",background:"#fff",border:"1px solid #eef0f3"};
+  const box={width:36,height:36,borderRadius:10,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",background:"#fff",border:"1px solid #eceff4",boxShadow:"0 1px 2px rgba(15,23,42,.04)"};
   if(_cli) return <div style={Object.assign({},box,{padding:3})}><ClientLogo clientId={_cli.id} size="sm"/></div>;
   const dom=_pvDomain(it);
-  if(dom&&!err) return <div style={box}><img src={"https://www.google.com/s2/favicons?domain="+encodeURIComponent(dom)+"&sz=64"} alt="" width={18} height={18} style={{display:"block"}} onError={function(){setErr(true);}}/></div>;
+  if(dom&&!err) return <div style={box}><img src={"https://www.google.com/s2/favicons?domain="+encodeURIComponent(dom)+"&sz=64"} alt="" width={20} height={20} style={{display:"block"}} onError={function(){setErr(true);}}/></div>;
   const ini=String(it.label||"?").replace(/[^A-Za-zÀ-ÿ0-9 ]/g,"").trim().split(/\s+/).slice(0,2).map(function(w){return w[0]||"";}).join("").toUpperCase()||"?";
-  return <div style={Object.assign({},box,{background:cat.color+"14",border:"1px solid "+cat.color+"2e",color:cat.color,fontSize:11,fontWeight:800,letterSpacing:-.2})}>{ini}</div>;
+  return <div style={Object.assign({},box,{background:cat.color+"14",border:"1px solid "+cat.color+"2e",color:cat.color,fontSize:11.5,fontWeight:800,letterSpacing:-.3})}>{ini}</div>;
 }
 
 function PasswordVault({user}){
@@ -34550,46 +34568,46 @@ function PasswordVault({user}){
             return <div key={cat.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)"}}>
               {/* cabeçalho da seção — cor sólida */}
               <div onClick={function(){ setCollapsed(function(p){ const n=Object.assign({},p); n[cat.id]=!n[cat.id]; return n; }); }}
-                style={{display:"flex",alignItems:"center",gap:11,padding:"11px 16px 11px 14px",background:cat.color,color:"#fff",cursor:"pointer",userSelect:"none"}}>
-                <div style={{width:30,height:30,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <_PvIco n={cat.icon} size={15} color="#fff"/>
+                style={{display:"flex",alignItems:"center",gap:13,padding:"14px 18px 14px 16px",background:"linear-gradient(120deg,"+cat.color+" 0%,"+_pvEscuro(cat.color)+" 100%)",color:"#fff",cursor:"pointer",userSelect:"none"}}>
+                <div style={{width:34,height:34,borderRadius:11,background:"rgba(255,255,255,.16)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.24)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <_PvIco n={cat.icon} size={16} color="#fff"/>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.2}}>{cat.label}</div>
-                  <div style={{fontSize:11,opacity:.8,fontWeight:500,marginTop:1}}>{cat.desc}</div>
+                  <div style={{fontWeight:800,fontSize:14.5,letterSpacing:-.35,lineHeight:1.2}}>{cat.label}</div>
+                  <div style={{fontSize:11.5,opacity:.78,fontWeight:500,marginTop:2,letterSpacing:.1}}>{cat.desc}</div>
                 </div>
-                <span style={{background:"rgba(255,255,255,.2)",borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800}}>{sec.list.length}</span>
-                <span style={{display:"inline-flex",transition:"transform .15s",transform:_col?"rotate(-90deg)":"none",opacity:.85}}><_PvIco n="chev" size={14} color="#fff"/></span>
+                <span style={{background:"rgba(255,255,255,.18)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.22)",borderRadius:99,padding:"3px 11px",fontSize:11.5,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{sec.list.length}</span>
+                <span style={{display:"inline-flex",transition:"transform .18s",transform:_col?"rotate(-90deg)":"none",opacity:.8}}><_PvIco n="chev" size={15} color="#fff"/></span>
               </div>
               {/* linhas compactas */}
-              {!_col && <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(440px,1fr))",gap:0,padding:6}}>
+              {!_col && <div style={{display:"grid",gridTemplateColumns:_mob?"1fr":"repeat(auto-fill,minmax(470px,1fr))",gap:"2px 10px",padding:"10px 12px 12px"}}>
                 {sec.list.map(function(it){
                   const showPw=!!showPwd[it.id];
                   const _dom=String(it.url||"").replace(/^https?:\/\//,"").split("/")[0];
                   const _hasNotes=!!String(it.notes||"").trim();
                   const _nOpen=!!notesOpen[it.id];
-                  return <div key={it.id} style={{display:"flex",flexDirection:"column",borderRadius:11,margin:2,transition:"background .12s"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f8f7fc";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 8px",minHeight:48}}>
+                  return <div key={it.id} style={{display:"flex",flexDirection:"column",borderRadius:12,transition:"background .14s, box-shadow .14s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f7f8fb";e.currentTarget.style.boxShadow="inset 0 0 0 1px #eceff4";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.boxShadow="none";}}>
+                    <div style={{display:"flex",alignItems:"center",gap:13,padding:"10px 11px",minHeight:58}}>
                       <_PvAvatar it={it} cat={cat}/>
                       {/* título + login */}
                       <div style={{flex:"1 1 0",minWidth:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-                          <span style={{color:"#0f172a",fontWeight:750,fontSize:12.8,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
+                          <span style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.25,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</span>
                           {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" title={it.url} onClick={function(e){e.stopPropagation();}}
                             style={{color:"#94a3b8",display:"inline-flex",flexShrink:0}} onMouseEnter={function(e){e.currentTarget.style.color=cat.color;}} onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}><_PvIco n="ext" size={11}/></a>}
                         </div>
-                        <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0,marginTop:1}}>
-                          <span style={{color:it.username?"#64748b":"#cbd5e1",fontSize:11,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username||"sem login"}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0,marginTop:3}}>
+                          <span style={{color:it.username?"#7b8794":"#cbd5e1",fontSize:11,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.username||"sem login"}</span>
                           {it.username && <button type="button" title="Copiar login" onClick={function(){_copy(it.username,"Login");}}
                             style={{background:"transparent",border:"none",cursor:"pointer",padding:2,color:"#cbd5e1",display:"inline-flex",flexShrink:0}}
                             onMouseEnter={function(e){e.currentTarget.style.color=cat.color;}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}><_PvIco n="copy" size={10}/></button>}
                         </div>
                       </div>
                       {/* senha */}
-                      <div style={{display:"flex",alignItems:"center",gap:2,background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:9,padding:"3px 4px 3px 10px",flexShrink:0,maxWidth:_mob?150:210}}>
-                        <span style={{color:it.password?"#334155":"#cbd5e1",fontSize:11.5,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:showPw?0:60,letterSpacing:showPw?"normal":".12em"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:3,background:"#f6f8fa",border:"1px solid #e9edf2",borderRadius:10,padding:"5px 5px 5px 12px",flexShrink:0,maxWidth:_mob?150:215}}>
+                        <span style={{color:it.password?"#334155":"#cbd5e1",fontSize:11.5,fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:showPw?0:64,letterSpacing:showPw?"normal":".18em"}}>
                           {it.password?(showPw?it.password:"••••••••"):"—"}
                         </span>
                         {it.password && _iconBtn(showPw?"Ocultar":"Mostrar", function(){ setShowPwd(function(p){ const n=Object.assign({},p); n[it.id]=!showPw; return n; }); }, showPw?"eyeoff":"eye", "#0f172a")}
@@ -34602,7 +34620,7 @@ function PasswordVault({user}){
                         {_iconBtn("Excluir", function(){_delete(it);}, "trash", "#dc2626")}
                       </div>
                     </div>
-                    {_nOpen && _hasNotes && <div style={{margin:"0 8px 8px 50px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"7px 10px",fontSize:11.5,color:"#78350f",lineHeight:1.5,whiteSpace:"pre-wrap"}}>
+                    {_nOpen && _hasNotes && <div style={{margin:"0 11px 10px 58px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:9,padding:"7px 10px",fontSize:11.5,color:"#78350f",lineHeight:1.5,whiteSpace:"pre-wrap"}}>
                       {it.notes}
                       <div style={{color:"#b45309",fontSize:10,marginTop:4,opacity:.8}}>{it.updated_at?"Atualizado em "+_dt(it.updated_at):""}{it.author_name?" · "+it.author_name:""}</div>
                     </div>}
@@ -45996,6 +46014,12 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fMonth,setFMonth]=useState("");
   const [fChip,setFChip]=useState("todos");
   const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
+  /* MODO APRESENTAÇÃO ("olhinho"): borra nomes e números da carteira (classe .px-sens) pra mostrar o sistema a um cliente
+     sem expor os outros. Fica lembrado neste navegador. Atalho: Ctrl+Shift+O. Pode ser removido sem efeito colateral. */
+  const [privado,setPrivado]=useState(function(){ try{ return localStorage.getItem("px_modo_apresentacao")==="1"; }catch(_){ return false; } });
+  const alternarPrivado=function(){ setPrivado(function(v){ const nv=!v; try{ localStorage.setItem("px_modo_apresentacao",nv?"1":"0"); }catch(_){} window._pxPrivado=nv; return nv; }); };
+  useEffect(function(){ window._pxPrivado=privado; },[privado]);
+  useEffect(function(){ const f=function(e){ if(e.ctrlKey&&e.shiftKey&&(e.key==="O"||e.key==="o")){ e.preventDefault(); alternarPrivado(); } }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
   const [demFilter,setDemFilter]=useState("todas"); // chips da aba demandas
   const [verLegadoDem,setVerLegadoDem]=useState(false); // lista antiga de demandas de mídia
   const [editingDem,setEditingDem]=useState(null);  // {clientId, task} pra modo editar
@@ -46288,7 +46312,8 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1240,width:"100%",margin:"0 auto"}}>
+  return <div className={privado?"px-privado":""} style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1240,width:"100%",margin:"0 auto"}}>
+    {privado&&<div style={{display:"flex",alignItems:"center",gap:10,background:"#2f1a5e",color:"#fff",borderRadius:12,padding:"8px 14px",fontSize:12.5,fontWeight:700}}><span style={{fontSize:15}}>🙈</span><span>Modo apresentação: nomes e números da carteira estão borrados. Só o cliente aberto aparece nítido.</span><button onClick={alternarPrivado} style={{marginLeft:"auto",background:"#fff",color:"#2f1a5e",border:0,borderRadius:8,padding:"5px 10px",fontSize:12,fontWeight:800,cursor:"pointer",minHeight:0}}>Mostrar tudo (Ctrl+Shift+O)</button></div>}
 
     {/* ══ Topo único: título · abas · alertas · ações (modelo 1) ══ */}
     <div style={{background:"#fff",border:"1px solid #e5e9f0",borderRadius:16,padding:isMob?"10px 12px":"10px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -46308,6 +46333,10 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
         })}
       </div>
       <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <button onClick={alternarPrivado} title={privado?"Modo apresentação ligado — clique pra ver tudo (Ctrl+Shift+O)":"Modo apresentação: borra nomes e números dos outros clientes (Ctrl+Shift+O)"} style={{width:36,height:36,borderRadius:10,border:"1px solid "+(privado?"#2f1a5e":"#e5e9f0"),background:privado?"#2f1a5e":"#fff",color:privado?"#fff":"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",minHeight:0,padding:0}}>
+          {privado?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          :<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+        </button>
         {typeof QGBusca==="function"&&<QGBusca clients={(store.clients||[]).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));})} openClient={openClient} onCliente={function(id){ setTopTab("visao"); setOpenClient(id); window.scrollTo({top:0,behavior:"smooth"}); }} onTop={function(id){ if(id==="visao"||id==="clientes") setOpenClient(null); setTopTab(id); }} acoes={[{lbl:"Nova demanda",run:function(){setShowNovaDemanda(true);}},{lbl:"Relatório geral",run:function(){setShowRelatorio(true);}}].concat(canManageClients?[{lbl:"Novo cliente",run:function(){setShowNovoCliente(true);}}]:[])}/>}
         {typeof QGAdsSino==="function"&&<QGAdsSino onAbrirConta={function(accId){ try{ const a=(window._pxAdsAccounts||[]).find(function(x){return x.ad_account_id===accId;}); if(!a) return; const mc=(store.clients||[]).find(function(c){ return (c.parent_client||c.client_id)===a.client_id&&((c.bioter_unit||null)===(a.unidade||null)); }); if(mc){ setTopTab("visao"); setOpenClient(mc.client_id); window.scrollTo({top:0,behavior:"smooth"}); } }catch(_){} }}/>}
         <button onClick={()=>setShowNovaDemanda(true)}
@@ -50791,8 +50820,8 @@ function qgAlertas(calcs,fechAtual,data,store,year,month){
 /* ═══════════════════════════════════════════════════════
    PRIMITIVOS DE UI — poucos, reutilizados
    ═══════════════════════════════════════════════════════ */
-function QGCard({title,sub,right,children,pad,style,flat}){
-  return <section style={Object.assign({background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:pad||"18px 20px",fontFamily:QG_FONT,minWidth:0},style||{})}>
+function QGCard({title,sub,right,children,pad,style,flat,className}){
+  return <section className={className} style={Object.assign({background:"#fff",border:"1px solid "+QG.borda,borderRadius:14,padding:pad||"18px 20px",fontFamily:QG_FONT,minWidth:0},style||{})}>
     {(title||right)&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
       <div style={{minWidth:0}}>{title&&<div style={{color:QG.txt,fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>{title}</div>}{sub&&<div style={{color:QG.txt3,fontSize:12,marginTop:2,fontWeight:500}}>{sub}</div>}</div>
       {right&&<div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{right}</div>}
@@ -51061,7 +51090,7 @@ function QGDashboard({clients,data,store,year,month,setPeriodo,isMob,canEdit,onO
     {typeof QGAdsPainel==="function"?<QGAdsPainel clients={clients} onOpenClient={onOpenClient} isMob={isMob}/>:<QGCard><QGEmpty texto="Painel indisponível."/></QGCard>}
 
     {/* ── Fechamento da semana: uma faixa ── */}
-    <QGCard pad="12px 20px">
+    <QGCard pad="12px 20px" className="px-sens">
       <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",fontSize:12.5}}>
         <span style={{fontWeight:800,color:QG.txt}}>Fechamento da semana</span><span style={{color:QG.txt3}}>{_qgWeekLabel(semanas[0].start)}</span>
         <span style={{fontWeight:800,color:pendentes.length===0?QG.verde:QG.txt}}>{comOrc.length-pendentes.length} de {comOrc.length}</span>
@@ -51104,11 +51133,25 @@ function QGTabelaClientes({calcs,metas,data,isMob,onOpenClient,stOpt,semanaFech}
    ABA CLIENTES — mesma tabela, com semana e novo cliente
    ═══════════════════════════════════════════════════════ */
 function QGClientesPage({clients,data,store,year,month,setPeriodo,isMob,canEdit,onOpenClient,onNovoCliente}){
-  const calcs=clients.map(function(c){ return qgCalcCliente(c,data,year,month,{}); });
+  /* Privacidade em apresentação: a lista começa VAZIA. Você digita o cliente que quer ver, ou marca "mostrar todos".
+     Nada de outro cliente aparece na tela por padrão. A preferência "mostrar todos" fica só neste navegador. */
+  const [busca,setBusca]=useState("");
+  const [todos,setTodos]=useState(function(){ try{ return localStorage.getItem("px_qg_clientes_todos")==="1"; }catch(_){ return false; } });
+  const mudaTodos=function(v){ setTodos(v); try{ localStorage.setItem("px_qg_clientes_todos",v?"1":"0"); }catch(_){} };
+  const norm=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); };
+  const termo=norm(busca.trim());
+  const visiveis=todos?clients:(termo?clients.filter(function(c){ return norm(c.name).indexOf(termo)>=0||norm(c.client_id).indexOf(termo)>=0; }):[]);
+  const calcs=visiveis.map(function(c){ return qgCalcCliente(c,data,year,month,{}); });
   const metas=calcs.map(function(c){ return qgMeta(c.mc,data,year,month,c.leads,store); });
   const wk=_qgLastWeeks(1)[0]; const fech={}; (data.closings||[]).forEach(function(w){ if(w.week_key===wk.key) fech[w.client_id]=w; });
-  return <QGCard title={"Clientes de mídia · "+clients.length} sub={QG_MESES[month-1]+" "+year+" · orçamento, gasto, leads, meta e fechamento da semana · Meta Ads pela API, Google pelo fechamento"} pad="16px 20px 8px" right={<QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>}>
-    <QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech}/>
+  const direita=<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+    <div style={{position:"relative"}}><span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:QG.txt3,fontSize:13,pointerEvents:"none"}}>⌕</span><input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisar cliente…" autoFocus={!todos} style={{border:"1px solid "+QG.line,borderRadius:10,padding:"7px 10px 7px 28px",fontSize:13,fontFamily:"inherit",width:isMob?150:220,background:"#fff",minHeight:0}}/></div>
+    <label style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12.5,fontWeight:700,color:todos?QG.roxo:QG.txt2,cursor:"pointer",userSelect:"none",whiteSpace:"nowrap"}}><input type="checkbox" checked={todos} onChange={function(e){ mudaTodos(e.target.checked); }} style={{accentColor:QG.roxo,width:15,height:15,margin:0}}/>mostrar todos</label>
+    <QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/>
+  </div>;
+  return <QGCard title={"Clientes de mídia"+(todos||termo?" · "+visiveis.length+(todos?"":" de "+clients.length):"")} sub={QG_MESES[month-1]+" "+year+" · Meta pela API · Google pelo fechamento"} pad="16px 20px 8px" right={direita}>
+    {visiveis.length===0?<div style={{padding:"34px 12px 30px",textAlign:"center",color:QG.txt3,fontSize:13.5,lineHeight:1.6}}>{termo?<span>Nenhum cliente com "<b>{busca.trim()}</b>".</span>:<span>Digite o nome do cliente pra ver os números dele —<br/>ou marque <b>mostrar todos</b> à direita pra abrir a carteira inteira.</span>}</div>
+    :<div className={todos?"px-sens":""}><QGTabelaClientes calcs={calcs} metas={metas} data={data} isMob={isMob} onOpenClient={onOpenClient} stOpt={(typeof MEDIA_STATUS_OPTS!=="undefined"?MEDIA_STATUS_OPTS:[])} semanaFech={fech}/></div>}
   </QGCard>;
 }
 
@@ -51221,7 +51264,7 @@ function QGClienteNav({mc,clients,onTrocar,isMob,compacto}){
         <span style={{marginLeft:"auto",color:QG.txt3,fontSize:11,flexShrink:0,paddingLeft:8}}>{pos+1}/{lista.length} ▾</span>
       </button>
       :<input ref={inp} value={q} onChange={function(e){ setQ(e.target.value); setIdx(0); }} onKeyDown={onKey} placeholder={"Digite o cliente… ("+lista.length+")"} style={{width:isMob?"58vw":360,height:32,border:"1px solid "+QG.roxo,borderRadius:10,padding:"5px 12px",fontSize:14,fontWeight:600,fontFamily:QG_FONT,outline:"none",color:QG.txt,boxSizing:"border-box"}}/>}
-      {aberto&&<div style={{position:"absolute",left:0,top:38,width:isMob?"58vw":360,background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:6,zIndex:60,maxHeight:360,overflowY:"auto"}}>
+      {aberto&&<div className="px-sens" style={{position:"absolute",left:0,top:38,width:isMob?"58vw":360,background:"#fff",border:"1px solid "+QG.borda,borderRadius:12,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:6,zIndex:60,maxHeight:360,overflowY:"auto"}}>
         {vis.length===0&&<div style={{padding:"10px 8px",fontSize:12,color:QG.txt3}}>Nenhum cliente com esse nome.</div>}
         {vis.map(function(x,i){ const on=x.client_id===mc.client_id; const foco=i===idx; return <div key={x.client_id} onMouseEnter={function(){setIdx(i);}} onClick={function(){ir(x);}} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 9px",borderRadius:8,background:foco?QG.roxoBg:"transparent",color:on||foco?QG.roxo:QG.txt2,fontWeight:on?800:600,fontSize:13,cursor:"pointer"}}>
           {typeof ClientLogo==="function"&&<span style={{flexShrink:0,display:"inline-flex"}}><ClientLogo clientId={_qgPortalClientId(x)} size="xs"/></span>}
@@ -51596,7 +51639,7 @@ function QGRelatorios({clients,data,store,year,month,setPeriodo,isMob,onOpenClie
       <span style={{marginLeft:"auto"}}><QGSel value={year+"-"+String(month).padStart(2,"0")} onChange={setPeriodo} options={_qgMeses()}/></span>
     </div>
     {calcs.length===0?<QGCard><QGEmpty texto={"Nenhum dado de mídia em "+mesLabel+"."} alt="Cadastre orçamento nos clientes ou aguarde a coleta da Meta."/></QGCard>:<>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(temVendas?"repeat(4,1fr)":"repeat(3,1fr)"),gap:14}}>
+    <div className="px-sens" style={{display:"grid",gridTemplateColumns:isMob?"1fr":(temVendas?"repeat(4,1fr)":"repeat(3,1fr)"),gap:14}}>
       {Sol("#2f1a5e","Agência · investido",_qgBRL(T.gasto,2),T.orcamento>0?"de "+_qgBRLk(T.orcamento)+" planejados · "+Math.round(T.gasto/T.orcamento*100)+"%":"sem orçamento cadastrado")}
       {Sol("#5a34a3","Agência · leads",_qgNum(T.leads),"todos os clientes no mês")}
       {Sol("#8a63cf","Agência · custo por lead",T.cpl!==null?_qgBRL(T.cpl,2):"—","média ponderada")}
@@ -52054,7 +52097,7 @@ function _adsTotaisConta(conta){ const c=conta||{}; const gl=Number(c.gasto_lead
 
 /* ─── primitivos visuais v2 ─── */
 function AdsWrap({children}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}>{children}</div>; }
-function AdsCard({children,style,borda,onClick}){ return <div onClick={onClick} style={Object.assign({background:ADS.surface,border:"1px solid "+(borda||ADS.line),borderRadius:18,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,13,26,.04)",minWidth:0},style||{})}>{children}</div>; }
+function AdsCard({children,style,borda,onClick,className}){ return <div className={className} onClick={onClick} style={Object.assign({background:ADS.surface,border:"1px solid "+(borda||ADS.line),borderRadius:18,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,13,26,.04)",minWidth:0},style||{})}>{children}</div>; }
 function AdsSec({t,s,children,right,style}){ return <section style={Object.assign({marginBottom:24},style||{})}>
   <div style={{display:"flex",alignItems:"baseline",gap:10,margin:"0 0 12px",flexWrap:"wrap"}}><h2 style={{margin:0,fontSize:15,fontWeight:800,letterSpacing:"-.2px",color:ADS.ink}}>{t}</h2>{s&&<span style={{fontSize:12,color:ADS.muted}}>{s}</span>}{right&&<span style={{marginLeft:"auto"}}>{right}</span>}</div>
   {children}</section>; }
@@ -52078,7 +52121,7 @@ function AdsLoading({t,forma}){ const B=function(w,h,mt){ return <div style={{wi
     <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>{t||"Carregando…"}</div>
   </div>; }
 /* estilos globais da área de mídia: foco visível, esqueleto, impressão */
-(function(){ try{ if(typeof document==="undefined"||document.getElementById("px-ads-css")) return; const st=document.createElement("style"); st.id="px-ads-css"; st.textContent="@keyframes pxsh{0%{background-position:200% 0}100%{background-position:-200% 0}} .px-ads button:focus-visible,.px-ads a:focus-visible,.px-ads select:focus-visible,.px-ads input:focus-visible{outline:2px solid #7326d6;outline-offset:2px} @media (prefers-reduced-motion:reduce){.px-ads *{animation:none!important;transition:none!important}}"; document.head.appendChild(st); }catch(_){ } })();
+(function(){ try{ if(typeof document==="undefined"||document.getElementById("px-ads-css")) return; const st=document.createElement("style"); st.id="px-ads-css"; /* modo apresentação: .px-privado borra tudo marcado .px-sens (números, nomes de clientes); .px-livre libera o cliente que está sendo mostrado */ st.textContent=".px-privado .px-sens{filter:blur(7px) !important;user-select:none;pointer-events:none;transition:filter .2s} .px-privado .px-sens-forte{filter:blur(12px) !important;user-select:none;pointer-events:none} .px-privado .px-livre{filter:none !important;user-select:auto;pointer-events:auto} @keyframes pxsh{0%{background-position:200% 0}100%{background-position:-200% 0}} .px-ads button:focus-visible,.px-ads a:focus-visible,.px-ads select:focus-visible,.px-ads input:focus-visible{outline:2px solid #7326d6;outline-offset:2px} @media (prefers-reduced-motion:reduce){.px-ads *{animation:none!important;transition:none!important}}"; document.head.appendChild(st); }catch(_){ } })();
 /* frescor dos dados: uma frase só, usada na barra de contexto */
 function _adsFrescor(){ const c=window._pxAdsPainel&&window._pxAdsPainel.data; let ult=null; if(c&&Array.isArray(c.dias)){ c.dias.forEach(function(r){ if(!ult||r.data>ult) ult=r.data; }); } if(!ult&&window._pxAdsPer){ Object.keys(window._pxAdsPer).forEach(function(k){ const v=window._pxAdsPer[k]; if(v&&v.de&&(!ult||v.ate>ult)) ult=v.ate; }); } return ult?"dados até "+_adsFmtD(ult)+" · próxima coleta 07:00":"coleta diária às 07:00"; }
 /* benchmark interno: mediana do custo por lead da carteira, por tipo de campanha (7 dias) */
@@ -52146,7 +52189,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
       return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       <AdsSolido bg={ADS_SOL.escuro} eyebrow="Investido" big={_adsBRL(T.gasto)} delta={_adsDelta(T.gasto,prev.gasto)} sub={<span>{verba>0?(ritmo!==null?Math.round(ritmo)+"% da verba do mês ("+_adsBRL0(verba)+") · esperado "+Math.round(ritmoEsp)+"% até dia "+diaAtual:"verba do mês "+_adsBRL0(verba)):"verba mensal não definida — cadastre em Gestão"}{T.gastoOutras>0.005&&<span style={{display:"block"}}>{_adsBRL(T.gastoLead)} em lead · {_adsBRL(T.gastoOutras)} em {outrasNomes.length?outrasNomes.join(" + ").toLowerCase():"outras finalidades"}</span>}</span>}/>
       <AdsSolido bg={ADS_SOL.medio} eyebrow="Leads" big={_adsNum(T.resultados)} delta={_adsDelta(T.resultados,prev.resultados)} sub={_adsSubLeads(T)} title={ADS_DEF_LEAD}/>
-      <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" title={ADS_DEF_CPL} big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{_adsBRL(T.gastoLead)+" em campanhas de lead ÷ "+_adsNum(T.resLead)+(T.gastoOutras>0.005?" · outras finalidades fora da conta":"")}<br/>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
+      <AdsSolido bg={ADS_SOL.claro} eyebrow="Custo por lead" title={ADS_DEF_CPL} big={_adsBRL(T.cpa)} delta={_adsDelta(T.cpa,prev.cpa)} inverso sub={<span>{_adsBRL(T.gastoLead)+" em campanhas de lead ÷ "+_adsNum(T.resLead)+(T.gastoOutras>0.005?" · outras finalidades fora da conta":"")}<br/>{prev.cpa?"era "+_adsBRL(prev.cpa)+" no período anterior":"sem base de comparação"}{bench&&T.cpa?<span className="px-sens"> · carteira em {cfgDom.curto}: <b style={{color:"#fff"}}>{_adsBRL(bench.mediana)}</b> ({_adsX(T.cpa/bench.mediana)})</span>:null}</span>}/>
     </div>; })()}
 
     {/* leitura da IA — cabeçalho, manchete, dois painéis com destaque numérico por item */}
@@ -52503,7 +52546,7 @@ function QGAdsSino({onAbrirConta}){
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       {n>0&&<span style={{position:"absolute",top:-6,right:-6,background:ADS.crit,color:"#fff",borderRadius:99,fontSize:10,fontWeight:800,minWidth:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 5px",border:"2px solid #fff"}}>{n}</span>}
     </button>
-    {aberto&&<div style={{position:"absolute",right:0,top:44,width:400,maxWidth:"calc(100vw - 32px)",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:10,zIndex:60}}>
+    {aberto&&<div className="px-sens" style={{position:"absolute",right:0,top:44,width:400,maxWidth:"calc(100vw - 32px)",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 14px 40px rgba(15,13,26,.16)",padding:10,zIndex:60}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"4px 6px 8px"}}><b style={{fontSize:13,color:ADS.ink}}>Pontos críticos · tráfego pago</b><span style={{fontSize:11,color:ADS.muted}}>{n?contas.length+" cliente"+(contas.length>1?"s":""):""}</span></div>
       {n===0?<div style={{padding:"10px 6px 8px",fontSize:12.5,color:ADS.muted}}>Nenhum ponto crítico agora.</div>:
       <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:420,overflowY:"auto"}}>{contas.map(function(id){ return <div key={id} style={{background:ADS.surface2,borderRadius:10,padding:"9px 12px"}}>
@@ -52978,8 +53021,8 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     {/* ── 1. PRIORIDADES ── */}
     {!soClientes&&<div>
       <div style={{display:"flex",alignItems:"baseline",gap:10,margin:"0 2px 10px"}}><span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px",color:S.ink}}>Prioridades de hoje</span><span style={{fontSize:12,color:S.muted}}>{prios.length?prios.filter(function(p){return p.nivel==="c";}).length+" crítico"+(prios.filter(function(p){return p.nivel==="c";}).length!==1?"s":"")+" · "+prios.filter(function(p){return p.nivel!=="c";}).length+" atenção":"nada crítico nas contas — bom dia"}</span><span style={{marginLeft:"auto",fontSize:11.5,color:C.atrasado?S.warn:S.muted}}>{C.atrasado?"a coleta de "+_adsFmtD(C.ontemReal)+" ainda não chegou — janelas fecham em "+_adsFmtD(C.ontem):"dados até "+_adsFmtD(C.ontem)+" · próxima coleta 07:00"} · <a onClick={P.reload} style={{color:S.accent,cursor:"pointer",fontWeight:700}}>atualizar</a></span></div>
-      {prios.length===0?<AdsCard style={{display:"flex",gap:12,alignItems:"center",borderLeft:"4px solid "+S.ok}}><span style={{fontSize:22}}>✓</span><div><b style={{fontSize:14}}>Nenhuma conta em estado crítico.</b><div style={{fontSize:12.5,color:S.muted,marginTop:2}}>Todas gastaram ontem e geraram resultado na semana. Os pontos de atenção menores estão dentro de cada cliente.</div></div></AdsCard>:
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
+      {prios.length===0?<AdsCard className="px-sens" style={{display:"flex",gap:12,alignItems:"center",borderLeft:"4px solid "+S.ok}}><span style={{fontSize:22}}>✓</span><div><b style={{fontSize:14}}>Nenhuma conta em estado crítico.</b><div style={{fontSize:12.5,color:S.muted,marginTop:2}}>Todas gastaram ontem e geraram resultado na semana. Os pontos de atenção menores estão dentro de cada cliente.</div></div></AdsCard>:
+      <div className="px-sens" style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
         {(verOcultos?prosTodos:prios).slice(0,verOcultos?40:6).map(function(p,i){ const cor=_adsCor(p.nivel); const st=AL.mapa[p.chave]; const oculto=!ativo(p); return <div key={p.chave} style={{background:"#fff",border:"1px solid "+S.line,borderLeft:"4px solid "+(oculto?S.line2:cor),borderRadius:14,padding:"12px 14px",opacity:go?(oculto?.6:1):0,transform:go?"none":"translateY(6px)",transition:"opacity .4s ease "+(i*60)+"ms, transform .4s ease "+(i*60)+"ms"}}>
           <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:11,fontWeight:800,color:oculto?S.muted:cor,textTransform:"uppercase",letterSpacing:".05em"}}>{p.nivel==="c"?"crítico":"atenção"}</span><span style={{fontSize:12,fontWeight:700,color:S.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cliente.name}</span>{st&&<span style={{marginLeft:"auto",fontSize:11,color:S.muted,whiteSpace:"nowrap"}}>{st.status==="adiado"?"adiado até "+_adsFmtD(st.ate):st.status}{st.por?" · "+st.por:""}</span>}</div>
           <div style={{fontSize:13.5,fontWeight:800,letterSpacing:"-.2px",marginTop:4,lineHeight:1.3}}>{p.titulo}</div>
@@ -52999,7 +53042,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     {/* ── 2. CLIENTES ── */}
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px",color:S.ink}}>{soClientes?"Clientes de mídia · "+linhas.length:"Clientes"}</span><span style={{fontSize:12,color:S.muted}}>escolha a janela à direita · janelas terminam ontem ({_adsFmtD(C.ontem)})</span>{C.atrasado&&<span style={{fontSize:11.5,fontWeight:700,color:ADS.warn,background:ADS.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)} — os números de ontem ainda não chegaram</span>}{direita}<span style={{marginLeft:"auto",display:"inline-flex",background:S.surface2,borderRadius:9,padding:2,gap:1}}>{J.map(function(j){ const on=jAtiva===j[0]; return <button key={j[0]} onClick={function(){setJAtiva(j[0]);}} style={{background:on?"#fff":"transparent",color:on?S.ink:S.muted,border:0,borderRadius:7,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:F,boxShadow:on?"0 1px 3px rgba(15,13,26,.12)":"none",minHeight:0}}>{j[1]}</button>; })}</span></div>
-      <AdsCard style={{padding:0,overflow:"hidden"}}>
+      <AdsCard className="px-sens" style={{padding:0,overflow:"hidden"}}>
         {!isMob&&<div style={{display:"grid",gridTemplateColumns:"minmax(200px,1.6fr) 110px 130px 120px minmax(160px,1fr) 70px",gap:14,padding:"9px 16px",borderBottom:"1px solid "+S.line,fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:S.muted}}>
           <span>Cliente</span><span style={{textAlign:"right"}}>Leads</span><span style={{textAlign:"right"}}>Custo por lead</span><span style={{textAlign:"right"}}>Gasto</span><span>Situação</span><span/>
         </div>}
@@ -53022,7 +53065,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     {/* ── 3. AGÊNCIA ── */}
     {!soClientes&&<div style={{background:ADS_SOL.painel,borderRadius:18,padding:isMob?"18px 14px":"22px 20px",color:"#fff"}}>
       <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap",marginBottom:16}}><span style={{fontWeight:900,fontSize:22,letterSpacing:"-.6px",color:"#fff"}}>Sob nossa gestão</span><span style={{fontSize:12.5,color:ADS_SOL.eyebrow}}>todas as contas Meta somadas · cada campanha conta pela finalidade: formulário ou conversa no WhatsApp · custo por lead só com o gasto das campanhas de lead</span></div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
+      <div className="px-sens" style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
         {J.map(function(j,i){ const x=C.ag.j[j[0]]; const c=cpl(x); const bg=j[0]==="d1"?ADS_SOL.claro:j[0]==="mes"?ADS_SOL.medio:ADS_SOL.escuro; return <div key={j[0]} style={{background:bg,borderRadius:14,padding:"16px 18px",minWidth:0}}>
           <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS_SOL.eyebrow}}>{j[0]==="d1"?(C.atrasado?"Último dia · ":"Ontem · ")+_adsFmtD(C.ontem):j[0]==="mes"?"Este mês · "+_adsFmtD(C.jan.mes[0])+"–"+_adsFmtD(C.ontem):"Últimos "+j[1]}</div>
           <div style={{fontSize:30,fontWeight:900,letterSpacing:"-1px",lineHeight:1.05,margin:"8px 0 2px",color:"#fff",fontFeatureSettings:"'tnum'"}}><AdsNumAnim v={x.res} fmt={_adsNum}/><span style={{fontSize:12,fontWeight:700,color:ADS_SOL.sub,letterSpacing:0,marginLeft:6}}>leads</span></div>
@@ -53031,7 +53074,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
         </div>; })}
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.5fr 1fr",gap:14,marginTop:14}}>
+      <div className="px-sens" style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.5fr 1fr",gap:14,marginTop:14}}>
         <AdsCard style={{padding:"18px 20px 10px",color:ADS.ink}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><h4 style={{margin:0,fontSize:14,fontWeight:800,letterSpacing:"-.2px"}}>Leads por dia · 30 dias</h4><span style={{fontSize:11.5,color:S.muted}}>todas as contas · passe o mouse</span></div>
           <AdsArea pontos={dias30.map(function(d,i){ return Object.assign({},d,{lbl:(i%5===4||i===29)?d.lbl:""}); })} fmt={_adsNum} cor={S.accent} media={C.ag.j.d30.res/30} inverso={false} chave={"ag30|"+C.hoje} isMob={true} alt={190} detalhe={function(p){ return _adsBRL0(p.g)+" investidos · "+(p.v>0?_adsBRL(p.g/p.v)+" por lead":"sem lead"); }}/>
