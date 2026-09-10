@@ -11562,12 +11562,105 @@ function _PlaybookSection({title, subtitle, icon, accent, idx, children}){
   </div>;
 }
 
+/* ═══ Projeto — início, fim e os meses do plano (10/09/2026) ═══════════════
+   Pedido do Vinicius: no Orientações (que os sócios também abrem) ter a data de
+   início e fim do projeto, com mês 1 / mês 2 / mês 3, no espírito da linha do
+   tempo do portal do cliente.
+   O mês é o PERÍODO EXATO a partir da data de início (começou 19/08 → mês 1 vai
+   até 18/09), igual ao contador de conteúdos do Calendário de publicações.
+   Mostra também quantos conteúdos já têm data marcada em cada mês. */
+const _PBPROJ_RITMO = {
+  starter: {1:"2 posts por semana · setup e go-live", 2:"1 post por semana · campanhas ativas", 3:"1 post por semana · consolidação"},
+};
+function _pbProjSomaMes(startISO, n){
+  // Sem "clamp" de propósito: quando o mês é curto (começou dia 31 e o mês seguinte
+  // tem 30), a data transborda pro dia 1 do mês seguinte — que é exatamente onde
+  // _pxProjMes() vira o mês. As duas contas precisam bater dia a dia.
+  const s=String(startISO).slice(0,10).split("-").map(Number);
+  return new Date(s[0], s[1]-1+n, s[2]);
+}
+function _pbProjFmt(d){ return d?String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear():""; }
+function _PBProjeto({cl, idx}){
+  const [fase,setFase]=useState(null);
+  const [datas,setDatas]=useState(null);
+  useEffect(function(){
+    let vivo=true;
+    const sb=window._sb;
+    if(!sb||!cl||!cl.id){ setFase(false); return; }
+    Promise.all([
+      sb.from("client_onboarding").select("items").eq("client_id",cl.id).maybeSingle(),
+      sb.from("client_meta").select("production_schedule").eq("client_id",cl.id).maybeSingle(),
+      sb.from("tasks").select("publish_date").eq("client",cl.id).is("deleted_at",null).not("publish_date","is",null),
+    ]).then(function(rs){
+      if(!vivo) return;
+      let f=null;
+      const it=(rs[0]&&rs[0].data&&rs[0].data.items)||null;
+      if(it&&it.__start_date__) f={preset:it.__preset__||"completo",start:String(it.__start_date__).slice(0,10)};
+      const ps=(rs[1]&&rs[1].data&&rs[1].data.production_schedule)||null;
+      if(ps&&ps.start&&ps.package) f={preset:ps.package,start:String(ps.start).slice(0,10)};
+      setFase(f||false);
+      setDatas(((rs[2]&&rs[2].data)||[]).map(function(r){ return String(r.publish_date).slice(0,10); }));
+    }).catch(function(){ if(vivo) setFase(false); });
+    return function(){ vivo=false; };
+  },[cl&&cl.id]);
+
+  if(fase===null||!fase||!fase.start) return null;   // sem projeto registrado: não mostra nada
+
+  const preset=String(fase.preset||"").toLowerCase();
+  const starter=preset==="starter";
+  const nMeses=starter?3:1;
+  const ini0=_pbProjSomaMes(fase.start,0);
+  const fimProj=new Date(_pbProjSomaMes(fase.start,nMeses)); fimProj.setDate(fimProj.getDate()-1);
+  const hojeISO=(function(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); })();
+  const mesHoje=(typeof _pxProjMes==="function")?_pxProjMes(fase.start,hojeISO):0;
+  const diaHoje=Math.round((new Date(hojeISO+"T00:00:00")-new Date(fase.start+"T00:00:00"))/864e5)+1;
+  const totalDias=Math.round((fimProj-ini0)/864e5)+1;
+
+  const linhas=[];
+  for(let n=1;n<=nMeses;n++){
+    const ini=_pbProjSomaMes(fase.start,n-1);
+    const fim=new Date(_pbProjSomaMes(fase.start,n)); fim.setDate(fim.getDate()-1);
+    const cota=(typeof _pxCotaMes==="function")?_pxCotaMes(preset,n):0;
+    const feitos=(datas||[]).filter(function(d){ return (typeof _pxProjMes==="function")&&_pxProjMes(fase.start,d)===n; }).length;
+    linhas.push({n:n,ini:ini,fim:fim,cota:cota,feitos:feitos,agora:mesHoje===n,passado:mesHoje>n});
+  }
+
+  return <_PlaybookSection idx={idx} icon="calendar" title="Projeto" subtitle={starter?"Plano Starter · 3 meses — início, fim e ritmo de cada mês":"Início e período do projeto"}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12,paddingBottom:12,borderBottom:"1px solid #f1f5f9"}}>
+      <span style={{background:"#7c3aed14",color:"#7c3aed",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"4px 10px",borderRadius:99}}>{starter?"Plano Starter":(preset||"Projeto")}</span>
+      <span style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_pbProjFmt(ini0)} → {_pbProjFmt(fimProj)}</span>
+      {diaHoje>=1&&diaHoje<=totalDias
+        ? <span style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,background:"#0f172a",color:"#fff",fontSize:10.5,fontWeight:800,padding:"4px 11px",borderRadius:99,fontFeatureSettings:"'tnum'"}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:"#4ade80",boxShadow:"0 0 0 3px rgba(74,222,128,.25)"}}/>
+            Dia {diaHoje} de {totalDias}
+          </span>
+        : <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:700}}>{diaHoje>totalDias?"Projeto encerrado":"Ainda não começou"}</span>}
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {linhas.map(function(l){
+        const cor=l.agora?"#7c3aed":(l.passado?"#16a34a":"#94a3b8");
+        const okCota=l.cota&&l.feitos>=l.cota;
+        return <div key={l.n} style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap",border:"1px solid "+(l.agora?"#ddd6fe":"#eef0f4"),background:l.agora?"#faf8ff":"#fff",borderRadius:12,padding:"10px 13px"}}>
+          <span style={{background:l.agora?"#7c3aed":(l.passado?"#16a34a":"#eef0f4"),color:(l.agora||l.passado)?"#fff":"#64748b",fontSize:10,fontWeight:900,letterSpacing:.6,textTransform:"uppercase",padding:"4px 9px",borderRadius:99,flexShrink:0}}>Mês {l.n}</span>
+          <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_pbProjFmt(l.ini)} – {_pbProjFmt(l.fim)}</span>
+          <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,minWidth:0,flex:1}}>{(_PBPROJ_RITMO[preset]||{})[l.n]||""}</span>
+          {l.cota>0&&<span title={l.feitos+" conteúdo(s) com data marcada neste mês · "+l.cota+" previstos no plano"}
+            style={{background:okCota?"#16a34a14":"#f1f5f9",color:okCota?"#16a34a":"#475569",fontSize:11.5,fontWeight:800,padding:"4px 10px",borderRadius:99,fontFeatureSettings:"'tnum'",flexShrink:0}}>{l.feitos}/{l.cota}</span>}
+          {l.agora&&<span style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:900,letterSpacing:.5,textTransform:"uppercase",padding:"4px 9px",borderRadius:99,flexShrink:0}}>Estamos aqui</span>}
+        </div>;
+      })}
+    </div>
+    <div style={{color:"#cbd5e1",fontSize:10.5,marginTop:9,lineHeight:1.5}}>O mês conta o período exato a partir da data de início, não o mês do calendário. O contador é o mesmo do Calendário de publicações.</div>
+  </_PlaybookSection>;
+}
+
 function COrientacoes({cl, sections}){
   // sections: opcional. Array com IDs das secoes a mostrar. Se nao passar, mostra todas.
   // IDs: 'logos', 'paleta', 'fontes', 'tom', 'hashtags', 'cta', 'naofazer', 'siteredes'
-  const _showSec = function(id){ return !sections || sections.indexOf(id)!==-1; };
+  // "projeto" aparece sempre (é info do contrato, serve pra todo mundo que abre o cartão)
+  const _showSec = function(id){ return id==="projeto" || !sections || sections.indexOf(id)!==-1; };
   // Posição da seção entre as VISÍVEIS → cor do rainbow no cabeçalho (_PlaybookSection idx)
-  const _SEC_ORDER = ["logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
+  const _SEC_ORDER = ["projeto","logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
   const _secVis = _SEC_ORDER.filter(_showSec);
   const _secIdx = function(id){ return Math.max(0,_secVis.indexOf(id)); };
   const sb=window._sb;
@@ -11736,6 +11829,8 @@ function COrientacoes({cl, sections}){
     <input ref={fileInputFonte} type="file" accept=".ttf,.otf,.woff,.woff2,.zip" style={{display:"none"}} onChange={onSelectFonteFile}/>
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
+
+    <_PBProjeto cl={cl} idx={_secIdx("projeto")}/>
 
     {_showSec("logos") && <_PlaybookSection idx={_secIdx("logos")} icon="image" accent="#7c3aed" title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
@@ -18142,11 +18237,80 @@ function _pxFaseDoMes(fase,year,month){
   return null;
 }
 
+/* ═══ Contador de conteúdos do projeto (10/09/2026) ═══════════════════════
+   Pedido do Vinicius: saber, batendo o olho no calendário, qual é o número do
+   card desde o início do projeto — pra conferir os 8 conteúdos do mês 1 e os 4
+   dos meses 2 e 3 do Plano Starter.
+   O "mês" é o PERÍODO EXATO de um mês a partir da data de início (começou 19/08
+   → mês 1 vai de 19/08 a 18/09), não o mês do calendário.
+   Só aparece pra cliente com data de início registrada (hoje: Clem e Acreforte;
+   qualquer cliente novo entra sozinho quando a data for cadastrada).
+   Conta TODO card com data de publicação (decisão do Vinicius), menos lixeira. */
+function _pxProjMes(startISO, dateISO){
+  if(!startISO||!dateISO) return 0;
+  const s=String(startISO).slice(0,10).split("-").map(Number);
+  const d=String(dateISO).slice(0,10).split("-").map(Number);
+  if(s.length<3||d.length<3||!s[0]||!d[0]) return 0;
+  let m=(d[0]-s[0])*12+(d[1]-s[1]);   // meses cheios entre os dois
+  if(d[2] < s[2]) m-=1;               // ainda não chegou no dia do aniversário
+  return m<0 ? 0 : m+1;               // mês 1 = primeiro mês do projeto
+}
+/* Cota de conteúdos do mês. Starter: mês 1 = 8 (2 por semana), meses 2 e 3 = 4
+   (1 por semana). Fora disso não há cota fechada — mostra só a posição. */
+function _pxCotaMes(preset, mes){
+  if(String(preset||"").toLowerCase()!=="starter") return 0;
+  if(mes===1) return 8;
+  if(mes===2||mes===3) return 4;
+  return 0;
+}
+/* Devolve { [taskId]: {mes, pos, cota, preset} } pros clientes com projeto iniciado. */
+function _pxContadorProjeto(tasks, faseMap){
+  const out={};
+  if(!faseMap) return out;
+  const porCliente={};
+  (tasks||[]).forEach(function(t){
+    if(!t||t.deletedAt||!t.publishDate) return;
+    const f=faseMap[t.client];
+    if(!f||!f.start) return;
+    (porCliente[t.client]=porCliente[t.client]||[]).push(t);
+  });
+  Object.keys(porCliente).forEach(function(cid){
+    const f=faseMap[cid];
+    const lista=porCliente[cid].slice().sort(function(a,b){
+      const da=String(a.publishDate||""), db=String(b.publishDate||"");
+      if(da!==db) return da.localeCompare(db);
+      const ha=String(a.publishTime||"00:00"), hb=String(b.publishTime||"00:00");
+      if(ha!==hb) return ha.localeCompare(hb);
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const contador={};
+    lista.forEach(function(t){
+      const mes=_pxProjMes(f.start,t.publishDate);
+      if(mes<1) return;
+      contador[mes]=(contador[mes]||0)+1;
+      out[t.id]={mes:mes, pos:contador[mes], cota:_pxCotaMes(f.preset,mes), preset:f.preset||""};
+    });
+  });
+  return out;
+}
+
 function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}){
   // Social media (Luiza) nunca exclui — regra fixa, independe de Acessos
   const _calUser=(viewingAs&&(TEAM||[]).find(function(u){return u.id===viewingAs;}))||CURRENT_USER;
   const _calExclBloq=(typeof pxExclusaoBloqueada==="function")&&pxExclusaoBloqueada(_calUser);
   const tasks = propTasks||[];
+  // Contador de conteúdos do projeto (só clientes com data de início registrada)
+  const [faseProjetos,setFaseProjetos]=useState(null);
+  useEffect(function(){
+    let vivo=true;
+    if(typeof _pxCarregarFaseProjeto==="function"){
+      _pxCarregarFaseProjeto().then(function(m){ if(vivo) setFaseProjetos(m||{}); }).catch(function(){});
+    }
+    return function(){ vivo=false; };
+  },[]);
+  const contadorProjeto=useMemo(function(){
+    return faseProjetos ? _pxContadorProjeto(tasks,faseProjetos) : {};
+  },[tasks,faseProjetos]);
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
@@ -19126,6 +19290,17 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 Collab
                               </span>}
                             </div>
+                            {(function(){
+                              // Contador do projeto: 3/8 = 3º conteúdo do mês 1 do Starter (8 previstos)
+                              const _ct=contadorProjeto[t.id];
+                              if(!_ct) return null;
+                              const _txt=_ct.cota?(_ct.pos+"/"+_ct.cota):("#"+_ct.pos);
+                              const _estourou=_ct.cota&&_ct.pos>_ct.cota;
+                              const _ttl=_ct.pos+"º conteúdo do mês "+_ct.mes+" do projeto"
+                                +(_ct.cota?(" ("+_ct.cota+" previstos no plano"+(_ct.preset?" "+_ct.preset.charAt(0).toUpperCase()+_ct.preset.slice(1):"")+")"):"")
+                                +(_estourou?" — passou da cota do mês":"");
+                              return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:9.5,fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
+                            })()}
                             {(function(){
                               const isReprovada = t.status==="reprovado";
                               const isPausada = t.status==="pausado";
