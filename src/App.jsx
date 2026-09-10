@@ -43092,6 +43092,97 @@ function ContatosView({clientId, bioterUnit}){
   </div>;
 }
 
+/* ═══ Projeto — linha do tempo dentro da aba Orientações DO CARD (10/09/2026) ═══
+   Mesma informação do bloco "Projeto" do Playbook, mas aqui dentro do cartão: quem
+   está produzindo vê início, fim e em que mês do plano o projeto está, sem sair daqui.
+   Contagem SEQUENCIAL por cota (8 · 4 · 4 …), igual ao chip do Calendário de publicações. */
+function _OVProjeto({clientId}){
+  const [fase,setFase]=useState(null);
+  const [datas,setDatas]=useState(null);
+  useEffect(function(){
+    let vivo=true;
+    const sb=window._sb;
+    if(!sb||!clientId){ setFase(false); return; }
+    Promise.all([
+      sb.from("client_onboarding").select("items").eq("client_id",clientId).maybeSingle(),
+      sb.from("client_meta").select("production_schedule").eq("client_id",clientId).maybeSingle(),
+      sb.from("tasks").select("publish_date,status,content_type").eq("client",clientId).is("deleted_at",null).not("publish_date","is",null),
+    ]).then(function(rs){
+      if(!vivo) return;
+      let f=null;
+      const it=(rs[0]&&rs[0].data&&rs[0].data.items)||null;
+      if(it&&it.__start_date__) f={preset:it.__preset__||"completo",start:String(it.__start_date__).slice(0,10)};
+      const ps=(rs[1]&&rs[1].data&&rs[1].data.production_schedule)||null;
+      if(ps&&ps.start&&ps.package) f={preset:ps.package,start:String(ps.start).slice(0,10)};
+      setFase(f||false);
+      setDatas(((rs[2]&&rs[2].data)||[])
+        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"; })
+        .map(function(r){ return String(r.publish_date).slice(0,10); }));
+    }).catch(function(){ if(vivo) setFase(false); });
+    return function(){ vivo=false; };
+  },[clientId]);
+
+  if(fase===null||!fase||!fase.start) return null;   // cliente sem projeto registrado
+  if(typeof _pbProjSomaMes!=="function") return null;
+
+  const preset=String(fase.preset||"").toLowerCase();
+  const starter=preset==="starter";
+  const nMeses=starter?3:1;
+  const ini0=_pbProjSomaMes(fase.start,0);
+  const fimProj=new Date(_pbProjSomaMes(fase.start,nMeses)); fimProj.setDate(fimProj.getDate()-1);
+  const hojeISO=(function(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); })();
+  const mesHoje=_pxProjMes(fase.start,hojeISO);
+  const diaHoje=Math.round((new Date(hojeISO+"T00:00:00")-new Date(fase.start+"T00:00:00"))/864e5)+1;
+  const totalDias=Math.round((fimProj-ini0)/864e5)+1;
+  const RITMO={1:"2 posts por semana",2:"1 post por semana",3:"1 post por semana"};
+  const total=(datas||[]).filter(function(d){ return _pxProjMes(fase.start,d)>=1; }).length;
+  const linhas=[]; let usados=0;
+  for(let n=1;n<=nMeses;n++){
+    const ini=_pbProjSomaMes(fase.start,n-1);
+    const fim=new Date(_pbProjSomaMes(fase.start,n)); fim.setDate(fim.getDate()-1);
+    const cota=_pxCotaMes(preset,n);
+    const feitos=cota>0?Math.max(0,Math.min(cota,total-usados)):0;
+    usados+=cota>0?cota:0;
+    linhas.push({n:n,ini:ini,fim:fim,cota:cota,feitos:feitos,agora:mesHoje===n,passado:mesHoje>n});
+  }
+  const _f=function(d){ return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); };
+
+  return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+      <div style={{width:28,height:28,borderRadius:8,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n="calendar" size={14}/>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.15}}>Projeto</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:2,letterSpacing:-.05}}>{starter?"Plano Starter · 3 meses — onde o projeto está":"Período do projeto"}</div>
+      </div>
+    </div>
+    <div style={{border:"1px solid #eef0f4",borderRadius:12,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",padding:"11px 13px",background:"#fafbfc",borderBottom:"1px solid #f1f5f9"}}>
+        <span style={{background:"#7c3aed14",color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"3px 9px",borderRadius:99}}>{starter?"Starter":(preset||"Projeto")}</span>
+        <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_f(ini0)} → {_f(fimProj)}</span>
+        {diaHoje>=1&&diaHoje<=totalDias
+          ? <span style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,background:"#0f172a",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:99,fontFeatureSettings:"'tnum'"}}>
+              <span style={{width:5,height:5,borderRadius:"50%",background:"#4ade80",boxShadow:"0 0 0 3px rgba(74,222,128,.25)"}}/>Dia {diaHoje} de {totalDias}
+            </span>
+          : <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:10.5,fontWeight:700}}>{diaHoje>totalDias?"Encerrado":"Não começou"}</span>}
+      </div>
+      <div style={{padding:"9px 10px",display:"flex",flexDirection:"column",gap:6}}>
+        {linhas.map(function(l){
+          const okCota=l.cota&&l.feitos>=l.cota;
+          return <div key={l.n} style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",border:"1px solid "+(l.agora?"#ddd6fe":"#f1f5f9"),background:l.agora?"#faf8ff":"#fff",borderRadius:10,padding:"8px 11px"}}>
+            <span style={{background:l.agora?"#7c3aed":(l.passado?"#16a34a":"#eef0f4"),color:(l.agora||l.passado)?"#fff":"#64748b",fontSize:9,fontWeight:900,letterSpacing:.5,textTransform:"uppercase",padding:"3px 8px",borderRadius:99,flexShrink:0}}>Mês {l.n}</span>
+            <span style={{color:"#0f172a",fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_f(l.ini)} – {_f(l.fim)}</span>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,minWidth:0,flex:1}}>{RITMO[l.n]||""}</span>
+            {l.cota>0&&<span title={l.feitos+" de "+l.cota+" conteúdos deste bloco já marcados"} style={{background:okCota?"#16a34a14":"#f1f5f9",color:okCota?"#16a34a":"#475569",fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:99,fontFeatureSettings:"'tnum'",flexShrink:0}}>{l.feitos}/{l.cota}</span>}
+            {l.agora&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:900,letterSpacing:.4,textTransform:"uppercase",padding:"3px 8px",borderRadius:99,flexShrink:0}}>Estamos aqui</span>}
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
+
 function OrientacoesView({clientId, bioterUnit, sector}){
   const sb=window._sb;
   // Cadeira de quem está olhando (09/09/2026): a aba Orientações do card segue a MESMA
@@ -43323,6 +43414,9 @@ function OrientacoesView({clientId, bioterUnit, sector}){
           <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
         </div>
       </div>}
+
+      {/* ═══ Projeto — início, fim e mês do plano (só cliente com projeto registrado) ═══ */}
+      <_OVProjeto clientId={clientId}/>
 
       {/* ═══ Do Briefing — dados não-confidenciais preenchidos no Briefing (auto) ═══ */}
       {_vis("pb-briefing-auto")&&_briefItens.length>0&&<div>
