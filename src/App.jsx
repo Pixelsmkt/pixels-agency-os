@@ -21641,12 +21641,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       // Coluna "agendado" (Publicadas) -> status real "publicado".
       // Mantém a separação: Aprovado (etapa) vs Publicadas (já publicado).
       const newStatus=toColId==="agendado"?"publicado":toColId;
-      // ── LIMPEZA AUTO em Pausado APENAS ──
-      // Em REPROVADO NÃO limpa nada: o designer/editor fez a arte, então
-      // responsáveis, mês de pagamento, tipo de conteúdo etc devem ser preservados
-      // pra contabilizar corretamente o pagamento e histórico.
-      // Em PAUSADO faz sentido limpar: o card ficou em standby antes da produção.
-      const _stripped = (newStatus==="pausado") ? {
+      // ── LIMPEZA AUTO ──
+      // PAUSADO: sempre limpa — o card ficou em standby antes da produção.
+      // REPROVADO: limpa SÓ se veio de Copys/Rascunhos, ou seja, a COPY foi reprovada e
+      //   nada chegou a ser produzido (10/09/2026, decisão do Vinicius). Se veio de
+      //   Execução/Ajustes/Avaliação/Aprovado, o designer já fez a arte — mantém
+      //   responsáveis e mês de pagamento pra ele receber pelo trabalho.
+      const _copyReprovada = (newStatus==="reprovado") && (x.status==="demanda"||x.status==="rascunhos");
+      const _stripped = (newStatus==="pausado"||_copyReprovada) ? {
         assignees:[],
         assignee:"",
         publishDate:"",
@@ -27299,8 +27301,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       status:"reprovado",
       ajustar:false,
       colEnteredAt:now,
-      // NÃO limpar tags: preserva responsáveis, mês de pagamento, tipo, publicação.
-      // Se a copy foi reprovada é decisão editorial — o histórico e contexto ficam.
+      // Copy reprovada = NADA foi produzido ainda. Então o card sai da fila de todo mundo:
+      // limpa responsáveis e mês de pagamento (10/09/2026, decisão do Vinicius). Só a Hellen
+      // (ou quem reprovou) fica de dono editorial. Material reprovado DEPOIS de produzido é
+      // outra coisa — ver rejectPub: lá mantém responsável e paga, porque a hora foi gasta.
+      assignees:[], assignee:"", referenceMonth:"",
       reprovacaoMotivo:motivo||t.reprovacaoMotivo||"",
       timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Reprovadas",from:"demanda",to:"reprovado",at:now,atFmt:nowFmt(),user:actor,note:motivo?("Motivo: "+motivo):undefined}]
     }:t));
