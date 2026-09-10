@@ -53557,6 +53557,152 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   </AdsWrap>;
 }
 
+
+/* ═══════════════════════════════════════════════════════
+   PERSONA QUE CONVERTE — cruzamento das quebras da Meta no período
+   O que a Meta cruza (testado 10/09/2026): idade×gênero (campanha e conjunto) e posicionamento×dispositivo. Idade×região, idade×posicionamento,
+   região×gênero ela RECUSA — por isso a persona por estado usa os conjuntos cujo público é só daquele estado (idade×gênero do conjunto)
+   + a quebra de região; e "posicionamento por idade" não existe: mostramos posicionamento×dispositivo.
+   ═══════════════════════════════════════════════════════ */
+function useAdsPersona(accountId,P){
+  const [st,setSt]=useState({loading:true,rows:[]}); const key=(P&&P.key)||"";
+  useEffect(function(){ if(!accountId||!P||!window._sb){ setSt({loading:false,rows:[]}); return; } let alive=true; setSt({loading:true,rows:[]});
+    window._sb.rpc("ads_persona",{p_account:accountId,p_de:P.ini,p_ate:P.fim}).then(function(r){ if(alive) setSt({loading:false,rows:r.error?[]:(r.data||[])}); }).catch(function(){ if(alive) setSt({loading:false,rows:[]}); });
+    return function(){ alive=false; }; },[accountId,key]);
+  return st;
+}
+const ADS_UF_ID={452:"Paraná",459:"Santa Catarina",456:"Rio Grande do Sul",458:"São Paulo",449:"Minas Gerais",455:"Rio de Janeiro",450:"Mato Grosso do Sul",448:"Mato Grosso",445:"Goiás"};
+/* estados em que um conjunto entrega, pelo targeting */
+function _adsEstadosDoConjunto(p){
+  p=p||{}; const g=p.geo_locations||{}; const s={};
+  (g.cities||[]).forEach(function(c){ if(c.region) s[c.region]=1; });
+  (g.regions||[]).forEach(function(r){ if(r.name) s[r.name]=1; });
+  (g.custom_locations||[]).concat(g.places||[]).forEach(function(c){ const n=ADS_UF_ID[Number(c.region_id)]; if(n) s[n]=1; else if(c.region) s[c.region]=1; });
+  return Object.keys(s);
+}
+const _adsGen=function(v){ return v==="male"?"Homens":v==="female"?"Mulheres":"Não informado"; };
+/* ═══════════════════════════════════════════════════════
+   CORTE DE PÚBLICO — tooltip com o cruzamento REAL da Meta + janela de detalhe (10/09/2026)
+   A Meta só cruza idade↔gênero e posicionamento↔dispositivo (testado 10/09: idade×aparelho, idade×hora,
+   idade×região, região×gênero → "combination invalid"). Hora do dia vem por campanha, sem recorte de idade/gênero.
+   ═══════════════════════════════════════════════════════ */
+const ADS_CRUZ={idade:["idade_genero",0,"Homens e mulheres nesta faixa",function(v){return _adsGen(v);}],
+  genero:["idade_genero",1,"Faixas etárias",function(v){return v+" anos";}],
+  posicionamento:["posic_dispositivo",0,"Aparelhos neste posicionamento",function(v){return _adsValLbl("dispositivo",v);}],
+  dispositivo:["posic_dispositivo",1,"Posicionamentos neste aparelho",function(v){return _adsValLbl("posicionamento",v);}]};
+const ADS_NAO_CRUZA={idade:"aparelho, região e hora",genero:"aparelho, região e hora",posicionamento:"idade, gênero e região",dispositivo:"idade, gênero e região",regiao:"idade, gênero, aparelho e posicionamento"};
+/* cruzamento real de um valor: lista {valor,lbl,res,gasto} a partir das linhas cruzadas (nível campanha, mesmo filtro) */
+function _adsCruzDe(rows,dim,valor){
+  const cfg=ADS_CRUZ[dim]; if(!cfg) return null;
+  const m={}; let achou=false;
+  rows.forEach(function(r){ if(r.dimensao!==cfg[0]) return; const p=String(r.valor).split("|"); if(p[cfg[1]]!==String(valor)) return; achou=true; const k=p[1-cfg[1]]; const o=m[k]||(m[k]={valor:k,lbl:cfg[3](k),res:0,gasto:0}); o.res+=Number(r.resultados||0); o.gasto+=Number(r.gasto||0); });
+  if(!achou) return null;
+  return Object.keys(m).map(function(k){return m[k];}).filter(function(x){return x.res>0||x.gasto>=1;}).sort(function(a,b){return b.res-a.res||b.gasto-a.gasto;});
+}
+/* conteúdo do tooltip (número real, nada de média) */
+function AdsCruzTip({x,dim,cruz,resNome,resNomePl}){
+  const tot=cruz?cruz.reduce(function(s,c){return s+c.res;},0):0;
+  return <div style={{minWidth:200,maxWidth:300,whiteSpace:"normal"}}>
+    <div style={{fontWeight:800,fontSize:12.5}}>{x.lbl}</div>
+    <div style={{opacity:.85,marginTop:2}}><b>{_adsNum(x.res)}</b> {x.res===1?resNome:resNomePl} · {_adsBRL0(x.gasto)}{x.cpa?" · "+_adsBRL(x.cpa)+" por "+resNome:""}</div>
+    {cruz&&cruz.length>0&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,.15)"}}>
+      <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",opacity:.7}}>{ADS_CRUZ[dim][2]} · dado da Meta</div>
+      {cruz.slice(0,6).map(function(c){ return <div key={c.valor} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginTop:4,alignItems:"center"}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.lbl}</span><span style={{fontFeatureSettings:"'tnum'"}}><b>{_adsNum(c.res)}</b>{tot>0?<span style={{opacity:.6}}> · {Math.round(c.res/tot*100)}%</span>:null}</span></div>; })}
+      {tot!==x.res&&tot>0&&<div style={{fontSize:10.5,opacity:.6,marginTop:4}}>soma do cruzamento: {_adsNum(tot)} (a Meta atribui separado)</div>}
+    </div>}
+    {cruz&&cruz.length===0&&<div style={{marginTop:6,fontSize:11,opacity:.7}}>cruzamento sem {resNomePl} neste período</div>}
+    {cruz===null&&ADS_CRUZ[dim]&&<div style={{marginTop:6,fontSize:11,opacity:.7}}>cruzamento ainda não coletado neste período</div>}
+    <div style={{marginTop:6,fontSize:10.5,opacity:.6}}>a Meta não cruza {ADS_DIM_LBL[dim].toLowerCase()} com {ADS_NAO_CRUZA[dim]}</div>
+    <div style={{marginTop:6,fontSize:11,color:"#c9b3f5",fontWeight:700}}>clique pra ver a linha do tempo</div>
+  </div>;
+}
+/* janela de detalhe: 3 meses por dia + cruzamento real + hora do dia */
+function useAdsCorteDetalhe(accountId,dim,valor,campIds,de,ate){
+  const [st,setSt]=useState({loading:true,data:null});
+  useEffect(function(){ if(!accountId||!window._sb){ setSt({loading:false,data:null}); return; } let alive=true; setSt({loading:true,data:null});
+    window._sb.rpc("ads_corte_detalhe",{p_account:accountId,p_dimensao:dim,p_valor:String(valor),p_de:de,p_ate:ate,p_campaigns:campIds&&campIds.length?campIds:null}).then(function(r){ if(!alive) return; if(r.error) console.warn("[ads corte]",r.error.message); setSt({loading:false,data:r.error?null:r.data}); }).catch(function(){ if(alive) setSt({loading:false,data:null}); });
+    return function(){ alive=false; }; },[accountId,dim,String(valor),(campIds||[]).join(","),de,ate]);
+  return st;
+}
+function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,onClose}){
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
+  const hoje=_adsIso(new Date()); const ate=_adsAddDays(hoje,-1); const de=_adsAddDays(ate,-89);
+  const S=useAdsCorteDetalhe(conta&&conta.ad_account_id,dim,x.valor,campIds,de,ate);
+  const [hov,setHov]=useState(null);
+  const d=S.data||{serie:[],cruz:[],hora:[]};
+  const serie=d.serie||[], cruz=d.cruz||[], hora=d.hora||[];
+  /* eixo de 90 dias, um por um (dia sem entrega = 0) */
+  const porDia={}; serie.forEach(function(s){ porDia[String(s.data).slice(0,10)]=s; });
+  const cruzDia={}; cruz.forEach(function(c){ const k=String(c.data).slice(0,10); (cruzDia[k]=cruzDia[k]||[]).push(c); });
+  const dias=[]; for(let i=0;i<90;i++){ const k=_adsAddDays(de,i); const s=porDia[k]||{}; dias.push({data:k,res:Number(s.resultados||0),gasto:Number(s.gasto||0),cruz:cruzDia[k]||[]}); }
+  const totRes=dias.reduce(function(s,a){return s+a.res;},0), totG=dias.reduce(function(s,a){return s+a.gasto;},0); const cpa=_adsDiv(totG,totRes);
+  const maxRes=Math.max.apply(null,dias.map(function(a){return a.res;}).concat([1]));
+  const cfg=ADS_CRUZ[dim];
+  /* cruzamento total (3 meses) */
+  const cruzTot=(function(){ if(!cfg) return null; const m={}; cruz.forEach(function(c){ const o=m[c.outro]||(m[c.outro]={valor:c.outro,lbl:cfg[3](c.outro),res:0,gasto:0}); o.res+=Number(c.resultados||0); o.gasto+=Number(c.gasto||0); }); return Object.keys(m).map(function(k){return m[k];}).filter(function(a){return a.res>0;}).sort(function(a,b){return b.res-a.res;}); })();
+  const cruzTotN=cruzTot?cruzTot.reduce(function(s,a){return s+a.res;},0):0;
+  const diasComRes=dias.filter(function(a){return a.res>0;}).length, diasComCruz=dias.filter(function(a){return a.res>0&&a.cruz.some(function(c){return Number(c.resultados)>0;});}).length;
+  /* hora do dia (por campanha do filtro — a Meta não cruza com idade/gênero) */
+  const horas=[]; for(let h=0;h<24;h++){ const r=hora.find(function(a){return Number(a.hora)===h;})||{}; horas.push({h:h,res:Number(r.resultados||0),gasto:Number(r.gasto||0)}); }
+  const horaTot=horas.reduce(function(s,a){return s+a.res;},0); const maxHora=Math.max.apply(null,horas.map(function(a){return a.res;}).concat([1]));
+  const melhorHora=horaTot>0?horas.slice().sort(function(a,b){return b.res-a.res;})[0]:null;
+  const semanas=(function(){ const out=[]; for(let i=0;i<90;i+=7){ const bloco=dias.slice(i,i+7); out.push({de:bloco[0].data,res:bloco.reduce(function(s,a){return s+a.res;},0)}); } return out; })();
+  const hp=hov!==null?dias[hov]:null;
+  const W=isMob?340:820, H=150;
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:isMob?10:20,fontFamily:ADS_FONT}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(920px,100%)",maxHeight:"92vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,.4)",padding:isMob?"18px 16px":"22px 26px",color:ADS.ink}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS.muted}}>{ADS_DIM_LBL[dim]} · {filtroLbl} · últimos 3 meses ({_adsFmtD(de)} – {_adsFmtD(ate)})</div>
+          <div style={{fontSize:isMob?20:24,fontWeight:900,letterSpacing:"-.5px",marginTop:4}}>{x.lbl}</div>
+          <div style={{fontSize:13,color:ADS.ink2,marginTop:4}}>{S.loading?"lendo a Meta…":<span><b style={{color:ADS.ink}}>{_adsNum(totRes)}</b> {resNomePl} · <b style={{color:ADS.ink}}>{_adsBRL0(totG)}</b>{cpa?<span> · <b style={{color:ADS.ink}}>{_adsBRL(cpa)}</b> por {resNome}</span>:null}</span>}</div>
+        </div>
+        <button onClick={onClose} style={{background:ADS.surface2,border:0,borderRadius:99,width:34,height:34,cursor:"pointer",fontSize:16,color:ADS.ink2,flexShrink:0}}>✕</button>
+      </div>
+      {!S.loading&&<>
+        {/* linha do tempo */}
+        <div style={{marginTop:18}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:900}}>Linha do tempo</span><span style={{fontSize:12,color:ADS.muted}}>{resNomePl} por dia · passe o mouse pra ver o dia{cfg?" e o cruzamento daquele dia":""}</span></div>
+          <div style={{position:"relative",marginTop:10}}>
+            <svg width="100%" viewBox={"0 0 "+W+" "+(H+22)} style={{display:"block"}} onMouseLeave={function(){setHov(null);}}>
+              {dias.map(function(a,i){ const bw=W/90; const h=a.res/maxRes*(H-10); const on=hov===i; return <g key={a.data} onMouseEnter={function(){setHov(i);}}><rect x={i*bw} y={0} width={bw} height={H} fill="transparent"/><rect x={i*bw+1} y={H-h} width={Math.max(1,bw-2)} height={h} rx={2} fill={on?ADS_ROXO[900]:a.res>0?ADS_ROXO[500]:"#ecebf2"} style={{transition:"fill .15s"}}/></g>; })}
+              {[0,15,30,45,60,75,89].map(function(i){ return <text key={i} x={i*W/90+W/180} y={H+16} fontSize="10" fill={ADS.muted} textAnchor={i===0?"start":i===89?"end":"middle"} fontFamily={ADS_FONT}>{_adsFmtD(dias[i].data)}</text>; })}
+            </svg>
+            {hp&&<div style={{position:"absolute",left:(hov/90*100)+"%",top:0,transform:"translate("+(hov>60?"-100%":hov<30?"0":"-50%")+",-6px)",background:ADS.tipBg,color:ADS.tipInk,borderRadius:12,padding:"10px 13px",fontSize:12,lineHeight:1.5,pointerEvents:"none",zIndex:5,boxShadow:"0 12px 32px rgba(15,13,26,.28)",whiteSpace:"nowrap",minWidth:170}}>
+              <b>{_adsFmtDL(hp.data)}</b> · {["dom","seg","ter","qua","qui","sex","sáb"][new Date(hp.data+"T12:00:00").getDay()]}<br/><b>{_adsNum(hp.res)}</b> {hp.res===1?resNome:resNomePl} · {_adsBRL0(hp.gasto)}
+              {hp.cruz.length>0&&<div style={{marginTop:4,paddingTop:4,borderTop:"1px solid rgba(255,255,255,.15)",opacity:.9}}>{hp.cruz.filter(function(c){return Number(c.resultados)>0;}).sort(function(a,b){return b.resultados-a.resultados;}).map(function(c){ return <div key={c.outro}>{cfg[3](c.outro)}: <b>{_adsNum(c.resultados)}</b></div>; })}</div>}
+            </div>}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat("+semanas.length+",1fr)",gap:3,marginTop:8}}>{semanas.map(function(s){ return <div key={s.de} title={"semana de "+_adsFmtD(s.de)} style={{textAlign:"center",fontSize:10.5,color:ADS.muted,fontFeatureSettings:"'tnum'"}}><b style={{color:s.res?ADS.ink2:ADS.muted}}>{s.res||"·"}</b></div>; })}</div>
+          <div style={{fontSize:11,color:ADS.muted,marginTop:2,textAlign:"center"}}>{resNomePl} por semana</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,marginTop:18}}>
+          {/* cruzamento real */}
+          <div style={{border:"1px solid "+ADS.line,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:13.5,fontWeight:900}}>{cfg?cfg[2]:"Cruzamentos"}</div>
+            <div style={{fontSize:11.5,color:ADS.muted,marginTop:2}}>{cfg?"número real da Meta, 3 meses"+(diasComRes>0&&diasComCruz<diasComRes?" · cruzamento coletado em "+diasComCruz+" dos "+diasComRes+" dias com "+resNomePl:""):"a Meta não cruza região com nada que tenha resultado"}</div>
+            {cfg&&cruzTot&&cruzTot.length>0&&<div style={{marginTop:10,display:"flex",flexDirection:"column",gap:7}}>{cruzTot.map(function(c,i){ return <div key={c.valor} style={{display:"grid",gridTemplateColumns:"minmax(0,110px) 1fr auto",gap:10,alignItems:"center",fontSize:12.5}}><span style={{fontWeight:700,color:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.lbl}</span><span style={{display:"block",height:9,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(c.res/cruzTot[0].res*100)+"%",borderRadius:99,background:ADS_PALETA[i%ADS_PALETA.length]}}/></span><span style={{fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}><b>{_adsNum(c.res)}</b> <span style={{color:ADS.muted,fontSize:11}}>· {Math.round(c.res/cruzTotN*100)}%{c.res>0&&c.gasto>0?" · "+_adsBRL(c.gasto/c.res)+" por "+resNome:""}</span></span></div>; })}</div>}
+            {cfg&&(!cruzTot||cruzTot.length===0)&&<div style={{fontSize:12.5,color:ADS.muted,marginTop:10}}>ainda sem cruzamento coletado neste período</div>}
+            <div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>A Meta não cruza {ADS_DIM_LBL[dim].toLowerCase()} com {ADS_NAO_CRUZA[dim]} — pedimos e ela recusa ("combination invalid"). O que está aqui é o único cruzamento real que existe.</div>
+          </div>
+          {/* hora do dia */}
+          <div style={{border:"1px solid "+ADS.line,borderRadius:14,padding:"14px 16px"}}>
+            <div style={{fontSize:13.5,fontWeight:900}}>Hora do dia</div>
+            <div style={{fontSize:11.5,color:ADS.muted,marginTop:2}}>{horaTot>0?"em que hora os "+resNomePl+" chegam · "+(d.hora_dias||0)+" dias com hora":"ainda sem hora coletada neste período"}</div>
+            {horaTot>0&&<>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(24,1fr)",gap:2,alignItems:"end",height:90,marginTop:12}}>{horas.map(function(a){ const on=melhorHora&&melhorHora.h===a.h; return <div key={a.h} title={String(a.h).padStart(2,"0")+"h · "+_adsNum(a.res)+" "+resNomePl+" · "+_adsBRL0(a.gasto)} style={{height:Math.max(2,a.res/maxHora*100)+"%",borderRadius:"3px 3px 1px 1px",background:on?ADS_ROXO[900]:a.res>0?ADS_ROXO[400]:"#ecebf2"}}/>; })}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(24,1fr)",marginTop:4}}>{horas.map(function(a){ return <span key={a.h} style={{fontSize:9,color:ADS.muted,textAlign:"center"}}>{a.h%3===0?a.h:""}</span>; })}</div>
+              {melhorHora&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:8}}>Pico às <b>{String(melhorHora.h).padStart(2,"0")}h</b> ({_adsNum(melhorHora.res)} {resNomePl}, {Math.round(melhorHora.res/horaTot*100)}%). {(function(){ const faixa=horas.slice().sort(function(a,b){return b.res-a.res;}).slice(0,4).map(function(a){return a.h;}).sort(function(a,b){return a-b;}); const n=horas.filter(function(a){return faixa.indexOf(a.h)>=0;}).reduce(function(s,a){return s+a.res;},0); return "As 4 horas mais fortes ("+faixa.map(function(h){return h+"h";}).join(", ")+") concentram "+Math.round(n/horaTot*100)+"%."; })()}</div>}
+            </>}
+            <div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>A hora é das campanhas do filtro ({filtroLbl}), no fuso da conta — a Meta não entrega hora por {ADS_DIM_LBL[dim].toLowerCase()}.</div>
+          </div>
+        </div>
+      </>}
+      {S.loading&&<div style={{padding:"40px 0",textAlign:"center",color:ADS.muted,fontSize:13}}>lendo os 3 meses na base…</div>}
+    </div>
+  </div>;
+}
+
 /* ═══════════════════════════════════════════════════════
    PÚBLICO — RPC ads_quebras_conta (agrega no banco) · filtro por campanha ou objetivo · período global
    ═══════════════════════════════════════════════════════ */
@@ -53594,13 +53740,13 @@ function useAdsEntra(chave){ const [go,setGo]=useState(false); useEffect(functio
 /* tooltip flutuante dentro do card */
 function AdsTipBox({x,y,children}){ return <div style={{position:"absolute",left:x,top:y,transform:"translate(-50%,calc(-100% - 10px))",background:ADS.tipBg,color:ADS.tipInk,borderRadius:10,padding:"8px 11px",fontSize:12,lineHeight:1.45,whiteSpace:"nowrap",pointerEvents:"none",zIndex:5,boxShadow:"0 10px 30px rgba(15,13,26,.25)",fontFamily:ADS_FONT}}>{children}</div>; }
 /* colunas verticais animadas */
-function AdsColunas({dados,fmt,h,chave,isMob}){
+function AdsColunas({dados,fmt,h,chave,isMob,onPick}){
   const go=useAdsEntra(chave); const [hov,setHov]=useState(null);
   const H=(h||150)+20; const max=Math.max.apply(null,dados.map(function(d){return d.val||0;}).concat([1]));
   const n=dados.length; const larg=n>8?"100%":undefined;
   return <div style={{position:"relative"}}>
     <div style={{display:"grid",gridTemplateColumns:"repeat("+n+",1fr)",gap:n>8?4:10,alignItems:"end"}}>
-      {dados.map(function(d,i){ const pct=(d.val||0)/max*100; const px=Math.max(3,pct/100*(H-26)); const on=hov===i; return <div key={d.key||i} onMouseEnter={function(){setHov(i);}} onMouseLeave={function(){setHov(null);}} style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:0,cursor:"default"}}>
+      {dados.map(function(d,i){ const pct=(d.val||0)/max*100; const px=Math.max(3,pct/100*(H-26)); const on=hov===i; return <div key={d.key||i} onMouseEnter={function(){setHov(i);}} onMouseLeave={function(){setHov(null);}} onClick={function(){ if(onPick) onPick(d); }} style={{display:"flex",flexDirection:"column",alignItems:"center",minWidth:0,cursor:onPick?"pointer":"default"}}>
         <div style={{position:"relative",width:"100%",height:H,display:"flex",justifyContent:"center",alignItems:"flex-end"}}>
           <span style={{position:"absolute",left:0,right:0,textAlign:"center",bottom:(go?px:3)+5,fontSize:11,fontWeight:800,color:d.fraco?ADS.muted:ADS.ink2,opacity:go?1:0,transition:"bottom .9s "+ADS_EASE+" "+(i*60)+"ms, opacity .5s "+(i*60+300)+"ms",fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{d.val?fmt(d.val):"—"}</span>
           <div style={{width:"100%",maxWidth:56,height:(go?px:3)+"px",background:d.fraco?"repeating-linear-gradient(45deg,#e4e1ec 0 4px,#f3f1f8 4px 8px)":"linear-gradient(180deg,"+d.cor+" 0%,"+d.cor+"cc 100%)",borderRadius:"8px 8px 3px 3px",transition:"height .9s "+ADS_EASE+" "+(i*60)+"ms, filter .2s, box-shadow .2s",filter:on?"brightness(1.12)":"none",boxShadow:on?"0 6px 18px "+d.cor+"55":"none"}}/>
@@ -53608,20 +53754,21 @@ function AdsColunas({dados,fmt,h,chave,isMob}){
         <span title={d.lbl} style={{fontSize:10.5,color:ADS.ink2,fontWeight:600,marginTop:8,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"center"}}>{d.curto||d.lbl}</span>
       </div>; })}
     </div>
-    {hov!==null&&dados[hov]&&<AdsTipBox x={((hov+0.5)/n*100)+"%"} y={22}><b>{dados[hov].lbl}</b><br/>{dados[hov].tip}</AdsTipBox>}
+    {hov!==null&&dados[hov]&&<AdsTipBox x={((hov+0.5)/n*100)+"%"} y={22}>{typeof dados[hov].tip==="object"?dados[hov].tip:<span><b>{dados[hov].lbl}</b><br/>{dados[hov].tip}</span>}</AdsTipBox>}
   </div>;
 }
 /* rosca animada com legenda */
-function AdsRosca({dados,total,chave,centro,centroLbl,fmtLeg,isMob}){
-  const go=useAdsEntra(chave); const [hov,setHov]=useState(null);
+function AdsRosca({dados,total,chave,centro,centroLbl,fmtLeg,isMob,onPick}){
+  const go=useAdsEntra(chave); const [hov,setHov]=useState(null); const [top,setTop]=useState(0);
   const R=56, C=2*Math.PI*R, SW=18; let acc=0;
   const fatias=dados.map(function(d,i){ const p=total>0?(d.val||0)/total:0; const f={i:i,p:p,off:acc,d:d}; acc+=p; return f; });
   const ativo=hov!==null?fatias[hov]:null;
-  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"156px 1fr",gap:16,alignItems:"center"}}>
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"156px 1fr",gap:16,alignItems:"center",position:"relative"}}>
+    {ativo&&ativo.d.tip&&<AdsTipBox x={isMob?"50%":"60%"} y={top}>{ativo.d.tip}</AdsTipBox>}
     <div style={{position:"relative",width:156,height:156,margin:isMob?"0 auto":0}}>
       <svg width="156" height="156" viewBox="0 0 156 156" style={{transform:"rotate(-90deg)"}}>
         <circle cx="78" cy="78" r={R} fill="none" stroke="#efedf5" strokeWidth={SW}/>
-        {fatias.map(function(f){ const on=hov===f.i; const dim=hov!==null&&!on; return <circle key={f.i} cx="78" cy="78" r={R} fill="none" stroke={f.d.cor} strokeWidth={on?SW+5:SW} strokeLinecap="butt" strokeDasharray={(go?Math.max(0,f.p*C-1.5):0)+" "+C} strokeDashoffset={-(f.off*C)} opacity={dim?.35:1} onMouseEnter={function(){setHov(f.i);}} onMouseLeave={function(){setHov(null);}} style={{transition:"stroke-dasharray 1s "+ADS_EASE+" "+(f.i*90)+"ms, stroke-width .2s, opacity .2s",cursor:"default"}}/>; })}
+        {fatias.map(function(f){ const on=hov===f.i; const dim=hov!==null&&!on; return <circle key={f.i} cx="78" cy="78" r={R} fill="none" stroke={f.d.cor} strokeWidth={on?SW+5:SW} strokeLinecap="butt" strokeDasharray={(go?Math.max(0,f.p*C-1.5):0)+" "+C} strokeDashoffset={-(f.off*C)} opacity={dim?.35:1} onMouseEnter={function(){setHov(f.i);setTop(20);}} onMouseLeave={function(){setHov(null);}} onClick={function(){ if(onPick) onPick(f.d); }} style={{transition:"stroke-dasharray 1s "+ADS_EASE+" "+(f.i*90)+"ms, stroke-width .2s, opacity .2s",cursor:onPick?"pointer":"default"}}/>; })}
       </svg>
       <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",pointerEvents:"none"}}>
         <span style={{fontSize:ativo?15:17,fontWeight:900,letterSpacing:"-.5px",color:ativo?ativo.d.cor:ADS.ink,lineHeight:1.1,maxWidth:96,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ativo?Math.round(ativo.p*100)+"%":centro}</span>
@@ -53629,7 +53776,7 @@ function AdsRosca({dados,total,chave,centro,centroLbl,fmtLeg,isMob}){
       </div>
     </div>
     <div style={{display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
-      {fatias.map(function(f){ const on=hov===f.i; return <div key={f.i} onMouseEnter={function(){setHov(f.i);}} onMouseLeave={function(){setHov(null);}} style={{display:"grid",gridTemplateColumns:"10px 1fr auto auto",gap:8,alignItems:"center",fontSize:12,padding:"3px 6px",borderRadius:7,background:on?ADS.surface2:"transparent",transition:"background .15s",opacity:go?1:0,transform:go?"none":"translateX(8px)",transitionDelay:(f.i*60)+"ms",transitionProperty:"background,opacity,transform",transitionDuration:".15s,.5s,.5s"}}>
+      {fatias.map(function(f){ const on=hov===f.i; return <div key={f.i} onMouseEnter={function(e){setHov(f.i);setTop(e.currentTarget.offsetTop);}} onMouseLeave={function(){setHov(null);}} onClick={function(){ if(onPick) onPick(f.d); }} style={{display:"grid",gridTemplateColumns:"10px 1fr auto auto",gap:8,alignItems:"center",fontSize:12,padding:"3px 6px",borderRadius:7,cursor:onPick?"pointer":"default",background:on?ADS.surface2:"transparent",transition:"background .15s",opacity:go?1:0,transform:go?"none":"translateX(8px)",transitionDelay:(f.i*60)+"ms",transitionProperty:"background,opacity,transform",transitionDuration:".15s,.5s,.5s"}}>
         <span style={{width:10,height:10,borderRadius:3,background:f.d.cor}}/>
         <span style={{color:ADS.ink2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={f.d.lbl}>{f.d.lbl}</span>
         <span style={{fontWeight:800,color:ADS.ink,fontFeatureSettings:"'tnum'"}}>{Math.round(f.p*100)}%</span>
@@ -53639,10 +53786,11 @@ function AdsRosca({dados,total,chave,centro,centroLbl,fmtLeg,isMob}){
   </div>;
 }
 /* barras horizontais animadas (custo + fatia) */
-function AdsBarrasH({dados,max,fmt,chave,isMob}){
-  const go=useAdsEntra(chave); const [hov,setHov]=useState(null);
+function AdsBarrasH({dados,max,fmt,chave,isMob,onPick}){
+  const go=useAdsEntra(chave); const [hov,setHov]=useState(null); const [top,setTop]=useState(0);
   return <div style={{display:"flex",flexDirection:"column",gap:8,position:"relative"}}>
-    {dados.map(function(x,i){ const on=hov===i; return <div key={x.key||i} onMouseEnter={function(){setHov(i);}} onMouseLeave={function(){setHov(null);}} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 76px":"140px 1fr 90px 90px",gap:10,alignItems:"center",fontSize:12.5,padding:"3px 6px",margin:"0 -6px",borderRadius:8,background:on?ADS.surface2:"transparent",transition:"background .15s"}}>
+    {hov!==null&&dados[hov]&&dados[hov].tip&&<AdsTipBox x="50%" y={top}>{dados[hov].tip}</AdsTipBox>}
+    {dados.map(function(x,i){ const on=hov===i; return <div key={x.key||i} onMouseEnter={function(e){setHov(i);setTop(e.currentTarget.offsetTop);}} onMouseLeave={function(){setHov(null);}} onClick={function(){ if(onPick) onPick(x); }} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 76px":"140px 1fr 90px 90px",gap:10,alignItems:"center",fontSize:12.5,padding:"3px 6px",margin:"0 -6px",borderRadius:8,background:on?ADS.surface2:"transparent",transition:"background .15s",cursor:onPick?"pointer":"default"}}>
       <span style={{color:ADS.ink2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.lbl}>{x.lbl}{x.susp&&<span title="CTR acima de 2× o da conta — possível clique acidental" style={{color:ADS.warn,marginLeft:4}}>⚠</span>}</span>
       <span>{x.fraco?<span style={{fontSize:11,color:ADS.muted}}>amostra pequena · {_adsNum(x.res)} res. · {_adsBRL0(x.gasto)}</span>:<span style={{display:"block",height:9,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?Math.max(0,Math.min(100,x.val/max*100)):0)+"%",borderRadius:99,background:x.cor,transition:"width .9s "+ADS_EASE+" "+(i*50)+"ms"}}/></span>}<span style={{display:"block",marginTop:3,height:4,borderRadius:99,background:"#ecebf2",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:(go?x.fatia:0)+"%",borderRadius:99,background:"#c48ffa",transition:"width .9s "+ADS_EASE+" "+(i*50+150)+"ms"}}/></span></span>
       <span style={Object.assign({textAlign:"right",fontWeight:800,fontSize:13.5,color:x.fraco?ADS.muted:ADS.ink},ADS_MONO)}>{x.val?fmt(x.val):"—"}</span>
@@ -53663,6 +53811,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   const [vista,setVista]=useState(function(){ try{ return localStorage.getItem("px_ads_vista")||"colunas"; }catch(_){ return "colunas"; } });
   const [metrica,setMetrica]=useState("cpa");
   const [vistaCard,setVistaCard]=useState({});
+  const [corte,setCorte]=useState(null); /* {dim,x} — janela de detalhe do corte */
   const mudaVista=function(v){ setVista(v); setVistaCard({}); try{ localStorage.setItem("px_ads_vista",v); }catch(_){} };
   const camps=_adsCampanhasEnriquecidas(X.cur,D.ent);
   const temOutras=camps.some(function(c){return c.fam!=="leads"&&Number(c.gasto||0)>0;});
@@ -53703,9 +53852,10 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
     const lista=enr.slice(0,8);
     const curto=function(l){ return dim==="posicionamento"?l.replace(/^(Instagram|Facebook|Messenger|Audience Network|Outro) · /,function(m,r){ return {Instagram:"IG ",Facebook:"FB ",Messenger:"MSG ",Outro:"",'Audience Network':"AN "}[r]||""; }):l; };
     /* série conforme a métrica; na pizza, custo vira fatia da verba (custo não soma) */
-    const serie=lista.map(function(x,i){ const val=metrica==="cpa"?(x.poucos?0:x.cpa):metrica==="gasto"?x.gasto:x.res; const cor=metrica==="cpa"?(x.poucos?"#b9b3c9":_adsCorG(x.nivel)):ADS_PALETA[i%ADS_PALETA.length]; return Object.assign({},x,{key:x.valor,val:val,cor:cor,fraco:metrica==="cpa"&&x.poucos,curto:curto(x.lbl),tip:(x.cpa?_adsBRL(x.cpa)+" por resultado · ":"")+_adsNum(x.res)+" resultados · "+_adsBRL0(x.gasto)+" ("+Math.round(x.fatia)+"% da verba)"+(x.poucos?" · amostra pequena":"")}); });
-    const seriePizza=lista.map(function(x,i){ return Object.assign({},x,{key:x.valor,val:metrica==="res"?x.res:x.gasto,cor:ADS_PALETA[i%ADS_PALETA.length],curto:curto(x.lbl)}); }).filter(function(x){return x.val>0;}).sort(function(a,b){return b.val-a.val;});
+    const serie=lista.map(function(x,i){ const val=metrica==="cpa"?(x.poucos?0:x.cpa):metrica==="gasto"?x.gasto:x.res; const cor=metrica==="cpa"?(x.poucos?"#b9b3c9":_adsCorG(x.nivel)):ADS_PALETA[i%ADS_PALETA.length]; return Object.assign({},x,{key:x.valor,val:val,cor:cor,fraco:metrica==="cpa"&&x.poucos,curto:curto(x.lbl),tip:<AdsCruzTip x={x} dim={dim} cruz={_adsCruzDe(rows,dim,x.valor)} resNome={resNome} resNomePl={resNomePl}/>}); });
+    const seriePizza=lista.map(function(x,i){ return Object.assign({},x,{key:x.valor,val:metrica==="res"?x.res:x.gasto,cor:ADS_PALETA[i%ADS_PALETA.length],curto:curto(x.lbl),tip:<AdsCruzTip x={x} dim={dim} cruz={_adsCruzDe(rows,dim,x.valor)} resNome={resNome} resNomePl={resNomePl}/>}); }).filter(function(x){return x.val>0;}).sort(function(a,b){return b.val-a.val;});
     const maxBar=metrica==="cpa"?maxCpa:Math.max.apply(null,serie.map(function(x){return x.val;}).concat([1]));
+    const pick=function(x){ setCorte({dim:dim,x:x}); };
     return <AdsCard key={dim} style={{padding:"18px 20px",position:"relative"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
         <h4 style={{margin:0,fontSize:14,fontWeight:800,letterSpacing:"-.2px"}}>{ADS_DIM_LBL[dim]}</h4>
@@ -53716,15 +53866,17 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
         </span>
       </div>
       {enr.length===0?<div style={{fontSize:12.5,color:ADS.muted}}>sem dados neste recorte</div>:
-        v==="colunas"?<AdsColunas dados={serie} fmt={fmtM} chave={chave} isMob={isMob} h={dim==="genero"||dim==="dispositivo"?120:150}/>:
-        v==="pizza"?<AdsRosca dados={seriePizza} total={seriePizza.reduce(function(s,x){return s+x.val;},0)} chave={chave} isMob={isMob} centro={metrica==="res"?_adsNum(rTot):_adsBRL0(gTot)} centroLbl={metrica==="res"?"resultados":"na verba"} fmtLeg={function(d){ return d.cpa&&!d.poucos?_adsBRL(d.cpa)+"/res.":(d.res?_adsNum(d.res)+" res.":"—"); }}/>:
-        <AdsBarrasH dados={serie} max={maxBar} fmt={fmtM} chave={chave} isMob={isMob}/>}
+        v==="colunas"?<AdsColunas dados={serie} fmt={fmtM} chave={chave} isMob={isMob} h={dim==="genero"||dim==="dispositivo"?120:150} onPick={pick}/>:
+        v==="pizza"?<AdsRosca dados={seriePizza} total={seriePizza.reduce(function(s,x){return s+x.val;},0)} chave={chave} isMob={isMob} centro={metrica==="res"?_adsNum(rTot):_adsBRL0(gTot)} centroLbl={metrica==="res"?"resultados":"na verba"} fmtLeg={function(d){ return d.cpa&&!d.poucos?_adsBRL(d.cpa)+"/res.":(d.res?_adsNum(d.res)+" res.":"—"); }} onPick={pick}/>:
+        <AdsBarrasH dados={serie} max={maxBar} fmt={fmtM} chave={chave} isMob={isMob} onPick={pick}/>}
       {(nota||susp.length>0)&&<p style={{fontSize:12.5,color:ADS.ink2,margin:"14px 0 0",lineHeight:1.5,paddingTop:12,borderTop:"1px solid "+ADS.line}}>{nota}{susp.length>0&&<span> <span style={{color:ADS.warn,fontWeight:700}}>⚠ possível clique acidental</span> em {susp.map(function(x){return x.lbl+" (CTR "+_adsPct(x.ctr,2)+")";}).join(", ")} — marque a qualidade desses leads antes de aumentar verba.</span>}</p>}
     </AdsCard>;
   };
   /* heróis sólidos: um tom de roxo Pixels por card */
   const heroi=function(lab,m,bg){ return <AdsSolido bg={bg} eyebrow={lab} big={m?m.lbl:"—"} sub={m?<span><b style={{color:"#fff"}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por lead · <AdsNumAnim v={m.res} fmt={_adsNum}/> leads</span>:"nenhum corte com 3+ leads"}/>; };
+  const filtroLbl=filtro==="todas"?(temOutras?"campanhas de lead":"toda a conta"):filtro.indexOf("tipo:")===0?((_adsTipo(filtroTipo)||{}).label||filtroTipo):_adsNomeCurto((camps.find(function(c){return c.id===filtro.slice(5);})||{}).nome||"campanha");
   return <AdsWrap>
+    {corte&&<AdsCorteModal conta={conta} dim={corte.dim} x={corte.x} campIds={campIds} filtroLbl={filtroLbl} resNome={resNome} resNomePl={resNomePl} isMob={isMob} onClose={function(){setCorte(null);}}/>}
     {!embutido&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       {heroi("Faixa etária que rende mais",mIdade,ADS_SOL.escuro)}
       {heroi("Posicionamento que rende mais",mPos?Object.assign({},mPos,{lbl:mPos.lbl.replace(" · "," ")}):null,ADS_SOL.medio)}
@@ -53737,7 +53889,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
         <span style={{fontSize:11.5,color:ADS.muted,marginLeft:"auto"}}>{metrica==="cpa"?"roxo escuro = barato · roxo claro = caro · listrado = amostra pequena":metrica==="gasto"?"onde a verba foi parar":"quem entregou os resultados"}</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>{dims.map(bloco)}</div>
-      <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>A Meta entrega cada corte separado — dá pra recalcular por campanha ou objetivo, mas não cruzar idade com gênero ou rede. Só cortes com {ADS_MIN_RESULTADOS}+ resultados entram na comparação; na pizza o custo vira fatia da verba (custo não soma).</div>
+      <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Passe o mouse num corte pra ver o cruzamento real da Meta (idade↔gênero, posicionamento↔aparelho — os únicos que ela entrega); clique pra abrir 3 meses por dia e a hora do dia. Só cortes com {ADS_MIN_RESULTADOS}+ resultados entram na comparação; na pizza o custo vira fatia da verba (custo não soma).</div>
     </AdsSec>
   </AdsWrap>;
 }
