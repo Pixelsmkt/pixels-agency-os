@@ -17009,6 +17009,9 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           <span style={{width:20,height:20,borderRadius:6,border:"2px solid "+(somenteStory?"#f59e0b":"#cbd5e1"),background:somenteStory?"#f59e0b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             {somenteStory&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
           </span>
+          <span title="Somente story" style={{width:34,height:34,borderRadius:10,background:somenteStory?"#f59e0b":"#fef3c7",color:somenteStory?"#fff":"#d97706",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
+          </span>
           <span style={{minWidth:0,flex:1}}>
             <span style={{display:"block",fontSize:13,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
             <span style={{display:"block",fontSize:11,color:somenteStory?"#b45309":"#94a3b8",marginTop:2,fontWeight:500,lineHeight:1.4}}>Sem arte pra produzir: o card nasce só com o Vinicius, leva a tag SOMENTE STORY no calendário e não entra na cota de conteúdos do plano.</span>
@@ -19350,7 +19353,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                             </div>
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
                               style={{display:"inline-flex",alignItems:"center",gap:4,height:20,padding:"0 8px",borderRadius:6,background:"#fff",color:(isShortFromDrive?"#a16207":(pubColor&&pubColor.bg)||"#0f172a"),fontSize:9,fontWeight:900,letterSpacing:.6,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(0,0,0,0.22)"}}>
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
                             {(function(){
