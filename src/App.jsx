@@ -44212,6 +44212,7 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
       </div>}
     {calc.naoClassificado>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11,borderRadius:8,padding:"10px 14px",lineHeight:1.5}}>
       <strong>{calc.naoClassificado} demanda(s) sem tipo de conteúdo definido</strong> — ainda não entram no cálculo. Os sócios precisam abrir e classificar.
+      <div style={{marginTop:4,fontWeight:700}}>{(calc.tasksOutros||[]).map(function(t){return t.title||"(Sem título)";}).join("  |  ")}</div>
     </div>}
     {/* Lista de demandas contadas */}
     <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
@@ -77086,7 +77087,7 @@ function DashColabV2(props){
 
       {calc.naoClassificado>0 && <div style={{background:"rgba(251,146,60,0.15)",border:"1px solid rgba(251,146,60,0.35)",color:"#fdba74",fontSize:12,borderRadius:11,padding:"12px 16px",marginTop:14,lineHeight:1.5,display:"flex",alignItems:"center",gap:10}}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fdba74" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <div><strong style={{color:"#fed7aa"}}>{calc.naoClassificado} demanda(s) sem tipo definido</strong> não entraram no cálculo. Avisa os sócios pra classificar.</div>
+        <div><strong style={{color:"#fed7aa"}}>{calc.naoClassificado} demanda(s) sem tipo definido</strong> não entraram no cálculo. Avisa os sócios pra classificar.<div style={{marginTop:4,color:"#fed7aa",fontWeight:600}}>{(calc.tasksOutros||[]).map(function(t){const cl=clientObj(t.client);return (t.title||"(Sem título)")+(cl?" · "+cl.name:"");}).join("  |  ")}</div></div>
       </div>}
     </section>
 
