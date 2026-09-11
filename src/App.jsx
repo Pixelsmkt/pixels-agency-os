@@ -16636,20 +16636,192 @@ function _getClientBdaysDM(clientId){
    trabalho fica. Vai pra lixeira (deleted_at), e o gerador não recria: ele
    confere o id no Supabase inclusive apagado.
    `manter(row)` → true = o card continua válido (usado na edição).           */
-function pxAutoComLimparDoEvento(eventId, manter){
+function pxAutoComLimparDoEvento(eventId, manter, descsEvento){
   const sb=window._sb; if(!sb||!eventId) return Promise.resolve(0);
-  return sb.from("tasks").select("id,status,publish_date,client,bioter_unit,files,caption,description,comments")
+  // (11/09) a descrição do evento é copiada pro card na criação — ela não conta como "trabalho"
+  const _descs=(Array.isArray(descsEvento)?descsEvento:[descsEvento]).map(function(x){return String(x||"").trim();}).filter(Boolean);
+  return sb.from("tasks").select("id,status,publish_date,client,bioter_unit,files,caption,description,comments,somente_story,title")
     .like("id","autocom-"+String(eventId)+"-%").is("deleted_at",null).then(function(r){
       if(!r||r.error||!Array.isArray(r.data)||!r.data.length) return 0;
       const _vazio=function(t){
         const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
-        return String(t.status||"")==="rascunhos" && !nf && !nc && !String(t.caption||"").trim() && !String(t.description||"").trim();
+        const ds=String(t.description||"").trim();
+        return String(t.status||"")==="rascunhos" && !nf && !nc && !String(t.caption||"").trim() && (!ds || _descs.indexOf(ds)>=0);
       };
-      const ids=r.data.filter(function(t){ return _vazio(t) && !(typeof manter==="function" && manter(t)); }).map(function(t){ return t.id; });
+      const rem=r.data.filter(function(t){ return _vazio(t) && !(typeof manter==="function" && manter(t)); });
+      const ids=rem.map(function(t){ return t.id; });
       if(!ids.length) return 0;
       const now=new Date().toISOString();
-      return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){ return (r2&&r2.error)?0:ids.length; });
+      return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){
+        if(r2&&r2.error) return 0;
+        // a semana perdeu um post → o Claude repõe conforme a cadência do cliente
+        if(typeof pxAutoplanRepor==="function") pxAutoplanRepor(rem);
+        return ids.length;
+      });
     });
+}
+/* ═══ Planejamento automático — reajuste da semana (11/09/2026) ═════════════
+   Linha do calendário = domingo a sábado. Cadência (posts por linha, contando
+   comemorativas que não são "Somente story"): Construschorr/Climaves/Arabutã 2 ·
+   Bioter principais 3 · Glória, Uberlândia e Paraguay 2. Collab (Brasil/Grupo)
+   conta pras 5 unidades do Brasil; Paraguay não entra em collab.
+   - pxAutoplanRepor(removidos): data comemorativa saiu (cliente tirado do evento
+     ou evento apagado) → se a linha ficou abaixo da cadência, cria um card do
+     Claude no lugar (Arte/Vídeo, Collab Brasil ou Publicación).
+   - pxAutoplanAbrirEspaco(novos): data comemorativa nova entrou → se a linha
+     passou da cadência, manda pra lixeira um card do Claude ainda vazio.
+   Tudo fica registrado em claude_plano_execucoes (o botão de emergência desfaz). */
+const PX_AUTOPLAN_CAP={construschorr:2,climaves:2,arabuta:2,"bioter:chapeco":3,"bioter:castro":3,"bioter:toledo":3,"bioter:gloria":2,"bioter:uberlandia":2,"bioter:paraguay":2};
+const PX_AUTOPLAN_BR=["chapeco","castro","toledo","gloria","uberlandia"];
+const PX_AUTOPLAN_NOMES={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã"};
+function _pxApIso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function _pxApData(iso){const p=String(iso||"").slice(0,10).split("-");return new Date(+p[0],(+p[1])-1,+p[2]);}
+function _pxApLinha(iso){const d=_pxApData(iso);const ini=new Date(d);ini.setDate(d.getDate()-d.getDay());const fim=new Date(ini);fim.setDate(ini.getDate()+6);return {ini:ini,iniIso:_pxApIso(ini),fimIso:_pxApIso(fim)};}
+function _pxApUnits(t){return String((t&&(t.bioter_unit||t.bioterUnit))||"").split(",").map(function(x){return x.trim();}).filter(Boolean);}
+function _pxApEhCollab(t){const us=_pxApUnits(t);return String(t&&t.client)==="bioter"&&(us.indexOf("brasil")>=0||us.indexOf("grupo")>=0);}
+function _pxApAlvos(t){
+  const c=String((t&&t.client)||"");
+  if(c==="bioter"){
+    if(_pxApEhCollab(t)) return PX_AUTOPLAN_BR.map(function(u){return "bioter:"+u;});
+    return _pxApUnits(t).map(function(u){return "bioter:"+u;}).filter(function(k){return !!PX_AUTOPLAN_CAP[k];});
+  }
+  return PX_AUTOPLAN_CAP[c]?[c]:[];
+}
+function _pxApConta(linhas,alvo){
+  return (linhas||[]).filter(function(t){
+    if(t.deleted_at) return false;
+    if(t.status==="reprovado"||t.status==="pausado"||t.somente_story) return false;
+    return _pxApAlvos(t).indexOf(alvo)>=0;
+  });
+}
+function _pxApVazio(t){
+  const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
+  return String(t.status||"")==="rascunhos"&&!nf&&!nc&&!String(t.caption||"").trim()&&!String(t.description||"").trim();
+}
+async function _pxApLinhasDe(ini,fim){
+  const sb=window._sb; if(!sb) return null;
+  const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,content_type,files,comments,caption,description,deleted_at")
+    .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",["construschorr","climaves","arabuta","bioter"]);
+  if(!r||r.error) return null; return r.data||[];
+}
+function _pxApDia(L,prefs,posts,hoje){
+  const ocup=(posts||[]).map(function(x){return String(x.publish_date||"").slice(0,10);});
+  const ds=prefs.concat([1,2,3,4,5]).map(function(dd){const d=new Date(L.ini);d.setDate(L.ini.getDate()+dd);return _pxApIso(d);})
+    .filter(function(iso,i,arr){return arr.indexOf(iso)===i&&iso>hoje&&ocup.indexOf(iso)<0;});
+  if(!ds.length) return null;
+  const dist=function(iso){ if(!ocup.length) return 9; const t=_pxApData(iso).getTime(); return Math.min.apply(null,ocup.map(function(o){return Math.abs(t-_pxApData(o).getTime())/86400000;})); };
+  return ds.find(function(iso){return dist(iso)>=2;})||ds[0];
+}
+function _pxApCard(client,unit,iso,tipo,titulo,tags){
+  const agora=new Date(); const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  return {id:"autoplan-"+client+(unit?"-"+unit:"")+"-"+iso+"-"+tipo+"-rep", title:titulo, status:"rascunhos", assignee:"ellen", assignees:["ellen"],
+    sector:(tipo==="video"?"video":"design"), client:client, priority:"media", deadline:iso, start_date:_pxApIso(agora),
+    created_at:fmt, created_by:"Claude", publish_date:iso, publish_time:"11:00", bioter_unit:unit||"", tags:tags||[],
+    timeline:[{type:"created",user:"Claude",atFmt:fmt,label:"Card criado pelo Claude pra repor a semana (uma data comemorativa saiu do planejamento)"}],
+    content_type:(tipo==="arte"||tipo==="video"?tipo:null), col_entered_at:agora.toISOString()};
+}
+function _pxApRegistrar(desc,criados,alterados){
+  const sb=window._sb; if(!sb||(!criados.length&&!alterados.length)) return;
+  sb.from("claude_plano_execucoes").insert({id:"auto-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),descricao:desc,criados:criados,alterados:alterados}).then(function(){},function(){});
+}
+async function pxAutoplanRepor(removidos){
+  try{
+    const sb=window._sb; if(!sb||!Array.isArray(removidos)||!removidos.length) return 0;
+    const hoje=_pxApIso(new Date());
+    const porLinha={};
+    removidos.forEach(function(t){
+      const iso=String(t.publish_date||t.publishDate||"").slice(0,10);
+      if(!iso||iso<=hoje||t.somente_story||t.somenteStory) return;
+      if(!_pxApAlvos(t).length) return;
+      const L=_pxApLinha(iso); (porLinha[L.iniIso]=porLinha[L.iniIso]||{L:L,rows:[]}).rows.push(t);
+    });
+    const novos=[];
+    for(const k of Object.keys(porLinha)){
+      const L=porLinha[k].L;
+      const linhas=await _pxApLinhasDe(L.iniIso,L.fimIso); if(!linhas) continue;
+      const feitos={};
+      for(const t of porLinha[k].rows){
+        if(_pxApEhCollab(t)){
+          if(feitos.collab) continue;
+          const temCollab=linhas.some(function(x){ return x.status!=="reprovado"&&x.status!=="pausado"&&!x.somente_story&&_pxApEhCollab(x); });
+          const falta=PX_AUTOPLAN_BR.some(function(u){ return _pxApConta(linhas,"bioter:"+u).length<PX_AUTOPLAN_CAP["bioter:"+u]; });
+          if(temCollab||!falta) continue;
+          const d=_pxApDia(L,[3,2,4],linhas.filter(function(x){return _pxApEhCollab(x);}),hoje); if(!d) continue;
+          novos.push(_pxApCard("bioter","brasil",d,"collab","Collab Brasil",[])); feitos.collab=true; continue;
+        }
+        const alvo=_pxApAlvos(t)[0];
+        if(!alvo||feitos[alvo]) continue;
+        const doAlvo=_pxApConta(linhas,alvo);
+        if(doAlvo.length>=PX_AUTOPLAN_CAP[alvo]) continue;
+        let client, unit="", tipo, titulo, prefs;
+        if(alvo.indexOf("bioter:")===0){
+          client="bioter"; unit=alvo.slice(7); tipo="arte";
+          titulo=unit==="paraguay"?"Publicación — Arte":"Arte";
+          prefs=unit==="paraguay"?[3,2,4]:[1,2,4,5];
+        } else {
+          client=alvo;
+          const temVideo=doAlvo.some(function(x){ return /video|corte/.test(String(x.content_type||""))||/v[ií]deo|depoimento/i.test(String(x.title||"")); });
+          tipo=temVideo?"arte":"video";
+          titulo=(tipo==="arte"?"Arte — ":"Vídeo — ")+(PX_AUTOPLAN_NOMES[client]||client);
+          prefs=tipo==="arte"?[1,4,2,5]:[4,1,2,5];
+        }
+        const d=_pxApDia(L,prefs,doAlvo,hoje); if(!d) continue;
+        novos.push(_pxApCard(client,unit,d,tipo,titulo,unit==="paraguay"?["Español"]:[])); feitos[alvo]=true;
+      }
+    }
+    if(!novos.length) return 0;
+    const q=await sb.from("tasks").select("id").in("id",novos.map(function(c){return c.id;}));
+    if(!q||q.error) return 0;
+    const ja=new Set((q.data||[]).map(function(x){return x.id;}));
+    const ins=novos.filter(function(c){return !ja.has(c.id);});
+    if(!ins.length) return 0;
+    const r=await sb.from("tasks").insert(ins);
+    if(r&&r.error){ console.warn("[autoplan repor]",r.error.message); return 0; }
+    _pxApRegistrar("Reposição automática: data comemorativa saiu da semana",ins.map(function(c){return c.id;}),[]);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info(ins.length+" card"+(ins.length>1?"s":"")+" do Claude criado"+(ins.length>1?"s":"")+" pra repor a semana que perdeu a data comemorativa.",6000);
+    return ins.length;
+  }catch(e){ console.warn("[autoplan repor]",e); return 0; }
+}
+async function pxAutoplanAbrirEspaco(novos){
+  try{
+    const sb=window._sb; if(!sb||!Array.isArray(novos)||!novos.length) return 0;
+    const hoje=_pxApIso(new Date());
+    const porLinha={};
+    novos.forEach(function(t){
+      const iso=String(t.publishDate||t.publish_date||"").slice(0,10);
+      if(!iso||iso<=hoje||t.somenteStory||t.somente_story) return;
+      const tt={id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:iso,status:"rascunhos",somente_story:false};
+      if(!_pxApAlvos(tt).length) return;
+      const L=_pxApLinha(iso); (porLinha[L.iniIso]=porLinha[L.iniIso]||{L:L,rows:[]}).rows.push(tt);
+    });
+    const lixo=[];
+    for(const k of Object.keys(porLinha)){
+      const L=porLinha[k].L;
+      const linhas=await _pxApLinhasDe(L.iniIso,L.fimIso); if(!linhas) continue;
+      const tem=new Set(linhas.map(function(x){return x.id;}));
+      porLinha[k].rows.forEach(function(t){ if(!tem.has(t.id)) linhas.push(t); });
+      const alvos=[]; porLinha[k].rows.forEach(function(t){ _pxApAlvos(t).forEach(function(a){ if(alvos.indexOf(a)<0) alvos.push(a); }); });
+      alvos.forEach(function(alvo){
+        const doAlvo=_pxApConta(linhas,alvo).filter(function(x){return lixo.indexOf(x.id)<0;});
+        let sobra=doAlvo.length-PX_AUTOPLAN_CAP[alvo];
+        if(sobra<=0) return;
+        const meus=doAlvo.filter(function(x){ return String(x.id).indexOf("autoplan-")===0&&_pxApVazio(x); });
+        // sai primeiro o Collab Brasil do Claude, depois a arte (a comemorativa ocupa o lugar do card)
+        meus.sort(function(a,b){
+          const pa=_pxApEhCollab(a)?0:(String(a.content_type)==="arte"?1:2), pb=_pxApEhCollab(b)?0:(String(b.content_type)==="arte"?1:2);
+          return pa-pb;
+        });
+        for(const m of meus){ if(sobra<=0) break; lixo.push(m.id); sobra--; }
+      });
+    }
+    if(!lixo.length) return 0;
+    const now=new Date().toISOString();
+    const r=await sb.from("tasks").update({deleted_at:now}).in("id",lixo);
+    if(r&&r.error){ console.warn("[autoplan abrir espaço]",r.error.message); return 0; }
+    _pxApRegistrar("Reajuste automático: data comemorativa nova ocupou a semana",[],lixo.map(function(id){return {id:id,antes:{deleted_at:null},depois:{deleted_at:now}};}));
+    if(typeof pixelsToast!=="undefined") pixelsToast.info(lixo.length+" card"+(lixo.length>1?"s":"")+" do Claude saiu"+(lixo.length>1?"ram":"")+" do calendário pra dar lugar à data comemorativa nova.",6000);
+    return lixo.length;
+  }catch(e){ console.warn("[autoplan abrir espaço]",e); return 0; }
 }
 /* (11/09/2026) Card criado automaticamente pelo Claude (planejamento do calendário até dez/2026):
    id "autoplan-..." ou createdBy "Claude". Mostra o selo roxo com brilho no card do Calendário
@@ -16658,10 +16830,14 @@ function pxCriadoPeloClaude(t){
   if(!t) return false;
   return String(t.id||"").indexOf("autoplan-")===0 || t.createdBy==="Claude" || t.created_by==="Claude";
 }
-function PxSeloClaude({size,claro}){
+function PxSeloClaude({size,claro,cor}){
+  // Ícone próprio (robozinho) na cor do card: no calendário vai num chip branco com o
+  // desenho na cor do card; no quadro (card branco) vai num fundo clarinho da cor do cliente.
   const s=size||18;
-  return <span title="Criado automaticamente pelo Claude (planejamento do calendário)" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:5,background:claro?"#fff":"#7c3aed",color:claro?"#7c3aed":"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)",verticalAlign:"middle"}}>
-    <svg width={Math.round(s*0.64)} height={Math.round(s*0.64)} viewBox="0 0 24 24" fill="currentColor"><path d="M11 2l2.4 6.6L20 11l-6.6 2.4L11 20l-2.4-6.6L2 11l6.6-2.4z"/><path d="M19 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+  const c=cor||"#7c3aed";
+  const _hex=/^#[0-9a-f]{6}$/i.test(c);
+  return <span title="Criado automaticamente pelo Claude (planejamento do calendário)" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:6,background:claro?"#fff":(_hex?c+"22":"#f1f5f9"),color:c,flexShrink:0,boxShadow:claro?"0 1px 2px rgba(0,0,0,0.18)":"none",verticalAlign:"middle"}}>
+    <svg width={Math.round(s*0.72)} height={Math.round(s*0.72)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="currentColor" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
   </span>;
 }
 /* (11/09/2026) "Somente story" marcado ou desmarcado DEPOIS que os cards automáticos já
@@ -16863,7 +17039,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           if(!Array.isArray(_ids)||!_ids.length) _ids=_savedRow.client_id?[_savedRow.client_id]:[];
           const _datas=new Set(pxAutoComExpandir(_savedRow,_ini,_fim));
           const _alvos=new Set(pxAutoComTargets(_ids).map(function(t){ return t.client+"|"+(t.unit||""); }));
-          pxAutoComLimparDoEvento(_savedRow.id,function(t){ return _datas.has(String(t.publish_date||"").slice(0,10)) && _alvos.has(String(t.client||"")+"|"+String(t.bioter_unit||"")); })
+          pxAutoComLimparDoEvento(_savedRow.id,function(t){ return _datas.has(String(t.publish_date||"").slice(0,10)) && _alvos.has(String(t.client||"")+"|"+String(t.bioter_unit||"")); },[initial&&initial.description,_savedRow.description])
             .then(function(n){ if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" que não bat"+(n>1?"em":"e")+" mais com a data foi"+(n>1?"ram":"")+" removido"+(n>1?"s":"")+".",6000); }).catch(function(){});
         }catch(_e){ console.warn("[autocom limpar]",_e); }
       }
@@ -16901,7 +17077,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       }
       const _delEvento=function(){
         // (09/09) leva junto os cards automáticos vazios do calendário de publicações
-        pxAutoComLimparDoEvento(initial.id).then(function(n){
+        pxAutoComLimparDoEvento(initial.id,null,[initial.description]).then(function(n){
           if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" removido"+(n>1?"s":"")+" do calendário de publicações.",5000);
         }).catch(function(){}).then(function(){
           window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel,function(e){console.warn("[internal_events del]",e);_doneDel();});
@@ -19492,7 +19668,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 Collab
                               </span>}
                             </div>
-                            {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro/>}
+                            {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
                               style={{display:"inline-flex",alignItems:"center",gap:4,height:20,padding:"0 8px",borderRadius:6,background:"#fff",color:(isShortFromDrive?"#a16207":(pubColor&&pubColor.bg)||"#0f172a"),fontSize:9,fontWeight:900,letterSpacing:.6,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(0,0,0,0.22)"}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
@@ -22476,7 +22652,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
                     <div style={{color:"#0f172a",fontSize:14,fontWeight:600,lineHeight:1.42,letterSpacing:-.1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:10})}}>
-                      {pxCriadoPeloClaude(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloClaude size={17}/></span>}{t.title}
+                      {pxCriadoPeloClaude(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloClaude size={18} cor={(cl&&cl.color)||"#7c3aed"}/></span>}{t.title}
                     </div>
 
                     {/* FOOTER único — sempre na mesma posição com a mesma anatomia.
@@ -80545,6 +80721,8 @@ async function pxGerarCardsComemorativos(opts){
     const add=novos.filter(function(t){ return !have.has(t.id); });
     return add.length? [].concat(prev||[],add) : prev;
   });
+  // (11/09) data comemorativa nova ocupou a semana → tira um card vazio do Claude se passou da cadência
+  if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
   return novos.length;
 }
 
