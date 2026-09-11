@@ -38846,6 +38846,75 @@ function LinkifiedText({text,color}){
   })}</>;
 }
 
+/* ═══ TRANSFORMAR EM ROTEIRO DE VÍDEO (11/09/2026, ideia do Vinicius) ═══════════
+   Data comemorativa nasce como arte única. Às vezes vale mais mandar pro cliente um
+   roteiro de vídeo de 60s do que a arte. Este botão pega o briefing (o texto que ia na
+   peça) + a legenda + o cliente e devolve um roteiro pronto pra enviar.
+   Usa a Edge Function ask-claude (askClaude, em 00_clientes_data) — a chave da Anthropic
+   nunca sai do servidor. */
+function pxEhArteComemorativa(t){
+  if(!t) return false;
+  const _tags=Array.isArray(t.tags)?t.tags:[];
+  const _ehCom = String(t.id||"").indexOf("autocom-")===0 || _tags.indexOf("Data comemorativa")>=0;
+  if(!_ehCom) return false;
+  const ct=String(t.contentType||t.content_type||"").toLowerCase();
+  // arte única é o padrão da comemorativa; só não oferece se o card já é vídeo
+  return ct!=="video" && ct!=="video_short" && ct!=="reels";
+}
+function _pxTextoPuro(html){
+  return String(html||"")
+    .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
+    .replace(/<[^>]+>/g,"")
+    .replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+    .replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/\n{3,}/g,"\n\n").trim();
+}
+async function pxRoteiro60(task, clienteNome){
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const brief=_pxTextoPuro(task&&(task.desc||task.description));
+  const leg=_pxTextoPuro(task&&task.caption);
+  const dt=String((task&&(task.publishDate||task.publish_date))||"").slice(0,10);
+  const dtBr=dt?(dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)):"";
+  const py=String((task&&(task.bioterUnit||task.bioter_unit))||"")==="paraguay";
+  const sys="Você escreve roteiros de vídeo curtos para o Instagram de empresas do agronegócio brasileiro. "+
+    "Escreve como gente que conhece o campo: direto, concreto, sem jargão de marketing e sem frase de efeito vazia. "+
+    "Data comemorativa é homenagem — o vídeo fala de quem trabalha, não do produto. "+
+    (py?"ESCREVA TUDO EM ESPANHOL (é a unidade do Paraguai), menos os rótulos das cenas.":"Escreva em português do Brasil.");
+  const usr="Cliente: "+(clienteNome||"—")+"\n"+
+    "Data da publicação: "+(dtBr||"—")+"\n"+
+    "Card: "+((task&&task.title)||"—")+"\n\n"+
+    "TEXTO QUE IRIA NA ARTE:\n"+(brief||"(vazio)")+"\n\n"+
+    "LEGENDA APROVADA:\n"+(leg||"(vazia)")+"\n\n"+
+    "Transforme isso num ROTEIRO DE VÍDEO DE 60 SEGUNDOS para mandarmos ao cliente. Regras:\n"+
+    "- 5 a 6 cenas, somando ~60s, com o tempo de cada uma.\n"+
+    "- Em cada cena diga O QUE APARECE na imagem e a FALA (ou o texto na tela).\n"+
+    "- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca.\n"+
+    "- A última cena é a assinatura da marca.\n"+
+    "- Não invente número, prazo, garantia nem dado técnico que não esteja no material acima.\n\n"+
+    "Formato exato da resposta (sem introdução, sem comentário no fim):\n"+
+    "Cena 1 (0–10s) — o que aparece\n"+
+    "Fala: \"…\"\n\n"+
+    "Cena 2 (10–22s) — o que aparece\n"+
+    "Fala: \"…\"\n\n"+
+    "(e assim por diante até fechar 60s)\n\n"+
+    "O QUE PRECISAMOS CAPTAR:\n"+
+    "- item\n- item\n- item";
+  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:1100,system:sys,messages:[{role:"user",content:usr}]});
+  const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  if(!txt) throw new Error("A IA não devolveu roteiro. Tente de novo.");
+  return txt;
+}
+function _pxRoteiroParaHtml(txt){
+  const linhas=String(txt||"").split("\n");
+  let out="<p><strong>• Roteiro do vídeo (60s)</strong></p>";
+  linhas.forEach(function(l){
+    const t=l.trim();
+    if(!t) return;
+    const esc=t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    out += /^(cena|escena|o que precisamos captar)/i.test(t) ? "<p><strong>"+esc+"</strong></p>" : "<p>"+esc+"</p>";
+  });
+  return out;
+}
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // ═══ Detecção de viewport mobile ═══
   const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -39309,6 +39378,9 @@ function _cardPodeSerResp(u){
   const matFileInputRef=useRef(null); // Materiais (imagens/vídeos brutos, takes, base)
   const descRef=useRef(null);
   const captionRef=useRef(null);
+  // (11/09/2026) Transformar arte de data comemorativa em roteiro de vídeo de 60s.
+  const [roteiroSt,setRoteiroSt]=useState(null); // {loading} | {texto} | {erro}
+
   // Sanitizador de HTML — permite apenas tags básicas de formatação.
   // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
   const sanitizeRichText=(html)=>{
@@ -40829,6 +40901,44 @@ function _cardPodeSerResp(u){
       </div>
     </div>}
 
+    {/* ── ROTEIRO DE VÍDEO 60s (a partir da arte de data comemorativa) ── */}
+    {roteiroSt&&<div onMouseDown={function(e){e.stopPropagation();}} onClick={function(e){ if(e.target===e.currentTarget) setRoteiroSt(null); }}
+      style={{position:"fixed",inset:0,zIndex:520,background:"rgba(15,23,42,0.60)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:620,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(15,23,42,0.35)"}}>
+        <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
+            </div>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Roteiro de vídeo · 60 segundos</div>
+              <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>{task.title}</div>
+            </div>
+          </div>
+          <button onClick={function(){setRoteiroSt(null);}} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+        </div>
+        <div style={{padding:"18px 20px",overflowY:"auto",flex:1,minHeight:0}}>
+          {roteiroSt.loading&&<div style={{padding:"36px 0",textAlign:"center",color:"#64748b",fontSize:13}}>Lendo o briefing e escrevendo o roteiro…</div>}
+          {roteiroSt.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px",color:"#991b1b",fontSize:12.5,lineHeight:1.6}}>{roteiroSt.erro}</div>}
+          {roteiroSt.texto&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",color:"#0f172a",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{roteiroSt.texto}</div>}
+        </div>
+        {roteiroSt.texto&&<div style={{padding:"12px 20px",borderTop:"1px solid #e2e8f0",display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",flexShrink:0}}>
+          <button onClick={function(){
+              try{ navigator.clipboard.writeText(roteiroSt.texto); if(typeof pixelsToast!=="undefined") pixelsToast.success("Roteiro copiado.",2500); }catch(_){}
+            }}
+            style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
+          {canEdit&&<button onClick={function(){
+              const novo=String(desc||"")+_pxRoteiroParaHtml(roteiroSt.texto);
+              setDesc(novo);
+              try{ if(descRef.current) descRef.current.innerHTML=novo; }catch(_){}
+              setRoteiroSt(null);
+              if(typeof pixelsToast!=="undefined") pixelsToast.info("Roteiro colado no briefing — confira e clique em Salvar.",5000);
+            }}
+            style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Colar no briefing</button>}
+        </div>}
+      </div>
+    </div>}
+
     {/* ── UNSAVED CHANGES DIALOG ── */}
     {/* ── LIGHTBOX ── */}
     {lightbox&&<div onClick={()=>setLightbox(null)} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -41621,6 +41731,25 @@ function _cardPodeSerResp(u){
             })()}
             </div>
             <div>
+              {/* ── Arte de data comemorativa → roteiro de vídeo de 60s pra mandar ao cliente ── */}
+              {pxEhArteComemorativa(task)&&(<div style={{marginBottom:10}}>
+                <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
+                  onClick={async function(){
+                    setRoteiroSt({loading:true});
+                    try{
+                      const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===task.client;});
+                      const _nome=(_cl&&_cl.name)||task.client||"";
+                      const txt=await pxRoteiro60(task,_nome);
+                      setRoteiroSt({texto:txt});
+                    }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
+                  }}
+                  title="Usa o texto da arte e a legenda pra escrever um roteiro de vídeo de 60 segundos."
+                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:(roteiroSt&&roteiroSt.loading)?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",opacity:(roteiroSt&&roteiroSt.loading)?.7:1}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
+                  {(roteiroSt&&roteiroSt.loading)?"Escrevendo o roteiro…":"Transformar em roteiro de vídeo"}
+                </button>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir do texto da arte e da legenda — pra mandar pro cliente decidir.</div>
+              </div>)}
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
               <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
