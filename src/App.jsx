@@ -16782,6 +16782,73 @@ async function pxAutoplanRepor(removidos){
     return ins.length;
   }catch(e){ console.warn("[autoplan repor]",e); return 0; }
 }
+/* (11/09/2026) pxAutoplanDesempilhar(novos) — data comemorativa mudou de dia (ou entrou num
+   dia que já tinha post) e caiu EM CIMA de outro post do mesmo cliente/unidade. Dois posts no
+   mesmo dia não faz sentido: quem sai do dia é o card do Claude ainda vazio, que vai pro próximo
+   dia livre da mesma linha (dom–sáb). A comemorativa nunca sai da data dela.
+   Caso real: a "Retrospectiva do ano" foi de domingo pra segunda e os Shorts de Chapecó, Castro e
+   Toledo (que recebem o Collab Brasil) tinham que ir pra terça. */
+async function pxAutoplanDesempilhar(novos){
+  try{
+    const sb=window._sb; if(!sb||!Array.isArray(novos)||!novos.length) return 0;
+    const hoje=_pxApIso(new Date());
+    const pedidos=[];
+    novos.forEach(function(t){
+      const iso=String(t.publishDate||t.publish_date||"").slice(0,10);
+      if(!iso||iso<=hoje||t.somenteStory||t.somente_story) return;
+      const tt={id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:iso,status:"rascunhos",somente_story:false};
+      _pxApAlvos(tt).forEach(function(a){ pedidos.push({iso:iso,alvo:a,id:t.id}); });
+    });
+    if(!pedidos.length) return 0;
+    const movidos=[]; const jaMov={};
+    for(const pd of pedidos){
+      const L=_pxApLinha(pd.iso);
+      const linhas=await _pxApLinhasDe(L.iniIso,L.fimIso); if(!linhas) continue;
+      const doAlvo=_pxApConta(linhas,pd.alvo);
+      const dataDe=function(x){ return jaMov[x.id]||String(x.publish_date||"").slice(0,10); };
+      const noDia=doAlvo.filter(function(x){ return x.id!==pd.id&&dataDe(x)===pd.iso; });
+      if(!noDia.length) continue;
+      const meus=noDia.filter(function(x){ return String(x.id).indexOf("autoplan-")===0&&_pxApVazio(x); });
+      for(const m of meus){
+        const de=dataDe(m);
+        const dow=_pxApData(de).getDay();
+        const prefs=[]; for(let k=1;k<=5;k++) prefs.push(((Math.max(1,Math.min(5,dow))-1+k)%5)+1);
+        const ocup=doAlvo.map(dataDe).filter(function(v,i,a){return a.indexOf(v)===i;});
+        const livres=prefs.map(function(dd){ const d=new Date(L.ini); d.setDate(L.ini.getDate()+dd); return _pxApIso(d); })
+          .filter(function(iso,i,arr){ return arr.indexOf(iso)===i&&iso>hoje&&ocup.indexOf(iso)<0; });
+        if(!livres.length) continue;
+        // Bioter principal (3 posts/semana) fica apertada: vale o dia seguinte. Quem faz 2 por
+        // semana tenta manter 2 dias de folga antes de aceitar o dia colado.
+        let destino=livres[0];
+        if((PX_AUTOPLAN_CAP[pd.alvo]||2)<3){
+          const dist=function(iso){ if(!ocup.length) return 9; const t=_pxApData(iso).getTime(); return Math.min.apply(null,ocup.map(function(o){return Math.abs(t-_pxApData(o).getTime())/86400000;})); };
+          destino=livres.find(function(iso){return dist(iso)>=2;})||livres[0];
+        }
+        jaMov[m.id]=destino;
+        movidos.push({id:m.id,de:de,para:destino,title:m.title});
+      }
+    }
+    if(!movidos.length) return 0;
+    const agora=new Date();
+    const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const alterados=[]; let ok=0;
+    for(const mv of movidos){
+      const q=await sb.from("tasks").select("timeline").eq("id",mv.id).maybeSingle();
+      const tl=(q&&q.data&&Array.isArray(q.data.timeline))?q.data.timeline:[];
+      const r=await sb.from("tasks").update({publish_date:mv.para, deadline:mv.para,
+        timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,
+          label:"Movido pelo Claude de "+mv.de.slice(8,10)+"/"+mv.de.slice(5,7)+" pra "+mv.para.slice(8,10)+"/"+mv.para.slice(5,7)+": uma data comemorativa passou a cair nesse dia e não pode ter dois posts no mesmo dia"}])
+      }).eq("id",mv.id);
+      if(r&&r.error){ console.warn("[autoplan desempilhar]",mv.id,r.error.message); continue; }
+      alterados.push({id:mv.id,antes:{publish_date:mv.de,deadline:mv.de},depois:{publish_date:mv.para,deadline:mv.para}});
+      ok++;
+    }
+    if(!ok) return 0;
+    _pxApRegistrar("Reajuste automático: comemorativa caiu em cima de outro post — card do Claude foi pro dia seguinte",[],alterados);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+" do Claude mudou"+(ok>1?"ram":"")+" de dia pra não ficar junto com a data comemorativa.",6000);
+    return ok;
+  }catch(e){ console.warn("[autoplan desempilhar]",e); return 0; }
+}
 async function pxAutoplanAbrirEspaco(novos){
   try{
     const sb=window._sb; if(!sb||!Array.isArray(novos)||!novos.length) return 0;
@@ -19477,24 +19544,19 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
 
       {/* Ações (mês controlado pelo ProgressoDoMes acima) */}
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <button onClick={handleGeneratePlan}
-          title={filterClient==="todos"?"Sugere datas pra cards de todos os clientes":"Sugere datas só pra cards de "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.name||"este cliente")}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-          Gerar plano do mês{filterClient!=="todos"?" · "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.abbr||""):""}
-        </button>
+        {/* (11/09/2026) "Gerar plano do mês" REMOVIDO a pedido do Vinicius: o calendário agora
+           é montado e mantido pelo Claude; o botão só arriscava bagunçar o que já está no lugar.
+           handleGeneratePlan segue no arquivo, sem nada chamando. */}
         {lastApplySnapshot&&<button onClick={handleUndoApply}
           title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
           style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
           Desfazer última sugestão
         </button>}
-        {_podeEmergencia&&claudeExec&&<button onClick={_desfazerClaude} disabled={claudeRevertendo}
-          title="Botão de emergência: desfaz tudo o que o Claude fez no calendário (cards criados, datas mudadas, lixeira)."
-          style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:claudeRevertendo?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:claudeRevertendo?.6:1,boxShadow:"0 1px 3px rgba(220,38,38,.35)"}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
-          {claudeRevertendo?"Desfazendo…":"Emergência: desfazer Claude"}
-        </button>}
+        {/* (11/09/2026) Botão "Emergência: desfazer Claude" REMOVIDO da tela a pedido do Vinicius.
+           A reversão continua existindo no banco: cada rodada do Claude fica em claude_plano_execucoes
+           e a RPC claude_reverter_plano(exec, quem) desfaz — é só pedir pro Claude. _desfazerClaude
+           segue no arquivo, sem botão chamando. */}
       </div>
 
       {/* ── Grade do calendário ── */}
@@ -28782,9 +28844,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             <div style={{color:C.tx,fontWeight:800,fontSize:isMob?17:20,lineHeight:1.25,letterSpacing:-.4}}>{current.title}</div>
 
             {/* Briefing pra equipe — PRIMEIRO */}
-            {descTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:12}}>
-              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}><Ico n="users" size={15} color="#0f172a"/>Briefing pra equipe</div>
-              <div style={{color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
+            {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={14} color="#0f172a"/>Briefing pra equipe</div>
+              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
             </div>)}
 
             {/* Histórico de ajustes — antes do briefing */}
@@ -28848,9 +28910,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             </div>)}
 
             {/* Legenda — depois do briefing */}
-            {captionTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:12}}>
-              <div style={{color:"#a140ff",fontSize:14,fontWeight:800,letterSpacing:-.2,marginBottom:10,display:"inline-flex",alignItems:"center",gap:7}}><Ico n="message" size={15} color="#a140ff"/>Legenda</div>
-              <div style={{color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
+            {captionTxt2&&(<div style={{background:"#fdfaff",border:"1px solid #ede9fe",borderRadius:14,overflow:"hidden"}}>
+              <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"9px 14px":"10px 18px",color:"#7c3aed",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="message" size={14} color="#7c3aed"/>Legenda</div>
+              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
             </div>)}
 
             {!captionTxt2&&!descTxt2&&(<div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"32px 24px",textAlign:"center",marginTop:8}}>
@@ -80853,8 +80915,15 @@ async function pxGerarCardsComemorativos(opts){
     const add=novos.filter(function(t){ return !have.has(t.id); });
     return add.length? [].concat(prev||[],add) : prev;
   });
-  // (11/09) data comemorativa nova ocupou a semana → tira um card vazio do Claude se passou da cadência
-  if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
+  // (11/09) 1º desempilha o DIA: comemorativa que caiu em cima de outro post empurra o card
+  // vazio do Claude pro próximo dia livre. 2º corta a sobra da SEMANA (cadência do cliente).
+  if(typeof pxAutoplanDesempilhar==="function"){
+    try{ Promise.resolve(pxAutoplanDesempilhar(novos)).then(function(){
+      if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
+    },function(){
+      if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
+    }); }catch(_e){ if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e2){} } }
+  } else if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
   return novos.length;
 }
 
