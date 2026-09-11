@@ -16651,6 +16651,19 @@ function pxAutoComLimparDoEvento(eventId, manter){
       return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){ return (r2&&r2.error)?0:ids.length; });
     });
 }
+/* (11/09/2026) Card criado automaticamente pelo Claude (planejamento do calendário até dez/2026):
+   id "autoplan-..." ou createdBy "Claude". Mostra o selo roxo com brilho no card do Calendário
+   de publicações e no quadro da Linha de produção. */
+function pxCriadoPeloClaude(t){
+  if(!t) return false;
+  return String(t.id||"").indexOf("autoplan-")===0 || t.createdBy==="Claude" || t.created_by==="Claude";
+}
+function PxSeloClaude({size,claro}){
+  const s=size||18;
+  return <span title="Criado automaticamente pelo Claude (planejamento do calendário)" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:5,background:claro?"#fff":"#7c3aed",color:claro?"#7c3aed":"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)",verticalAlign:"middle"}}>
+    <svg width={Math.round(s*0.64)} height={Math.round(s*0.64)} viewBox="0 0 24 24" fill="currentColor"><path d="M11 2l2.4 6.6L20 11l-6.6 2.4L11 20l-2.4-6.6L2 11l6.6-2.4z"/><path d="M19 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+  </span>;
+}
 /* (11/09/2026) "Somente story" marcado ou desmarcado DEPOIS que os cards automáticos já
    existiam: o gerador é idempotente (não mexe em card que já existe), então sem isso o card
    ficava com a Hellen, sem a tag e contando na cota. Aqui acerta os cards do evento:
@@ -18506,6 +18519,74 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   const [lastApplySnapshot,setLastApplySnapshot]=useState(function(){
     try{ const raw=localStorage.getItem("pixels-plan-last-apply"); return raw?JSON.parse(raw):null; }catch(_){ return null; }
   });
+  // (11/09/2026) BOTÃO DE EMERGÊNCIA — desfaz o planejamento automático do Claude.
+  // Cada rodada fica em claude_plano_execucoes (criados + antes/depois dos alterados) e a RPC
+  // claude_reverter_plano volta tudo — sem apagar card que alguém já começou a preencher e sem
+  // desfazer campo que alguém mudou depois. Só sócios veem.
+  const _podeEmergencia=!!(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+  const [claudeExec,setClaudeExec]=useState(null);
+  const [claudeRevertendo,setClaudeRevertendo]=useState(false);
+  const _carregarClaudeExec=useCallback(function(){
+    const sb=window._sb; if(!sb||!_podeEmergencia) return;
+    // Todas as rodadas ainda não desfeitas (a mais nova primeiro) — o botão desfaz todas.
+    sb.from("claude_plano_execucoes").select("id,criado_em,descricao,criados,alterados")
+      .is("revertido_em",null).order("criado_em",{ascending:false}).limit(20)
+      .then(function(r){
+        if(!r||r.error) return;
+        const lst=r.data||[];
+        if(!lst.length){ setClaudeExec(null); return; }
+        setClaudeExec({ids:lst.map(function(x){return x.id;}), criado_em:lst[lst.length-1].criado_em,
+          criados:[].concat.apply([],lst.map(function(x){return x.criados||[];})),
+          alterados:[].concat.apply([],lst.map(function(x){return x.alterados||[];}))});
+      });
+  },[_podeEmergencia]);
+  useEffect(function(){ _carregarClaudeExec(); },[_carregarClaudeExec]);
+  function _desfazerClaude(){
+    if(!claudeExec||claudeRevertendo) return;
+    const quando=new Date(claudeExec.criado_em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    const nC=(claudeExec.criados||[]).length, nA=(claudeExec.alterados||[]).length;
+    const msg="Desfazer tudo o que o Claude fez no calendário em "+quando+"? "+nC+" cards criados vão pra lixeira (menos os que alguém já começou a preencher) e "+nA+" cards mexidos voltam pra como estavam antes (menos o que alguém alterou depois).";
+    const go=function(){
+      const sb=window._sb; if(!sb) return;
+      setClaudeRevertendo(true);
+      const _por=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"";
+      // Desfaz uma rodada por vez, da mais nova pra mais antiga, e soma os resultados
+      (async function(){
+        const res={apagados:0,restaurados:0,mantidos:[],conflitos:[],ids:[]};
+        for(const exId of (claudeExec.ids||[])){
+          const rr=await sb.rpc("claude_reverter_plano",{p_exec:exId,p_por:_por});
+          if(!rr||rr.error) return {error:(rr&&rr.error)||{message:"erro"}, data:res};
+          const d=rr.data||{};
+          res.apagados+=d.apagados||0; res.restaurados+=d.restaurados||0;
+          res.mantidos=res.mantidos.concat(d.mantidos||[]); res.conflitos=res.conflitos.concat(d.conflitos||[]);
+          res.ids=res.ids.concat(d.ids||[]);
+        }
+        return {data:res};
+      })().then(async function(r){
+        if(!r||r.error){ setClaudeRevertendo(false); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra desfazer: "+((r&&r.error&&r.error.message)||"erro")); _carregarClaudeExec(); return; }
+        const res=r.data||{};
+        const ids=Array.isArray(res.ids)?res.ids:[];
+        // Traz os cards como ficaram no banco e atualiza a tela na hora
+        try{
+          const linhas=[];
+          for(let i=0;i<ids.length;i+=100){
+            const q=await sb.from("tasks").select("*").in("id",ids.slice(i,i+100));
+            if(q&&!q.error&&q.data) linhas.push.apply(linhas,q.data);
+          }
+          if(linhas.length&&typeof setTasks==="function"&&typeof rowToTask==="function"){
+            const mapa={}; linhas.forEach(function(l){ mapa[String(l.id)]=rowToTask(l); });
+            setTasks(function(prev){ return (prev||[]).map(function(t){ return mapa[t.id]?Object.assign({},t,mapa[t.id]):t; }); });
+          }
+        }catch(_){}
+        setClaudeRevertendo(false);
+        const nm=(res.mantidos||[]).length, nc=(res.conflitos||[]).length;
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Desfeito: "+(res.apagados||0)+" cards do Claude na lixeira, "+(res.restaurados||0)+" voltaram como estavam"+(nm?(" · "+nm+" mantidos porque já tinham trabalho"):"")+(nc?(" · "+nc+" tinham alteração de alguém depois (respeitada)"):"")+".");
+        _carregarClaudeExec();
+      });
+    };
+    if(typeof pixelsConfirm==="function") pixelsConfirm(msg,{danger:true,okText:"Desfazer tudo",cancelText:"Cancelar"}).then(function(y){ if(y) go(); });
+    else if(window.confirm(msg)) go();
+  }
   // Drag-and-drop: arrastar card entre dias atualiza publishDate automaticamente
   const [dragTaskId,setDragTaskId]=useState(null);
   const [dropDayId,setDropDayId]=useState(null);
@@ -19232,6 +19313,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
           Desfazer última sugestão
         </button>}
+        {_podeEmergencia&&claudeExec&&<button onClick={_desfazerClaude} disabled={claudeRevertendo}
+          title="Botão de emergência: desfaz tudo o que o Claude fez no calendário (cards criados, datas mudadas, lixeira)."
+          style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:claudeRevertendo?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:claudeRevertendo?.6:1,boxShadow:"0 1px 3px rgba(220,38,38,.35)"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
+          {claudeRevertendo?"Desfazendo…":"Emergência: desfazer Claude"}
+        </button>}
       </div>
 
       {/* ── Grade do calendário ── */}
@@ -19405,6 +19492,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 Collab
                               </span>}
                             </div>
+                            {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro/>}
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
                               style={{display:"inline-flex",alignItems:"center",gap:4,height:20,padding:"0 8px",borderRadius:6,background:"#fff",color:(isShortFromDrive?"#a16207":(pubColor&&pubColor.bg)||"#0f172a"),fontSize:9,fontWeight:900,letterSpacing:.6,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(0,0,0,0.22)"}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
@@ -22388,7 +22476,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
                     <div style={{color:"#0f172a",fontSize:14,fontWeight:600,lineHeight:1.42,letterSpacing:-.1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:10})}}>
-                      {t.title}
+                      {pxCriadoPeloClaude(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloClaude size={17}/></span>}{t.title}
                     </div>
 
                     {/* FOOTER único — sempre na mesma posição com a mesma anatomia.
@@ -80524,6 +80612,8 @@ const PX_ES_DICT = {
   "dia mundial da alimentacao":"Día Mundial de la Alimentación", "dia do produtor de leite":"Día del Productor de Leche",
   "dia do engenheiro":"Día del Ingeniero", "dia da terra":"Día de la Tierra", "dia mundial do solo":"Día Mundial del Suelo",
   "dia do meio ambiente":"Día del Medio Ambiente", "dia da arvore":"Día del Árbol", "semana do meio ambiente":"Semana del Medio Ambiente",
+  "retrospectiva do ano":"Retrospectiva del año", "dia internacional da mulher rural":"Día Internacional de la Mujer Rural",
+  "dia mundial da reciclagem":"Día Mundial del Reciclaje", "corpus christi":"Corpus Christi", "black friday":"Black Friday", "finados":"Día de los Difuntos",
 };
 const PX_ES_PALAVRAS = {
   "dia":"Día","mundial":"Mundial","nacional":"Nacional","internacional":"Internacional","semana":"Semana","mes":"Mes",
