@@ -27448,6 +27448,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   },[]);
   const [ajusteModal,setAjusteModal]=useState(null);
   const [ajusteText,setAjusteText]=useState("");
+  // (11/09/2026) "Refazer" e "Testar nova abordagem": pedidos de reescrita pro Claude.
+  // refazerModal = {task, tipo:"abordagem"|"refazer"}.
+  const [refazerModal,setRefazerModal]=useState(null);
+  const [refazerText,setRefazerText]=useState("");
   // SPLIT: dois modais distintos pra não sobrepor (bug reportado pelo Vinicius).
   // editAnnot = "Anotar ajustes" (riscar imagem) na aba publicação.
   // editCopy  = "Editar copy" (título+legenda+briefing) na aba copys.
@@ -27621,6 +27625,60 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       };
     }));
     pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" foi pra Alteração de copy'+(cmtTxt?" — "+cmtTxt.slice(0,80):""),user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    setCardIdx(0);setImgIdx(0);
+  };
+
+  /* ── REFAZER / TESTAR NOVA ABORDAGEM (11/09/2026, pedido do Vinicius) ──
+     Não é "ajuste de palavra": é pedido pro Claude ESCREVER DE NOVO.
+       • abordagem → mantém o assunto do card, muda o jeito de abordar.
+       • refazer   → muda tudo, assunto incluído.
+     O card volta pra "Alteração de copy" com ajusteOrigin "claude_*" (é assim que o Claude
+     acha a fila) e o comentário fica gravado em claude_copy_feedback. Esse feedback NUNCA é
+     apagado: é dali que o Claude aprende o que a agência não curtiu. */
+  const pedirRefacaoClaude=(task,tipo,feedback)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const txt=String(feedback||"").trim();
+    const now=new Date().toISOString();
+    const ehAbord=tipo==="abordagem";
+    const rotulo=ehAbord?"Testar nova abordagem":"Refazer do zero";
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const cs=[...(t.comments||[])];
+      cs.push({
+        id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+        type:ehAbord?"copy_nova_abordagem":"copy_refazer",
+        text:(ehAbord?"Testar nova abordagem: ":"Refazer do zero: ")+(txt||"(sem comentário)"),
+        user:actor,at:now,atFmt:nowFmt(),
+      });
+      return {...t,
+        status:"alteracao_copy",ajustar:true,isAlteracao:true,colEnteredAt:now,
+        ajusteOrigin:ehAbord?"claude_abordagem":"claude_refazer",
+        comments:cs,
+        timeline:[...(t.timeline||[]),{type:"status",from:t.status,to:"alteracao_copy",
+          fromLabel:"Copys",toLabel:"Alteração de copy",at:now,atFmt:nowFmt(),user:actor,
+          note:rotulo+(txt?(" — "+txt):"")}],
+      };
+    }));
+    try{
+      if(typeof sb!=="undefined"&&sb){
+        sb.from("claude_copy_feedback").insert({
+          task_id:task.id,
+          client:task.client||null,
+          bioter_unit:task.bioterUnit||task.bioter_unit||null,
+          titulo:task.title||null,
+          tipo:ehAbord?"abordagem":"refazer",
+          feedback:txt||null,
+          briefing_anterior:task.description||null,
+          legenda_anterior:task.caption||null,
+          pedido_por:actor,
+        }).then(function(){},function(){});
+      }
+    }catch(_){}
+    pushNotif({type:"ajuste",icon:ehAbord?"↻":"✎",title:rotulo,
+      body:'"'+task.title+'" voltou pro Claude'+(txt?(" — "+txt.slice(0,80)):""),
+      user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAbord?"Pedido de nova abordagem registrado. O Claude reescreve mantendo o assunto.":"Pedido de refação registrado. O Claude escreve outra copy do zero.",4200);
     setCardIdx(0);setImgIdx(0);
   };
 
@@ -28898,8 +28956,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             const _color = (_senderUser && _senderUser.color) || "#7c3aed";
             const _initial = String(_senderName||"?").trim().charAt(0).toUpperCase();
             const _firstName = String(_senderName||"").split(" ")[0] || "Colaborador";
+            // (11/09/2026) Copy escrita pelo Claude: nao pode aparecer como se a Hellen tivesse
+            // mandado. O robozinho identifica de cara quem escreveu.
+            const _ehClaude = String(_senderName||"").trim().toLowerCase()==="claude";
             return (<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:11,boxShadow:"0 1px 3px rgba(124,58,237,0.06)"}}>
-              {_photo
+              {_ehClaude
+                ? <span title="Briefing e legenda escritos pelo Claude" style={{width:38,height:38,borderRadius:"50%",background:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxShadow:"0 2px 8px rgba(124,58,237,0.30)",flexShrink:0}}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="#fff" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="#fff" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="#fff" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
+                  </span>
+                : _photo
                 ? <img src={_photo} alt={_senderName} referrerPolicy="no-referrer" style={{width:38,height:38,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",boxShadow:"0 2px 8px rgba(15,23,42,0.12)",flexShrink:0}}/>
                 : <span style={{width:38,height:38,borderRadius:"50%",background:_color,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,border:"2px solid #fff",boxShadow:"0 2px 8px rgba(15,23,42,0.12)",flexShrink:0}}>{_initial}</span>
               }
@@ -28931,6 +28996,22 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
+              </button>
+              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"abordagem"});}}
+                title="Mantém o assunto do card, mas o Claude escreve de outro jeito. Você diz o que quer mudar na abordagem."
+                style={{width:"100%",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#ddd6fe";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>
+                Testar nova abordagem
+              </button>
+              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"refazer"});}}
+                title="Assunto e abordagem novos: o Claude escreve outra copy do zero pra esse dia."
+                style={{width:"100%",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#bae6fd";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="M4.5 7.5l2.1 2.1"/><path d="M19.5 7.5l-2.1 2.1"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="9.5" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>
+                Refazer do zero
               </button>
               <button onClick={async()=>{
                   if(typeof pixelsConfirm==="function"){
@@ -29421,6 +29502,54 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         </div>
       </div>
     </div>}
+
+    {/* ── Modal Refazer / Testar nova abordagem (o Claude reescreve) ── */}
+    {refazerModal&&(()=>{
+      const _ab=refazerModal.tipo==="abordagem";
+      const _grad=_ab?"linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)":"linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)";
+      const _sombra=_ab?"0 4px 14px rgba(109,40,217,.40)":"0 4px 14px rgba(3,105,161,.40)";
+      const _tit=_ab?"Testar nova abordagem":"Refazer do zero";
+      const _sub=_ab?"Mesmo assunto, outro jeito de contar":"Assunto e abordagem novos";
+      const _lbl=_ab?"O que mudar na abordagem?":"Por que não funcionou?";
+      const _ph=_ab
+        ? "Ex.: começa com uma pergunta em vez de afirmação; menos técnico; foca no custo e não no processo; puxa mais pro lado emocional…"
+        : "Ex.: esse assunto já saiu mês passado; não combina com o momento do cliente; muito genérico…";
+      const _fechar=()=>{setRefazerModal(null);setRefazerText("");};
+      return (<div onClick={e=>{if(e.target===e.currentTarget)_fechar();}}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
+          <div style={{background:_grad,padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="#fff" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="#fff" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="#fff" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
+              </div>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{_tit}</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>{_sub}</div>
+              </div>
+            </div>
+            <button onClick={_fechar} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+          </div>
+          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{_lbl}</div>
+            <textarea value={refazerText} onChange={e=>setRefazerText(e.target.value)}
+              autoFocus rows={5} placeholder={_ph}
+              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+            <div style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:11.5,lineHeight:1.5}}>
+              O card volta pra <strong>Alteração de copy</strong> e o Claude reescreve. O que você escrever aqui fica guardado — é assim que ele vai acertando o tom de cada cliente.
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
+              <button onClick={_fechar}
+                style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText);_fechar();}}
+                style={{background:_grad,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:_sombra,display:"inline-flex",alignItems:"center",gap:6}}>
+                <Ico n="check" size={13} color="#fff"/>{_ab?"Pedir nova abordagem":"Pedir refação"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>);
+    })()}
 
     {/* ── Modal Editar copy (titulo + legenda + briefing inline) ── */}
     {editCopy&&(()=>{
@@ -36044,6 +36173,9 @@ function _ArmazenamentoPanel({tasks}){
           at:_nowIso2, atFmt:(new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})),
           user:CURRENT_USER.name, note:_nRemoved+" arquivos removidos (original + versão leve). Miniatura preservada no card. Drive tem a cópia."
         }]);
+        // REGRA (11/09/2026, Vinicius): a limpeza apaga SÓ ARQUIVO. Legenda (caption) e
+        // briefing (description) NUNCA entram neste update — são a base histórica de copy
+        // escrita por humano e é dela que o Claude aprende o tom de cada cliente.
         const _upd = await window._sb.from("tasks").update({files:_newFiles, timeline:_newTl, updated_at:_nowIso2}).eq("id", _t.id);
         if(_upd && _upd.error){ console.warn("[armazenamento] update task",_t.id,_upd.error.message); _errors++; }
       }catch(e){ console.warn("[armazenamento] task",_t.id,e); _errors++; }
