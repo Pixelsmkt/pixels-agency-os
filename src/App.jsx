@@ -16651,6 +16651,41 @@ function pxAutoComLimparDoEvento(eventId, manter){
       return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){ return (r2&&r2.error)?0:ids.length; });
     });
 }
+/* (11/09/2026) "Somente story" marcado ou desmarcado DEPOIS que os cards automáticos já
+   existiam: o gerador é idempotente (não mexe em card que já existe), então sem isso o card
+   ficava com a Hellen, sem a tag e contando na cota. Aqui acerta os cards do evento:
+   - todos (fora da lixeira): flag somente_story + tag "Somente story" (põe ou tira);
+   - só os que ainda estão em Rascunhos trocam o responsável (story → Vinicius; desmarcou e
+     estava só com o Vinicius → volta pra Hellen). Card que já entrou na produção mantém
+     quem está nele.                                                                        */
+function pxAutoComSyncStory(eventId, story){
+  const sb=window._sb; if(!sb||!eventId) return Promise.resolve({alterados:0,emProducao:0});
+  const TAG="Somente story";
+  return sb.from("tasks").select("id,status,assignee,assignees,tags,somente_story")
+    .like("id","autocom-"+String(eventId)+"-%").is("deleted_at",null).then(function(r){
+      if(!r||r.error||!Array.isArray(r.data)) return {alterados:0,emProducao:0};
+      let alterados=0, emProducao=0;
+      const jobs=[];
+      r.data.forEach(function(t){
+        const tags=Array.isArray(t.tags)?t.tags.slice():[];
+        const temTag=tags.indexOf(TAG)>=0;
+        const patch={};
+        if(!!t.somente_story!==!!story) patch.somente_story=!!story;
+        if(story&&!temTag) patch.tags=tags.concat([TAG]);
+        if(!story&&temTag) patch.tags=tags.filter(function(x){ return x!==TAG; });
+        const as=Array.isArray(t.assignees)?t.assignees:(t.assignee?[t.assignee]:[]);
+        const soVini=as.length===1&&as[0]==="vinicius";
+        if(String(t.status||"")==="rascunhos"){
+          if(story&&!soVini){ patch.assignee="vinicius"; patch.assignees=["vinicius"]; }
+          if(!story&&soVini){ patch.assignee="ellen"; patch.assignees=["ellen"]; }
+        } else if(Object.keys(patch).length){ emProducao++; }
+        if(!Object.keys(patch).length) return;
+        alterados++;
+        jobs.push(sb.from("tasks").update(patch).eq("id",t.id));
+      });
+      return Promise.all(jobs).then(function(){ return {alterados:alterados,emProducao:emProducao}; });
+    });
+}
 function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [title,setTitle]=useState((initial&&initial.title)||"");
   const [description,setDescription]=useState((initial&&initial.description)||"");
@@ -16818,6 +16853,16 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           pxAutoComLimparDoEvento(_savedRow.id,function(t){ return _datas.has(String(t.publish_date||"").slice(0,10)) && _alvos.has(String(t.client||"")+"|"+String(t.bioter_unit||"")); })
             .then(function(n){ if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" que não bat"+(n>1?"em":"e")+" mais com a data foi"+(n>1?"ram":"")+" removido"+(n>1?"s":"")+".",6000); }).catch(function(){});
         }catch(_e){ console.warn("[autocom limpar]",_e); }
+      }
+      // (11/09) Somente story mudou (ou está ligado) num evento que já tinha cards → acerta os cards
+      if(isEdit&&_savedRow&&String(_savedRow.category||"")==="comemorativa"
+         &&(!!_savedRow.somente_story||!!(initial&&initial.somente_story))&&typeof pxAutoComSyncStory==="function"){
+        pxAutoComSyncStory(_savedRow.id,!!_savedRow.somente_story).then(function(res){
+          if(!res||!res.alterados||typeof pixelsToast==="undefined") return;
+          const n=res.alterados, m=res.emProducao;
+          pixelsToast.info((_savedRow.somente_story?"Somente story aplicado":"Somente story retirado")+" em "+n+" card"+(n>1?"s":"")+" já criado"+(n>1?"s":"")+
+            (m?" · "+m+" já em produção "+(m>1?"mantiveram":"manteve")+" os responsáveis":"")+".",5000);
+        }).catch(function(e){ console.warn("[autocom story]",e); });
       }
       // Sincronizar marco vinculado (se aplicável)
       function _doneSave(_silencioso){
@@ -18304,10 +18349,13 @@ function _pxProjMes(startISO, dateISO){
   if(d[2] < s[2]) m-=1;               // ainda não chegou no dia do aniversário
   return m<0 ? 0 : m+1;               // mês 1 = primeiro mês do projeto
 }
-/* Cota de conteúdos do mês. Starter: mês 1 = 8 (2 por semana); do mês 2 em diante
-   4 (1 por semana). Outros planos não têm cota fechada — mostra só a posição. */
+/* Cota de conteúdos do mês. Starter (3 meses): mês 1 = 8 (2 por semana), meses 2 e 3
+   = 4 (1 por semana) e ACABOU — do mês 4 em diante 0 (decisão do Vinicius, 11/09: "é 1/8,
+   depois 1/4, depois 1/4 e deu"). Outros planos não têm cota fechada — mostra só a posição. */
+const PX_STARTER_MESES=3;
 function _pxCotaMes(preset, mes){
   if(String(preset||"").toLowerCase()!=="starter") return 0;
+  if(mes<1||mes>PX_STARTER_MESES) return 0;
   return mes===1 ? 8 : 4;
 }
 /* Entra na conta exatamente o que APARECE no calendário — mesma regra do `agendados`.
@@ -18344,11 +18392,17 @@ function _pxContadorProjeto(tasks, faseMap){
     // segue a ordem de entrega. Os 8 primeiros conteúdos são o mês 1 (1/8 … 8/8), os
     // 4 seguintes o mês 2 (1/4 … 4/4), os 4 seguintes o mês 3, e assim por diante.
     // Assim o 8º card é sempre "8/8", mesmo caindo depois da virada do mês no calendário.
-    let mes=1, pos=0, cota=_pxCotaMes(f.preset,1);
+    // Plano com cota que acaba (Starter: 8+4+4): fechou o último bloco, os cards seguintes
+    // ficam SEM chip — nada de um 4º ciclo "1/4" (11/09).
+    let mes=1, pos=0, cota=_pxCotaMes(f.preset,1), encerrado=false;
     lista.forEach(function(t){
+      if(encerrado) return;
       if(_pxProjMes(f.start,t.publishDate)<1) return;   // antes do início do projeto: fora
       pos++;
-      if(cota>0 && pos>cota){ mes++; pos=1; cota=_pxCotaMes(f.preset,mes); }
+      if(cota>0 && pos>cota){
+        mes++; pos=1; cota=_pxCotaMes(f.preset,mes);
+        if(cota===0){ encerrado=true; return; }           // plano acabou
+      }
       out[t.id]={mes:mes, pos:pos, cota:cota, preset:f.preset||""};
     });
   });
@@ -32859,7 +32913,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   const [novoClienteOpen,setNovoClienteOpen]=useState(false);
   const [novoClienteBusy,setNovoClienteBusy]=useState(false);
   const [novoCliente,setNovoCliente]=useState({
-    client_id:"", client_unit:"", email:"", password:"", name:"",
+    client_id:"", client_unit:"", email:"", password:"", name:"", papel:"admin",
     photo_base64:"", photo_mime:""
   });
 
@@ -32903,7 +32957,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
 
       // 2) Buscar auth users tipo cliente
       const{data,error}=await sb.from("profiles")
-        .select("id,name,primary_client,primary_unit,profile_data")
+        .select("id,name,primary_client,primary_unit,profile_data,permissions")
         .eq("user_type","client");
       if(error||!data){setClientAuthLoading(false);return;}
       const byClient={};
@@ -32939,6 +32993,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           primary_client:cid,
           client_id:cid,
           user_type:"client",
+          permissions:p.permissions||{},
         });
       });
       setClientAuthUsers(byClient);
@@ -33441,6 +33496,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             client_id:novoCliente.client_id,
             client_unit:novoCliente.client_unit||"",
             name:(novoCliente.name||"").trim()||(_clSel?_clSel.name:novoCliente.client_id),
+            papel:novoCliente.papel==="comercial"?"comercial":"admin", // nível do portal (11/09/2026)
             photo_url:_photoUrl,
           };
           // Timeout de 45s — evita ficar "Criando..." infinito
@@ -33615,6 +33671,24 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                   <input type="file" accept="image/*" onChange={e=>onPickFoto(e.target.files?.[0])} style={{display:"none"}}/>
                 </label>
                 {novoCliente.photo_base64 && <img src={novoCliente.photo_base64} alt="preview" style={{width:40,height:40,borderRadius:8,objectFit:"cover",border:"1px solid "+C.b1}}/>}
+              </div>
+            </div>
+
+            {/* Nível de acesso no portal (11/09/2026) */}
+            <div>
+              <div style={lbl}>Nível de acesso *</div>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:8}}>
+                {PORTAL_NIVEIS.map(n=>{
+                  const on=(novoCliente.papel||"admin")===n.id;
+                  return <button key={n.id} type="button" onClick={()=>setNovoCliente(p=>({...p,papel:n.id}))}
+                    style={{textAlign:"left",background:on?n.cor+"0f":"#fff",border:"1.5px solid "+(on?n.cor:C.b1),borderRadius:10,padding:"10px 12px",cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",gap:3,transition:"all .12s"}}>
+                    <span style={{display:"flex",alignItems:"center",gap:7,color:on?n.cor:C.tx,fontWeight:800,fontSize:13}}>
+                      <span style={{width:14,height:14,borderRadius:"50%",border:"2px solid "+(on?n.cor:"#cbd5e1"),display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxSizing:"border-box"}}>{on&&<span style={{width:6,height:6,borderRadius:"50%",background:n.cor}}/>}</span>
+                      {n.label}
+                    </span>
+                    <span style={{color:C.td,fontSize:11.5,fontWeight:500,lineHeight:1.4,paddingLeft:21}}>{n.desc}</span>
+                  </button>;
+                })}
               </div>
             </div>
 
@@ -33898,7 +33972,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             const _semVis=_semAcesso.filter(c=>!_q||String(c.name||"").toLowerCase().includes(_q));
             const _abrirNovo=(cid)=>{
               const _fc=cid?{id:cid}:(_semAcesso[0]||_clientesPortal[0]||{id:""});
-              setNovoCliente({client_id:_fc.id||"",client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});
+              setNovoCliente({client_id:_fc.id||"",client_unit:"",email:"",password:"",name:"",papel:"admin",photo_base64:"",photo_mime:""});
               setNovoClienteOpen(true);
             };
             const _Stat=({v,l,c,ic})=>(
@@ -34040,6 +34114,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                             </span>
                         }
                       </div>
+                      {/* Nível do acesso — Administrador / Comercial (11/09/2026) */}
+                      <AcessoNivelPortal user={user} podeEditar={!!isPartner}
+                        onSalvo={(papel)=>setClientAuthUsers(prev=>{
+                          const nx={...prev};
+                          Object.keys(nx).forEach(k=>{ nx[k]=(nx[k]||[]).map(u=>u.id===user.id?{...u,permissions:{...(u.permissions||{}),papel}}:u); });
+                          return nx;
+                        })}/>
                       {/* Ações */}
                       {isPartner && <div style={{display:"flex",gap:6,paddingTop:9,borderTop:"1px solid #f1f5f9"}}>
                         {onViewAsClient && <button onClick={()=>onViewAsClient(user)} title={"Ver o portal como "+(user.name||cl.name)} type="button"
@@ -34921,6 +35002,68 @@ function StorageManager({tasks}){
     {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
       {log.map((l,i)=><div key={i} style={{color:C.ts,fontSize:12}}>{l}</div>)}
     </div>}
+  </div>;
+}
+
+
+/* ── NÍVEL DO ACESSO NO PORTAL (11/09/2026) ─────────────────────────────
+   Administrador = portal inteiro · Comercial = só a aba Performance (funil + vendas/ROI).
+   Fica em profiles.permissions.papel ("admin" | "comercial"; vazio/"dono" = admin).
+   Quem grava é a Edge Function acessos-portal (só sócio). O portal esconde as abas
+   (13_novidades.jsx, _soPerformance) e o banco trava de verdade
+   (_pixels_client_pode('performance'/'portal') nas policies).                     */
+const PORTAL_NIVEIS=[
+  {id:"admin",     label:"Administrador", desc:"Vê o portal inteiro",                     cor:"#7c3aed"},
+  {id:"comercial", label:"Comercial",     desc:"Só Performance: registra leads e vendas", cor:"#0891b2"},
+];
+function _portalNivelDe(u){
+  const p=(u&&u.permissions)||{};
+  return String(p.papel||"").toLowerCase()==="comercial"?"comercial":"admin";
+}
+async function _portalNivelSalvar(userId,papel){
+  const sb=window._sb;
+  await sb.auth.refreshSession().catch(()=>{});
+  const{data:sess}=await sb.auth.getSession();
+  const tok=sess&&sess.session&&sess.session.access_token;
+  if(!tok) throw new Error("Sua sessão expirou. Faça logout e login de novo.");
+  const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+  const res=await fetch(url+"/functions/v1/acessos-portal",{
+    method:"POST",
+    headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+    body:JSON.stringify({acao:"atualizar",id:userId,papel:papel}),
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok||data.error) throw new Error(data.error||("Erro "+res.status));
+  return data;
+}
+function AcessoNivelPortal({user,podeEditar,onSalvo}){
+  const [salvando,setSalvando]=useState(false);
+  const atual=_portalNivelDe(user);
+  const trocar=async(id)=>{
+    if(!podeEditar||salvando||id===atual)return;
+    setSalvando(true);
+    try{
+      await _portalNivelSalvar(user.id,id);
+      if(onSalvo)onSalvo(id);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success((user.name||"Acesso")+" agora é "+(id==="comercial"?"Comercial":"Administrador")+".",2500);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Não consegui trocar o nível: "+((e&&e.message)||e));
+    }finally{ setSalvando(false); }
+  };
+  return <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    <span style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Nível</span>
+    <div role="radiogroup" aria-label="Nível do acesso" style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2,opacity:salvando?.6:1}}>
+      {PORTAL_NIVEIS.map(n=>{
+        const on=atual===n.id;
+        const off=!podeEditar||salvando;
+        return <button key={n.id} type="button" role="radio" aria-checked={on} disabled={off} title={n.desc}
+          onClick={()=>trocar(n.id)}
+          style={{background:on?"#fff":"transparent",color:on?n.cor:"#64748b",border:"none",borderRadius:7,padding:"5px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:off?"default":"pointer",boxShadow:on?"0 1px 3px rgba(15,23,42,.12)":"none",fontFamily:"inherit",transition:"all .12s"}}>
+          {n.label}
+        </button>;
+      })}
+    </div>
+    <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{salvando?"salvando…":(atual==="comercial"?"só Performance":"portal inteiro")}</span>
   </div>;
 }
 
@@ -62051,8 +62194,24 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   },[lockedClientId]);
   // Cliente com calculadora liberada abre DIRETO em "Monte seu pacote".
   // Tem prioridade sobre initTab: o login do cliente passa initTab="dashboard" fixo.
-  const _abaInicial = (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0) ? "calculadora" : (initTab||"dashboard");
-  const [tab,setTab]=useState(_abaInicial);
+  // ── NÍVEL DO ACESSO (11/09/2026) ─────────────────────────────────
+  // profiles.permissions.papel: "admin" (ou vazio/"dono", legado) vê o portal inteiro;
+  // "comercial" vê SÓ a aba Performance (funil + vendas/ROI) pra registrar leads e vendas.
+  // Vale só pra login de cliente (lockedClientId) — inclui o "Ver como" do sócio,
+  // pra ele conferir exatamente o que o comercial enxerga. O banco também trava
+  // (_pixels_client_pode('performance'/'portal') nas policies), isso aqui é a tela.
+  const _papelPortal=(function(){
+    try{ const _p=(currentClientUser&&currentClientUser.permissions)||{};
+      return String(_p.papel||"").toLowerCase()==="comercial"?"comercial":"admin"; }
+    catch(_){ return "admin"; }
+  })();
+  const _soPerformance=!!lockedClientId&&_papelPortal==="comercial";
+  const _abaInicial = _soPerformance ? "performance"
+    : (PORTAL_CALC_CLIENTS.indexOf(initialClient)>=0) ? "calculadora" : (initTab||"dashboard");
+  const [tab,_setTabRaw]=useState(_abaInicial);
+  // Comercial fica preso na Performance (atalhos de widgets/links internos não tiram ele de lá)
+  const setTab=function(v){ if(_soPerformance){ _setTabRaw("performance"); return; } _setTabRaw(v); };
+  useEffect(function(){ if(_soPerformance&&tab!=="performance") _setTabRaw("performance"); },[_soPerformance,tab]);
   // Trocou pra um cliente com calculadora? cai na aba dela tambem.
   // Trocou pra um cliente SEM calculadora enquanto estava nela? volta pro dashboard
   // (a aba ficava presa em "calculadora" e o Monte seu pacote aparecia em todo mundo). 2026-09-03
@@ -62205,6 +62364,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
 
   // Module → tab mapping (publicacoes is always enabled alongside demandas)
   const tabEnabled=(id)=>{
+    if(_soPerformance)return id==="performance";   // nível Comercial
     if(isSocio)return true;
     if(id==="publicacoes")return mods.demandas!==false;
     if(!mods[id]&&mods[id]!==undefined)return false;
@@ -62213,7 +62373,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   const TABS=ALL_TABS.filter(t=>tabEnabled(t.id));
   // Calculadora no portal — clientes liberados montam o próprio pacote;
   // as respostas são salvas no Supabase (tabela portal_calculadora).
-  if(PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
+  if(!_soPerformance && PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
     TABS.unshift({id:"calculadora", ico:"package", label:"Monte seu pacote"});
   }
 
