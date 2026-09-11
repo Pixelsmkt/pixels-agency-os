@@ -16676,6 +16676,9 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
   const [city,setCity]=useState((initial&&initial.city)||"");
+  // "Somente story": a data vira só post de story — card nasce só com o Vinicius e fica
+  // fora da cota de conteúdos do plano (10/09/2026).
+  const [somenteStory,setSomenteStory]=useState(!!(initial&&initial.somente_story));
   const [endDate,setEndDate]=useState((initial&&initial.end_date)||"");
   const [responsibleIds,setResponsibleIds]=useState(function(){
     try{
@@ -16766,6 +16769,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       city:city.trim()||null,
       end_date:(endDate&&endDate>date)?endDate:null,
       responsibles:(responsibleIds&&responsibleIds.length)?responsibleIds:null,
+      somente_story:!!somenteStory,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -16996,6 +17000,20 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             });
           })()}
         </div>
+      </div>
+
+      {/* Somente story — só faz sentido em data que a gente publica no story, sem arte */}
+      <div style={{marginBottom:14}}>
+        <label onClick={function(){ setSomenteStory(!somenteStory); }}
+          style={{display:"flex",alignItems:"center",gap:11,border:"1px solid "+(somenteStory?"#f59e0b":"#e2e8f0"),background:somenteStory?"#fffbeb":"#fff",borderRadius:12,padding:"11px 14px",cursor:"pointer",transition:"all .12s"}}>
+          <span style={{width:20,height:20,borderRadius:6,border:"2px solid "+(somenteStory?"#f59e0b":"#cbd5e1"),background:somenteStory?"#f59e0b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {somenteStory&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+          </span>
+          <span style={{minWidth:0,flex:1}}>
+            <span style={{display:"block",fontSize:13,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
+            <span style={{display:"block",fontSize:11,color:somenteStory?"#b45309":"#94a3b8",marginTop:2,fontWeight:500,lineHeight:1.4}}>Sem arte pra produzir: o card nasce só com o Vinicius, leva a tag SOMENTE STORY no calendário e não entra na cota de conteúdos do plano.</span>
+          </span>
+        </label>
       </div>
 
       {/* Cliente(s) vinculados (opcional, multi-select) */}
@@ -18296,6 +18314,7 @@ function _pxContaNoCalendario(t){
   if(!t||t.deletedAt||!t.publishDate) return false;
   if(t.status==="pausado"||t.status==="reprovado") return false;
   if(t.contentType==="folder") return false;   // material impresso, não é publicação
+  if(t.somenteStory||t.somente_story) return false; // story não é post de feed: fora da cota 8/4/4
   return true;
 }
 /* Devolve { [taskId]: {mes, pos, cota, preset} } pros clientes com projeto iniciado. */
@@ -19329,6 +19348,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 Collab
                               </span>}
                             </div>
+                            {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
+                              style={{display:"inline-flex",alignItems:"center",gap:4,height:20,padding:"0 8px",borderRadius:6,background:"#fff",color:(isShortFromDrive?"#a16207":(pubColor&&pubColor.bg)||"#0f172a"),fontSize:9,fontWeight:900,letterSpacing:.6,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(0,0,0,0.22)"}}>
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>
+                              SOMENTE STORY
+                            </span>}
                             {(function(){
                               // Contador do projeto: 3/8 = 3º conteúdo do mês 1 do Starter (8 previstos)
                               const _ct=contadorProjeto[t.id];
@@ -48247,6 +48271,7 @@ const rowToTask = (r) => ({
   caption:      r.caption      || "",
   desc:         r.description  || "",
   position:     r.position     ?? null,
+  somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
   origem:           r.origem            || "",
   tipo_solicitacao: r.tipo_solicitacao  || "",
@@ -48302,6 +48327,7 @@ const taskToRow = (t) => ({
   caption:        t.caption      || "",
   description:    t.desc         || "",
   position:       t.position     ?? null,
+  somente_story:  !!t.somenteStory,
   // ── Origem + tipo solicitação ──
   origem:           t.origem            || null,
   tipo_solicitacao: t.tipo_solicitacao  || null,
@@ -80246,14 +80272,16 @@ async function pxGerarCardsComemorativos(opts){
       id:c.id,
       title:(typeof smartFormatTitle==="function"?smartFormatTitle(_tituloBase||"Data comemorativa"):(_tituloBase||"Data comemorativa")),
       desc:c.ev.description||"",
-      assignee:"ellen", assignees:["ellen"], watchers:[],
+      // "Somente story": sem arte pra produzir — vai só pro Vinicius, sem Hellen nem designer.
+      assignee:(c.ev.somente_story?"vinicius":"ellen"), assignees:[c.ev.somente_story?"vinicius":"ellen"], watchers:[],
       client:c.client, sector:"", priority:"", status:"rascunhos",
       startDate:_f(now), deadline:c.date,
       publishDate:c.date, publish_date:c.date, publishTime:"11:00",
       contentType:null,
-      completedAt:null, score:null, tags:c.unit==="paraguay"?["Data comemorativa","Español"]:["Data comemorativa"], comments:[], files:[], cover:null, checklist:[],
+      completedAt:null, score:null, tags:(c.unit==="paraguay"?["Data comemorativa","Español"]:["Data comemorativa"]).concat(c.ev.somente_story?["Somente story"]:[]), comments:[], files:[], cover:null, checklist:[],
       deletedAt:null,
       bioterUnit:c.unit||null,
+      somenteStory:!!c.ev.somente_story,
       referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto():""),
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt, createdBy:"Automático",
