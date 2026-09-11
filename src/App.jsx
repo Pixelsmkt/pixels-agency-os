@@ -91202,6 +91202,24 @@ function _mtzBR(iso){
 }
 /* Seções dentro das atribuições: item que começa com "## " é o título da seção.
    Continua sendo array de texto no banco — cadeira sem seção fica igual antes. */
+/* Ícone da cadeira, escolhido pelo nome (sem campo novo no banco) */
+function _MtzIcone({nome, size, color}){
+  const n=String(nome||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const sz=size||18, c=color||"currentColor";
+  const P={strokeWidth:2,stroke:c,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"};
+  let d;
+  if(/projeto|gerente|coordena|operac/.test(n)) d=<g {...P}><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7"/><path d="M3 12.5h18"/><path d="M10.5 12.5v1.5h3v-1.5"/></g>;
+  else if(/rede|social|midias sociais/.test(n)) d=<g {...P}><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></g>;
+  else if(/trafego|midia|ads|anuncio/.test(n)) d=<g {...P}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill={c}/></g>;
+  else if(/design|arte|criacao/.test(n)) d=<g {...P}><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></g>;
+  else if(/video|edicao|editor/.test(n)) d=<g {...P}><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5l6-3.5v10l-6-3.5"/></g>;
+  else if(/comercial|venda/.test(n)) d=<g {...P}><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></g>;
+  else if(/financ/.test(n)) d=<g {...P}><path d="M12 2v20"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>;
+  else if(/direc|socio|ceo|diretor/.test(n)) d=<g {...P}><path d="M3 18h18l-2-10-5 4-2-6-2 6-5-4z"/></g>;
+  else if(/conteudo|estrateg|copy|redac/.test(n)) d=<g {...P}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></g>;
+  else d=<g {...P}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></g>;
+  return <svg width={sz} height={sz} viewBox="0 0 24 24" style={{display:"block",flexShrink:0}}>{d}</svg>;
+}
 function _mtzEhSecao(s){ return /^##\s*/.test(String(s||"")); }
 function _mtzTituloSecao(s){ return String(s||"").replace(/^##\s*/,""); }
 function _mtzQtd(lst){ return (lst||[]).filter(function(a){return !_mtzEhSecao(a);}).length; }
@@ -91358,8 +91376,8 @@ function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
     <div onMouseDown={function(e){e.stopPropagation();}}
       style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:680,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,.28)"}}>
       <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",gap:14}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 5px 14px rgba(124,58,237,.3)"}}>
-          <Ico n="layers" size={20} color="#fff"/>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 5px 14px rgba(124,58,237,.3)",color:"#fff"}}>
+          <_MtzIcone nome={r.nome} size={20}/>
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4,lineHeight:1.25}}>{r.nome}</div>
@@ -91378,16 +91396,15 @@ function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
       </div>
       <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:18}}>
         {r.missao&&<div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px",color:"#4c1d95",fontSize:13.5,lineHeight:1.65,fontWeight:500}}>{r.missao}</div>}
-        {_mtzQtd(r.atribuicoes)>0&&<_Sec t={"Atribuições ("+_mtzQtd(r.atribuicoes)+")"} cor="#7c3aed">
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {_mtzQtd(r.atribuicoes)>0&&<_Sec t="Atribuições" cor="#7c3aed">
+          <div style={{display:"flex",flexDirection:"column",gap:20}}>
           {_mtzGrupos(r.atribuicoes).map(function(g,gi){
             return <div key={gi}>
               {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
                 <span style={{color:"#6d28d9",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{g.titulo}</span>
-                <span style={{color:"#a78bfa",fontSize:10.5,fontWeight:700}}>{g.itens.length}</span>
                 <span style={{flex:1,height:1,background:"#ede9fe"}}/>
               </div>}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"5px 16px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"10px 24px"}}>
                 {g.itens.map(function(a,i){
                   return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
@@ -91528,59 +91545,64 @@ function PageMatrizResponsabilidades({isMob}){
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 14px 34px "+cor+"22";e.currentTarget.style.borderColor=cor+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.04)";e.currentTarget.style.borderColor="#e8ebf0";}}>
           {/* Banner com a cor do responsável */}
-          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:"18px 22px 17px",display:"flex",alignItems:"center",gap:15,position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.12)",filter:"blur(2px)",pointerEvents:"none"}}/>
-            <div style={{width:76,height:76,borderRadius:"50%",overflow:"hidden",border:"3px solid rgba(255,255,255,0.9)",boxShadow:"0 6px 16px rgba(0,0,0,.22)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:isMob?"20px 18px":"24px 26px",display:"flex",alignItems:"center",gap:isMob?16:22,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:-40,right:-40,width:170,height:170,borderRadius:"50%",background:"rgba(255,255,255,0.12)",filter:"blur(2px)",pointerEvents:"none"}}/>
+            <div style={{position:"absolute",bottom:-60,right:90,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.07)",pointerEvents:"none"}}/>
+            <div style={{width:isMob?84:108,height:isMob?84:108,borderRadius:"50%",overflow:"hidden",border:"4px solid rgba(255,255,255,0.95)",boxShadow:"0 10px 24px rgba(0,0,0,.22)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
               {u&&typeof UserAvatar==="function"
-                ? <UserAvatar user={u} size={70} border={false}/>
-                : <span style={{color:cor,fontSize:26,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
+                ? <UserAvatar user={u} size={isMob?76:100} border={false}/>
+                : <span style={{color:cor,fontSize:34,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
             </div>
-            <div style={{minWidth:0}}>
-              <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.25,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
-              <div style={{color:"rgba(255,255,255,.9)",fontSize:11.5,fontWeight:700,marginTop:3,display:"inline-flex",alignItems:"center",gap:5}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <div style={{minWidth:0,position:"relative",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <span style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.32)",boxShadow:"inset 0 1px 0 rgba(255,255,255,.25)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                  <_MtzIcone nome={r.nome} size={19}/>
+                </span>
+                <div style={{color:"#fff",fontWeight:800,fontSize:isMob?17:20,letterSpacing:-.5,lineHeight:1.2,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
+              </div>
+              <div style={{alignSelf:"flex-start",color:"#fff",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.26)",borderRadius:99,padding:"5px 12px 5px 10px"}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 {r.responsavel_nome||"—"}
               </div>
             </div>
           </div>
-          <div style={{padding:"16px 20px 18px",display:"flex",flexDirection:"column",gap:14,flex:1}}>
-            {r.missao&&<div style={{background:cor+"0a",borderLeft:"3px solid "+cor,borderRadius:"0 11px 11px 0",padding:"11px 14px",color:"#475569",fontSize:12.5,lineHeight:1.6,fontWeight:500}}>{r.missao}</div>}
+          <div style={{padding:isMob?"18px 16px 20px":"22px 24px 24px",display:"flex",flexDirection:"column",gap:20,flex:1}}>
+            {r.missao&&<div style={{background:cor+"0a",borderLeft:"3px solid "+cor,borderRadius:"0 12px 12px 0",padding:"14px 18px",color:"#475569",fontSize:13,lineHeight:1.7,fontWeight:500}}>{r.missao}</div>}
             {_atr.length>0&&<div>
-              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
-                <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atribuições</span>
-                <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_mtzQtd(_atr)}</span>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Atribuições</span>
                 <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
               </div>
-              {_atr.some(_mtzEhSecao)?<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+              {_atr.some(_mtzEhSecao)?<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:14,padding:isMob?"16px 14px":"20px 22px",display:"flex",flexDirection:"column",gap:24}}>
                 {_mtzGrupos(_atr).map(function(g,gi){
                   return <div key={gi}>
-                    {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
-                      <span style={{width:3,height:12,borderRadius:2,background:cor,flexShrink:0}}/>
-                      <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{g.titulo}</span>
-                      <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700}}>{g.itens.length}</span>
+                    {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:13}}>
+                      <span style={{width:3,height:14,borderRadius:2,background:cor,flexShrink:0}}/>
+                      <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{g.titulo}</span>
+                      <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)",marginLeft:4}}/>
                     </div>}
-                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"7px 18px"}}>
+                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"13px 28px"}}>
                       {g.itens.map(function(a,i){
                         return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
                           <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           </span>
-                          <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                          <span style={{color:"#334155",fontSize:12.5,lineHeight:1.55,fontWeight:500}}>{a}</span>
                         </div>;
                       })}
                     </div>
                   </div>;
                 })}
               </div>
-              :<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",gap:18}}>
+              :<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:14,padding:isMob?"16px 14px":"20px 22px",display:"flex",gap:28}}>
                 {(isMob?[_atr]:[_atr.slice(0,Math.ceil(_atr.length/2)),_atr.slice(Math.ceil(_atr.length/2))]).map(function(_col,_ci){
-                  return <div key={_ci} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:7}}>
+                  return <div key={_ci} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:13}}>
                     {_col.map(function(a,i){
                       return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
                         <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </span>
-                        <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                        <span style={{color:"#334155",fontSize:12.5,lineHeight:1.55,fontWeight:500}}>{a}</span>
                       </div>;
                     })}
                   </div>;
