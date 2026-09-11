@@ -91200,13 +91200,42 @@ function _mtzBR(iso){
   if(!iso) return "";
   try{ const d=new Date(iso); if(isNaN(d.getTime()))return ""; return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear(); }catch(_){ return ""; }
 }
+/* Seções dentro das atribuições: item que começa com "## " é o título da seção.
+   Continua sendo array de texto no banco — cadeira sem seção fica igual antes. */
+function _mtzEhSecao(s){ return /^##\s*/.test(String(s||"")); }
+function _mtzTituloSecao(s){ return String(s||"").replace(/^##\s*/,""); }
+function _mtzQtd(lst){ return (lst||[]).filter(function(a){return !_mtzEhSecao(a);}).length; }
+function _mtzGrupos(lst){
+  const out=[]; let cur=null;
+  (lst||[]).forEach(function(a){
+    if(_mtzEhSecao(a)){ cur={titulo:_mtzTituloSecao(a),itens:[]}; out.push(cur); return; }
+    if(!cur){ cur={titulo:null,itens:[]}; out.push(cur); }
+    cur.itens.push(a);
+  });
+  return out.filter(function(g){return g.titulo||g.itens.length;});
+}
 /* Editor de lista dinâmica (atribuições / entregas) — linha + X + adicionar */
-function _MtzListaEdit({itens, onChange, placeholder, addLabel}){
-  const _set=function(i,v){ onChange(itens.map(function(x,j){return j===i?v:x;})); };
+function _MtzListaEdit({itens, onChange, placeholder, addLabel, comSecoes}){
+  const _set=function(i,v){ onChange(itens.map(function(x,j){return j===i?(_mtzEhSecao(x)?"## "+v:v):x;})); };
   const _del=function(i){ onChange(itens.filter(function(_,j){return j!==i;})); };
   const _add=function(){ onChange(itens.concat([""])); };
+  const _addSecao=function(){ onChange(itens.concat(["## "])); };
+  // + dentro da seção: entra no fim dela (antes da próxima seção)
+  const _addNa=function(i){ let k=i+1; while(k<itens.length&&!_mtzEhSecao(itens[k])) k++; const n=itens.slice(); n.splice(k,0,""); onChange(n); };
   return <div style={{display:"flex",flexDirection:"column",gap:6}}>
     {itens.map(function(v,i){
+      if(comSecoes&&_mtzEhSecao(v)) return <div key={i} style={{display:"flex",alignItems:"center",gap:7,marginTop:i>0?10:0}}>
+        <input value={_mtzTituloSecao(v)} placeholder="Nome da seção (ex: Onboarding)" onChange={function(e){_set(i,e.target.value);}}
+          style={Object.assign({},_MTZ_INP,{padding:"8px 12px",fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,color:"#6d28d9",background:"#f5f3ff",borderColor:"#ddd6fe"})}/>
+        <button type="button" onClick={function(){_addNa(i);}} title="Adicionar atribuição nesta seção"
+          style={{background:"#7c3aed",border:"none",color:"#fff",cursor:"pointer",borderRadius:8,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontWeight:800,fontSize:15,lineHeight:1}}>+</button>
+        <button type="button" onClick={function(){_del(i);}} title="Remover seção (as atribuições ficam)"
+          style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex",flexShrink:0}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>;
       return <div key={i} style={{display:"flex",alignItems:"center",gap:7}}>
         <input value={v} placeholder={placeholder} onChange={function(e){_set(i,e.target.value);}}
           style={Object.assign({},_MTZ_INP,{padding:"8px 12px",fontSize:12.5})}/>
@@ -91218,8 +91247,12 @@ function _MtzListaEdit({itens, onChange, placeholder, addLabel}){
         </button>
       </div>;
     })}
-    <button type="button" onClick={_add}
-      style={{background:"#7c3aed0d",border:"1px dashed #7c3aed55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#7c3aed",cursor:"pointer",fontFamily:_MTZ_FF}}>+ {addLabel}</button>
+    <div style={{display:"flex",gap:6}}>
+      <button type="button" onClick={_add}
+        style={{flex:1,background:"#7c3aed0d",border:"1px dashed #7c3aed55",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#7c3aed",cursor:"pointer",fontFamily:_MTZ_FF}}>+ {addLabel}</button>
+      {comSecoes&&<button type="button" onClick={_addSecao}
+        style={{background:"#fff",border:"1px dashed #7c3aed55",borderRadius:10,padding:"9px 14px",fontSize:11.5,fontWeight:800,color:"#6d28d9",cursor:"pointer",fontFamily:_MTZ_FF}}>+ Seção</button>}
+    </div>
   </div>;
 }
 /* Modal de criação/edição */
@@ -91243,7 +91276,7 @@ function _MtzForm({inicial, cadeiras, onSalvar, onFechar}){
     if(!String(f.nome||"").trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Dá um nome pra cadeira."); return; }
     if(!String(f.missao||"").trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escreve a missão da cadeira."); return; }
     onSalvar(Object.assign({},f,{
-      atribuicoes:f.atribuicoes.map(function(s){return String(s).trim();}).filter(Boolean),
+      atribuicoes:f.atribuicoes.map(function(s){return String(s).trim();}).filter(function(s){return s&&!(_mtzEhSecao(s)&&!_mtzTituloSecao(s).trim());}),
       entregas:f.entregas.map(function(s){return String(s).trim();}).filter(Boolean),
       interfaces:f.interfaces.map(function(s){return String(s).trim();}).filter(Boolean),
     }));
@@ -91296,7 +91329,7 @@ function _MtzForm({inicial, cadeiras, onSalvar, onFechar}){
         </div>
         <div>
           <div style={_MTZ_LBL}>Atribuições</div>
-          <_MtzListaEdit itens={f.atribuicoes} onChange={function(v){set("atribuicoes",v);}} placeholder="Ex: Agendar publicações" addLabel="Adicionar atribuição"/>
+          <_MtzListaEdit itens={f.atribuicoes} onChange={function(v){set("atribuicoes",v);}} placeholder="Ex: Agendar publicações" addLabel="Adicionar atribuição" comSecoes={true}/>
         </div>
       </div>
       <div style={{padding:"14px 22px 18px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
@@ -91345,14 +91378,25 @@ function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
       </div>
       <div style={{padding:"18px 24px",display:"flex",flexDirection:"column",gap:18}}>
         {r.missao&&<div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px",color:"#4c1d95",fontSize:13.5,lineHeight:1.65,fontWeight:500}}>{r.missao}</div>}
-        {(r.atribuicoes||[]).length>0&&<_Sec t={"Atribuições ("+r.atribuicoes.length+")"} cor="#7c3aed">
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"5px 16px"}}>
-            {r.atribuicoes.map(function(a,i){
-              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{color:"#334155",fontSize:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
-              </div>;
-            })}
+        {_mtzQtd(r.atribuicoes)>0&&<_Sec t={"Atribuições ("+_mtzQtd(r.atribuicoes)+")"} cor="#7c3aed">
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {_mtzGrupos(r.atribuicoes).map(function(g,gi){
+            return <div key={gi}>
+              {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                <span style={{color:"#6d28d9",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{g.titulo}</span>
+                <span style={{color:"#a78bfa",fontSize:10.5,fontWeight:700}}>{g.itens.length}</span>
+                <span style={{flex:1,height:1,background:"#ede9fe"}}/>
+              </div>}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:"5px 16px"}}>
+                {g.itens.map(function(a,i){
+                  return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:3}}><polyline points="20 6 9 17 4 12"/></svg>
+                    <span style={{color:"#334155",fontSize:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
           </div>
         </_Sec>}
       </div>
@@ -91504,10 +91548,31 @@ function PageMatrizResponsabilidades({isMob}){
             {_atr.length>0&&<div>
               <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8}}>
                 <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atribuições</span>
-                <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_atr.length}</span>
+                <span style={{background:cor+"14",color:cor,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_mtzQtd(_atr)}</span>
                 <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
               </div>
-              <div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",gap:18}}>
+              {_atr.some(_mtzEhSecao)?<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",flexDirection:"column",gap:12}}>
+                {_mtzGrupos(_atr).map(function(g,gi){
+                  return <div key={gi}>
+                    {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
+                      <span style={{width:3,height:12,borderRadius:2,background:cor,flexShrink:0}}/>
+                      <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{g.titulo}</span>
+                      <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700}}>{g.itens.length}</span>
+                    </div>}
+                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"7px 18px"}}>
+                      {g.itens.map(function(a,i){
+                        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
+                          <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          </span>
+                          <span style={{color:"#334155",fontSize:12,lineHeight:1.5,fontWeight:500}}>{a}</span>
+                        </div>;
+                      })}
+                    </div>
+                  </div>;
+                })}
+              </div>
+              :<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:13,padding:"12px 14px",display:"flex",gap:18}}>
                 {(isMob?[_atr]:[_atr.slice(0,Math.ceil(_atr.length/2)),_atr.slice(Math.ceil(_atr.length/2))]).map(function(_col,_ci){
                   return <div key={_ci} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:7}}>
                     {_col.map(function(a,i){
@@ -91520,7 +91585,7 @@ function PageMatrizResponsabilidades({isMob}){
                     })}
                   </div>;
                 })}
-              </div>
+              </div>}
             </div>}
           </div>
         </div>;
