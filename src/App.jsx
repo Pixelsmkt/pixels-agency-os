@@ -16671,9 +16671,12 @@ function pxAutoComLimparDoEvento(eventId, manter, descsEvento){
    - pxAutoplanAbrirEspaco(novos): data comemorativa nova entrou → se a linha
      passou da cadência, manda pra lixeira um card do Claude ainda vazio.
    Tudo fica registrado em claude_plano_execucoes (o botão de emergência desfaz). */
-const PX_AUTOPLAN_CAP={construschorr:2,climaves:2,arabuta:2,"bioter:chapeco":3,"bioter:castro":3,"bioter:toledo":3,"bioter:gloria":2,"bioter:uberlandia":2,"bioter:paraguay":2};
+const PX_AUTOPLAN_CAP={construschorr:2,climaves:2,arabuta:2,pixels:1,"bioter:chapeco":3,"bioter:castro":3,"bioter:toledo":3,"bioter:gloria":2,"bioter:uberlandia":2,"bioter:paraguay":2};
 const PX_AUTOPLAN_BR=["chapeco","castro","toledo","gloria","uberlandia"];
-const PX_AUTOPLAN_NOMES={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã"};
+const PX_AUTOPLAN_NOMES={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels"};
+/* (11/09/2026) Dia preferido de publicação por cliente (0=dom … 6=sáb). Pixels e VetService
+   publicam 1 por semana e sempre na quarta. */
+const PX_AUTOPLAN_DIA={pixels:[3],vetservice:[3]};
 function _pxApIso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function _pxApData(iso){const p=String(iso||"").slice(0,10).split("-");return new Date(+p[0],(+p[1])-1,+p[2]);}
 function _pxApLinha(iso){const d=_pxApData(iso);const ini=new Date(d);ini.setDate(d.getDate()-d.getDay());const fim=new Date(ini);fim.setDate(ini.getDate()+6);return {ini:ini,iniIso:_pxApIso(ini),fimIso:_pxApIso(fim)};}
@@ -16701,7 +16704,7 @@ function _pxApVazio(t){
 async function _pxApLinhasDe(ini,fim){
   const sb=window._sb; if(!sb) return null;
   const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,content_type,files,comments,caption,description,deleted_at")
-    .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",["construschorr","climaves","arabuta","bioter"]);
+    .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",["construschorr","climaves","arabuta","bioter","pixels"]);
   if(!r||r.error) return null; return r.data||[];
 }
 function _pxApDia(L,prefs,posts,hoje){
@@ -16812,7 +16815,9 @@ async function pxAutoplanDesempilhar(novos){
       for(const m of meus){
         const de=dataDe(m);
         const dow=_pxApData(de).getDay();
-        const prefs=[]; for(let k=1;k<=5;k++) prefs.push(((Math.max(1,Math.min(5,dow))-1+k)%5)+1);
+        // Cliente com dia fixo (Pixels e VetService publicam na quarta) tenta o dia dele primeiro.
+        const fixo=PX_AUTOPLAN_DIA[String(pd.alvo).split(":")[0]]||[];
+        const prefs=fixo.slice(); for(let k=1;k<=5;k++){ const dd=((Math.max(1,Math.min(5,dow))-1+k)%5)+1; if(prefs.indexOf(dd)<0) prefs.push(dd); }
         const ocup=doAlvo.map(dataDe).filter(function(v,i,a){return a.indexOf(v)===i;});
         const livres=prefs.map(function(dd){ const d=new Date(L.ini); d.setDate(L.ini.getDate()+dd); return _pxApIso(d); })
           .filter(function(iso,i,arr){ return arr.indexOf(iso)===i&&iso>hoje&&ocup.indexOf(iso)<0; });
