@@ -16703,6 +16703,10 @@ function _pxApAlvos(t){
    Claude gera card. PX_AUTOPLAN_CAP continua sendo so o limite de geracao; quem diz "esse card
    ocupa o dia desse alvo" e a lista abaixo. Bioter brasil/grupo (Collab) ocupa o dia das TRES
    principais — nao pode collab e post proprio de Castro, Chapeco ou Toledo no mesmo dia. */
+/* ⚠️ STORY NAO OCUPA O DIA. Card com somente_story=true NAO entra na conta de colisao:
+   story e post de feed no mesmo dia e o certo. E DATA COMEMORATIVA NUNCA e apagada nem movida
+   por causa de colisao — quem cede e sempre o post comum. (12/09/2026: varredura manual
+   esqueceu o filtro de story e mandou 5 "Dia das Criancas" (story) pra lixeira sem motivo.) */
 const PX_COLISAO_CLIENTES=["construschorr","climaves","arabuta","bioter","pixels","vetservice","acreforte","construesclem"];
 function _pxColAlvos(t){
   const c=String((t&&t.client)||"");
