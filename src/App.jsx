@@ -53849,7 +53849,7 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
             <span><b>{conjAtivos.length}</b> conjunto{conjAtivos.length!==1?"s":""} ativo{conjAtivos.length!==1?"s":""} · <b>{anAtivos}</b> anúncio{anAtivos!==1?"s":""}</span>
           </div>
         </div>
-        <div style={{textAlign:"right"}}><div style={{fontSize:34,fontWeight:900,letterSpacing:"-1px",color:marca?ADS.ink:_adsCor(nivel),lineHeight:1.05}}>{marca?_adsPct(c&&c.ctr,2):(custo?_adsBRLc(custo):"—")}</div><div style={{fontSize:11.5,color:ADS.muted}}>{marca?"CTR · sem meta de resultado":cfg.custoLbl+" · "+_adsNum(res)+" em "+P.dias+" dias"}</div></div>
+        <div style={{textAlign:"right"}}><div style={{fontSize:34,fontWeight:900,letterSpacing:"-1px",color:ADS.accent,lineHeight:1.05}}>{marca?_adsPct(c&&c.ctr,2):(custo?_adsBRLc(custo):"—")}</div><div style={{fontSize:11.5,color:ADS.muted}}>{marca?"CTR · sem meta de resultado":cfg.custoLbl+" · "+_adsNum(res)+" em "+P.dias+" dias"}</div></div>
       </div>
       <div style={{display:"flex",gap:2,marginTop:16,background:"#e9e6f1",borderRadius:12,padding:3,width:"fit-content",maxWidth:"100%",overflowX:"auto"}} className="scroll-x">{SUBS.map(function(t){ const on=sub===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{border:0,background:on?"#fff":"transparent",color:on?ADS.accent:ADS.ink2,padding:"7px 13px",borderRadius:9,fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",boxShadow:on?"0 1px 3px rgba(15,13,26,.08)":"none",minHeight:0}}>{t[1]}</button>; })}</div>
     </AdsCard>
