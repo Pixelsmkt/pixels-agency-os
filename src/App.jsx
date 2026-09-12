@@ -54248,12 +54248,16 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   const prev=useAdsPreview(mp4?null:a.id,fmt);
   /* ativo escolhido na grade (anúncio flexível / carrossel): vídeo pelo player do Facebook, imagem direta */
   const [ativoSel,setAtivoSel]=useState(null); const ativos=Array.isArray(cr.ativos)?cr.ativos:[]; const at=ativoSel!==null?(typeof ativoSel==="object"?ativoSel:ativos[ativoSel]):null;
+  /* 12/09/2026: cada ativo agrupado agora tem o mp4 (ads_videos). Antes só o vídeo principal
+     tocava: os agrupados caíam no player embutido do Facebook, que não abre vídeo de anúncio
+     não publicado. Com o arquivo em mãos, toca nativo igual ao principal. */
+  const atMp4=at?(at.video_url||at.source||at.mp4||null):null;
   const atLink=at&&(at.tipo==="video"||at.dimensao==="video_asset")&&(at.permalink||at.url)?("https://www.facebook.com"+(String(at.permalink||at.url).indexOf("/")===0?"":"/")+(at.permalink||at.url)):null;
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
-        {at?(atLink?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(atLink)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
+        {at?(atMp4?<video key={atMp4} src={atMp4} poster={at.thumb||undefined} controls autoPlay playsInline preload="metadata" style={{width:"100%",maxHeight:"92vh",display:"block",background:"#000"}}/>:atLink?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(atLink)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
           :(at.url||at.thumb)?<div style={{position:"relative",width:"100%"}}><img src={at.url||at.thumb} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>{(at.tipo==="video"||at.dimensao==="video_asset")&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu o link deste vídeo — só a capa. Veja pela prévia oficial ou no Gerenciador.</div>}</div>
           :<div style={{color:"#fff",fontSize:13}}>sem prévia deste ativo</div>)
         :mp4?<video src={mp4} poster={cr.thumbnail_url||undefined} controls autoPlay playsInline style={{width:"100%",maxHeight:"92vh",display:"block"}}/>
