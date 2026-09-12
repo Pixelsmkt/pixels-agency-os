@@ -53838,20 +53838,20 @@ function QGAdsCampanha({mc,conta,campId,isMob,canEdit,onVoltar}){
   const mediaConta=_adsTotaisConta(X.cur&&X.cur.conta).cpa||null; /* mesmo número da Visão geral, sem depender da ordem de navegação */
   return <AdsWrap>
     <button onClick={onVoltar} style={{background:"none",border:"none",color:ADS.accent,fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:ADS_FONT,padding:0,marginBottom:12,minHeight:0}}>‹ Campanhas</button>
-    <AdsCard style={{marginBottom:16}}>
+    <AdsCard style={{marginBottom:16,background:"linear-gradient(135deg,#2f1a5e 0%,#4a1591 55%,#5e1bb5 100%)",border:"1px solid #3b0f78",color:"#fff",boxShadow:"0 12px 32px rgba(47,26,94,.28)"}}>
       <div style={{display:"flex",justifyContent:"space-between",gap:16,flexWrap:"wrap",alignItems:"flex-start"}}>
-        <div style={{minWidth:0,flex:1}}>
+        <div style={{minWidth:0,flex:"1 1 220px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}><span style={{fontSize:20,fontWeight:900,letterSpacing:"-.4px"}}>{_adsNomeCurto(nome)}</span><AdsObjTag tipo={tipo}/><AdsTag n={st[1]}>{st[0]}</AdsTag></div>
-          <div style={{fontSize:11.5,color:ADS.muted,marginTop:4,wordBreak:"break-all"}}>{nome}</div>
-          <div style={{display:"flex",gap:16,flexWrap:"wrap",marginTop:12,fontSize:12.5,color:ADS.ink2}}>
+          <div style={{fontSize:11.5,color:ADS_SOL.eyebrow,marginTop:4,wordBreak:"break-all"}}>{nome}</div>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap",marginTop:12,fontSize:12.5,color:ADS_SOL.sub}}>
             <span style={{display:"inline-flex",alignItems:"center",gap:5}}><AdsDot n={fase[1]}/>{fase[0]}{conjAtivos.length>1?" ("+conjAtivos.length+" conj.)":""}</span>
-            <span>Orçamento <b>{orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":""):"—"}</b>{orc&&orc.nivel==="conjuntos"?<span style={{color:ADS.muted}}> · soma dos conjuntos</span>:null}</span>
+            <span>Orçamento <b>{orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":""):"—"}</b>{orc&&orc.nivel==="conjuntos"?<span style={{color:ADS_SOL.eyebrow}}> · soma dos conjuntos</span>:null}</span>
             <span><b>{conjAtivos.length}</b> conjunto{conjAtivos.length!==1?"s":""} ativo{conjAtivos.length!==1?"s":""} · <b>{anAtivos}</b> anúncio{anAtivos!==1?"s":""}</span>
           </div>
         </div>
-        <div style={{textAlign:"right"}}><div style={{fontSize:34,fontWeight:900,letterSpacing:"-1px",color:ADS.accent,lineHeight:1.05}}>{marca?_adsPct(c&&c.ctr,2):(custo?_adsBRLc(custo):"—")}</div><div style={{fontSize:11.5,color:ADS.muted}}>{marca?"CTR · sem meta de resultado":cfg.custoLbl+" · "+_adsNum(res)+" em "+P.dias+" dias"}</div></div>
+        <div style={{textAlign:"right",flexShrink:0,marginLeft:"auto"}}><div style={{fontSize:34,fontWeight:900,letterSpacing:"-1px",color:"#fff",lineHeight:1.05}}>{marca?_adsPct(c&&c.ctr,2):(custo?_adsBRLc(custo):"—")}</div><div style={{fontSize:11.5,color:ADS_SOL.sub}}>{marca?"CTR · sem meta de resultado":cfg.custoLbl+" · "+_adsNum(res)+" em "+P.dias+" dias"}</div></div>
       </div>
-      <div style={{display:"flex",gap:2,marginTop:16,background:"#e9e6f1",borderRadius:12,padding:3,width:"fit-content",maxWidth:"100%",overflowX:"auto"}} className="scroll-x">{SUBS.map(function(t){ const on=sub===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{border:0,background:on?"#fff":"transparent",color:on?ADS.accent:ADS.ink2,padding:"7px 13px",borderRadius:9,fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",boxShadow:on?"0 1px 3px rgba(15,13,26,.08)":"none",minHeight:0}}>{t[1]}</button>; })}</div>
+      <div style={{display:"flex",gap:2,marginTop:16,background:"rgba(255,255,255,.14)",borderRadius:12,padding:3,width:"fit-content",maxWidth:"100%",overflowX:"auto"}} className="scroll-x">{SUBS.map(function(t){ const on=sub===t[0]; return <button key={t[0]} onClick={function(){setSub(t[0]);}} style={{border:0,background:on?"#fff":"transparent",color:on?ADS.accent:"#e9e0fb",padding:"7px 13px",borderRadius:9,fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:ADS_FONT,whiteSpace:"nowrap",boxShadow:on?"0 1px 3px rgba(15,13,26,.08)":"none",minHeight:0}}>{t[1]}</button>; })}</div>
     </AdsCard>
 
     {sub==="visao"&&<>
