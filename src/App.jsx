@@ -16699,6 +16699,26 @@ function _pxApAlvos(t){
   }
   return PX_AUTOPLAN_CAP[c]?[c]:[];
 }
+/* (12/09/2026) Colisao "dois posts no mesmo dia" vale pra TODO cliente, nao so pros que o
+   Claude gera card. PX_AUTOPLAN_CAP continua sendo so o limite de geracao; quem diz "esse card
+   ocupa o dia desse alvo" e a lista abaixo. Bioter brasil/grupo (Collab) ocupa o dia das TRES
+   principais — nao pode collab e post proprio de Castro, Chapeco ou Toledo no mesmo dia. */
+const PX_COLISAO_CLIENTES=["construschorr","climaves","arabuta","bioter","pixels","vetservice","acreforte","construesclem"];
+function _pxColAlvos(t){
+  const c=String((t&&t.client)||"");
+  if(c==="bioter"){
+    if(_pxApEhCollab(t)) return PX_AUTOPLAN_BR.map(function(u){return "bioter:"+u;});
+    return _pxApUnits(t).map(function(u){return "bioter:"+u;});
+  }
+  return PX_COLISAO_CLIENTES.indexOf(c)>=0?[c]:[];
+}
+function _pxColConta(linhas,alvo){
+  return (linhas||[]).filter(function(t){
+    if(t.deleted_at) return false;
+    if(t.status==="reprovado"||t.status==="pausado"||t.somente_story) return false;
+    return _pxColAlvos(t).indexOf(alvo)>=0;
+  });
+}
 function _pxApConta(linhas,alvo){
   return (linhas||[]).filter(function(t){
     if(t.deleted_at) return false;
@@ -16713,7 +16733,7 @@ function _pxApVazio(t){
 async function _pxApLinhasDe(ini,fim){
   const sb=window._sb; if(!sb) return null;
   const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,content_type,files,comments,caption,description,deleted_at")
-    .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",["construschorr","climaves","arabuta","bioter","pixels"]);
+    .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",PX_COLISAO_CLIENTES);
   if(!r||r.error) return null; return r.data||[];
 }
 function _pxApDia(L,prefs,posts,hoje){
@@ -16809,14 +16829,14 @@ async function pxAutoplanDesempilhar(novos){
       const iso=String(t.publishDate||t.publish_date||"").slice(0,10);
       if(!iso||iso<=hoje||t.somenteStory||t.somente_story) return;
       const tt={id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:iso,status:"rascunhos",somente_story:false};
-      _pxApAlvos(tt).forEach(function(a){ pedidos.push({iso:iso,alvo:a,id:t.id}); });
+      _pxColAlvos(tt).forEach(function(a){ pedidos.push({iso:iso,alvo:a,id:t.id}); });
     });
     if(!pedidos.length) return 0;
     const movidos=[]; const jaMov={};
     for(const pd of pedidos){
       const L=_pxApLinha(pd.iso);
       const linhas=await _pxApLinhasDe(L.iniIso,L.fimIso); if(!linhas) continue;
-      const doAlvo=_pxApConta(linhas,pd.alvo);
+      const doAlvo=_pxColConta(linhas,pd.alvo);
       const dataDe=function(x){ return jaMov[x.id]||String(x.publish_date||"").slice(0,10); };
       const noDia=doAlvo.filter(function(x){ return x.id!==pd.id&&dataDe(x)===pd.iso; });
       if(!noDia.length) continue;
