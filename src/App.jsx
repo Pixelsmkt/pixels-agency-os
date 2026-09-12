@@ -5454,6 +5454,26 @@ function pxNthLabel(origISO){
   }catch(_){ return ""; }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// pxEscurecerCor — escurece um hex pra usar como fundo de chip em cima
+// de um card colorido (tag "SOMENTE STORY" no Calendário de publicações).
+// f = 0..1 (quanto maior, mais escuro). Devolve sempre um hex de 6.
+// ═══════════════════════════════════════════════════════════════════
+function pxEscurecerCor(hex,f){
+  var h=String(hex||"").trim().replace("#","");
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return "#0f172a";
+  var k=(typeof f==="number"?f:0.42);
+  if(k<0)k=0; if(k>1)k=1;
+  function _c(i){
+    var v=Math.round(parseInt(h.slice(i,i+2),16)*(1-k));
+    if(v<0)v=0; if(v>255)v=255;
+    var s=v.toString(16);
+    return s.length<2?("0"+s):s;
+  }
+  return "#"+_c(0)+_c(2)+_c(4);
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -19770,7 +19790,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                             </div>
                             {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
-                              style={{display:"inline-flex",alignItems:"center",gap:4,height:20,padding:"0 8px",borderRadius:6,background:"#fff",color:(isShortFromDrive?"#a16207":(pubColor&&pubColor.bg)||"#0f172a"),fontSize:9,fontWeight:900,letterSpacing:.6,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 3px rgba(0,0,0,0.22)"}}>
+                              style={{display:"inline-flex",alignItems:"center",gap:4,height:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:pxEscurecerCor(cardColor,.42),color:"#fff",border:"1px solid rgba(255,255,255,0.18)",fontSize:9,fontWeight:800,letterSpacing:.5,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
@@ -42214,37 +42234,32 @@ function _cardPodeSerResp(u){
                 {(canEdit||canEditRef)&&<div style={{fontSize:11.5,color:"#94a3b8",lineHeight:1.5}}>Arraste arquivos aqui ou clique em <span style={{color:"#7c3aed",fontWeight:600}}>+ Adicionar</span> nas seções abaixo</div>}
               </div>}
 
-              {/* Keyframes pros efeitos do card de upload */}
-              <style>{`@keyframes pixelsPulse{0%,100%{transform:scale(1);opacity:.18}50%{transform:scale(1.55);opacity:0}}@keyframes pixelsShimmer{0%{background-position:0% 0}100%{background-position:-200% 0}}`}</style>
-              {/* ── Uploads em andamento — visual moderno ── */}
+              {/* Keyframes do card de upload */}
+              <style>{`@keyframes pxUpSheen{0%{transform:translateX(-110%)}55%,100%{transform:translateX(110%)}}`}</style>
+              {/* ── Uploads em andamento ── */}
               {attachments.filter(a=>a.uploading).length>0&&(()=>{
                 const uploading=attachments.filter(a=>a.uploading);
                 const nUp=uploading.length;
                 const avgPct=Math.round(uploading.reduce((s,a)=>s+(a.progress||0),0)/nUp);
                 const allDone=avgPct===100;
-                return(<div style={{position:"relative",background:"#ffffff",border:"1px solid #eef2f7",borderRadius:14,padding:"14px 16px",marginBottom:14,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(124,58,237,0.06)",overflow:"hidden"}}>
-                  {/* Faixa de progresso agregada no topo — animada */}
-                  <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:"#f1f5f9"}}>
-                    <div style={{width:avgPct+"%",height:"100%",background:allDone?"#16a34a":"linear-gradient(90deg,#a78bfa,#7c3aed)",borderRadius:0,transition:"width .3s ease"}}/>
-                  </div>
-                  {/* Header */}
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                    {/* Pulse dot roxo */}
-                    <div style={{position:"relative",width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                      <span style={{position:"absolute",inset:2,borderRadius:"50%",background:allDone?"#16a34a":"#7c3aed",opacity:.18,animation:"pixelsPulse 1.6s ease-in-out infinite"}}/>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:allDone?"#16a34a":"#7c3aed",boxShadow:allDone?"0 0 0 3px rgba(22,163,74,0.15)":"0 0 0 3px rgba(124,58,237,0.15)"}}/>
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"flex",alignItems:"center",gap:8}}>
-                        {allDone?"Upload concluído":`Enviando ${nUp} ${nUp===1?"arquivo":"arquivos"}`}
-                        <span style={{color:"#94a3b8",fontWeight:500,fontSize:11.5}}>·</span>
-                        <span style={{color:allDone?"#16a34a":"#7c3aed",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{avgPct}%</span>
-                      </div>
-                      <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:500}}>{allDone?"Pronto pra salvar":"Não feche essa janela até terminar"}</div>
+                const UpBar=({pct,done})=>(
+                  <div style={{position:"relative",background:"#eef1f6",borderRadius:99,height:4,overflow:"hidden"}}>
+                    <div style={{position:"relative",overflow:"hidden",width:Math.max(pct,1.5)+"%",height:"100%",borderRadius:99,background:done?"#16a34a":"#7c3aed",transition:"width .35s cubic-bezier(.4,0,.2,1)"}}>
+                      {!done&&<span style={{position:"absolute",inset:0,background:"linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent)",animation:"pxUpSheen 1.8s ease-in-out infinite"}}/>}
                     </div>
                   </div>
-                  {/* Lista de uploads — visual limpo, sem card-in-card */}
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                );
+                return(<div style={{background:"#fff",border:"1px solid #eceff4",borderRadius:12,padding:14,marginBottom:14,boxShadow:"0 1px 2px rgba(15,23,42,.04)"}}>
+                  {/* Resumo agregado — só aparece com mais de um arquivo */}
+                  {nUp>1&&<div style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid #f3f5f8"}}>
+                    <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:7}}>
+                      <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,letterSpacing:-.1}}>{allDone?"Upload concluído":`Enviando ${nUp} arquivos`}</span>
+                      <span style={{color:allDone?"#16a34a":"#7c3aed",fontSize:12,fontWeight:700,letterSpacing:-.2,fontVariantNumeric:"tabular-nums"}}>{avgPct}%</span>
+                    </div>
+                    <UpBar pct={avgPct} done={allDone}/>
+                  </div>}
+                  {/* Lista de arquivos */}
+                  <div style={{display:"flex",flexDirection:"column",gap:13}}>
                     {uploading.map(a=>{
                       const pct=a.progress||0;
                       const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
@@ -42252,26 +42267,24 @@ function _cardPodeSerResp(u){
                       const isVid=a.type?.startsWith("video/");
                       const isAud=a.type?.startsWith("audio/");
                       const done=pct===100;
-                      return<div key={a.id} style={{display:"flex",alignItems:"center",gap:11}}>
-                        {/* Ícone tipográfico com bg suave */}
-                        <div style={{width:34,height:34,borderRadius:9,background:done?"linear-gradient(135deg,#dcfce7,#bbf7d0)":isVid?"linear-gradient(135deg,#0f172a,#1e293b)":isImg?"linear-gradient(135deg,#faf5ff,#f3e8ff)":isAud?"linear-gradient(135deg,#fef3c7,#fde68a)":"linear-gradient(135deg,#f1f5f9,#e2e8f0)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:done?"#16a34a":isVid?"#fff":isImg?"#7c3aed":isAud?"#b45309":"#475569"}}>
-                          {done?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:isVid?<Ico n="video" size={16}/>:isImg?<Ico n="image" size={16}/>:isAud?<Ico n="mic" size={16}/>:<Ico n="file" size={16}/>}
+                      return<div key={a.id} style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:30,height:30,borderRadius:8,background:done?"#ecfdf5":"#f4f6f9",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:done?"#16a34a":"#64748b"}}>
+                          {done?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:isVid?<Ico n="video" size={15}/>:isImg?<Ico n="image" size={15}/>:isAud?<Ico n="mic" size={15}/>:<Ico n="file" size={15}/>}
                         </div>
-                        {/* Nome + barra */}
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:5}}>
+                          <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
                             <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1,flex:1,minWidth:0}}>{a.name}</span>
-                            {sizeMB&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,flexShrink:0}}>{sizeMB} MB</span>}
-                            <span style={{color:done?"#16a34a":"#7c3aed",fontSize:11,fontWeight:800,minWidth:34,textAlign:"right",flexShrink:0,letterSpacing:-.2}}>{pct}%</span>
+                            <span style={{color:"#9aa4b2",fontSize:11,fontWeight:500,flexShrink:0,letterSpacing:-.1,fontVariantNumeric:"tabular-nums"}}>
+                              {sizeMB&&<>{sizeMB} MB<span style={{color:"#dbe1e9",margin:"0 5px"}}>·</span></>}
+                              <span style={{color:done?"#16a34a":"#7c3aed",fontWeight:700}}>{pct}%</span>
+                            </span>
                           </div>
-                          {/* Barra com gradiente + shimmer sutil */}
-                          <div style={{position:"relative",background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden"}}>
-                            <div style={{width:pct+"%",height:"100%",background:done?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,#a78bfa,#7c3aed,#a78bfa)",backgroundSize:done?"100% 100%":"200% 100%",borderRadius:99,transition:"width .25s ease",animation:done?"none":"pixelsShimmer 1.4s linear infinite"}}/>
-                          </div>
+                          <UpBar pct={pct} done={done}/>
                         </div>
                       </div>;
                     })}
                   </div>
+                  <div style={{color:"#a3adbb",fontSize:10.5,fontWeight:500,marginTop:12,letterSpacing:-.05}}>{allDone?"Tudo enviado — é só salvar o card.":"Não feche essa janela até terminar."}</div>
                 </div>);
               })()}
 
