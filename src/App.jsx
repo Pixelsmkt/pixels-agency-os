@@ -16671,6 +16671,15 @@ function pxAutoComLimparDoEvento(eventId, manter, descsEvento){
    - pxAutoplanAbrirEspaco(novos): data comemorativa nova entrou → se a linha
      passou da cadência, manda pra lixeira um card do Claude ainda vazio.
    Tudo fica registrado em claude_plano_execucoes (o botão de emergência desfaz). */
+// ═══════════════════════════════════════════════════════════════════════
+// REGRA DE COPY (Claude) — ver claude/padrao-briefing-copy-REGRA.md
+//  • Briefing tem SÓ "• Título" e "• Texto na arte" (rótulos em <strong>).
+//  • "Texto na arte" é desenvolvido: HEADLINE em 2 linhas + apoio com a
+//    homenagem + fecho com o cumprimento da data + ASSINATURA. ~380-620 chars.
+//  • CARROSSEL: no máximo 5 lâminas, e a 5ª é SEMPRE o CTA.
+//  • Paraguay: título e texto na arte em espanhol, orientações em português.
+// ═══════════════════════════════════════════════════════════════════════
+const PX_AUTOPLAN_MAX_LAMINAS=5; // carrossel: 5 lâminas, a 5ª é o CTA
 const PX_AUTOPLAN_CAP={construschorr:2,climaves:2,arabuta:2,pixels:1,"bioter:chapeco":3,"bioter:castro":3,"bioter:toledo":3,"bioter:gloria":2,"bioter:uberlandia":2,"bioter:paraguay":2};
 const PX_AUTOPLAN_BR=["chapeco","castro","toledo","gloria","uberlandia"];
 const PX_AUTOPLAN_NOMES={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels"};
