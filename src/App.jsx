@@ -28761,6 +28761,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           };
           const captionTxt2=stripHtml(current.caption);
           const descTxt2=stripHtml(current.desc);
+          // Rotulos do briefing ("• Titulo", "• Texto na arte", "• Roteiro") sempre em NEGRITO.
+          // O stripHtml tira as tags, entao o negrito volta aqui, por linha.
+          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo|texto na arte|roteiro|legenda|t[ií]tulo do v[ií]deo)\s*:?\s*$/i.test(ln);
+          const pxLinhas=(txt)=>String(txt||"").split("\n").map((ln,i)=>(
+            _ehRotulo(ln)
+              ? <div key={i} style={{fontWeight:800,color:"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ")}</div>
+              : (ln.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{ln}</div>)
+          ));
           // Histórico de ajustes
           const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
           const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
@@ -28851,7 +28859,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             {/* Briefing pra equipe — PRIMEIRO */}
             {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
               <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={14} color="#0f172a"/>Briefing pra equipe</div>
-              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
+              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
             </div>)}
 
             {/* Histórico de ajustes — antes do briefing */}
