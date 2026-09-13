@@ -3387,7 +3387,7 @@ function _pxHtmlParaTexto(html){
     .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
     .replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-    .replace(/\n{3,}/g,"\n\n").trim();
+    .replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
 }
 function _pxTextoParaHtml(txt){
   const linhas=String(txt||"").split(/\n/);
@@ -29044,7 +29044,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             t=t.replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n");
             t=t.replace(/<[^>]+>/g,"");
             t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
-            return t.replace(/\n{3,}/g,"\n\n").trim();
+            return t.replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
           };
           // Versoes da copy: se o usuario esta olhando uma versao anterior, o briefing e a
           // legenda abaixo mostram ELA. Nada de caixas duplicadas - e a mesma tela.
@@ -29593,7 +29593,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               // Decodifica entidades comuns
               t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
               // Limpa quebras múltiplas
-              return t.replace(/\n{3,}/g,"\n\n").trim();
+              return t.replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
             };
             const captionTxt=stripHtml(current.caption);
             const descTxt=stripHtml(current.desc);
@@ -29967,7 +29967,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         t=t.replace(/data-prosemirror-[a-z-]+="[^"]*"/gi,"");
         t=t.replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n");
         t=t.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
-        return t.replace(/\n{3,}/g,"\n\n").trim();
+        return t.replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
       };
       return <_EditCopyModal task={editCopy} onClose={()=>setEditCopy(null)} onSave={(field,val)=>{editCopyField(editCopy,field,val);}} stripHtml={stripHtml}/>;
     })()}
@@ -39209,7 +39209,7 @@ function _pxTextoPuro(html){
     .replace(/<[^>]+>/g,"")
     .replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
     .replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-    .replace(/\n{3,}/g,"\n\n").trim();
+    .replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
 }
 async function pxRoteiro60(task, clienteNome){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
