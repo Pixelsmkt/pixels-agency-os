@@ -3335,8 +3335,19 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
     if(String(error.message||"").includes("Failed to send a request")){
       throw new Error("Pixels IA indisponível: deploy a Edge Function 'ask-claude' no Supabase. Veja SUPABASE_EDGE_FUNCTION.md.");
     }
+    // A function devolve o motivo real no corpo (modelo fora do ar, chave inválida,
+    // sem crédito...). Sem isto o usuário só via "non-2xx status code". (13/09/2026)
+    try{
+      const _r=error.context;
+      if(_r&&typeof _r.json==="function"){
+        const _j=await _r.json();
+        const _m=_j&&(_j.error||_j.message);
+        if(_m)throw new Error(typeof _m==="string"?_m:(_m.message||JSON.stringify(_m)));
+      }
+    }catch(_e){ if(_e&&_e.message&&_e.message!=="Unexpected end of JSON input")throw _e; }
     throw error;
   }
+  if(data&&data._aviso&&typeof console!=="undefined")console.info("[ask-claude]",data._aviso);
   if(data?.error)throw new Error(data.error);
   return data;
 }
@@ -41258,13 +41269,27 @@ function _cardPodeSerResp(u){
             }}
             style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
           {canEdit&&<button onClick={function(){
+              // Acrescenta o roteiro embaixo do briefing atual, sem tirar o que já estava.
               const novo=String(desc||"")+_pxRoteiroParaHtml(roteiroSt.texto);
               setDesc(novo);
               try{ if(descRef.current) descRef.current.innerHTML=novo; }catch(_){}
               setRoteiroSt(null);
-              if(typeof pixelsToast!=="undefined") pixelsToast.info("Roteiro colado no briefing — confira e clique em Salvar.",5000);
+              if(typeof pixelsToast!=="undefined") pixelsToast.info("Roteiro colado embaixo do briefing — confira e clique em Salvar.",5000);
             }}
-            style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Colar no briefing</button>}
+            style={{background:"#fff",color:"#5b21b6",border:"1px solid #ddd6fe",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Colar embaixo do briefing</button>}
+          {canEdit&&<button onClick={function(){
+              // Vira vídeo de verdade: o roteiro SUBSTITUI o briefing, o tipo de conteúdo
+              // passa a ser Vídeo e o editor entra como responsável (mesma regra do seletor
+              // de tipo). Pedido do Vinicius em 13/09/2026 — antes o botão só gerava o texto.
+              const novo=_pxRoteiroParaHtml(roteiroSt.texto);
+              setDesc(novo);
+              try{ if(descRef.current) descRef.current.innerHTML=novo; }catch(_){}
+              setContentType("video");
+              try{ setAssignees(function(p){ return p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]); }); }catch(_){}
+              setRoteiroSt(null);
+              if(typeof pixelsToast!=="undefined") pixelsToast.success("Card virou Vídeo e o roteiro substituiu o briefing — confira e clique em Salvar.",6000);
+            }}
+            style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Transformar o card em vídeo</button>}
         </div>}
       </div>
     </div>}
