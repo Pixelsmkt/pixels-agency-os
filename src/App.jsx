@@ -27815,15 +27815,21 @@ function _renderCmtWithTs(txt, accent){
 
 const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
-  // Sort estável por ID asc (FIFO — mais antigos primeiro). Evita reordenar
-  // a fila quando o cartão é editado e o polling retorna em ordem nova.
-  // Ordena PRIMEIRO por prioridade (alta → média → baixa), depois por ID
-  // Cards "Alta" que a Hellen marca aparecem no topo pra Vinicius avaliar
-  const _PRIO_RANK = {alta:0, urgente:0, media:1, "média":1, baixa:2};
+  // Ordem da fila de avaliação: DATA DE PUBLICAÇÃO, mais próximas primeiro.
+  // Pedido do Vinicius (13/09/2026) — quem avalia precisa ver o que publica antes.
+  // Card sem data de publicação cai no fim da fila (aí vale o prazo de entrega, depois o id).
+  // A prioridade NÃO manda mais na ordem.
+  const _dataOrd=(v)=>{
+    const m=String(v||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m?(m[1]+m[2]+m[3]):"";
+  };
   const sortStable=(arr)=>[...arr].sort((a,b)=>{
-    const pa = _PRIO_RANK[String(a.priority||"").toLowerCase()] ?? 1;
-    const pb = _PRIO_RANK[String(b.priority||"").toLowerCase()] ?? 1;
-    if(pa !== pb) return pa - pb;
+    const pa=_dataOrd(a.publishDate||a.publish_date), pb=_dataOrd(b.publishDate||b.publish_date);
+    if(pa&&pb){ if(pa!==pb) return pa<pb?-1:1; }
+    else if(pa!==pb) return pa?-1:1;          // quem tem data vem antes de quem não tem
+    const da=_dataOrd(a.deadline), db=_dataOrd(b.deadline);
+    if(da&&db){ if(da!==db) return da<db?-1:1; }
+    else if(da!==db) return da?-1:1;
     const ia=Number(a.id)||0,ib=Number(b.id)||0;
     if(ia!==ib)return ia-ib;
     return String(a.id).localeCompare(String(b.id));
@@ -28597,7 +28603,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
         {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
+          {/* ── Header de chips: cliente, unidade, responsáveis, tipo, publicação, entrega, pagamento ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
             const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
@@ -28628,10 +28634,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             const metaTags=[];
             if(ctCfg)metaTags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
             if(sentAt)metaTags.push({key:"sent",icon:"clock",label:"Enviado "+fmtSentBR(sentAt),color:"#6366f1",bg:"#6366f114"});
-            if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
+            if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#16a34a",bg:"#dcfce7"});
-            if(priCfg)metaTags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
+            // prioridade removida da avaliação a pedido do Vinicius (13/09/2026)
             const bioterSel=(cl&&cl.id==="bioter"&&current.bioterUnit)?String(current.bioterUnit).split(",").map(s=>s.trim()).filter(Boolean):[];
             const assigneeIds=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
             const assigneeUsers=assigneeIds.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
@@ -28681,12 +28687,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   </>;
                 })()}
               </div>)}
-              {/* Linha 2: tipo + prazos + mês + prioridade — chips grandes, padronizados com linha 1 */}
+              {/* Linha 2: tipo + publicação + entrega + pagamento — chips grandes, padronizados com linha 1 */}
               {(metaTags.length>0 || tab==="video" || tab==="publicacao")&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                 {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
                   <Ico n={t.icon} size={12} color={t.color}/>{t.label}
                 </span>))}
-                {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento/prioridade ═════ */}
+                {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento ═════ */}
                 {(tab==="video"||tab==="publicacao")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <button type="button" title={tab==="video"?(_previewVideo?"Baixar vídeo ORIGINAL (arquivo cheio, alta qualidade)":"Baixar vídeo original"):((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
                     onClick={async function(){
@@ -29068,7 +29074,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               })()}
             </div>
 
-            {/* Linha de metadados do card — tipo, publicação, entrega, mês, prioridade */}
+            {/* Metadados do card — um por linha, grandes.
+                 Ordem pedida pelo Vinicius: tipo de arte, data de publicação, entrega, pagamento.
+                 Prioridade NÃO entra aqui. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
               const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
@@ -29077,23 +29085,26 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const pubT=current.publishTime||current.publish_time||"";
               const dl=current.deadline||"";
               const refMes=current.referenceMonth||current.reference_month||"";
-              const pri=(current.priority||"").toLowerCase();
-              const PRI_MAP={alta:{label:"Alta",color:"#dc2626"},media:{label:"Média",color:"#f59e0b"},baixa:{label:"Baixa",color:"#16a34a"}};
-              const priCfg=PRI_MAP[pri];
               const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
-              const tags=[];
-              if(ctCfg)tags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
-              // Ordem: Entrega vem ANTES da publicação
-              if(dl)tags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
-              if(pubD)tags.push({key:"pub",icon:"calendar",label:"Data de publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
-              if(refMes)tags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
-              if(priCfg)tags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
-              if(tags.length===0)return null;
-              return(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={14} color={t.color}/>{t.label}
-                </span>))}
+              const linhas=[];
+              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de arte",val:ctCfg.label,color:"#7c3aed"});
+              if(pubD)linhas.push({key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD)+(pubT?("  ·  "+pubT):""),color:"#0ea5e9"});
+              if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316"});
+              if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"});
+              if(linhas.length===0)return null;
+              return(<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:isMob?6:12}}>
+                {linhas.map(l=>(
+                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",alignSelf:"flex-start",minWidth:isMob?"100%":280,boxSizing:"border-box"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?30:34,height:isMob?30:34,borderRadius:10,background:l.color+"1F",flexShrink:0}}>
+                      <Ico n={l.icon} size={isMob?15:17} color={l.color}/>
+                    </span>
+                    <span style={{minWidth:0}}>
+                      <span style={{display:"block",color:l.color,fontSize:isMob?9.5:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,lineHeight:1.2}}>{l.rot}</span>
+                      <span style={{display:"block",color:C.tx,fontSize:isMob?14.5:16,fontWeight:700,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap"}}>{l.val}</span>
+                    </span>
+                  </div>
+                ))}
               </div>);
             })()}
 
