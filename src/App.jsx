@@ -3341,6 +3341,160 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
   return data;
 }
 
+/* ─── REESCRITA DE COPY PELO CLAUDE ─────────────────────────────────
+   Usado pelos botões "Testar nova abordagem" e "Refazer do zero" da
+   Avaliação de copys. O card NÃO sai da fila: a copy é reescrita na hora e
+   trocada ali mesmo, e a versão anterior fica guardada em task.copyVersoes
+   pra poder voltar atrás.
+
+   Antes de escrever, busca o contexto do cliente com a RPC
+   claude_contexto_copy: playbook do portal (tom de voz, pilares, chamadas
+   aprovadas e PROIBIDAS), foco do mês/trimestre do Planejamento, regras
+   aprendidas com o feedback da agência e as copys já aprovadas. */
+
+async function pxContextoCopy(client, unit){
+  const sb=window._sb; if(!sb) return null;
+  const d=new Date();
+  try{
+    const {data,error}=await sb.rpc("claude_contexto_copy",{
+      p_client:String(client||""), p_unit:String(unit||""),
+      p_year:d.getFullYear(), p_month:d.getMonth()+1 });
+    if(error) return null;
+    return data||null;
+  }catch(_){ return null; }
+}
+
+function _pxCtxTxt(v){
+  if(v==null) return "";
+  if(Array.isArray(v)) return v.map(_pxCtxTxt).filter(Boolean).join(" · ");
+  if(typeof v==="object") return Object.keys(v).map(function(k){
+    const x=_pxCtxTxt(v[k]); return x?(k+": "+x):""; }).filter(Boolean).join(" | ");
+  return String(v).trim();
+}
+function _pxHtmlParaTexto(html){
+  return String(html||"")
+    .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
+    .replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
+    .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/\n{3,}/g,"\n\n").trim();
+}
+function _pxTextoParaHtml(txt){
+  const linhas=String(txt||"").split(/\n/);
+  let out="";
+  for(let i=0;i<linhas.length;i++){
+    const l=linhas[i].trim();
+    if(!l){ out+="<p>&nbsp;</p>"; continue; }
+    // rótulos do briefing (• Título, • Texto na arte, • Roteiro) vão em negrito
+    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Roteiro)/i.test(l)){
+      out+="<p><strong>"+l.replace(/^[-]\s*/,"• ")+"</strong></p>";
+    } else out+="<p>"+l+"</p>";
+  }
+  return out;
+}
+
+/* Devolve {briefing, legenda} em HTML, ou lança erro. */
+async function pxReescreverCopy(opts){
+  const task=opts&&opts.task; if(!task) throw new Error("Card não informado.");
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const tipo=String((opts&&opts.tipo)||"abordagem");
+  const ehAbord=tipo!=="refazer";
+  const pedido=String((opts&&opts.feedback)||"").trim();
+  const cliente=String((opts&&opts.clienteNome)||task.client||"");
+  const unit=String(task.bioterUnit||task.bioter_unit||"");
+  const py=unit==="paraguay";
+  const ct=String(task.contentType||task.content_type||"").toLowerCase();
+  const ehVideo=ct==="video"||ct==="video_short"||ct==="reels";
+  const soStory=!!(task.somenteStory||task.somente_story);
+
+  const ctx=await pxContextoCopy(task.client, unit);
+  const pb=(ctx&&ctx.playbook)||{};
+  const regras=(ctx&&ctx.regras)||[];
+  const foco=(ctx&&ctx.foco_do_mes)||[];
+  const aprov=(ctx&&ctx.aprovadas)||[];
+  const recus=(ctx&&ctx.recusadas)||[];
+
+  const sys="Você escreve copy de redes sociais para empresas do agronegócio brasileiro, na voz de cada marca. "+
+    "Escreve como gente que conhece o campo: direto, concreto, sem jargão de marketing e sem frase de efeito vazia. "+
+    "Nunca inventa número, cidade, prazo, garantia ou depoimento que não tenha sido informado. "+
+    (py?"ESCREVA O QUE VAI NA PEÇA E A LEGENDA EM ESPANHOL (é a unidade do Paraguai). Os rótulos do briefing ficam como estão."
+       :"Escreva em português do Brasil.")+
+    " Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato "+
+    '{"briefing":"...","legenda":"..."} — cada campo em texto puro com quebras de linha \\n (sem HTML).';
+
+  let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
+  u+="CARD: "+(task.title||"—")+"\n";
+  const dt=String(task.publishDate||task.publish_date||"").slice(0,10);
+  if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
+  u+="FORMATO: "+(ehVideo?"vídeo":(ct||"arte"))+(soStory?" (SOMENTE STORY — não escreva legenda)":"")+"\n\n";
+
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
+    u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
+    u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
+  if(regras.length){
+    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
+    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
+    u+="\n";
+  }
+  if(foco.length){
+    u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
+    for(let i=0;i<Math.min(foco.length,3);i++){
+      const f=foco[i]; const partes=[];
+      if(f.objetivo) partes.push("objetivo: "+f.objetivo);
+      if(_pxCtxTxt(f.produtos_foco)) partes.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco));
+      if(_pxCtxTxt(f.campanhas)) partes.push("campanhas: "+_pxCtxTxt(f.campanhas));
+      if(_pxCtxTxt(f.sazonalidades)) partes.push("sazonalidade: "+_pxCtxTxt(f.sazonalidades));
+      if(partes.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+partes.join("; ")+"\n";
+    }
+    u+="\n";
+  }
+  if(aprov.length){
+    u+="COPYS JÁ APROVADAS DESTE CLIENTE (é este o tom que funciona):\n";
+    for(let i=0;i<Math.min(aprov.length,4);i++)
+      u+="---\n"+_pxHtmlParaTexto(aprov[i].legenda).slice(0,700)+"\n";
+    u+="\n";
+  }
+  if(recus.length){
+    u+="COPYS RECUSADAS E O MOTIVO (não repetir o erro):\n";
+    for(let i=0;i<Math.min(recus.length,5);i++)
+      if(recus[i].feedback) u+="- "+(recus[i].titulo||"")+": "+recus[i].feedback+"\n";
+    u+="\n";
+  }
+
+  u+="VERSÃO ATUAL — BRIEFING:\n"+(_pxHtmlParaTexto(task.desc||task.description)||"(vazio)")+"\n\n";
+  u+="VERSÃO ATUAL — LEGENDA:\n"+(_pxHtmlParaTexto(task.caption)||"(vazia)")+"\n\n";
+
+  u+=ehAbord
+    ? "TAREFA: mantenha EXATAMENTE o mesmo assunto e reescreva com OUTRA ABORDAGEM — outro ângulo, outro jeito de abrir, outra construção. Não repita as frases da versão atual.\n"
+    : "TAREFA: esqueça o assunto da versão atual. Escreva uma copy NOVA, de outro assunto que faça sentido para este cliente neste mês.\n";
+  u+=pedido?("O QUE A AGÊNCIA PEDIU: "+pedido+"\n"):"A agência não deu direção — escolha você o melhor caminho, diferente do atual.\n";
+
+  u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
+  u+=ehVideo
+    ? ("• Roteiro"+(py?" (español)":"")+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
+    : ("• Título"+(py?" (español)":"")+"\n(a headline que vai na peça)\n\n• Texto na arte"+(py?" (español)":"")+
+       "\n(desenvolvido: headline em duas linhas em caixa alta, linha em branco, 2 frases de apoio, linha em branco, fecho — 380 a 620 caracteres. "+
+       "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
+  u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags.";
+  if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
+
+  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2200,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+  txt=txt.replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"").trim();
+  let out; try{ out=JSON.parse(txt); }catch(_){
+    const i=txt.indexOf("{"), f=txt.lastIndexOf("}");
+    if(i<0||f<=i) throw new Error("O Claude respondeu fora do formato. Tente de novo.");
+    out=JSON.parse(txt.slice(i,f+1));
+  }
+  const brief=String(out.briefing||"").trim();
+  if(!brief) throw new Error("Veio sem briefing. Tente de novo.");
+  return { briefing:_pxTextoParaHtml(brief),
+           legenda: soStory?"":_pxTextoParaHtml(String(out.legenda||"").trim()) };
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════
    SPRINT HELPERS — lógica de cálculo de sprint e previsão de entrega
    Toda a lógica vive aqui pra ser testável e reusable.
@@ -19788,7 +19942,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 Collab
                               </span>}
                             </div>
-                            {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
                               style={{display:"inline-flex",alignItems:"center",gap:4,height:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:pxEscurecerCor(cardColor,.42),color:"#fff",border:"1px solid rgba(255,255,255,0.18)",fontSize:9,fontWeight:800,letterSpacing:.5,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
@@ -19805,6 +19958,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                                 +(_estourou?" — passou da cota do mês":"");
                               return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:9.5,fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
                             })()}
+                            {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {(function(){
                               const isReprovada = t.status==="reprovado";
                               const isPausada = t.status==="pausado";
@@ -27572,6 +27726,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // refazerModal = {task, tipo:"abordagem"|"refazer"}.
   const [refazerModal,setRefazerModal]=useState(null);
   const [refazerText,setRefazerText]=useState("");
+  // Reescrita do Claude acontece NA TELA: o card não sai da fila de Copys.
+  const [reescrevendoId,setReescrevendoId]=useState(null);
+  const [erroReescrita,setErroReescrita]=useState("");
+  // Navegador de versões da copy (qual versão está sendo olhada em cada card)
+  const [verVersao,setVerVersao]=useState({});
   // SPLIT: dois modais distintos pra não sobrepor (bug reportado pelo Vinicius).
   // editAnnot = "Anotar ajustes" (riscar imagem) na aba publicação.
   // editCopy  = "Editar copy" (título+legenda+briefing) na aba copys.
@@ -27755,31 +27914,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      O card volta pra "Alteração de copy" com ajusteOrigin "claude_*" (é assim que o Claude
      acha a fila) e o comentário fica gravado em claude_copy_feedback. Esse feedback NUNCA é
      apagado: é dali que o Claude aprende o que a agência não curtiu. */
-  const pedirRefacaoClaude=(task,tipo,feedback)=>{
+  /* Testar nova abordagem / Refazer do zero.
+     O card NÃO muda de status e NÃO sai da tela: o Claude reescreve na hora,
+     a versão anterior fica guardada em copyVersoes e o painel atualiza sozinho. */
+  const pedirRefacaoClaude=async(task,tipo,feedback)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const txt=String(feedback||"").trim();
-    const now=new Date().toISOString();
     const ehAbord=tipo==="abordagem";
     const rotulo=ehAbord?"Testar nova abordagem":"Refazer do zero";
-    if(setTasks)setTasks(p=>p.map(t=>{
-      if(t.id!==task.id)return t;
-      const cs=[...(t.comments||[])];
-      cs.push({
-        id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
-        type:ehAbord?"copy_nova_abordagem":"copy_refazer",
-        text:(ehAbord?"Testar nova abordagem: ":"Refazer do zero: ")+(txt||"(sem comentário)"),
-        user:actor,at:now,atFmt:nowFmt(),
-      });
-      return {...t,
-        status:"alteracao_copy",ajustar:true,isAlteracao:true,colEnteredAt:now,
-        ajusteOrigin:ehAbord?"claude_abordagem":"claude_refazer",
-        comments:cs,
-        timeline:[...(t.timeline||[]),{type:"status",from:t.status,to:"alteracao_copy",
-          fromLabel:"Copys",toLabel:"Alteração de copy",at:now,atFmt:nowFmt(),user:actor,
-          note:rotulo+(txt?(" — "+txt):"")}],
-      };
-    }));
+    setErroReescrita("");setReescrevendoId(task.id);
+    // o pedido vai pra memória de aprendizado mesmo que a reescrita falhe
     try{
       if(typeof sb!=="undefined"&&sb){
         sb.from("claude_copy_feedback").insert({
@@ -27789,17 +27934,63 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           titulo:task.title||null,
           tipo:ehAbord?"abordagem":"refazer",
           feedback:txt||null,
-          briefing_anterior:task.description||null,
+          briefing_anterior:task.desc||task.description||null,
           legenda_anterior:task.caption||null,
           pedido_por:actor,
         }).then(function(){},function(){});
       }
     }catch(_){}
-    pushNotif({type:"ajuste",icon:ehAbord?"↻":"✎",title:rotulo,
-      body:'"'+task.title+'" voltou pro Claude'+(txt?(" — "+txt.slice(0,80)):""),
-      user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-    if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAbord?"Pedido de nova abordagem registrado. O Claude reescreve mantendo o assunto.":"Pedido de refação registrado. O Claude escreve outra copy do zero.",4200);
-    setCardIdx(0);setImgIdx(0);
+    try{
+      const nova=await pxReescreverCopy({task:task,tipo:ehAbord?"abordagem":"refazer",feedback:txt,clienteNome:task.client});
+      const now=new Date().toISOString();
+      if(setTasks)setTasks(p=>p.map(t=>{
+        if(t.id!==task.id)return t;
+        const vs=Array.isArray(t.copyVersoes)?t.copyVersoes.slice():[];
+        // primeira reescrita: guarda a versão original como v1
+        if(!vs.length)vs.push({v:1,briefing:t.desc||t.description||"",legenda:t.caption||"",
+          autor:"original",tipo:null,feedback:null,at:now,atFmt:nowFmt()});
+        vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
+          autor:"Claude",tipo:ehAbord?"abordagem":"refazer",feedback:txt||null,
+          pedidoPor:actor,at:now,atFmt:nowFmt()});
+        const cs=[...(t.comments||[])];
+        cs.push({id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+          type:ehAbord?"copy_nova_abordagem":"copy_refazer",
+          text:(ehAbord?"Testar nova abordagem: ":"Refazer do zero: ")+(txt||"(sem comentário)"),
+          user:actor,at:now,atFmt:nowFmt()});
+        return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
+          copyVersoes:vs,comments:cs,
+          timeline:[...(t.timeline||[]),{type:"edit",user:"Claude",at:now,atFmt:nowFmt(),
+            label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")}]};
+      }));
+      setVerVersao(v=>({...v,[task.id]:null}));
+      pushNotif({type:"ajuste",icon:ehAbord?"↻":"✎",title:rotulo,
+        body:'"'+task.title+'" foi reescrita pelo Claude'+(txt?(" — "+txt.slice(0,80)):""),
+        user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+      if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada.",4200);
+    }catch(e){
+      const msg=String((e&&e.message)||e||"Não consegui reescrever agora.");
+      setErroReescrita(msg);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error(msg,6000);
+    }finally{
+      setReescrevendoId(null);
+    }
+  };
+
+  /* Volta a copy do card para uma versão guardada. Não apaga nada: só troca o que está no ar. */
+  const restaurarVersaoCopy=(task,idx)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const vs=Array.isArray(t.copyVersoes)?t.copyVersoes:[];
+      const v=vs[idx]; if(!v)return t;
+      return {...t,desc:v.briefing||"",description:v.briefing||"",caption:v.legenda||"",
+        timeline:[...(t.timeline||[]),{type:"edit",user:actor,at:now,atFmt:nowFmt(),
+          label:"Voltou para a versão "+(v.v||(idx+1))+" da copy"}]};
+    }));
+    setVerVersao(v=>({...v,[task.id]:null}));
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Copy restaurada.",3000);
   };
 
   // ── PAUSAR copy: manda pro status "pausado" (calendário mostra ícone vermelho pausa) ──
@@ -28909,6 +29100,77 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             {/* Título do card — destaque */}
             <div style={{color:C.tx,fontWeight:800,fontSize:isMob?17:20,lineHeight:1.25,letterSpacing:-.4}}>{current.title}</div>
 
+            {/* ── Claude reescrevendo / versões da copy ──
+                 O card não sai da fila: a copy troca aqui mesmo e a anterior fica guardada. */}
+            {reescrevendoId===current.id&&(
+              <div style={{background:"linear-gradient(135deg,#7c3aed,#a140ff)",borderRadius:14,padding:isMob?"12px 14px":"13px 18px",color:"#fff",display:"flex",alignItems:"center",gap:11}}>
+                <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
+                <span style={{width:18,height:18,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,.35)",borderTopColor:"#fff",display:"inline-block",animation:"pixelsSpin .8s linear infinite",flexShrink:0}}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-.2}}>O Claude está reescrevendo a copy…</div>
+                  <div style={{fontSize:11.5,color:"rgba(255,255,255,.88)",marginTop:1}}>Fica na mesma tela. A versão atual será guardada para você poder voltar.</div>
+                </div>
+              </div>
+            )}
+            {!!erroReescrita&&reescrevendoId!==current.id&&(
+              <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 14px",color:"#b91c1c",fontSize:12.5,lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:9}}>
+                <Ico n="alert" size={14} color="#b91c1c"/>
+                <div style={{minWidth:0,flex:1}}>{erroReescrita}<div style={{color:"#ef4444",fontSize:11,marginTop:3}}>A copy que estava no ar não foi alterada.</div></div>
+                <button onClick={()=>setErroReescrita("")} style={{background:"transparent",border:"none",color:"#b91c1c",cursor:"pointer",fontSize:16,lineHeight:1,padding:0}}>×</button>
+              </div>
+            )}
+            {(function(){
+              const vs=Array.isArray(current.copyVersoes)?current.copyVersoes:[];
+              if(vs.length<2)return null;
+              const _sel=verVersao[current.id];
+              const noAr=vs.length-1;                       // a última é a que está no ar
+              const idx=(_sel===null||_sel===undefined)?noAr:Math.max(0,Math.min(vs.length-1,_sel));
+              const v=vs[idx]||{};
+              const vendoOutra=idx!==noAr;
+              const _txt=(h)=>typeof _pxHtmlParaTexto==="function"?_pxHtmlParaTexto(h):String(h||"").replace(/<[^>]+>/g," ");
+              const _rot=v.autor==="original"?"versão original":(v.tipo==="refazer"?"refeita do zero":"nova abordagem");
+              const _ir=(d)=>setVerVersao(x=>({...x,[current.id]:Math.max(0,Math.min(vs.length-1,idx+d))}));
+              return(<div style={{background:vendoOutra?"#fffbeb":"#faf5ff",border:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),borderRadius:14,overflow:"hidden"}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,padding:isMob?"9px 12px":"10px 14px",borderBottom:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),flexWrap:"wrap"}}>
+                  <Ico n="refresh" size={13} color={vendoOutra?"#b45309":"#7c3aed"}/>
+                  <span style={{color:vendoOutra?"#92400e":"#6d28d9",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Versões da copy</span>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
+                    <button onClick={()=>_ir(-1)} disabled={idx<=0} title="Versão anterior"
+                      style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fcd34d":"#ddd6fe"),borderRadius:8,width:26,height:26,color:idx<=0?"#cbd5e1":"#6d28d9",cursor:idx<=0?"default":"pointer",fontSize:15,lineHeight:1,fontFamily:"inherit"}}>‹</button>
+                    <span style={{color:vendoOutra?"#92400e":"#6d28d9",fontSize:11.5,fontWeight:800,fontVariantNumeric:"tabular-nums",minWidth:74,textAlign:"center"}}>versão {idx+1} de {vs.length}</span>
+                    <button onClick={()=>_ir(1)} disabled={idx>=vs.length-1} title="Próxima versão"
+                      style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fcd34d":"#ddd6fe"),borderRadius:8,width:26,height:26,color:idx>=vs.length-1?"#cbd5e1":"#6d28d9",cursor:idx>=vs.length-1?"default":"pointer",fontSize:15,lineHeight:1,fontFamily:"inherit"}}>›</button>
+                  </div>
+                </div>
+                <div style={{padding:isMob?"11px 12px":"12px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:8}}>
+                    <span style={{background:vendoOutra?"#f59e0b":"#7c3aed",color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:5}}>{_rot}</span>
+                    {!vendoOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:5}}>no ar</span>}
+                    {v.atFmt&&<span style={{color:"#94a3b8",fontSize:10.5}}>{v.atFmt}</span>}
+                    {v.pedidoPor&&<span style={{color:"#94a3b8",fontSize:10.5}}>· pedido por {v.pedidoPor}</span>}
+                  </div>
+                  {v.feedback&&<div style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),borderRadius:9,padding:"8px 11px",color:"#475569",fontSize:11.5,lineHeight:1.5,marginBottom:8}}><strong style={{color:"#334155"}}>Pedido:</strong> {v.feedback}</div>}
+                  {vendoOutra&&(<>
+                    <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Briefing desta versão</div>
+                    <div style={{background:"#fff",border:"1px solid #fde68a",borderRadius:9,padding:"9px 11px",color:"#475569",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:190,overflow:"auto",marginBottom:8}}>{_txt(v.briefing)||"(vazio)"}</div>
+                    {!!_txt(v.legenda)&&(<>
+                      <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Legenda desta versão</div>
+                      <div style={{background:"#fff",border:"1px solid #fde68a",borderRadius:9,padding:"9px 11px",color:"#475569",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:190,overflow:"auto",marginBottom:8}}>{_txt(v.legenda)}</div>
+                    </>)}
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                      <button onClick={()=>restaurarVersaoCopy(current,idx)} disabled={!isApprover}
+                        style={{background:"#f59e0b",border:"none",borderRadius:9,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:isApprover?"pointer":"default",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                        <Ico n="check" size={12} color="#fff"/>Usar esta versão
+                      </button>
+                      <button onClick={()=>setVerVersao(x=>({...x,[current.id]:null}))}
+                        style={{background:"transparent",border:"1px solid #fcd34d",borderRadius:9,padding:"8px 14px",color:"#92400e",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Voltar pra que está no ar</button>
+                    </div>
+                  </>)}
+                  {!vendoOutra&&<div style={{color:"#7c3aed",fontSize:11.5,lineHeight:1.5}}>É esta que está valendo. Use as setas para ver as anteriores e voltar para qualquer uma delas.</div>}
+                </div>
+              </div>);
+            })()}
+
             {/* Briefing pra equipe — PRIMEIRO */}
             {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
               <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={14} color="#0f172a"/>Briefing pra equipe</div>
@@ -29664,7 +29926,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               autoFocus rows={5} placeholder={_ph}
               style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
             <div style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:11.5,lineHeight:1.5}}>
-              O card volta pra <strong>Alteração de copy</strong> e o Claude reescreve. O que você escrever aqui fica guardado — é assim que ele vai acertando o tom de cada cliente.
+              O card <strong>não sai daqui</strong>: o Claude reescreve na hora e a copy troca nesta tela. A versão atual fica guardada — dá pra voltar nela a qualquer momento pelas setas de versão. Deixar em branco também funciona: ele escolhe outro caminho sozinho.
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
               <button onClick={_fechar}
@@ -49065,6 +49327,7 @@ const rowToTask = (r) => ({
   desc:         r.description  || "",
   position:     r.position     ?? null,
   somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
+  copyVersoes:  Array.isArray(r.copy_versoes) ? r.copy_versoes : [],   // histórico de versões da copy (nova abordagem / refazer)
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
   origem:           r.origem            || "",
   tipo_solicitacao: r.tipo_solicitacao  || "",
@@ -49121,6 +49384,7 @@ const taskToRow = (t) => ({
   description:    t.desc         || "",
   position:       t.position     ?? null,
   somente_story:  !!t.somenteStory,
+  copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
   // ── Origem + tipo solicitação ──
   origem:           t.origem            || null,
   tipo_solicitacao: t.tipo_solicitacao  || null,
