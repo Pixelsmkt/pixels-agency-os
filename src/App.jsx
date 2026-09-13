@@ -3416,6 +3416,8 @@ async function pxReescreverCopy(opts){
   const ct=String(task.contentType||task.content_type||"").toLowerCase();
   const ehVideo=ct==="video"||ct==="video_short"||ct==="reels";
   const soStory=!!(task.somenteStory||task.somente_story);
+  const _tags=Array.isArray(task.tags)?task.tags:[];
+  const ehComemorativa=_tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
   const ctx=await pxContextoCopy(task.client, unit);
   const pb=(ctx&&ctx.playbook)||{};
@@ -3429,8 +3431,8 @@ async function pxReescreverCopy(opts){
     "Nunca inventa número, cidade, prazo, garantia ou depoimento que não tenha sido informado. "+
     (py?"ESCREVA O QUE VAI NA PEÇA E A LEGENDA EM ESPANHOL (é a unidade do Paraguai). Os rótulos do briefing ficam como estão."
        :"Escreva em português do Brasil.")+
-    " Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato "+
-    '{"briefing":"...","legenda":"..."} — cada campo em texto puro com quebras de linha \\n (sem HTML).';
+    " Responda EXATAMENTE neste formato, texto puro, sem HTML, sem markdown, sem nada antes nem depois:"+
+    "\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)";
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
   u+="CARD: "+(task.title||"—")+"\n";
@@ -3482,6 +3484,18 @@ async function pxReescreverCopy(opts){
     : "TAREFA: esqueça o assunto da versão atual. Escreva uma copy NOVA, de outro assunto que faça sentido para este cliente neste mês.\n";
   u+=pedido?("O QUE A AGÊNCIA PEDIU: "+pedido+"\n"):"A agência não deu direção — escolha você o melhor caminho, diferente do atual.\n";
 
+  if(ehComemorativa){
+    u+="\n⚠️ ESTE CARD É DATA COMEMORATIVA. É HOMENAGEM, NÃO É POST DE VENDA.\n";
+    u+="- O Título é a própria saudação da data: “Feliz Dia do Cliente!”, “Feliz Dia do Gaúcho!”, “Feliz Dia do Agrônomo!”. Nada de headline criativa nem frase de efeito.\n";
+    u+="- PROIBIDO storytelling, cena inventada ou micro-história (ex.: “TEM CLIENTE QUE LIGA PRA SABER SE CHOVEU NA OBRA”). Fora do cabível numa arte de homenagem.\n";
+    u+="- O conteúdo é agradecimento e reconhecimento: família, confiança, parceria, “vocês fazem parte da nossa história”.\n";
+    u+="- Sem CTA, sem telefone, sem número, sem falar de produto, serviço, garantia ou prazo.\n";
+    u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
+    u+="• Título"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• Texto na arte"+(py?" (español)":"")+
+      "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho)\n";
+    u+="\nFORMATO DA LEGENDA: 280 a 520 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
+    if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
+  }else{
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
   u+=ehVideo
     ? ("• Roteiro"+(py?" (español)":"")+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
@@ -3490,19 +3504,31 @@ async function pxReescreverCopy(opts){
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
   u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
-
-  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2200,system:sys,messages:[{role:"user",content:u}]});
-  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
-  txt=txt.replace(/^```(?:json)?\s*/i,"").replace(/```\s*$/,"").trim();
-  let out; try{ out=JSON.parse(txt); }catch(_){
-    const i=txt.indexOf("{"), f=txt.lastIndexOf("}");
-    if(i<0||f<=i) throw new Error("O Claude respondeu fora do formato. Tente de novo.");
-    out=JSON.parse(txt.slice(i,f+1));
   }
-  const brief=String(out.briefing||"").trim();
-  if(!brief) throw new Error("Veio sem briefing. Tente de novo.");
+
+  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+  txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
+  // Aceita ===BRIEFING===, ###BRIEFING###, **BRIEFING**, BRIEFING: etc. Normaliza tudo antes de cortar.
+  txt=txt.replace(/^[\s>*#=_-]*(BRIEFING|LEGENDA)\s*(DA COPY|DO CARD)?\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "===" + p1.toUpperCase() + "===";});
+  let brief="",leg="";
+  const iB=txt.indexOf("===BRIEFING==="), iL=txt.indexOf("===LEGENDA===");
+  if(iB>=0||iL>=0){
+    if(iB>=0) brief=(iL>iB?txt.slice(iB+14,iL):txt.slice(iB+14)).trim();
+    else brief=txt.slice(0,iL).trim();
+    if(iL>=0) leg=txt.slice(iL+13).trim();
+  }else{
+    // Ultimo recurso: se veio JSON (formato antigo) aproveita; senao trata tudo como briefing.
+    const a=txt.indexOf("{"), z=txt.lastIndexOf("}");
+    let ok=false;
+    if(a>=0&&z>a){ try{ const o=JSON.parse(txt.slice(a,z+1)); brief=String(o.briefing||"").trim(); leg=String(o.legenda||"").trim(); ok=!!brief; }catch(_){} }
+    if(!ok){ brief=txt.trim(); leg=""; }
+  }
+  brief=brief.replace(/^===+\s*/,"").trim();
+  leg=leg.replace(/^===+\s*/,"").trim();
+  if(!brief) throw new Error("O Claude respondeu vazio. Tente de novo.");
   return { briefing:_pxTextoParaHtml(brief),
-           legenda: soStory?"":_pxTextoParaHtml(String(out.legenda||"").trim()) };
+           legenda: soStory?"":_pxTextoParaHtml(leg) };
 }
 
 
@@ -29020,8 +29046,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
             return t.replace(/\n{3,}/g,"\n\n").trim();
           };
-          const captionTxt2=stripHtml(current.caption);
-          const descTxt2=stripHtml(current.desc);
+          // Versoes da copy: se o usuario esta olhando uma versao anterior, o briefing e a
+          // legenda abaixo mostram ELA. Nada de caixas duplicadas - e a mesma tela.
+          const _vs=Array.isArray(current.copyVersoes)?current.copyVersoes:[];
+          const _vNoAr=Math.max(0,_vs.length-1);
+          const _vSel=verVersao[current.id];
+          const _vIdx=(_vSel===null||_vSel===undefined)?_vNoAr:Math.max(0,Math.min(_vNoAr,_vSel));
+          const _vOutra=_vs.length>1&&_vIdx!==_vNoAr;
+          const _vAtiva=_vOutra?(_vs[_vIdx]||{}):null;
+          const captionTxt2=stripHtml(_vAtiva?_vAtiva.legenda:current.caption);
+          const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
           // Rotulos do briefing ("• Titulo", "• Texto na arte", "• Roteiro") sempre em NEGRITO.
           // O stripHtml tira as tags, entao o negrito volta aqui, por linha.
           const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo|texto na arte|roteiro|legenda|t[ií]tulo do v[ií]deo)\s*:?\s*$/i.test(ln);
@@ -29142,54 +29176,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               </div>
             )}
             {(function(){
-              const vs=Array.isArray(current.copyVersoes)?current.copyVersoes:[];
-              if(vs.length<2)return null;
-              const _sel=verVersao[current.id];
-              const noAr=vs.length-1;                       // a última é a que está no ar
-              const idx=(_sel===null||_sel===undefined)?noAr:Math.max(0,Math.min(vs.length-1,_sel));
-              const v=vs[idx]||{};
-              const vendoOutra=idx!==noAr;
-              const _txt=(h)=>typeof _pxHtmlParaTexto==="function"?_pxHtmlParaTexto(h):String(h||"").replace(/<[^>]+>/g," ");
-              const _rot=v.autor==="original"?"versão original":(v.tipo==="refazer"?"refeita do zero":"nova abordagem");
-              const _ir=(d)=>setVerVersao(x=>({...x,[current.id]:Math.max(0,Math.min(vs.length-1,idx+d))}));
-              return(<div style={{background:vendoOutra?"#fffbeb":"#faf5ff",border:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),borderRadius:14,overflow:"hidden"}}>
-                <div style={{display:"flex",alignItems:"center",gap:9,padding:isMob?"9px 12px":"10px 14px",borderBottom:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),flexWrap:"wrap"}}>
-                  <Ico n="refresh" size={13} color={vendoOutra?"#b45309":"#7c3aed"}/>
-                  <span style={{color:vendoOutra?"#92400e":"#6d28d9",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Versões da copy</span>
-                  <div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
-                    <button onClick={()=>_ir(-1)} disabled={idx<=0} title="Versão anterior"
-                      style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fcd34d":"#ddd6fe"),borderRadius:8,width:26,height:26,color:idx<=0?"#cbd5e1":"#6d28d9",cursor:idx<=0?"default":"pointer",fontSize:15,lineHeight:1,fontFamily:"inherit"}}>‹</button>
-                    <span style={{color:vendoOutra?"#92400e":"#6d28d9",fontSize:11.5,fontWeight:800,fontVariantNumeric:"tabular-nums",minWidth:74,textAlign:"center"}}>versão {idx+1} de {vs.length}</span>
-                    <button onClick={()=>_ir(1)} disabled={idx>=vs.length-1} title="Próxima versão"
-                      style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fcd34d":"#ddd6fe"),borderRadius:8,width:26,height:26,color:idx>=vs.length-1?"#cbd5e1":"#6d28d9",cursor:idx>=vs.length-1?"default":"pointer",fontSize:15,lineHeight:1,fontFamily:"inherit"}}>›</button>
-                  </div>
-                </div>
-                <div style={{padding:isMob?"11px 12px":"12px 14px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:8}}>
-                    <span style={{background:vendoOutra?"#f59e0b":"#7c3aed",color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:5}}>{_rot}</span>
-                    {!vendoOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:5}}>no ar</span>}
-                    {v.atFmt&&<span style={{color:"#94a3b8",fontSize:10.5}}>{v.atFmt}</span>}
-                    {v.pedidoPor&&<span style={{color:"#94a3b8",fontSize:10.5}}>· pedido por {v.pedidoPor}</span>}
-                  </div>
-                  {v.feedback&&<div style={{background:"#fff",border:"1px solid "+(vendoOutra?"#fde68a":"#e9d5ff"),borderRadius:9,padding:"8px 11px",color:"#475569",fontSize:11.5,lineHeight:1.5,marginBottom:8}}><strong style={{color:"#334155"}}>Pedido:</strong> {v.feedback}</div>}
-                  {vendoOutra&&(<>
-                    <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Briefing desta versão</div>
-                    <div style={{background:"#fff",border:"1px solid #fde68a",borderRadius:9,padding:"9px 11px",color:"#475569",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:190,overflow:"auto",marginBottom:8}}>{_txt(v.briefing)||"(vazio)"}</div>
-                    {!!_txt(v.legenda)&&(<>
-                      <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Legenda desta versão</div>
-                      <div style={{background:"#fff",border:"1px solid #fde68a",borderRadius:9,padding:"9px 11px",color:"#475569",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",maxHeight:190,overflow:"auto",marginBottom:8}}>{_txt(v.legenda)}</div>
-                    </>)}
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                      <button onClick={()=>restaurarVersaoCopy(current,idx)} disabled={!isApprover}
-                        style={{background:"#f59e0b",border:"none",borderRadius:9,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:isApprover?"pointer":"default",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-                        <Ico n="check" size={12} color="#fff"/>Usar esta versão
-                      </button>
-                      <button onClick={()=>setVerVersao(x=>({...x,[current.id]:null}))}
-                        style={{background:"transparent",border:"1px solid #fcd34d",borderRadius:9,padding:"8px 14px",color:"#92400e",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Voltar pra que está no ar</button>
-                    </div>
-                  </>)}
-                  {!vendoOutra&&<div style={{color:"#7c3aed",fontSize:11.5,lineHeight:1.5}}>É esta que está valendo. Use as setas para ver as anteriores e voltar para qualquer uma delas.</div>}
-                </div>
+              if(_vs.length<2)return null;
+              const v=_vs[_vIdx]||{};
+              const _rot=v.autor==="original"?"original":(v.tipo==="refazer"?"refeita do zero":"nova abordagem");
+              const _ir=(d)=>setVerVersao(x=>({...x,[current.id]:Math.max(0,Math.min(_vs.length-1,_vIdx+d))}));
+              const cB=_vOutra?"#fcd34d":"#e9d5ff", cT=_vOutra?"#92400e":"#6d28d9", cF=_vOutra?"#fffbeb":"#faf5ff";
+              const _nav=(d,lb,on)=>(<button onClick={()=>_ir(d)} disabled={!on} title={lb} style={{background:"#fff",border:"1px solid "+cB,borderRadius:7,width:24,height:24,color:on?cT:"#cbd5e1",cursor:on?"pointer":"default",fontSize:14,lineHeight:1,fontFamily:"inherit",padding:0}}>{d<0?"‹":"›"}</button>);
+              return(<div title={v.feedback?("Pedido: "+v.feedback):""} style={{background:cF,border:"1px solid "+cB,borderRadius:12,padding:isMob?"7px 9px":"7px 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{display:"inline-flex",alignItems:"center",gap:3}}>{_nav(-1,"Versao anterior",_vIdx>0)}{_nav(1,"Proxima versao",_vIdx<_vs.length-1)}</div>
+                <span style={{color:cT,fontSize:12,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>Versão {_vIdx+1}/{_vs.length}</span>
+                <span style={{color:cT,opacity:.7,fontSize:11.5,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {_rot}{v.atFmt?" · "+v.atFmt:""}</span>
+                {!_vOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>no ar</span>}
+                {_vOutra&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>setVerVersao(x=>({...x,[current.id]:null}))} style={{background:"transparent",border:"1px solid "+cB,borderRadius:8,padding:"5px 11px",color:cT,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Voltar pra atual</button>
+                  <button onClick={()=>restaurarVersaoCopy(current,_vIdx)} disabled={!isApprover} style={{background:"#f59e0b",border:"none",borderRadius:8,padding:"5px 13px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:isApprover?"pointer":"default",fontFamily:"inherit"}}>Usar esta</button>
+                </div>)}
               </div>);
             })()}
 
