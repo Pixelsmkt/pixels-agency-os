@@ -29093,9 +29093,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316"});
               if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"});
               if(linhas.length===0)return null;
-              return(<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:isMob?6:12}}>
+              return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?8:14}}>
                 {linhas.map(l=>(
-                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",alignSelf:"flex-start",minWidth:isMob?"100%":280,boxSizing:"border-box"}}>
+                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",flex:isMob?"1 1 100%":"1 1 200px",minWidth:0,boxSizing:"border-box"}}>
                     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?30:34,height:isMob?30:34,borderRadius:10,background:l.color+"1F",flexShrink:0}}>
                       <Ico n={l.icon} size={isMob?15:17} color={l.color}/>
                     </span>
