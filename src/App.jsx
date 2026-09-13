@@ -29058,7 +29058,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
           // Rotulos do briefing ("• Titulo", "• Texto na arte", "• Roteiro") sempre em NEGRITO.
           // O stripHtml tira as tags, entao o negrito volta aqui, por linha.
-          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo|texto na arte|roteiro|legenda|t[ií]tulo do v[ií]deo)\s*:?\s*$/i.test(ln);
+          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
           const pxLinhas=(txt)=>String(txt||"").split("\n").map((ln,i)=>(
             _ehRotulo(ln)
               ? <div key={i} style={{fontWeight:800,color:"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ")}</div>
@@ -29133,20 +29133,20 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
               const linhas=[];
-              if(pubD)linhas.push({key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD)+(pubT?("  ·  "+pubT):""),color:"#0ea5e9"});
-              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de conteúdo",val:ctCfg.label,color:"#7c3aed"});
-              if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316"});
-              if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"});
+              if(pubD)linhas.push({key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD)+(pubT?("  ·  "+pubT):""),color:"#0ea5e9",escura:"#0369a1"});
+              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de conteúdo",val:ctCfg.label,color:"#7c3aed",escura:"#5b21b6"});
+              if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316",escura:"#c2410c"});
+              if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a",escura:"#15803d"});
               if(linhas.length===0)return null;
               return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
                 {linhas.map(l=>(
-                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":248,boxSizing:"border-box"}}>
-                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?30:34,height:isMob?30:34,borderRadius:10,background:l.color+"1F",flexShrink:0}}>
-                      <Ico n={l.icon} size={isMob?15:17} color={l.color}/>
+                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?9:11,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"9px 12px":"10px 14px",flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":224,boxSizing:"border-box"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?27:30,height:isMob?27:30,borderRadius:9,background:l.color+"1F",flexShrink:0}}>
+                      <Ico n={l.icon} size={isMob?14:15} color={l.color}/>
                     </span>
                     <span style={{minWidth:0}}>
-                      <span style={{display:"block",color:l.color,fontSize:isMob?9.5:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,lineHeight:1.2}}>{l.rot}</span>
-                      <span style={{display:"block",color:C.tx,fontSize:isMob?14.5:16,fontWeight:700,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap"}}>{l.val}</span>
+                      <span style={{display:"block",color:l.color,fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,lineHeight:1.2}}>{l.rot}</span>
+                      <span style={{display:"block",color:l.escura||l.color,fontSize:isMob?13:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap"}}>{l.val}</span>
                     </span>
                   </div>
                 ))}
