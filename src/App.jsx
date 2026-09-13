@@ -3477,7 +3477,7 @@ async function pxReescreverCopy(opts){
     : ("• Título"+(py?" (español)":"")+"\n(a headline que vai na peça)\n\n• Texto na arte"+(py?" (español)":"")+
        "\n(desenvolvido: headline em duas linhas em caixa alta, linha em branco, 2 frases de apoio, linha em branco, fecho — 380 a 620 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
-  u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags.";
+  u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
 
   const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2200,system:sys,messages:[{role:"user",content:u}]});
@@ -28632,9 +28632,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               return dd+"/"+mm+"/"+yy+" "+hh+":"+mi;
             };
             const metaTags=[];
+            if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
             if(ctCfg)metaTags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
             if(sentAt)metaTags.push({key:"sent",icon:"clock",label:"Enviado "+fmtSentBR(sentAt),color:"#6366f1",bg:"#6366f114"});
-            if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
             if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#16a34a",bg:"#dcfce7"});
             // prioridade removida da avaliação a pedido do Vinicius (13/09/2026)
@@ -29042,8 +29042,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           return(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,boxShadow:"0 4px 16px rgba(15,23,42,0.04)",padding:isMob?"18px 18px":"26px 32px",display:"flex",flexDirection:"column",gap:14,minHeight:"50vh"}}>
             {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"5px 14px",display:"flex",alignItems:"center"}}>
-                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:30,maxWidth:120,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:14,fontWeight:700}}>{cl.abbr}</span>)}
+              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"7px 17px",display:"flex",alignItems:"center"}}>
+                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:165,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)}
               </div>)}
               {/* Unidades Bioter — se cliente=bioter e tem bioterUnit setado */}
               {cl&&cl.id==="bioter"&&current.bioterUnit&&(()=>{
@@ -29061,21 +29061,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 const ids=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
                 const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
                 if(users.length===0)return null;
-                return(<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"3px 12px 3px 4px"}}>
+                return(<div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"4px 15px 4px 5px"}}>
                   <div style={{display:"flex",alignItems:"center"}}>
                     {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
-                      style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-7,zIndex:3-i,flexShrink:0}}>
-                      <UserAvatar user={u} size={30} border={false}/>
+                      style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-9,zIndex:3-i,flexShrink:0}}>
+                      <UserAvatar user={u} size={40} border={false}/>
                     </div>))}
                   </div>
-                  {users.length>3&&<span style={{color:C.td,fontSize:10.5,fontWeight:700}}>+{users.length-3}</span>}
-                  <span style={{color:"#0f172a",fontSize:13,fontWeight:600,marginLeft:2}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                  {users.length>3&&<span style={{color:C.td,fontSize:12,fontWeight:700}}>+{users.length-3}</span>}
+                  <span style={{color:"#0f172a",fontSize:15,fontWeight:600,marginLeft:3}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                 </div>);
               })()}
             </div>
 
             {/* Metadados do card — um por linha, grandes.
-                 Ordem pedida pelo Vinicius: tipo de arte, data de publicação, entrega, pagamento.
+                 Ordem pedida pelo Vinicius: data de publicação, tipo de conteúdo, entrega, pagamento.
                  Prioridade NÃO entra aqui. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
@@ -29088,14 +29088,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
               const linhas=[];
-              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de arte",val:ctCfg.label,color:"#7c3aed"});
               if(pubD)linhas.push({key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD)+(pubT?("  ·  "+pubT):""),color:"#0ea5e9"});
+              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de conteúdo",val:ctCfg.label,color:"#7c3aed"});
               if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316"});
               if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"});
               if(linhas.length===0)return null;
               return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
                 {linhas.map(l=>(
-                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",flex:isMob?"1 1 100%":"1 1 200px",minWidth:0,boxSizing:"border-box"}}>
+                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?10:13,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"10px 13px":"12px 16px",flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":248,boxSizing:"border-box"}}>
                     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?30:34,height:isMob?30:34,borderRadius:10,background:l.color+"1F",flexShrink:0}}>
                       <Ico n={l.icon} size={isMob?15:17} color={l.color}/>
                     </span>
@@ -29262,10 +29262,6 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <div style={{color:"#92400e",fontSize:12.5,lineHeight:1.5,maxWidth:420,margin:"0 auto"}}>Esse card foi enviado pra avaliação sem legenda ou briefing preenchidos. Reprove ou abra o card pra pedir a copy pra Hellen.</div>
             </div>)}
 
-            {/* Tags */}
-            {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid "+C.b1,paddingTop:14}}>
-              {current.tags.map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:7,padding:"3px 10px",fontSize:11.5,fontWeight:500}}>{"#"+tag}</span>))}
-            </div>)}
           </div>);
         })()}
 
