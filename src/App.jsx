@@ -3465,7 +3465,7 @@ async function pxReescreverCopy(opts){
   }
   if(aprov.length){
     u+="COPYS JÁ APROVADAS DESTE CLIENTE (é este o tom que funciona):\n";
-    for(let i=0;i<Math.min(aprov.length,4);i++)
+    for(let i=0;i<Math.min(aprov.length,8);i++)
       u+="---\n"+_pxHtmlParaTexto(aprov[i].legenda).slice(0,700)+"\n";
     u+="\n";
   }
@@ -3661,7 +3661,7 @@ async function pxGerarLegendas(opts){
   }
   if(aprov.length){
     u+="OUTRAS LEGENDAS JÁ APROVADAS DESTE CLIENTE (é este o tom que funciona):\n";
-    for(let i=0;i<Math.min(aprov.length,5);i++)
+    for(let i=0;i<Math.min(aprov.length,8);i++)
       u+="---\n"+_pxHtmlParaTexto(aprov[i].legenda).slice(0,600)+"\n";
     u+="\n";
   }
@@ -3695,6 +3695,183 @@ async function pxGerarLegendas(opts){
   }).filter(Boolean);
   if(!out.length) throw new Error("A IA respondeu vazio. Tente de novo.");
   return out.slice(0,3);
+}
+
+/* ─── GERAR BRIEFING (botão "Gerar briefing" da aba Briefing) ─────────────
+   A pessoa escreve o que precisa em linguagem normal ("vídeo mostrando a obra
+   de Toledo pronta, falar do prazo") e a IA devolve DUAS coisas:
+     1. o TIPO DE CONTEÚDO (um dos 8 do seletor do card);
+     2. o briefing no formato que a equipe já usa.
+   O tipo volta pra quem chamou marcar o seletor e puxar o responsável certo —
+   vídeo entra com o Guilherme, igual ao clique manual no seletor.
+
+   Os tipos são os MESMOS ids do seletor em 10_radar_entrega. Se mudar lá, muda aqui. */
+const PX_TIPOS_CONTEUDO=[
+  {id:"foto",           label:"Ajuste de template", grupo:"design", quando:"só trocar foto e/ou texto num template que já existe; nada é criado do zero"},
+  {id:"arte",           label:"Arte única",         grupo:"design", quando:"uma peça estática só, criada do zero"},
+  {id:"carrossel",      label:"Carrossel",          grupo:"design", quando:"o conteúdo precisa de várias lâminas em sequência"},
+  {id:"folder",         label:"Folder",             grupo:"design", quando:"material impresso ou PDF de várias páginas, pra entregar ou imprimir"},
+  {id:"corte",          label:"Corte de vídeo",     grupo:"video",  quando:"já existe um vídeo gravado e é só cortar, legendar ou adaptar"},
+  {id:"video_feira",    label:"Vídeo básico",       grupo:"video",  quando:"vídeo simples, pouca edição — registro de feira, bastidor, recado rápido"},
+  {id:"video",          label:"Vídeo",              grupo:"video",  quando:"vídeo editado de verdade, com roteiro, cenas e trilha"},
+  {id:"video_complexo", label:"Vídeo dinâmico",     grupo:"video",  quando:"motion, animação, efeitos — edição pesada"},
+];
+function pxTipoEhVideo(id){
+  const t=PX_TIPOS_CONTEUDO.find(function(x){return x.id===String(id||"");});
+  return !!(t&&t.grupo==="video");
+}
+
+/* Briefings de cards já aprovados/publicados do cliente — servem de molde de
+   FORMATO (como a equipe escreve), não de conteúdo. */
+async function pxBriefingsAprovados(client,unit,tipo){
+  const sb=window._sb; if(!sb||!client) return [];
+  try{
+    let q=sb.from("tasks").select("title,description,content_type,publish_date")
+      .eq("client",client)
+      .is("deleted_at",null)
+      .in("status",["aprovado","aprovacao_final","agendado","publicado"])
+      .not("description","is",null).neq("description","")
+      .order("publish_date",{ascending:false,nullsFirst:false})
+      .limit(30);
+    if(unit) q=q.eq("bioter_unit",unit);
+    const {data,error}=await q;
+    if(error||!Array.isArray(data)) return [];
+    const bons=data.filter(function(r){return r&&_pxHtmlParaTexto(r.description).length>80;});
+    // prioriza os do mesmo tipo de conteúdo; completa com os outros
+    const mesmo=bons.filter(function(r){return String(r.content_type||"")===String(tipo||"");});
+    const resto=bons.filter(function(r){return String(r.content_type||"")!==String(tipo||"");});
+    return mesmo.concat(resto).slice(0,4);
+  }catch(_){ return []; }
+}
+
+/* Devolve {tipo, tipoLabel, porque, briefing(HTML)} ou lança erro. */
+async function pxGerarBriefing(opts){
+  const task=(opts&&opts.task)||null;
+  if(!task) throw new Error("Card não informado.");
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const pedido=String((opts&&opts.necessidade)||"").trim();
+  if(pedido.length<5) throw new Error("Escreva o que precisa ser feito antes de gerar.");
+
+  const cliente=String((opts&&opts.clienteNome)||task.client||"");
+  const unit=String(task.bioterUnit||task.bioter_unit||"");
+  const py=unit==="paraguay";
+  const tipoAtual=String(task.contentType||task.content_type||"");
+
+  const ctx=await pxContextoCopy(task.client,unit);
+  const pb=(ctx&&ctx.playbook)||{};
+  const regras=(ctx&&ctx.regras)||[];
+  const foco=(ctx&&ctx.foco_do_mes)||[];
+  let moldes=[];
+  try{ moldes=await pxBriefingsAprovados(task.client,unit,tipoAtual); }catch(_){}
+
+  const sys="Você prepara briefings de produção para a equipe interna de uma agência que atende "+
+    "agronegócio e construção no Brasil. Quem lê é o designer ou o editor de vídeo: o briefing precisa "+
+    "ser executável sem ninguém perguntar nada depois. "+
+    "NUNCA invente número, medida, cidade, prazo, preço, garantia nem nome de cliente que não esteja no pedido. "+
+    "Se faltar dado, escreva o briefing sem ele — nunca preencha com suposição. "+
+    (py?"O TÍTULO E O TEXTO DA PEÇA VÃO EM ESPANHOL (é a unidade do Paraguai); os rótulos do briefing ficam em português."
+       :"Escreva em português do Brasil.")+
+    "\nResponda EXATAMENTE neste formato, texto puro, sem markdown, sem nada antes nem depois:"+
+    "\n===TIPO===\n(só o id do tipo)\n===PORQUE===\n(uma frase curta dizendo por que esse tipo)\n===BRIEFING===\n(o briefing)";
+
+  let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
+  u+="CARD: "+(task.title||"—")+"\n";
+  const dt=String(task.publishDate||task.publish_date||"").slice(0,10);
+  if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
+  if(tipoAtual){
+    const _ta=PX_TIPOS_CONTEUDO.find(function(x){return x.id===tipoAtual;});
+    u+="TIPO JÁ MARCADO NO CARD: "+((_ta&&_ta.label)||tipoAtual)+" (só mude se o pedido abaixo disser outra coisa)\n";
+  }
+  u+="\n════ O QUE A AGÊNCIA PEDIU (única fonte de fatos) ════\n"+pedido+"\n\n";
+
+  u+="ESCOLHA UM TIPO DESTA LISTA (responda só o id):\n";
+  for(let i=0;i<PX_TIPOS_CONTEUDO.length;i++)
+    u+="- "+PX_TIPOS_CONTEUDO[i].id+" ("+PX_TIPOS_CONTEUDO[i].label+"): "+PX_TIPOS_CONTEUDO[i].quando+"\n";
+  u+="Se o pedido já disser o formato (\"faz um carrossel\", \"vídeo curto\", \"só troca a foto do template\"), OBEDEÇA — não escolha outro.\n";
+  u+="Na dúvida entre arte única e carrossel, escolha arte única. Na dúvida entre vídeo e vídeo dinâmico, escolha vídeo.\n\n";
+
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
+    u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  if(regras.length){
+    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
+    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
+    u+="\n";
+  }
+  if(foco.length){
+    const f=foco[0]; const partes=[];
+    if(f.objetivo) partes.push("objetivo: "+f.objetivo);
+    if(_pxCtxTxt(f.produtos_foco)) partes.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco));
+    if(partes.length) u+="FOCO DO MÊS: "+partes.join("; ")+"\n\n";
+  }
+  if(moldes.length){
+    u+="BRIEFINGS DE CARDS JÁ APROVADOS DESTE CLIENTE — COPIE O FORMATO, NÃO O CONTEÚDO:\n";
+    for(let i=0;i<moldes.length;i++)
+      u+="---\n"+_pxHtmlParaTexto(moldes[i].description).slice(0,900)+"\n";
+    u+="\n";
+  }
+
+  u+="FORMATO DO BRIEFING, conforme o tipo que você escolher:\n";
+  u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", e a lâmina 5 é SEMPRE o CTA.\n";
+  u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → seção \"• Roteiro\" com Cena 1 (0–8s) — o que aparece / Na tela: \"…\", 5 a 6 cenas somando ~60s.\n";
+  u+="- design que não é carrossel (foto, arte, folder) → seção \"• Título\" (a headline que vai na peça) e seção \"• Texto na arte\" (desenvolvido: headline em duas linhas em caixa alta, linha em branco, 2 frases de apoio, linha em branco, fecho — 380 a 620 caracteres).\n";
+  u+="Depois do briefing, acrescente sempre uma última seção \"• O que precisamos\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
+  u+="Não escreva legenda de Instagram aqui — legenda é outra etapa.";
+
+  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
+  txt=txt.replace(/^[\s>*#=_-]*(TIPO|PORQUE|POR\s*QUE|BRIEFING)\s*[:\s>*#=_-]*$/gim,function(_m,p1){
+    const k=p1.toUpperCase().replace(/\s+/g,"");
+    return "==="+(k==="PORQUE"?"PORQUE":k)+"===";
+  });
+  const _fatia=function(ini,fim){
+    const a=txt.indexOf(ini); if(a<0) return "";
+    const b=fim?txt.indexOf(fim,a):-1;
+    return (b>a?txt.slice(a+ini.length,b):txt.slice(a+ini.length)).trim();
+  };
+  let tipo=_fatia("===TIPO===","===PORQUE===")||_fatia("===TIPO===","===BRIEFING===");
+  const porque=_fatia("===PORQUE===","===BRIEFING===");
+  let brief=_fatia("===BRIEFING===","");
+  if(!brief){ brief=txt.replace(/^===+\s*/,"").trim(); }
+  // ── normaliza o tipo: id > rótulo > apelido > formato do briefing > tipo atual ──
+  const _bruto=String(tipo||"").toLowerCase();
+  tipo=_bruto.replace(/[^a-z_]/g,"");
+  let achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===tipo;});
+  if(!achado){
+    // rótulo: testa do MAIS LONGO pro mais curto, senão "Vídeo dinâmico" casa em "Vídeo"
+    const _porTam=PX_TIPOS_CONTEUDO.slice().sort(function(a,b){return b.label.length-a.label.length;});
+    achado=_porTam.find(function(x){return _bruto.indexOf(x.label.toLowerCase())>=0;});
+  }
+  if(!achado){
+    // apelidos que aparecem no dia a dia
+    const _apelidos=[
+      [/reels?|shorts?|tiktok|motion|anima/,"video"],
+      [/dinamic|dinâmic|efeito/,"video_complexo"],
+      [/corte|legenda(r|gem)|recorte/,"corte"],
+      [/feira|bastidor|recado|simples/,"video_feira"],
+      [/v[íi]deo|filmagem|grava/,"video"],
+      [/carrossel|l[âa]mina|sequ[êe]ncia/,"carrossel"],
+      [/folder|panfleto|flyer|impress|catalog/,"folder"],
+      [/template|ajuste|trocar\s+(a\s+)?foto/,"foto"],
+      [/arte|post|card|pe[çc]a|est[áa]tic/,"arte"],
+    ];
+    for(let i=0;i<_apelidos.length&&!achado;i++)
+      if(_apelidos[i][0].test(_bruto))
+        achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===_apelidos[i][1];});
+  }
+  if(!achado){
+    // último recurso antes do tipo atual: o próprio formato que ele escreveu
+    const _b=String(brief||"").toLowerCase();
+    const _id=/(^|\n)\s*(•\s*)?roteiro|cena\s*1\s*\(/.test(_b) ? "video"
+            : /(^|\n)\s*l[âa]mina\s*1/.test(_b) ? "carrossel"
+            : /(^|\n)\s*(•\s*)?t[íi]tulo/.test(_b) ? "arte" : "";
+    if(_id) achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===_id;});
+  }
+  if(!achado) achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===tipoAtual;})||PX_TIPOS_CONTEUDO[1];
+  if(!brief) throw new Error("A IA respondeu vazio. Tente de novo.");
+  return { tipo:achado.id, tipoLabel:achado.label, ehVideo:achado.grupo==="video",
+           porque:porque||"", briefing:_pxTextoParaHtml(brief), briefingTexto:brief };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -39960,6 +40137,10 @@ function _cardPodeSerResp(u){
   // Nasceu de Foto de obra e Short (dependem da Hellen subir o arquivo), mas fica
   // em todo card — quem já tem legenda simplesmente não usa.
   const [legIA,setLegIA]=useState(null); // {brief,loading,opcoes:[],erro}
+  // (14/09/2026) "Gerar briefing": pedido curto -> briefing + tipo de conteúdo.
+  // As versões ficam empilhadas aqui dentro pra dar pra voltar na anterior; não
+  // vão pro banco (é caso a caso, igual combinado pras versões de copy).
+  const [briefIA,setBriefIA]=useState(null); // {pedido,loading,versoes:[],idx,erro}
 
   // Sanitizador de HTML — permite apenas tags básicas de formatação.
   // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
@@ -41644,6 +41825,113 @@ function _cardPodeSerResp(u){
       </div>
     </div>}
 
+    {/* ── GERAR BRIEFING (pedido curto -> briefing + tipo de conteúdo) ── */}
+    {briefIA&&(function(){
+      const _vs=Array.isArray(briefIA.versoes)?briefIA.versoes:[];
+      const _i=Math.min(Math.max(0,briefIA.idx||0),Math.max(0,_vs.length-1));
+      const _v=_vs[_i]||null;
+      const _podeGerar=!briefIA.loading&&String(briefIA.pedido||"").trim().length>=5;
+      return <div onMouseDown={function(e){e.stopPropagation();}} onClick={function(e){ if(e.target===e.currentTarget&&!briefIA.loading) setBriefIA(null); }}
+        style={{position:"fixed",inset:0,zIndex:520,background:"rgba(15,23,42,0.60)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:680,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(15,23,42,0.35)"}}>
+          <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+              <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Gerar briefing</div>
+                <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title||task.title}{client?(" · "+((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;})||{name:client}).name):""}{bioterUnit?(" · "+bioterUnit):""}</div>
+              </div>
+            </div>
+            <button onClick={function(){ if(!briefIA.loading) setBriefIA(null); }} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:briefIA.loading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:briefIA.loading?.5:1,flexShrink:0}}><Ico n="x" size={14} color="#fff"/></button>
+          </div>
+
+          <div style={{padding:"18px 20px",overflowY:"auto",flex:1,minHeight:0}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>O que precisa ser feito</div>
+            <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,marginBottom:8}}>
+              Escreve como você falaria pra equipe. Se disser o formato (“um carrossel”, “vídeo curto”, “só trocar a foto do template”), ele obedece — senão, ele escolhe o tipo e explica por quê.
+            </div>
+            <textarea
+              value={briefIA.pedido}
+              onChange={function(e){ const v=e.target.value; setBriefIA(function(p){return Object.assign({},p,{pedido:v});}); }}
+              onKeyDown={function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); const b=document.getElementById("px-briefia-go"); if(b)b.click(); } }}
+              disabled={!!briefIA.loading}
+              placeholder={"Ex.: vídeo curto mostrando a lagoa de Naviraí pronta, falar que a obra ficou pronta em 12 dias e que o revestimento é geomembrana. Guilherme edita."}
+              style={{width:"100%",minHeight:96,boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontSize:13,lineHeight:1.6,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",background:briefIA.loading?"#f8fafc":"#fff"}}/>
+
+            {briefIA.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",color:"#991b1b",fontSize:12.5,lineHeight:1.6,marginTop:12}}>{briefIA.erro}</div>}
+
+            {briefIA.loading&&<div style={{padding:"30px 0 18px",textAlign:"center",color:"#64748b",fontSize:13}}>
+              Lendo o playbook e os briefings aprovados… montando.
+            </div>}
+
+            {!briefIA.loading&&_v&&<div style={{marginTop:18}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>Proposta</div>
+                {_vs.length>1&&<div style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                  <button type="button" disabled={_i<=0} onClick={function(){setBriefIA(function(p){return Object.assign({},p,{idx:Math.max(0,(p.idx||0)-1)});});}}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:26,height:26,color:_i<=0?"#cbd5e1":"#334155",cursor:_i<=0?"default":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"inherit"}}>‹</button>
+                  <span style={{color:"#64748b",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>versão {_i+1} de {_vs.length}</span>
+                  <button type="button" disabled={_i>=_vs.length-1} onClick={function(){setBriefIA(function(p){return Object.assign({},p,{idx:Math.min((p.versoes||[]).length-1,(p.idx||0)+1)});});}}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:26,height:26,color:_i>=_vs.length-1?"#cbd5e1":"#334155",cursor:_i>=_vs.length-1?"default":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"inherit"}}>›</button>
+                </div>}
+              </div>
+
+              <div style={{background:"#faf5ff",border:"1px solid #e9d5ff",borderRadius:12,padding:"11px 14px",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={{color:"#5b21b6",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>Vai marcar</span>
+                  <span style={{background:"#7c3aed",color:"#fff",borderRadius:99,padding:"3px 11px",fontSize:11.5,fontWeight:700}}>{_v.tipoLabel}</span>
+                  {_v.ehVideo&&<span style={{background:"#fff",border:"1px solid #ddd6fe",color:"#5b21b6",borderRadius:99,padding:"3px 11px",fontSize:11.5,fontWeight:600}}>+ Guilherme como responsável</span>}
+                </div>
+                {_v.porque&&<div style={{color:"#6b21a8",fontSize:11.5,lineHeight:1.55,marginTop:7}}>{_v.porque}</div>}
+              </div>
+
+              <div style={{border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",color:"#1e293b",fontSize:12.8,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"#fff"}}>{_v.briefingTexto}</div>
+
+              {desc&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55,marginTop:10}}>
+                Este card já tem briefing. Usar esta proposta troca o texto na tela — nada é gravado até você clicar em <strong>Salvar</strong>, lá em cima.
+              </div>}
+            </div>}
+          </div>
+
+          <div style={{padding:"12px 20px",borderTop:"1px solid #e2e8f0",display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
+            <span style={{color:"#94a3b8",fontSize:10.5,marginRight:"auto"}}>Não inventa prazo, medida nem cidade que não esteja no pedido.</span>
+            <button id="px-briefia-go" disabled={!_podeGerar}
+              onClick={async function(){
+                const _p=String(briefIA.pedido||"").trim();
+                setBriefIA(function(p){return Object.assign({},p,{loading:true,erro:""});});
+                try{
+                  const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
+                  const _nome=(_cl&&_cl.name)||client||"";
+                  const _t=Object.assign({},task,{title:title||task.title,client:client,bioterUnit:bioterUnit,contentType:contentType,publishDate:publishDate});
+                  const r=await pxGerarBriefing({task:_t,clienteNome:_nome,necessidade:_p});
+                  setBriefIA(function(p){
+                    const vs=(Array.isArray(p.versoes)?p.versoes:[]).concat([r]);
+                    return Object.assign({},p,{loading:false,erro:"",versoes:vs,idx:vs.length-1});
+                  });
+                }catch(e){
+                  setBriefIA(function(p){return Object.assign({},p,{loading:false,erro:(e&&e.message)||String(e)});});
+                }
+              }}
+              style={{background:_podeGerar?"#fff":"#f8fafc",color:_podeGerar?"#5b21b6":"#cbd5e1",border:"1px solid "+(_podeGerar?"#ddd6fe":"#e2e8f0"),borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:briefIA.loading?"wait":(_podeGerar?"pointer":"default"),fontFamily:"inherit"}}>
+              {briefIA.loading?"Montando…":(_vs.length?"Gerar de novo":"Gerar briefing")}
+            </button>
+            {_v&&!briefIA.loading&&<button onClick={function(){
+                // Só mexe na tela. Nada vai pro banco até clicar em Salvar no cabeçalho.
+                setDesc(_v.briefing);
+                try{ if(descRef.current) descRef.current.innerHTML=_v.briefing; }catch(_){}
+                if(canEditContentType) setContentType(_v.tipo);
+                if(_v.ehVideo){ try{ setAssignees(function(p){ return p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]); }); }catch(_){} }
+                setBriefIA(null);
+                if(typeof pixelsToast!=="undefined") pixelsToast.info("Briefing colado e tipo marcado como \""+_v.tipoLabel+"\" — revise e clique em Salvar.",6000);
+              }}
+              style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Usar este</button>}
+          </div>
+        </div>
+      </div>;
+    })()}
+
     {/* ── UNSAVED CHANGES DIALOG ── */}
     {/* ── LIGHTBOX ── */}
     {lightbox&&<div onClick={()=>setLightbox(null)} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -42457,6 +42745,16 @@ function _cardPodeSerResp(u){
                 </button>
                 <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir do texto da arte e da legenda — pra mandar pro cliente decidir.</div>
               </div>)}
+              {canEdit&&<div style={{marginBottom:10}}>
+                <button type="button"
+                  onClick={function(){setBriefIA({pedido:"",loading:false,versoes:[],idx:0,erro:""});}}
+                  title="Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."
+                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+                  Gerar briefing
+                </button>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo.</div>
+              </div>}
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
               <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
