@@ -3532,6 +3532,171 @@ async function pxReescreverCopy(opts){
 }
 
 
+/* ─── GERAR LEGENDA DO ZERO (botão "Gerar legenda" da aba Legenda) ───────
+   Nasceu de Foto de obra e Short: são os cards que não dá pra automatizar,
+   porque dependem da Hellen subir o arquivo. O botão fica em TODO card — quem
+   já tem legenda simplesmente não usa.
+
+   Ela escreve um briefing curto (produto, cidade, um dado) e a IA devolve 3
+   opções escritas no padrão daquela empresa: tom de voz do playbook, chamadas
+   proibidas, regras aprendidas com o feedback da agência, foco do mês e as
+   legendas JÁ APROVADAS como referência de estilo.
+
+   Regra dura: não inventa número, cidade, prazo, garantia nem depoimento que
+   não esteja no briefing que ela escreveu. */
+
+/* Legendas aprovadas de cards do MESMO tipo (outras "Foto de obra" do mesmo
+   cliente, por exemplo). Molde muito melhor do que uma legenda de arte comum. */
+async function pxLegendasDoMesmoTipo(client,unit,titulo,excluirId){
+  const sb=window._sb; if(!sb||!client) return [];
+  const t=String(titulo||"").toLowerCase();
+  let chave="";
+  if(/foto\s*de\s*obra/.test(t)) chave="foto de obra";
+  else if(/\bshort\b|\bshorts\b/.test(t)) chave="short";
+  else {
+    // usa as 2 primeiras palavras significativas do título ("Folder Linha X" -> "folder linha")
+    const _p=t.replace(/[^0-9a-zà-ú\s]/gi," ").split(/\s+/).filter(function(w){return w.length>2;});
+    chave=_p.slice(0,2).join(" ");
+  }
+  if(chave.length<3) return [];
+  try{
+    // caption vazia vem como '' (nao NULL) na maioria dos cards — filtrar so por
+    // "is not null" enchia o limite de linhas vazias e descartava as boas.
+    let q=sb.from("tasks").select("title,caption,publish_date,status")
+      .eq("client",client)
+      .ilike("title","%"+chave+"%")
+      .is("deleted_at",null)
+      .not("caption","is",null)
+      .neq("caption","")
+      .order("publish_date",{ascending:false,nullsFirst:false})
+      .limit(20);
+    if(unit) q=q.eq("bioter_unit",unit);
+    if(excluirId) q=q.neq("id",String(excluirId));
+    const {data,error}=await q;
+    if(error||!Array.isArray(data)) return [];
+    return data.filter(function(r){
+      return r && _pxHtmlParaTexto(r.caption).length>60;
+    }).slice(0,4);
+  }catch(_){ return []; }
+}
+
+/* Devolve um array com 3 legendas em TEXTO PURO (quem chama converte pra HTML). */
+async function pxGerarLegendas(opts){
+  const task=(opts&&opts.task)||null;
+  if(!task) throw new Error("Card não informado.");
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const briefing=String((opts&&opts.briefing)||"").trim();
+  if(briefing.length<3) throw new Error("Escreva um briefing curto antes de gerar (produto, cidade, ou o que aparece na foto).");
+
+  const cliente=String((opts&&opts.clienteNome)||task.client||"");
+  const unit=String(task.bioterUnit||task.bioter_unit||"");
+  const py=unit==="paraguay";
+  const ct=String(task.contentType||task.content_type||"").toLowerCase();
+  const titulo=String(task.title||"");
+  const ehVideo=/^(video|video_short|reels|corte_video|video_basico|video_dinamico)$/.test(ct)||/short|reel|v[íi]deo/i.test(titulo);
+  const ehFotoObra=/foto\s*de\s*obra/i.test(titulo);
+  const soStory=!!(task.somenteStory||task.somente_story);
+  const _tags=Array.isArray(task.tags)?task.tags:[];
+  const ehComemorativa=_tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
+
+  const ctx=await pxContextoCopy(task.client,unit);
+  const pb=(ctx&&ctx.playbook)||{};
+  const regras=(ctx&&ctx.regras)||[];
+  const foco=(ctx&&ctx.foco_do_mes)||[];
+  const aprov=(ctx&&ctx.aprovadas)||[];
+  const recus=(ctx&&ctx.recusadas)||[];
+  let mesmoTipo=[];
+  try{ mesmoTipo=await pxLegendasDoMesmoTipo(task.client,unit,titulo,task.id); }catch(_){}
+
+  const sys="Você escreve legendas de Instagram para empresas do agronegócio e da construção no Brasil, "+
+    "sempre na voz da marca que te passarem. Escreve como gente que conhece o campo e a obra: direto, "+
+    "concreto, sem jargão de marketing e sem frase de efeito vazia. "+
+    "REGRA MAIS IMPORTANTE: você só pode usar os fatos do BRIEFING. Nunca invente número, medida, cidade, "+
+    "prazo, preço, garantia, nome de cliente nem depoimento que não esteja escrito ali. Se faltar dado, "+
+    "escreva a legenda sem ele em vez de preencher com suposição. "+
+    (py?"ESCREVA AS TRÊS LEGENDAS EM ESPANHOL (é a unidade do Paraguai)."
+       :"Escreva em português do Brasil.")+
+    "\nResponda EXATAMENTE neste formato, texto puro, sem markdown, sem comentário antes nem depois:"+
+    "\n===OPCAO 1===\n(legenda)\n===OPCAO 2===\n(legenda)\n===OPCAO 3===\n(legenda)";
+
+  let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
+  u+="CARD: "+(titulo||"—")+"\n";
+  const dt=String(task.publishDate||task.publish_date||"").slice(0,10);
+  if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
+  u+="FORMATO: "+(ehVideo?"vídeo curto (reels/short)":(ehFotoObra?"foto de obra":(ct||"arte")))+"\n\n";
+
+  u+="════ BRIEFING QUE A AGÊNCIA ESCREVEU (única fonte de fatos) ════\n"+briefing+"\n\n";
+
+  if(pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.sobre).slice(0,900)+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
+    u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
+    u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
+  const _ctt=(pb.contatos_por_unidade&&unit&&pb.contatos_por_unidade[unit])||pb.contatos;
+  if(_ctt&&_pxCtxTxt(_ctt)) u+="CONTATOS DESTA UNIDADE (use no CTA, não invente outro): "+_pxCtxTxt(_ctt)+"\n\n";
+  if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
+  if(regras.length){
+    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
+    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
+    u+="\n";
+  }
+  if(foco.length){
+    u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
+    for(let i=0;i<Math.min(foco.length,2);i++){
+      const f=foco[i]; const partes=[];
+      if(f.objetivo) partes.push("objetivo: "+f.objetivo);
+      if(_pxCtxTxt(f.produtos_foco)) partes.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco));
+      if(_pxCtxTxt(f.campanhas)) partes.push("campanhas: "+_pxCtxTxt(f.campanhas));
+      if(partes.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+partes.join("; ")+"\n";
+    }
+    u+="\n";
+  }
+  if(mesmoTipo.length){
+    u+="LEGENDAS DE CARDS DO MESMO TIPO (\""+titulo+"\") JÁ PUBLICADOS — COPIE A ESTRUTURA, NÃO O CONTEÚDO:\n";
+    for(let i=0;i<mesmoTipo.length;i++)
+      u+="---\n"+_pxHtmlParaTexto(mesmoTipo[i].caption).slice(0,650)+"\n";
+    u+="\n";
+  }
+  if(aprov.length){
+    u+="OUTRAS LEGENDAS JÁ APROVADAS DESTE CLIENTE (é este o tom que funciona):\n";
+    for(let i=0;i<Math.min(aprov.length,5);i++)
+      u+="---\n"+_pxHtmlParaTexto(aprov[i].legenda).slice(0,600)+"\n";
+    u+="\n";
+  }
+  if(recus.length){
+    u+="LEGENDAS RECUSADAS E O MOTIVO (não repetir o erro):\n";
+    for(let i=0;i<Math.min(recus.length,5);i++)
+      if(recus[i].feedback) u+="- "+(recus[i].titulo||"")+": "+recus[i].feedback+"\n";
+    u+="\n";
+  }
+
+  u+="TAREFA: escreva 3 LEGENDAS DIFERENTES para este post, todas a partir do mesmo briefing.\n";
+  u+="As três precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
+  if(ehFotoObra) u+="É uma FOTO DE OBRA: o post mostra serviço entregue. Fale do que foi feito e de onde, com orgulho e sem exagero. Nada de promessa nem número que não esteja no briefing.\n";
+  if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
+  if(ehComemorativa){
+    u+="É DATA COMEMORATIVA: é homenagem, não é post de venda. Sem CTA, sem telefone, sem falar de produto, prazo ou garantia.\n";
+    u+="\nFORMATO DE CADA LEGENDA: 280 a 520 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.";
+  }else{
+    u+="\nFORMATO DE CADA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
+  }
+  if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
+
+  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
+  // Normaliza variações do separador (**OPÇÃO 1**, ### Opcao 1, OPÇÃO 1:) antes de cortar
+  txt=txt.replace(/^[\s>*#=_-]*OP[ÇC][ÃA]O\s*([123])\s*[:\s>*#=_-]*$/gim,function(_m,n){return "===OPCAO "+n+"===";});
+  const partes=txt.split(/===OPCAO\s*[123]===/i).map(function(p){return p.trim();}).filter(function(p){return p.length>40;});
+  const out=(partes.length?partes:[txt]).map(function(p){
+    return p.replace(/^===+\s*/,"").replace(/\s*===+$/,"").trim();
+  }).filter(Boolean);
+  if(!out.length) throw new Error("A IA respondeu vazio. Tente de novo.");
+  return out.slice(0,3);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    SPRINT HELPERS — lógica de cálculo de sprint e previsão de entrega
    Toda a lógica vive aqui pra ser testável e reusable.
@@ -4923,8 +5088,23 @@ function pixelsGenerateVideoPreview(file,onProgress,abortRef){
   return new Promise(function(resolve){
     var PREVIEW_MAX_DURATION=15*60;   // acima de 15 min não compensa (tempo real)
     var PREVIEW_MAX_EDGE=1280;        // maior lado do preview
-    var PREVIEW_VIDEO_BPS=1200000;
-    var PREVIEW_AUDIO_BPS=96000;
+    // ── Bitrate ADAPTATIVO (14/09/2026) ──
+    // Antes: 1.2 Mbps fixo. Reel de 45s saia com ~7 MB e visivelmente borrado.
+    // Agora: calcula o bitrate pra mirar ~13 MB de arquivo final, com piso
+    // (video longo nao explode de tamanho) e teto (video curto nao desperdica).
+    var PREVIEW_TARGET_BYTES=13*1024*1024; // alvo de tamanho do preview
+    var PREVIEW_VIDEO_BPS_MIN=1200000;     // piso  — videos longos (= comportamento antigo)
+    var PREVIEW_VIDEO_BPS_MAX=6000000;     // teto  — acima disso 720p ja esta transparente
+    var PREVIEW_AUDIO_BPS=128000;
+    function _calcVideoBps(dur,origBytes){
+      if(!isFinite(dur)||dur<=0)return PREVIEW_VIDEO_BPS_MIN;
+      var alvo=(PREVIEW_TARGET_BYTES*8/dur)-PREVIEW_AUDIO_BPS;
+      // nunca pedir mais bitrate do que o proprio original tem (so incharia o arquivo)
+      if(origBytes>0){var _o=(origBytes*8/dur)*0.8;if(_o>0&&alvo>_o)alvo=_o;}
+      if(alvo<PREVIEW_VIDEO_BPS_MIN)alvo=PREVIEW_VIDEO_BPS_MIN;
+      if(alvo>PREVIEW_VIDEO_BPS_MAX)alvo=PREVIEW_VIDEO_BPS_MAX;
+      return Math.round(alvo);
+    }
     function _pickPreviewMime(){
       if(typeof MediaRecorder==="undefined")return null;
       var cands=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
@@ -5003,7 +5183,9 @@ function pixelsGenerateVideoPreview(file,onProgress,abortRef){
         if(!_audioOk){console.warn("[preview] WebAudio indisponível — usando o original");finish(null);return;}
         var chunks=[];
         try{
-          rec=new MediaRecorder(canvasStream,{mimeType:mimeType,videoBitsPerSecond:PREVIEW_VIDEO_BPS,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
+          var _vbps=_calcVideoBps(dur,(file&&file.size)||0);
+          console.log("[preview] "+cw+"x"+ch+" | "+Math.round(dur)+"s | "+(_vbps/1e6).toFixed(2)+" Mbps | alvo ~"+Math.round(PREVIEW_TARGET_BYTES/1048576)+" MB");
+          rec=new MediaRecorder(canvasStream,{mimeType:mimeType,videoBitsPerSecond:_vbps,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
         }catch(_){finish(null);return;}
         rec.ondataavailable=function(e){if(e.data&&e.data.size>0)chunks.push(e.data);};
         rec.onerror=function(){finish(null);};
@@ -5017,7 +5199,9 @@ function pixelsGenerateVideoPreview(file,onProgress,abortRef){
             if(!_temTrilha||!_ctxOk){console.warn("[preview] áudio não capturado, descartando");finish(null);return;}
           }
           var blob=new Blob(chunks,{type:(mimeType.split(";")[0]||"video/mp4")});
-          if(blob.size>=file.size*0.65){finish(null);return;}
+          // Precisa encolher pelo menos 25% pra valer a pena guardar 2 arquivos.
+          // (era 35%; afrouxado porque agora o preview e maior e melhor de proposito)
+          if(blob.size>=file.size*0.75){console.warn("[preview] encolheu pouco, descartando");finish(null);return;}
           _validatePreview(blob,dur,drawCount).then(function(ok){finish(ok?blob:null);}).catch(function(){finish(null);});
         };
         var draw=function(){
@@ -28913,7 +29097,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   })()}
                   {/* ═════ Baixar versão compactada — só aparece quando existe preview ═════ */}
                   {tab==="video"&&_previewVideo&&_previewVideo.previewUrl&&(
-                  <button type="button" title="Baixar versão compactada (720p, bem menor — ideal pra WhatsApp e aprovação)"
+                  <button type="button" title="Baixar versão compactada (720p em alta taxa — bem menor que o original e sem perder qualidade de leitura)"
                     onClick={async function(){
                       try{
                         const _url=_previewVideo.previewUrl;
@@ -39772,6 +39956,10 @@ function _cardPodeSerResp(u){
   const captionRef=useRef(null);
   // (11/09/2026) Transformar arte de data comemorativa em roteiro de vídeo de 60s.
   const [roteiroSt,setRoteiroSt]=useState(null); // {loading} | {texto} | {erro}
+  // (14/09/2026) "Gerar legenda": briefing curto -> 3 opções no padrão da empresa.
+  // Nasceu de Foto de obra e Short (dependem da Hellen subir o arquivo), mas fica
+  // em todo card — quem já tem legenda simplesmente não usa.
+  const [legIA,setLegIA]=useState(null); // {brief,loading,opcoes:[],erro}
 
   // Sanitizador de HTML — permite apenas tags básicas de formatação.
   // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
@@ -40279,8 +40467,23 @@ function _cardPodeSerResp(u){
   const PREVIEW_MIN_SIZE=20*1024*1024;   // só comprime acima de 20 MB
   const PREVIEW_MAX_DURATION=15*60;      // acima de 15 min não compensa (gravação é em tempo real)
   const PREVIEW_MAX_EDGE=1280;           // maior lado do preview
-  const PREVIEW_VIDEO_BPS=1200000;
-  const PREVIEW_AUDIO_BPS=96000;
+  // ── Bitrate ADAPTATIVO (14/09/2026) ──
+  // Antes: 1.2 Mbps fixo. Reel de 45s saia com ~7 MB e visivelmente borrado.
+  // Agora: calcula o bitrate pra mirar ~13 MB de arquivo final, com piso
+  // (video longo nao explode de tamanho) e teto (video curto nao desperdica).
+  const PREVIEW_TARGET_BYTES=13*1024*1024; // alvo de tamanho do preview
+  const PREVIEW_VIDEO_BPS_MIN=1200000;     // piso  — videos longos (= comportamento antigo)
+  const PREVIEW_VIDEO_BPS_MAX=6000000;     // teto  — acima disso 720p ja esta transparente
+  const PREVIEW_AUDIO_BPS=128000;
+  const _calcVideoBps=(dur,origBytes)=>{
+    if(!isFinite(dur)||dur<=0)return PREVIEW_VIDEO_BPS_MIN;
+    let alvo=(PREVIEW_TARGET_BYTES*8/dur)-PREVIEW_AUDIO_BPS;
+    // nunca pedir mais bitrate do que o proprio original tem (so incharia o arquivo)
+    if(origBytes>0){const _o=(origBytes*8/dur)*0.8;if(_o>0&&alvo>_o)alvo=_o;}
+    if(alvo<PREVIEW_VIDEO_BPS_MIN)alvo=PREVIEW_VIDEO_BPS_MIN;
+    if(alvo>PREVIEW_VIDEO_BPS_MAX)alvo=PREVIEW_VIDEO_BPS_MAX;
+    return Math.round(alvo);
+  };
 
   const _pickPreviewMime=()=>{
     if(typeof MediaRecorder==="undefined")return null;
@@ -40376,7 +40579,9 @@ function _cardPodeSerResp(u){
         }
         const chunks=[];
         try{
-          rec=new MediaRecorder(canvasStream,{mimeType,videoBitsPerSecond:PREVIEW_VIDEO_BPS,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
+          const _vbps=_calcVideoBps(dur,(file&&file.size)||0);
+          console.log("[preview] "+cw+"x"+ch+" | "+Math.round(dur)+"s | "+(_vbps/1e6).toFixed(2)+" Mbps | alvo ~"+Math.round(PREVIEW_TARGET_BYTES/1048576)+" MB");
+          rec=new MediaRecorder(canvasStream,{mimeType,videoBitsPerSecond:_vbps,audioBitsPerSecond:PREVIEW_AUDIO_BPS});
         }catch(_){finish(null);return;}
         rec.ondataavailable=(e)=>{if(e.data&&e.data.size>0)chunks.push(e.data);};
         rec.onerror=()=>finish(null);
@@ -40394,8 +40599,9 @@ function _cardPodeSerResp(u){
             if(!_temTrilha||!_ctxOk){console.warn("[preview] áudio não capturado, descartando");finish(null);return;}
           }
           const blob=new Blob(chunks,{type:(mimeType.split(";")[0]||"video/mp4")});
-          // Se não encolheu pelo menos 35%, não compensa guardar um segundo arquivo
-          if(blob.size>=file.size*0.65){finish(null);return;}
+          // Precisa encolher pelo menos 25% pra valer a pena guardar 2 arquivos.
+          // (era 35%; afrouxado porque agora o preview e maior e melhor de proposito)
+          if(blob.size>=file.size*0.75){console.warn("[preview] encolheu pouco, descartando");finish(null);return;}
           _validatePreview(blob,dur,drawCount).then(function(ok){finish(ok?blob:null);}).catch(function(){finish(null);});
         };
         const draw=()=>{
@@ -41342,6 +41548,99 @@ function _cardPodeSerResp(u){
             }}
             style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Transformar o card em vídeo</button>}
         </div>}
+      </div>
+    </div>}
+
+    {/* ── GERAR LEGENDA (briefing curto -> 3 opções no padrão da empresa) ── */}
+    {legIA&&<div onMouseDown={function(e){e.stopPropagation();}} onClick={function(e){ if(e.target===e.currentTarget&&!legIA.loading) setLegIA(null); }}
+      style={{position:"fixed",inset:0,zIndex:520,background:"rgba(15,23,42,0.60)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:660,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(15,23,42,0.35)"}}>
+        <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <div style={{width:32,height:32,borderRadius:9,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Gerar legenda</div>
+              <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.title}{client?(" · "+((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;})||{name:client}).name):""}{bioterUnit?(" · "+bioterUnit):""}</div>
+            </div>
+          </div>
+          <button onClick={function(){ if(!legIA.loading) setLegIA(null); }} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:legIA.loading?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:legIA.loading?.5:1,flexShrink:0}}><Ico n="x" size={14} color="#fff"/></button>
+        </div>
+
+        <div style={{padding:"18px 20px",overflowY:"auto",flex:1,minHeight:0}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>Briefing rápido</div>
+          <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,marginBottom:8}}>
+            Escreva só o essencial — produto, cidade, cliente da obra, um dado técnico, o que aparece na foto.
+            O tom de voz, as hashtags e o contato saem do playbook da empresa e das legendas já aprovadas.
+          </div>
+          <textarea
+            value={legIA.brief}
+            onChange={function(e){ const v=e.target.value; setLegIA(function(p){return Object.assign({},p,{brief:v});}); }}
+            onKeyDown={function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); const b=document.getElementById("px-legia-go"); if(b)b.click(); } }}
+            disabled={!!legIA.loading}
+            placeholder={"Ex.: Terraplanagem entregue em Toledo pra um cliente de soja. 3 mil m² nivelados, máquina própria, obra em 4 dias."}
+            style={{width:"100%",minHeight:92,boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontSize:13,lineHeight:1.6,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",background:legIA.loading?"#f8fafc":"#fff"}}/>
+
+          {legIA.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",color:"#991b1b",fontSize:12.5,lineHeight:1.6,marginTop:12}}>{legIA.erro}</div>}
+
+          {legIA.loading&&<div style={{padding:"30px 0 18px",textAlign:"center",color:"#64748b",fontSize:13}}>
+            Lendo o playbook, as regras e as legendas aprovadas… escrevendo 3 opções.
+          </div>}
+
+          {!legIA.loading&&Array.isArray(legIA.opcoes)&&legIA.opcoes.length>0&&<div style={{marginTop:18}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:10}}>Escolha uma — ela entra no campo de legenda pra você revisar</div>
+            {legIA.opcoes.map(function(txt,i){
+              return <div key={i} style={{border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",marginBottom:10,background:"#fff"}}>
+                <div style={{padding:"8px 14px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <span style={{color:"#5b21b6",fontWeight:800,fontSize:11,letterSpacing:.2}}>OPÇÃO {i+1}</span>
+                  <span style={{color:"#94a3b8",fontSize:10.5}}>{txt.length} caracteres</span>
+                </div>
+                <div style={{padding:"13px 15px",color:"#1e293b",fontSize:12.8,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{txt}</div>
+                <div style={{padding:"9px 14px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                  <button onClick={function(){
+                      try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success("Legenda copiada.",2500); }catch(_){}
+                    }}
+                    style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Copiar</button>
+                  <button onClick={function(){
+                      // Só troca o campo na tela. Nada vai pro banco até ela clicar em Salvar
+                      // legenda — se fechar o card sem salvar, a legenda antiga continua lá.
+                      const html=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml(txt):("<p>"+txt.replace(/\n/g,"</p><p>")+"</p>");
+                      setCaption(html);
+                      try{ if(captionRef.current) captionRef.current.innerHTML=html; }catch(_){}
+                      setLegIA(null);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Legenda colada no campo — revise e clique em Salvar legenda.",5500);
+                    }}
+                    style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:9,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>Usar esta</button>
+                </div>
+              </div>;
+            })}
+            {caption&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55}}>
+              Este card já tem legenda. Usar uma das opções troca o texto na tela — nada é gravado até você clicar em <strong>Salvar legenda</strong>.
+            </div>}
+          </div>}
+        </div>
+
+        <div style={{padding:"12px 20px",borderTop:"1px solid #e2e8f0",display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
+          <span style={{color:"#94a3b8",fontSize:10.5}}>Não inventa número, cidade nem prazo que não esteja no briefing.</span>
+          <button id="px-legia-go" disabled={!!legIA.loading||String(legIA.brief||"").trim().length<3}
+            onClick={async function(){
+              const _b=String(legIA.brief||"").trim();
+              setLegIA(function(p){return Object.assign({},p,{loading:true,erro:"",opcoes:null});});
+              try{
+                const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
+                const _nome=(_cl&&_cl.name)||client||"";
+                const _t=Object.assign({},task,{title:title||task.title,client:client,bioterUnit:bioterUnit,contentType:contentType,caption:caption,tags:tags});
+                const ops=await pxGerarLegendas({task:_t,clienteNome:_nome,briefing:_b});
+                setLegIA(function(p){return Object.assign({},p,{loading:false,opcoes:ops,erro:""});});
+              }catch(e){
+                setLegIA(function(p){return Object.assign({},p,{loading:false,erro:(e&&e.message)||String(e)});});
+              }
+            }}
+            style={{background:(legIA.loading||String(legIA.brief||"").trim().length<3)?"#e2e8f0":"linear-gradient(135deg,#7c3aed,#5b21b6)",color:(legIA.loading||String(legIA.brief||"").trim().length<3)?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:700,cursor:legIA.loading?"wait":((String(legIA.brief||"").trim().length<3)?"default":"pointer"),fontFamily:"inherit",boxShadow:(legIA.loading||String(legIA.brief||"").trim().length<3)?"none":"0 3px 12px rgba(124,58,237,.35)"}}>
+            {legIA.loading?"Escrevendo…":(Array.isArray(legIA.opcoes)?"Gerar outras 3":"Gerar 3 opções")}
+          </button>
+        </div>
       </div>
     </div>}
 
@@ -42512,6 +42811,13 @@ function _cardPodeSerResp(u){
                   <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>Texto final que acompanha o cartão até o agendamento e aparece no Portal do Cliente</div>
                 </div>
                 {caption&&<span style={{background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"3px 9px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}><Ico n="check" size={10}/> Preenchida</span>}
+                {canEdit&&<button type="button"
+                  onClick={function(){setLegIA({brief:"",loading:false,opcoes:null,erro:""});}}
+                  title="Você escreve um briefing curto (produto, cidade, o que aparece na foto) e a IA devolve 3 legendas no padrão desta empresa."
+                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,.28)",letterSpacing:-.1,whiteSpace:"nowrap"}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+                  Gerar legenda
+                </button>}
               </div>
               {canEdit&&<RichToolbar elRef={captionRef}/>}
               <div
