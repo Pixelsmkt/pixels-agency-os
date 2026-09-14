@@ -28503,6 +28503,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [loteModal,setLoteModal]=useState(false);
   const [loteQtd,setLoteQtd]=useState(30);
   const [loteTexto,setLoteTexto]=useState("");
+  const [loteTudo,setLoteTudo]=useState(false);   // incluir os que já passaram por um lote
   const [lote,setLote]=useState(null);   // {total,feitos,erros,atual,parar}
   const loteRef=useRef(null);
   const [refazerText,setRefazerText]=useState("");
@@ -28712,6 +28713,24 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   /* Testar nova abordagem / Refazer do zero.
      O card NÃO muda de status e NÃO sai da tela: o Claude reescreve na hora,
      a versão anterior fica guardada em copyVersoes e o painel atualiza sozinho. */
+  /* Card já reescrito num lote? Olha a ÚLTIMA versão: se ela veio de um lote, o card
+     já foi tratado e o próximo lote pula ele. Se depois disso alguém pediu um ajuste
+     individual, a última versão não é mais de lote e o card volta pra fila do lote. */
+  const _pxJaNoLote=(t)=>{
+    const vs=Array.isArray(t&&t.copyVersoes)?t.copyVersoes:[];
+    if(!vs.length) return false;
+    return !!vs[vs.length-1].lote;
+  };
+  /* Os alvos do próximo lote: fila de Copys, quem publica mais cedo primeiro,
+     pulando os que já passaram (a não ser que se peça pra incluir). */
+  const _pxAlvosLote=(qtd,incluirFeitos)=>{
+    const _dt=(t)=>{const d=String(t.publishDate||t.publish_date||"").slice(0,10);return d?d:"9999-99-99";};
+    return (copyQueue||[])
+      .filter(function(t){ return incluirFeitos?true:!_pxJaNoLote(t); })
+      .slice().sort(function(a,b){return _dt(a)<_dt(b)?-1:_dt(a)>_dt(b)?1:0;})
+      .slice(0,Math.max(1,qtd|0));
+  };
+
   /* Copys IRMÃS: mesma data de publicação e mesmo assunto, em OUTRA marca.
      Vão no prompt como "não repetir" — é o que faltava pra IA parar de escrever
      a mesma comemorativa pra todo mundo (14/09/2026). */
@@ -28774,9 +28793,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         // pra uma versão anterior tem que devolver o título daquela versão também (14/09/2026).
         if(!vs.length)vs.push({v:1,briefing:t.desc||t.description||"",legenda:t.caption||"",
           titulo:t.title||"",autor:"original",tipo:null,feedback:null,at:now,atFmt:nowFmt()});
+        // `lote:true` é o que faz o próximo lote SABER que este card já foi reescrito e
+        // pular pro próximo (14/09/2026). Sem isso, apertar "30" de novo refazia os mesmos 30.
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
           titulo:((nova&&nova.titulo)||t.title||""),
-          autor:"Claude",tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
+          autor:_pxNomeIA(),tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
+          lote:!!lote,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
         // NAO cria comentario no card com o pedido pra IA (pedido do Vinicius, 14/09/2026).
         // Os comentarios do cartao sao conversa entre pessoas; pedido de reescrita ja fica
@@ -28815,8 +28837,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      Cada card guarda a versão anterior — dá pra voltar card a card. */
   const rodarLote=async(qtd,direcao)=>{
     if(!isApprover)return;
-    const _dt=(t)=>{const d=String(t.publishDate||t.publish_date||"").slice(0,10);return d?d:"9999-99-99";};
-    const alvos=(copyQueue||[]).slice().sort(function(a,b){return _dt(a)<_dt(b)?-1:_dt(a)>_dt(b)?1:0;}).slice(0,Math.max(1,qtd|0));
+    const alvos=_pxAlvosLote(qtd,!!loteTudo);
     loteRef.current={parar:false};
     setLote({total:alvos.length,feitos:0,erros:0,atual:"",parar:false});
     for(let i=0;i<alvos.length;i++){
@@ -30425,7 +30446,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   planejamento, não pode mudar em massa) e reescreve só o texto. */}
               {!isMob&&copyQueue.length>1&&(<>
                 <div style={{height:1,background:C.b1,margin:"6px 0 2px"}}/>
-                <button onClick={()=>{setLoteTexto("");setLoteQtd(Math.min(30,copyQueue.length));setLoteModal(true);}}
+                <button onClick={()=>{const _f=(copyQueue||[]).filter(function(t){return !_pxJaNoLote(t);}).length;setLoteTexto("");setLoteTudo(false);setLoteQtd(Math.max(1,Math.min(30,_f||copyQueue.length)));setLoteModal(true);}}
                   disabled={!!(lote&&!lote.fim)}
                   title="Reescreve de uma vez as próximas copys da fila, começando pelas que publicam mais cedo."
                   style={{width:"100%",background:"transparent",color:"#0f766e",border:"1px dashed #99f6e4",borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12.5,cursor:(lote&&!lote.fim)?"wait":"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,opacity:(lote&&!lote.fim)?.6:1}}
@@ -30845,10 +30866,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     {/* ── Modal e progresso da REESCRITA EM LOTE (14/09/2026) ── */}
     {loteModal&&(function(){
       const _dt=(t)=>{const d=String(t.publishDate||t.publish_date||"").slice(0,10);return d?d:"9999-99-99";};
-      const _alvos=(copyQueue||[]).slice().sort(function(a,b){return _dt(a)<_dt(b)?-1:_dt(a)>_dt(b)?1:0;}).slice(0,Math.max(1,loteQtd|0));
+      const _feitos=(copyQueue||[]).filter(_pxJaNoLote).length;
+      const _restam=(copyQueue||[]).length-_feitos;
+      const _alvos=_pxAlvosLote(loteQtd,loteTudo);
       const _de=_alvos.length?_dt(_alvos[0]):"", _ate=_alvos.length?_dt(_alvos[_alvos.length-1]):"";
       const _br=(d)=>d&&d.length===10?(d.slice(8,10)+"/"+d.slice(5,7)):"—";
       const _custo=(_alvos.length*0.22).toFixed(2).replace(".",",");
+      // (o custo é estimativa: ~6k tokens de entrada + ~900 de saída por card no gpt-5.6-sol)
       return <div onClick={e=>{if(e.target===e.currentTarget)setLoteModal(false);}}
         style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
@@ -30865,10 +30889,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <span style={{fontSize:12,color:"#64748b"}}>de {copyQueue.length} na fila</span>
             </div>
             <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontSize:12.5,color:"#334155",lineHeight:1.6}}>
-              Pega os que <b>publicam mais cedo</b> — de <b>{_br(_de)}</b> a <b>{_br(_ate)}</b>.<br/>
+              Vai reescrever <b>{_alvos.length}</b> card(s), dos que <b>publicam mais cedo</b> — de <b>{_br(_de)}</b> a <b>{_br(_ate)}</b>.<br/>
+              {_feitos>0&&<>Na fila: <b>{_feitos}</b> já passaram por um lote{loteTudo?" (vão ser refeitos)":" e são pulados"}, <b>{_restam}</b> ainda não.<br/></>}
               Cada card guarda a versão anterior, dá pra voltar um a um.<br/>
               Custo estimado: <b>~R$ {_custo}</b>.
             </div>
+            {_feitos>0&&(
+              <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",cursor:"pointer"}}>
+                <input type="checkbox" checked={loteTudo} onChange={e=>setLoteTudo(e.target.checked)} style={{width:15,height:15,cursor:"pointer"}}/>
+                Reescrever também os {_feitos} que já passaram por um lote
+              </label>
+            )}
             <div>
               <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a",display:"block",marginBottom:5}}>Direção pra todos (opcional)</label>
               <textarea value={loteTexto} onChange={e=>setLoteTexto(e.target.value)} rows={3}
