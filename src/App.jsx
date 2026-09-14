@@ -12190,7 +12190,7 @@ function _PBProjeto({cl, idx}){
       if(ps&&ps.start&&ps.package) f={preset:ps.package,start:String(ps.start).slice(0,10)};
       setFase(f||false);
       setDatas(((rs[2]&&rs[2].data)||[])
-        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"; })
+        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"&&!r.nao_publica; })
         .map(function(r){ return String(r.publish_date).slice(0,10); }));
     }).catch(function(){ if(vivo) setFase(false); });
     return function(){ vivo=false; };
@@ -17288,17 +17288,25 @@ function _pxColAlvos(t){
   }
   return PX_COLISAO_CLIENTES.indexOf(c)>=0?[c]:[];
 }
+/* ⚠️ FOLDER E "NAO PUBLICA" TAMBEM NAO OCUPAM O DIA (14/09/2026). Eles ja sumiam de
+   todos os calendarios, mas continuavam contando aqui — um folder na quarta fazia o
+   planejador achar que a semana ja tinha o post daquele dia e deixar de repor.
+   Mesmo esquecimento do story, corrigido em 12/09, na outra ponta. */
+function _pxNaoEhPublicacao(t){
+  return !!(t && (t.somente_story || t.somenteStory || t.nao_publica || t.naoPublica
+                  || t.content_type==="folder" || t.contentType==="folder"));
+}
 function _pxColConta(linhas,alvo){
   return (linhas||[]).filter(function(t){
     if(t.deleted_at) return false;
-    if(t.status==="reprovado"||t.status==="pausado"||t.somente_story) return false;
+    if(t.status==="reprovado"||t.status==="pausado"||_pxNaoEhPublicacao(t)) return false;
     return _pxColAlvos(t).indexOf(alvo)>=0;
   });
 }
 function _pxApConta(linhas,alvo){
   return (linhas||[]).filter(function(t){
     if(t.deleted_at) return false;
-    if(t.status==="reprovado"||t.status==="pausado"||t.somente_story) return false;
+    if(t.status==="reprovado"||t.status==="pausado"||_pxNaoEhPublicacao(t)) return false;
     return _pxApAlvos(t).indexOf(alvo)>=0;
   });
 }
@@ -17308,7 +17316,7 @@ function _pxApVazio(t){
 }
 async function _pxApLinhasDe(ini,fim){
   const sb=window._sb; if(!sb) return null;
-  const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,content_type,files,comments,caption,description,deleted_at")
+  const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,files,comments,caption,description,deleted_at")
     .is("deleted_at",null).gte("publish_date",ini).lte("publish_date",fim).in("client",PX_COLISAO_CLIENTES);
   if(!r||r.error) return null; return r.data||[];
 }
@@ -19231,6 +19239,7 @@ function _pxContaNoCalendario(t){
   if(!t||t.deletedAt||!t.publishDate) return false;
   if(t.status==="pausado"||t.status==="reprovado") return false;
   if(t.contentType==="folder") return false;   // material impresso, não é publicação
+  if(t.naoPublica||t.nao_publica) return false; // marcado "não publica nas redes" no cartão
   if(t.somenteStory||t.somente_story) return false; // story não é post de feed: fora da cota 8/4/4
   return true;
 }
@@ -19812,6 +19821,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
     if(!t.publishDate) return false;
     // Folder não é publicação social (é material impresso) — não vai pro calendário
     if(t.contentType==="folder") return false;
+    if(t.naoPublica||t.nao_publica) return false;
     // Filtro cliente
     if(filterClient!=="todos"){
       if(t.client!==filterClient) return false;
@@ -39853,6 +39863,9 @@ function _cardPodeSerResp(u){
   // O campo ja existia no banco (vinha so do editor de data comemorativa); agora da pra
   // marcar no proprio cartao. Story NAO ocupa o dia no planejamento e a IA nao escreve legenda.
   const [somenteStory,setSomenteStory]=useState(!!(task.somenteStory||task.somente_story));
+  // (14/09/2026) Nao publica nas redes: convite, material de feira, peca interna.
+  // Vale pra qualquer tipo de conteudo. O tipo "folder" ja tinha esse efeito embutido.
+  const [naoPublica,setNaoPublica]=useState(!!(task.naoPublica||task.nao_publica));
   const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
   const _refMonthHidRef=useRef(null); // ref do input month — SEMPRE no topo (hook não pode ser condicional)
   // Deadline com auto-correção EAGER (no useState initializer, sem side effect)
@@ -40079,6 +40092,7 @@ function _cardPodeSerResp(u){
       setPriority((task.priority&&task.priority!=="media")?task.priority:"");
       setContentType(task.contentType||"");
       setSomenteStory(!!(task.somenteStory||task.somente_story));
+      setNaoPublica(!!(task.naoPublica||task.nao_publica));
       setReferenceMonth(task.referenceMonth||"");
       // Recalcula deadline corrigido pro novo card + reset baseline
       const _newDeadline = _computeInitialDeadline(task);
@@ -40376,6 +40390,7 @@ function _cardPodeSerResp(u){
     if(priority!==task.priority)changed.push("prioridade");
     if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
     if(!!somenteStory!==!!(task.somenteStory||task.somente_story))changed.push(somenteStory?"marcado como somente story":"desmarcado somente story");
+    if(!!naoPublica!==!!(task.naoPublica||task.nao_publica))changed.push(naoPublica?"marcado como não publica nas redes":"desmarcado não publica nas redes");
     if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
@@ -40418,9 +40433,10 @@ function _cardPodeSerResp(u){
       let nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
       // A tag "Somente story" é espelho do campo, não é etiqueta livre: acompanha o
       // interruptor mesmo quando quem salva não é sócio (tags livres seguem só-admin).
-      const _TAG_STORY="Somente story";
-      nextTags = (nextTags||[]).filter(function(_x){return String(_x)!==_TAG_STORY;});
+      const _TAG_STORY="Somente story", _TAG_NAOPUB="Não publica";
+      nextTags = (nextTags||[]).filter(function(_x){return String(_x)!==_TAG_STORY&&String(_x)!==_TAG_NAOPUB;});
       if(somenteStory) nextTags = nextTags.concat([_TAG_STORY]);
+      if(naoPublica)   nextTags = nextTags.concat([_TAG_NAOPUB]);
       // referenceMonth: só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
       // Auto-fill: se responsável é freelancer pago por demanda (André/Maria/Guilherme) E o mês tá vazio,
       // calcula automaticamente (dia>10 vira mês seguinte). Se NÃO tem freelancer, deixa vazio mesmo se o user tentou setar.
@@ -40443,7 +40459,7 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -42964,38 +42980,8 @@ function _cardPodeSerResp(u){
               </div>}
             </div>
 
-            {!isAgendado&&<div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>
-                  🎙 Áudios de Orientação {audAttachments.length>0&&<span style={{color:"#94a3b8",fontWeight:400}}>({audAttachments.length})</span>}
-                </div>
-                {canEdit&&<button onClick={isRecording?stopRec:startRec}
-                  style={{background:isRecording?"#fef2f2":"#f0f9ff",border:`1px solid ${isRecording?"#fecaca":"#bae6fd"}`,borderRadius:8,padding:"4px 12px",fontSize:11,fontWeight:700,color:isRecording?"#ef4444":"#0284c7",cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                  {isRecording?<><div style={{width:7,height:7,borderRadius:"50%",background:"#ef4444"}}/>{fmtSec(recSeconds)} Parar</>:<>+ Gravar</>}
-                </button>}
-              </div>
-              {audAttachments.length===0&&!isRecording&&!audioURL&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"12px 0"}}>Nenhum áudio ainda</div>}
-              {isRecording&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:"#ef4444",flexShrink:0}}/>
-                <span style={{color:"#ef4444",fontWeight:700,fontSize:13}}>{fmtSec(recSeconds)}</span>
-                <span style={{color:"#94a3b8",fontSize:11,flex:1}}>Gravando...</span>
-                <button onClick={stopRec} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:8,padding:"4px 12px",fontWeight:700,fontSize:11,cursor:"pointer"}}>⏹ Parar</button>
-              </div>}
-              {audioURL&&!isRecording&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-                <span>🎙</span>
-                <audio src={audioURL} controls style={{height:28,flex:1}}/>
-                <button onClick={saveAudio} style={{background:"#22c55e",border:"none",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}>Enviar</button>
-                <button onClick={discardAudio} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:16}}>×</button>
-              </div>}
-              {audAttachments.map(a=><div key={a.id} style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"9px 12px",marginBottom:6,display:"flex",gap:8,alignItems:"center"}}>
-                <span style={{fontSize:16,flexShrink:0}}>🎙</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <audio src={a.url} controls style={{width:"100%",height:26}}/>
-                  <div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{a.addedBy} · {a.addedAt}</div>
-                </div>
-                {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:15,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
-              </div>)}
-            </div>}
+            {/* Seção "Áudios de Orientação" removida (14/09/2026), junto com a aba Áudio:
+                ninguém usava, e a gravação virava comentário de áudio que passava batido. */}
 
             {!isAgendado&&(function(){
               // Filtra comentarios que ja aparecem no painel "Solicitacao de ajuste"
@@ -43110,6 +43096,17 @@ function _cardPodeSerResp(u){
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
           {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Mesmo botão, mesmo tamanho e mesmo canto do "Gerar briefing" da aba Briefing. */}
+            {canEdit&&<div>
+              <button type="button"
+                onClick={function(){setLegIA({brief:"",loading:false,opcoes:null,erro:""});}}
+                title="Você escreve um briefing curto (produto, cidade, o que aparece na foto) e a IA devolve 3 legendas no padrão desta empresa."
+                style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+                Gerar legenda
+              </button>
+              <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Dá um briefing curto — produto, cidade, o que aparece na foto — e ele devolve 3 opções.</div>
+            </div>}
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,#fafbfc,#fff)",display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:28,height:28,borderRadius:8,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={14}/></div>
@@ -43118,13 +43115,6 @@ function _cardPodeSerResp(u){
                   <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>Texto final que acompanha o cartão até o agendamento e aparece no Portal do Cliente</div>
                 </div>
                 {caption&&<span style={{background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"3px 9px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}><Ico n="check" size={10}/> Preenchida</span>}
-                {canEdit&&<button type="button"
-                  onClick={function(){setLegIA({brief:"",loading:false,opcoes:null,erro:""});}}
-                  title="Você escreve um briefing curto (produto, cidade, o que aparece na foto) e a IA devolve 3 legendas no padrão desta empresa."
-                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0,boxShadow:"0 2px 8px rgba(124,58,237,.28)",letterSpacing:-.1,whiteSpace:"nowrap"}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-                  Gerar legenda
-                </button>}
               </div>
               {canEdit&&<RichToolbar elRef={captionRef}/>}
               <div
@@ -44536,6 +44526,31 @@ function _cardPodeSerResp(u){
             </label>
           </div>
 
+          {/* ── Não publica nas redes ── convite, impresso, material interno ── */}
+          <div>
+            {(function(){
+              const _folder=contentType==="folder";
+              const _on=naoPublica||_folder;
+              return <label onClick={function(){ if(canEdit&&!_folder) setNaoPublica(!naoPublica); }}
+                title={_folder?"Folder já é material impresso: nunca entra no calendário.":"Marque quando a peça não vai pro feed nem pro story."}
+                style={{display:"flex",alignItems:"center",gap:10,border:"1px solid "+(_on?"#64748b":"#e2e8f0"),background:_on?"#f8fafc":"#fff",borderRadius:10,padding:"9px 11px",cursor:(canEdit&&!_folder)?"pointer":"default",transition:"all .12s",opacity:(canEdit&&!_folder)?1:.75}}>
+                <span style={{width:18,height:18,borderRadius:5,border:"2px solid "+(_on?"#64748b":"#cbd5e1"),background:_on?"#64748b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {_on&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+                </span>
+                <span style={{width:28,height:28,borderRadius:8,background:_on?"#64748b":"#f1f5f9",color:_on?"#fff":"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>
+                </span>
+                <span style={{minWidth:0,flex:1}}>
+                  <span style={{display:"block",fontSize:12,fontWeight:800,color:_on?"#334155":"#0f172a",letterSpacing:-.2}}>Não publica nas redes</span>
+                  <span style={{display:"block",fontSize:10.5,color:_on?"#64748b":"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.4}}>
+                    {_folder?"Ligado sozinho porque o tipo é Folder — material impresso nunca entra no calendário."
+                            :"Convite, material de feira, peça interna. Some dos calendários, sai da cota do mês e não ocupa o dia no planejamento."}
+                  </span>
+                </span>
+              </label>;
+            })()}
+          </div>
+
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
           {(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
           <div>
@@ -44949,7 +44964,7 @@ function _OVProjeto({clientId}){
       if(ps&&ps.start&&ps.package) f={preset:ps.package,start:String(ps.start).slice(0,10)};
       setFase(f||false);
       setDatas(((rs[2]&&rs[2].data)||[])
-        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"; })
+        .filter(function(r){ return r.status!=="pausado"&&r.status!=="reprovado"&&r.content_type!=="folder"&&!r.nao_publica; })
         .map(function(r){ return String(r.publish_date).slice(0,10); }));
     }).catch(function(){ if(vivo) setFase(false); });
     return function(){ vivo=false; };
@@ -50008,6 +50023,7 @@ const rowToTask = (r) => ({
   desc:         r.description  || "",
   position:     r.position     ?? null,
   somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
+  naoPublica:   !!r.nao_publica,     // convite/impresso/interno: fora de TODO calendário e do planejador
   copyVersoes:  Array.isArray(r.copy_versoes) ? r.copy_versoes : [],   // histórico de versões da copy (nova abordagem / refazer)
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
   origem:           r.origem            || "",
@@ -50065,6 +50081,7 @@ const taskToRow = (t) => ({
   description:    t.desc         || "",
   position:       t.position     ?? null,
   somente_story:  !!t.somenteStory,
+  nao_publica:    !!t.naoPublica,
   copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
   // ── Origem + tipo solicitação ──
   origem:           t.origem            || null,
@@ -58404,6 +58421,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     // continua restrita à aba Publicações, que só mostra aprovadas).
     if(t.status==="rascunhos"||t.status==="pausado"||t.status==="reprovado")return false;
     if(t.contentType==="folder")return false;
+    if(t.naoPublica||t.nao_publica)return false;
     if(_filterUnit){
       const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
       // Mesma regra do calendário interno: sem unidade = grupo (vale pra todas);
