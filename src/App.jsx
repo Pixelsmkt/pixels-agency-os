@@ -28904,12 +28904,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         // título, venha o que vier da IA. Duas travas porque uma some numa refatoração.
         const _tituloNovo=(nova&&nova.titulo&&!_pxEhComemorativa(t))?String(nova.titulo).trim():"";
         const _trocouTitulo=!!_tituloNovo&&_tituloNovo!==String(t.title||"").trim();
+        /* A copy virou carrossel (ou voltou a ser arte única)? A tag acompanha. */
+        const _tipoNovo=_pxTipoNovo(t,nova.briefing);
+        const _lbTipo=(id)=>{ const _x=(typeof PX_TIPOS_CONTEUDO!=="undefined")?PX_TIPOS_CONTEUDO.find(function(y){return y.id===id;}):null; return (_x&&_x.label)||id; };
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
           copyVersoes:vs,
           ...(_trocouTitulo?{title:_tituloNovo}:{}),
+          ...(_tipoNovo?{contentType:_tipoNovo}:{}),
           timeline:[...(t.timeline||[]),{type:"edit",user:_pxNomeIA(),at:now,atFmt:nowFmt(),
             label:rotulo+" — copy reescrita pelo "+_pxNomeIA()+(txt?(" ("+txt.slice(0,90)+")"):"")
-                  +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")}]};
+                  +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")
+                  +(_tipoNovo?(" · tipo: "+_lbTipo(String(t.contentType||t.tipo||""))+" → "+_lbTipo(_tipoNovo)):"")}]};
       }));
       setVerVersao(v=>({...v,[task.id]:null}));
       if(!lote) pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
@@ -28924,6 +28929,48 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }finally{
       setReescrevendoId(null);
     }
+  };
+
+  /* ── TIPO DE CONTEÚDO SEGUE O FORMATO DA COPY (14/09/2026) ──────────────
+     Pedido do Vinicius: "pedi pelo refazer do zero pra transformar em carrossel,
+     vc nao tem capacidade de mudar a tag automaticamente de arte unica pra
+     carrossel?". Antes o card continuava marcado "Arte única" com uma copy de
+     5 lâminas — o designer abria esperando uma peça e achava cinco.
+
+     A leitura é do TEXTO devolvido, não de um campo que a IA teria que preencher:
+     o formato está escrito no briefing ("Lâmina 1 —", "Cena 1 (0–8s)"), então dá
+     pra ler sem depender da IA acertar um rótulo extra.
+
+     O que NÃO faz:
+     - não troca entre subtipos de vídeo (vídeo / dinâmico / básico / corte): são
+       preços diferentes e a escolha foi de gente, não da IA;
+     - não mexe em "Ajuste de template" nem em "Folder" — quem marcou isso marcou
+       de propósito;
+     - não mexe em data comemorativa (o formato dela é fixo: título + texto na arte).
+     O tipo entra no cálculo de pagamento do freelancer, então mudar é coisa séria —
+     por isso fica registrado na timeline. */
+  const _PX_TIPOS_DESIGN_LIVRES=["arte","carrossel"];
+  const _pxFormatoDaCopy=(briefing)=>{
+    const _t=(typeof _pxHtmlParaTexto==="function")?_pxHtmlParaTexto(briefing||""):String(briefing||"");
+    /* "Lâmina" (pt) e "Lámina" (es, Paraguay) — sem o á o carrossel em espanhol
+       passava batido e o card era rebaixado pra arte única. */
+    const _laminas=(_t.match(/^\s*[•*-]?\s*L[âáa]mina\s*\d/gmi)||[]).length;
+    if(_laminas>=2) return "carrossel";
+    const _cenas=(_t.match(/^\s*[•*-]?\s*(Cena|Escena)\s*\d/gmi)||[]).length;
+    if(_cenas>=2||/^\s*[•*-]?\s*(ROTEIRO|GUI[ÓO]N)\b/mi.test(_t)) return "video";
+    if(/^\s*[•*-]?\s*(T[ÍI]TULO|TEXTO NA ARTE)\b/mi.test(_t)) return "arte";
+    return "";
+  };
+  /* Devolve o contentType novo, ou "" se não é pra mexer. */
+  const _pxTipoNovo=(t,briefing)=>{
+    try{
+      if(_pxEhComemorativa(t)) return "";
+      const _atual=String(t.contentType||t.tipo||"").toLowerCase();
+      if(_PX_TIPOS_DESIGN_LIVRES.indexOf(_atual)<0) return "";   // template, folder, vídeo: não toca
+      const _fmt=_pxFormatoDaCopy(briefing);
+      if(_fmt!=="arte"&&_fmt!=="carrossel") return "";           // virou roteiro? decisão humana
+      return (_fmt!==_atual)?_fmt:"";
+    }catch(e){ console.warn("[copy] _pxTipoNovo falhou:",e); return ""; }
   };
 
   /* ── REESCRITA EM LOTE ────────────────────────────────────────────────
