@@ -28462,6 +28462,52 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       return _vids[0]||null;
     }catch(_){return null;}
   })();
+  // ══ Tamanho do video ORIGINAL (mostrado no botao de download do header) ══
+  // 1) usa f.size gravado no upload; 2) senao pergunta ao Storage (metadata.size);
+  // 3) senao HEAD content-length. Resultado fica em cache no state por arquivo.
+  const _fmtMB=function(b){
+    if(!b||b<=0)return "";
+    if(b>=1048576)return Math.max(1,Math.round(b/1048576))+" MB";
+    return Math.max(1,Math.round(b/1024))+" KB";
+  };
+  const [origSizes,setOrigSizes]=useState({});
+  const _origKey=_ultimoVideo?String(_ultimoVideo.id||_ultimoVideo.url||""):"";
+  const _origSize=(function(){
+    if(!_ultimoVideo)return 0;
+    if(typeof _ultimoVideo.size==="number"&&_ultimoVideo.size>0)return _ultimoVideo.size;
+    const v=origSizes[_origKey];
+    return (typeof v==="number"&&v>0)?v:0;
+  })();
+  useEffect(function(){
+    if(!_ultimoVideo||!_origKey)return;
+    if(typeof _ultimoVideo.size==="number"&&_ultimoVideo.size>0)return;
+    if(origSizes[_origKey]!==undefined)return;
+    let _vivo=true;
+    (async function(){
+      let _bytes=0;
+      try{
+        const _sb=(typeof window!=="undefined")?window._sb:null;
+        if(_sb&&_ultimoVideo.storagePath){
+          const _parts=String(_ultimoVideo.storagePath).split("/");
+          const _nome=_parts.pop();
+          const _dir=_parts.join("/");
+          const _r=await _sb.storage.from("agency-files").list(_dir,{search:_nome,limit:100});
+          const _lista=(_r&&_r.data)||[];
+          for(let i=0;i<_lista.length;i++){
+            const _it=_lista[i];
+            if(_it&&_it.name===_nome&&_it.metadata&&typeof _it.metadata.size==="number"){_bytes=_it.metadata.size;break;}
+          }
+        }
+        if(!_bytes&&_ultimoVideo.url){
+          const _h=await fetch(_ultimoVideo.url,{method:"HEAD"});
+          const _cl=(_h&&_h.headers)?_h.headers.get("content-length"):null;
+          if(_cl)_bytes=parseInt(_cl,10)||0;
+        }
+      }catch(e){console.warn("[tamanho original]",e);}
+      if(_vivo)setOrigSizes(function(m){return Object.assign({},m,{[_origKey]:_bytes||0});});
+    })();
+    return function(){_vivo=false;};
+  },[_origKey]);
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
@@ -28817,10 +28863,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
                       }
                     }}
-                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s",padding:0}}
+                    style={Object.assign({background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,height:36,color:"#334155",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit",transition:"all .15s"},
+                      (tab==="video"&&_origSize)
+                        ?{padding:"0 10px",gap:6,fontSize:11.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap"}
+                        :{width:36,padding:0})}
                     onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
                     onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {(tab==="video"&&_origSize)?("Original "+_fmtMB(_origSize)):null}
                   </button>
                   {/* ═════ Gerar versão leve sob demanda (vídeos sem preview) ═════ */}
                   {tab==="video"&&_ultimoVideo&&!(_previewVideo&&_previewVideo.previewUrl)&&(function(){
@@ -28888,7 +28938,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}
                     onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    {_previewVideo.previewSize?(Math.max(1,Math.round(_previewVideo.previewSize/1048576))+" MB"):"Leve"}
+                    {_previewVideo.previewSize?("Leve "+_fmtMB(_previewVideo.previewSize)):"Leve"}
                   </button>)}
                   <button type="button" title="Copiar link do cartão"
                     onClick={async function(){
