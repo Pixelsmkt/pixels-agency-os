@@ -3750,7 +3750,13 @@ async function pxGerarBriefing(opts){
   if(!task) throw new Error("Card não informado.");
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const pedido=String((opts&&opts.necessidade)||"").trim();
-  if(pedido.length<5) throw new Error("Escreva o que precisa ser feito antes de gerar.");
+  const modo=String((opts&&opts.modo)||"gerar")==="alterar"?"alterar":"gerar";
+  const briefAtual=_pxHtmlParaTexto((opts&&opts.briefingAtual)||"");
+  const historico=Array.isArray(opts&&opts.historico)?opts.historico:[];
+  if(pedido.length<5) throw new Error(modo==="alterar"
+    ? "Escreva o que precisa ajustar antes de gerar."
+    : "Escreva o que precisa ser feito antes de gerar.");
+  if(modo==="alterar"&&briefAtual.length<20) throw new Error("Este card ainda não tem briefing pra alterar.");
 
   const cliente=String((opts&&opts.clienteNome)||task.client||"");
   const unit=String(task.bioterUnit||task.bioter_unit||"");
@@ -3771,8 +3777,9 @@ async function pxGerarBriefing(opts){
     "Se faltar dado, escreva o briefing sem ele — nunca preencha com suposição. "+
     (py?"O TÍTULO E O TEXTO DA PEÇA VÃO EM ESPANHOL (é a unidade do Paraguai); os rótulos do briefing ficam em português."
        :"Escreva em português do Brasil.")+
+    (modo==="alterar"?"Você está AJUSTANDO um briefing que já existe: mexa só no que foi criticado e devolva o texto inteiro. ":"")+
     "\nResponda EXATAMENTE neste formato, texto puro, sem markdown, sem nada antes nem depois:"+
-    "\n===TIPO===\n(só o id do tipo)\n===PORQUE===\n(uma frase curta dizendo por que esse tipo)\n===BRIEFING===\n(o briefing)";
+    "\n===TIPO===\n(só o id do tipo)\n===PORQUE===\n"+(modo==="alterar"?"(uma frase curta dizendo o que você mudou)":"(uma frase curta dizendo por que esse tipo)")+"\n===BRIEFING===\n(o briefing)";
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
   u+="CARD: "+(task.title||"—")+"\n";
@@ -3782,12 +3789,34 @@ async function pxGerarBriefing(opts){
     const _ta=PX_TIPOS_CONTEUDO.find(function(x){return x.id===tipoAtual;});
     u+="TIPO JÁ MARCADO NO CARD: "+((_ta&&_ta.label)||tipoAtual)+" (só mude se o pedido abaixo disser outra coisa)\n";
   }
-  u+="\n════ O QUE A AGÊNCIA PEDIU (única fonte de fatos) ════\n"+pedido+"\n\n";
+  if(modo==="alterar"){
+    u+="\n════ BRIEFING ATUAL (é este que você vai ajustar) ════\n"+briefAtual+"\n\n";
+    u+="════ O QUE PRECISA AJUSTAR ════\n"+pedido+"\n\n";
+    if(historico.length){
+      u+="AJUSTES JÁ PEDIDOS NESTA MESMA RODADA — não repita nenhum desses erros:\n";
+      for(let i=0;i<Math.min(historico.length,6);i++){
+        const _f=String((historico[i]&&historico[i].pedido)||"").trim();
+        if(_f) u+="- "+_f+"\n";
+      }
+      u+="\n";
+    }
+  }else{
+    u+="\n════ O QUE A AGÊNCIA PEDIU (única fonte de fatos) ════\n"+pedido+"\n\n";
+    if(historico.length){
+      u+="VERSÕES JÁ RECUSADAS NESTA RODADA E O QUE FOI DITO — não repita:\n";
+      for(let i=0;i<Math.min(historico.length,6);i++){
+        const _f=String((historico[i]&&historico[i].pedido)||"").trim();
+        if(_f) u+="- "+_f+"\n";
+      }
+      u+="\n";
+    }
+  }
 
   u+="ESCOLHA UM TIPO DESTA LISTA (responda só o id):\n";
   for(let i=0;i<PX_TIPOS_CONTEUDO.length;i++)
     u+="- "+PX_TIPOS_CONTEUDO[i].id+" ("+PX_TIPOS_CONTEUDO[i].label+"): "+PX_TIPOS_CONTEUDO[i].quando+"\n";
   u+="Se o pedido já disser o formato (\"faz um carrossel\", \"vídeo curto\", \"só troca a foto do template\"), OBEDEÇA — não escolha outro.\n";
+  if(modo==="alterar") u+="ESTE É UM AJUSTE: MANTENHA o tipo que já está no card, a não ser que o pedido de ajuste peça outro explicitamente.\n";
   u+="Na dúvida entre arte única e carrossel, escolha arte única. Na dúvida entre vídeo e vídeo dinâmico, escolha vídeo.\n\n";
 
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
@@ -3811,6 +3840,12 @@ async function pxGerarBriefing(opts){
     u+="\n";
   }
 
+  if(modo==="alterar"){
+    u+="\nTAREFA: reescreva o BRIEFING ATUAL aplicando o ajuste pedido.\n";
+    u+="- MANTENHA tudo que não foi criticado, com as mesmas palavras. Não reescreva o que já está bom.\n";
+    u+="- Não invente dado novo pra preencher o que foi tirado.\n";
+    u+="- Devolva o briefing INTEIRO já corrigido, nunca só o pedaço que mudou.\n\n";
+  }
   u+="FORMATO DO BRIEFING, conforme o tipo que você escolher:\n";
   u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", e a lâmina 5 é SEMPRE o CTA.\n";
   u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → seção \"• Roteiro\" com Cena 1 (0–8s) — o que aparece / Na tela: \"…\", 5 a 6 cenas somando ~60s.\n";
@@ -3870,7 +3905,7 @@ async function pxGerarBriefing(opts){
   }
   if(!achado) achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===tipoAtual;})||PX_TIPOS_CONTEUDO[1];
   if(!brief) throw new Error("A IA respondeu vazio. Tente de novo.");
-  return { tipo:achado.id, tipoLabel:achado.label, ehVideo:achado.grupo==="video",
+  return { tipo:achado.id, tipoLabel:achado.label, ehVideo:achado.grupo==="video", modo:modo,
            porque:porque||"", briefing:_pxTextoParaHtml(brief), briefingTexto:brief };
 }
 
@@ -41867,7 +41902,7 @@ function _cardPodeSerResp(u){
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
               </div>
               <div style={{minWidth:0}}>
-                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Gerar briefing</div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{briefIA.modo==="alterar"?"Alterar briefing":"Gerar briefing"}</div>
                 <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title||task.title}{client?(" · "+((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;})||{name:client}).name):""}{bioterUnit?(" · "+bioterUnit):""}</div>
               </div>
             </div>
@@ -41875,22 +41910,30 @@ function _cardPodeSerResp(u){
           </div>
 
           <div style={{padding:"18px 20px",overflowY:"auto",flex:1,minHeight:0}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>O que precisa ser feito</div>
+            {briefIA.modo==="alterar"&&<details style={{marginBottom:12,border:"1px solid #e2e8f0",borderRadius:10,background:"#f8fafc",padding:"9px 12px"}}>
+              <summary style={{cursor:"pointer",color:"#475569",fontSize:11.5,fontWeight:700,listStyle:"revert"}}>Briefing que está no card agora</summary>
+              <div style={{color:"#475569",fontSize:12,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",marginTop:8,maxHeight:190,overflowY:"auto"}}>{_pxTextoPuro(desc)}</div>
+            </details>}
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>{briefIA.modo==="alterar"?"O que precisa ajustar":"O que precisa ser feito"}</div>
             <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,marginBottom:8}}>
-              Escreve como você falaria pra equipe. Se disser o formato (“um carrossel”, “vídeo curto”, “só trocar a foto do template”), ele obedece — senão, ele escolhe o tipo e explica por quê.
+              {briefIA.modo==="alterar"
+                ? "Diz só o que está errado. Ele mantém com as mesmas palavras tudo que você não criticou, e devolve o briefing inteiro já corrigido."
+                : "Escreve como você falaria pra equipe. Se disser o formato (“um carrossel”, “vídeo curto”, “só trocar a foto do template”), ele obedece — senão, ele escolhe o tipo e explica por quê."}
             </div>
             <textarea
               value={briefIA.pedido}
               onChange={function(e){ const v=e.target.value; setBriefIA(function(p){return Object.assign({},p,{pedido:v});}); }}
               onKeyDown={function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); const b=document.getElementById("px-briefia-go"); if(b)b.click(); } }}
               disabled={!!briefIA.loading}
-              placeholder={"Ex.: vídeo curto mostrando a lagoa de Naviraí pronta, falar que a obra ficou pronta em 12 dias e que o revestimento é geomembrana. Guilherme edita."}
+              placeholder={briefIA.modo==="alterar"
+                ? "Ex.: tira a parte do horário, não temos isso ainda. E o título tá genérico demais — fala do sítio, que é o que chama atenção."
+                : "Ex.: vídeo curto mostrando a lagoa de Naviraí pronta, falar que a obra ficou pronta em 12 dias e que o revestimento é geomembrana. Guilherme edita."}
               style={{width:"100%",minHeight:96,boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontSize:13,lineHeight:1.6,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",background:briefIA.loading?"#f8fafc":"#fff"}}/>
 
             {briefIA.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",color:"#991b1b",fontSize:12.5,lineHeight:1.6,marginTop:12}}>{briefIA.erro}</div>}
 
             {briefIA.loading&&<div style={{padding:"30px 0 18px",textAlign:"center",color:"#64748b",fontSize:13}}>
-              Lendo o playbook e os briefings aprovados… montando.
+              {briefIA.modo==="alterar"?"Aplicando o ajuste no briefing que já está no card…":"Lendo o playbook e os briefings aprovados… montando."}
             </div>}
 
             {!briefIA.loading&&_v&&<div style={{marginTop:18}}>
@@ -41907,7 +41950,7 @@ function _cardPodeSerResp(u){
 
               <div style={{background:"#faf5ff",border:"1px solid #e9d5ff",borderRadius:12,padding:"11px 14px",marginBottom:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                  <span style={{color:"#5b21b6",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>Vai marcar</span>
+                  <span style={{color:"#5b21b6",fontSize:11,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{(_v.modo==="alterar"&&_v.tipo===contentType)?"Mantém":"Vai marcar"}</span>
                   <span style={{background:"#7c3aed",color:"#fff",borderRadius:99,padding:"3px 11px",fontSize:11.5,fontWeight:700}}>{_v.tipoLabel}</span>
                   {_v.ehVideo&&<span style={{background:"#fff",border:"1px solid #ddd6fe",color:"#5b21b6",borderRadius:99,padding:"3px 11px",fontSize:11.5,fontWeight:600}}>+ Guilherme como responsável</span>}
                 </div>
@@ -41932,17 +41975,28 @@ function _cardPodeSerResp(u){
                   const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
                   const _nome=(_cl&&_cl.name)||client||"";
                   const _t=Object.assign({},task,{title:title||task.title,client:client,bioterUnit:bioterUnit,contentType:contentType,publishDate:publishDate});
-                  const r=await pxGerarBriefing({task:_t,clienteNome:_nome,necessidade:_p});
+                  // Leva os pedidos já feitos nesta rodada: sem isso cada "gerar de novo"
+                  // recomeça do zero e repete erro que você já apontou (foi o que
+                  // aconteceu nas 7 versões de copy do Dia do Cliente).
+                  const _hist=(Array.isArray(briefIA.versoes)?briefIA.versoes:[]).map(function(v){return {pedido:v&&v.pedido};}).filter(function(v){return !!v.pedido;});
+                  const _base=(briefIA.modo==="alterar")
+                    ? ((Array.isArray(briefIA.versoes)&&briefIA.versoes.length)
+                        ? briefIA.versoes[briefIA.versoes.length-1].briefing
+                        : desc)
+                    : "";
+                  const r=await pxGerarBriefing({task:_t,clienteNome:_nome,necessidade:_p,
+                    modo:briefIA.modo||"gerar", briefingAtual:_base, historico:_hist});
+                  r.pedido=_p;
                   setBriefIA(function(p){
                     const vs=(Array.isArray(p.versoes)?p.versoes:[]).concat([r]);
-                    return Object.assign({},p,{loading:false,erro:"",versoes:vs,idx:vs.length-1});
+                    return Object.assign({},p,{loading:false,erro:"",pedido:"",versoes:vs,idx:vs.length-1});
                   });
                 }catch(e){
                   setBriefIA(function(p){return Object.assign({},p,{loading:false,erro:(e&&e.message)||String(e)});});
                 }
               }}
               style={{background:_podeGerar?"#fff":"#f8fafc",color:_podeGerar?"#5b21b6":"#cbd5e1",border:"1px solid "+(_podeGerar?"#ddd6fe":"#e2e8f0"),borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:briefIA.loading?"wait":(_podeGerar?"pointer":"default"),fontFamily:"inherit"}}>
-              {briefIA.loading?"Montando…":(_vs.length?"Gerar de novo":"Gerar briefing")}
+              {briefIA.loading?"Montando…":(_vs.length?"Ajustar de novo":(briefIA.modo==="alterar"?"Aplicar ajuste":"Gerar briefing"))}
             </button>
             {_v&&!briefIA.loading&&<button onClick={function(){
                 // Só mexe na tela. Nada vai pro banco até clicar em Salvar no cabeçalho.
@@ -42772,16 +42826,33 @@ function _cardPodeSerResp(u){
                 </button>
                 <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir do texto da arte e da legenda — pra mandar pro cliente decidir.</div>
               </div>)}
-              {canEdit&&<div style={{marginBottom:10}}>
-                <button type="button"
-                  onClick={function(){setBriefIA({pedido:"",loading:false,versoes:[],idx:0,erro:""});}}
-                  title="Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."
-                  style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-                  Gerar briefing
-                </button>
-                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo.</div>
-              </div>}
+              {canEdit&&(function(){
+                // Card com briefing → o primário vira "Alterar" (ajuste em cima do que existe).
+                // "Refazer do zero" continua ali pra quando o rumo está errado, não o texto.
+                const _temBrief=_pxTextoPuro(desc).length>20;
+                const _abrir=function(_modo){ setBriefIA({modo:_modo,pedido:"",loading:false,versoes:[],idx:0,erro:""}); };
+                const _est=function(_primario){ return {background:_primario?"linear-gradient(135deg,#7c3aed,#5b21b6)":"#fff",color:_primario?"#fff":"#5b21b6",border:_primario?"none":"1px solid #ddd6fe",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:_primario?"0 2px 8px rgba(124,58,237,.30)":"none"}; };
+                const _faisca=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>;
+                return <div style={{marginBottom:10}}>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                    <button type="button" onClick={function(){_abrir(_temBrief?"alterar":"gerar");}}
+                      title={_temBrief?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
+                                      :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
+                      style={_est(true)}>
+                      {_faisca}{_temBrief?"Alterar briefing":"Gerar briefing"}
+                    </button>
+                    {_temBrief&&<button type="button" onClick={function(){_abrir("gerar");}}
+                      title="Ignora o briefing atual e escreve outro do zero."
+                      style={_est(false)}>
+                      Refazer do zero
+                    </button>}
+                  </div>
+                  <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>
+                    {_temBrief?"Diz o que está errado — ele corrige e mantém o resto igual."
+                              :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
+                  </div>
+                </div>;
+              })()}
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
               <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
