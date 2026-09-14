@@ -3539,6 +3539,35 @@ if(typeof window!=="undefined"){ window.askGPT=askGPT; window.askIA=askIA; }
    É TRADUÇÃO, não revisão: não melhora, não corta, não reescreve — quem lê precisa
    saber exatamente o que está escrito em espanhol antes de aprovar.
    Roda no modelo rápido; traduzir não precisa de Opus. */
+/* Assinatura do texto de origem: se a copy for reescrita, o tamanho muda e a tradução
+   guardada é considerada velha. Barato e suficiente — não precisa de hash de verdade. */
+function pxTraducaoSrc(task){
+  const d=_pxHtmlParaTexto((task&&(task.desc||task.description))||"");
+  const l=_pxHtmlParaTexto((task&&task.caption)||"");
+  return d.length+"|"+l.length;
+}
+/* Tradução já guardada e AINDA VÁLIDA pra este card (ou null). */
+function pxTraducaoSalva(task){
+  const tr=task&&(task.traducaoPt||task.traducao_pt);
+  if(!tr||typeof tr!=="object") return null;
+  if(String(tr.src||"")!==pxTraducaoSrc(task)) return null;   // copy mudou → retraduzir
+  return tr;
+}
+/* Traduz (uma vez) e GRAVA no card. Devolve {briefing,legenda}. */
+async function pxTraduzirEGravar(task, setTasks){
+  const salva=pxTraducaoSalva(task);
+  if(salva) return salva;
+  const r=await pxTraduzirParaPt({briefing:(task.desc||task.description||""), legenda:(task.caption||"")});
+  const reg={briefing:r.briefing, legenda:r.legenda, at:new Date().toISOString(), src:pxTraducaoSrc(task)};
+  try{
+    if(typeof setTasks==="function") setTasks(function(p){return p.map(function(x){return x.id===task.id?Object.assign({},x,{traducaoPt:reg}):x;});});
+    const sb=(typeof window!=="undefined")?window._sb:null;
+    if(sb) sb.from("tasks").update({traducao_pt:reg}).eq("id",task.id).then(function(){},function(){});
+  }catch(_){}
+  return reg;
+}
+if(typeof window!=="undefined"){ window.pxTraducaoSalva=pxTraducaoSalva; window.pxTraduzirEGravar=pxTraduzirEGravar; }
+
 async function pxTraduzirParaPt(opts){
   const briefing=_pxHtmlParaTexto((opts&&opts.briefing)||"");
   const legenda =_pxHtmlParaTexto((opts&&opts.legenda)||"");
@@ -3695,6 +3724,20 @@ async function pxReescreverCopy(opts){
     u+="COPYS RECUSADAS E O MOTIVO (não repetir o erro):\n";
     for(let i=0;i<Math.min(recus.length,5);i++)
       if(recus[i].feedback) u+="- "+(recus[i].titulo||"")+": "+recus[i].feedback+"\n";
+    u+="\n";
+  }
+
+  /* ── O QUE AS OUTRAS MARCAS JÁ ESTÃO PUBLICANDO NA MESMA DATA (14/09/2026) ──
+     Sem isto a IA não tinha como saber que estava repetindo: as 4 copys de Dia do
+     Gaúcho (Acreforte, Clem, Construschorr e VetService) saíram idênticas, palavra
+     por palavra. Quem monta essa lista é quem chama (o app tem todos os cards em
+     memória); aqui só entra no prompt como "não repetir". */
+  const _irmaos=Array.isArray(opts&&opts.irmaos)?opts.irmaos.filter(function(x){return x&&x.texto;}):[];
+  if(_irmaos.length){
+    u+="⛔ MESMA DATA, OUTRAS MARCAS — O TEXTO ABAIXO JÁ ESTÁ ESCRITO ASSIM EM OUTRO CLIENTE.\n";
+    u+="CADA COPY É ÚNICA: não repita abertura, frase, imagem nem estrutura destes. Escreva algo que só faça sentido para ESTE cliente e para o público DELE.\n";
+    for(let i=0;i<Math.min(_irmaos.length,6);i++)
+      u+="--- "+(_irmaos[i].marca||"outra marca")+":\n"+String(_irmaos[i].texto||"").slice(0,420)+"\n";
     u+="\n";
   }
 
@@ -28454,6 +28497,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // (11/09/2026) "Refazer" e "Testar nova abordagem": pedidos de reescrita pro Claude.
   // refazerModal = {task, tipo:"abordagem"|"refazer"}.
   const [refazerModal,setRefazerModal]=useState(null);
+  // Reescrita EM LOTE da fila de Copys (14/09/2026). loteModal = tela de confirmação;
+  // lote = progresso rodando. Sempre "abordagem": mantém o assunto de cada card (o
+  // assunto veio do planejamento e não pode mudar em massa), só reescreve o texto.
+  const [loteModal,setLoteModal]=useState(false);
+  const [loteQtd,setLoteQtd]=useState(30);
+  const [loteTexto,setLoteTexto]=useState("");
+  const [lote,setLote]=useState(null);   // {total,feitos,erros,atual,parar}
+  const loteRef=useRef(null);
   const [refazerText,setRefazerText]=useState("");
   // Nome de quem escreveu a copy, pro histórico e pras notificações não mentirem
   // quando o provedor for a OpenAI (14/09/2026).
@@ -28661,7 +28712,30 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   /* Testar nova abordagem / Refazer do zero.
      O card NÃO muda de status e NÃO sai da tela: o Claude reescreve na hora,
      a versão anterior fica guardada em copyVersoes e o painel atualiza sozinho. */
-  const pedirRefacaoClaude=async(task,tipo,feedback)=>{
+  /* Copys IRMÃS: mesma data de publicação e mesmo assunto, em OUTRA marca.
+     Vão no prompt como "não repetir" — é o que faltava pra IA parar de escrever
+     a mesma comemorativa pra todo mundo (14/09/2026). */
+  const _pxIrmaos=(task)=>{
+    try{
+      const d=String(task.publishDate||task.publish_date||"").slice(0,10);
+      const tit=String(task.title||"").trim().toLowerCase();
+      if(!d||!tit) return [];
+      const _nome=(t)=>{
+        const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
+        return ((c&&c.name)||t.client||"")+(t.bioterUnit?(" "+t.bioterUnit):"");
+      };
+      return (tasks||[]).filter(function(t){
+        if(!t||t.id===task.id||t.deletedAt) return false;
+        if(String(t.publishDate||t.publish_date||"").slice(0,10)!==d) return false;
+        if(String(t.title||"").trim().toLowerCase()!==tit) return false;
+        return !!String(t.caption||"").trim();
+      }).slice(0,6).map(function(t){
+        return {marca:_nome(t), texto:stripHtml(t.caption)};
+      });
+    }catch(_){ return []; }
+  };
+
+  const pedirRefacaoClaude=async(task,tipo,feedback,lote)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const txt=String(feedback||"").trim();
@@ -28690,7 +28764,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       }
     }catch(_){}
     try{
-      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client});
+      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client,irmaos:_pxIrmaos(task)});
       const now=new Date().toISOString();
       if(setTasks)setTasks(p=>p.map(t=>{
         if(t.id!==task.id)return t;
@@ -28720,17 +28794,45 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")}]};
       }));
       setVerVersao(v=>({...v,[task.id]:null}));
-      pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
+      if(!lote) pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
         body:'"'+task.title+'" foi reescrita pelo '+_pxNomeIA()+(txt?(" — "+txt.slice(0,80)):""),
         user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-      if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?"Copy ajustada. A anterior ficou guardada.":(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
+      if(!lote&&typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?"Copy ajustada. A anterior ficou guardada.":(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
     }catch(e){
       const msg=String((e&&e.message)||e||"Não consegui reescrever agora.");
       setErroReescrita(msg);
-      if(typeof pixelsToast!=="undefined")pixelsToast.error(msg,6000);
+      if(!lote&&typeof pixelsToast!=="undefined")pixelsToast.error(msg,6000);
+      if(lote) throw e;
     }finally{
       setReescrevendoId(null);
     }
+  };
+
+  /* ── REESCRITA EM LOTE ────────────────────────────────────────────────
+     Pega os N cards da fila de Copys que publicam MAIS CEDO e manda cada um pro
+     mesmo caminho do botão individual (e portanto pro GPT). Um de cada vez, pra
+     não estourar limite da API e pra dar pra acompanhar e parar no meio.
+     Cada card guarda a versão anterior — dá pra voltar card a card. */
+  const rodarLote=async(qtd,direcao)=>{
+    if(!isApprover)return;
+    const _dt=(t)=>{const d=String(t.publishDate||t.publish_date||"").slice(0,10);return d?d:"9999-99-99";};
+    const alvos=(copyQueue||[]).slice().sort(function(a,b){return _dt(a)<_dt(b)?-1:_dt(a)>_dt(b)?1:0;}).slice(0,Math.max(1,qtd|0));
+    loteRef.current={parar:false};
+    setLote({total:alvos.length,feitos:0,erros:0,atual:"",parar:false});
+    for(let i=0;i<alvos.length;i++){
+      if(loteRef.current&&loteRef.current.parar) break;
+      const t=alvos[i];
+      setLote(function(L){return Object.assign({},L||{},{atual:t.title||"(sem título)"});});
+      try{
+        await pedirRefacaoClaude(t,"abordagem",direcao||"",true);
+        setLote(function(L){return Object.assign({},L||{},{feitos:(L&&L.feitos||0)+1});});
+      }catch(_){
+        setLote(function(L){return Object.assign({},L||{},{erros:(L&&L.erros||0)+1});});
+      }
+    }
+    setReescrevendoId(null);
+    setLote(function(L){return Object.assign({},L||{},{fim:true,atual:""});});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Lote terminado.",5000);
   };
 
   /* Volta a copy do card para uma versão guardada. Não apaga nada: só troca o que está no ar. */
@@ -29289,13 +29391,21 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _tradKey=current?(String(current.id)+"|"+String(current.desc||current.description||"").length+"|"+String(current.caption||"").length):"";
   useEffect(function(){
     if(!current||!_ehParaguay||tab!=="copys") return;
-    if(typeof pxTraduzirParaPt!=="function") return;
-    if(tradPt[_tradKey]) return;                       // já traduzido (ou traduzindo)
+    if(typeof pxTraduzirEGravar!=="function") return;
+    if(tradPt[_tradKey]) return;                       // já traduzido nesta sessão (ou traduzindo)
+    // TRADUZ UMA VEZ E GUARDA NO CARD (14/09/2026). Antes retraduzia a cada abertura de card
+    // e a cada reescrita de copy — 4 chamadas ao Claude em 2 minutos só de abrir a fila.
+    // Agora: se `tasks.traducao_pt` existe e a assinatura do texto bate, não chama IA nenhuma.
+    const _salva=(typeof pxTraducaoSalva==="function")?pxTraducaoSalva(current):null;
+    if(_salva){
+      setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={briefing:_salva.briefing,legenda:_salva.legenda}; return o; });
+      return;
+    }
     let vivo=true;
     setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={loading:true}; return o; });
     (async function(){
       try{
-        const r=await pxTraduzirParaPt({briefing:current.desc||current.description||"", legenda:current.caption||""});
+        const r=await pxTraduzirEGravar(current,setTasks);
         if(vivo) setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={briefing:r.briefing,legenda:r.legenda}; return o; });
       }catch(e){
         if(vivo) setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={erro:(e&&e.message)||String(e)}; return o; });
@@ -29864,7 +29974,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <div style={{color:"#16a34a",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
                 <Ico n="globe" size={11} color="#16a34a"/>Tradução
               </div>
-              <div style={{color:"#15803d",fontSize:isMob?12.5:13.5,fontWeight:700,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{texto}</div>
+              {/* Negrito SÓ no rótulo, igual ao bloco original — o texto inteiro em negrito
+                  ficava pesado e ilegível (Vinicius, 14/09). */}
+              <div style={{color:"#15803d",fontSize:isMob?12.5:13.5,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{pxLinhas(texto,"#166534")}</div>
             </div>;
           };
           const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
@@ -29873,9 +29985,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|o\s+que\s+precisamos|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
           // Rótulo sai sempre em CAIXA ALTA — copy antiga guardada em copy_versoes
           // não passou pela migração de 14/09, então normaliza aqui também.
-          const pxLinhas=(txt)=>String(txt||"").split("\n").map((ln,i)=>(
+          // `cor` existe pro bloco verde da tradução reusar exatamente este tratamento:
+          // negrito SÓ no rótulo ("• TÍTULO", "• TEXTO NA ARTE"), corpo em peso normal.
+          const pxLinhas=(txt,cor)=>String(txt||"").split("\n").map((ln,i)=>(
             _ehRotulo(ln)
-              ? <div key={i} style={{fontWeight:800,color:"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
+              ? <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
               : (ln.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{ln}</div>)
           ));
           // Histórico de ajustes
@@ -30304,6 +30418,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 <span style={{transition:"color .18s",letterSpacing:-.15}}>Ver detalhes do cartão</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.4,transition:"opacity .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
               </button>
+
+              {/* ── Reescrever em lote (14/09/2026) ──
+                  Ação da FILA, não do card — por isso vem separada, embaixo de tudo.
+                  Sempre "nova abordagem": mantém o assunto de cada card (o assunto veio do
+                  planejamento, não pode mudar em massa) e reescreve só o texto. */}
+              {!isMob&&copyQueue.length>1&&(<>
+                <div style={{height:1,background:C.b1,margin:"6px 0 2px"}}/>
+                <button onClick={()=>{setLoteTexto("");setLoteQtd(Math.min(30,copyQueue.length));setLoteModal(true);}}
+                  disabled={!!(lote&&!lote.fim)}
+                  title="Reescreve de uma vez as próximas copys da fila, começando pelas que publicam mais cedo."
+                  style={{width:"100%",background:"transparent",color:"#0f766e",border:"1px dashed #99f6e4",borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12.5,cursor:(lote&&!lote.fim)?"wait":"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,opacity:(lote&&!lote.fim)?.6:1}}
+                  onMouseEnter={e=>{if(!(lote&&!lote.fim)){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0f766e";}}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#99f6e4";}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                  Reescrever em lote
+                </button>
+              </>)}
             </>)}
 
             {(tab==="publicacao"||tab==="video")&&(<>
@@ -30710,6 +30841,68 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         </div>
       </div>
     </div>)}
+
+    {/* ── Modal e progresso da REESCRITA EM LOTE (14/09/2026) ── */}
+    {loteModal&&(function(){
+      const _dt=(t)=>{const d=String(t.publishDate||t.publish_date||"").slice(0,10);return d?d:"9999-99-99";};
+      const _alvos=(copyQueue||[]).slice().sort(function(a,b){return _dt(a)<_dt(b)?-1:_dt(a)>_dt(b)?1:0;}).slice(0,Math.max(1,loteQtd|0));
+      const _de=_alvos.length?_dt(_alvos[0]):"", _ate=_alvos.length?_dt(_alvos[_alvos.length-1]):"";
+      const _br=(d)=>d&&d.length===10?(d.slice(8,10)+"/"+d.slice(5,7)):"—";
+      const _custo=(_alvos.length*0.22).toFixed(2).replace(".",",");
+      return <div onClick={e=>{if(e.target===e.currentTarget)setLoteModal(false);}}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",padding:"18px 22px",color:"#fff"}}>
+            <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-.2}}>Reescrever em lote</div>
+            <div style={{fontSize:12,opacity:.9,marginTop:2}}>Mantém o assunto de cada card e reescreve o texto</div>
+          </div>
+          <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a"}}>Quantos cards</label>
+              <input type="number" min={1} max={copyQueue.length} value={loteQtd}
+                onChange={e=>setLoteQtd(Math.max(1,Math.min(copyQueue.length,parseInt(e.target.value||"1",10))))}
+                style={{width:90,border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 10px",fontSize:13,fontFamily:"inherit"}}/>
+              <span style={{fontSize:12,color:"#64748b"}}>de {copyQueue.length} na fila</span>
+            </div>
+            <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontSize:12.5,color:"#334155",lineHeight:1.6}}>
+              Pega os que <b>publicam mais cedo</b> — de <b>{_br(_de)}</b> a <b>{_br(_ate)}</b>.<br/>
+              Cada card guarda a versão anterior, dá pra voltar um a um.<br/>
+              Custo estimado: <b>~R$ {_custo}</b>.
+            </div>
+            <div>
+              <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a",display:"block",marginBottom:5}}>Direção pra todos (opcional)</label>
+              <textarea value={loteTexto} onChange={e=>setLoteTexto(e.target.value)} rows={3}
+                placeholder="Ex.: comemorativa é homenagem, nada de produto nem CTA de venda. Cada marca com texto próprio."
+                style={{width:"100%",boxSizing:"border-box",border:"1px solid #cbd5e1",borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+            </div>
+            <div style={{display:"flex",gap:9,justifyContent:"flex-end"}}>
+              <button onClick={()=>setLoteModal(false)} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",color:"#64748b",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={()=>{setLoteModal(false);rodarLote(loteQtd,loteTexto);}}
+                style={{background:"#0f766e",border:"none",borderRadius:9,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Reescrever {_alvos.length}</button>
+            </div>
+          </div>
+        </div>
+      </div>;
+    })()}
+
+    {lote&&(
+      <div style={{position:"fixed",right:18,bottom:18,zIndex:9100,background:"#0f172a",color:"#fff",borderRadius:14,padding:"14px 16px",width:300,boxShadow:"0 18px 44px rgba(15,23,42,.4)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:8}}>
+          <div style={{fontSize:12.5,fontWeight:800,letterSpacing:-.15}}>{lote.fim?"Lote terminado":"Reescrevendo em lote…"}</div>
+          <button onClick={()=>{ if(lote.fim){setLote(null);} else if(loteRef.current){loteRef.current.parar=true;setLote(function(L){return Object.assign({},L||{},{parar:true});});} }}
+            style={{background:"transparent",border:"1px solid rgba(255,255,255,.25)",borderRadius:7,color:"#fff",fontSize:11,fontWeight:600,padding:"3px 9px",cursor:"pointer",fontFamily:"inherit"}}>
+            {lote.fim?"Fechar":(lote.parar?"Parando…":"Parar")}
+          </button>
+        </div>
+        <div style={{height:6,background:"rgba(255,255,255,.16)",borderRadius:99,overflow:"hidden",marginBottom:7}}>
+          <div style={{height:"100%",width:((lote.total?((lote.feitos+lote.erros)/lote.total*100):0))+"%",background:"#2dd4bf",transition:"width .3s"}}/>
+        </div>
+        <div style={{fontSize:11.5,color:"rgba(255,255,255,.85)"}}>
+          {lote.feitos} de {lote.total} prontas{lote.erros?(" · "+lote.erros+" com erro"):""}
+        </div>
+        {lote.atual&&<div style={{fontSize:11,color:"rgba(255,255,255,.6)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lote.atual}</div>}
+      </div>
+    )}
 
     {/* ── Modal Solicitar ajuste com comentário ── */}
     {ajusteModal&&<div onClick={e=>{if(e.target===e.currentTarget){setAjusteModal(null);setAjusteText("");}}}
@@ -40595,6 +40788,25 @@ function _cardPodeSerResp(u){
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
   const fileInputRef=useRef(null);    // Arquivos finais (designer/editor sobem)
+  // ── Paraguay: tradução pt-BR do briefing, pro designer saber o que fazer (14/09/2026) ──
+  // Lê o que já está GRAVADO no card (tasks.traducao_pt). Só chama a IA se não existir
+  // ou se a copy mudou desde a última tradução — e aí grava, pra nunca mais traduzir de novo.
+  const _ehPy=String(task.bioterUnit||task.bioter_unit||"").toLowerCase()==="paraguay";
+  const [tradCard,setTradCard]=useState(function(){
+    return (typeof pxTraducaoSalva==="function")?(pxTraducaoSalva(task)||null):null;
+  });
+  const [tradCardLoad,setTradCardLoad]=useState(false);
+  useEffect(function(){
+    if(!_ehPy||typeof pxTraduzirEGravar!=="function") return;
+    const salva=(typeof pxTraducaoSalva==="function")?pxTraducaoSalva(task):null;
+    if(salva){ setTradCard(salva); return; }
+    let vivo=true; setTradCardLoad(true);
+    pxTraduzirEGravar(task,setTasks).then(function(r){ if(vivo){setTradCard(r);setTradCardLoad(false);} },
+                                          function(){ if(vivo) setTradCardLoad(false); });
+    return function(){ vivo=false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[task.id,_ehPy,String(task.desc||task.description||"").length,String(task.caption||"").length]);
+
   const fileInputRefRef=useRef(null); // Imagens de referência (criador sobe)
   const matFileInputRef=useRef(null); // Materiais (imagens/vídeos brutos, takes, base)
   const descRef=useRef(null);
@@ -43472,6 +43684,26 @@ function _cardPodeSerResp(u){
                 )}
               </div>);
             })()}
+
+            {/* ── Tradução do briefing (só Paraguay) — o designer não fala espanhol ── */}
+            {_ehPy&&(tradCardLoad||(tradCard&&tradCard.briefing))&&(
+              <div style={{background:"#f0fdf4",border:"1px dashed #bbf7d0",borderRadius:12,padding:"12px 14px"}}>
+                <div style={{color:"#16a34a",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                  <Ico n="globe" size={12} color="#16a34a"/>Tradução do briefing
+                </div>
+                {tradCardLoad
+                  ? <div style={{color:"#15803d",fontSize:12,fontWeight:600}}>Traduzindo…</div>
+                  : <div style={{color:"#15803d",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+                      {/* Negrito só no rótulo, igual ao briefing em español logo acima. */}
+                      {String(tradCard.briefing||"").split("\n").map(function(ln,i){
+                        const _rot=/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
+                        if(_rot) return <div key={i} style={{fontWeight:800,color:"#166534",marginTop:i===0?0:10,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>;
+                        return ln.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{ln}</div>;
+                      })}
+                    </div>}
+                <div style={{color:"#86efac",fontSize:10,marginTop:7,fontWeight:600}}>A peça é produzida com o texto em español acima.</div>
+              </div>
+            )}
 
             {/* ── CHECKLIST ── */}
             <div>
@@ -50567,6 +50799,7 @@ const rowToTask = (r) => ({
   somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
   naoPublica:   !!r.nao_publica,     // convite/impresso/interno: fora de TODO calendário e do planejador
   copyVersoes:  Array.isArray(r.copy_versoes) ? r.copy_versoes : [],   // histórico de versões da copy (nova abordagem / refazer)
+  traducaoPt:   (r.traducao_pt && typeof r.traducao_pt==="object") ? r.traducao_pt : null,   // tradução pt-BR da copy do Paraguay (guardada, não retraduz)
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
   origem:           r.origem            || "",
   tipo_solicitacao: r.tipo_solicitacao  || "",
@@ -50625,6 +50858,7 @@ const taskToRow = (t) => ({
   somente_story:  !!t.somenteStory,
   nao_publica:    !!t.naoPublica,
   copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
+  traducao_pt:    (t.traducaoPt && typeof t.traducaoPt==="object") ? t.traducaoPt : null,
   // ── Origem + tipo solicitação ──
   origem:           t.origem            || null,
   tipo_solicitacao: t.tipo_solicitacao  || null,
