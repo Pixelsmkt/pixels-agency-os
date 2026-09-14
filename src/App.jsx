@@ -3352,6 +3352,64 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
   return data;
 }
 
+/* Contato de verdade pra usar no CTA. Devolve "" quando a empresa nao tem
+   telefone cadastrado — e ai a legenda fecha SEM numero, nunca com um inventado.
+   O playbook guarda de dois jeitos: lista [{nome,whatsapp}] ou objeto com
+   {telefone,whatsapp,...} cheio de string vazia. Os dois caem aqui. */
+function _pxContatoUtil(pb, unit){
+  try{
+    const _limpa=function(v){ return String(v==null?"":v).trim(); };
+    const _daLista=function(arr){
+      if(!Array.isArray(arr)) return "";
+      const _its=arr.map(function(c){
+        const _tel=_limpa(c&&(c.whatsapp||c.telefone));
+        if(!_tel) return "";
+        const _nome=_limpa(c&&c.nome);
+        return _nome?(_nome+" — "+_tel):_tel;
+      }).filter(Boolean);
+      return _its.slice(0,2).join(" · ");
+    };
+    const _porUn=(pb&&pb.contatos_por_unidade)||{};
+    if(unit&&_porUn[unit]){ const _r=_daLista(_porUn[unit]); if(_r) return _r; }
+    const _c=pb&&pb.contatos;
+    if(Array.isArray(_c)){ const _r=_daLista(_c); if(_r) return _r; }
+    if(_c&&typeof _c==="object"){
+      const _tel=_limpa(_c.whatsapp)||_limpa(_c.telefone);
+      if(_tel) return _tel;
+    }
+    // ultimo recurso: qualquer unidade cadastrada (melhor que nada? nao — evita
+    // mandar o telefone de Castro num post de Toledo). Devolve vazio de proposito.
+    return "";
+  }catch(_){ return ""; }
+}
+
+/* Regras de CTA e emoji que valem pra TODA legenda do sistema. */
+function _pxRegrasLegenda(pb, unit, ehComemorativa){
+  const _ct=_pxContatoUtil(pb, unit);
+  let r="\nCTA E CONTATO (obrigatório em toda legenda):\n";
+  if(ehComemorativa){
+    r+="- Esta é uma homenagem, então o fecho é leve: uma linha curta se colocando à disposição, não uma chamada de venda.\n";
+  }else{
+    r+="- Feche com uma chamada clara do que a pessoa deve fazer (chamar no WhatsApp, mandar mensagem, falar com a equipe).\n";
+  }
+  if(_ct){
+    r+="- USE EXATAMENTE ESTE CONTATO, sem mudar um dígito: "+_ct+"\n";
+    r+="- A linha do contato começa SEMPRE com o emoji de celular 📱.\n";
+    r+="- Na legenda vai só o 📱 e o NÚMERO. Nome curto de pessoa pode acompanhar (ex.: “📱 Arlei — (49) 9 9164-6410”), mas descrição de região ou observação (“para todas as regiões exceto…”) NUNCA vai pra legenda: está aí só pra você escolher o número certo.\n";
+    r+="- Se houver mais de um número acima, escolha O QUE FAZ SENTIDO pro assunto do post e use SÓ UM.\n";
+    r+="- Não invente outro número, outro nome, site, e-mail nem endereço.\n";
+  }else{
+    r+="- ⛔ ESTA EMPRESA NÃO TEM TELEFONE CADASTRADO NO PLAYBOOK. Feche o CTA SEM número — ex.: “chama a gente no direct”, “manda uma mensagem pra gente”. NUNCA invente um telefone, e sem o emoji de celular (não há número pra anunciar).\n";
+  }
+  r+="\nEMOJIS (regra fixa do padrão da agência):\n";
+  r+="- No MÁXIMO 1 emoji por parágrafo e no MÁXIMO 2 na legenda inteira.\n";
+  if(_ct) r+="- O 📱 da linha do contato é obrigatório e JÁ CONTA como um dos 2 — então sobra no máximo 1 emoji pro resto da legenda.\n";
+  r+="- Só use emoji que tenha relação direta com o que a frase diz. Emoji de enfeite não entra.\n";
+  r+="- Nunca na linha de hashtags, nunca dois seguidos.\n";
+  r+="- Fora o 📱 do contato, se nenhum outro emoji fizer sentido, não use nenhum — é melhor que forçar.\n";
+  return r;
+}
+
 /* ─── REESCRITA DE COPY PELO CLAUDE ─────────────────────────────────
    Usado pelos botões "Testar nova abordagem" e "Refazer do zero" da
    Avaliação de copys. O card NÃO sai da fila: a copy é reescrita na hora e
@@ -3448,6 +3506,7 @@ async function pxReescreverCopy(opts){
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
+  if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   if(regras.length){
     u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
     for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
@@ -3514,11 +3573,12 @@ async function pxReescreverCopy(opts){
     u+="- O Título é a própria saudação da data: “Feliz Dia do Cliente!”, “Feliz Dia do Gaúcho!”, “Feliz Dia do Agrônomo!”. Nada de headline criativa nem frase de efeito.\n";
     u+="- PROIBIDO storytelling, cena inventada ou micro-história (ex.: “TEM CLIENTE QUE LIGA PRA SABER SE CHOVEU NA OBRA”). Fora do cabível numa arte de homenagem.\n";
     u+="- O conteúdo é agradecimento e reconhecimento: família, confiança, parceria, “vocês fazem parte da nossa história”.\n";
-    u+="- Sem CTA, sem telefone, sem número, sem falar de produto, serviço, garantia ou prazo.\n";
+    u+="- Sem falar de produto, serviço, garantia, prazo ou preço. O fecho é de disposição, não de venda.\n";
     u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
     u+="• TÍTULO"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
       "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
-    u+="\nFORMATO DA LEGENDA: 280 a 520 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
+    u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
+    u+=_pxRegrasLegenda(pb,unit,true);
     if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
   }else{
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
@@ -3529,6 +3589,7 @@ async function pxReescreverCopy(opts){
        "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
   u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
+  u+=_pxRegrasLegenda(pb,unit,false);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
   }
 
@@ -3686,8 +3747,6 @@ async function pxGerarLegendas(opts){
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
-  const _ctt=(pb.contatos_por_unidade&&unit&&pb.contatos_por_unidade[unit])||pb.contatos;
-  if(_ctt&&_pxCtxTxt(_ctt)) u+="CONTATOS DESTA UNIDADE (use no CTA, não invente outro): "+_pxCtxTxt(_ctt)+"\n\n";
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   if(regras.length){
     u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
@@ -3738,10 +3797,11 @@ async function pxGerarLegendas(opts){
   if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
   if(ehComemorativa){
     u+="É DATA COMEMORATIVA: é homenagem, não é post de venda. Sem CTA, sem telefone, sem falar de produto, prazo ou garantia.\n";
-    u+="\nFORMATO DE CADA LEGENDA: 280 a 520 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.";
+    u+="\nFORMATO DE CADA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.";
   }else{
     u+="\nFORMATO DE CADA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   }
+  u+=_pxRegrasLegenda(pb,unit,ehComemorativa);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
 
   const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
