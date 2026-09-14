@@ -1036,6 +1036,12 @@ const KANBAN_COLS = [
   { id:"rascunhos",      label:"Rascunhos",              color:"#94a3b8", dark:true  }, // slate-400 (neutro)
   { id:"demanda",        label:"Copys",                  color:"#dc2626", dark:true  }, // red-600
   { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c", dark:true  }, // orange-600
+  /* PREENCHER MATERIAL (14/09/2026) — etapa nova, entre a copy aprovada e a demanda
+     do freelancer. Antes a Hellen escrevia a copy E já subia as imagens; agora a IA
+     escreve a copy, então o card precisa parar aqui pra alguém anexar o material
+     antes de virar demanda. Cor rosa-escura de propósito: é a única parada interna
+     no meio da rampa laranja, tem que dar pra achar de longe. */
+  { id:"preencher_material", label:"Preencher material",  color:"#e11d48", dark:true  }, // rose-600
   { id:"recebida",       label:"Demanda",                color:"#f97316", dark:true  }, // orange-500
   { id:"execucao",       label:"Em Execução",            color:"#f59e0b", dark:true  }, // amber-500
   { id:"ajustes",        label:"Ajustes",                color:"#ca8a04", dark:true  }, // yellow-600
@@ -1865,7 +1871,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     // Considera pra pagamento a partir de "Demanda" (recebida) em diante: execução, avaliação,
     // aprovado, agendado, publicado, reprovado, pausado, ajustes.
     if(t.deletedAt)return;
-    const _EXCLUDED_STATUSES=["rascunhos","demanda","alteracao_copy"];
+    const _EXCLUDED_STATUSES=["rascunhos","demanda","alteracao_copy","preencher_material"];
     if(_EXCLUDED_STATUSES.indexOf(t.status)>=0)return;
     // Fallback robusto: pra cards reprovados publishDate/completedAt podem ser null.
     // Cascata: referenceMonth → publishDate → completedAt → deadline → colEnteredAt → updated_at → createdAt
@@ -2366,7 +2372,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         {key:"tasksVideoFeira",label:"Vídeo básico",        price:_pd.videoFeira,    color:"#0369a1"},
         {key:"tasksOutros",    label:"Não classificado",    price:0,                             color:"#64748b"},
       ];
-      const _statusLabel={demanda:"Copys",alteracao_copy:"Alteração",recebida:"Demanda",execucao:"Execução",avaliacao:"Avaliação",aprovado:"Aprovado",aprovacao_final:"Aprovado pelo cliente",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado",reprovado:"Reprovado",ajustes:"Ajustes",rascunhos:"Rascunho"};
+      const _statusLabel={demanda:"Copys",alteracao_copy:"Alteração",preencher_material:"Preencher material",recebida:"Demanda",execucao:"Execução",avaliacao:"Avaliação",aprovado:"Aprovado",aprovacao_final:"Aprovado pelo cliente",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado",reprovado:"Reprovado",ajustes:"Ajustes",rascunhos:"Rascunho"};
       return <div
       onMouseDown={function(e){window._detMD=(e.target===e.currentTarget);}}
       onMouseUp={function(e){if(window._detMD&&e.target===e.currentTarget)_setDetalheModal(null);window._detMD=false;}}
@@ -3325,9 +3331,9 @@ const Chip=({color,children,sm})=>(
 /* ─── STATUS DE CARD ─────────────────────────
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
-const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
+const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",preencher_material:"Preencher material",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 // Cores sincronizadas com KANBAN_COLS — paleta arco-íris coerente
-const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f97316",execucao:"#f59e0b",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
+const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",preencher_material:"#e11d48",recebida:"#f97316",execucao:"#f59e0b",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
 
 /* ─── MODELO DA IA — UM LUGAR SÓ (14/09/2026) ─────────────────
    O app estava pregado no Sonnet 4 de maio/2025 (claude-sonnet-4-2025-05-14), espalhado
@@ -3796,7 +3802,7 @@ async function pxReescreverCopy(opts){
     u+="- O conteúdo é agradecimento e reconhecimento: família, confiança, parceria, “vocês fazem parte da nossa história”.\n";
     u+="- Sem falar de produto, serviço, garantia, prazo ou preço. O fecho é de disposição, não de venda.\n";
     u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
-    u+="• TÍTULO"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
+    u+="• TÍTULO"+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+
       "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
     u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
     u+=_pxRegrasLegenda(pb,unit,true,task.client);
@@ -3804,8 +3810,8 @@ async function pxReescreverCopy(opts){
   }else{
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
   u+=ehVideo
-    ? ("• ROTEIRO"+(py?" (español)":"")+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
-    : ("• TÍTULO"+(py?" (español)":"")+"\n(a headline que vai na peça, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
+    ? ("• ROTEIRO"+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
+    : ("• TÍTULO"+"\n(a headline que vai na peça, em caixa alta)\n\n• TEXTO NA ARTE"+
        "\n(⚠️ NÃO REPITA O TÍTULO AQUI — ele já está na arte, repetir faz o colaborador ler a mesma coisa duas vezes. "+
        "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
@@ -6462,7 +6468,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const daqui7d=new Date(hoje);daqui7d.setDate(hoje.getDate()+7);
 
   // ═══ Demandas CLIENTES (kanban normal) ═══
-  const clientStatuses=["demanda","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
+  const clientStatuses=["demanda","alteracao_copy","preencher_material","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
   const clientTasks=active.filter(t=>clientStatuses.includes(t.status));
   const clientAtivas=clientTasks.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
 
@@ -8342,7 +8348,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
   </div>;
 }
 
-const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","recebida","demanda","pausado"];
+const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","recebida","preencher_material","alteracao_copy","demanda","pausado"];
 
 /* ─── LISTA VIEW (reusável, sem useState em .map()) ─────── */
 
@@ -19933,7 +19939,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   // Sugere datas de publicação pra cards que JÁ EXISTEM no fluxo (sem publishDate).
   // Pega cards em status [demanda, recebida, execucao, ajustes, avaliacao, aprovado],
   // distribui em 2ª e 5ª de cada semana alternando arte/vídeo. Estrategista confirma/edita.
-  const ELIGIBLE_STATUSES_PLAN=["demanda","recebida","execucao","ajustes","avaliacao","aprovado"];
+  const ELIGIBLE_STATUSES_PLAN=["demanda","preencher_material","recebida","execucao","ajustes","avaliacao","aprovado"];
   function _isVideoType(t){return t==="video"||t==="corte"||t==="video_complexo"||t==="video_feira";}
   function _isArteType(t){return t==="arte"||t==="carrossel";}
   function _isFotoType(t){return t==="foto";}
@@ -22666,7 +22672,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     // v8: paleta arco-íris (vermelho→laranja→âmbar→amarelo→lima→verde→roxo)
     // Bump da versão força rebuild — sem isso, cache antigo do localStorage mantém cores velhas
     // mesmo após KANBAN_COLS ser atualizado.
-    const COLS_VERSION="v9-rename-aprov-labels";
+    // v10: entrou a coluna "Preencher material" entre Copys e Demanda (14/09/2026).
+    const COLS_VERSION="v10-preencher-material";
     // IDs descontinuados — colunas que existiam em versões antigas e devem ser DESCARTADAS no rebuild.
     // (sem isso, a self-heal defensiva trata como "custom" e mantém visível indevidamente)
     const DEPRECATED_COL_IDS=new Set(["publicado"]);
@@ -25520,7 +25527,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
 
 function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,reorderTask,canDrag}){
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
-  const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
+  const LISTA_ORDER_LOCAL=["rascunhos","demanda","alteracao_copy","preencher_material","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
   const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td,reprovado:"#475569"};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
@@ -28680,11 +28687,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   };
 
   // ── COPY ACTIONS ──
-  const approveCopy=(task)=>{
+  /* Aprovar copy tem DOIS destinos (14/09/2026):
+       "preencher_material" — a copy está boa mas o card ainda não tem imagem.
+                              Para na coluna Preencher material até alguém anexar.
+       "recebida"           — o card já tem o material, vai direto virar demanda
+                              pro freelancer.
+     Antes era sempre "recebida": a Hellen escrevia a copy e já subia as imagens no
+     mesmo passo. Com a IA escrevendo a copy, esse passo ficou órfão. */
+  const approveCopy=(task,destino)=>{
     if(!isApprover)return;
+    const _dest=(destino==="recebida")?"recebida":"preencher_material";
+    const _lbl=(_dest==="recebida")?"Demandas":"Preencher material";
     const actor=effectiveUser?.name||CURRENT_USER.name;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demandas",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
-    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    const _now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:_dest,ajustar:false,colEnteredAt:_now,timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:_lbl,from:"demanda",to:_dest,at:_now,atFmt:nowFmt(),user:actor}]}:t));
+    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",
+      body:'"'+task.title+'" foi aprovada e está em '+_lbl,
+      user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);
   };
 
@@ -29500,7 +29519,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       return;
     }
     let vivo=true;
-    setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={loading:true}; return o; });
+    /* Se existe tradução gravada mas o texto mudou, MOSTRA A ANTIGA na hora e atualiza
+       por baixo. O usuário nunca mais encara um "Traduzindo…" em tela branca. */
+    const _velha=(function(){ const tr=current&&(current.traducaoPt||current.traducao_pt);
+      return (tr&&typeof tr==="object"&&(tr.briefing||tr.legenda))?tr:null; })();
+    setTradPt(function(m){ const o=Object.assign({},m);
+      o[_tradKey]=_velha?{briefing:_velha.briefing,legenda:_velha.legenda,atualizando:true}:{loading:true};
+      return o; });
     (async function(){
       try{
         const r=await pxTraduzirEGravar(current,setTasks);
@@ -30071,6 +30096,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             return <div style={{borderTop:"1px dashed #bbf7d0",background:"#f0fdf4",padding:isMob?"10px 14px":"12px 18px"}}>
               <div style={{color:"#16a34a",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
                 <Ico n="globe" size={11} color="#16a34a"/>Tradução
+                {_tradAtual.atualizando&&<span style={{fontWeight:600,letterSpacing:0,textTransform:"none",color:"#4ade80"}}>· atualizando</span>}
               </div>
               {/* Negrito SÓ no rótulo, igual ao bloco original — o texto inteiro em negrito
                   ficava pesado e ilegível (Vinicius, 14/09). */}
@@ -30179,8 +30205,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               </div>);
             })()}
 
-            {/* Título do card — destaque */}
-            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:23,lineHeight:1.24,letterSpacing:-.5}}>{current.title}</div>
+            {/* Título do card — destaque.
+                 marginBottom extra: o Vinicius pediu mais ar entre o título e o
+                 "Briefing pra equipe" (14/09/2026). O gap do container é 14. */}
+            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:23,lineHeight:1.24,letterSpacing:-.5,marginBottom:isMob?4:8}}>{current.title}</div>
 
             {/* ── Claude reescrevendo / versões da copy ──
                  O card não sai da fila: a copy troca aqui mesmo e a anterior fica guardada. */}
@@ -30208,11 +30236,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const v=_vs[_vIdx]||{};
               const _rot=v.autor==="original"?"original":(v.tipo==="refazer"?"refeita do zero":"nova abordagem");
               const _ir=(d)=>setVerVersao(x=>({...x,[current.id]:Math.max(0,Math.min(_vs.length-1,_vIdx+d))}));
-              const cB=_vOutra?"#fcd34d":"#e9d5ff", cT=_vOutra?"#92400e":"#6d28d9", cF=_vOutra?"#fffbeb":"#faf5ff";
+              /* LARANJA, não roxo: o roxo é a cor da Legenda e as duas barras ficavam
+                 se confundindo na mesma tela (Vinicius, 14/09/2026).
+                 Copy atual = laranja suave. Vendo versão antiga = borda âmbar forte,
+                 pra dar o susto de "isto não é o que está no ar". */
+              const cB=_vOutra?"#f59e0b":"#fed7aa", cT=_vOutra?"#92400e":"#c2410c", cF=_vOutra?"#fffbeb":"#fff7ed";
               const _nav=(d,lb,on)=>(<button onClick={()=>_ir(d)} disabled={!on} title={lb} style={{background:"#fff",border:"1px solid "+cB,borderRadius:7,width:24,height:24,color:on?cT:"#cbd5e1",cursor:on?"pointer":"default",fontSize:14,lineHeight:1,fontFamily:"inherit",padding:0}}>{d<0?"‹":"›"}</button>);
-              return(<div title={v.feedback?("Pedido: "+v.feedback):""} style={{background:cF,border:"1px solid "+cB,borderRadius:12,padding:isMob?"7px 9px":"7px 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              return(<div title={v.feedback?("Pedido: "+v.feedback):""} style={{background:cF,border:(_vOutra?"1.5px solid ":"1px solid ")+cB,borderRadius:12,padding:isMob?"7px 9px":"7px 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:isMob?4:8}}>
                 <div style={{display:"inline-flex",alignItems:"center",gap:3}}>{_nav(-1,"Versao anterior",_vIdx>0)}{_nav(1,"Proxima versao",_vIdx<_vs.length-1)}</div>
-                <span style={{color:cT,fontSize:12,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>Versão {_vIdx+1}/{_vs.length}</span>
+                <span style={{color:cT,fontSize:12,fontWeight:800,fontVariantNumeric:"tabular-nums",textTransform:"uppercase",letterSpacing:.5}}>Versão {_vIdx+1}/{_vs.length}</span>
                 <span style={{color:cT,opacity:.7,fontSize:11.5,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {_rot}{v.atFmt?" · "+v.atFmt:""}</span>
                 {!_vOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>copy atual</span>}
                 {_vOutra&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6}}>
@@ -30295,8 +30327,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               </div>
             </div>)}
 
-            {/* Legenda — depois do briefing */}
-            {captionTxt2&&(<div style={{background:"#fdfaff",border:"1px solid #ede9fe",borderRadius:14,overflow:"hidden"}}>
+            {/* Legenda — depois do briefing. marginTop extra: os dois blocos estavam
+                 colados demais (Vinicius, 14/09/2026). */}
+            {captionTxt2&&(<div style={{background:"#fdfaff",border:"1px solid #ede9fe",borderRadius:14,overflow:"hidden",marginTop:isMob?6:12}}>
               {/* Mesmo tamanho do briefing — ver o comentário lá em cima. */}
               <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"9px 14px":"10px 18px",color:"#7c3aed",fontSize:isMob?12.5:13.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="message" size={15} color="#7c3aed"/>Legenda</div>
               <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.tx,fontSize:isMob?12.5:13.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
@@ -30431,11 +30464,22 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               ? {position:"fixed",left:0,right:0,bottom:0,zIndex:60,background:C.card,borderRadius:"16px 16px 0 0",padding:"10px 12px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid "+C.b1,boxShadow:"0 -8px 24px rgba(15,23,42,0.12)",display:"grid",gridTemplateColumns:(tab==="publicacao"||tab==="video")?"1fr 1fr":"1fr",gap:8}
               : {position:"sticky",top:8,zIndex:5,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1,boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
             {tab==="copys"&&(<>
-              <button onClick={()=>approveCopy(current)}
+              {/* APROVAR TEM DOIS CAMINHOS (14/09/2026). O de cima é o normal: a copy
+                  está boa mas falta imagem, então o card para em "Preencher material".
+                  O de baixo é o atalho pra quando o card já tem o material pronto. */}
+              <button onClick={()=>approveCopy(current,"preencher_material")}
+                title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
                 style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
-                Aprovar copy
+                Aprovar copy → Preencher material
+              </button>
+              <button onClick={()=>approveCopy(current,"recebida")}
+                title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
+                style={{width:"100%",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
+                Aprovar e ir direto pra Demanda
               </button>
               <button onClick={()=>setAjusteModal(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
@@ -40950,6 +40994,10 @@ function _cardPodeSerResp(u){
     if(!_ehPy||typeof pxTraduzirEGravar!=="function") return;
     const salva=(typeof pxTraducaoSalva==="function")?pxTraducaoSalva(task):null;
     if(salva){ setTradCard(salva); return; }
+    /* Copy mudou: mantém a tradução antiga na tela enquanto a nova não chega,
+       em vez de piscar "Traduzindo…" com o bloco vazio. */
+    const _velha=task&&(task.traducaoPt||task.traducao_pt);
+    if(_velha&&typeof _velha==="object"&&(_velha.briefing||_velha.legenda)) setTradCard(_velha);
     let vivo=true; setTradCardLoad(true);
     pxTraduzirEGravar(task,setTasks).then(function(r){ if(vivo){setTradCard(r);setTradCardLoad(false);} },
                                           function(){ if(vivo) setTradCardLoad(false); });
@@ -42060,6 +42108,25 @@ function _cardPodeSerResp(u){
     await runWithConcurrency(validFiles,MAX_PARALLEL_UPLOADS,uploadOne);
   };
 
+  /* PREENCHER MATERIAL → DEMANDA (14/09/2026).
+     Move o card da etapa nova pra fila do freelancer. Fica aqui em cima (e não
+     dentro do onClick) porque o botão está no rodapé do modal e precisa enxergar
+     a função tanto no caminho direto quanto depois do pixelsConfirm. */
+  const _enviarProDemanda=function(){
+    const _now=new Date().toISOString();
+    const _quem=(user&&user.name)||"";
+    setTasks(function(p){return p.map(function(t){ return t.id===task.id?Object.assign({},t,{
+      status:"recebida",
+      ajustar:false,
+      colEnteredAt:_now,
+      timeline:(t.timeline||[]).concat([{type:"status",fromLabel:"Preencher material",toLabel:"Demanda",
+        from:"preencher_material",to:"recebida",at:_now,atFmt:nowFmt(),user:_quem,
+        note:"Material preenchido por "+_quem+" — liberado pra produção"}])
+    }):t; });});
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Card liberado pra produção!",4000);
+    onClose();
+  };
+
   const removeAttachment=(id,_confirmado)=>{
     const att=attachments.find(a=>a.id===id);
     // Confirma antes de remover arquivo já subido (o × fica colado no Baixar — toque errado apagava).
@@ -43137,6 +43204,30 @@ function _cardPodeSerResp(u){
                 style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(161,64,255,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
                 Enviar p/ aprovação
               </button>}
+              {/* PREENCHER MATERIAL → DEMANDA (14/09/2026).
+                  Etapa nova: a copy já está aprovada, o card só está esperando alguém
+                  anexar as imagens. Qualquer um que possa editar o card libera —
+                  não é exclusivo da Hellen. O botão avisa se ainda não tem material. */}
+              {canEdit&&task.status==="preencher_material"&&(function(){
+                const _mats=(task.files||[]).filter(function(f){
+                  return f&&!f.isAnnotation&&!f.isRef&&(!f.tipo||f.tipo==="material"||f.tipo==="referencia"||f.tipo==="final");
+                });
+                const _temMaterial=_mats.length>0;
+                return <button
+                  onClick={function(){
+                    if(!_temMaterial&&typeof pixelsConfirm==="function"){
+                      pixelsConfirm("Este card não tem nenhuma imagem ou arquivo anexado. Mandar assim mesmo pra Demanda?",
+                        {danger:true,okText:"Mandar assim mesmo",cancelText:"Voltar e anexar"})
+                        .then(function(y){ if(y) _enviarProDemanda(); });
+                      return;
+                    }
+                    _enviarProDemanda();
+                  }}
+                  title={_temMaterial?("Material anexado ("+_mats.length+"). Vira demanda pro freelancer."):"Ainda não tem nenhum arquivo anexado neste card."}
+                  style={{background:"#e11d48",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(225,29,72,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
+                  Material pronto → Demanda
+                </button>;
+              })()}
               {/* Drive folder — shown when approved */}
               {task.status==="aprovado"&&(()=>{
                 const cl=CLIENTS.find(c=>c.id===task.client);
@@ -43841,7 +43932,7 @@ function _cardPodeSerResp(u){
                 <div style={{color:"#16a34a",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                   <Ico n="globe" size={12} color="#16a34a"/>Tradução do briefing
                 </div>
-                {tradCardLoad
+                {(tradCardLoad&&!(tradCard&&tradCard.briefing))
                   ? <div style={{color:"#15803d",fontSize:12,fontWeight:600}}>Traduzindo…</div>
                   : <div style={{color:"#15803d",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
                       {/* Negrito só no rótulo, igual ao briefing em español logo acima. */}
@@ -51008,7 +51099,11 @@ const taskToRow = (t) => ({
   somente_story:  !!t.somenteStory,
   nao_publica:    !!t.naoPublica,
   copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
-  traducao_pt:    (t.traducaoPt && typeof t.traducaoPt==="object") ? t.traducaoPt : null,
+  /* NUNCA apagar tradução já gravada: se o objeto em memória não trouxer o campo
+     (veio de algum caminho que montou a task sem ele), aceita o alias snake_case.
+     Sem isso, um sync qualquer gravava null por cima e o card retraduzia do zero. */
+  traducao_pt:    (t.traducaoPt && typeof t.traducaoPt==="object") ? t.traducaoPt
+                : ((t.traducao_pt && typeof t.traducao_pt==="object") ? t.traducao_pt : null),
   // ── Origem + tipo solicitação ──
   origem:           t.origem            || null,
   tipo_solicitacao: t.tipo_solicitacao  || null,
@@ -51291,12 +51386,12 @@ export default function AgencyOS(){
       let rows=null;
       // Só os status elegíveis (mesma lista de _OK_STATUS abaixo) — evita puxar o
       // JSON de files de 1.800 cards a cada 10 min em cada aba (egress).
-      try{ const r=await sb.from("tasks").select("id,status,files,completed_at,col_entered_at").not("files","is",null).is("deleted_at",null).in("status",["avaliacao","aprovacao_final","aprovado","agendado","ajustes","alteracao_copy","publicado"]); rows=r&&r.data; }catch(_){ return; }
+      try{ const r=await sb.from("tasks").select("id,status,files,completed_at,col_entered_at").not("files","is",null).is("deleted_at",null).in("status",["avaliacao","aprovacao_final","aprovado","agendado","ajustes","alteracao_copy","preencher_material","publicado"]); rows=r&&r.data; }catch(_){ return; }
       if(!rows||stopped)return;
       // Só vídeos que ainda vão passar por aprovação ou já aprovados/agendados que NÃO
       // foram postados. Publicados já foram — não precisam de versão leve. Rascunhos,
       // produção (demanda/execução), pausados, reprovados e internos ficam de fora.
-      const _OK_STATUS={avaliacao:1,aprovacao_final:1,aprovado:1,agendado:1,ajustes:1,alteracao_copy:1,publicado:1};
+      const _OK_STATUS={avaliacao:1,aprovacao_final:1,aprovado:1,agendado:1,ajustes:1,alteracao_copy:1,preencher_material:1,publicado:1};
       // Publicado: só os últimos 60 dias (é o que o portal e o feed ainda tocam)
       const _pubCut=Date.now()-60*864e5;
       const _pubRecente=function(t){
@@ -59326,7 +59421,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     window._sb.from("tasks")
       .select("id,title,status,publish_date,publish_time,bioter_unit,client,content_type,cover,files,caption")
       .eq("client",cl.id).is("deleted_at",null)
-      .in("status",["demanda","recebida","execucao","ajustes","avaliacao","alteracao_copy","aprovado","agendado","publicado","aprovacao_final"])
+      .in("status",["demanda","recebida","execucao","ajustes","avaliacao","alteracao_copy","preencher_material","aprovado","agendado","publicado","aprovacao_final"])
       .not("publish_date","is",null)
       .then(function(r){
         if(off||!r||!Array.isArray(r.data))return;
@@ -59435,8 +59530,8 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     return cl?cl.color:"#475569";
   };
   // Cor do badge de status
-  const statusColor={agendado:"#7c3aed",publicado:"#059669",aprovacao_final:"#14b8a6",aprovado:"#14b8a6",demanda:"#06b6d4",recebida:"#06b6d4",execucao:"#06b6d4",ajustes:"#06b6d4",avaliacao:"#06b6d4",alteracao_copy:"#06b6d4"};
-  const statusLabel={agendado:"Agendada",publicado:"Publicada",aprovacao_final:"Aprovada",aprovado:"Aprovada",demanda:"Em produção",recebida:"Em produção",execucao:"Em produção",ajustes:"Em produção",avaliacao:"Em produção",alteracao_copy:"Em produção"};
+  const statusColor={agendado:"#7c3aed",publicado:"#059669",aprovacao_final:"#14b8a6",aprovado:"#14b8a6",demanda:"#06b6d4",recebida:"#06b6d4",execucao:"#06b6d4",ajustes:"#06b6d4",avaliacao:"#06b6d4",alteracao_copy:"#06b6d4",preencher_material:"#06b6d4"};
+  const statusLabel={agendado:"Agendada",publicado:"Publicada",aprovacao_final:"Aprovada",aprovado:"Aprovada",demanda:"Em produção",recebida:"Em produção",execucao:"Em produção",ajustes:"Em produção",avaliacao:"Em produção",alteracao_copy:"Em produção",preencher_material:"Em produção"};
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Header: titulo + seletor de mes (igual interno) */}
@@ -61817,7 +61912,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob, currentClientUser}
     if(t.status==="ajustes")return {label:"Em ajustes",color:"#ea580c",bg:"#fed7aa"};
     if(t.status==="execucao")return {label:"Em produção",color:"#d97706",bg:"#fef3c7"};
     if(t.status==="avaliacao")return {label:"Em avaliação interna",color:"#0891b2",bg:"#cffafe"};
-    if(t.status==="recebida"||t.status==="demanda")return {label:"Recebida pela equipe",color:"#0284c7",bg:"#dbeafe"};
+    if(t.status==="recebida"||t.status==="demanda"||t.status==="preencher_material")return {label:"Recebida pela equipe",color:"#0284c7",bg:"#dbeafe"};
     // Status das demandas INTERNAS (kanban da equipe — sync com portal cliente)
     if(t.status==="interno_demanda"||t.status==="interno_triagem")return {label:"Recebida pela equipe",color:"#0284c7",bg:"#dbeafe"};
     if(t.status==="interno_execucao")return {label:"Em produção",color:"#d97706",bg:"#fef3c7"};
@@ -71791,7 +71886,7 @@ function _opKpisColab(colab, monthTasks, today0, visible){
       {l:"Aprov. design",   v: aprovDesign, m:null},
       {l:"Aprov. vídeo",    v: aprovVideo,  m:null},
       {l:"Paradas +48h",    v: allTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0 && _opHorasParado(t)>48;}).length, m:0, invert:true},
-      {l:"Sem responsável", v: allTasks.filter(function(t){return ["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado"].indexOf(t.status)>=0 && !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
+      {l:"Sem responsável", v: allTasks.filter(function(t){return ["rascunhos","demanda","preencher_material","recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado"].indexOf(t.status)>=0 && !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
       {l:"Sem prazo",       v: allTasks.filter(function(t){return ["recebida","execucao","ajustes"].indexOf(t.status)>=0 && !t.publishDate && !t.deadline;}).length, m:0, invert:true},
     ];
   }
@@ -83505,7 +83600,7 @@ function _useDGKpis(allTasks){
   const tasks = allTasks||[];
   const DONE = ["aprovado","agendado","publicado"];
 
-  const emProducao = tasks.filter(t=>["execucao","ajustes","alteracao","avaliacao","aprovacao_final","demanda","recebida"].indexOf(t.status)>=0).length;
+  const emProducao = tasks.filter(t=>["execucao","ajustes","alteracao","avaliacao","aprovacao_final","demanda","preencher_material","recebida"].indexOf(t.status)>=0).length;
   const avalPendentes = tasks.filter(t=>t.status==="avaliacao"||t.status==="aprovacao_final").length;
   const publicadasMes = tasks.filter(t=>{
     if(t.status!=="publicado"&&t.status!=="agendado")return false;
