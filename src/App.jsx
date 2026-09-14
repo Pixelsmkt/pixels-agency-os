@@ -3396,7 +3396,7 @@ function _pxTextoParaHtml(txt){
     const l=linhas[i].trim();
     if(!l){ out+="<p>&nbsp;</p>"; continue; }
     // rótulos do briefing (• Título, • Texto na arte, • Roteiro) vão em negrito
-    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Roteiro)/i.test(l)){
+    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|O que precisamos)/i.test(l)){
       out+="<p><strong>"+l.replace(/^[-]\s*/,"• ")+"</strong></p>";
     } else out+="<p>"+l+"</p>";
   }
@@ -3407,8 +3407,10 @@ function _pxTextoParaHtml(txt){
 async function pxReescreverCopy(opts){
   const task=opts&&opts.task; if(!task) throw new Error("Card não informado.");
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
-  const tipo=String((opts&&opts.tipo)||"abordagem");
-  const ehAbord=tipo!=="refazer";
+  const tipo=String((opts&&opts.tipo)||"ajuste");
+  const ehRefazer=tipo==="refazer";
+  const ehAjuste=tipo==="ajuste";
+  const ehAbord=!ehRefazer&&!ehAjuste;
   const pedido=String((opts&&opts.feedback)||"").trim();
   const cliente=String((opts&&opts.clienteNome)||task.client||"");
   const unit=String(task.bioterUnit||task.bioter_unit||"");
@@ -3476,10 +3478,33 @@ async function pxReescreverCopy(opts){
     u+="\n";
   }
 
+  // ── O que já foi pedido NESTE card (copyVersoes) ──────────────────────
+  // Sem isto cada rodada começa do zero: na 7ª versão ele repetia erro apontado
+  // na 3ª, porque só recebia o feedback que acabara de ser digitado.
+  const _vs=Array.isArray(task.copyVersoes)?task.copyVersoes:(Array.isArray(task.copy_versoes)?task.copy_versoes:[]);
+  const _pedidosAnteriores=_vs.map(function(v){return String((v&&v.feedback)||"").trim();})
+                              .filter(Boolean);
+  if(_pedidosAnteriores.length){
+    u+="AJUSTES JÁ PEDIDOS NESTE MESMO CARD (do mais antigo pro mais recente) — NENHUM desses erros pode voltar:\n";
+    for(let i=0;i<Math.min(_pedidosAnteriores.length,8);i++)
+      u+=(i+1)+". "+_pedidosAnteriores[i]+"\n";
+    u+="\n";
+  }
+  if(_vs.length>1){
+    const _ant=_vs[_vs.length-1];
+    const _antTxt=_pxHtmlParaTexto((_ant&&_ant.legenda)||"");
+    if(_antTxt) u+="VERSÃO ANTERIOR (a que foi recusada agora) — não repita as frases dela:\n"+_antTxt.slice(0,600)+"\n\n";
+  }
+
   u+="VERSÃO ATUAL — BRIEFING:\n"+(_pxHtmlParaTexto(task.desc||task.description)||"(vazio)")+"\n\n";
   u+="VERSÃO ATUAL — LEGENDA:\n"+(_pxHtmlParaTexto(task.caption)||"(vazia)")+"\n\n";
 
-  u+=ehAbord
+  u+=ehAjuste
+    ? ("TAREFA: reescreva a copy aplicando o que a agência pediu abaixo.\n"+
+       "- MANTENHA o assunto do card, a não ser que o pedido diga explicitamente pra mudar de assunto.\n"+
+       "- MANTENHA o que não foi criticado. Não reescreva por reescrever.\n"+
+       "- Não repita as frases da versão atual naquilo que foi criticado.\n")
+    : ehAbord
     ? "TAREFA: mantenha EXATAMENTE o mesmo assunto e reescreva com OUTRA ABORDAGEM — outro ângulo, outro jeito de abrir, outra construção. Não repita as frases da versão atual.\n"
     : "TAREFA: esqueça o assunto da versão atual. Escreva uma copy NOVA, de outro assunto que faça sentido para este cliente neste mês.\n";
   u+=pedido?("O QUE A AGÊNCIA PEDIU: "+pedido+"\n"):"A agência não deu direção — escolha você o melhor caminho, diferente do atual.\n";
@@ -3491,16 +3516,17 @@ async function pxReescreverCopy(opts){
     u+="- O conteúdo é agradecimento e reconhecimento: família, confiança, parceria, “vocês fazem parte da nossa história”.\n";
     u+="- Sem CTA, sem telefone, sem número, sem falar de produto, serviço, garantia ou prazo.\n";
     u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
-    u+="• Título"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• Texto na arte"+(py?" (español)":"")+
-      "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho)\n";
+    u+="• TÍTULO"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
+      "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
     u+="\nFORMATO DA LEGENDA: 280 a 520 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
     if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
   }else{
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
   u+=ehVideo
-    ? ("• Roteiro"+(py?" (español)":"")+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
-    : ("• Título"+(py?" (español)":"")+"\n(a headline que vai na peça)\n\n• Texto na arte"+(py?" (español)":"")+
-       "\n(desenvolvido: headline em duas linhas em caixa alta, linha em branco, 2 frases de apoio, linha em branco, fecho — 380 a 620 caracteres. "+
+    ? ("• ROTEIRO"+(py?" (español)":"")+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
+    : ("• TÍTULO"+(py?" (español)":"")+"\n(a headline que vai na peça, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
+       "\n(⚠️ NÃO REPITA O TÍTULO AQUI — ele já está na arte, repetir faz o colaborador ler a mesma coisa duas vezes. "+
+       "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
   u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
@@ -3586,7 +3612,13 @@ async function pxGerarLegendas(opts){
   if(!task) throw new Error("Card não informado.");
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const briefing=String((opts&&opts.briefing)||"").trim();
-  if(briefing.length<3) throw new Error("Escreva um briefing curto antes de gerar (produto, cidade, ou o que aparece na foto).");
+  const modo=String((opts&&opts.modo)||"gerar")==="alterar"?"alterar":"gerar";
+  const legAtual=_pxHtmlParaTexto((opts&&opts.legendaAtual)||"");
+  const historico=Array.isArray(opts&&opts.historico)?opts.historico:[];
+  if(briefing.length<3) throw new Error(modo==="alterar"
+    ? "Escreva o que precisa ajustar antes de gerar."
+    : "Escreva um briefing curto antes de gerar (produto, cidade, ou o que aparece na foto).");
+  if(modo==="alterar"&&legAtual.length<20) throw new Error("Este card ainda não tem legenda pra ajustar.");
 
   const cliente=String((opts&&opts.clienteNome)||task.client||"");
   const unit=String(task.bioterUnit||task.bioter_unit||"");
@@ -3616,6 +3648,7 @@ async function pxGerarLegendas(opts){
     "escreva a legenda sem ele em vez de preencher com suposição. "+
     (py?"ESCREVA AS TRÊS LEGENDAS EM ESPANHOL (é a unidade do Paraguai)."
        :"Escreva em português do Brasil.")+
+    (modo==="alterar"?"Você está AJUSTANDO uma legenda que já existe: mexa só no que foi criticado e devolva o texto inteiro. ":"")+
     "\nResponda EXATAMENTE neste formato, texto puro, sem markdown, sem comentário antes nem depois:"+
     "\n===OPCAO 1===\n(legenda)\n===OPCAO 2===\n(legenda)\n===OPCAO 3===\n(legenda)";
 
@@ -3625,7 +3658,26 @@ async function pxGerarLegendas(opts){
   if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
   u+="FORMATO: "+(ehVideo?"vídeo curto (reels/short)":(ehFotoObra?"foto de obra":(ct||"arte")))+"\n\n";
 
-  u+="════ BRIEFING QUE A AGÊNCIA ESCREVEU (única fonte de fatos) ════\n"+briefing+"\n\n";
+  if(modo==="alterar"){
+    u+="════ LEGENDA ATUAL (é esta que você vai ajustar) ════\n"+legAtual+"\n\n";
+    u+="════ O QUE PRECISA AJUSTAR ════\n"+briefing+"\n\n";
+    if(historico.length){
+      u+="AJUSTES JÁ PEDIDOS NESTA MESMA RODADA — não repita nenhum desses erros:\n";
+      for(let i=0;i<Math.min(historico.length,6);i++){
+        const _f=String(historico[i]||"").trim(); if(_f) u+="- "+_f+"\n";
+      }
+      u+="\n";
+    }
+  }else{
+    u+="════ BRIEFING QUE A AGÊNCIA ESCREVEU (única fonte de fatos) ════\n"+briefing+"\n\n";
+    if(historico.length){
+      u+="O QUE JÁ FOI RECUSADO NESTA RODADA — não repita:\n";
+      for(let i=0;i<Math.min(historico.length,6);i++){
+        const _f=String(historico[i]||"").trim(); if(_f) u+="- "+_f+"\n";
+      }
+      u+="\n";
+    }
+  }
 
   if(pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.sobre).slice(0,900)+"\n\n";
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
@@ -3672,8 +3724,16 @@ async function pxGerarLegendas(opts){
     u+="\n";
   }
 
-  u+="TAREFA: escreva 3 LEGENDAS DIFERENTES para este post, todas a partir do mesmo briefing.\n";
-  u+="As três precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
+  if(modo==="alterar"){
+    u+="TAREFA: reescreva a LEGENDA ATUAL aplicando o ajuste pedido, em 3 versões.\n";
+    u+="- MANTENHA tudo que não foi criticado, com as mesmas palavras. Não reescreva o que já está bom.\n";
+    u+="- Não invente dado novo pra preencher o que foi tirado.\n";
+    u+="- As 3 versões corrigem a MESMA coisa de jeitos diferentes — não são 3 assuntos diferentes.\n";
+    u+="- Devolva a legenda INTEIRA já corrigida, nunca só o pedaço que mudou.\n";
+  }else{
+    u+="TAREFA: escreva 3 LEGENDAS DIFERENTES para este post, todas a partir do mesmo briefing.\n";
+    u+="As três precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
+  }
   if(ehFotoObra) u+="É uma FOTO DE OBRA: o post mostra serviço entregue. Fale do que foi feito e de onde, com orgulho e sem exagero. Nada de promessa nem número que não esteja no briefing.\n";
   if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
   if(ehComemorativa){
@@ -3847,10 +3907,12 @@ async function pxGerarBriefing(opts){
     u+="- Devolva o briefing INTEIRO já corrigido, nunca só o pedaço que mudou.\n\n";
   }
   u+="FORMATO DO BRIEFING, conforme o tipo que você escolher:\n";
-  u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", e a lâmina 5 é SEMPRE o CTA.\n";
-  u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → seção \"• Roteiro\" com Cena 1 (0–8s) — o que aparece / Na tela: \"…\", 5 a 6 cenas somando ~60s.\n";
-  u+="- design que não é carrossel (foto, arte, folder) → seção \"• Título\" (a headline que vai na peça) e seção \"• Texto na arte\" (desenvolvido: headline em duas linhas em caixa alta, linha em branco, 2 frases de apoio, linha em branco, fecho — 380 a 620 caracteres).\n";
-  u+="Depois do briefing, acrescente sempre uma última seção \"• O que precisamos\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
+  u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → seção \"• ROTEIRO\" com Cena 1 (0–8s) — o que aparece / Na tela: \"…\", 5 a 6 cenas somando ~60s.\n";
+  u+="- design que não é carrossel (foto, arte, folder) → seção \"• TÍTULO\" (a headline que vai na peça, em caixa alta) e seção \"• TEXTO NA ARTE\".\n";
+  u+="  ⚠️ O TEXTO NA ARTE NÃO PODE REPETIR O TÍTULO. O título já está na peça; repetir faz o colaborador ler a mesma coisa duas vezes. Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres.\n";
+  u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", a 5 é o CTA.\n";
+  u+="Os rótulos de seção vão SEMPRE EM MAIÚSCULO, exatamente assim: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO, • O QUE PRECISAMOS.\n";
+  u+="Depois do briefing, acrescente sempre uma última seção \"• O QUE PRECISAMOS\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
   u+="Não escreva legenda de Instagram aqui — legenda é outra etapa.";
 
   const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
@@ -28371,7 +28433,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const txt=String(feedback||"").trim();
     const ehAbord=tipo==="abordagem";
-    const rotulo=ehAbord?"Testar nova abordagem":"Refazer do zero";
+    const ehAjuste=tipo==="ajuste";
+    const rotulo=ehAjuste?"Ajustar copy":(ehAbord?"Testar nova abordagem":"Refazer do zero");
     setErroReescrita("");setReescrevendoId(task.id);
     // o pedido vai pra memória de aprendizado mesmo que a reescrita falhe
     try{
@@ -28381,7 +28444,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           client:task.client||null,
           bioter_unit:task.bioterUnit||task.bioter_unit||null,
           titulo:task.title||null,
-          tipo:ehAbord?"abordagem":"refazer",
+          tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),
           feedback:txt||null,
           briefing_anterior:task.desc||task.description||null,
           legenda_anterior:task.caption||null,
@@ -28390,7 +28453,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       }
     }catch(_){}
     try{
-      const nova=await pxReescreverCopy({task:task,tipo:ehAbord?"abordagem":"refazer",feedback:txt,clienteNome:task.client});
+      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client});
       const now=new Date().toISOString();
       if(setTasks)setTasks(p=>p.map(t=>{
         if(t.id!==task.id)return t;
@@ -28399,12 +28462,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         if(!vs.length)vs.push({v:1,briefing:t.desc||t.description||"",legenda:t.caption||"",
           autor:"original",tipo:null,feedback:null,at:now,atFmt:nowFmt()});
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
-          autor:"Claude",tipo:ehAbord?"abordagem":"refazer",feedback:txt||null,
+          autor:"Claude",tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
         const cs=[...(t.comments||[])];
         cs.push({id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
-          type:ehAbord?"copy_nova_abordagem":"copy_refazer",
-          text:(ehAbord?"Testar nova abordagem: ":"Refazer do zero: ")+(txt||"(sem comentário)"),
+          type:ehAjuste?"copy_ajuste":(ehAbord?"copy_nova_abordagem":"copy_refazer"),
+          text:rotulo+": "+(txt||"(sem comentário)"),
           user:actor,at:now,atFmt:nowFmt()});
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
           copyVersoes:vs,comments:cs,
@@ -28412,10 +28475,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")}]};
       }));
       setVerVersao(v=>({...v,[task.id]:null}));
-      pushNotif({type:"ajuste",icon:ehAbord?"↻":"✎",title:rotulo,
+      pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
         body:'"'+task.title+'" foi reescrita pelo Claude'+(txt?(" — "+txt.slice(0,80)):""),
         user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-      if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada.",4200);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?"Copy ajustada. A anterior ficou guardada.":(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
     }catch(e){
       const msg=String((e&&e.message)||e||"Não consegui reescrever agora.");
       setErroReescrita(msg);
@@ -29514,10 +29577,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
           // Rotulos do briefing ("• Titulo", "• Texto na arte", "• Roteiro") sempre em NEGRITO.
           // O stripHtml tira as tags, entao o negrito volta aqui, por linha.
-          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
+          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|o\s+que\s+precisamos|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
+          // Rótulo sai sempre em CAIXA ALTA — copy antiga guardada em copy_versoes
+          // não passou pela migração de 14/09, então normaliza aqui também.
           const pxLinhas=(txt)=>String(txt||"").split("\n").map((ln,i)=>(
             _ehRotulo(ln)
-              ? <div key={i} style={{fontWeight:800,color:"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ")}</div>
+              ? <div key={i} style={{fontWeight:800,color:"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
               : (ln.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{ln}</div>)
           ));
           // Histórico de ajustes
@@ -29862,21 +29927,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
               </button>
-              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"abordagem"});}}
-                title="Mantém o assunto do card, mas o Claude escreve de outro jeito. Você diz o que quer mudar na abordagem."
+              {/* (14/09/2026) "Testar nova abordagem" + "Refazer do zero" viraram um só:
+                  o que muda é o que você escreve no pedido, não qual botão você clica. */}
+              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"ajuste"});}}
+                title="Você diz o que precisa mudar e o Claude reescreve na hora. A versão atual fica guardada."
                 style={{width:"100%",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#ddd6fe";}}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>
-                Testar nova abordagem
-              </button>
-              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"refazer"});}}
-                title="Assunto e abordagem novos: o Claude escreve outra copy do zero pra esse dia."
-                style={{width:"100%",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#bae6fd";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="M4.5 7.5l2.1 2.1"/><path d="M19.5 7.5l-2.1 2.1"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="9.5" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>
-                Refazer do zero
+                Ajustar copy
               </button>
               <button onClick={async()=>{
                   if(typeof pixelsConfirm==="function"){
@@ -30370,13 +30429,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
     {/* ── Modal Refazer / Testar nova abordagem (o Claude reescreve) ── */}
     {refazerModal&&(()=>{
+      const _aj=refazerModal.tipo==="ajuste";
       const _ab=refazerModal.tipo==="abordagem";
-      const _grad=_ab?"linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)":"linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)";
-      const _sombra=_ab?"0 4px 14px rgba(109,40,217,.40)":"0 4px 14px rgba(3,105,161,.40)";
-      const _tit=_ab?"Testar nova abordagem":"Refazer do zero";
-      const _sub=_ab?"Mesmo assunto, outro jeito de contar":"Assunto e abordagem novos";
-      const _lbl=_ab?"O que mudar na abordagem?":"Por que não funcionou?";
-      const _ph=_ab
+      const _grad=(_aj||_ab)?"linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)":"linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)";
+      const _sombra=(_aj||_ab)?"0 4px 14px rgba(109,40,217,.40)":"0 4px 14px rgba(3,105,161,.40)";
+      const _nVers=(function(){const _v=refazerModal.task&&refazerModal.task.copyVersoes;return Array.isArray(_v)?_v.length:0;})();
+      const _tit=_aj?"Ajustar copy":(_ab?"Testar nova abordagem":"Refazer do zero");
+      const _sub=_aj?"Você diz o que mudar — ele reescreve":(_ab?"Mesmo assunto, outro jeito de contar":"Assunto e abordagem novos");
+      const _lbl=_aj?"O que precisa ajustar?":(_ab?"O que mudar na abordagem?":"Por que não funcionou?");
+      const _ph=_aj
+        ? "Ex.: tira o storytelling, seja direto; o título tá genérico; não cita obra, é pra homenagear o cliente; troca o assunto, esse já saiu mês passado…"
+        : _ab
         ? "Ex.: começa com uma pergunta em vez de afirmação; menos técnico; foca no custo e não no processo; puxa mais pro lado emocional…"
         : "Ex.: esse assunto já saiu mês passado; não combina com o momento do cliente; muito genérico…";
       const _fechar=()=>{setRefazerModal(null);setRefazerText("");};
@@ -30401,14 +30464,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               autoFocus rows={5} placeholder={_ph}
               style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
             <div style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:11.5,lineHeight:1.5}}>
-              O card <strong>não sai daqui</strong>: o Claude reescreve na hora e a copy troca nesta tela. A versão atual fica guardada — dá pra voltar nela a qualquer momento pelas setas de versão. Deixar em branco também funciona: ele escolhe outro caminho sozinho.
+              O card <strong>não sai daqui</strong>: o Claude reescreve na hora e a copy troca nesta tela. A versão atual fica guardada — dá pra voltar nela a qualquer momento pelas setas de versão.
+              {_aj&&<> Pra mudar de assunto, é só pedir aqui.</>}
+              {_aj&&_nVers>1&&<><br/><strong>Ele já recebeu os {_nVers-1} pedidos anteriores deste card</strong> — não vai repetir o que você já apontou.</>}
             </div>
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
               <button onClick={_fechar}
                 style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
               <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText);_fechar();}}
                 style={{background:_grad,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:_sombra,display:"inline-flex",alignItems:"center",gap:6}}>
-                <Ico n="check" size={13} color="#fff"/>{_ab?"Pedir nova abordagem":"Pedir refação"}
+                <Ico n="check" size={13} color="#fff"/>{_aj?"Ajustar":(_ab?"Pedir nova abordagem":"Pedir refação")}
               </button>
             </div>
           </div>
@@ -39713,6 +39778,38 @@ function _pxRoteiroParaHtml(txt){
   });
   return out;
 }
+/* Botao roxo dos recursos de IA do cartao (Gerar/Ajustar briefing e legenda).
+   FICA AQUI, UM SO: quando o estilo estava copiado nos dois lugares eles
+   desencontraram na primeira mexida. Mudou aqui, muda nos dois. */
+function PxBotaoIA({label,hint,title,onClick}){
+  return <div style={{marginBottom:10}}>
+    <button type="button" onClick={onClick} title={title||""}
+      style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",lineHeight:1.2,letterSpacing:-.1}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
+      {label}
+    </button>
+    {hint&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>{hint}</div>}
+  </div>;
+}
+
+/* Linha de interruptor do painel do cartão (Somente story, Não publica nas redes).
+   Um componente só: os dois ficam iguais e mudam juntos. */
+function PxSwitchLinha({on,onToggle,disabled,icone,corIcone,fundoIcone,label,hint,title,primeiro}){
+  return <div title={title||""} onClick={function(){ if(!disabled&&onToggle) onToggle(); }}
+    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:primeiro?"none":"1px solid #f1f5f9",cursor:disabled?"default":"pointer",transition:"background .12s",background:"transparent",opacity:disabled?.7:1}}
+    onMouseEnter={function(e){ if(!disabled) e.currentTarget.style.background="#fafafa"; }}
+    onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+    <span style={{width:26,height:26,borderRadius:8,background:on?fundoIcone:"#f1f5f9",color:on?corIcone:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>{icone}</span>
+    <span style={{minWidth:0,flex:1}}>
+      <span style={{display:"block",fontSize:12.5,fontWeight:650,color:on?"#0f172a":"#475569",letterSpacing:-.15,lineHeight:1.25}}>{label}</span>
+      {hint&&<span style={{display:"block",fontSize:10.5,color:"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.35}}>{hint}</span>}
+    </span>
+    <span aria-hidden="true" style={{width:34,height:20,borderRadius:99,background:on?"#7c3aed":"#e2e8f0",flexShrink:0,position:"relative",transition:"background .16s"}}>
+      <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+    </span>
+  </div>;
+}
+
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // ═══ Detecção de viewport mobile ═══
   const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -41804,7 +41901,7 @@ function _cardPodeSerResp(u){
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
             </div>
             <div style={{minWidth:0}}>
-              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Gerar legenda</div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{legIA.modo==="alterar"?"Ajustar legenda":"Gerar legenda"}</div>
               <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{task.title}{client?(" · "+((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;})||{name:client}).name):""}{bioterUnit?(" · "+bioterUnit):""}</div>
             </div>
           </div>
@@ -41812,23 +41909,30 @@ function _cardPodeSerResp(u){
         </div>
 
         <div style={{padding:"18px 20px",overflowY:"auto",flex:1,minHeight:0}}>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>Briefing rápido</div>
+          {legIA.modo==="alterar"&&<details style={{marginBottom:12,border:"1px solid #e2e8f0",borderRadius:10,background:"#f8fafc",padding:"9px 12px"}}>
+            <summary style={{cursor:"pointer",color:"#475569",fontSize:11.5,fontWeight:700,listStyle:"revert"}}>Legenda que está no card agora</summary>
+            <div style={{color:"#475569",fontSize:12,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",marginTop:8,maxHeight:190,overflowY:"auto"}}>{_pxTextoPuro(caption)}</div>
+          </details>}
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginBottom:6}}>{legIA.modo==="alterar"?"O que precisa ajustar":"Briefing rápido"}</div>
           <div style={{color:"#64748b",fontSize:11.5,lineHeight:1.6,marginBottom:8}}>
-            Escreva só o essencial — produto, cidade, cliente da obra, um dado técnico, o que aparece na foto.
-            O tom de voz, as hashtags e o contato saem do playbook da empresa e das legendas já aprovadas.
+            {legIA.modo==="alterar"
+              ? "Diz só o que está errado. Ele mantém com as mesmas palavras tudo que você não criticou, e devolve 3 jeitos de corrigir a mesma coisa."
+              : "Escreva só o essencial — produto, cidade, cliente da obra, um dado técnico, o que aparece na foto. O tom de voz, as hashtags e o contato saem do playbook da empresa e das legendas já aprovadas."}
           </div>
           <textarea
             value={legIA.brief}
             onChange={function(e){ const v=e.target.value; setLegIA(function(p){return Object.assign({},p,{brief:v});}); }}
             onKeyDown={function(e){ if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); const b=document.getElementById("px-legia-go"); if(b)b.click(); } }}
             disabled={!!legIA.loading}
-            placeholder={"Ex.: Terraplanagem entregue em Toledo pra um cliente de soja. 3 mil m² nivelados, máquina própria, obra em 4 dias."}
+            placeholder={legIA.modo==="alterar"
+              ? "Ex.: tira a parte do preço, a gente não fala valor. E a abertura tá fraca — começa pelo problema do cliente."
+              : "Ex.: Terraplanagem entregue em Toledo pra um cliente de soja. 3 mil m² nivelados, máquina própria, obra em 4 dias."}
             style={{width:"100%",minHeight:92,boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontSize:13,lineHeight:1.6,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",background:legIA.loading?"#f8fafc":"#fff"}}/>
 
           {legIA.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",color:"#991b1b",fontSize:12.5,lineHeight:1.6,marginTop:12}}>{legIA.erro}</div>}
 
           {legIA.loading&&<div style={{padding:"30px 0 18px",textAlign:"center",color:"#64748b",fontSize:13}}>
-            Lendo o playbook, as regras e as legendas aprovadas… escrevendo 3 opções.
+            {legIA.modo==="alterar"?"Aplicando o ajuste na legenda que já está no card…":"Lendo o playbook, as regras e as legendas aprovadas… escrevendo 3 opções."}
           </div>}
 
           {!legIA.loading&&Array.isArray(legIA.opcoes)&&legIA.opcoes.length>0&&<div style={{marginTop:18}}>
@@ -41858,7 +41962,7 @@ function _cardPodeSerResp(u){
                 </div>
               </div>;
             })}
-            {caption&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55}}>
+            {caption&&legIA.modo!=="alterar"&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55}}>
               Este card já tem legenda. Usar uma das opções troca o texto na tela — nada é gravado até você clicar em <strong>Salvar</strong>, lá em cima.
             </div>}
           </div>}
@@ -41874,14 +41978,21 @@ function _cardPodeSerResp(u){
                 const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;});
                 const _nome=(_cl&&_cl.name)||client||"";
                 const _t=Object.assign({},task,{title:title||task.title,client:client,bioterUnit:bioterUnit,contentType:contentType,caption:caption,tags:tags});
-                const ops=await pxGerarLegendas({task:_t,clienteNome:_nome,briefing:_b});
-                setLegIA(function(p){return Object.assign({},p,{loading:false,opcoes:ops,erro:""});});
+                // Leva os pedidos já feitos nesta rodada: sem isso cada nova geração
+                // recomeça do zero e repete erro que você já apontou.
+                const _hist=Array.isArray(legIA.historico)?legIA.historico:[];
+                const ops=await pxGerarLegendas({task:_t,clienteNome:_nome,briefing:_b,
+                  modo:legIA.modo||"gerar", legendaAtual:(legIA.modo==="alterar"?caption:""), historico:_hist});
+                setLegIA(function(p){return Object.assign({},p,{loading:false,opcoes:ops,erro:"",brief:"",
+                  historico:(Array.isArray(p.historico)?p.historico:[]).concat([_b])});});
               }catch(e){
                 setLegIA(function(p){return Object.assign({},p,{loading:false,erro:(e&&e.message)||String(e)});});
               }
             }}
             style={{background:(legIA.loading||String(legIA.brief||"").trim().length<3)?"#e2e8f0":"linear-gradient(135deg,#7c3aed,#5b21b6)",color:(legIA.loading||String(legIA.brief||"").trim().length<3)?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:700,cursor:legIA.loading?"wait":((String(legIA.brief||"").trim().length<3)?"default":"pointer"),fontFamily:"inherit",boxShadow:(legIA.loading||String(legIA.brief||"").trim().length<3)?"none":"0 3px 12px rgba(124,58,237,.35)"}}>
-            {legIA.loading?"Escrevendo…":(Array.isArray(legIA.opcoes)?"Gerar outras 3":"Gerar 3 opções")}
+            {legIA.loading?"Escrevendo…":(Array.isArray(legIA.opcoes)
+              ? (legIA.modo==="alterar"?"Ajustar de novo":"Gerar outras 3")
+              : (legIA.modo==="alterar"?"Aplicar ajuste":"Gerar 3 opções"))}
           </button>
         </div>
       </div>
@@ -41902,7 +42013,7 @@ function _cardPodeSerResp(u){
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
               </div>
               <div style={{minWidth:0}}>
-                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{briefIA.modo==="alterar"?"Alterar briefing":"Gerar briefing"}</div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{briefIA.modo==="alterar"?"Ajustar briefing":"Gerar briefing"}</div>
                 <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{title||task.title}{client?(" · "+((typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===client;})||{name:client}).name):""}{bioterUnit?(" · "+bioterUnit):""}</div>
               </div>
             </div>
@@ -42433,6 +42544,7 @@ function _cardPodeSerResp(u){
                       <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>{_isV?"Última entrega":"Entrega"}</span>
                       {finItems.length>1&&<span style={{background:"#f1f5f9",color:"#475569",fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{_isV?(finItems.length+"ª versão"):(_ehCarrossel?(finItems.length+" lâminas"):(finItems.length+" artes"))}</span>}
                       {_ehCarrossel&&<span style={{background:"#ede9fe",color:"#4c1d95",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Carrossel</span>}
+                      {canEdit&&!_isV&&finItems.length>1&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>· {_pxMob()?"use as setas pra mudar a ordem":"arraste pra mudar a ordem"}</span>}
                       {_isV&&<span style={{background:"#0f172a",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>Vídeo</span>}
                       {_noTopo&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
                     </div>
@@ -42459,13 +42571,42 @@ function _cardPodeSerResp(u){
                         // Numeração por seção: feed 1..N, story 1..M (mesma regra da aba Arquivos)
                         const _isStory=!_av&&typeof pxEhStory==="function"&&pxEhStory(a);
                         const _num=arr.slice(0,i+1).filter(function(x){return (!isVid(x)&&typeof pxEhStory==="function"&&pxEhStory(x))===_isStory;}).length;
+                        // Só reordena dentro da mesma seção (feed com feed, story com story):
+                        // a exibição é feed-depois-story, então cruzar seção daria um
+                        // resultado que não bate com o que a pessoa vê.
+                        const _mesmaSecao=function(x){ return (!isVid(x)&&typeof pxEhStory==="function"&&pxEhStory(x))===_isStory; };
+                        const _secao=arr.filter(_mesmaSecao);
+                        const _iSec=_secao.findIndex(function(x){return x.id===a.id;});
+                        const _podeOrd=canEdit&&_secao.length>1;
+                        const _sobre=_dragOverItemId===a.id;
                         return <div key={a.id} onClick={function(e){
                             e.stopPropagation();
                             setLightbox({url:a.url,name:a.name,storagePath:a.storagePath});
-                          }} title={(a.name||("#"+(i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")}
-                          style={{position:"relative",borderRadius:9,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1",background:_av?"#0f172a":"#f8fafc",cursor:"pointer",transition:"transform .12s, box-shadow .12s"}}
-                          onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.03)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.12)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="none";}}>
+                          }} title={(a.name||("#"+(i+1)))+(_pxFileWhen(a)?(" — "+_pxFileWhen(a)):"")+(_podeOrd?" — arraste pra mudar a ordem":"")}
+                          draggable={_podeOrd?"true":undefined}
+                          onDragStart={_podeOrd?function(e){
+                            _dragItemIdRef.current=a.id;
+                            try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",a.id);}catch(_){}
+                          }:undefined}
+                          onDragOver={_podeOrd?function(e){
+                            if(!_dragItemIdRef.current) return;
+                            const _de=arr.find(function(x){return x.id===_dragItemIdRef.current;});
+                            if(!_de||!_mesmaSecao(_de)) return;   // feed não entra no meio do story
+                            e.preventDefault(); e.stopPropagation();
+                            try{e.dataTransfer.dropEffect="move";}catch(_){}
+                            if(_dragOverItemId!==a.id) _setDragOverItemId(a.id);
+                          }:undefined}
+                          onDragLeave={_podeOrd?function(e){ e.stopPropagation(); if(_dragOverItemId===a.id) _setDragOverItemId(null); }:undefined}
+                          onDrop={_podeOrd?function(e){
+                            e.preventDefault(); e.stopPropagation();
+                            const _fromId=_dragItemIdRef.current;
+                            _dragItemIdRef.current=null; _setDragOverItemId(null);
+                            if(_fromId&&_fromId!==a.id) reorderFinItem(_fromId,a.id);
+                          }:undefined}
+                          onDragEnd={_podeOrd?function(){ _dragItemIdRef.current=null; _setDragOverItemId(null); }:undefined}
+                          style={{position:"relative",borderRadius:9,overflow:"hidden",border:_sobre?"2px dashed #7c3aed":"1px solid #e2e8f0",aspectRatio:"1",background:_av?"#0f172a":"#f8fafc",cursor:_podeOrd?"grab":"pointer",transition:"transform .12s, box-shadow .12s, border .12s",transform:_sobre?"scale(1.02)":"scale(1)",boxShadow:_sobre?"0 8px 24px rgba(124,58,237,0.25)":"none"}}
+                          onMouseEnter={function(e){if(_sobre)return;e.currentTarget.style.transform="scale(1.03)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.12)";}}
+                          onMouseLeave={function(e){if(_sobre)return;e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="none";}}>
                           {_av
                             ? <div style={{position:"relative",width:"100%",height:"100%",background:"#0f172a"}}>
                                 {typeof PxVideoThumb==="function"&&<PxVideoThumb src={a.url} file={a} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
@@ -42482,6 +42623,16 @@ function _cardPodeSerResp(u){
                                   }
                                 }}
                                 style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+                          {_podeOrd&&_pxMob()&&<div style={{position:"absolute",top:5,left:5,display:"flex",gap:4,zIndex:3}}>
+                            <button type="button" disabled={_iSec<=0} onClick={function(e){e.stopPropagation();if(_iSec>0)reorderFinItem(a.id,_secao[_iSec-1].id);}} title="Mover pra antes"
+                              style={{background:"rgba(15,23,42,0.85)",color:"#fff",border:"none",borderRadius:7,width:30,height:30,minWidth:30,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:_iSec<=0?.35:1,fontSize:12}}>◀</button>
+                            <button type="button" disabled={_iSec>=_secao.length-1} onClick={function(e){e.stopPropagation();if(_iSec<_secao.length-1)reorderFinItem(a.id,_secao[_iSec+1].id);}} title="Mover pra depois"
+                              style={{background:"rgba(15,23,42,0.85)",color:"#fff",border:"none",borderRadius:7,width:30,height:30,minWidth:30,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:_iSec>=_secao.length-1?.35:1,fontSize:12}}>▶</button>
+                          </div>}
+                          {_podeOrd&&!_pxMob()&&<div title="Arraste pra mudar a sequência do carrossel"
+                            style={{position:"absolute",top:5,left:5,background:"rgba(15,23,42,0.78)",color:"#fff",borderRadius:7,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                          </div>}
                           <div style={{position:"absolute",bottom:5,left:5,display:"flex",gap:4,pointerEvents:"none"}}>
                             <span style={{background:"rgba(15,23,42,0.78)",color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'"}}>{_isStory?"S":"#"}{_num}</span>
                             {/* Lâmina em vídeo também leva Feed/Story: é lâmina do carrossel, não "card de vídeo" */}
@@ -42827,31 +42978,16 @@ function _cardPodeSerResp(u){
                 <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir do texto da arte e da legenda — pra mandar pro cliente decidir.</div>
               </div>)}
               {canEdit&&(function(){
-                // Card com briefing → o primário vira "Alterar" (ajuste em cima do que existe).
-                // "Refazer do zero" continua ali pra quando o rumo está errado, não o texto.
-                const _temBrief=_pxTextoPuro(desc).length>20;
-                const _abrir=function(_modo){ setBriefIA({modo:_modo,pedido:"",loading:false,versoes:[],idx:0,erro:""}); };
-                const _est=function(_primario){ return {background:_primario?"linear-gradient(135deg,#7c3aed,#5b21b6)":"#fff",color:_primario?"#fff":"#5b21b6",border:_primario?"none":"1px solid #ddd6fe",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:_primario?"0 2px 8px rgba(124,58,237,.30)":"none"}; };
-                const _faisca=<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>;
-                return <div style={{marginBottom:10}}>
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                    <button type="button" onClick={function(){_abrir(_temBrief?"alterar":"gerar");}}
-                      title={_temBrief?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
-                                      :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
-                      style={_est(true)}>
-                      {_faisca}{_temBrief?"Alterar briefing":"Gerar briefing"}
-                    </button>
-                    {_temBrief&&<button type="button" onClick={function(){_abrir("gerar");}}
-                      title="Ignora o briefing atual e escreve outro do zero."
-                      style={_est(false)}>
-                      Refazer do zero
-                    </button>}
-                  </div>
-                  <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>
-                    {_temBrief?"Diz o que está errado — ele corrige e mantém o resto igual."
-                              :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
-                  </div>
-                </div>;
+                // Sem briefing ele gera, com briefing ele ajusta. Pra recomeçar do
+                // zero, apaga o texto — o botão volta sozinho pra "Gerar".
+                const _tem=_pxTextoPuro(desc).length>20;
+                return <PxBotaoIA
+                  label={_tem?"Ajustar briefing":"Gerar briefing"}
+                  title={_tem?"Você diz o que precisa ajustar e a IA reescreve o briefing mantendo o que já está bom."
+                             :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
+                  hint={_tem?"Diz o que está errado — ele corrige e mantém o resto igual. Pra começar outro do zero, é só apagar o briefing."
+                            :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
+                  onClick={function(){ setBriefIA({modo:_tem?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:""}); }}/>;
               })()}
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
@@ -43166,18 +43302,18 @@ function _cardPodeSerResp(u){
 
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
-          {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {/* Mesmo botão, mesmo tamanho e mesmo canto do "Gerar briefing" da aba Briefing. */}
-            {canEdit&&<div>
-              <button type="button"
-                onClick={function(){setLegIA({brief:"",loading:false,opcoes:null,erro:""});}}
-                title="Você escreve um briefing curto (produto, cidade, o que aparece na foto) e a IA devolve 3 legendas no padrão desta empresa."
-                style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.2"/></svg>
-                Gerar legenda
-              </button>
-              <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Dá um briefing curto — produto, cidade, o que aparece na foto — e ele devolve 3 opções.</div>
-            </div>}
+          {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
+            {canEdit&&(function(){
+              // Mesmo componente da aba Briefing — mesmo tamanho, mesmo estilo, sempre.
+              const _tem=_pxTextoPuro(caption).length>20;
+              return <PxBotaoIA
+                label={_tem?"Ajustar legenda":"Gerar legenda"}
+                title={_tem?"Você diz o que precisa ajustar e a IA reescreve a legenda mantendo o que já está bom."
+                           :"Você escreve um briefing curto (produto, cidade, o que aparece na foto) e a IA devolve 3 legendas no padrão desta empresa."}
+                hint={_tem?"Diz o que está errado — ele corrige e mantém o resto igual. Pra começar outra do zero, é só apagar a legenda."
+                          :"Dá um briefing curto — produto, cidade, o que aparece na foto — e ele devolve 3 opções."}
+                onClick={function(){ setLegIA({modo:_tem?"alterar":"gerar",brief:"",loading:false,opcoes:null,erro:"",historico:[]}); }}/>;
+            })()}
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,#fafbfc,#fff)",display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:28,height:28,borderRadius:8,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={14}/></div>
@@ -44580,47 +44716,30 @@ function _cardPodeSerResp(u){
             </div>
           </div>
 
-          {/* ── Somente story ── o post vai pro story; não há arte de feed pra produzir ── */}
-          <div>
-            <label onClick={function(){ if(canEdit) setSomenteStory(!somenteStory); }}
-              style={{display:"flex",alignItems:"center",gap:10,border:"1px solid "+(somenteStory?"#f59e0b":"#e2e8f0"),background:somenteStory?"#fffbeb":"#fff",borderRadius:10,padding:"9px 11px",cursor:canEdit?"pointer":"default",transition:"all .12s",opacity:canEdit?1:.75}}>
-              <span style={{width:18,height:18,borderRadius:5,border:"2px solid "+(somenteStory?"#f59e0b":"#cbd5e1"),background:somenteStory?"#f59e0b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {somenteStory&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
-              </span>
-              <span style={{width:28,height:28,borderRadius:8,background:somenteStory?"#f59e0b":"#fef3c7",color:somenteStory?"#fff":"#d97706",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
-              </span>
-              <span style={{minWidth:0,flex:1}}>
-                <span style={{display:"block",fontSize:12,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
-                <span style={{display:"block",fontSize:10.5,color:somenteStory?"#b45309":"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.4}}>Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda.</span>
-              </span>
-            </label>
-          </div>
-
-          {/* ── Não publica nas redes ── convite, impresso, material interno ── */}
-          <div>
-            {(function(){
-              const _folder=contentType==="folder";
-              const _on=naoPublica||_folder;
-              return <label onClick={function(){ if(canEdit&&!_folder) setNaoPublica(!naoPublica); }}
-                title={_folder?"Folder já é material impresso: nunca entra no calendário.":"Marque quando a peça não vai pro feed nem pro story."}
-                style={{display:"flex",alignItems:"center",gap:10,border:"1px solid "+(_on?"#64748b":"#e2e8f0"),background:_on?"#f8fafc":"#fff",borderRadius:10,padding:"9px 11px",cursor:(canEdit&&!_folder)?"pointer":"default",transition:"all .12s",opacity:(canEdit&&!_folder)?1:.75}}>
-                <span style={{width:18,height:18,borderRadius:5,border:"2px solid "+(_on?"#64748b":"#cbd5e1"),background:_on?"#64748b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  {_on&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
-                </span>
-                <span style={{width:28,height:28,borderRadius:8,background:_on?"#64748b":"#f1f5f9",color:_on?"#fff":"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>
-                </span>
-                <span style={{minWidth:0,flex:1}}>
-                  <span style={{display:"block",fontSize:12,fontWeight:800,color:_on?"#334155":"#0f172a",letterSpacing:-.2}}>Não publica nas redes</span>
-                  <span style={{display:"block",fontSize:10.5,color:_on?"#64748b":"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.4}}>
-                    {_folder?"Ligado sozinho porque o tipo é Folder — material impresso nunca entra no calendário."
-                            :"Convite, material de feira, peça interna. Some dos calendários, sai da cota do mês e não ocupa o dia no planejamento."}
-                  </span>
-                </span>
-              </label>;
-            })()}
-          </div>
+          {/* ── Como esta peça sai ── story / não publica ── */}
+          {(function(){
+            const _folder=contentType==="folder";
+            const _naoPub=naoPublica||_folder;
+            return <div>
+              <label style={LB}><span style={LB_DOT}/> Como esta peça sai</label>
+              <div style={{border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",background:"#fff"}}>
+                <PxSwitchLinha primeiro on={somenteStory} disabled={!canEdit}
+                  onToggle={function(){ setSomenteStory(!somenteStory); }}
+                  label="Somente story" hint="Sem arte de feed"
+                  title="Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda."
+                  corIcone="#d97706" fundoIcone="#fef3c7"
+                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>}/>
+                <PxSwitchLinha on={_naoPub} disabled={!canEdit||_folder}
+                  onToggle={function(){ setNaoPublica(!naoPublica); }}
+                  label="Não publica nas redes"
+                  hint={_folder?"Folder é sempre assim":"Fora dos calendários e da cota"}
+                  title={_folder?"Folder é material impresso: nunca entra no calendário."
+                                :"Convite, material de feira, peça interna. Some dos calendários, sai da cota do mês e não ocupa o dia no planejamento."}
+                  corIcone="#475569" fundoIcone="#e2e8f0"
+                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>}/>
+              </div>
+            </div>;
+          })()}
 
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
           {(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
