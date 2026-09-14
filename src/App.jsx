@@ -1039,11 +1039,14 @@ const KANBAN_COLS = [
   /* PREENCHER MATERIAL (14/09/2026) — etapa nova, entre a copy aprovada e a demanda
      do freelancer. Antes a Hellen escrevia a copy E já subia as imagens; agora a IA
      escreve a copy, então o card precisa parar aqui pra alguém anexar o material
-     antes de virar demanda. Cor rosa-escura de propósito: é a única parada interna
-     no meio da rampa laranja, tem que dar pra achar de longe. */
-  { id:"preencher_material", label:"Preencher material",  color:"#e11d48", dark:true  }, // rose-600
-  { id:"recebida",       label:"Demanda",                color:"#f97316", dark:true  }, // orange-500
-  { id:"execucao",       label:"Em Execução",            color:"#f59e0b", dark:true  }, // amber-500
+     antes de virar demanda.
+     COR: entra na rampa do arco-íris como qualquer outra coluna — ela não pode ser
+     um ponto fora da curva. Ao inserir esta coluna, as três seguintes deslizaram um
+     degrau (Demanda: laranja→âmbar, Em Execução: âmbar→amarelo), mantendo a
+     sequência vermelho → laranja → âmbar → amarelo → lima → verde → roxo. */
+  { id:"preencher_material", label:"Preencher material",  color:"#f97316", dark:true  }, // orange-500
+  { id:"recebida",       label:"Demanda",                color:"#f59e0b", dark:true  }, // amber-500
+  { id:"execucao",       label:"Em Execução",            color:"#eab308", dark:true  }, // yellow-500
   { id:"ajustes",        label:"Ajustes",                color:"#ca8a04", dark:true  }, // yellow-600
   { id:"avaliacao",      label:"Concluído p/ Avaliação", color:"#84cc16", dark:true  }, // lime-500
   { id:"aprovado",       label:"Aprovado internamente",      color:"#16a34a", dark:true  }, // green-600
@@ -3333,7 +3336,7 @@ const Chip=({color,children,sm})=>(
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
 const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",preencher_material:"Preencher material",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 // Cores sincronizadas com KANBAN_COLS — paleta arco-íris coerente
-const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",preencher_material:"#e11d48",recebida:"#f97316",execucao:"#f59e0b",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
+const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",preencher_material:"#f97316",recebida:"#f59e0b",execucao:"#eab308",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
 
 /* ─── MODELO DA IA — UM LUGAR SÓ (14/09/2026) ─────────────────
    O app estava pregado no Sonnet 4 de maio/2025 (claude-sonnet-4-2025-05-14), espalhado
@@ -30469,20 +30472,20 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   O de baixo é o atalho pra quando o card já tem o material pronto. */}
               <button onClick={()=>approveCopy(current,"preencher_material")}
                 title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
-                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar copy → Preencher material
               </button>
               <button onClick={()=>approveCopy(current,"recebida")}
                 title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
-                style={{width:"100%",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s"}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
                 Aprovar e ir direto pra Demanda
               </button>
               <button onClick={()=>setAjusteModal(current)}
-                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
@@ -30491,7 +30494,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   o que muda é o que você escreve no pedido, não qual botão você clica. */}
               <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"ajuste"});}}
                 title="Você diz o que precisa mudar e o Claude reescreve na hora. A versão atual fica guardada."
-                style={{width:"100%",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#ddd6fe";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="M4.5 7.5l2.1 2.1"/><path d="M19.5 7.5l-2.1 2.1"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="9.5" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>
@@ -30504,7 +30507,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   refazer descarta tudo. */}
               <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"refazer"});}}
                 title="Descarta a copy atual e escreve outra do zero — assunto e título novos. A versão atual fica guardada."
-                style={{width:"100%",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#bae6fd";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>
@@ -30517,7 +30520,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   pausarCopy(current);
                 }}
                 title="Manda pra coluna Pausadas — o card fica em standby, aparece ícone vermelho de pause no calendário."
-                style={{width:"100%",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#dc2626";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
@@ -30529,7 +30532,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   reprovarCopy(current,_m);
                 }}
                 title="Manda pra coluna Reprovadas — copy descartada, aparece ícone vermelho de alerta no calendário."
-                style={{width:"100%",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#dc2626";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
@@ -30566,11 +30569,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   Sempre "nova abordagem": mantém o assunto de cada card (o assunto veio do
                   planejamento, não pode mudar em massa) e reescreve só o texto. */}
               {!isMob&&copyQueue.length>1&&(<>
-                <div style={{height:1,background:C.b1,margin:"6px 0 2px"}}/>
                 <button onClick={()=>{const _f=(copyQueue||[]).filter(function(t){return !_pxJaNoLote(t);}).length;setLoteTexto("");setLoteTudo(false);setLoteQtd(Math.max(1,Math.min(30,_f||copyQueue.length)));setLoteModal(true);}}
                   disabled={!!(lote&&!lote.fim)}
                   title="Reescreve de uma vez as próximas copys da fila, começando pelas que publicam mais cedo."
-                  style={{width:"100%",background:"transparent",color:"#0f766e",border:"1px dashed #99f6e4",borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12.5,cursor:(lote&&!lote.fim)?"wait":"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,opacity:(lote&&!lote.fim)?.6:1}}
+                  style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#0f766e",border:"1px solid #99f6e4",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:(lote&&!lote.fim)?"wait":"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,opacity:(lote&&!lote.fim)?.6:1,marginTop:4}}
                   onMouseEnter={e=>{if(!(lote&&!lote.fim)){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0f766e";}}}
                   onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#99f6e4";}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
@@ -30630,7 +30632,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 Aprovar demanda
               </button>
               <button onClick={()=>requestAdjust(current,[],[],[],[])}
-                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Devolver para execução
@@ -43224,7 +43226,7 @@ function _cardPodeSerResp(u){
                     _enviarProDemanda();
                   }}
                   title={_temMaterial?("Material anexado ("+_mats.length+"). Vira demanda pro freelancer."):"Ainda não tem nenhum arquivo anexado neste card."}
-                  style={{background:"#e11d48",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(225,29,72,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
+                  style={{background:"#f97316",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(249,115,22,0.30)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>
                   Material pronto → Demanda
                 </button>;
               })()}
