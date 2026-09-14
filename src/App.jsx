@@ -28866,7 +28866,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         // `lote:true` é o que faz o próximo lote SABER que este card já foi reescrito e
         // pular pro próximo (14/09/2026). Sem isso, apertar "30" de novo refazia os mesmos 30.
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
-          titulo:((nova&&nova.titulo)||t.title||""),
+          // 4ª trava: a VERSÃO também não guarda título novo em comemorativa — senão
+          // restaurar essa versão depois trocaria o título pela porta dos fundos.
+          titulo:((nova&&nova.titulo&&!_pxEhComemorativa(t))||t.title||""),
           autor:_pxNomeIA(),tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
           lote:!!lote,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
@@ -28883,7 +28885,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
           copyVersoes:vs,
           ...(_trocouTitulo?{title:_tituloNovo}:{}),
-          timeline:[...(t.timeline||[]),{type:"edit",user:"Claude",at:now,atFmt:nowFmt(),
+          timeline:[...(t.timeline||[]),{type:"edit",user:_pxNomeIA(),at:now,atFmt:nowFmt(),
             label:rotulo+" — copy reescrita pelo "+_pxNomeIA()+(txt?(" ("+txt.slice(0,90)+")"):"")
                   +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")}]};
       }));
@@ -28911,7 +28913,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     if(!isApprover)return;
     const alvos=_pxAlvosLote(qtd,!!loteTudo);
     loteRef.current={parar:false};
-    setLote({total:alvos.length,feitos:0,erros:0,atual:"",parar:false});
+    setLote({total:alvos.length,feitos:0,erros:0,atual:"",parar:false,inicio:Date.now()});
     for(let i=0;i<alvos.length;i++){
       if(loteRef.current&&loteRef.current.parar) break;
       const t=alvos[i];
@@ -31027,12 +31029,27 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             {lote.fim?"Fechar":(lote.parar?"Parando…":"Parar")}
           </button>
         </div>
-        <div style={{height:6,background:"rgba(255,255,255,.16)",borderRadius:99,overflow:"hidden",marginBottom:7}}>
-          <div style={{height:"100%",width:((lote.total?((lote.feitos+lote.erros)/lote.total*100):0))+"%",background:"#2dd4bf",transition:"width .3s"}}/>
-        </div>
-        <div style={{fontSize:11.5,color:"rgba(255,255,255,.85)"}}>
-          {lote.feitos} de {lote.total} prontas{lote.erros?(" · "+lote.erros+" com erro"):""}
-        </div>
+        {(function(){
+          var _done=(lote.feitos||0)+(lote.erros||0);
+          var _pct=lote.total?Math.round(_done/lote.total*100):0;
+          /* tempo medio por card ate agora -> estimativa do que falta */
+          var _falta=Math.max(0,(lote.total||0)-_done);
+          var _ms=(lote.inicio&&_done)?((Date.now()-lote.inicio)/_done):0;
+          var _seg=(_ms&&_falta)?Math.round(_ms*_falta/1000):0;
+          var _rest=_seg>0?(_seg>=60?(Math.ceil(_seg/60)+" min"):(_seg+"s")):"";
+          return <>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:5}}>
+              <div style={{fontSize:21,fontWeight:800,letterSpacing:-.6,lineHeight:1}}>{_pct}%</div>
+              {!lote.fim&&_rest&&<div style={{fontSize:10.5,color:"rgba(255,255,255,.55)"}}>~{_rest} restantes</div>}
+            </div>
+            <div style={{height:6,background:"rgba(255,255,255,.16)",borderRadius:99,overflow:"hidden",marginBottom:7}}>
+              <div style={{height:"100%",width:_pct+"%",background:"#2dd4bf",transition:"width .3s"}}/>
+            </div>
+            <div style={{fontSize:11.5,color:"rgba(255,255,255,.85)"}}>
+              {lote.feitos} de {lote.total} prontas{lote.erros?(" · "+lote.erros+" com erro"):""}
+            </div>
+          </>;
+        })()}
         {lote.atual&&<div style={{fontSize:11,color:"rgba(255,255,255,.6)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lote.atual}</div>}
       </div>
     )}
