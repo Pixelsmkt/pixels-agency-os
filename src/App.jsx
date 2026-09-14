@@ -41609,14 +41609,14 @@ function _cardPodeSerResp(u){
                       setCaption(html);
                       try{ if(captionRef.current) captionRef.current.innerHTML=html; }catch(_){}
                       setLegIA(null);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Legenda colada no campo — revise e clique em Salvar legenda.",5500);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Legenda colada no campo — revise e clique em Salvar.",5500);
                     }}
                     style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:9,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 2px 8px rgba(124,58,237,.30)"}}>Usar esta</button>
                 </div>
               </div>;
             })}
             {caption&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55}}>
-              Este card já tem legenda. Usar uma das opções troca o texto na tela — nada é gravado até você clicar em <strong>Salvar legenda</strong>.
+              Este card já tem legenda. Usar uma das opções troca o texto na tela — nada é gravado até você clicar em <strong>Salvar</strong>, lá em cima.
             </div>}
           </div>}
         </div>
@@ -42003,7 +42003,9 @@ function _cardPodeSerResp(u){
 
         {/* TABS */}
         <div className={isMobile?"scroll-x":undefined} style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:isMobile?"auto":undefined,WebkitOverflowScrolling:"touch"}}>
-          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
+          {/* Aba "Áudio" removida (14/09/2026): a seção "Áudios de Orientação" da aba
+              Briefing faz o mesmo e melhor — lá dá pra revisar e salvar a gravação. */}
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:isMobile?"11px 13px":"12px 18px",fontSize:isMobile?13:13.5,flexShrink:0,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -42571,12 +42573,8 @@ function _cardPodeSerResp(u){
                   }
                 }}
                 style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"14px",color:"#0f172a",outline:"none",boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
-              {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-                <button onClick={save}
-                  style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                  💾 Salvar descrição
-                </button>
-              </div>}
+              {/* Botão "Salvar descrição" removido (14/09/2026): chamava o mesmo save()
+                  do botão Salvar do cabeçalho — um botão só pro card inteiro. */}
             </div>
 
             {/* ── BRIEFING DO CLIENTE ── */}
@@ -42840,12 +42838,10 @@ function _cardPodeSerResp(u){
                 }}
                 style={{width:"100%",border:"none",padding:"14px 16px",color:"#1e293b",fontSize:13,lineHeight:1.8,outline:"none",fontFamily:"inherit",boxSizing:"border-box",minHeight:220,background:"transparent",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            {/* Botão "Salvar legenda" removido (14/09/2026): chamava o mesmo save()
+                do botão Salvar do cabeçalho — dois botões pra mesma ação confundiam. */}
+            <div style={{display:"flex",justifyContent:"flex-start",alignItems:"center"}}>
               <span style={{color:"#94a3b8",fontSize:10}}>{caption.replace(/<[^>]*>/g,"").length} caracteres</span>
-              {canEdit&&<button onClick={save}
-                style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>
-                Salvar legenda
-              </button>}
             </div>
           </div>}
 
@@ -43577,36 +43573,6 @@ function _cardPodeSerResp(u){
             <input id={"pixels-pick-final-"+task.id} type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
             <input id={"pixels-pick-ref-"+task.id} type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
             <input id={"pixels-pick-mat-"+task.id} type="file" ref={matFileInputRef} onChange={e=>handleFileUpload(e,"material")} multiple style={{display:"none"}} accept="image/*,video/*"/>
-          </div>}
-
-          {/* ÁUDIO */}
-          {activeTab==="audio"&&<div>
-            {!isRecording&&!audioURL&&<button onClick={startRec}
-              style={{width:"100%",background:"#fff",border:"2px dashed #fecaca",borderRadius:14,padding:"28px",display:"flex",flexDirection:"column",alignItems:"center",gap:10,cursor:"pointer",color:"#ef4444",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#fff5f5";e.currentTarget.style.borderColor="#ef4444";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
-              <div style={{width:48,height:48,borderRadius:"50%",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>🎙</div>
-              <span style={{fontWeight:700,fontSize:13}}>Iniciar Gravação</span>
-              <span style={{color:"#94a3b8",fontSize:11}}>O áudio aparecerá nos comentários automaticamente</span>
-            </button>}
-            {isRecording&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:14,padding:"24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-              <div style={{width:48,height:48,borderRadius:"50%",background:"#fef2f2",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{width:16,height:16,borderRadius:"50%",background:"#ef4444"}}/>
-              </div>
-              <span style={{color:"#ef4444",fontWeight:800,fontSize:28}}>{fmtSec(recSeconds)}</span>
-              <span style={{color:"#94a3b8",fontSize:12}}>Gravando...</span>
-              <button onClick={stopRec} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,cursor:"pointer",fontSize:13}}>⏹ Parar e Revisar</button>
-            </div>}
-            {audAttachments.length>0&&<div style={{marginTop:24}}>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Áudios gravados</div>
-              {audAttachments.map(a=>(
-                <div key={a.id} style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center"}}>
-                  <span style={{fontSize:18}}>🎙</span>
-                  <div style={{flex:1}}><audio src={a.url} controls style={{width:"100%",height:28}}/><div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{a.addedBy} · {a.addedAt}</div></div>
-                  {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
-                </div>
-              ))}
-            </div>}
           </div>}
 
           {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
