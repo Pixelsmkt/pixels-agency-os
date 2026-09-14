@@ -3359,54 +3359,61 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
 function _pxContatoUtil(pb, unit){
   try{
     const _limpa=function(v){ return String(v==null?"":v).trim(); };
+    // Devolve [{num, quando}] — "quando" é o nome/observação do playbook, usado SÓ
+    // pra escolher o número certo. Ele nunca vai pra legenda.
     const _daLista=function(arr){
-      if(!Array.isArray(arr)) return "";
-      const _its=arr.map(function(c){
+      if(!Array.isArray(arr)) return [];
+      return arr.map(function(c){
         const _tel=_limpa(c&&(c.whatsapp||c.telefone));
-        if(!_tel) return "";
-        const _nome=_limpa(c&&c.nome);
-        return _nome?(_nome+" — "+_tel):_tel;
-      }).filter(Boolean);
-      return _its.slice(0,2).join(" · ");
+        if(!_tel) return null;
+        return {num:_tel, quando:_limpa(c&&c.nome)};
+      }).filter(Boolean).slice(0,3);
     };
     const _porUn=(pb&&pb.contatos_por_unidade)||{};
-    if(unit&&_porUn[unit]){ const _r=_daLista(_porUn[unit]); if(_r) return _r; }
+    if(unit&&_porUn[unit]){ const _r=_daLista(_porUn[unit]); if(_r.length) return _r; }
     const _c=pb&&pb.contatos;
-    if(Array.isArray(_c)){ const _r=_daLista(_c); if(_r) return _r; }
+    if(Array.isArray(_c)){ const _r=_daLista(_c); if(_r.length) return _r; }
     if(_c&&typeof _c==="object"){
       const _tel=_limpa(_c.whatsapp)||_limpa(_c.telefone);
-      if(_tel) return _tel;
+      if(_tel) return [{num:_tel, quando:""}];
     }
-    // ultimo recurso: qualquer unidade cadastrada (melhor que nada? nao — evita
-    // mandar o telefone de Castro num post de Toledo). Devolve vazio de proposito.
-    return "";
-  }catch(_){ return ""; }
+    // Sem número: devolve vazio de propósito. Melhor CTA sem número do que o
+    // telefone de Castro num post de Toledo — ou um número inventado.
+    return [];
+  }catch(_){ return []; }
 }
 
 /* Regras de CTA e emoji que valem pra TODA legenda do sistema. */
 function _pxRegrasLegenda(pb, unit, ehComemorativa){
-  const _ct=_pxContatoUtil(pb, unit);
+  const _cts=_pxContatoUtil(pb, unit);
+  const _tem=_cts.length>0;
   let r="\nCTA E CONTATO (obrigatório em toda legenda):\n";
   if(ehComemorativa){
-    r+="- Esta é uma homenagem, então o fecho é leve: uma linha curta se colocando à disposição, não uma chamada de venda.\n";
+    r+="- Esta é uma homenagem: o fecho é leve, se colocando à disposição — não é chamada de venda.\n";
   }else{
-    r+="- Feche com uma chamada clara do que a pessoa deve fazer (chamar no WhatsApp, mandar mensagem, falar com a equipe).\n";
+    r+="- Feche com uma chamada curta e direta, do tipo “Entre em contato agora mesmo”, “Fala com a gente”, “Chama no WhatsApp”, “Solicite seu orçamento”. Varie entre os posts, não repita sempre a mesma frase.\n";
   }
-  if(_ct){
-    r+="- USE EXATAMENTE ESTE CONTATO, sem mudar um dígito: "+_ct+"\n";
-    r+="- A linha do contato começa SEMPRE com o emoji de celular 📱.\n";
-    r+="- Na legenda vai só o 📱 e o NÚMERO. Nome curto de pessoa pode acompanhar (ex.: “📱 Arlei — (49) 9 9164-6410”), mas descrição de região ou observação (“para todas as regiões exceto…”) NUNCA vai pra legenda: está aí só pra você escolher o número certo.\n";
-    r+="- Se houver mais de um número acima, escolha O QUE FAZ SENTIDO pro assunto do post e use SÓ UM.\n";
-    r+="- Não invente outro número, outro nome, site, e-mail nem endereço.\n";
+  if(_tem){
+    r+="- Logo abaixo da chamada vem a linha do telefone, assim e SÓ assim:\n";
+    r+="    📱 "+_cts[0].num+"\n";
+    r+="- NADA além do emoji e do número nessa linha. Sem nome de pessoa, sem “WhatsApp:”, sem observação, sem parênteses explicativos.\n";
+    if(_cts.length>1){
+      r+="- Há mais de um número cadastrado. Escolha UM, o que faz sentido pro assunto do post, e use só ele:\n";
+      for(let i=0;i<_cts.length;i++)
+        r+="    · "+_cts[i].num+(_cts[i].quando?("  (quando usar: "+_cts[i].quando+" — esta observação é só pra você escolher, NÃO vai pra legenda)"):"")+"\n";
+    }else if(_cts[0].quando){
+      r+="- (“"+_cts[0].quando+"” é a anotação do playbook sobre esse número — é só pra você. NÃO escreva isso na legenda.)\n";
+    }
+    r+="- Não mude um dígito, não invente outro número, site, e-mail nem endereço.\n";
   }else{
     r+="- ⛔ ESTA EMPRESA NÃO TEM TELEFONE CADASTRADO NO PLAYBOOK. Feche o CTA SEM número — ex.: “chama a gente no direct”, “manda uma mensagem pra gente”. NUNCA invente um telefone, e sem o emoji de celular (não há número pra anunciar).\n";
   }
   r+="\nEMOJIS (regra fixa do padrão da agência):\n";
   r+="- No MÁXIMO 1 emoji por parágrafo e no MÁXIMO 2 na legenda inteira.\n";
-  if(_ct) r+="- O 📱 da linha do contato é obrigatório e JÁ CONTA como um dos 2 — então sobra no máximo 1 emoji pro resto da legenda.\n";
+  if(_tem) r+="- O 📱 da linha do telefone é obrigatório e JÁ CONTA como um dos 2 — sobra no máximo 1 pro resto da legenda.\n";
   r+="- Só use emoji que tenha relação direta com o que a frase diz. Emoji de enfeite não entra.\n";
   r+="- Nunca na linha de hashtags, nunca dois seguidos.\n";
-  r+="- Fora o 📱 do contato, se nenhum outro emoji fizer sentido, não use nenhum — é melhor que forçar.\n";
+  r+="- Fora o 📱 do telefone, se nenhum outro emoji fizer sentido, não use nenhum — é melhor que forçar.\n";
   return r;
 }
 
@@ -28524,13 +28531,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
           autor:"Claude",tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
-        const cs=[...(t.comments||[])];
-        cs.push({id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
-          type:ehAjuste?"copy_ajuste":(ehAbord?"copy_nova_abordagem":"copy_refazer"),
-          text:rotulo+": "+(txt||"(sem comentário)"),
-          user:actor,at:now,atFmt:nowFmt()});
+        // NAO cria comentario no card com o pedido pra IA (pedido do Vinicius, 14/09/2026).
+        // Os comentarios do cartao sao conversa entre pessoas; pedido de reescrita ja fica
+        // guardado em tres lugares: no painel "Versoes da copy" (vs[].feedback), no historico
+        // do cartao (timeline, logo abaixo) e em claude_copy_feedback (memoria de aprendizado).
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
-          copyVersoes:vs,comments:cs,
+          copyVersoes:vs,
           timeline:[...(t.timeline||[]),{type:"edit",user:"Claude",at:now,atFmt:nowFmt(),
             label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")}]};
       }));
@@ -43021,6 +43027,13 @@ function _cardPodeSerResp(u){
             })()}
             </div>
             <div>
+              {/* ── Ações de IA do briefing ──
+                   Em arte de data comemorativa são DOIS botões roxos aqui (roteiro de vídeo e
+                   Gerar/Ajustar briefing). Empilhados ficavam feios: agora viram duas colunas de
+                   mesma largura, botão ocupando a coluna inteira e a dica embaixo. Em tela estreita
+                   quebram um sobre o outro sozinhos. Com um botão só, fica exatamente como era. */}
+              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.px-ia-row>div{flex:1 1 230px;min-width:0;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{width:100%;justify-content:center;text-align:center}"}</style>
+              <div className={(pxEhArteComemorativa(task)&&canEdit)?"px-ia-row":undefined} style={(pxEhArteComemorativa(task)&&canEdit)?{marginBottom:10}:undefined}>
               {/* ── Arte de data comemorativa → roteiro de vídeo de 60s pra mandar ao cliente ── */}
               {pxEhArteComemorativa(task)&&(<div style={{marginBottom:10}}>
                 <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
@@ -43052,6 +43065,7 @@ function _cardPodeSerResp(u){
                             :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
                   onClick={function(){ setBriefIA({modo:_tem?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:""}); }}/>;
               })()}
+              </div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
               {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
               <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
@@ -43258,6 +43272,11 @@ function _cardPodeSerResp(u){
               // (evita duplicacao quando o card esta em status ajustes/alteracao).
               const _hasAjustePanel=task.status==="ajustes"||task.isAlteracao;
               const _isFb=function(c){return !!c&&(c.type==="feedback"||c.type==="audio"||c.type==="client_request");};
+              // Pedido de reescrita pra IA (Ajustar copy / Testar nova abordagem / Refazer do zero,
+              // la na Avaliacao de copys) NAO e comentario do cartao. Desde 14/09/2026 nem e mais
+              // criado; cards de antes tem o comentario gravado, entao filtra aqui pra sumir da lista.
+              // O pedido continua visivel no painel "Versoes da copy" e no historico do cartao.
+              const _ehPedidoIA=function(c){return !!c&&(c.type==="copy_ajuste"||c.type==="copy_nova_abordagem"||c.type==="copy_refazer");};
               const _cTs=function(c){
                 const v=(c&&(c.at||c.atFmt||c.time))||"";const st=String(v);
                 if(/^\d{4}-\d{2}-\d{2}T/.test(st)){const d=new Date(st);return isNaN(d.getTime())?0:d.getTime();}
@@ -43274,7 +43293,7 @@ function _cardPodeSerResp(u){
                 .sort(function(a,b){return _cTs(a)-_cTs(b);})
                 .map(function(c,i){return {c:c,label:"R"+(i+1)};})
                 .reverse();
-              const _visibleComments=(comments||[]).filter(function(c){return !_isFb(c);});
+              const _visibleComments=(comments||[]).filter(function(c){return !_isFb(c)&&!_ehPedidoIA(c);});
               const _temVideoAjuste=!!_findAjusteVideoUrl();
               return <div>
               <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
