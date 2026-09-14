@@ -3383,8 +3383,37 @@ function _pxContatoUtil(pb, unit){
   }catch(_){ return []; }
 }
 
+/* Coração na cor da marca (pedido do Vinicius, 14/09/2026): em data comemorativa o
+   emoji de coração tem que ser o da cor do cliente, não um ❤️ genérico. Lê a cor do
+   próprio CLIENTS e escolhe o coração de matiz mais próxima. */
+function _pxCoracaoCliente(clientId){
+  try{
+    const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x&&x.id===clientId;});
+    let hex=String((c&&c.color)||"").replace("#","").trim();
+    if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    if(hex.length!==6) return "❤️";
+    const r=parseInt(hex.slice(0,2),16)/255, g=parseInt(hex.slice(2,4),16)/255, b=parseInt(hex.slice(4,6),16)/255;
+    const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+    const l=(mx+mn)/2, sat=d===0?0:d/(1-Math.abs(2*l-1));
+    if(sat<0.18) return l<0.5?"🖤":"🤍";           // cinza/preto/branco
+    let h=0;
+    if(d!==0){
+      if(mx===r) h=60*(((g-b)/d)%6);
+      else if(mx===g) h=60*(((b-r)/d)+2);
+      else h=60*(((r-g)/d)+4);
+    }
+    if(h<0) h+=360;
+    if(h<18||h>=330) return "❤️";                 // vermelho
+    if(h<45)  return "🧡";                        // laranja
+    if(h<70)  return "💛";                        // amarelo
+    if(h<170) return "💚";                        // verde
+    if(h<265) return "💙";                        // azul
+    return "💜";                                  // roxo/magenta
+  }catch(_){ return "❤️"; }
+}
+
 /* Regras de CTA e emoji que valem pra TODA legenda do sistema. */
-function _pxRegrasLegenda(pb, unit, ehComemorativa){
+function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   const _cts=_pxContatoUtil(pb, unit);
   const _tem=_cts.length>0;
   let r="\nCTA E CONTATO (obrigatório em toda legenda):\n";
@@ -3408,12 +3437,19 @@ function _pxRegrasLegenda(pb, unit, ehComemorativa){
   }else{
     r+="- ⛔ ESTA EMPRESA NÃO TEM TELEFONE CADASTRADO NO PLAYBOOK. Feche o CTA SEM número — ex.: “chama a gente no direct”, “manda uma mensagem pra gente”. NUNCA invente um telefone, e sem o emoji de celular (não há número pra anunciar).\n";
   }
-  r+="\nEMOJIS (regra fixa do padrão da agência):\n";
-  r+="- No MÁXIMO 1 emoji por parágrafo e no MÁXIMO 2 na legenda inteira.\n";
-  if(_tem) r+="- O 📱 da linha do telefone é obrigatório e JÁ CONTA como um dos 2 — sobra no máximo 1 pro resto da legenda.\n";
-  r+="- Só use emoji que tenha relação direta com o que a frase diz. Emoji de enfeite não entra.\n";
-  r+="- Nunca na linha de hashtags, nunca dois seguidos.\n";
-  r+="- Fora o 📱 do telefone, se nenhum outro emoji fizer sentido, não use nenhum — é melhor que forçar.\n";
+  // 14/09/2026 — a regra antiga terminava em "se nenhum emoji fizer sentido, não use nenhum".
+  // O modelo lia isso como permissão e devolvia legenda seca em toda rodada; o Vinicius cobrou
+  // ("vc ainda não começou a utilizar os emojis como eu pedi"). Agora emoji é OBRIGATÓRIO, no
+  // lugar que as legendas aprovadas da equipe usam: fim da linha de abertura.
+  r+="\nEMOJIS (regra fixa do padrão da agência — OBRIGATÓRIO, não é opcional):\n";
+  r+="- TODA legenda leva emoji. Legenda sem nenhum emoji está ERRADA e será recusada.\n";
+  r+="- SÃO 2 EMOJIS NA LEGENDA INTEIRA. Nem menos, nem mais.\n";
+  r+="- Cada um vai no FIM de uma frase, e tem que ter relação direta com o que AQUELA frase diz. O 1º no fim da linha de abertura; o 2º no fim do parágrafo de fecho. É assim nas legendas aprovadas da agência: “Máquinas em campo e trabalho acontecendo. 🚜”, “Cada detalhe importa. 🛠️💚”, “Segurança hídrica + energia renovável. ✅”, “Essa lavoura não vai depender da chuva esse ano. ☕💧”.\n";
+  if(ehComemorativa) r+="- ESTA É DATA COMEMORATIVA: um dos dois emojis é o CORAÇÃO NA COR DA MARCA — "+_pxCoracaoCliente(clientId)+" — no fim da frase de agradecimento. Use exatamente esse coração, não troque por outra cor nem por ❤️ genérico.\n";
+  r+="- Se a legenda tiver lista de itens, cada item abre com ✔ ou com um emoji do próprio item (🏗️ 🐷 🐄 ⚙️ 📐) — nesse caso a lista inteira conta como UM dos dois.\n";
+  if(_tem) r+="- A linha do telefone leva o 📱 obrigatoriamente. Ele é parte do formato do contato e NÃO entra na conta dos 2.\n";
+  r+="- Nunca no meio da frase, nunca dois emojis diferentes seguidos fora dos exemplos acima, nunca na linha de hashtags.\n";
+  r+="- Emoji de enfeite, que não tem a ver com o que a frase diz, não entra. Escolher o certo é parte do trabalho — não usar nenhum NÃO é alternativa.\n";
   return r;
 }
 
@@ -3585,7 +3621,7 @@ async function pxReescreverCopy(opts){
     u+="• TÍTULO"+(py?" (español)":"")+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+(py?" (español)":"")+
       "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
     u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
-    u+=_pxRegrasLegenda(pb,unit,true);
+    u+=_pxRegrasLegenda(pb,unit,true,task.client);
     if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
   }else{
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
@@ -3596,7 +3632,7 @@ async function pxReescreverCopy(opts){
        "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
   u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
-  u+=_pxRegrasLegenda(pb,unit,false);
+  u+=_pxRegrasLegenda(pb,unit,false,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
   }
 
@@ -3808,7 +3844,7 @@ async function pxGerarLegendas(opts){
   }else{
     u+="\nFORMATO DE CADA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   }
-  u+=_pxRegrasLegenda(pb,unit,ehComemorativa);
+  u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
 
   const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
@@ -28505,8 +28541,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     setErroReescrita("");setReescrevendoId(task.id);
     // o pedido vai pra memória de aprendizado mesmo que a reescrita falhe
     try{
-      if(typeof sb!=="undefined"&&sb){
-        sb.from("claude_copy_feedback").insert({
+      // BUG ate 14/09/2026: aqui estava "typeof sb!==\"undefined\"&&sb" — mas `sb` NAO existe
+      // neste escopo (todo o resto do modulo faz `const sb=window._sb`). O guard dava falso e o
+      // insert NUNCA rodava: 7 rodadas de reescrita neste dia e a tabela de aprendizado vazia.
+      const _sbFb=(typeof window!=="undefined")?window._sb:null;
+      if(_sbFb){
+        _sbFb.from("claude_copy_feedback").insert({
           task_id:task.id,
           client:task.client||null,
           bioter_unit:task.bioterUnit||task.bioter_unit||null,
@@ -28939,11 +28979,18 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // Isso resolveu cards "Ajuste de template" e similares que apareciam no kanban
   // mas davam "Nenhuma imagem anexada" na avaliação.
   // Defesa: se URL tem extensão de vídeo, NÃO conta como imagem (mesmo se mime caiu pra image)
-  const isFinalImg=(f)=>!f.isAnnotation&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
-  const isAnyImg=(f)=>!f.isAnnotation&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/");
+  // ⚠️ SÓ ARQUIVO FINAL NA AVALIAÇÃO DE DESIGN (14/09/2026 — cobrança repetida do Vinicius).
+  // Anexo de "Solicitar ajuste" tem flag isRef:true e NÃO tem `tipo`, então passava batido em
+  // (!f.tipo||f.tipo==="final") e vazava pra galeria. Referência e material (tipo:"referencia" /
+  // "material") já eram barrados no estrito, mas voltavam pelo fallback permissivo.
+  // Mesma definição do cartão (10_radar_entrega › isAdj/isFin): se mudar lá, muda aqui.
+  const _ehAnexoAjuste=(f)=>!!f&&!!f.isRef&&f.tipo!=="referencia"&&f.tipo!=="material";
+  const _naoEhFinal=(f)=>_ehAnexoAjuste(f)||f?.tipo==="referencia"||f?.tipo==="material";
+  const isFinalImg=(f)=>!f.isAnnotation&&!_naoEhFinal(f)&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  const isAnyImg=(f)=>!f.isAnnotation&&!_ehAnexoAjuste(f)&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/");
   // Vídeo: detecta por mime (video/*) OU pela URL (alguns uploads antigos perderam o type)
-  const _isVidFile=(f)=>!f.isAnnotation&&(f.type?.startsWith("video/")||_isVideoUrl(f.url));
-  const isFinalVideo=(f)=>_isVidFile(f)&&(!f.tipo||f.tipo==="final");
+  const _isVidFile=(f)=>!f.isAnnotation&&!_ehAnexoAjuste(f)&&(f.type?.startsWith("video/")||_isVideoUrl(f.url));
+  const isFinalVideo=(f)=>_isVidFile(f)&&!_naoEhFinal(f)&&(!f.tipo||f.tipo==="final");
   const isAnyVideo=(f)=>_isVidFile(f);
   const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
@@ -29046,18 +29093,18 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   let _filesDesc=[];
   if(tab==="video"){
     // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
-    let _vids=_extractImgs(_filesAtuais,isFinalVideo);
-    if(_vids.length===0)_vids=_extractImgs(_filesAtuais,isAnyVideo);
-    let _imgs=_extractImgs(_filesAtuais,isFinalImg);
-    if(_imgs.length===0)_imgs=_extractImgs(_filesAtuais,isAnyImg);
+    // Só arquivo final aqui também (14/09/2026).
+    const _vids=_extractImgs(_filesAtuais,isFinalVideo);
+    const _imgs=_extractImgs(_filesAtuais,isFinalImg);
     _filesDesc=[..._vids,..._imgs];
   }else if(tab==="publicacao"){
     // Carrossel/Arte única podem misturar imagens e vídeos (ex: post carrossel com vídeo).
     // ORDEM = ordem do array files (drag&drop da aba Arquivos do card), imagens e
     // vídeos INTERCALADOS como no carrossel real. (Antes juntava [imagens..., vídeos...]
     // e a lâmina em vídeo ia sempre pro fim, ignorando a ordem definida no card.)
+    // SEM fallback permissivo: se não tem arquivo final, não mostra referência nem material
+    // no lugar (14/09/2026). Antes o fallback enchia a galeria com foto de obra e anexo de ajuste.
     _filesDesc=_extractImgs(_filesAtuais,function(f){return isFinalImg(f)||isFinalVideo(f);});
-    if(_filesDesc.length===0)_filesDesc=_extractImgs(_filesAtuais,function(f){return isAnyImg(f)||isAnyVideo(f);});
   }else{
     // Aba "copys" e outras: mostra imagens + vídeos como referências
     // (Hellen precisa ver os vídeos anexados antes de aprovar a copy)
@@ -29325,14 +29372,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
                             if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
                             return 0; };
-                          const _videos = (_filesAtuais||[]).filter(function(f){return f && !f.isAnnotation && f.url && !f.uploading && (String(f.type||"").startsWith("video/") || _isVid(f.url));})
+                          const _videos = (_filesAtuais||[]).filter(function(f){return f && !f.isAnnotation && !_naoEhFinal(f) && f.url && !f.uploading && (String(f.type||"").startsWith("video/") || _isVid(f.url));})
                             .slice().sort(function(a,b){ return _ts(b)-_ts(a); });
                           const _v = _videos[0] || (Array.isArray(allImgs)?allImgs.find(function(u){return _isVid(typeof u==="string"?u:u&&u.url);}):null);
                           const _vUrl = _v ? (typeof _v==="string"?_v:_v.url) : null;
                           if(_vUrl) _urls = [_vUrl];
                         } else {
                           const _imgs = (_filesAtuais||[]).filter(function(f){
-                            if(!f || f.isAnnotation) return false;
+                            if(!f || f.isAnnotation || _naoEhFinal(f)) return false;
                             if(f.tipo && f.tipo!=="final") return false;
                             if(String(f.type||"").startsWith("video/")) return false;
                             if(_isVid(f.url)) return false;
@@ -29783,10 +29830,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
             {/* Briefing pra equipe — PRIMEIRO */}
             {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
-              {/* Título 1.5px MAIOR que o corpo do bloco (corpo: 12.5 mobile / 13.5 desktop).
-                  Antes era 12px em caixa alta e parecia menor que o texto que encabeça. */}
-              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"10px 14px":"11px 18px",color:"#0f172a",fontSize:isMob?14:15,fontWeight:800,letterSpacing:.2,textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><Ico n="users" size={16} color="#0f172a"/>Briefing pra equipe</div>
-              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
+              {/* MESMA fonte do bloco Legenda (14/09/2026): o briefing estava 1px menor
+                  (13.5 contra 14.5) e o Vinicius reparou na tela. Os dois blocos são o
+                  mesmo tipo de leitura — se mudar um, muda o outro junto.
+                  Título 1.5px MAIOR que o corpo do bloco. */}
+              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"10px 14px":"11px 18px",color:"#0f172a",fontSize:isMob?14.5:16,fontWeight:800,letterSpacing:.2,textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><Ico n="users" size={17} color="#0f172a"/>Briefing pra equipe</div>
+              <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
             </div>)}
 
             {/* Histórico de ajustes — antes do briefing */}
@@ -29874,7 +29923,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           {(function(){
             // Busca o ÚLTIMO arquivo FINAL (não anotação, não referência) subido
             const _finalFiles = (current.files||[]).filter(function(f){
-              return f && !f.isAnnotation && (!f.tipo || f.tipo==="final");
+              return f && !f.isAnnotation && !_naoEhFinal(f) && (!f.tipo || f.tipo==="final");
             });
             const _parseT = function(s){
               if(!s) return 0;
@@ -41452,8 +41501,12 @@ function _cardPodeSerResp(u){
 
   const removeAttachment=(id,_confirmado)=>{
     const att=attachments.find(a=>a.id===id);
-    // Confirma antes de remover arquivo já subido (o × fica colado no Baixar — toque errado apagava)
-    if(!_confirmado&&att&&!att.uploading&&att.url&&typeof pixelsConfirm==="function"){
+    // Confirma antes de remover arquivo já subido (o × fica colado no Baixar — toque errado apagava).
+    // 14/09/2026: saiu o "&&att.url" da condição. Material sem url resolvida (arquivo antigo, só com
+    // storagePath, ou capa que ficou só com previewUrl) era apagado NO CLIQUE, sem perguntar nada —
+    // foi o que o Vinicius pegou nos Materiais do card de demanda. Agora só não pergunta quando o
+    // anexo ainda está subindo (aí o × é "cancelar upload", não "apagar").
+    if(!_confirmado&&att&&!att.uploading&&typeof pixelsConfirm==="function"){
       pixelsConfirm("Remover \""+(att.name||"este arquivo")+"\" do card?",{danger:true,okText:"Remover",cancelText:"Cancelar"}).then(function(y){ if(y) removeAttachment(id,true); });
       return;
     }
@@ -43029,10 +43082,11 @@ function _cardPodeSerResp(u){
             <div>
               {/* ── Ações de IA do briefing ──
                    Em arte de data comemorativa são DOIS botões roxos aqui (roteiro de vídeo e
-                   Gerar/Ajustar briefing). Empilhados ficavam feios: agora viram duas colunas de
-                   mesma largura, botão ocupando a coluna inteira e a dica embaixo. Em tela estreita
-                   quebram um sobre o outro sozinhos. Com um botão só, fica exatamente como era. */}
-              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.px-ia-row>div{flex:1 1 230px;min-width:0;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{width:100%;justify-content:center;text-align:center}"}</style>
+                   Gerar/Ajustar briefing). Empilhados ficavam feios: agora ficam lado a lado, cada
+                   um com a dica embaixo. O BOTÃO NÃO ESTICA — mesmo tamanho natural do botão da aba
+                   Legenda; quem divide a largura em duas colunas é a coluna, não o botão. Em tela
+                   estreita quebram um sobre o outro sozinhos. Com um botão só, fica como era. */}
+              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.px-ia-row>div{flex:1 1 230px;min-width:0;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start}"}</style>
               <div className={(pxEhArteComemorativa(task)&&canEdit)?"px-ia-row":undefined} style={(pxEhArteComemorativa(task)&&canEdit)?{marginBottom:10}:undefined}>
               {/* ── Arte de data comemorativa → roteiro de vídeo de 60s pra mandar ao cliente ── */}
               {pxEhArteComemorativa(task)&&(<div style={{marginBottom:10}}>
