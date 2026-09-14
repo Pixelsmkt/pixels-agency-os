@@ -28650,13 +28650,24 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const m=String(v||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m?(m[1]+m[2]+m[3]):"";
   };
+  /* ORDEM DA FILA = DATA DE PUBLICAÇÃO. (14/09/2026)
+     O desempate entre dois cards que publicam NO MESMO DIA era a data de entrega.
+     Isso fazia a fila se reorganizar sozinha quando alguém mexia na entrega de um
+     card — o Vinicius trocou a entrega do "Piso vazado x Lâmina d'água" e o card
+     pulou de lugar no meio da fila ("o avaliação de copys é por ordem de
+     publicação, então não deveria ter alterado"). Ele está certo.
+     Agora, entre cards do mesmo dia, o desempate é o ID: nunca muda, não importa
+     o que se edite no card. A entrega só desempata quem NÃO tem data de publicação,
+     onde ela é a única pista de prazo que existe. */
   const sortStable=(arr)=>[...arr].sort((a,b)=>{
     const pa=_dataOrd(a.publishDate||a.publish_date), pb=_dataOrd(b.publishDate||b.publish_date);
     if(pa&&pb){ if(pa!==pb) return pa<pb?-1:1; }
     else if(pa!==pb) return pa?-1:1;          // quem tem data vem antes de quem não tem
-    const da=_dataOrd(a.deadline), db=_dataOrd(b.deadline);
-    if(da&&db){ if(da!==db) return da<db?-1:1; }
-    else if(da!==db) return da?-1:1;
+    if(!pa&&!pb){                              // só sem data de publicação é que a entrega desempata
+      const da=_dataOrd(a.deadline), db=_dataOrd(b.deadline);
+      if(da&&db){ if(da!==db) return da<db?-1:1; }
+      else if(da!==db) return da?-1:1;
+    }
     const ia=Number(a.id)||0,ib=Number(b.id)||0;
     if(ia!==ib)return ia-ib;
     return String(a.id).localeCompare(String(b.id));
@@ -28707,7 +28718,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",
       body:'"'+task.title+'" foi aprovada e está em '+_lbl,
       user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-    setCardIdx(0);setImgIdx(0);
+    /* NÃO volta pro card 1: quem está varrendo 174 copys quer cair na PRÓXIMA.
+       O card aprovado sai da fila, então manter o índice já mostra a seguinte;
+       só soltamos a âncora pra ela não procurar um card que não está mais lá. */
+    cardIdRef.current=null;
+    setImgIdx(0);
   };
 
   const markAjustar=(task,comentario)=>{
@@ -29341,6 +29356,29 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // FIX 4: clamp seguro — se queue vazia, current fica undefined
   const clampedIdx=queue.length>0?Math.min(cardIdx,queue.length-1):0;
   const current=queue[clampedIdx]||null;
+
+  /* ── O CARD SEGUE O ID, NÃO A POSIÇÃO (14/09/2026) ────────────────────────
+     "eu tava mexendo no cartão do Lâmina de água x Piso vazado e simplesmente
+     sumiu". O card não sumia: `cardIdx` é uma POSIÇÃO na fila. Basta alguém
+     (você em outra aba, o Gustavo, a Hellen, o realtime) aprovar ou reprovar um
+     card que esteja ANTES do seu na ordem e a fila inteira desliza um degrau —
+     a posição 12 passa a ser outro card e o seu "some" da tela.
+     Agora a tela guarda o ID do card aberto e, quando a fila muda, reencontra
+     esse ID e corrige a posição sozinha. Se o card saiu da fila de verdade
+     (aprovado/reprovado), a posição fica onde está e cai no próximo — que é o
+     certo pra quem está varrendo a fila. */
+  const cardIdRef=useRef(null);
+  useEffect(function(){ if(current&&current.id) cardIdRef.current=String(current.id); },[current&&current.id]);
+  const _idsFila=queue.map(function(t){return t.id;}).join("|");
+  useEffect(function(){
+    const alvo=cardIdRef.current;
+    if(!alvo||queue.length===0) return;
+    if(queue[clampedIdx]&&String(queue[clampedIdx].id)===alvo) return;   // já está no card certo
+    const j=queue.findIndex(function(t){return String(t.id)===alvo;});
+    if(j>=0){ if(j!==clampedIdx) setCardIdx(j); return; }
+    cardIdRef.current=(queue[clampedIdx]&&String(queue[clampedIdx].id))||null;  // saiu da fila
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[_idsFila,clampedIdx]);
   const cl=current?CLIENTS.find(c=>c.id===current.client):null;
   const assigneeUser=current?TEAM.find(x=>x.id===current.assignee):null;
 
