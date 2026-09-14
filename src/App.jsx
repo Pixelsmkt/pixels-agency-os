@@ -31088,7 +31088,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
           <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",padding:"18px 22px",color:"#fff"}}>
             <div style={{fontSize:15.5,fontWeight:800,letterSpacing:-.2}}>Reescrever em lote</div>
-            <div style={{fontSize:12,opacity:.9,marginTop:2}}>Mantém o assunto de cada card e reescreve o texto</div>
+            <div style={{fontSize:12,opacity:.9,marginTop:2}}>Reescreve a copy. Título de data comemorativa nunca muda.</div>
           </div>
           <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
             <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -31115,8 +31115,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             <div>
               <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a",display:"block",marginBottom:6}}>O que pode mudar</label>
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                {[{v:"tema",t:"Texto e tema",d:"Nas artes e vídeos de cadência, pode trocar o assunto por um melhor. Comemorativa mantém a data."},
-                  {v:"texto",t:"Só o texto",d:"Todos mantêm o assunto — reescreve só como está escrito."}].map(function(o){
+                {[{v:"tema",t:"Texto e tema",d:"Nas artes e vídeos de cadência, pode trocar o assunto por um melhor. Comemorativa mantém a data E O TÍTULO — só a copy muda."},
+                  {v:"texto",t:"Só o texto",d:"Todos mantêm o assunto e o título — reescreve só como está escrito."}].map(function(o){
                   const _on=loteModo===o.v;
                   return <label key={o.v} onClick={function(){setLoteModo(o.v);}}
                     style={{display:"flex",gap:9,alignItems:"flex-start",border:"1px solid "+(_on?"#0f766e":"#e2e8f0"),background:_on?"#f0fdfa":"#fff",borderRadius:10,padding:"9px 11px",cursor:"pointer"}}>
@@ -31131,7 +31131,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 })}
               </div>
               <div style={{fontSize:11.5,color:"#64748b",marginTop:7,lineHeight:1.5}}>
-                Neste lote: <b>{_nCom}</b> comemorativa(s) — assunto travado — e <b>{_nCad}</b> de cadência
+                Neste lote: <b>{_nCom}</b> comemorativa(s) — assunto e título travados — e <b>{_nCad}</b> de cadência
                 {loteModo==="tema"?", que podem ganhar assunto novo (sem repetir o que a marca já tem agendado).":", que mantêm o assunto."}
               </div>
             </div>
