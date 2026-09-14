@@ -29814,9 +29814,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             if(!texto) return null;
             return <div style={{borderTop:"1px dashed #bbf7d0",background:"#f0fdf4",padding:isMob?"10px 14px":"12px 18px"}}>
               <div style={{color:"#16a34a",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
-                <Ico n="globe" size={11} color="#16a34a"/>Tradução — publica em español
+                <Ico n="globe" size={11} color="#16a34a"/>Tradução
               </div>
-              <div style={{color:"#15803d",fontSize:isMob?11.5:12,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{texto}</div>
+              <div style={{color:"#15803d",fontSize:isMob?12.5:13.5,fontWeight:700,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{texto}</div>
             </div>;
           };
           const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
@@ -29920,7 +29920,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             })()}
 
             {/* Título do card — destaque */}
-            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?17:20,lineHeight:1.25,letterSpacing:-.45}}>{current.title}</div>
+            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:23,lineHeight:1.24,letterSpacing:-.5}}>{current.title}</div>
 
             {/* ── Claude reescrevendo / versões da copy ──
                  O card não sai da fila: a copy troca aqui mesmo e a anterior fica guardada. */}
@@ -29964,11 +29964,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
               {/* TAMANHO DOS DOIS BLOCOS ANDA JUNTO (briefing e legenda são o mesmo tipo de
                   leitura). Histórico do dia 14/09/2026: primeiro o briefing subiu pra igualar a
-                  legenda (14.5), o Vinicius achou tudo grande demais e os dois desceram pra
-                  12.5 desktop / 12 mobile, com o cabeçalho em 12.5 e ícone 14.
+                  legenda (14.5), o Vinicius achou grande demais e desceu pra 12.5 — aí ficou
+                  pequeno demais. O ponto certo é 13.5 desktop / 12.5 mobile, cabeçalho igual e
+                  ícone 15. Não subir de novo pra 14.5 nem descer pra 12.5.
                   Se mudar um, muda o outro junto. */}
-              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:isMob?11.5:12.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={14} color="#0f172a"/>Briefing pra equipe</div>
-              <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.ts,fontSize:isMob?12:12.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
+              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:isMob?12.5:13.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={15} color="#0f172a"/>Briefing pra equipe</div>
+              <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
               {_blocoTrad(_tradAtual.briefing)}
             </div>)}
 
@@ -30035,8 +30036,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             {/* Legenda — depois do briefing */}
             {captionTxt2&&(<div style={{background:"#fdfaff",border:"1px solid #ede9fe",borderRadius:14,overflow:"hidden"}}>
               {/* Mesmo tamanho do briefing — ver o comentário lá em cima. */}
-              <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"9px 14px":"10px 18px",color:"#7c3aed",fontSize:isMob?11.5:12.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="message" size={14} color="#7c3aed"/>Legenda</div>
-              <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.tx,fontSize:isMob?12:12.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
+              <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"9px 14px":"10px 18px",color:"#7c3aed",fontSize:isMob?12.5:13.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="message" size={15} color="#7c3aed"/>Legenda</div>
+              <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.tx,fontSize:isMob?12.5:13.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
               {_blocoTrad(_tradAtual.legenda)}
             </div>)}
 
