@@ -3664,7 +3664,10 @@ async function pxReescreverCopy(opts){
   const ehVideo=ct==="video"||ct==="video_short"||ct==="reels";
   const soStory=!!(task.somenteStory||task.somente_story);
   const _tags=Array.isArray(task.tags)?task.tags:[];
-  const ehComemorativa=_tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
+  // DUAS provas de comemorativa (14/09/2026): a tag, que humano edita, e o id "autocom-",
+  // que só existe em card nascido do calendário de datas comemorativas e não some.
+  const ehComemorativa=/^autocom-/i.test(String(task.id||""))
+    || _tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
   const ctx=await pxContextoCopy(task.client, unit);
   const pb=(ctx&&ctx.playbook)||{};
@@ -3681,7 +3684,10 @@ async function pxReescreverCopy(opts){
     " Responda EXATAMENTE neste formato, texto puro, sem HTML, sem markdown, sem nada antes nem depois:"+
     // Refazer do zero troca o ASSUNTO — então o nome do cartão também tem que mudar, senão a fila
     // de avaliação fica cheia de card com título de um assunto e copy de outro (14/09/2026).
-    (ehRefazer?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, em português do Brasil mesmo no Paraguay, sem ponto final)":"")+
+    // ⛔ COMEMORATIVA NUNCA TROCA DE TÍTULO (Vinicius, 14/09/2026: "não pode mudar o
+    // título dos cards de data comemorativa, nenhum, NENHUM"). O assunto é a data.
+    // Nem no "refazer do zero" — lá a copy é nova, o nome do cartão continua o mesmo.
+    ((ehRefazer&&!ehComemorativa)?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, em português do Brasil mesmo no Paraguay, sem ponto final)":"")+
     "\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)";
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
@@ -3738,6 +3744,17 @@ async function pxReescreverCopy(opts){
     u+="CADA COPY É ÚNICA: não repita abertura, frase, imagem nem estrutura destes. Escreva algo que só faça sentido para ESTE cliente e para o público DELE.\n";
     for(let i=0;i<Math.min(_irmaos.length,6);i++)
       u+="--- "+(_irmaos[i].marca||"outra marca")+":\n"+String(_irmaos[i].texto||"").slice(0,420)+"\n";
+    u+="\n";
+  }
+
+  /* ── ASSUNTOS JÁ AGENDADOS PRA ESTE CLIENTE (14/09/2026) ──
+     Só importa no "refazer do zero", que escolhe assunto novo: sem esta lista ele
+     podia escolher um assunto que já está marcado pra outra semana do mesmo cliente
+     e o calendário ficava com dois posts do mesmo tema. */
+  const _ocupados=Array.isArray(opts&&opts.assuntosOcupados)?opts.assuntosOcupados.filter(Boolean):[];
+  if(ehRefazer&&_ocupados.length){
+    u+="ASSUNTOS JÁ AGENDADOS PARA ESTE CLIENTE (não escolha nenhum destes, nem variação deles):\n";
+    for(let i=0;i<Math.min(_ocupados.length,40);i++) u+="- "+String(_ocupados[i]).slice(0,110)+"\n";
     u+="\n";
   }
 
@@ -3822,7 +3839,7 @@ async function pxReescreverCopy(opts){
   if(!brief) throw new Error("O Claude respondeu vazio. Tente de novo.");
   return { briefing:_pxTextoParaHtml(brief),
            legenda: soStory?"":_pxTextoParaHtml(leg),
-           titulo: (ehRefazer&&titulo&&titulo.length<=90)?titulo:"" };
+           titulo: (ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"" };
 }
 
 
@@ -3897,7 +3914,10 @@ async function pxGerarLegendas(opts){
   const ehFotoObra=/foto\s*de\s*obra/i.test(titulo);
   const soStory=!!(task.somenteStory||task.somente_story);
   const _tags=Array.isArray(task.tags)?task.tags:[];
-  const ehComemorativa=_tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
+  // DUAS provas de comemorativa (14/09/2026): a tag, que humano edita, e o id "autocom-",
+  // que só existe em card nascido do calendário de datas comemorativas e não some.
+  const ehComemorativa=/^autocom-/i.test(String(task.id||""))
+    || _tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
   const ctx=await pxContextoCopy(task.client,unit);
   const pb=(ctx&&ctx.playbook)||{};
@@ -28504,6 +28524,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [loteQtd,setLoteQtd]=useState(30);
   const [loteTexto,setLoteTexto]=useState("");
   const [loteTudo,setLoteTudo]=useState(false);   // incluir os que já passaram por um lote
+  const [loteModo,setLoteModo]=useState("tema");  // "texto" = só reescreve | "tema" = cadência pode trocar de assunto
+  /* Espelho sempre atual de `tasks`. No lote, cada card é reescrito em sequência e o
+     PRÓXIMO precisa enxergar o que o anterior acabou de virar — senão a 2ª copy do
+     Dia do Gaúcho ainda vê a versão velha da 1ª e os dois podem convergir de novo.
+     O `tasks` da closure fica congelado no render em que o lote começou. (14/09/2026) */
+  const tasksRef=useRef(tasks);
+  useEffect(function(){ tasksRef.current=tasks; },[tasks]);
   const [lote,setLote]=useState(null);   // {total,feitos,erros,atual,parar}
   const loteRef=useRef(null);
   const [refazerText,setRefazerText]=useState("");
@@ -28713,6 +28740,35 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   /* Testar nova abordagem / Refazer do zero.
      O card NÃO muda de status e NÃO sai da tela: o Claude reescreve na hora,
      a versão anterior fica guardada em copyVersoes e o painel atualiza sozinho. */
+  /* DATA COMEMORATIVA NÃO TROCA DE TEMA (14/09/2026, regra do Vinicius).
+     "Dia do Gaúcho" é Dia do Gaúcho — o que se reescreve é o texto, nunca o assunto.
+     Arte única genérica e vídeo de cadência PODEM trocar de tema por algo melhor. */
+  const _pxEhComemorativa=(t)=>{
+    if(!t) return false;
+    // DUAS provas, porque tag é coisa que alguém apaga sem querer:
+    //  1) a tag "Data comemorativa";
+    //  2) o id "autocom-…", que só existe em card NASCIDO do calendário de datas
+    //     comemorativas (pxGerarCardsComemorativos). Esse não some com edição manual.
+    // Conferido no banco em 14/09: 69 cards autocom, todos com tag; 108 sem tag, nenhum
+    // autocom — zero divergência hoje. As duas provas existem pro dia em que divergir.
+    if(/^autocom-/i.test(String(t.id||""))) return true;
+    const tags=Array.isArray(t.tags)?t.tags:[];
+    return tags.some(function(x){return /data\s*comemorativa/i.test(String(x||""));});
+  };
+  /* Assuntos que o cliente já tem marcados no calendário — pro "refazer do zero" não
+     escolher um tema que já está agendado em outra semana da mesma marca. */
+  const _pxAssuntosCliente=(task)=>{
+    try{
+      const un=String(task.bioterUnit||task.bioter_unit||"");
+      return (tasksRef.current||[]).filter(function(t){
+        if(!t||t.id===task.id||t.deletedAt) return false;
+        if(t.client!==task.client) return false;
+        if(String(t.bioterUnit||t.bioter_unit||"")!==un) return false;
+        return !!String(t.title||"").trim();
+      }).map(function(t){return String(t.title).trim();}).slice(0,40);
+    }catch(e){ console.warn("[_pxAssuntosCliente] falhou, seguindo sem a lista de assuntos:",(e&&e.message)||e); return []; }
+  };
+
   /* Card já reescrito num lote? Olha a ÚLTIMA versão: se ela veio de um lote, o card
      já foi tratado e o próximo lote pula ele. Se depois disso alguém pediu um ajuste
      individual, a última versão não é mais de lote e o card volta pra fila do lote. */
@@ -28734,24 +28790,38 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   /* Copys IRMÃS: mesma data de publicação e mesmo assunto, em OUTRA marca.
      Vão no prompt como "não repetir" — é o que faltava pra IA parar de escrever
      a mesma comemorativa pra todo mundo (14/09/2026). */
+  // Id do EVENTO de um card automático: "autocom-<evento>-<data>-<cliente>[-<unidade>]".
+  // É o casamento certo entre irmãos — o título muda de marca pra marca (o card do Dia
+  // do Gaúcho da Arabutã se chama "Homenagem ao Gaúcho 20 de Setembro"), o evento não.
+  const _pxEventoId=(t)=>{
+    const m=String((t&&t.id)||"").match(/^autocom-([0-9a-f-]{36})-/i);
+    return m?m[1]:"";
+  };
   const _pxIrmaos=(task)=>{
     try{
       const d=String(task.publishDate||task.publish_date||"").slice(0,10);
+      if(!d) return [];
+      const ev=_pxEventoId(task);
       const tit=String(task.title||"").trim().toLowerCase();
-      if(!d||!tit) return [];
       const _nome=(t)=>{
         const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
         return ((c&&c.name)||t.client||"")+(t.bioterUnit?(" "+t.bioterUnit):"");
       };
-      return (tasks||[]).filter(function(t){
+      return (tasksRef.current||[]).filter(function(t){
         if(!t||t.id===task.id||t.deletedAt) return false;
         if(String(t.publishDate||t.publish_date||"").slice(0,10)!==d) return false;
-        if(String(t.title||"").trim().toLowerCase()!==tit) return false;
+        // mesmo evento (caminho certo) OU, pra card sem evento, mesmo título
+        const _mesmo = ev ? (_pxEventoId(t)===ev) : (tit&&String(t.title||"").trim().toLowerCase()===tit);
+        if(!_mesmo) return false;
         return !!String(t.caption||"").trim();
       }).slice(0,6).map(function(t){
-        return {marca:_nome(t), texto:stripHtml(t.caption)};
+        // _pxHtmlParaTexto é global (00_clientes_data). NÃO usar `stripHtml` aqui: as
+        // cópias dele neste arquivo são todas locais, dentro de outras funções — daqui
+        // daria ReferenceError, engolido pelo catch, e a lista de irmãos voltaria VAZIA
+        // sem ninguém perceber. (14/09/2026)
+        return {marca:_nome(t), texto:_pxHtmlParaTexto(t.caption)};
       });
-    }catch(_){ return []; }
+    }catch(e){ console.warn("[_pxIrmaos] falhou, seguindo sem as copys irmãs:",(e&&e.message)||e); return []; }
   };
 
   const pedirRefacaoClaude=async(task,tipo,feedback,lote)=>{
@@ -28783,7 +28853,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       }
     }catch(_){}
     try{
-      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client,irmaos:_pxIrmaos(task)});
+      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client,irmaos:_pxIrmaos(task),assuntosOcupados:_pxAssuntosCliente(task)});
       const now=new Date().toISOString();
       if(setTasks)setTasks(p=>p.map(t=>{
         if(t.id!==task.id)return t;
@@ -28806,7 +28876,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         // do cartao (timeline, logo abaixo) e em claude_copy_feedback (memoria de aprendizado).
         // "Refazer do zero" muda o assunto — o nome do cartão acompanha, senão a fila fica com
         // título de um assunto e copy de outro (14/09/2026).
-        const _tituloNovo=(nova&&nova.titulo)?String(nova.titulo).trim():"";
+        // Segunda trava, independente do prompt: card de data comemorativa NÃO troca de
+        // título, venha o que vier da IA. Duas travas porque uma some numa refatoração.
+        const _tituloNovo=(nova&&nova.titulo&&!_pxEhComemorativa(t))?String(nova.titulo).trim():"";
         const _trocouTitulo=!!_tituloNovo&&_tituloNovo!==String(t.title||"").trim();
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
           copyVersoes:vs,
@@ -28835,7 +28907,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      mesmo caminho do botão individual (e portanto pro GPT). Um de cada vez, pra
      não estourar limite da API e pra dar pra acompanhar e parar no meio.
      Cada card guarda a versão anterior — dá pra voltar card a card. */
-  const rodarLote=async(qtd,direcao)=>{
+  const rodarLote=async(qtd,direcao,modo)=>{
     if(!isApprover)return;
     const alvos=_pxAlvosLote(qtd,!!loteTudo);
     loteRef.current={parar:false};
@@ -28845,7 +28917,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       const t=alvos[i];
       setLote(function(L){return Object.assign({},L||{},{atual:t.title||"(sem título)"});});
       try{
-        await pedirRefacaoClaude(t,"abordagem",direcao||"",true);
+        // Comemorativa: SEMPRE "abordagem" — reescreve o texto e mantém a data/assunto.
+        // Cadência (arte única, vídeo): depende do modo escolhido no modal.
+        const _tipo=_pxEhComemorativa(t)?"abordagem":(modo==="tema"?"refazer":"abordagem");
+        await pedirRefacaoClaude(t,_tipo,direcao||"",true);
         setLote(function(L){return Object.assign({},L||{},{feitos:(L&&L.feitos||0)+1});});
       }catch(_){
         setLote(function(L){return Object.assign({},L||{},{erros:(L&&L.erros||0)+1});});
@@ -30871,6 +30946,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       const _alvos=_pxAlvosLote(loteQtd,loteTudo);
       const _de=_alvos.length?_dt(_alvos[0]):"", _ate=_alvos.length?_dt(_alvos[_alvos.length-1]):"";
       const _br=(d)=>d&&d.length===10?(d.slice(8,10)+"/"+d.slice(5,7)):"—";
+      const _nCom=_alvos.filter(_pxEhComemorativa).length;
+      const _nCad=_alvos.length-_nCom;
       const _custo=(_alvos.length*0.22).toFixed(2).replace(".",",");
       // (o custo é estimativa: ~6k tokens de entrada + ~900 de saída por card no gpt-5.6-sol)
       return <div onClick={e=>{if(e.target===e.currentTarget)setLoteModal(false);}}
@@ -30900,6 +30977,31 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 Reescrever também os {_feitos} que já passaram por um lote
               </label>
             )}
+            {/* Comemorativa nunca troca de tema. O que se escolhe aqui é o que fazer com
+                os cards de cadência (arte única, vídeo). */}
+            <div>
+              <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a",display:"block",marginBottom:6}}>O que pode mudar</label>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {[{v:"tema",t:"Texto e tema",d:"Nas artes e vídeos de cadência, pode trocar o assunto por um melhor. Comemorativa mantém a data."},
+                  {v:"texto",t:"Só o texto",d:"Todos mantêm o assunto — reescreve só como está escrito."}].map(function(o){
+                  const _on=loteModo===o.v;
+                  return <label key={o.v} onClick={function(){setLoteModo(o.v);}}
+                    style={{display:"flex",gap:9,alignItems:"flex-start",border:"1px solid "+(_on?"#0f766e":"#e2e8f0"),background:_on?"#f0fdfa":"#fff",borderRadius:10,padding:"9px 11px",cursor:"pointer"}}>
+                    <span style={{width:15,height:15,borderRadius:"50%",border:"2px solid "+(_on?"#0f766e":"#cbd5e1"),flexShrink:0,marginTop:1,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                      {_on&&<span style={{width:7,height:7,borderRadius:"50%",background:"#0f766e"}}/>}
+                    </span>
+                    <span style={{minWidth:0}}>
+                      <span style={{display:"block",fontSize:12.5,fontWeight:700,color:"#0f172a"}}>{o.t}</span>
+                      <span style={{display:"block",fontSize:11.5,color:"#64748b",lineHeight:1.45,marginTop:1}}>{o.d}</span>
+                    </span>
+                  </label>;
+                })}
+              </div>
+              <div style={{fontSize:11.5,color:"#64748b",marginTop:7,lineHeight:1.5}}>
+                Neste lote: <b>{_nCom}</b> comemorativa(s) — assunto travado — e <b>{_nCad}</b> de cadência
+                {loteModo==="tema"?", que podem ganhar assunto novo (sem repetir o que a marca já tem agendado).":", que mantêm o assunto."}
+              </div>
+            </div>
             <div>
               <label style={{fontSize:12.5,fontWeight:700,color:"#0f172a",display:"block",marginBottom:5}}>Direção pra todos (opcional)</label>
               <textarea value={loteTexto} onChange={e=>setLoteTexto(e.target.value)} rows={3}
@@ -30908,7 +31010,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             </div>
             <div style={{display:"flex",gap:9,justifyContent:"flex-end"}}>
               <button onClick={()=>setLoteModal(false)} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",color:"#64748b",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-              <button onClick={()=>{setLoteModal(false);rodarLote(loteQtd,loteTexto);}}
+              <button onClick={()=>{setLoteModal(false);rodarLote(loteQtd,loteTexto,loteModo);}}
                 style={{background:"#0f766e",border:"none",borderRadius:9,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Reescrever {_alvos.length}</button>
             </div>
           </div>
