@@ -28455,7 +28455,12 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // refazerModal = {task, tipo:"abordagem"|"refazer"}.
   const [refazerModal,setRefazerModal]=useState(null);
   const [refazerText,setRefazerText]=useState("");
-  // Reescrita do Claude acontece NA TELA: o card não sai da fila de Copys.
+  // Nome de quem escreveu a copy, pro histórico e pras notificações não mentirem
+  // quando o provedor for a OpenAI (14/09/2026).
+  const _pxNomeIA=function(){
+    return (typeof PX_IA_PROVEDOR_COPY!=="undefined"&&PX_IA_PROVEDOR_COPY==="openai")?"GPT":"Claude";
+  };
+  // Reescrita da IA acontece NA TELA: o card não sai da fila de Copys.
   const [reescrevendoId,setReescrevendoId]=useState(null);
   const [erroReescrita,setErroReescrita]=useState("");
   // Navegador de versões da copy (qual versão está sendo olhada em cada card)
@@ -28711,12 +28716,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           copyVersoes:vs,
           ...(_trocouTitulo?{title:_tituloNovo}:{}),
           timeline:[...(t.timeline||[]),{type:"edit",user:"Claude",at:now,atFmt:nowFmt(),
-            label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")
+            label:rotulo+" — copy reescrita pelo "+_pxNomeIA()+(txt?(" ("+txt.slice(0,90)+")"):"")
                   +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")}]};
       }));
       setVerVersao(v=>({...v,[task.id]:null}));
       pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
-        body:'"'+task.title+'" foi reescrita pelo Claude'+(txt?(" — "+txt.slice(0,80)):""),
+        body:'"'+task.title+'" foi reescrita pelo '+_pxNomeIA()+(txt?(" — "+txt.slice(0,80)):""),
         user:actor,at:"Agora",targetUsers:_notifTargets(task)});
       if(typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?"Copy ajustada. A anterior ficou guardada.":(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
     }catch(e){
@@ -29972,7 +29977,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 <style>{"@keyframes pixelsSpin{to{transform:rotate(360deg)}}"}</style>
                 <span style={{width:18,height:18,borderRadius:"50%",border:"2.5px solid rgba(255,255,255,.35)",borderTopColor:"#fff",display:"inline-block",animation:"pixelsSpin .8s linear infinite",flexShrink:0}}/>
                 <div style={{minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-.2}}>O Claude está reescrevendo a copy…</div>
+                  {/* Quem escreve a copy depende de PX_IA_PROVEDOR_COPY — a barra não pode
+                      dizer "Claude" quando é o GPT que está escrevendo (14/09/2026). */}
+                  <div style={{fontSize:13,fontWeight:800,letterSpacing:-.2}}>{(typeof PX_IA_PROVEDOR_COPY!=="undefined"&&PX_IA_PROVEDOR_COPY==="openai")?"O GPT está reescrevendo a copy…":"O Claude está reescrevendo a copy…"}</div>
                   <div style={{fontSize:11.5,color:"rgba(255,255,255,.88)",marginTop:1}}>Fica na mesma tela. A versão atual será guardada para você poder voltar.</div>
                 </div>
               </div>
