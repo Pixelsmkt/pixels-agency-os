@@ -1139,6 +1139,15 @@ function _pxUltimoAjusteTsSafe(task){
   });
   return mx;
 }
+/* Nome do arquivo sem extensão, normalizado — é a chave que diz se a lâmina nova
+   SUBSTITUI a antiga. "Feed-6.png" e "feed-6.PNG" são a mesma lâmina; "Feed-5" e
+   "Feed-6" NÃO são (o número faz parte do nome da lâmina e não pode ser removido). */
+function _pxNomeChaveArquivo(f){
+  return String((f&&f.name)||"").toLowerCase().trim()
+    .replace(/\.[a-z0-9]{1,5}$/,"")
+    .replace(/[\s_]+/g,"-")
+    .replace(/-{2,}/g,"-");
+}
 function pxFinalFilesVersoes(task){
   const todos = pxFinalFiles(task);
   const vazio = { atuais:todos, anteriores:[], versoes:1 };
@@ -1149,8 +1158,19 @@ function pxFinalFilesVersoes(task){
   const novos = todos.filter(function(f){ return _pxFileTsSimples(f) >  tsAjuste; });
   const velhos= todos.filter(function(f){ return _pxFileTsSimples(f) <= tsAjuste; });
   if(novos.length===0 || velhos.length===0) return vazio;                   // não há 2 versões
-  if(novos.length < velhos.length) return vazio;                            // reenvio parcial
-  return { atuais:novos, anteriores:velhos, versoes:2 };
+  /* ⚠️ SÓ ESCONDE A LÂMINA ANTIGA QUE FOI REALMENTE REENVIADA (14/09/2026).
+     A regra antiga jogava fora TODO arquivo anterior ao ajuste quando a leva nova era
+     maior ou igual. Num carrossel o designer reexporta só as lâminas que mudaram: o card
+     "O dejeto da SUA produção…" (Bioter Glória) tinha 6 lâminas finais, 5 reenviadas em
+     14/09 e a lâmina 6 intacta de 09/09 — e a avaliação mostrava 5. Agora a lâmina antiga
+     só some quando existe uma nova COM O MESMO NOME de arquivo; sem prova de substituição,
+     ela continua na entrega. Preferir mostrar arquivo a mais do que esconder lâmina. */
+  const _chavesNovas = {};
+  novos.forEach(function(f){ const k=_pxNomeChaveArquivo(f); if(k) _chavesNovas[k]=true; });
+  const anteriores = velhos.filter(function(f){ const k=_pxNomeChaveArquivo(f); return !!k && !!_chavesNovas[k]; });
+  if(anteriores.length===0) return vazio;                                   // nada comprovadamente substituído
+  const atuais = todos.filter(function(f){ return anteriores.indexOf(f)<0; });
+  return { atuais:atuais, anteriores:anteriores, versoes:2 };
 }
 // Atalho: só a entrega mais recente (aprovações e portal usam esta)
 function pxFinalFilesAtuais(task){ return pxFinalFilesVersoes(task).atuais; }
