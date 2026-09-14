@@ -29717,7 +29717,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
             {/* Briefing pra equipe — PRIMEIRO */}
             {descTxt2&&(<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
-              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={14} color="#0f172a"/>Briefing pra equipe</div>
+              {/* Título 1.5px MAIOR que o corpo do bloco (corpo: 12.5 mobile / 13.5 desktop).
+                  Antes era 12px em caixa alta e parecia menor que o texto que encabeça. */}
+              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"10px 14px":"11px 18px",color:"#0f172a",fontSize:isMob?14:15,fontWeight:800,letterSpacing:.2,textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><Ico n="users" size={16} color="#0f172a"/>Briefing pra equipe</div>
               <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
             </div>)}
 
@@ -29783,7 +29785,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
             {/* Legenda — depois do briefing */}
             {captionTxt2&&(<div style={{background:"#fdfaff",border:"1px solid #ede9fe",borderRadius:14,overflow:"hidden"}}>
-              <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"9px 14px":"10px 18px",color:"#7c3aed",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="message" size={14} color="#7c3aed"/>Legenda</div>
+              {/* Idem: corpo da legenda é 13 mobile / 14.5 desktop. */}
+              <div style={{background:"#f5f0ff",borderBottom:"1px solid #ede9fe",padding:isMob?"10px 14px":"11px 18px",color:"#7c3aed",fontSize:isMob?14.5:16,fontWeight:800,letterSpacing:.2,textTransform:"uppercase",display:"flex",alignItems:"center",gap:8}}><Ico n="message" size={17} color="#7c3aed"/>Legenda</div>
               <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
             </div>)}
 
