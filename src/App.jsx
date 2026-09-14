@@ -39849,6 +39849,10 @@ function _cardPodeSerResp(u){
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
+  // (14/09/2026) Somente story: o post vai pro story e nao tem arte de feed pra produzir.
+  // O campo ja existia no banco (vinha so do editor de data comemorativa); agora da pra
+  // marcar no proprio cartao. Story NAO ocupa o dia no planejamento e a IA nao escreve legenda.
+  const [somenteStory,setSomenteStory]=useState(!!(task.somenteStory||task.somente_story));
   const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
   const _refMonthHidRef=useRef(null); // ref do input month — SEMPRE no topo (hook não pode ser condicional)
   // Deadline com auto-correção EAGER (no useState initializer, sem side effect)
@@ -40074,6 +40078,7 @@ function _cardPodeSerResp(u){
       setClient(task.client||"");
       setPriority((task.priority&&task.priority!=="media")?task.priority:"");
       setContentType(task.contentType||"");
+      setSomenteStory(!!(task.somenteStory||task.somente_story));
       setReferenceMonth(task.referenceMonth||"");
       // Recalcula deadline corrigido pro novo card + reset baseline
       const _newDeadline = _computeInitialDeadline(task);
@@ -40370,6 +40375,7 @@ function _cardPodeSerResp(u){
     if(client!==task.client)changed.push("cliente");
     if(priority!==task.priority)changed.push("prioridade");
     if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
+    if(!!somenteStory!==!!(task.somenteStory||task.somente_story))changed.push(somenteStory?"marcado como somente story":"desmarcado somente story");
     if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
@@ -40409,7 +40415,12 @@ function _cardPodeSerResp(u){
       // adminTag e tags só são salvos se o usuário atual for admin (level 1).
       // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
-      const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
+      let nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
+      // A tag "Somente story" é espelho do campo, não é etiqueta livre: acompanha o
+      // interruptor mesmo quando quem salva não é sócio (tags livres seguem só-admin).
+      const _TAG_STORY="Somente story";
+      nextTags = (nextTags||[]).filter(function(_x){return String(_x)!==_TAG_STORY;});
+      if(somenteStory) nextTags = nextTags.concat([_TAG_STORY]);
       // referenceMonth: só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
       // Auto-fill: se responsável é freelancer pago por demanda (André/Maria/Guilherme) E o mês tá vazio,
       // calcula automaticamente (dia>10 vira mês seguinte). Se NÃO tem freelancer, deixa vazio mesmo se o user tentou setar.
@@ -40432,7 +40443,7 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -44506,6 +44517,23 @@ function _cardPodeSerResp(u){
                 </button>;
               })}
             </div>
+          </div>
+
+          {/* ── Somente story ── o post vai pro story; não há arte de feed pra produzir ── */}
+          <div>
+            <label onClick={function(){ if(canEdit) setSomenteStory(!somenteStory); }}
+              style={{display:"flex",alignItems:"center",gap:10,border:"1px solid "+(somenteStory?"#f59e0b":"#e2e8f0"),background:somenteStory?"#fffbeb":"#fff",borderRadius:10,padding:"9px 11px",cursor:canEdit?"pointer":"default",transition:"all .12s",opacity:canEdit?1:.75}}>
+              <span style={{width:18,height:18,borderRadius:5,border:"2px solid "+(somenteStory?"#f59e0b":"#cbd5e1"),background:somenteStory?"#f59e0b":"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {somenteStory&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
+              </span>
+              <span style={{width:28,height:28,borderRadius:8,background:somenteStory?"#f59e0b":"#fef3c7",color:somenteStory?"#fff":"#d97706",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
+              </span>
+              <span style={{minWidth:0,flex:1}}>
+                <span style={{display:"block",fontSize:12,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
+                <span style={{display:"block",fontSize:10.5,color:somenteStory?"#b45309":"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.4}}>Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda.</span>
+              </span>
+            </label>
           </div>
 
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
