@@ -29707,7 +29707,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 <div style={{display:"inline-flex",alignItems:"center",gap:3}}>{_nav(-1,"Versao anterior",_vIdx>0)}{_nav(1,"Proxima versao",_vIdx<_vs.length-1)}</div>
                 <span style={{color:cT,fontSize:12,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>Versão {_vIdx+1}/{_vs.length}</span>
                 <span style={{color:cT,opacity:.7,fontSize:11.5,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {_rot}{v.atFmt?" · "+v.atFmt:""}</span>
-                {!_vOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>no ar</span>}
+                {!_vOutra&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:5}}>copy atual</span>}
                 {_vOutra&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6}}>
                   <button onClick={()=>setVerVersao(x=>({...x,[current.id]:null}))} style={{background:"transparent",border:"1px solid "+cB,borderRadius:8,padding:"5px 11px",color:cT,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Voltar pra atual</button>
                   <button onClick={()=>restaurarVersaoCopy(current,_vIdx)} disabled={!isApprover} style={{background:"#f59e0b",border:"none",borderRadius:8,padding:"5px 13px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:isApprover?"pointer":"default",fontFamily:"inherit"}}>Usar esta</button>
@@ -44118,8 +44118,25 @@ function _cardPodeSerResp(u){
         {/* ── RIGHT SIDEBAR ── */}
         <div style={{padding:"16px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto",maxHeight:isMobile?"82vh":"none",minHeight:0,background:"#fafbfc",borderRadius:"0 0 22px 0",borderLeft:"1px solid #edf0f4"}}>
 
-          {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
-          {canEditSLAandPub&&!isAgendado&&(
+          {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══
+               Peça que não vai pro feed (marcada "não publica" ou tipo Folder) não
+               mostra data de publicação: o campo não faria nada, e campo que não faz
+               nada vira dúvida. A data guardada continua lá — desmarcou, ela volta. */}
+          {canEditSLAandPub&&!isAgendado&&(naoPublica||contentType==="folder")&&(
+            <div style={{border:"1px dashed #e2e8f0",borderRadius:10,padding:"10px 12px",background:"#fff",display:"flex",alignItems:"center",gap:9}}>
+              <span style={{width:26,height:26,borderRadius:8,background:"#f1f5f9",color:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>
+              </span>
+              <span style={{minWidth:0}}>
+                <span style={{display:"block",fontSize:12,fontWeight:650,color:"#475569",letterSpacing:-.1}}>Sem data de publicação</span>
+                <span style={{display:"block",fontSize:10.5,color:"#94a3b8",marginTop:1,lineHeight:1.35}}>
+                  {contentType==="folder"?"Folder não entra no calendário. Use o Prazo pra cobrar a entrega."
+                                         :"Peça marcada como “não publica nas redes”. Use o Prazo pra cobrar a entrega."}
+                </span>
+              </span>
+            </div>
+          )}
+          {canEditSLAandPub&&!isAgendado&&!(naoPublica||contentType==="folder")&&(
             <div>
               <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> Data/hora de publicação</label>
               {(()=>{
@@ -44731,7 +44748,7 @@ function _cardPodeSerResp(u){
                   label="Somente story" hint="Sem arte de feed"
                   title="Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda."
                   corIcone="#d97706" fundoIcone="#fef3c7"
-                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>}/>
+                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>}/>
                 <PxSwitchLinha on={_naoPub} disabled={!canEdit||_folder}
                   onToggle={function(){ setNaoPublica(!naoPublica); }}
                   label="Não publica nas redes"
