@@ -3342,7 +3342,9 @@ const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f
    300 reescritas/mês ≈ US$ 16 no Opus 5 contra US$ 6 no Sonnet 5. A diferença
    não paga uma hora da Hellen refazendo copy, então o critério aqui é qualidade. */
 const PX_IA_MODELO = "claude-opus-5";
-if(typeof window!=="undefined") window.PX_IA_MODELO = PX_IA_MODELO;
+/* Modelo das tarefas mecânicas (traduzir, resumir): não precisa de Opus e roda mais barato. */
+const PX_IA_MODELO_RAPIDO = "claude-sonnet-5";
+if(typeof window!=="undefined"){ window.PX_IA_MODELO = PX_IA_MODELO; window.PX_IA_MODELO_RAPIDO = PX_IA_MODELO_RAPIDO; }
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
    Chama a Edge Function `ask-claude` do Supabase, que faz proxy seguro para
@@ -3488,6 +3490,41 @@ function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   return r;
 }
 
+/* ─── TRADUÇÃO DA COPY DO PARAGUAY PRA CONFERÊNCIA (14/09/2026) ──────
+   Pedido do Vinicius: "as copys em espanhol de paraguay tem que ter a tradução
+   embaixo pra gente saber se tá bom ou não, pq ninguém aqui fala espanhol".
+   É TRADUÇÃO, não revisão: não melhora, não corta, não reescreve — quem lê precisa
+   saber exatamente o que está escrito em espanhol antes de aprovar.
+   Roda no modelo rápido; traduzir não precisa de Opus. */
+async function pxTraduzirParaPt(opts){
+  const briefing=_pxHtmlParaTexto((opts&&opts.briefing)||"");
+  const legenda =_pxHtmlParaTexto((opts&&opts.legenda)||"");
+  if(!briefing&&!legenda) return {briefing:"",legenda:""};
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const sys="Você traduz do espanhol para o português do Brasil. Tradução FIEL: não reescreva, "+
+    "não melhore, não corte e não resuma — a pessoa que vai ler não fala espanhol e precisa saber "+
+    "exatamente o que está escrito pra decidir se aprova. Mantenha a quebra de parágrafos, os emojis, "+
+    "os números, os telefones e os endereços como estão. HASHTAG NÃO SE TRADUZ: copie igual. "+
+    "Nome de produto e nome da marca também ficam como estão. "+
+    "Responda EXATAMENTE neste formato, texto puro, sem nada antes nem depois:"+
+    "\n===BRIEFING===\n(o briefing traduzido)\n===LEGENDA===\n(a legenda traduzida)";
+  let u="BRIEFING (español):\n"+(briefing||"(vazio)")+"\n\n";
+  u+="LEGENDA (español):\n"+(legenda||"(vazia)")+"\n";
+  const data=await askClaude({model:PX_IA_MODELO_RAPIDO,max_tokens:2200,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+  txt=txt.replace(/^[\s>*#=_-]*(BRIEFING|LEGENDA)\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "==="+p1.toUpperCase()+"===";});
+  const iB=txt.indexOf("===BRIEFING==="), iL=txt.indexOf("===LEGENDA===");
+  let b="", l="";
+  if(iB>=0||iL>=0){
+    if(iB>=0) b=(iL>iB?txt.slice(iB+14,iL):txt.slice(iB+14)).trim();
+    if(iL>=0) l=txt.slice(iL+13).trim();
+  }else{ b=txt.trim(); }
+  b=b.replace(/^===+\s*/,"").trim(); l=l.replace(/^===+\s*/,"").trim();
+  if(b==="(vazio)") b=""; if(l==="(vazia)") l="";
+  return {briefing:b, legenda:l};
+}
+if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
+
 /* ─── REESCRITA DE COPY PELO CLAUDE ─────────────────────────────────
    Usado pelos botões "Testar nova abordagem" e "Refazer do zero" da
    Avaliação de copys. O card NÃO sai da fila: a copy é reescrita na hora e
@@ -3570,6 +3607,9 @@ async function pxReescreverCopy(opts){
     (py?"ESCREVA O QUE VAI NA PEÇA E A LEGENDA EM ESPANHOL (é a unidade do Paraguai). Os rótulos do briefing ficam como estão."
        :"Escreva em português do Brasil.")+
     " Responda EXATAMENTE neste formato, texto puro, sem HTML, sem markdown, sem nada antes nem depois:"+
+    // Refazer do zero troca o ASSUNTO — então o nome do cartão também tem que mudar, senão a fila
+    // de avaliação fica cheia de card com título de um assunto e copy de outro (14/09/2026).
+    (ehRefazer?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, em português do Brasil mesmo no Paraguay, sem ponto final)":"")+
     "\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)";
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
@@ -3675,9 +3715,11 @@ async function pxReescreverCopy(opts){
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Aceita ===BRIEFING===, ###BRIEFING###, **BRIEFING**, BRIEFING: etc. Normaliza tudo antes de cortar.
-  txt=txt.replace(/^[\s>*#=_-]*(BRIEFING|LEGENDA)\s*(DA COPY|DO CARD)?\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "===" + p1.toUpperCase() + "===";});
-  let brief="",leg="";
+  txt=txt.replace(/^[\s>*#=_-]*(TITULO|T\u00cdTULO|BRIEFING|LEGENDA)\s*(DA COPY|DO CARD)?\s*[:\s>*#=_-]*$/gim,function(_m,p1){return "===" + (p1.toUpperCase()==="T\u00cdTULO"?"TITULO":p1.toUpperCase()) + "===";});
+  let brief="",leg="",titulo="";
+  const iT=txt.indexOf("===TITULO===");
   const iB=txt.indexOf("===BRIEFING==="), iL=txt.indexOf("===LEGENDA===");
+  if(iT>=0&&iB>iT){ titulo=txt.slice(iT+12,iB).trim().replace(/^===+\s*/,"").replace(/^["\u201c]|["\u201d]$/g,"").replace(/\.$/,"").trim(); }
   if(iB>=0||iL>=0){
     if(iB>=0) brief=(iL>iB?txt.slice(iB+14,iL):txt.slice(iB+14)).trim();
     else brief=txt.slice(0,iL).trim();
@@ -3693,7 +3735,8 @@ async function pxReescreverCopy(opts){
   leg=leg.replace(/^===+\s*/,"").trim();
   if(!brief) throw new Error("O Claude respondeu vazio. Tente de novo.");
   return { briefing:_pxTextoParaHtml(brief),
-           legenda: soStory?"":_pxTextoParaHtml(leg) };
+           legenda: soStory?"":_pxTextoParaHtml(leg),
+           titulo: (ehRefazer&&titulo&&titulo.length<=90)?titulo:"" };
 }
 
 
@@ -28374,6 +28417,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [erroReescrita,setErroReescrita]=useState("");
   // Navegador de versões da copy (qual versão está sendo olhada em cada card)
   const [verVersao,setVerVersao]=useState({});
+  // Tradução pt-BR das copys do Paraguay (ninguém na equipe fala espanhol).
+  // Chave = id + tamanho do briefing + tamanho da legenda: se o Claude reescrever a copy,
+  // a chave muda sozinha e a tradução é refeita. Fica só na sessão, não vai pro banco.
+  const [tradPt,setTradPt]=useState({});
   // SPLIT: dois modais distintos pra não sobrepor (bug reportado pelo Vinicius).
   // editAnnot = "Anotar ajustes" (riscar imagem) na aba publicação.
   // editCopy  = "Editar copy" (título+legenda+briefing) na aba copys.
@@ -28601,19 +28648,28 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         if(t.id!==task.id)return t;
         const vs=Array.isArray(t.copyVersoes)?t.copyVersoes.slice():[];
         // primeira reescrita: guarda a versão original como v1
+        // `titulo` vai junto de cada versão: "Refazer do zero" troca o nome do cartão, e voltar
+        // pra uma versão anterior tem que devolver o título daquela versão também (14/09/2026).
         if(!vs.length)vs.push({v:1,briefing:t.desc||t.description||"",legenda:t.caption||"",
-          autor:"original",tipo:null,feedback:null,at:now,atFmt:nowFmt()});
+          titulo:t.title||"",autor:"original",tipo:null,feedback:null,at:now,atFmt:nowFmt()});
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
+          titulo:((nova&&nova.titulo)||t.title||""),
           autor:"Claude",tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
         // NAO cria comentario no card com o pedido pra IA (pedido do Vinicius, 14/09/2026).
         // Os comentarios do cartao sao conversa entre pessoas; pedido de reescrita ja fica
         // guardado em tres lugares: no painel "Versoes da copy" (vs[].feedback), no historico
         // do cartao (timeline, logo abaixo) e em claude_copy_feedback (memoria de aprendizado).
+        // "Refazer do zero" muda o assunto — o nome do cartão acompanha, senão a fila fica com
+        // título de um assunto e copy de outro (14/09/2026).
+        const _tituloNovo=(nova&&nova.titulo)?String(nova.titulo).trim():"";
+        const _trocouTitulo=!!_tituloNovo&&_tituloNovo!==String(t.title||"").trim();
         return {...t,desc:nova.briefing,description:nova.briefing,caption:nova.legenda,
           copyVersoes:vs,
+          ...(_trocouTitulo?{title:_tituloNovo}:{}),
           timeline:[...(t.timeline||[]),{type:"edit",user:"Claude",at:now,atFmt:nowFmt(),
-            label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")}]};
+            label:rotulo+" — copy reescrita pelo Claude"+(txt?(" ("+txt.slice(0,90)+")"):"")
+                  +(_trocouTitulo?(" · título: \u201c"+String(t.title||"").trim()+"\u201d → \u201c"+_tituloNovo+"\u201d"):"")}]};
       }));
       setVerVersao(v=>({...v,[task.id]:null}));
       pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
@@ -28638,9 +28694,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       if(t.id!==task.id)return t;
       const vs=Array.isArray(t.copyVersoes)?t.copyVersoes:[];
       const v=vs[idx]; if(!v)return t;
+      const _tv=String(v.titulo||"").trim();
+      const _voltaTitulo=!!_tv&&_tv!==String(t.title||"").trim();
       return {...t,desc:v.briefing||"",description:v.briefing||"",caption:v.legenda||"",
+        ...(_voltaTitulo?{title:_tv}:{}),
         timeline:[...(t.timeline||[]),{type:"edit",user:actor,at:now,atFmt:nowFmt(),
-          label:"Voltou para a versão "+(v.v||(idx+1))+" da copy"}]};
+          label:"Voltou para a versão "+(v.v||(idx+1))+" da copy"+(_voltaTitulo?(" (e para o título \u201c"+_tv+"\u201d)"):"")}]};
     }));
     setVerVersao(v=>({...v,[task.id]:null}));
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Copy restaurada.",3000);
@@ -29176,6 +29235,28 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     return m;
   })();
   const _playSrc=function(u){return (u&&_prevMap[u])||u;};
+
+  // ── Paraguay: traduz a copy pro português assim que o card aparece ──
+  const _ehParaguay=!!current&&String(current.bioterUnit||current.bioter_unit||"").toLowerCase()==="paraguay";
+  const _tradKey=current?(String(current.id)+"|"+String(current.desc||current.description||"").length+"|"+String(current.caption||"").length):"";
+  useEffect(function(){
+    if(!current||!_ehParaguay||tab!=="copys") return;
+    if(typeof pxTraduzirParaPt!=="function") return;
+    if(tradPt[_tradKey]) return;                       // já traduzido (ou traduzindo)
+    let vivo=true;
+    setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={loading:true}; return o; });
+    (async function(){
+      try{
+        const r=await pxTraduzirParaPt({briefing:current.desc||current.description||"", legenda:current.caption||""});
+        if(vivo) setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={briefing:r.briefing,legenda:r.legenda}; return o; });
+      }catch(e){
+        if(vivo) setTradPt(function(m){ const o=Object.assign({},m); o[_tradKey]={erro:(e&&e.message)||String(e)}; return o; });
+      }
+    })();
+    return function(){ vivo=false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[_tradKey,_ehParaguay,tab]);
+
   // Auto-skip: quando entra num card, se o imgIdx aponta pra uma URL quebrada,
   // pula automaticamente pra primeira que ainda não falhou.
   useEffect(()=>{
@@ -29940,6 +30021,34 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <div style={{padding:isMob?"13px 14px":"16px 18px",color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
             </div>)}
 
+            {/* ── Tradução pt-BR (só Paraguay) ──
+                Ninguém na equipe fala espanhol, então a copy em español vinha sendo aprovada no
+                escuro. Aqui embaixo vem a tradução FIEL do que está acima, só pra conferência —
+                o que publica continua sendo o texto em español. */}
+            {_ehParaguay&&(captionTxt2||descTxt2)&&(function(){
+              const _t=tradPt[_tradKey]||{};
+              return <div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:14,overflow:"hidden"}}>
+                <div style={{background:"#f1f5f9",borderBottom:"1px dashed #cbd5e1",padding:isMob?"9px 14px":"10px 18px",color:"#475569",fontSize:isMob?12:13,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <Ico n="globe" size={15} color="#475569"/>Tradução pra conferência
+                  <span style={{marginLeft:"auto",background:"#e2e8f0",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"none"}}>publica em español</span>
+                </div>
+                <div style={{padding:isMob?"12px 14px":"14px 18px"}}>
+                  {_t.loading&&<div style={{color:"#64748b",fontSize:12.5,fontWeight:600}}>Traduzindo…</div>}
+                  {_t.erro&&<div style={{color:"#b91c1c",fontSize:12.5,fontWeight:600}}>Não consegui traduzir agora: {_t.erro}</div>}
+                  {!_t.loading&&!_t.erro&&(_t.briefing||_t.legenda)&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {_t.briefing&&<div>
+                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:5}}>Briefing</div>
+                      <div style={{color:"#334155",fontSize:isMob?12.5:13.5,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{_t.briefing}</div>
+                    </div>}
+                    {_t.legenda&&<div>
+                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:5}}>Legenda</div>
+                      <div style={{color:"#334155",fontSize:isMob?12.5:13.5,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{_t.legenda}</div>
+                    </div>}
+                  </div>}
+                </div>
+              </div>;
+            })()}
+
             {!captionTxt2&&!descTxt2&&(<div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:12,padding:"32px 24px",textAlign:"center",marginTop:8}}>
               <div style={{width:44,height:44,borderRadius:12,background:"#f59e0b",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -30089,6 +30198,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#ddd6fe";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="M4.5 7.5l2.1 2.1"/><path d="M19.5 7.5l-2.1 2.1"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="9.5" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>
                 Ajustar copy
+              </button>
+              {/* (14/09/2026) "Refazer do zero" VOLTOU a ser um botão próprio. Juntar tudo em
+                  "Ajustar copy" não funcionou: quem quer jogar a copy fora e começar outra, com
+                  outro assunto e outro título, não sabia que era só escrever isso na caixa.
+                  São ações diferentes e continuam sendo dois botões — ajustar preserva o assunto,
+                  refazer descarta tudo. */}
+              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"refazer"});}}
+                title="Descarta a copy atual e escreve outra do zero — assunto e título novos. A versão atual fica guardada."
+                style={{width:"100%",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#bae6fd";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>
+                Refazer do zero
               </button>
               <button onClick={async()=>{
                   if(typeof pixelsConfirm==="function"){
