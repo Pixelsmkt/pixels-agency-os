@@ -3342,6 +3342,16 @@ const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f
    300 reescritas/mês ≈ US$ 16 no Opus 5 contra US$ 6 no Sonnet 5. A diferença
    não paga uma hora da Hellen refazendo copy, então o critério aqui é qualidade. */
 const PX_IA_MODELO = "claude-opus-5";
+/* ─── QUEM ESCREVE A COPY (14/09/2026) ───────────────────────────────
+   O Vinicius reprovou a copy do Opus 5 no card de piscicultura do Paraguay
+   ("O peixe vive dentro da água???") e pediu GPT. A escolha do provedor da COPY
+   fica aqui — só a copy, o resto do app continua no Claude.
+     "openai"    → Edge Function ask-openai (precisa do secret OPENAI_KEY)
+     "anthropic" → Edge Function ask-claude (o de sempre)
+   Se a OpenAI falhar (chave não configurada, função não deployada, erro da API),
+   `askIA` cai sozinha pro Claude — ninguém fica sem conseguir reescrever copy. */
+const PX_IA_PROVEDOR_COPY = "openai";
+const PX_IA_MODELO_GPT = "gpt-5.6-sol";
 /* Modelo das tarefas mecânicas (traduzir, resumir): não precisa de Opus e roda mais barato. */
 const PX_IA_MODELO_RAPIDO = "claude-sonnet-5";
 if(typeof window!=="undefined"){ window.PX_IA_MODELO = PX_IA_MODELO; window.PX_IA_MODELO_RAPIDO = PX_IA_MODELO_RAPIDO; }
@@ -3489,6 +3499,39 @@ function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   r+="- Emoji de enfeite, que não tem a ver com o que a frase diz, não entra. Escolher o certo é parte do trabalho — não usar nenhum NÃO é alternativa.\n";
   return r;
 }
+
+/* ─── ASK GPT (OpenAI) ───────────────────────────────────────────────
+   Mesmo desenho do askClaude: a chave fica SÓ no backend (Edge Function
+   ask-openai, secret OPENAI_KEY). Recebe e devolve no formato do askClaude
+   ({content:[{text}]}) pra nenhum chamador precisar saber quem escreveu. */
+async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]}){
+  const sb=window._sb;
+  if(!sb)throw new Error("Supabase client indisponível");
+  const msgs=[];
+  if(system)msgs.push({role:"system",content:system});
+  (messages||[]).forEach(function(m){
+    const c=(typeof m.content==="string")?m.content
+      :((m.content||[]).map(function(b){return b&&b.text||"";}).join("\n"));
+    msgs.push({role:m.role||"user",content:c});
+  });
+  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:model,max_tokens:max_tokens,messages:msgs}});
+  if(error)throw new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro"));
+  if(data&&data.error)throw new Error(String(data.error.message||data.error));
+  const txt=(((data||{}).choices||[])[0]||{}).message;
+  const out=(txt&&txt.content)||"";
+  if(!out)throw new Error("O GPT respondeu vazio.");
+  return {content:[{type:"text",text:out}]};
+}
+
+/* Porta única da COPY: tenta o provedor escolhido e cai pro Claude se ele falhar. */
+async function askIA(opts){
+  if(PX_IA_PROVEDOR_COPY==="openai"){
+    try{ return await askGPT(Object.assign({},opts,{model:PX_IA_MODELO_GPT})); }
+    catch(e){ console.warn("[askIA] OpenAI falhou, usando o Claude:",(e&&e.message)||e); }
+  }
+  return await askClaude(opts);
+}
+if(typeof window!=="undefined"){ window.askGPT=askGPT; window.askIA=askIA; }
 
 /* ─── TRADUÇÃO DA COPY DO PARAGUAY PRA CONFERÊNCIA (14/09/2026) ──────
    Pedido do Vinicius: "as copys em espanhol de paraguay tem que ter a tradução
@@ -3711,7 +3754,7 @@ async function pxReescreverCopy(opts){
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
   }
 
-  const data=await askClaude({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Aceita ===BRIEFING===, ###BRIEFING###, **BRIEFING**, BRIEFING: etc. Normaliza tudo antes de cortar.
@@ -3925,7 +3968,7 @@ async function pxGerarLegendas(opts){
   u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
 
-  const data=await askClaude({model:PX_IA_MODELO,max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Normaliza variações do separador (**OPÇÃO 1**, ### Opcao 1, OPÇÃO 1:) antes de cortar
@@ -4096,7 +4139,7 @@ async function pxGerarBriefing(opts){
   u+="Depois do briefing, acrescente sempre uma última seção \"• O QUE PRECISAMOS\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
   u+="Não escreva legenda de Instagram aqui — legenda é outra etapa.";
 
-  const data=await askClaude({model:PX_IA_MODELO,max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   txt=txt.replace(/^[\s>*#=_-]*(TIPO|PORQUE|POR\s*QUE|BRIEFING)\s*[:\s>*#=_-]*$/gim,function(_m,p1){
@@ -66768,7 +66811,9 @@ PROMPT DE IMAGEM:
     const genSnapshot = {...gen}; // snapshot antes de qualquer mudança do usuário durante o fetch
     setGenLoading(true);setGenResult(null);
     try{
-      const data=await askClaude({
+      // A página Pixels IA também ESCREVE COPY — então segue o provedor de copy
+      // (askIA → GPT quando PX_IA_PROVEDOR_COPY="openai"), igual à Avaliação e ao cartão.
+      const data=await askIA({
         model:PX_IA_MODELO,max_tokens:2000,
         messages:[{role:"user",content:buildPrompt()}]
       });
