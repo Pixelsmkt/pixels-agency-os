@@ -3329,13 +3329,28 @@ const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",re
 // Cores sincronizadas com KANBAN_COLS — paleta arco-íris coerente
 const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f97316",execucao:"#f59e0b",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
 
+/* ─── MODELO DA IA — UM LUGAR SÓ (14/09/2026) ─────────────────
+   O app estava pregado no Sonnet 4 de maio/2025 (claude-sonnet-4-2025-05-14), espalhado
+   por 11 chamadas em 5 módulos. Trocar de modelo virava caça ao tesouro — e foi assim
+   que ficamos duas gerações atrasados sem ninguém perceber.
+   AGORA É AQUI E SÓ AQUI. Se for trocar de modelo, troca esta linha.
+   Lista de modelos: platform.claude.com/docs/en/models/overview
+
+   14/09/2026 — decisão do Vinicius, depois de 7 rodadas de ajuste numa copy só:
+   "cara já passa pra Opus pq fiquei puto". Vale as 11 chamadas do app.
+   Conta feita: ~6k tokens de entrada e ~900 de saída por reescrita de copy;
+   300 reescritas/mês ≈ US$ 16 no Opus 5 contra US$ 6 no Sonnet 5. A diferença
+   não paga uma hora da Hellen refazendo copy, então o critério aqui é qualidade. */
+const PX_IA_MODELO = "claude-opus-5";
+if(typeof window!=="undefined") window.PX_IA_MODELO = PX_IA_MODELO;
+
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
    Chama a Edge Function `ask-claude` do Supabase, que faz proxy seguro para
    a API da Anthropic. NUNCA exponha a chave da Anthropic no frontend!
 
    Uso:
      const data = await askClaude({
-       model: "claude-sonnet-4-20250514",
+       model: PX_IA_MODELO,
        max_tokens: 500,
        system: "Você é...",
        messages: [{role:"user", content:"..."}]
@@ -3344,7 +3359,7 @@ const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f
 
    Requer: Edge Function "ask-claude" deployada no Supabase.
    Veja SUPABASE_EDGE_FUNCTION.md para instruções de deploy. */
-async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system,messages=[]}){
+async function askClaude({model=PX_IA_MODELO,max_tokens=500,system,messages=[]}){
   const sb=window._sb;
   if(!sb)throw new Error("Supabase client indisponível");
   const body={model,max_tokens,messages};
@@ -3656,7 +3671,7 @@ async function pxReescreverCopy(opts){
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
   }
 
-  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Aceita ===BRIEFING===, ###BRIEFING###, **BRIEFING**, BRIEFING: etc. Normaliza tudo antes de cortar.
@@ -3867,7 +3882,7 @@ async function pxGerarLegendas(opts){
   u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
 
-  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Normaliza variações do separador (**OPÇÃO 1**, ### Opcao 1, OPÇÃO 1:) antes de cortar
@@ -4038,7 +4053,7 @@ async function pxGerarBriefing(opts){
   u+="Depois do briefing, acrescente sempre uma última seção \"• O QUE PRECISAMOS\" listando em tópicos o que a equipe precisa ter em mãos pra executar (foto da obra, logo do cliente, take gravado, dado técnico). Se não faltar nada, escreva \"nada além do que já está no card\".\n";
   u+="Não escreva legenda de Instagram aqui — legenda é outra etapa.";
 
-  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:2600,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   txt=txt.replace(/^[\s>*#=_-]*(TIPO|PORQUE|POR\s*QUE|BRIEFING)\s*[:\s>*#=_-]*$/gim,function(_m,p1){
@@ -11645,7 +11660,7 @@ function CBriefing({cl}){
     try{
       let res=await fetch("/api/anthropic/v1/messages",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,
+        body:JSON.stringify({model:PX_IA_MODELO,max_tokens:2000,
           messages:[{role:"user",content:[{type:"text",text:rawText},{type:"text",text:prompt}]}]})
       });
       if(!res.ok){let t=await res.text();setAiError("Erro HTTP "+res.status+": "+t.slice(0,100));setLoading(false);setLoadingMsg("");return;}
@@ -16278,7 +16293,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
       };
 
       let resp=await askClaude({
-        model:"claude-sonnet-4-20250514",
+        model:PX_IA_MODELO,
         max_tokens:900,
         system:"Você é um analista da Pixels Marketing, agência de marketing digital. Gere um resumo executivo de um cliente em pt-BR. Seja direto, conciso e estratégico. Saída deve ser JSON válido sem markdown com as chaves: visao_geral (string), atrasos_criticos (string), pendente_de_voce (string), proximas_publicacoes (string), saude_relacionamento (string). Cada chave tem 1-3 frases curtas. Inclua números e nomes específicos quando relevante.",
         messages:[{role:"user",content:"Gere o resumo executivo deste cliente. Dados:\n\n"+JSON.stringify(context,null,2)}]
@@ -21635,7 +21650,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
     try{
       const msgs=newHistory.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}));
       const data=await askClaude({
-        model:"claude-sonnet-4-20250514",max_tokens:600,
+        model:PX_IA_MODELO,max_tokens:600,
         system:`Você é a Pixels IA, assistente criativa da agência Pixels. Converse de forma amigável e direta. Ajude o sócio a refinar ideias de marketing digital. ${briefing?`Contexto do cliente: ${briefing}`:""}`,
         messages:msgs
       });
@@ -21655,7 +21670,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
     setError(""); setStep("generating");
     try{
       const data=await askClaude({
-        model:"claude-sonnet-4-20250514",max_tokens:1000,
+        model:PX_IA_MODELO,max_tokens:1000,
         system:`Você é a Pixels IA, assistente criativa de uma agência de marketing digital chamada Pixels. Transforme ideias em demandas de produção claras. Gere APENAS JSON válido sem markdown:\n{"titulo":"...","descricao":"...","formato":"...","objetivo":"...","pontos_atencao":"...","tags":["tag1","tag2"]}`,
         messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Estratégia)":"Erick (Gestão de mídia)"}\n\nGere a demanda.`}]
       });
@@ -39900,7 +39915,7 @@ async function pxRoteiro60(task, clienteNome){
     "(e assim por diante até fechar 60s)\n\n"+
     "O QUE PRECISAMOS CAPTAR:\n"+
     "- item\n- item\n- item";
-  const data=await askClaude({model:"claude-sonnet-4-20250514",max_tokens:1100,system:sys,messages:[{role:"user",content:usr}]});
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:1100,system:sys,messages:[{role:"user",content:usr}]});
   const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   if(!txt) throw new Error("A IA não devolveu roteiro. Tente de novo.");
   return txt;
@@ -66640,7 +66655,7 @@ PROMPT DE IMAGEM:
     setGenLoading(true);setGenResult(null);
     try{
       const data=await askClaude({
-        model:"claude-sonnet-4-20250514",max_tokens:2000,
+        model:PX_IA_MODELO,max_tokens:2000,
         messages:[{role:"user",content:buildPrompt()}]
       });
       if(data.error){
