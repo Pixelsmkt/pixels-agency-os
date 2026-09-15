@@ -3650,7 +3650,7 @@ function _pxTextoParaHtml(txt){
     const l=linhas[i].trim();
     if(!l){ out+="<p>&nbsp;</p>"; continue; }
     // rótulos do briefing (• Título, • Texto na arte, • Roteiro) vão em negrito
-    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|O que precisamos)/i.test(l)){
+    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|Pin no mapa|Pin en el mapa|Frase na arte|Frase en el arte|O que precisamos)/i.test(l)){
       out+="<p><strong>"+l.replace(/^[-]\s*/,"• ")+"</strong></p>";
     } else out+="<p>"+l+"</p>";
   }
@@ -3665,12 +3665,18 @@ async function pxReescreverCopy(opts){
   const ehRefazer=tipo==="refazer";
   const ehAjuste=tipo==="ajuste";
   const ehAbord=!ehRefazer&&!ehAjuste;
+  // ALVO DO AJUSTE (15/09/2026, Vinicius): muitas vezes só o briefing OU só a legenda está
+  // ruim. Reescrever os dois gasta tempo e crédito e ainda mexe no que já estava bom.
+  const _alvo=(function(a){return (a==="briefing"||a==="legenda")?a:"ambos";})(String((opts&&opts.alvo)||""));
+  const soBrief=_alvo==="briefing", soLeg=_alvo==="legenda";
   const pedido=String((opts&&opts.feedback)||"").trim();
   const cliente=String((opts&&opts.clienteNome)||task.client||"");
   const unit=String(task.bioterUnit||task.bioter_unit||"");
   const py=unit==="paraguay";
   const ct=String(task.contentType||task.content_type||"").toLowerCase();
   const ehVideo=ct==="video"||ct==="video_short"||ct==="reels";
+  // FOTO DE OBRA tem briefing proprio (15/09/2026): so o pin do mapa e UMA frase.
+  const ehFotoObra=ct==="foto"||/foto\s*de\s*obra/i.test(String(task.title||""));
   const soStory=!!(task.somenteStory||task.somente_story);
   const _tags=Array.isArray(task.tags)?task.tags:[];
   // DUAS provas de comemorativa (14/09/2026): a tag, que humano edita, e o id "autocom-",
@@ -3697,13 +3703,15 @@ async function pxReescreverCopy(opts){
     // título dos cards de data comemorativa, nenhum, NENHUM"). O assunto é a data.
     // Nem no "refazer do zero" — lá a copy é nova, o nome do cartão continua o mesmo.
     ((ehRefazer&&!ehComemorativa)?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, em português do Brasil mesmo no Paraguay, sem ponto final)":"")+
-    "\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)";
+    (soBrief?"\n===BRIEFING===\n(o briefing aqui — NÃO escreva legenda, ela não vai ser usada)"
+     :soLeg?"\n===LEGENDA===\n(a legenda aqui — NÃO escreva briefing, ele não vai ser usado)"
+     :"\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)");
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
   u+="CARD: "+(task.title||"—")+"\n";
   const dt=String(task.publishDate||task.publish_date||"").slice(0,10);
   if(dt) u+="PUBLICA EM: "+dt.slice(8,10)+"/"+dt.slice(5,7)+"/"+dt.slice(0,4)+"\n";
-  u+="FORMATO: "+(ehVideo?"vídeo":(ct||"arte"))+(soStory?" (SOMENTE STORY — não escreva legenda)":"")+"\n\n";
+  u+="FORMATO: "+(ehVideo?"vídeo":(ehFotoObra?"foto de obra":(ct||"arte")))+(soStory?" (SOMENTE STORY — não escreva legenda)":"")+"\n\n";
 
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
@@ -3797,6 +3805,8 @@ async function pxReescreverCopy(opts){
     ? "TAREFA: mantenha EXATAMENTE o mesmo assunto e reescreva com OUTRA ABORDAGEM — outro ângulo, outro jeito de abrir, outra construção. Não repita as frases da versão atual.\n"
     : "TAREFA: esqueça o assunto da versão atual. Escreva uma copy NOVA, de outro assunto que faça sentido para este cliente neste mês.\n";
   u+=pedido?("O QUE A AGÊNCIA PEDIU: "+pedido+"\n"):"A agência não deu direção — escolha você o melhor caminho, diferente do atual.\n";
+  if(soBrief) u+="⚠️ MEXA SÓ NO BRIEFING. A legenda atual está aprovada e continua exatamente como está — não escreva legenda. O briefing novo tem que continuar combinando com ela.\n";
+  if(soLeg)   u+="⚠️ MEXA SÓ NA LEGENDA. O briefing atual está aprovado e continua exatamente como está — não escreva briefing. A legenda nova tem que continuar conversando com esse briefing.\n";
 
   if(ehComemorativa){
     u+="\n⚠️ ESTE CARD É DATA COMEMORATIVA. É HOMENAGEM, NÃO É POST DE VENDA.\n";
@@ -3804,13 +3814,37 @@ async function pxReescreverCopy(opts){
     u+="- PROIBIDO storytelling, cena inventada ou micro-história (ex.: “TEM CLIENTE QUE LIGA PRA SABER SE CHOVEU NA OBRA”). Fora do cabível numa arte de homenagem.\n";
     u+="- O conteúdo é agradecimento e reconhecimento: família, confiança, parceria, “vocês fazem parte da nossa história”.\n";
     u+="- Sem falar de produto, serviço, garantia, prazo ou preço. O fecho é de disposição, não de venda.\n";
-    u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
-    u+="• TÍTULO"+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+
-      "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
-    u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
-    u+=_pxRegrasLegenda(pb,unit,true,task.client);
-    if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
+    if(!soLeg){
+      u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
+      u+="• TÍTULO"+"\n(só a saudação da data, em caixa alta)\n\n• TEXTO NA ARTE"+
+        "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
+    }
+    if(!soBrief){
+      u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
+      u+=_pxRegrasLegenda(pb,unit,true,task.client);
+      if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
+    }
+  }else if(ehFotoObra){
+    // FOTO DE OBRA (15/09/2026, Vinicius): a arte JA EXISTE — e a foto da obra entregue.
+    // O briefing so diz a cidade do pin e a frase que vai estampada. Nada de headline,
+    // apoio, fecho, laminas nem assinatura de data.
+    u+="\n⚠️ ESTE CARD É FOTO DE OBRA. A arte é a PRÓPRIA FOTO da obra entregue, não um layout de texto.\n";
+    u+="- O briefing tem só DUAS linhas: a cidade que vai no pin do mapa e UMA frase pra estampar na foto.\n";
+    u+="- A cidade/UF sai do que a equipe já escreveu no card (briefing atual, título ou comentários). NUNCA invente cidade.\n";
+    u+="- PROIBIDO título criativo, headline, texto de apoio, fecho, storytelling, lâminas e assinatura de data.\n";
+    if(!soLeg){
+      u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
+      u+="• Pin no mapa\n(Cidade/UF — só isso)\n\n• Frase na arte\n"+
+         "(UMA frase só, curta — 45 a 90 caracteres — estilo CTA, com o benefício principal do produto que aparece na foto. "+
+         "Sem segunda frase, sem subtítulo, sem explicação depois.)\n";
+    }
+    if(!soBrief){
+      u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, o que foi entregue nesta obra, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
+      u+=_pxRegrasLegenda(pb,unit,false,task.client);
+      if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
+    }
   }else{
+  if(!soLeg){
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
   u+=ehVideo
     ? ("• ROTEIRO"+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
@@ -3818,9 +3852,12 @@ async function pxReescreverCopy(opts){
        "\n(⚠️ NÃO REPITA O TÍTULO AQUI — ele já está na arte, repetir faz o colaborador ler a mesma coisa duas vezes. "+
        "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
        "Se for carrossel, no lugar disso use “Lâmina 1 — …” até no máximo “Lâmina 5 — …”, sendo a 5 o CTA.)\n");
+  }
+  if(!soBrief){
   u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   u+=_pxRegrasLegenda(pb,unit,false,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
+  }
   }
 
   const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
@@ -3845,10 +3882,22 @@ async function pxReescreverCopy(opts){
   }
   brief=brief.replace(/^===+\s*/,"").trim();
   leg=leg.replace(/^===+\s*/,"").trim();
-  if(!brief) throw new Error("O Claude respondeu vazio. Tente de novo.");
+  const _tituloOk=(ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"";
+  // AJUSTE PARCIAL: o lado que não foi pedido volta IGUAL ao que já estava no card.
+  if(soLeg){
+    if(!leg&&brief) leg=brief;            // veio tudo num bloco só: é a legenda
+    if(!leg) throw new Error("A IA respondeu vazio. Tente de novo.");
+    return { briefing:String(task.desc||task.description||""),
+             legenda: soStory?"":_pxTextoParaHtml(leg),
+             titulo:"" };
+  }
+  if(!brief) throw new Error("A IA respondeu vazio. Tente de novo.");
+  if(soBrief) return { briefing:_pxTextoParaHtml(brief),
+                       legenda:String(task.caption||""),
+                       titulo:_tituloOk };
   return { briefing:_pxTextoParaHtml(brief),
            legenda: soStory?"":_pxTextoParaHtml(leg),
-           titulo: (ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"" };
+           titulo:_tituloOk };
 }
 
 
@@ -28544,6 +28593,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [lote,setLote]=useState(null);   // {total,feitos,erros,atual,parar}
   const loteRef=useRef(null);
   const [refazerText,setRefazerText]=useState("");
+  // O QUE A IA VAI REESCREVER (15/09/2026): "ambos" | "briefing" | "legenda".
+  // Só aparece no Ajustar copy — nova abordagem e refazer do zero trocam a copy inteira.
+  const [refazerAlvo,setRefazerAlvo]=useState("ambos");
   // Nome de quem escreveu a copy, pro histórico e pras notificações não mentirem
   // quando o provedor for a OpenAI (14/09/2026).
   const _pxNomeIA=function(){
@@ -28861,13 +28913,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }catch(e){ console.warn("[_pxIrmaos] falhou, seguindo sem as copys irmãs:",(e&&e.message)||e); return []; }
   };
 
-  const pedirRefacaoClaude=async(task,tipo,feedback,lote)=>{
+  const pedirRefacaoClaude=async(task,tipo,feedback,lote,alvo)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const txt=String(feedback||"").trim();
     const ehAbord=tipo==="abordagem";
     const ehAjuste=tipo==="ajuste";
-    const rotulo=ehAjuste?"Ajustar copy":(ehAbord?"Testar nova abordagem":"Refazer do zero");
+    const _alvo=(alvo==="briefing"||alvo==="legenda")?alvo:"ambos";
+    const _soB=_alvo==="briefing", _soL=_alvo==="legenda";
+    const rotulo=(ehAjuste?(_soB?"Ajustar briefing":(_soL?"Ajustar legenda":"Ajustar copy")):(ehAbord?"Testar nova abordagem":"Refazer do zero"));
     setErroReescrita("");setReescrevendoId(task.id);
     // o pedido vai pra memória de aprendizado mesmo que a reescrita falhe
     try{
@@ -28890,7 +28944,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       }
     }catch(_){}
     try{
-      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,clienteNome:task.client,irmaos:_pxIrmaos(task),assuntosOcupados:_pxAssuntosCliente(task)});
+      const nova=await pxReescreverCopy({task:task,tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt,alvo:_alvo,clienteNome:task.client,irmaos:_pxIrmaos(task),assuntosOcupados:_pxAssuntosCliente(task)});
       const now=new Date().toISOString();
       if(setTasks)setTasks(p=>p.map(t=>{
         if(t.id!==task.id)return t;
@@ -28907,6 +28961,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           // restaurar essa versão depois trocaria o título pela porta dos fundos.
           titulo:((nova&&nova.titulo&&!_pxEhComemorativa(t))||t.title||""),
           autor:_pxNomeIA(),tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
+          alvo:_alvo,
           lote:!!lote,
           pedidoPor:actor,at:now,atFmt:nowFmt()});
         // NAO cria comentario no card com o pedido pra IA (pedido do Vinicius, 14/09/2026).
@@ -28935,7 +28990,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       if(!lote) pushNotif({type:"ajuste",icon:ehAjuste?"🤖":(ehAbord?"↻":"✎"),title:rotulo,
         body:'"'+task.title+'" foi reescrita pelo '+_pxNomeIA()+(txt?(" — "+txt.slice(0,80)):""),
         user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-      if(!lote&&typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?"Copy ajustada. A anterior ficou guardada.":(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
+      if(!lote&&typeof pixelsToast!=="undefined")pixelsToast.success(ehAjuste?((_soB?"Briefing ajustado":(_soL?"Legenda ajustada":"Copy ajustada"))+". A versão anterior ficou guardada."):(ehAbord?"Nova abordagem pronta. A anterior ficou guardada.":"Copy nova pronta. A anterior ficou guardada."),4200);
     }catch(e){
       const msg=String((e&&e.message)||e||"Não consegui reescrever agora.");
       setErroReescrita(msg);
@@ -29738,7 +29793,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             onMouseLeave={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,padding:"0 14px",minWidth:60,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {queue.length}</span></span>
+          {/* SELETOR FIXO (15/09/2026): a largura era o texto, entao "9 de 12" -> "10 de 12"
+              empurrava as setas e o clique rapido errava o alvo. Agora a caixa reserva o
+              tamanho do MAIOR numero da fila e os digitos sao tabulares (todos com a mesma
+              largura), entao nada se mexe do card 1 ao 182. */}
+          <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,padding:"0 10px",minWidth:36+String(queue.length).length*15,boxSizing:"content-box",display:"inline-block",textAlign:"center",whiteSpace:"nowrap",fontFamily:"'Inter',system-ui,sans-serif",fontVariantNumeric:"tabular-nums",fontFeatureSettings:"'tnum'"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {queue.length}</span></span>
           <button onClick={next} disabled={queue.length<=1}
             style={{background:queue.length<=1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:queue.length<=1?"not-allowed":"pointer",color:queue.length<=1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
             onMouseEnter={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
@@ -30163,6 +30222,30 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
             return t.replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
           };
+          // NEGRITO FEITO A MAO NO CARD (Vinicius, 15/09/2026): o stripHtml apaga TODA tag,
+          // entao o <b>/<strong> que a pessoa aplicou no cartao chegava aqui sem negrito
+          // nenhum - parecia que o card nao tinha salvado. Marcadores invisiveis atravessam
+          // o strip e viram negrito de volta no pxLinhas.
+          const NEG_A="\u0001", NEG_B="\u0002";
+          const _semNeg=(s)=>String(s||"").replace(/[\u0001\u0002]/g,"");
+          // Fecha o negrito no fim de cada linha e reabre na seguinte (o render e por linha),
+          // e descarta marcador solto - negrito que abre e nao fecha nao contamina o resto.
+          const _fechaNeg=(t)=>{
+            let out="",neg=false;
+            const str=String(t||"");
+            for(let i=0;i<str.length;i++){
+              const ch=str[i];
+              if(ch===NEG_A){ if(!neg){neg=true;out+=ch;} continue; }
+              if(ch===NEG_B){ if(neg){neg=false;out+=ch;} continue; }
+              if(ch==="\n"&&neg){ out+=NEG_B+"\n"+NEG_A; continue; }
+              out+=ch;
+            }
+            return neg?(out+NEG_B):out;
+          };
+          const stripHtmlNeg=(html)=>{
+            if(!html)return"";
+            return _fechaNeg(stripHtml(String(html).replace(/<(?:b|strong)(?:\s[^>]*)?>/gi,NEG_A).replace(/<\/(?:b|strong)\s*>/gi,NEG_B)));
+          };
           // Versoes da copy: se o usuario esta olhando uma versao anterior, o briefing e a
           // legenda abaixo mostram ELA. Nada de caixas duplicadas - e a mesma tela.
           const _vs=Array.isArray(current.copyVersoes)?current.copyVersoes:[];
@@ -30191,18 +30274,31 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               <div style={{color:"#15803d",fontSize:isMob?12.5:13.5,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{pxLinhas(texto,"#166534")}</div>
             </div>;
           };
-          const descTxt2=stripHtml(_vAtiva?_vAtiva.briefing:current.desc);
+          const descTxt2=stripHtmlNeg(_vAtiva?_vAtiva.briefing:current.desc);
           // Rotulos do briefing ("• Titulo", "• Texto na arte", "• Roteiro") sempre em NEGRITO.
           // O stripHtml tira as tags, entao o negrito volta aqui, por linha.
-          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|o\s+que\s+precisamos|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
+          const _ehRotulo=(ln)=>/^\s*[•*-]?\s*(t[ií]tulo(\s+do\s+v[ií]deo)?|texto\s+na\s+arte|texto\s+en\s+el\s+arte|pin\s+no\s+mapa|pin\s+en\s+el\s+mapa|frase\s+na\s+arte|frase\s+en\s+el\s+arte|roteiro|gui[oó]n|legenda|leyenda|o\s+que\s+precisamos|lâmina\s*\d+|l[aá]mina\s*\d+)\s*(\([^)]*\))?\s*:?\s*$/i.test(ln);
           // Rótulo sai sempre em CAIXA ALTA — copy antiga guardada em copy_versoes
           // não passou pela migração de 14/09, então normaliza aqui também.
           // `cor` existe pro bloco verde da tradução reusar exatamente este tratamento:
           // negrito SÓ no rótulo ("• TÍTULO", "• TEXTO NA ARTE"), corpo em peso normal.
+          // Quebra a linha nos marcadores de negrito e devolve os pedacos ja formatados.
+          const _pedacos=(ln)=>{
+            const partes=String(ln||"").split(/([\u0001\u0002])/);
+            const out=[]; let neg=false;
+            for(let k=0;k<partes.length;k++){
+              const p=partes[k];
+              if(p===NEG_A){neg=true;continue;}
+              if(p===NEG_B){neg=false;continue;}
+              if(!p) continue;
+              out.push(neg?<strong key={k} style={{fontWeight:800}}>{p}</strong>:<span key={k}>{p}</span>);
+            }
+            return out;
+          };
           const pxLinhas=(txt,cor)=>String(txt||"").split("\n").map((ln,i)=>(
-            _ehRotulo(ln)
-              ? <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{ln.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
-              : (ln.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{ln}</div>)
+            _ehRotulo(_semNeg(ln))
+              ? <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{_semNeg(ln).replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
+              : (_semNeg(ln).trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{_pedacos(ln)}</div>)
           ));
           // Histórico de ajustes
           const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
@@ -30552,22 +30648,22 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               ? {position:"fixed",left:0,right:0,bottom:0,zIndex:60,background:C.card,borderRadius:"16px 16px 0 0",padding:"10px 12px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid "+C.b1,boxShadow:"0 -8px 24px rgba(15,23,42,0.12)",display:"grid",gridTemplateColumns:(tab==="publicacao"||tab==="video")?"1fr 1fr":"1fr",gap:8}
               : {position:"sticky",top:8,zIndex:5,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1,boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
             {tab==="copys"&&(<>
-              {/* APROVAR TEM DOIS CAMINHOS (14/09/2026). O de cima é o normal: a copy
-                  está boa mas falta imagem, então o card para em "Preencher material".
-                  O de baixo é o atalho pra quando o card já tem o material pronto. */}
-              <button onClick={()=>approveCopy(current,"preencher_material")}
-                title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
+              {/* APROVAR TEM DOIS CAMINHOS. O de cima (verde cheio, 15/09/2026) é o
+                  atalho pra quando o card já tem o material pronto — vira demanda direto.
+                  O de baixo para em "Preencher material" até alguém anexar as imagens. */}
+              <button onClick={()=>approveCopy(current,"recebida")}
+                title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
-                Aprovar copy → Preencher material
+                Aprovar e ir direto pra Demanda
               </button>
-              <button onClick={()=>approveCopy(current,"recebida")}
-                title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
+              <button onClick={()=>approveCopy(current,"preencher_material")}
+                title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
-                Aprovar e ir direto pra Demanda
+                Aprovar copy → Preencher material
               </button>
               <button onClick={()=>setAjusteModal(current)}
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
@@ -30577,7 +30673,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               </button>
               {/* (14/09/2026) "Testar nova abordagem" + "Refazer do zero" viraram um só:
                   o que muda é o que você escreve no pedido, não qual botão você clica. */}
-              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"ajuste"});}}
+              <button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"ajuste"});}}
                 title="Você diz o que precisa mudar e o Claude reescreve na hora. A versão atual fica guardada."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed";}}
@@ -30590,7 +30686,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   outro assunto e outro título, não sabia que era só escrever isso na caixa.
                   São ações diferentes e continuam sendo dois botões — ajustar preserva o assunto,
                   refazer descarta tudo. */}
-              <button onClick={()=>{setRefazerText("");setRefazerModal({task:current,tipo:"refazer"});}}
+              <button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"refazer"});}}
                 title="Descarta a copy atual e escreve outra do zero — assunto e título novos. A versão atual fica guardada."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
@@ -31233,7 +31329,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         : _ab
         ? "Ex.: começa com uma pergunta em vez de afirmação; menos técnico; foca no custo e não no processo; puxa mais pro lado emocional…"
         : "Ex.: esse assunto já saiu mês passado; não combina com o momento do cliente; muito genérico…";
-      const _fechar=()=>{setRefazerModal(null);setRefazerText("");};
+      const _fechar=()=>{setRefazerModal(null);setRefazerText("");setRefazerAlvo("ambos");};
       return (<div onClick={e=>{if(e.target===e.currentTarget)_fechar();}}
         style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
         <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
@@ -31250,6 +31346,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             <button onClick={_fechar} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
           </div>
           <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
+            {/* O QUE AJUSTAR (15/09/2026): quase sempre só um dos dois está ruim.
+                Reescrever o par gasta tempo, crédito e mexe no que já estava aprovado. */}
+            {_aj&&(<div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:7}}>O que ajustar</div>
+              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                {[{id:"ambos",l:"Os dois"},{id:"briefing",l:"Só o briefing"},{id:"legenda",l:"Só a legenda"}].map(function(o){
+                  const on=refazerAlvo===o.id;
+                  return <button key={o.id} onClick={()=>setRefazerAlvo(o.id)}
+                    style={{background:on?"#f5f3ff":"#fff",border:"1px solid "+(on?"#7c3aed":C.b1),color:on?"#6d28d9":C.ts,
+                            borderRadius:999,padding:"7px 15px",fontSize:12.5,fontWeight:on?700:600,cursor:"pointer",
+                            fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>{o.l}</button>;
+                })}
+              </div>
+              <div style={{color:C.td,fontSize:11,marginTop:7,lineHeight:1.45}}>
+                {refazerAlvo==="briefing"?"A legenda atual fica intacta.":(refazerAlvo==="legenda"?"O briefing atual fica intacto.":"Briefing e legenda são reescritos juntos.")}
+              </div>
+            </div>)}
             <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{_lbl}</div>
             <textarea value={refazerText} onChange={e=>setRefazerText(e.target.value)}
               autoFocus rows={5} placeholder={_ph}
@@ -31262,9 +31375,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
               <button onClick={_fechar}
                 style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-              <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText);_fechar();}}
+              <button onClick={()=>{pedirRefacaoClaude(refazerModal.task,refazerModal.tipo,refazerText,false,_aj?refazerAlvo:"ambos");_fechar();}}
                 style={{background:_grad,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:_sombra,display:"inline-flex",alignItems:"center",gap:6}}>
-                <Ico n="check" size={13} color="#fff"/>{_aj?"Ajustar":(_ab?"Pedir nova abordagem":"Pedir refação")}
+                <Ico n="check" size={13} color="#fff"/>{_aj?(refazerAlvo==="briefing"?"Ajustar briefing":(refazerAlvo==="legenda"?"Ajustar legenda":"Ajustar os dois")):(_ab?"Pedir nova abordagem":"Pedir refação")}
               </button>
             </div>
           </div>
@@ -40515,6 +40628,15 @@ function pxEhArteComemorativa(t){
   // arte única é o padrão da comemorativa; só não oferece se o card já é vídeo
   return ct!=="video" && ct!=="video_short" && ct!=="reels";
 }
+/* 15/09/2026 — o botão nasceu preso à data comemorativa e o Vinicius abriu um carrossel
+   comum procurando por ele. Qualquer peça escrita pode virar roteiro: o que não faz
+   sentido é oferecer num card que JÁ é vídeo. O tom (homenagem × conteúdo) quem decide
+   é o pxRoteiro60, lendo se o card é comemorativa. */
+function pxPodeVirarRoteiro(t){
+  if(!t) return false;
+  const ct=String(t.contentType||t.content_type||"").toLowerCase();
+  return ct!=="video" && ct!=="video_short" && ct!=="reels" && ct!=="corte" && ct!=="video_feira" && ct!=="video_complexo";
+}
 function _pxTextoPuro(html){
   return String(html||"")
     .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
@@ -40525,6 +40647,9 @@ function _pxTextoPuro(html){
 }
 async function pxRoteiro60(task, clienteNome){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const _ehCom=pxEhArteComemorativa(task);
+  const _ct=String((task&&(task.contentType||task.content_type))||"").toLowerCase();
+  const _ehCarrossel=_ct==="carrossel";
   const brief=_pxTextoPuro(task&&(task.desc||task.description));
   const leg=_pxTextoPuro(task&&task.caption);
   const dt=String((task&&(task.publishDate||task.publish_date))||"").slice(0,10);
@@ -40532,18 +40657,23 @@ async function pxRoteiro60(task, clienteNome){
   const py=String((task&&(task.bioterUnit||task.bioter_unit))||"")==="paraguay";
   const sys="Você escreve roteiros de vídeo curtos para o Instagram de empresas do agronegócio brasileiro. "+
     "Escreve como gente que conhece o campo: direto, concreto, sem jargão de marketing e sem frase de efeito vazia. "+
-    "Data comemorativa é homenagem — o vídeo fala de quem trabalha, não do produto. "+
+    (_ehCom?"Data comemorativa é homenagem — o vídeo fala de quem trabalha, não do produto. "
+          :"Este card NÃO é data comemorativa: é conteúdo. O vídeo explica ou mostra o assunto do card e termina convidando quem assiste a falar com a empresa. ")+
     (py?"ESCREVA TUDO EM ESPANHOL (é a unidade do Paraguai), menos os rótulos das cenas.":"Escreva em português do Brasil.");
   const usr="Cliente: "+(clienteNome||"—")+"\n"+
     "Data da publicação: "+(dtBr||"—")+"\n"+
     "Card: "+((task&&task.title)||"—")+"\n\n"+
-    "TEXTO QUE IRIA NA ARTE:\n"+(brief||"(vazio)")+"\n\n"+
+    (_ehCarrossel?"BRIEFING DO CARROSSEL (cada lâmina é um bloco do assunto — use a ordem delas como a ordem das cenas):\n"
+                 :"TEXTO QUE IRIA NA ARTE:\n")+(brief||"(vazio)")+"\n\n"+
     "LEGENDA APROVADA:\n"+(leg||"(vazia)")+"\n\n"+
     "Transforme isso num ROTEIRO DE VÍDEO DE 60 SEGUNDOS para mandarmos ao cliente. Regras:\n"+
     "- 5 a 6 cenas, somando ~60s, com o tempo de cada uma.\n"+
     "- Em cada cena diga O QUE APARECE na imagem e a FALA (ou o texto na tela).\n"+
-    "- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca.\n"+
-    "- A última cena é a assinatura da marca.\n"+
+    (_ehCom?"- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca.\n"
+           :"- Mantenha o assunto e os fatos do briefing: o vídeo é a mesma ideia contada em imagem e fala, não um texto novo.\n"+
+            "- A fala é de quem conhece o campo: direto e concreto, sem jargão de marketing.\n")+
+    (_ehCom?"- A última cena é a assinatura da marca.\n"
+           :"- A última cena é o CTA: o convite pra falar com a empresa, do jeito que a legenda faz.\n")+
     "- Não invente número, prazo, garantia nem dado técnico que não esteja no material acima.\n\n"+
     "Formato exato da resposta (sem introdução, sem comentário no fim):\n"+
     "Cena 1 (0–10s) — o que aparece\n"+
@@ -43826,9 +43956,9 @@ function _cardPodeSerResp(u){
                    Legenda; quem divide a largura em duas colunas é a coluna, não o botão. Em tela
                    estreita quebram um sobre o outro sozinhos. Com um botão só, fica como era. */}
               <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.px-ia-row>div{flex:1 1 230px;min-width:0;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start}"}</style>
-              <div className={(pxEhArteComemorativa(task)&&canEdit)?"px-ia-row":undefined} style={(pxEhArteComemorativa(task)&&canEdit)?{marginBottom:10}:undefined}>
-              {/* ── Arte de data comemorativa → roteiro de vídeo de 60s pra mandar ao cliente ── */}
-              {pxEhArteComemorativa(task)&&(<div style={{marginBottom:10}}>
+              <div className={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?"px-ia-row":undefined} style={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?{marginBottom:10}:undefined}>
+              {/* ── Qualquer peça escrita (arte, carrossel, foto) → roteiro de vídeo de 60s ── */}
+              {pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&(<div style={{marginBottom:10}}>
                 <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
                   onClick={async function(){
                     setRoteiroSt({loading:true});
@@ -43839,12 +43969,12 @@ function _cardPodeSerResp(u){
                       setRoteiroSt({texto:txt});
                     }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
                   }}
-                  title="Usa o texto da arte e a legenda pra escrever um roteiro de vídeo de 60 segundos."
+                  title="Usa o briefing e a legenda deste card pra escrever um roteiro de vídeo de 60 segundos."
                   style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:(roteiroSt&&roteiroSt.loading)?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",opacity:(roteiroSt&&roteiroSt.loading)?.7:1}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
                   {(roteiroSt&&roteiroSt.loading)?"Escrevendo o roteiro…":"Transformar em roteiro de vídeo"}
                 </button>
-                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir do texto da arte e da legenda — pra mandar pro cliente decidir.</div>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir deste briefing e da legenda — dá pra copiar, colar embaixo do briefing ou virar o card em vídeo.</div>
               </div>)}
               {canEdit&&(function(){
                 // Sem briefing ele gera, com briefing ele ajusta. Pra recomeçar do
@@ -52979,7 +53109,11 @@ export default function AgencyOS(){
           </button>
         </div>
       </div>}
-      <main style={{flex:1,overflowY:"auto",padding:isMob?"16px 14px 90px":"24px",WebkitOverflowScrolling:"touch",scrollBehavior:"smooth"}}>
+      {/* scrollbarGutter:"stable" (15/09/2026): a barra de rolagem aparece so quando a
+          pagina passa da altura da tela, e ao aparecer empurrava 4px tudo que e
+          centralizado - o seletor de cards da Avaliacao ia pra esquerda e voltava a cada
+          card. Reservando a calha, a largura util nao muda mais. */}
+      <main style={{flex:1,overflowY:"auto",scrollbarGutter:"stable",padding:isMob?"16px 14px 90px":"24px",WebkitOverflowScrolling:"touch",scrollBehavior:"smooth"}}>
         {renderPage()}
       </main>
       {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.92)",borderTop:`1px solid ${C.b1}`,display:"flex",padding:"8px 4px env(safe-area-inset-bottom,10px)",flexShrink:0,zIndex:30,boxShadow:"0 -4px 20px rgba(0,0,0,0.08)",backdropFilter:"saturate(180%) blur(20px)",WebkitBackdropFilter:"saturate(180%) blur(20px)"}}>
