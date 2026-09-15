@@ -5375,6 +5375,28 @@ const BIOTER_UNITS = [
   { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Uberlândia" },
 ];
 
+/* ─── Unidades Bioter de um card ──────────────────────────
+   `task.bioterUnit` guarda TRÊS formatos:
+     "grupo"            → Grupo Bioter  (todas as unidades, Brasil + Paraguay)
+     "brasil"           → Bioter Brasil (todas do Brasil, sem Paraguay)
+     "castro,toledo"    → uma ou mais unidades individuais
+   Quem só procurava o id em BIOTER_UNITS não achava "grupo"/"brasil" e
+   não mostrava NADA — era o caso do topo da Avaliação (15/09/2026).
+   Devolve [{id,label,hint,color,grupo}] na ordem em que foi marcado. */
+function pxBioterUnidades(raw){
+  var _ids=String(raw||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+  var _units=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS:[];
+  var _out=[];
+  _ids.forEach(function(id){
+    if(id==="grupo"){ _out.push({id:"grupo",label:"Grupo Bioter",hint:"Todas as unidades (Brasil + Paraguay)",color:"#166534",grupo:"todas"}); return; }
+    if(id==="brasil"){ _out.push({id:"brasil",label:"Bioter Brasil",hint:"Todas as unidades do Brasil (exceto Paraguay)",color:"#166534",grupo:"brasil"}); return; }
+    var u=null;
+    for(var i=0;i<_units.length;i++){ if(_units[i].id===id){ u=_units[i]; break; } }
+    if(u) _out.push({id:u.id,label:u.pickerLabel||u.label,hint:u.label,color:u.color||"#166534",grupo:""});
+  });
+  return _out;
+}
+
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
 
 /* ─── BRANCHES BASE ─────────────────────── */
@@ -29857,24 +29879,27 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#16a34a",bg:"#dcfce7"});
             // prioridade removida da avaliação a pedido do Vinicius (13/09/2026)
-            const bioterSel=(cl&&cl.id==="bioter"&&current.bioterUnit)?String(current.bioterUnit).split(",").map(s=>s.trim()).filter(Boolean):[];
+            // Unidade Bioter no topo: "grupo"/"brasil" tambem viram chip (pxBioterUnidades, 00_clientes_data.jsx)
+            const _ehBioter=!!(cl&&cl.id==="bioter");
+            const bioterSel=(_ehBioter&&typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
+            const bioterFalta=_ehBioter&&bioterSel.length===0;
             const assigneeIds=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
             const assigneeUsers=assigneeIds.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
-            const hasAnyChip=cl||metaTags.length>0||bioterSel.length>0||assigneeUsers.length>0;
+            const hasAnyChip=cl||metaTags.length>0||bioterSel.length>0||bioterFalta||assigneeUsers.length>0;
             if(!hasAnyChip)return null;
             return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               {/* Linha 1: cliente + unidades + responsáveis */}
-              {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              {(cl||bioterSel.length>0||bioterFalta||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center"}}>
                   {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:26,maxWidth:110,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:13,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
                 </div>)}
-                {bioterSel.map(uid=>{
-                  const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
-                  if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
-                    {u.pickerLabel||u.label}
-                  </span>);
-                })}
+                {bioterSel.map(u=>(<span key={u.id} title={u.hint} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <Ico n="map-pin" size={12} color={u.color}/>{u.label}
+                  {u.grupo&&<span style={{background:u.color,color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{u.grupo}</span>}
+                </span>))}
+                {bioterFalta&&(<span title="Card da Bioter sem unidade marcada — abra o card e marque a unidade" style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <Ico n="map-pin" size={12} color="#92400e"/>Unidade não definida
+                </span>)}
                 {assigneeUsers.length>0&&(<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"3px 12px 3px 4px"}}>
                   <div style={{display:"flex",alignItems:"center"}}>
                     {assigneeUsers.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
@@ -30336,16 +30361,16 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:11,padding:"7px 17px",display:"flex",alignItems:"center"}}>
                 {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:42,maxWidth:165,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:19,fontWeight:700}}>{cl.abbr}</span>)}
               </div>)}
-              {/* Unidades Bioter — se cliente=bioter e tem bioterUnit setado */}
-              {cl&&cl.id==="bioter"&&current.bioterUnit&&(()=>{
-                const sel=String(current.bioterUnit||"").split(",").map(s=>s.trim()).filter(Boolean);
-                return sel.map(uid=>{
-                  const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
-                  if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
-                    {u.pickerLabel||u.label}
-                  </span>);
-                });
+              {/* Unidades Bioter — "grupo"/"brasil" também viram chip (pxBioterUnidades) */}
+              {cl&&cl.id==="bioter"&&(()=>{
+                const sel=(typeof pxBioterUnidades==="function")?pxBioterUnidades(current.bioterUnit):[];
+                if(sel.length===0)return(<span title="Card da Bioter sem unidade marcada" style={{background:"#fef3c7",color:"#92400e",border:"1px solid #fcd34d",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <Ico n="map-pin" size={13} color="#92400e"/>Unidade não definida
+                </span>);
+                return sel.map(u=>(<span key={u.id} title={u.hint} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+                  <Ico n="map-pin" size={13} color={u.color}/>{u.label}
+                  {u.grupo&&<span style={{background:u.color,color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{u.grupo}</span>}
+                </span>));
               })()}
               {/* Designers/Editores designados (todos do array assignees) */}
               {(()=>{
