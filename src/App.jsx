@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 40/40 | Nao editar diretamente
+// Modulos: 41/41 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -687,6 +687,7 @@ const SYNC_KEY_PATTERNS = [
   /^pixels-planejamento-entries$/,
   /^pixels-team-data$/,
   /^pixels-nps-respondent-/,
+  /^pixels-produtos-v1$/,   // Criador de produtos (Comercial)
 ];
 function _appDataShouldSync(key){
   if(!key||typeof key!=="string")return false;
@@ -68648,6 +68649,7 @@ function PageComercial({isMob, perms, effectiveUser}){
 
   const SUBTABS=[
     {id:"portfolio", label:"Portfólio"},
+    {id:"produtos",  label:"Criador de produtos"},
     {id:"dashboard", label:"Dashboard"},
     {id:"prospects", label:"Kanban de prospects"},
     {id:"oportun",   label:"Oportunidades / upsell"},
@@ -68689,6 +68691,7 @@ function PageComercial({isMob, perms, effectiveUser}){
     {tab==="followups"&&<ComFollowUps store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="scripts"&&<ComScripts store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="portfolio"&&typeof PagePortfolio==="function"&&<PagePortfolio isMob={isMob}/>}
+    {tab==="produtos"&&typeof PageProdutos==="function"&&<PageProdutos isMob={isMob} canEdit={canEdit} isSocio={isSocio}/>}
     {tab==="vendas"&&isSocio&&<ComVendasPontuais canEdit={canEdit&&isSocio} isMob={isMob}/>}
     {tab==="contratos"&&isSocio&&<ComContratos canEdit={canEdit&&isSocio}/>}
     {tab==="historico"&&<ComHistorico store={store}/>}
@@ -72015,6 +72018,1084 @@ function ContratoEventoModal({client, editing, onClose, onSaved}){
           style={{background:saving?"#94a3b8":cor,border:"none",borderRadius:9,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"wait":"pointer",fontFamily:"inherit"}}>
           {saving?"Salvando…":(editing?"Atualizar":"Registrar")}
         </button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ======= 18b_produtos.jsx =======
+// Comercial › Criador de produtos — produtizar serviços da Pixels.
+//
+// "Antes de vender, precisamos saber exatamente o que estamos vendendo,
+//  quanto custa entregar e quanto sobra."
+//
+// Mesmo padrão visual da Calculadora do Comercial (22_portfolio.jsx):
+// roxo #9F43F6, Inter, trilho de etapas, cabeçalho de módulo com ícone
+// grande, controles −/+, resumo sticky à direita. Ícones: _PxIco/_PxIcoBox.
+//
+// Persistência: localStorage `pixels-produtos-v1`, espelhado no Supabase
+// (app_data) pelo interceptor de 00_clientes_data — o mesmo caminho do
+// `pixels-comercial-v1`. Zero tabela nova.
+//
+// Depende de: _PxIco, _PxIcoBox, _calcFmtBRL (22_portfolio),
+// TEAM, CURRENT_USER, pixelsToast, pixelsConfirm, pixelsPrompt (00_clientes_data).
+
+const PROD_STORE_KEY = "pixels-produtos-v1";
+
+/* ─── Tokens (copiados da Calculadora, pra ficar idêntico) ──────────── */
+const _PRD = {
+  PX:"#9F43F6", PX_DK:"#7c3aed", PX_BG:"#f5f0ff", PX_BD:"#e9d8fe",
+  INK:"#0f172a", MUTE:"#64748b", SOFT:"#94a3b8", BORD:"#e5e0f2",
+  BG_INNER:"#fbfaff", OK:"#16a34a", OK_BG:"#dcfce7", WARN:"#d97706", WARN_BG:"#fef3c7", BAD:"#dc2626", BAD_BG:"#fee2e2",
+  FF:"'Inter',system-ui,-apple-system,sans-serif",
+};
+
+const PROD_TIPOS = [
+  {id:"consultoria",   label:"Consultoria"},
+  {id:"diagnostico",   label:"Diagnóstico"},
+  {id:"estruturacao",  label:"Estruturação"},
+  {id:"implementacao", label:"Implementação"},
+  {id:"recorrencia",   label:"Recorrência"},
+  {id:"projeto",       label:"Projeto fechado"},
+  {id:"treinamento",   label:"Treinamento"},
+  {id:"outro",         label:"Outro"},
+];
+const PROD_STATUS = [
+  {id:"rascunho",      label:"Rascunho",       cor:"#64748b", bg:"#f1f5f9"},
+  {id:"validacao",     label:"Em validação",   cor:"#d97706", bg:"#fef3c7"},
+  {id:"ativo",         label:"Ativo",          cor:"#16a34a", bg:"#dcfce7"},
+  {id:"pausado",       label:"Pausado",        cor:"#7c3aed", bg:"#f5f0ff"},
+  {id:"descontinuado", label:"Descontinuado",  cor:"#dc2626", bg:"#fee2e2"},
+];
+const PROD_TAMANHOS  = ["Micro","Pequena","Média","Grande"];
+const PROD_DEPEND    = [{id:"baixa",label:"Baixa",peso:0},{id:"media",label:"Média",peso:0.5},{id:"alta",label:"Alta",peso:1}];
+const PROD_COMPLEX   = [{id:"baixa",label:"Baixa",peso:0},{id:"media",label:"Média",peso:0.5},{id:"alta",label:"Alta",peso:1}];
+const PROD_FORMATOS  = ["Documento","Dashboard","Apresentação","Planilha","Reunião","Vídeo","Treinamento","Outro"];
+const PROD_CUSTO_EXT = ["Terceirização","Freelancer","Ferramenta","Deslocamento","Hospedagem","Produção","Materiais","Outros"];
+const PROD_CENARIOS  = [1,3,5,10];
+
+/* ─── Parâmetros padrão (editáveis em Parâmetros, só sócio) ────────────
+   Custo-hora não existe cadastrado no sistema — são ESTIMATIVAS iniciais
+   (Vinicius, 15/09/2026). A Ficha avisa enquanto for padrão. */
+function _prodConfigDefault(){
+  return {
+    funcoes:[
+      {id:"socio",      label:"Sócio / Gestão",   custoHora:150},
+      {id:"estrategia", label:"Estratégia",       custoHora:90},
+      {id:"midia",      label:"Gestão de mídia",  custoHora:80},
+      {id:"video",      label:"Edição de vídeo",  custoHora:70},
+      {id:"design",     label:"Design",           custoHora:60},
+      {id:"estagio",    label:"Estagiária",       custoHora:30},
+    ],
+    custoHoraEditado:false,
+    impostoPct:8, impostoOrigem:"padrão",
+    comissaoPct:10, taxaPct:2, outrosVarPct:0,
+    margemMinPct:50, margemDesejadaPct:65,
+    horasProdutivasMes:120,
+  };
+}
+
+/* Imposto sobre a receita, lido da Projeção financeira (app_data
+   `projecao_financeira` › impostos › "Simples Nacional / ISS (8%)").
+   O INSS da folha fica de fora — é custo de pessoal, já está no custo-hora. */
+function _prodImpostoDoFinanceiro(){
+  const sb=window._sb; if(!sb) return Promise.resolve(null);
+  return sb.from("app_data").select("value").eq("key","projecao_financeira").maybeSingle().then(function(r){
+    try{
+      const arr=(r&&r.data&&r.data.value&&r.data.value.impostos)||[];
+      for(let i=0;i<arr.length;i++){
+        const l=String(arr[i].l||"");
+        if(/simples|iss|faturamento|receita/i.test(l)){
+          const m=l.match(/(\d+(?:[.,]\d+)?)\s*%/);
+          if(m) return {pct:parseFloat(m[1].replace(",",".")), origem:l};
+        }
+      }
+    }catch(_){}
+    return null;
+  }).catch(function(){ return null; });
+}
+
+function _prodUid(p){ return (p||"p")+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function _prodFmt(n){ return (typeof _calcFmtBRL==="function")?_calcFmtBRL(Math.round(n||0)):("R$ "+Math.round(n||0).toLocaleString("pt-BR")); }
+function _prodPct(x, d){ const v=Number(x||0)*100; return v.toLocaleString("pt-BR",{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d})+"%"; }
+function _prodHoje(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function _prodDataBR(iso){ const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m?(m[3]+"/"+m[2]+"/"+m[1]):String(iso||""); }
+function _prodNum(v){ const n=parseFloat(String(v==null?"":v).replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; }
+
+/* ─── Produto em branco ───────────────────────────────────────────────── */
+function _prodNovo(){
+  return {
+    id:_prodUid("prod-"), versao:1, status:"rascunho",
+    criadoEm:_prodHoje(), atualizadoEm:_prodHoje(),
+    ideia:{ nome:"", categoria:"", tipo:"projeto", problema:"", resultado:"", descricao:"",
+            clienteIdeal:"", segmento:"", tamanho:"Pequena", responsavel:"" },
+    fases:[], entregaveis:[], custosExternos:[],
+    preco:{ modo:"preco", valor:0, margemAlvoPct:65 },
+    versoes:[],
+  };
+}
+function _prodFaseNova(n){
+  return { id:_prodUid("f-"), nome:"Fase "+String(n).padStart(2,"0"), objetivo:"", descricao:"",
+           responsavel:"", prazoDias:5, reunioes:0, horas:{}, dependencia:"media", ferramentas:"" };
+}
+function _prodEntregavelNovo(faseId){
+  return { id:_prodUid("e-"), nome:"", descricao:"", formato:"Documento", faseId:faseId||"",
+           responsavel:"", horas:0, reutilizavel:false, template:false, complexidade:"media" };
+}
+
+/* ─── ACELERADOR DIGITAL — produto demonstrativo (15/09/2026) ─────────
+   Projeto fechado de diagnóstico e estruturação, começo-meio-fim. Os números
+   são ponto de partida, não definitivos. Inspirado na lógica de um produto de
+   estruturação estratégica (diagnóstico → análise → plano → apresentação),
+   adaptado à Pixels — sem copiar metodologia de terceiros. */
+function _prodSeedAcelerador(){
+  const p=_prodNovo();
+  p.id="prod-acelerador-digital"; p.status="validacao";
+  p.ideia={
+    nome:"Acelerador Digital", categoria:"Estruturação", tipo:"projeto",
+    problema:"A empresa já vende e tem alguma estrutura comercial e digital, mas não sabe onde está perdendo oportunidade — CRM sem uso, funil sem medição, tráfego e redes sem ligação com a venda.",
+    resultado:"Um mapa claro dos gargalos comerciais e digitais e um plano de ação priorizado em 30, 60 e 90 dias, com o que fazer primeiro e por quê.",
+    descricao:"Projeto fechado de 30 dias que analisa toda a operação comercial e digital — CRM, processo comercial, funil, atendimento, marketing digital, tráfego, redes, site, posicionamento, conversão, follow-up e indicadores — e entrega um plano de crescimento integrado.",
+    clienteIdeal:"Empresas que já vendem e possuem alguma estrutura comercial e digital, mas não conseguem identificar onde estão perdendo oportunidades.",
+    segmento:"Agro, indústria e serviços B2B", tamanho:"Média", responsavel:"vinicius",
+  };
+  const F=function(nome,objetivo,descricao,prazo,reunioes,horas,dep,ferr){ const f=_prodFaseNova(1); f.nome=nome; f.objetivo=objetivo; f.descricao=descricao; f.prazoDias=prazo; f.reunioes=reunioes; f.horas=horas; f.dependencia=dep; f.ferramentas=ferr||""; f.responsavel="estrategia"; return f; };
+  p.fases=[
+    F("Imersão","Entender o negócio e reunir tudo que será analisado.","Reunião inicial, coleta de dados, acessos às plataformas e questionário respondido pelo cliente.",5,1,{socio:2,estrategia:3,midia:1},"alta","Google Forms, Drive"),
+    F("Diagnóstico","Olhar cada frente com critério.","CRM, processo comercial, marketing digital, tráfego pago, redes sociais, site e funil — cada um com seu diagnóstico.",10,0,{estrategia:5,midia:4,design:1,socio:1},"media","Meta Ads, Google Ads, CRM do cliente, Analytics"),
+    F("Análise","Transformar diagnóstico em prioridade.","Cruzamento das frentes: gargalos, oportunidades, perdas no funil e pontos prioritários.",5,0,{estrategia:3,socio:3},"baixa","Planilha de análise"),
+    F("Plano","Dizer o que fazer primeiro.","Plano de ação priorizado, separado em ações imediatas, 30, 60 e 90 dias.",5,0,{estrategia:3,socio:2},"baixa","Template de plano de ação"),
+    F("Entrega","Apresentar e fechar o ciclo.","Apresentação executiva, dashboard/documento, plano de ação e reunião estratégica de encerramento.",5,1,{socio:2,estrategia:2,design:2},"media","Apresentação, dashboard"),
+  ];
+  const fx=p.fases;
+  const E=function(nome,desc,formato,fase,resp,h,reut,tpl,cx){ const e=_prodEntregavelNovo(fase.id); e.nome=nome; e.descricao=desc; e.formato=formato; e.responsavel=resp; e.horas=h; e.reutilizavel=reut; e.template=tpl; e.complexidade=cx; return e; };
+  p.entregaveis=[
+    E("Diagnóstico Comercial","Processo, cadência, follow-up e conversão do time comercial.","Documento",fx[1],"estrategia",4,true,true,"media"),
+    E("Diagnóstico de CRM","Uso, campos, pipeline e o que não está sendo registrado.","Documento",fx[1],"estrategia",2,true,true,"baixa"),
+    E("Análise de Marketing Digital","Presença, site, posicionamento e conversão.","Documento",fx[1],"midia",2,true,true,"media"),
+    E("Análise de Redes Sociais","Conteúdo, frequência e ligação com a venda.","Documento",fx[1],"midia",1,true,true,"baixa"),
+    E("Análise de Tráfego Pago","Contas, campanhas, custo por resultado e desperdício.","Dashboard",fx[1],"midia",2,true,true,"media"),
+    E("Mapeamento do Funil","Do primeiro contato ao fechamento: onde vaza.","Dashboard",fx[2],"estrategia",3,true,true,"media"),
+    E("Identificação de gargalos","Lista priorizada do que trava o crescimento.","Documento",fx[2],"socio",2,false,false,"alta"),
+    E("Plano de Ação 30·60·90","O que fazer, quem faz, quando — em três ondas.","Documento",fx[3],"estrategia",4,true,true,"media"),
+    E("Apresentação executiva","Leitura executiva do diagnóstico e do plano.","Apresentação",fx[4],"socio",3,true,true,"media"),
+    E("Reunião estratégica","Apresentação e decisão dos próximos passos com a diretoria.","Reunião",fx[4],"socio",2,false,false,"baixa"),
+  ];
+  p.custosExternos=[];
+  p.preco={ modo:"preco", valor:12000, margemAlvoPct:65 };
+  p.versoes=[{n:1,data:_prodHoje(),alteracoes:"Produto demonstrativo criado pelo Criador de produtos.",preco:12000,csp:null,mc:null,mcPct:null}];
+  return p;
+}
+
+/* ─── Store (localStorage + espelho no Supabase via interceptor) ─────── */
+function _prodStoreInicial(){ return {config:_prodConfigDefault(), produtos:[_prodSeedAcelerador()], seeded:true}; }
+function _prodLoad(){
+  try{
+    const raw=localStorage.getItem(PROD_STORE_KEY);
+    if(!raw) return _prodStoreInicial();
+    const p=JSON.parse(raw)||{};
+    const cfg=Object.assign(_prodConfigDefault(), p.config||{});
+    if(!Array.isArray(cfg.funcoes)||!cfg.funcoes.length) cfg.funcoes=_prodConfigDefault().funcoes;
+    const out={config:cfg, produtos:Array.isArray(p.produtos)?p.produtos:[], seeded:!!p.seeded};
+    if(!out.seeded && !out.produtos.length){ out.produtos=[_prodSeedAcelerador()]; out.seeded=true; }
+    return out;
+  }catch(e){ console.warn("[produtos] load falhou:",e&&e.message); return _prodStoreInicial(); }
+}
+function _prodSave(s){ try{ localStorage.setItem(PROD_STORE_KEY, JSON.stringify(s)); }catch(e){ console.warn("[produtos] save falhou:",e&&e.message); } }
+function _prodPerguntarVersao(){
+  if(typeof pixelsPrompt==="function") return pixelsPrompt("O que mudou nesta versão?",{placeholder:"Ex.: subi o preço pra R$ 14 mil e tirei a fase de análise",okText:"Salvar versão",cancelText:"Cancelar"});
+  return Promise.resolve(window.prompt("O que mudou nesta versão?",""));
+}
+function useProdutosStore(){
+  const [store,setStore]=useState(_prodLoad);
+  // Quando o Supabase hidrata o localStorage (outro PC salvou), recarrega.
+  useEffect(function(){
+    function _re(){ setStore(_prodLoad()); }
+    window.addEventListener("pixels:appdata-hydrated",_re);
+    return function(){ window.removeEventListener("pixels:appdata-hydrated",_re); };
+  },[]);
+  const update=useCallback(function(fn){
+    setStore(function(prev){ const next=typeof fn==="function"?fn(prev):fn; _prodSave(next); return next; });
+  },[]);
+  return {store:store, update:update};
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CÁLCULO — função pura, testável no node. Tudo que a tela mostra sai daqui.
+   ═══════════════════════════════════════════════════════════════════════ */
+function prodCalc(p, cfg){
+  cfg=cfg||_prodConfigDefault();
+  const funcoes=cfg.funcoes||[];
+  const custoDe=function(fid){ const f=funcoes.find(function(x){return x.id===fid;}); return f?Number(f.custoHora||0):0; };
+  // Horas por função — vivem nas FASES (fonte do CSP). As horas dos entregáveis
+  // são informativas; se divergirem muito, a tela avisa em vez de contar duas vezes.
+  const horasPorFuncao={};
+  let reunioes=0, duracaoDias=0;
+  (p.fases||[]).forEach(function(f){
+    reunioes+=Number(f.reunioes||0); duracaoDias+=Number(f.prazoDias||0);
+    Object.keys(f.horas||{}).forEach(function(k){ horasPorFuncao[k]=(horasPorFuncao[k]||0)+Number(f.horas[k]||0); });
+  });
+  const horasTotal=Object.keys(horasPorFuncao).reduce(function(s,k){return s+horasPorFuncao[k];},0);
+  const horasEntregaveis=(p.entregaveis||[]).reduce(function(s,e){return s+Number(e.horas||0);},0);
+  const pessoas=Object.keys(horasPorFuncao).filter(function(k){return horasPorFuncao[k]>0;});
+  const cspMO=Object.keys(horasPorFuncao).reduce(function(s,k){return s+horasPorFuncao[k]*custoDe(k);},0);
+  const cspExt=(p.custosExternos||[]).reduce(function(s,c){return s+Number(c.valor||0);},0);
+  const csp=cspMO+cspExt;
+  const dedPct=(Number(cfg.impostoPct||0)+Number(cfg.comissaoPct||0)+Number(cfg.taxaPct||0)+Number(cfg.outrosVarPct||0))/100;
+  const margemMin=Number(cfg.margemMinPct||0)/100, margemDes=Number(cfg.margemDesejadaPct||0)/100;
+  const precoPara=function(m){ const d=1-m-dedPct; return d>0?csp/d:0; };
+  const precoMin=precoPara(margemMin), precoAlvo=precoPara(margemDes);
+  let preco=Number((p.preco&&p.preco.valor)||0);
+  if(p.preco&&p.preco.modo==="margem") preco=precoPara(Number(p.preco.margemAlvoPct||0)/100);
+  const deducoes=preco*dedPct;
+  const impostos=preco*Number(cfg.impostoPct||0)/100, comissao=preco*Number(cfg.comissaoPct||0)/100;
+  const taxas=preco*Number(cfg.taxaPct||0)/100, outrosVar=preco*Number(cfg.outrosVarPct||0)/100;
+  const lucroBruto=preco-csp, margemBruta=preco>0?lucroBruto/preco:0;
+  const mc=preco-deducoes-csp, mcPct=preco>0?mc/preco:0;
+  const rsHora=horasTotal>0?preco/horasTotal:0, mcHora=horasTotal>0?mc/horasTotal:0;
+  // ── Índices 0–100, simples de propósito ──
+  const ents=p.entregaveis||[]; const nE=ents.length||1;
+  const pctTemplate=ents.filter(function(e){return e.template;}).length/nE;
+  const pctReut=ents.filter(function(e){return e.reutilizavel;}).length/nE;
+  const pctCxBaixa=ents.filter(function(e){return e.complexidade==="baixa";}).length/nE;
+  const nPersonal=ents.filter(function(e){return !e.reutilizavel;}).length;
+  const padronizacao=Math.round(100*(pctTemplate*0.45+pctReut*0.35+pctCxBaixa*0.20));
+  const nF=(p.fases||[]).length||1;
+  const depSoma=(p.fases||[]).reduce(function(s,f){ const d=PROD_DEPEND.find(function(x){return x.id===f.dependencia;}); return s+(d?d.peso:0.5); },0);
+  const dependencia=Math.round(100*depSoma/nF);
+  const complexidade=Math.round(100*Math.min(1, 0.35*Math.min(horasTotal/80,1)+0.25*Math.min(pessoas.length/5,1)+0.20*Math.min(reunioes/8,1)+0.20*(nPersonal/nE)));
+  const escala=Math.round(padronizacao*0.4+(100-dependencia)*0.3+(100-complexidade)*0.3);
+  // ── Capacidade ──
+  const mesesEntrega=Math.max(1, Math.round(duracaoDias/30)||1);
+  const hProd=Math.max(1, Number(cfg.horasProdutivasMes||120));
+  let simultaneos=Infinity; const porFuncaoMes={};
+  pessoas.forEach(function(k){ const hm=horasPorFuncao[k]/mesesEntrega; porFuncaoMes[k]=hm; if(hm>0) simultaneos=Math.min(simultaneos, Math.floor(hProd/hm)); });
+  if(!isFinite(simultaneos)) simultaneos=0;
+  const cenarios=PROD_CENARIOS.map(function(n){
+    const equipe={}; let pessoasTotal=0;
+    pessoas.forEach(function(k){ const need=Math.ceil((horasPorFuncao[k]*n/mesesEntrega)/hProd); equipe[k]=need; pessoasTotal+=need; });
+    return {n:n, faturamento:preco*n, csp:csp*n, mc:mc*n, horas:horasTotal*n, horasMes:horasTotal*n/mesesEntrega, equipe:equipe, pessoasTotal:pessoasTotal};
+  });
+  return {
+    horasPorFuncao:horasPorFuncao, horasTotal:horasTotal, horasEntregaveis:horasEntregaveis, pessoas:pessoas, reunioes:reunioes, duracaoDias:duracaoDias,
+    cspMO:cspMO, cspExt:cspExt, csp:csp, dedPct:dedPct, preco:preco, deducoes:deducoes, impostos:impostos, comissao:comissao, taxas:taxas, outrosVar:outrosVar,
+    lucroBruto:lucroBruto, margemBruta:margemBruta, mc:mc, mcPct:mcPct, precoMin:precoMin, precoAlvo:precoAlvo, rsHora:rsHora, mcHora:mcHora,
+    indices:{padronizacao:padronizacao, dependencia:dependencia, complexidade:complexidade, escala:escala, pctTemplate:pctTemplate, pctReut:pctReut, nPersonal:nPersonal},
+    capacidade:{mesesEntrega:mesesEntrega, simultaneos:simultaneos, porFuncaoMes:porFuncaoMes, horasProdutivasMes:hProd},
+    cenarios:cenarios,
+    // sinais pra decisão (não é veredito — a tela mostra os indicadores)
+    sinais:{ margemOk:mcPct>=margemMin, margemDesejadaOk:mcPct>=margemDes, precoAcimaMin:preco>=precoMin, temFases:(p.fases||[]).length>0, temEntregaveis:ents.length>0, temPreco:preco>0, temHoras:horasTotal>0 },
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UI — peças pequenas, no estilo da Calculadora
+   ═══════════════════════════════════════════════════════════════════════ */
+function _PrdRotulo({children, extra}){ return <div style={{color:_PRD.SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6,display:"flex",justifyContent:"space-between",gap:8}}><span>{children}</span>{extra&&<span style={{color:_PRD.PX_DK,textTransform:"none",letterSpacing:0,fontWeight:700}}>{extra}</span>}</div>; }
+function _PrdInput({value,onChange,placeholder,type,disabled,style,mono,align}){
+  return <input type={type||"text"} value={value==null?"":value} placeholder={placeholder||""} disabled={!!disabled}
+    onChange={function(e){ onChange(e.target.value); }}
+    style={Object.assign({width:"100%",background:disabled?"#f8fafc":"#fff",border:"1px solid "+_PRD.BORD,borderRadius:10,padding:"9px 12px",color:_PRD.INK,fontSize:13,fontWeight:500,outline:"none",fontFamily:_PRD.FF,boxSizing:"border-box",textAlign:align||"left",fontFeatureSettings:mono?"'tnum'":undefined},style||{})}
+    onFocus={function(e){e.currentTarget.style.borderColor=_PRD.PX;e.currentTarget.style.boxShadow="0 0 0 3px rgba(159,67,246,.12)";}}
+    onBlur={function(e){e.currentTarget.style.borderColor=_PRD.BORD;e.currentTarget.style.boxShadow="none";}}/>;
+}
+function _PrdTextarea({value,onChange,placeholder,rows}){
+  return <textarea value={value||""} placeholder={placeholder||""} rows={rows||3} onChange={function(e){ onChange(e.target.value); }}
+    style={{width:"100%",background:"#fff",border:"1px solid "+_PRD.BORD,borderRadius:10,padding:"9px 12px",color:_PRD.INK,fontSize:13,fontWeight:500,outline:"none",fontFamily:_PRD.FF,boxSizing:"border-box",resize:"vertical",lineHeight:1.5}}
+    onFocus={function(e){e.currentTarget.style.borderColor=_PRD.PX;e.currentTarget.style.boxShadow="0 0 0 3px rgba(159,67,246,.12)";}}
+    onBlur={function(e){e.currentTarget.style.borderColor=_PRD.BORD;e.currentTarget.style.boxShadow="none";}}/>;
+}
+function _PrdSelect({value,onChange,options,placeholder}){
+  return <select value={value||""} onChange={function(e){ onChange(e.target.value); }}
+    style={{width:"100%",background:"#fff",border:"1px solid "+_PRD.BORD,borderRadius:10,padding:"9px 12px",color:value?_PRD.INK:_PRD.SOFT,fontSize:13,fontWeight:500,outline:"none",fontFamily:_PRD.FF,boxSizing:"border-box"}}>
+    {placeholder&&<option value="">{placeholder}</option>}
+    {options.map(function(o){ const id=typeof o==="string"?o:o.id, lb=typeof o==="string"?o:o.label; return <option key={id} value={id}>{lb}</option>; })}
+  </select>;
+}
+function _PrdPill({label,active,onClick,tone}){
+  const cor=tone==="ok"?_PRD.OK:tone==="warn"?_PRD.WARN:tone==="bad"?_PRD.BAD:_PRD.PX_DK;
+  const bg =tone==="ok"?_PRD.OK_BG:tone==="warn"?_PRD.WARN_BG:tone==="bad"?_PRD.BAD_BG:_PRD.PX_BG;
+  return <button type="button" onClick={onClick}
+    style={{background:active?bg:"#fff",border:"1px solid "+(active?cor:_PRD.BORD),color:active?cor:_PRD.MUTE,borderRadius:99,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:onClick?"pointer":"default",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",fontFamily:_PRD.FF}}>
+    {active&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}{label}
+  </button>;
+}
+function _PrdToggle({on,onChange,label,hint}){
+  return <div onClick={function(){ onChange(!on); }} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}>
+    <span style={{width:36,height:20,borderRadius:99,background:on?_PRD.PX:"#cbd5e1",position:"relative",transition:"background .15s",flexShrink:0}}>
+      <span style={{position:"absolute",top:2,left:on?18:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .15s",boxShadow:"0 1px 2px rgba(0,0,0,.2)"}}/>
+    </span>
+    <span style={{minWidth:0}}><span style={{display:"block",color:_PRD.INK,fontSize:12.5,fontWeight:700}}>{label}</span>{hint&&<span style={{display:"block",color:_PRD.SOFT,fontSize:10.5}}>{hint}</span>}</span>
+  </div>;
+}
+/* Controle −/+ (mesmo desenho do _QtyControl da Calculadora) */
+function _PrdQty({label,sub,value,onChange,step,min,max,unidade}){
+  const st=step||1, mn=min==null?0:min, mx=max==null?9999:max;
+  return <div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+    <div style={{minWidth:0,flex:1}}>
+      <div style={{color:_PRD.INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>{label}</div>
+      {sub&&<div style={{color:_PRD.MUTE,fontSize:11,marginTop:2}}>{sub}</div>}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+      <button type="button" onClick={function(){onChange(Math.max(mn, Number(value||0)-st));}}
+        style={{width:30,height:30,borderRadius:9,background:"#fff",border:"1px solid "+_PRD.BORD,color:_PRD.PX,fontSize:17,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>−</button>
+      <input value={value==null?0:value} onChange={function(e){ const n=_prodNum(e.target.value); onChange(Math.max(mn,Math.min(mx,n))); }}
+        style={{width:52,textAlign:"center",color:_PRD.INK,fontWeight:800,fontSize:14,border:"1px solid transparent",background:"transparent",outline:"none",fontFamily:_PRD.FF,fontFeatureSettings:"'tnum'"}}/>
+      {unidade&&<span style={{color:_PRD.SOFT,fontSize:11,fontWeight:700,marginLeft:-4}}>{unidade}</span>}
+      <button type="button" onClick={function(){onChange(Math.min(mx, Number(value||0)+st));}}
+        style={{width:30,height:30,borderRadius:9,background:_PRD.PX_BG,border:"1px solid "+_PRD.PX_BD,color:_PRD.PX,fontSize:17,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>+</button>
+    </div>
+  </div>;
+}
+function _PrdCard({children,style,pad}){ return <div style={Object.assign({background:"#fff",border:"1px solid #eef0f5",borderRadius:16,padding:pad||"18px 20px",boxShadow:"0 1px 2px rgba(15,23,42,.035)",fontFamily:_PRD.FF},style||{})}>{children}</div>; }
+function _PrdBtn({children,onClick,tone,small,disabled,ico}){
+  const prim=tone==="primary", ghost=tone==="ghost", danger=tone==="danger";
+  return <button type="button" onClick={onClick} disabled={!!disabled}
+    style={{background:prim?"linear-gradient(135deg,#9F43F6,#7c3aed)":danger?"#fff":"#fff",color:prim?"#fff":danger?_PRD.BAD:ghost?_PRD.MUTE:_PRD.PX_DK,border:prim?"none":"1px solid "+(danger?"#fecaca":ghost?"#e2e8f0":_PRD.PX_BD),borderRadius:10,padding:small?"7px 12px":"9px 15px",fontSize:small?12:12.5,fontWeight:700,cursor:disabled?"not-allowed":"pointer",fontFamily:_PRD.FF,display:"inline-flex",alignItems:"center",gap:7,opacity:disabled?.55:1,boxShadow:prim?"0 3px 10px rgba(124,58,237,.28)":"none",whiteSpace:"nowrap"}}>
+    {ico&&typeof _PxIco==="function"&&<_PxIco n={ico} size={13} color={prim?"#fff":undefined} strokeWidth={2.4}/>}{children}
+  </button>;
+}
+function _PrdStatusChip({status}){ const s=PROD_STATUS.find(function(x){return x.id===status;})||PROD_STATUS[0]; return <span style={{background:s.bg,color:s.cor,fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",whiteSpace:"nowrap"}}>{s.label}</span>; }
+/* KPI grande (Resumo financeiro / Ficha) */
+function _PrdKpi({label,valor,sub,cor,ico,grande}){
+  return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:16,padding:grande?"18px 20px":"14px 16px",position:"relative",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.035)"}}>
+    <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:cor||"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
+    <div style={{display:"flex",alignItems:"center",gap:8}}>
+      {ico&&typeof _PxIcoBox==="function"&&<_PxIcoBox n={ico} box={30} estado="ativo"/>}
+      <div style={{color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>{label}</div>
+    </div>
+    <div style={{color:_PRD.INK,fontWeight:900,fontSize:grande?26:20,letterSpacing:-.9,marginTop:6,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{valor}</div>
+    {sub&&<div style={{color:_PRD.MUTE,fontSize:11,marginTop:4}}>{sub}</div>}
+  </div>;
+}
+/* Barra de índice 0–100 */
+function _PrdIndice({label,valor,hint,inverso}){
+  const v=Math.max(0,Math.min(100,Number(valor||0)));
+  const bom=inverso?(v<=35):(v>=65), medio=inverso?(v<=65):(v>=35);
+  const cor=bom?_PRD.OK:medio?_PRD.WARN:_PRD.BAD;
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}}>
+      <span style={{color:_PRD.INK,fontSize:12.5,fontWeight:700}}>{label}</span>
+      <span style={{color:cor,fontSize:13,fontWeight:900,fontFeatureSettings:"'tnum'"}}>{v}</span>
+    </div>
+    <div style={{height:8,borderRadius:99,background:"#eef0f5",overflow:"hidden"}}><div style={{width:v+"%",height:"100%",borderRadius:99,background:cor,transition:"width .25s"}}/></div>
+    {hint&&<div style={{color:_PRD.SOFT,fontSize:10.5,marginTop:5,lineHeight:1.4}}>{hint}</div>}
+  </div>;
+}
+function _PrdModHeader({num,ico,title,subtitle,done,isMob}){
+  return <div style={{display:"flex",alignItems:"flex-start",gap:isMob?11:15}}>
+    {typeof _PxIcoBox==="function"&&<_PxIcoBox n={ico||"clipboard"} box={isMob?44:52} estado={done?"ativo":"neutro"}/>}
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+        <span style={{color:_PRD.SOFT,fontSize:10,fontWeight:800,letterSpacing:.6}}>ETAPA {num}</span>
+        <div style={{color:_PRD.INK,fontWeight:800,fontSize:isMob?16.5:18.5,letterSpacing:-.45,lineHeight:1.2}}>{title}</div>
+        {done&&<span style={{background:"#faf7ff",color:_PRD.PX_DK,border:"1px solid "+_PRD.PX_BD,fontSize:10,fontWeight:800,padding:"3px 9px 3px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
+          {typeof _PxIco==="function"&&<_PxIco n="check" size={11} color={_PRD.PX_DK} strokeWidth={3.2}/>}Preenchido</span>}
+      </div>
+      <div style={{color:_PRD.MUTE,fontSize:13,marginTop:5,lineHeight:1.5}}>{subtitle}</div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PÁGINA — roteador: portfólio · criador · ficha · parâmetros
+   ═══════════════════════════════════════════════════════════════════════ */
+function PageProdutos({isMob, canEdit, isSocio}){
+  const {store,update}=useProdutosStore();
+  const [view,setView]=useState("lista");        // lista | editar | ficha | parametros
+  const [selId,setSelId]=useState(null);
+  const cfg=store.config;
+  const produtos=store.produtos||[];
+  const sel=produtos.find(function(p){return p.id===selId;})||null;
+
+  const setProduto=useCallback(function(id, fn){
+    update(function(prev){
+      const arr=(prev.produtos||[]).map(function(p){ if(p.id!==id) return p; const next=typeof fn==="function"?fn(p):Object.assign({},p,fn); next.atualizadoEm=_prodHoje(); return next; });
+      return Object.assign({},prev,{produtos:arr});
+    });
+  },[update]);
+  const setConfig=useCallback(function(fn){ update(function(prev){ return Object.assign({},prev,{config:typeof fn==="function"?fn(prev.config):Object.assign({},prev.config,fn)}); }); },[update]);
+
+  function novo(){
+    if(!canEdit) return;
+    const p=_prodNovo();
+    p.ideia.responsavel=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"";
+    update(function(prev){ return Object.assign({},prev,{produtos:[p].concat(prev.produtos||[])}); });
+    setSelId(p.id); setView("editar");
+  }
+  function duplicar(p){
+    if(!canEdit) return;
+    const c=JSON.parse(JSON.stringify(p));
+    c.id=_prodUid("prod-"); c.status="rascunho"; c.versao=1; c.criadoEm=_prodHoje(); c.atualizadoEm=_prodHoje();
+    c.ideia.nome=(p.ideia.nome||"Produto")+" (cópia)";
+    c.versoes=[{n:1,data:_prodHoje(),alteracoes:"Duplicado de \""+(p.ideia.nome||"")+"\" v"+(p.versao||1)+".",preco:null,csp:null,mc:null,mcPct:null}];
+    update(function(prev){ return Object.assign({},prev,{produtos:[c].concat(prev.produtos||[])}); });
+    setSelId(c.id); setView("editar");
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Produto duplicado — agora é só renomear e ajustar.");
+  }
+  function excluir(p){
+    if(!canEdit) return;
+    const go=function(){ update(function(prev){ return Object.assign({},prev,{produtos:(prev.produtos||[]).filter(function(x){return x.id!==p.id;})}); }); if(selId===p.id){ setSelId(null); setView("lista"); } };
+    if(typeof pixelsConfirm==="function") pixelsConfirm("Excluir \""+(p.ideia.nome||"produto")+"\"? Não dá pra desfazer.",{danger:true,okText:"Excluir",cancelText:"Cancelar"}).then(function(y){ if(y) go(); });
+    else if(window.confirm("Excluir este produto?")) go();
+  }
+  function salvarVersao(p, alteracoes){
+    const c=prodCalc(p,cfg);
+    setProduto(p.id, function(cur){
+      const n=(cur.versao||1)+1;
+      return Object.assign({},cur,{versao:n,versoes:(cur.versoes||[]).concat([{n:n,data:_prodHoje(),alteracoes:alteracoes||"",preco:c.preco,csp:c.csp,mc:c.mc,mcPct:c.mcPct}])});
+    });
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Versão "+((p.versao||1)+1)+" registrada.");
+  }
+
+  const common={isMob:isMob,canEdit:canEdit,isSocio:isSocio,cfg:cfg,setConfig:setConfig,setProduto:setProduto,salvarVersao:salvarVersao,duplicar:duplicar,excluir:excluir,
+    abrir:function(id){setSelId(id);setView("editar");}, ficha:function(id){setSelId(id);setView("ficha");}, voltar:function(){setView("lista");}};
+
+  if(view==="parametros") return <_ProdParametros {...common} onBack={function(){setView("lista");}}/>;
+  if(view==="editar"&&sel) return <_ProdCriador key={sel.id} produto={sel} {...common}/>;
+  if(view==="ficha"&&sel) return <_ProdFicha produto={sel} {...common}/>;
+  return <_ProdPortfolio produtos={produtos} novo={novo} params={function(){setView("parametros");}} {...common}/>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PORTFÓLIO DE PRODUTOS — cards com os indicadores, sem ranking
+   ═══════════════════════════════════════════════════════════════════════ */
+function _ProdPortfolio({produtos,novo,params,abrir,ficha,duplicar,excluir,cfg,isMob,canEdit,isSocio}){
+  const [filtro,setFiltro]=useState("todos");
+  const lista=produtos.filter(function(p){ return filtro==="todos"||p.status===filtro; });
+  const ativos=produtos.filter(function(p){return p.status==="ativo";}).length;
+  const _cx=function(v){ return v>=65?{l:"Alta",c:_PRD.BAD}:v>=35?{l:"Média",c:_PRD.WARN}:{l:"Baixa",c:_PRD.OK}; };
+  const _esc=function(v){ return v>=65?{l:"Alto",c:_PRD.OK}:v>=35?{l:"Médio",c:_PRD.WARN}:{l:"Baixo",c:_PRD.BAD}; };
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PRD.FF}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:_PRD.INK,fontWeight:800,fontSize:19,letterSpacing:-.4}}>Criador de produtos</div>
+        <div style={{color:_PRD.MUTE,fontSize:12.5,marginTop:3}}>Transformar serviço em produto: escopo, processo, prazo, entrega, preço, CSP e margem — antes de vender.</div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {isSocio&&<_PrdBtn onClick={params} ico="sliders">Parâmetros</_PrdBtn>}
+        {canEdit&&<_PrdBtn onClick={novo} tone="primary" ico="sparkles">Novo produto</_PrdBtn>}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
+      <_PrdKpi label="Produtos" valor={produtos.length} sub={ativos+" ativo"+(ativos===1?"":"s")} ico="folderkanban"/>
+      <_PrdKpi label="Margem mínima" valor={_prodPct(Number(cfg.margemMinPct||0)/100,0)} sub={"desejada "+_prodPct(Number(cfg.margemDesejadaPct||0)/100,0)} ico="target"/>
+      <_PrdKpi label="Deduções sobre venda" valor={_prodPct((Number(cfg.impostoPct||0)+Number(cfg.comissaoPct||0)+Number(cfg.taxaPct||0)+Number(cfg.outrosVarPct||0))/100,1)} sub={"imposto "+cfg.impostoPct+"% · comissão "+cfg.comissaoPct+"% · taxa "+cfg.taxaPct+"%"} ico="dollar"/>
+      <_PrdKpi label="Custo-hora" valor={cfg.custoHoraEditado?"ajustado":"estimado"} sub={cfg.custoHoraEditado?"definido em Parâmetros":"padrão — ajustar em Parâmetros"} ico="users" cor={cfg.custoHoraEditado?_PRD.OK:_PRD.WARN}/>
+    </div>
+
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      <_PrdPill label="Todos" active={filtro==="todos"} onClick={function(){setFiltro("todos");}}/>
+      {PROD_STATUS.map(function(s){ const n=produtos.filter(function(p){return p.status===s.id;}).length; if(!n) return null; return <_PrdPill key={s.id} label={s.label+" · "+n} active={filtro===s.id} onClick={function(){setFiltro(s.id);}}/>; })}
+    </div>
+
+    {lista.length===0&&<_PrdCard style={{textAlign:"center",padding:"40px 20px"}}>
+      <div style={{color:_PRD.INK,fontWeight:800,fontSize:15}}>Nenhum produto aqui ainda</div>
+      <div style={{color:_PRD.MUTE,fontSize:12.5,marginTop:4}}>Comece por uma ideia — o Criador te leva pelo resto.</div>
+    </_PrdCard>}
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      {lista.map(function(p){
+        const c=prodCalc(p,cfg); const tipo=PROD_TIPOS.find(function(t){return t.id===p.ideia.tipo;});
+        const cx=_cx(c.indices.complexidade), es=_esc(c.indices.escala);
+        const mcCor=c.mcPct>=Number(cfg.margemMinPct||0)/100?_PRD.OK:c.preco>0?_PRD.BAD:_PRD.SOFT;
+        const M=function(l,v,cor){ return <div style={{minWidth:0}}><div style={{color:_PRD.SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{l}</div><div style={{color:cor||_PRD.INK,fontWeight:800,fontSize:13.5,fontFeatureSettings:"'tnum'",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v}</div></div>; };
+        return <_PrdCard key={p.id} style={{display:"flex",flexDirection:"column",gap:12,transition:"all .18s"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+            {typeof _PxIcoBox==="function"&&<_PxIcoBox n="rocket" box={44} estado={p.status==="ativo"?"ativo":"neutro"}/>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{color:_PRD.INK,fontWeight:800,fontSize:15.5,letterSpacing:-.3,cursor:"pointer"}} onClick={function(){abrir(p.id);}}>{p.ideia.nome||"Sem nome"}</div>
+                <_PrdStatusChip status={p.status}/>
+                <span style={{color:_PRD.SOFT,fontSize:10.5,fontWeight:700}}>v{p.versao||1}</span>
+              </div>
+              <div style={{color:_PRD.MUTE,fontSize:11.5,marginTop:3}}>{[p.ideia.categoria,tipo&&tipo.label,c.duracaoDias?(c.duracaoDias+" dias"):null].filter(Boolean).join(" · ")||"—"}</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"10px 12px",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"12px 14px"}}>
+            {M("Preço",c.preco?_prodFmt(c.preco):"—")}
+            {M("CSP",_prodFmt(c.csp))}
+            {M("Margem contr.",c.preco?_prodPct(c.mcPct,0):"—",mcCor)}
+            {M("Margem R$",c.preco?_prodFmt(c.mc):"—",mcCor)}
+            {M("Horas",c.horasTotal+"h")}
+            {M("R$/hora",c.rsHora?_prodFmt(c.rsHora):"—")}
+            {M("Duração",c.duracaoDias?(c.duracaoDias+" dias"):"—")}
+            {M("Complexidade",cx.l,cx.c)}
+            {M("Escala",es.l,es.c)}
+          </div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <_PrdBtn small tone="primary" onClick={function(){abrir(p.id);}} ico="pentool">{canEdit?"Abrir":"Ver"}</_PrdBtn>
+            <_PrdBtn small onClick={function(){ficha(p.id);}} ico="clipboard">Ficha</_PrdBtn>
+            {canEdit&&<_PrdBtn small onClick={function(){duplicar(p);}} ico="copy">Duplicar</_PrdBtn>}
+            {canEdit&&<_PrdBtn small tone="danger" onClick={function(){excluir(p);}}>Excluir</_PrdBtn>}
+          </div>
+        </_PrdCard>;
+      })}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CRIADOR — wizard em 8 etapas com resumo lateral
+   ═══════════════════════════════════════════════════════════════════════ */
+function _ProdCriador({produto,cfg,setProduto,salvarVersao,duplicar,voltar,ficha,isMob,canEdit,isSocio}){
+  const p=produto; const c=prodCalc(p,cfg);
+  const [step,setStep]=useState(0);
+  const set=function(fn){ if(!canEdit) return; setProduto(p.id, fn); };
+  const setIdeia=function(k,v){ set(function(cur){ return Object.assign({},cur,{ideia:Object.assign({},cur.ideia,(function(){const o={};o[k]=v;return o;})())}); }); };
+  const STEPS=[
+    {id:"ideia",       ico:"lightbulb",    label:"Ideia",         done:!!(p.ideia.nome&&p.ideia.problema)},
+    {id:"estrutura",   ico:"compass",      label:"Estrutura",     done:(p.fases||[]).length>0},
+    {id:"entregaveis", ico:"checkcircle",  label:"Entregáveis",   done:(p.entregaveis||[]).length>0},
+    {id:"csp",         ico:"users",        label:"CSP",           done:c.csp>0},
+    {id:"preco",       ico:"dollar",       label:"Precificação",  done:c.preco>0},
+    {id:"capacidade",  ico:"barchart",     label:"Capacidade",    done:c.preco>0&&c.horasTotal>0},
+    {id:"indices",     ico:"sliders",      label:"Padronização",  done:(p.entregaveis||[]).length>0},
+    {id:"ficha",       ico:"clipboard",    label:"Ficha",         done:c.sinais.temPreco&&c.sinais.temFases&&c.sinais.temEntregaveis},
+  ];
+  const cur=STEPS[step];
+  const sub=function(st){ if(st.id==="csp"&&c.csp>0) return _prodFmt(c.csp); if(st.id==="preco"&&c.preco>0) return _prodFmt(c.preco); if(st.id==="estrutura"&&p.fases.length) return p.fases.length+" fase"+(p.fases.length>1?"s":""); if(st.id==="entregaveis"&&p.entregaveis.length) return p.entregaveis.length+" itens"; if(st.id==="indices"&&p.entregaveis.length) return "escala "+c.indices.escala; return st.done?"ok":"pendente"; };
+
+  const Rail=<><style>{".prdRail::-webkit-scrollbar{display:none}"}</style>
+    <div className="prdRail" style={{background:"#fff",border:"1px solid #eef0f5",borderRadius:18,padding:isMob?7:8,display:"flex",alignItems:"stretch",gap:5,overflowX:"auto",scrollbarWidth:"none",boxShadow:"0 1px 3px rgba(15,23,42,.04)"}}>
+      {STEPS.map(function(st,i){
+        const isCur=i===step, isDone=!!st.done, estado=isCur?"ativo":(isDone?"ok":"neutro");
+        return <button key={st.id} type="button" onClick={function(){setStep(i);}}
+          style={{flex:"1 1 0",minWidth:isMob?130:0,background:isCur?"#faf7ff":(isDone?"#faf7ff":"transparent"),border:"1.5px solid "+(isCur?_PRD.PX_BD:(isDone?"#e9d8fe":"transparent")),borderRadius:14,padding:isMob?"10px 9px":"11px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",textAlign:"left",fontFamily:_PRD.FF,boxShadow:isCur?"0 5px 16px rgba(159,67,246,.13)":"none",transition:"all .18s"}}>
+          <div style={{position:"relative",flexShrink:0}}>
+            {typeof _PxIcoBox==="function"&&<_PxIcoBox n={st.ico} box={isMob?38:42} estado={estado}/>}
+            {isDone&&<div style={{position:"absolute",top:-4,right:-4,width:16,height:16,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",border:"2px solid #fff",display:"flex",alignItems:"center",justifyContent:"center"}}>{typeof _PxIco==="function"&&<_PxIco n="check" size={8} color="#fff" strokeWidth={3.6}/>}</div>}
+          </div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:isCur?"#4c1d95":(isDone?"#6d28d9":"#98a2b0"),fontSize:12.5,fontWeight:isCur?800:700,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{st.label}</div>
+            <div style={{color:isCur?_PRD.PX:(isDone?_PRD.PX:"#c3cad6"),fontSize:10.5,fontWeight:700,marginTop:2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub(st)}</div>
+          </div>
+        </button>;
+      })}
+    </div></>;
+
+  const Nav=<div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
+    <_PrdBtn onClick={function(){ if(step===0) voltar(); else setStep(step-1); }} tone="ghost">{step===0?"← Portfólio":"← Voltar"}</_PrdBtn>
+    {step<STEPS.length-1?<_PrdBtn tone="primary" onClick={function(){setStep(step+1);}}>Próxima etapa →</_PrdBtn>
+      :<_PrdBtn tone="primary" onClick={function(){ficha(p.id);}} ico="clipboard">Abrir ficha completa</_PrdBtn>}
+  </div>;
+
+  const body=(function(){
+    switch(cur.id){
+      case "ideia":       return <_ProdEtapaIdeia p={p} setIdeia={setIdeia} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "estrutura":   return <_ProdEtapaEstrutura p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "entregaveis": return <_ProdEtapaEntregaveis p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "csp":         return <_ProdEtapaCsp p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "preco":       return <_ProdEtapaPreco p={p} c={c} cfg={cfg} set={set} canEdit={canEdit} isMob={isMob}/>;
+      case "capacidade":  return <_ProdEtapaCapacidade p={p} c={c} cfg={cfg} isMob={isMob}/>;
+      case "indices":     return <_ProdEtapaIndices p={p} c={c} isMob={isMob}/>;
+      default:            return <_ProdFichaCorpo p={p} c={c} cfg={cfg} isMob={isMob} compacta/>;
+    }
+  })();
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PRD.FF}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+        <_PrdBtn small tone="ghost" onClick={voltar}>← Portfólio</_PrdBtn>
+        <div style={{minWidth:0}}>
+          <div style={{color:_PRD.INK,fontWeight:800,fontSize:17,letterSpacing:-.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.ideia.nome||"Novo produto"}</div>
+          <div style={{color:_PRD.SOFT,fontSize:11,marginTop:1}}>versão {p.versao||1} · atualizado {_prodDataBR(p.atualizadoEm)} · salva sozinho</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <_PrdSelect value={p.status} onChange={function(v){ set({status:v}); }} options={PROD_STATUS}/>
+        {canEdit&&<_PrdBtn small onClick={function(){ _prodPerguntarVersao().then(function(alt){ if(alt===null||alt===undefined) return; salvarVersao(p,alt); }); }} ico="copy">Salvar versão</_PrdBtn>}
+        {canEdit&&<_PrdBtn small onClick={function(){duplicar(p);}}>Duplicar</_PrdBtn>}
+      </div>
+    </div>
+    {Rail}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 320px",gap:16,alignItems:"start"}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+        <_PrdCard pad={isMob?"16px 14px":"22px 24px"}>
+          <div style={{display:"flex",flexDirection:"column",gap:18}}>{body}</div>
+        </_PrdCard>
+        {Nav}
+      </div>
+      {!isMob&&<div style={{position:"sticky",top:16}}><_ProdResumoLateral p={p} c={c} cfg={cfg}/></div>}
+    </div>
+  </div>;
+}
+
+/* ─── Resumo lateral (mesmo desenho do _ResumoBox da Calculadora) ─────── */
+function _ProdResumoLateral({p,c,cfg}){
+  const mMin=Number(cfg.margemMinPct||0)/100, mDes=Number(cfg.margemDesejadaPct||0)/100;
+  const S=function(ok,label,detalhe){ const cor=ok?_PRD.OK:_PRD.WARN; return <div style={{display:"flex",gap:9,alignItems:"flex-start"}}>
+    <span style={{width:16,height:16,borderRadius:5,background:ok?_PRD.OK_BG:_PRD.WARN_BG,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{typeof _PxIco==="function"&&<_PxIco n={ok?"check":"xcircle"} size={10} color={cor} strokeWidth={3}/>}</span>
+    <span style={{minWidth:0}}><span style={{display:"block",color:_PRD.INK,fontSize:12,fontWeight:700}}>{label}</span>{detalhe&&<span style={{display:"block",color:_PRD.SOFT,fontSize:10.5}}>{detalhe}</span>}</span></div>; };
+  const L=function(l,v,cor){ return <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}><span style={{color:_PRD.MUTE,fontSize:12}}>{l}</span><span style={{color:cor||_PRD.INK,fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{v}</span></div>; };
+  return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:20,padding:"20px 18px",boxShadow:"0 10px 30px rgba(88,64,166,.08), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PRD.FF,display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:11}}>
+      {typeof _PxIcoBox==="function"&&<_PxIcoBox n="clipboard" box={38} estado="ativo"/>}
+      <div style={{minWidth:0}}><div style={{color:_PRD.INK,fontWeight:800,fontSize:15,letterSpacing:-.35,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.ideia.nome||"Novo produto"}</div><div style={{color:_PRD.SOFT,fontSize:11,marginTop:1}}>resumo ao vivo</div></div>
+    </div>
+    <div style={{background:"linear-gradient(135deg,#f8f4ff,#ffffff)",border:"1px solid "+_PRD.PX_BD,borderRadius:16,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
+      <div style={{color:_PRD.PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Margem de contribuição</div>
+      <div style={{color:_PRD.INK,fontWeight:900,fontSize:30,letterSpacing:-1.3,marginTop:4,fontFeatureSettings:"'tnum'",lineHeight:1}}>{c.preco?_prodFmt(c.mc):"—"}<span style={{color:_PRD.MUTE,fontSize:13,fontWeight:700,marginLeft:6,letterSpacing:0}}>{c.preco?_prodPct(c.mcPct,1):""}</span></div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:7}}>
+      {L("Preço de venda",c.preco?_prodFmt(c.preco):"—")}
+      {L("CSP",_prodFmt(c.csp))}
+      {L("Deduções ("+_prodPct(c.dedPct,0)+")",c.preco?("− "+_prodFmt(c.deducoes)):"—")}
+      {L("Horas de entrega",c.horasTotal+"h")}
+      {L("R$/hora vendida",c.rsHora?_prodFmt(c.rsHora):"—")}
+      {L("Preço mínimo ("+_prodPct(mMin,0)+")",c.csp?_prodFmt(c.precoMin):"—",_PRD.WARN)}
+      {L("Preço alvo ("+_prodPct(mDes,0)+")",c.csp?_prodFmt(c.precoAlvo):"—",_PRD.PX_DK)}
+    </div>
+    <div style={{borderTop:"1px solid #f2f3f7",paddingTop:12,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Vale a pena? Os sinais</div>
+      {S(c.sinais.temFases&&c.sinais.temEntregaveis,"Começo, meio e fim definidos",(p.fases||[]).length+" fases · "+(p.entregaveis||[]).length+" entregáveis")}
+      {S(c.sinais.temHoras,"Horas por função na estrutura",c.horasTotal?(c.horasTotal+"h em "+c.pessoas.length+(c.pessoas.length===1?" função":" funções")):"faltam horas nas fases")}
+      {S(c.sinais.temPreco&&c.sinais.margemOk,"Margem acima da mínima",c.preco?(_prodPct(c.mcPct,0)+" vs. "+_prodPct(mMin,0)):"defina o preço")}
+      {S(c.sinais.temPreco&&c.sinais.margemDesejadaOk,"Chega na margem desejada",c.preco?(_prodPct(c.mcPct,0)+" vs. "+_prodPct(mDes,0)):"defina o preço")}
+      {S(c.indices.escala>=50,"Potencial de escala",c.indices.escala+"/100")}
+    </div>
+  </div>;
+}
+
+/* ─── ETAPA 1 · Ideia ─────────────────────────────────────────────────── */
+function _ProdEtapaIdeia({p,setIdeia,set,canEdit,isMob}){
+  const i=p.ideia;
+  const team=(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return {id:u.id,label:u.name};});
+  const G=function(cols){ return {display:"grid",gridTemplateColumns:isMob?"1fr":("repeat("+(cols||2)+",minmax(0,1fr))"),gap:14}; };
+  return <>
+    <_PrdModHeader num={1} ico="lightbulb" title="Ideia do produto" subtitle="O que é, pra quem é e que problema resolve. Se não der pra explicar em três linhas, ainda não é produto." done={!!(i.nome&&i.problema)} isMob={isMob}/>
+    <div style={G(3)}>
+      <div><_PrdRotulo>Nome provisório</_PrdRotulo><_PrdInput value={i.nome} onChange={function(v){setIdeia("nome",v);}} placeholder="Ex.: Acelerador Digital"/></div>
+      <div><_PrdRotulo>Categoria</_PrdRotulo><_PrdInput value={i.categoria} onChange={function(v){setIdeia("categoria",v);}} placeholder="Ex.: Estruturação"/></div>
+      <div><_PrdRotulo>Responsável comercial</_PrdRotulo><_PrdSelect value={i.responsavel} onChange={function(v){setIdeia("responsavel",v);}} options={team} placeholder="Quem vende"/></div>
+    </div>
+    <div><_PrdRotulo>Tipo de produto</_PrdRotulo><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{PROD_TIPOS.map(function(t){return <_PrdPill key={t.id} label={t.label} active={i.tipo===t.id} onClick={canEdit?function(){setIdeia("tipo",t.id);}:undefined}/>;})}</div></div>
+    <div style={G(2)}>
+      <div><_PrdRotulo>Problema principal que resolve</_PrdRotulo><_PrdTextarea value={i.problema} onChange={function(v){setIdeia("problema",v);}} placeholder="A dor que o cliente sente hoje, com as palavras dele." rows={4}/></div>
+      <div><_PrdRotulo>Resultado esperado</_PrdRotulo><_PrdTextarea value={i.resultado} onChange={function(v){setIdeia("resultado",v);}} placeholder="O que muda na empresa do cliente quando o produto termina." rows={4}/></div>
+    </div>
+    <div><_PrdRotulo>Descrição curta</_PrdRotulo><_PrdTextarea value={i.descricao} onChange={function(v){setIdeia("descricao",v);}} placeholder="Como você explicaria o produto numa frase, na proposta." rows={2}/></div>
+    <div style={{borderTop:"1px solid #f2f3f7",paddingTop:16}}>
+      <div style={{color:_PRD.INK,fontSize:12,fontWeight:800,marginBottom:12}}>Cliente ideal</div>
+      <div style={G(2)}>
+        <div><_PrdRotulo>Perfil</_PrdRotulo><_PrdTextarea value={i.clienteIdeal} onChange={function(v){setIdeia("clienteIdeal",v);}} placeholder="Quem compra isso e por quê." rows={3}/></div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div><_PrdRotulo>Segmento</_PrdRotulo><_PrdInput value={i.segmento} onChange={function(v){setIdeia("segmento",v);}} placeholder="Ex.: Agro, indústria, serviços B2B"/></div>
+          <div><_PrdRotulo>Tamanho ideal da empresa</_PrdRotulo><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{PROD_TAMANHOS.map(function(t){return <_PrdPill key={t} label={t} active={i.tamanho===t} onClick={canEdit?function(){setIdeia("tamanho",t);}:undefined}/>;})}</div></div>
+        </div>
+      </div>
+    </div>
+  </>;
+}
+
+/* ─── ETAPA 2 · Estrutura (fases + linha do tempo) ────────────────────── */
+function _ProdEtapaEstrutura({p,c,cfg,set,canEdit,isMob}){
+  const [aberta,setAberta]=useState((p.fases[0]&&p.fases[0].id)||null);
+  const funcoes=cfg.funcoes||[];
+  const addFase=function(){ set(function(cur){ const f=_prodFaseNova((cur.fases||[]).length+1); setAberta(f.id); return Object.assign({},cur,{fases:(cur.fases||[]).concat([f])}); }); };
+  const setFase=function(id,patch){ set(function(cur){ return Object.assign({},cur,{fases:(cur.fases||[]).map(function(f){ return f.id===id?Object.assign({},f,typeof patch==="function"?patch(f):patch):f; })}); }); };
+  const delFase=function(id){ set(function(cur){ return Object.assign({},cur,{fases:(cur.fases||[]).filter(function(f){return f.id!==id;}),entregaveis:(cur.entregaveis||[]).map(function(e){return e.faseId===id?Object.assign({},e,{faseId:""}):e;})}); }); };
+  const mover=function(id,dir){ set(function(cur){ const arr=(cur.fases||[]).slice(); const i=arr.findIndex(function(f){return f.id===id;}); const j=i+dir; if(i<0||j<0||j>=arr.length) return cur; const t=arr[i]; arr[i]=arr[j]; arr[j]=t; return Object.assign({},cur,{fases:arr}); }); };
+  const totalDias=c.duracaoDias||1;
+  const cores=["#9F43F6","#7c3aed","#a855f7","#c084fc","#6d28d9","#8b5cf6","#d8b4fe"];
+  return <>
+    <_PrdModHeader num={2} ico="compass" title="Estrutura do produto" subtitle="Começo, meio e fim. Cada fase diz o que acontece, quem faz, quanto tempo leva e quantas horas consome. Produto eterno não é produto." done={p.fases.length>0} isMob={isMob}/>
+
+    {/* Linha do tempo */}
+    {p.fases.length>0&&<div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:14,padding:"14px 16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+        <div style={{color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase"}}>Linha do tempo</div>
+        <div style={{color:_PRD.INK,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{c.duracaoDias} dias · {c.horasTotal}h · {c.reunioes} reuni{c.reunioes===1?"ão":"ões"}</div>
+      </div>
+      <div style={{display:"flex",gap:3,height:34,borderRadius:10,overflow:"hidden"}}>
+        {p.fases.map(function(f,i){ const w=Math.max(6,100*Number(f.prazoDias||0)/totalDias); return <div key={f.id} title={f.nome+" · "+f.prazoDias+" dias"} onClick={function(){setAberta(f.id);}} style={{flex:"0 0 "+w+"%",background:cores[i%cores.length],color:"#fff",fontSize:10.5,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 6px",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis",cursor:"pointer",opacity:aberta===f.id?1:.85}}>{String(i+1).padStart(2,"0")} {f.nome}</div>; })}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,color:_PRD.SOFT,fontSize:10.5,fontWeight:700}}><span>Início</span><span>Entrega final</span></div>
+    </div>}
+
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {p.fases.map(function(f,i){
+        const open=aberta===f.id; const hF=Object.keys(f.horas||{}).reduce(function(s,k){return s+Number(f.horas[k]||0);},0);
+        return <div key={f.id} style={{border:"1px solid "+(open?_PRD.PX_BD:"#eef0f5"),borderRadius:14,background:open?"#fdfbff":"#fff",overflow:"hidden"}}>
+          <div onClick={function(){setAberta(open?null:f.id);}} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",cursor:"pointer"}}>
+            <div style={{width:30,height:30,borderRadius:9,background:open?_PRD.PX:_PRD.PX_BG,color:open?"#fff":_PRD.PX,border:"1px solid "+(open?_PRD.PX:_PRD.PX_BD),display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{String(i+1).padStart(2,"0")}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:_PRD.INK,fontWeight:800,fontSize:14,letterSpacing:-.2}}>{f.nome||"Fase sem nome"}</div>
+              <div style={{color:_PRD.MUTE,fontSize:11.5,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{[f.prazoDias+" dias",hF+"h",f.reunioes?(f.reunioes+" reuni"+(f.reunioes===1?"ão":"ões")):null,"dependência "+f.dependencia].filter(Boolean).join(" · ")}</div>
+            </div>
+            {canEdit&&<div style={{display:"flex",gap:4}} onClick={function(e){e.stopPropagation();}}>
+              <_PrdBtn small tone="ghost" onClick={function(){mover(f.id,-1);}} disabled={i===0}>↑</_PrdBtn>
+              <_PrdBtn small tone="ghost" onClick={function(){mover(f.id,1);}} disabled={i===p.fases.length-1}>↓</_PrdBtn>
+              <_PrdBtn small tone="danger" onClick={function(){delFase(f.id);}}>Remover</_PrdBtn>
+            </div>}
+          </div>
+          {open&&<div style={{padding:"4px 14px 16px",display:"flex",flexDirection:"column",gap:14,borderTop:"1px solid #f2f3f7"}}>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr 1fr",gap:12,marginTop:12}}>
+              <div><_PrdRotulo>Nome da fase</_PrdRotulo><_PrdInput value={f.nome} onChange={function(v){setFase(f.id,{nome:v});}} placeholder="Ex.: Diagnóstico"/></div>
+              <div><_PrdRotulo>Responsável</_PrdRotulo><_PrdSelect value={f.responsavel} onChange={function(v){setFase(f.id,{responsavel:v});}} options={funcoes} placeholder="Função"/></div>
+              <div><_PrdRotulo>Prazo</_PrdRotulo><_PrdQty label="" value={f.prazoDias} onChange={function(v){setFase(f.id,{prazoDias:v});}} unidade="dias" min={1}/></div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+              <div><_PrdRotulo>Objetivo</_PrdRotulo><_PrdTextarea value={f.objetivo} onChange={function(v){setFase(f.id,{objetivo:v});}} rows={2} placeholder="O que essa fase precisa garantir."/></div>
+              <div><_PrdRotulo>Descrição / o que acontece</_PrdRotulo><_PrdTextarea value={f.descricao} onChange={function(v){setFase(f.id,{descricao:v});}} rows={2} placeholder="Reuniões, coletas, análises, produções…"/></div>
+            </div>
+            <div>
+              <_PrdRotulo extra={hF+"h nesta fase"}>Horas estimadas por função</_PrdRotulo>
+              <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:8}}>
+                {funcoes.map(function(fn){ return <_PrdQty key={fn.id} label={fn.label} sub={_prodFmt(fn.custoHora)+"/h"} value={Number((f.horas||{})[fn.id]||0)} onChange={function(v){ setFase(f.id,function(cur){ const h=Object.assign({},cur.horas||{}); if(v>0) h[fn.id]=v; else delete h[fn.id]; return {horas:h}; }); }} unidade="h" step={1}/>; })}
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:12}}>
+              <div><_PrdRotulo>Reuniões com o cliente</_PrdRotulo><_PrdQty label="" value={f.reunioes} onChange={function(v){setFase(f.id,{reunioes:v});}} unidade="reun."/></div>
+              <div><_PrdRotulo>Dependência do cliente</_PrdRotulo><div style={{display:"flex",gap:6,flexWrap:"wrap",paddingTop:4}}>{PROD_DEPEND.map(function(d){return <_PrdPill key={d.id} label={d.label} active={f.dependencia===d.id} tone={d.id==="alta"?"bad":d.id==="media"?"warn":"ok"} onClick={canEdit?function(){setFase(f.id,{dependencia:d.id});}:undefined}/>;})}</div></div>
+              <div><_PrdRotulo>Ferramentas utilizadas</_PrdRotulo><_PrdInput value={f.ferramentas} onChange={function(v){setFase(f.id,{ferramentas:v});}} placeholder="CRM, Meta Ads, planilha…"/></div>
+            </div>
+          </div>}
+        </div>;
+      })}
+    </div>
+    {canEdit&&<div><_PrdBtn onClick={addFase} ico="sparkles">Adicionar fase</_PrdBtn></div>}
+  </>;
+}
+
+/* ─── ETAPA 3 · Entregáveis ───────────────────────────────────────────── */
+function _ProdEtapaEntregaveis({p,c,cfg,set,canEdit,isMob}){
+  const funcoes=cfg.funcoes||[];
+  const fases=(p.fases||[]).map(function(f,i){return {id:f.id,label:String(i+1).padStart(2,"0")+" "+f.nome};});
+  const add=function(){ set(function(cur){ return Object.assign({},cur,{entregaveis:(cur.entregaveis||[]).concat([_prodEntregavelNovo((cur.fases[0]&&cur.fases[0].id)||"")])}); }); };
+  const setE=function(id,patch){ set(function(cur){ return Object.assign({},cur,{entregaveis:(cur.entregaveis||[]).map(function(e){return e.id===id?Object.assign({},e,patch):e;})}); }); };
+  const del=function(id){ set(function(cur){ return Object.assign({},cur,{entregaveis:(cur.entregaveis||[]).filter(function(e){return e.id!==id;})}); }); };
+  const n=p.entregaveis.length;
+  const diverge=c.horasTotal>0&&c.horasEntregaveis>0&&Math.abs(c.horasEntregaveis-c.horasTotal)/c.horasTotal>0.25;
+  return <>
+    <_PrdModHeader num={3} ico="checkcircle" title="Entregáveis" subtitle="O que o cliente recebe, em que formato e o quanto disso já é padrão. Quanto mais template e reutilização, mais escala." done={n>0} isMob={isMob}/>
+    {n>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
+      <_PrdKpi label="Entregáveis" valor={n} ico="checkcircle"/>
+      <_PrdKpi label="Com template" valor={_prodPct(c.indices.pctTemplate,0)} sub="pronto pra reaproveitar"/>
+      <_PrdKpi label="Reutilizáveis" valor={_prodPct(c.indices.pctReut,0)} sub={c.indices.nPersonal+" personalizado"+(c.indices.nPersonal===1?"":"s")}/>
+      <_PrdKpi label="Horas previstas" valor={c.horasEntregaveis+"h"} sub={"fases somam "+c.horasTotal+"h"} cor={diverge?_PRD.WARN:undefined}/>
+    </div>}
+    {diverge&&<div style={{background:_PRD.WARN_BG,border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",color:"#92400e",fontSize:12,lineHeight:1.5}}>As horas dos entregáveis ({c.horasEntregaveis}h) estão longe das horas das fases ({c.horasTotal}h). O CSP usa as horas das <b>fases</b> — confira qual dos dois está errado.</div>}
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {p.entregaveis.map(function(e,i){
+        return <div key={e.id} style={{border:"1px solid #eef0f5",borderRadius:14,padding:"14px",background:"#fff",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr 1fr auto",gap:10,alignItems:"end"}}>
+            <div><_PrdRotulo>Entregável {i+1}</_PrdRotulo><_PrdInput value={e.nome} onChange={function(v){setE(e.id,{nome:v});}} placeholder="Ex.: Diagnóstico de CRM"/></div>
+            <div><_PrdRotulo>Formato</_PrdRotulo><_PrdSelect value={e.formato} onChange={function(v){setE(e.id,{formato:v});}} options={PROD_FORMATOS}/></div>
+            <div><_PrdRotulo>Fase</_PrdRotulo><_PrdSelect value={e.faseId} onChange={function(v){setE(e.id,{faseId:v});}} options={fases} placeholder="Sem fase"/></div>
+            {canEdit&&<_PrdBtn small tone="danger" onClick={function(){del(e.id);}}>Remover</_PrdBtn>}
+          </div>
+          <div><_PrdRotulo>Descrição</_PrdRotulo><_PrdInput value={e.descricao} onChange={function(v){setE(e.id,{descricao:v});}} placeholder="O que tem dentro, em uma linha."/></div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1.4fr",gap:12,alignItems:"center"}}>
+            <div><_PrdRotulo>Responsável</_PrdRotulo><_PrdSelect value={e.responsavel} onChange={function(v){setE(e.id,{responsavel:v});}} options={funcoes} placeholder="Função"/></div>
+            <div><_PrdRotulo>Horas previstas</_PrdRotulo><_PrdQty label="" value={e.horas} onChange={function(v){setE(e.id,{horas:v});}} unidade="h"/></div>
+            <div><_PrdRotulo>Complexidade</_PrdRotulo><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{PROD_COMPLEX.map(function(d){return <_PrdPill key={d.id} label={d.label} active={e.complexidade===d.id} tone={d.id==="alta"?"bad":d.id==="media"?"warn":"ok"} onClick={canEdit?function(){setE(e.id,{complexidade:d.id});}:undefined}/>;})}</div></div>
+          </div>
+          <div style={{display:"flex",gap:22,flexWrap:"wrap"}}>
+            <_PrdToggle on={!!e.reutilizavel} onChange={function(v){ if(canEdit) setE(e.id,{reutilizavel:v}); }} label="É reutilizável" hint="a estrutura serve pra outros clientes"/>
+            <_PrdToggle on={!!e.template} onChange={function(v){ if(canEdit) setE(e.id,{template:v}); }} label="Existe template pronto" hint="já tem modelo, só preencher"/>
+          </div>
+        </div>;
+      })}
+    </div>
+    {canEdit&&<div><_PrdBtn onClick={add} ico="sparkles">Adicionar entregável</_PrdBtn></div>}
+  </>;
+}
+
+/* ─── ETAPA 4 · CSP ───────────────────────────────────────────────────── */
+function _ProdEtapaCsp({p,c,cfg,set,canEdit,isMob}){
+  const funcoes=cfg.funcoes||[];
+  const add=function(){ set(function(cur){ return Object.assign({},cur,{custosExternos:(cur.custosExternos||[]).concat([{id:_prodUid("c-"),tipo:"Freelancer",descricao:"",valor:0}])}); }); };
+  const setC=function(id,patch){ set(function(cur){ return Object.assign({},cur,{custosExternos:(cur.custosExternos||[]).map(function(x){return x.id===id?Object.assign({},x,patch):x;})}); }); };
+  const del=function(id){ set(function(cur){ return Object.assign({},cur,{custosExternos:(cur.custosExternos||[]).filter(function(x){return x.id!==id;})}); }); };
+  const linhas=funcoes.filter(function(f){return (c.horasPorFuncao[f.id]||0)>0;});
+  return <>
+    <_PrdModHeader num={4} ico="users" title="Custo do Serviço Prestado" subtitle="Quanto custa entregar UM produto. Mão de obra vem das horas por função das fases × custo-hora; o resto é o que sai do bolso pra entregar." done={c.csp>0} isMob={isMob}/>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:10}}>
+      <_PrdKpi label="Mão de obra" valor={_prodFmt(c.cspMO)} sub={c.horasTotal+"h · "+c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
+      <_PrdKpi label="Custos externos" valor={_prodFmt(c.cspExt)} sub={(p.custosExternos||[]).length+" item"+((p.custosExternos||[]).length===1?"":"ns")} ico="handshake"/>
+      <_PrdKpi label="CSP total" valor={_prodFmt(c.csp)} sub="por produto entregue" ico="dollar" grande/>
+    </div>
+    <div>
+      <_PrdRotulo extra={cfg.custoHoraEditado?"custo-hora definido em Parâmetros":"custo-hora estimado — ajustar em Parâmetros"}>Mão de obra por função</_PrdRotulo>
+      {linhas.length===0?<div style={{color:_PRD.SOFT,fontSize:12.5,padding:"12px 0"}}>Sem horas ainda — volte na etapa 2 e preencha as horas por função em cada fase.</div>
+      :<div style={{border:"1px solid #eef0f5",borderRadius:12,overflow:"hidden"}}>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:8,padding:"8px 14px",background:_PRD.BG_INNER,color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}><span>Função</span><span style={{textAlign:"right"}}>Horas</span><span style={{textAlign:"right"}}>Custo/h</span><span style={{textAlign:"right"}}>Subtotal</span></div>
+        {linhas.map(function(f){ const h=c.horasPorFuncao[f.id]||0; return <div key={f.id} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:8,padding:"10px 14px",borderTop:"1px solid #f2f3f7",fontSize:13,fontFeatureSettings:"'tnum'"}}><span style={{color:_PRD.INK,fontWeight:700}}>{f.label}</span><span style={{textAlign:"right",color:_PRD.MUTE}}>{h}h</span><span style={{textAlign:"right",color:_PRD.MUTE}}>{_prodFmt(f.custoHora)}</span><span style={{textAlign:"right",color:_PRD.INK,fontWeight:800}}>{_prodFmt(h*f.custoHora)}</span></div>; })}
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:8,padding:"10px 14px",borderTop:"1px solid "+_PRD.PX_BD,background:"#fdfbff",fontSize:13,fontFeatureSettings:"'tnum'"}}><span style={{color:_PRD.PX_DK,fontWeight:800}}>Total mão de obra</span><span style={{textAlign:"right",color:_PRD.MUTE,fontWeight:700}}>{c.horasTotal}h</span><span/><span style={{textAlign:"right",color:_PRD.PX_DK,fontWeight:900}}>{_prodFmt(c.cspMO)}</span></div>
+      </div>}
+    </div>
+    <div>
+      <_PrdRotulo>Custos externos e outros ligados à entrega</_PrdRotulo>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {(p.custosExternos||[]).map(function(x){ return <div key={x.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 2fr 130px auto",gap:8,alignItems:"center"}}>
+          <_PrdSelect value={x.tipo} onChange={function(v){setC(x.id,{tipo:v});}} options={PROD_CUSTO_EXT}/>
+          <_PrdInput value={x.descricao} onChange={function(v){setC(x.id,{descricao:v});}} placeholder="Descrição"/>
+          <_PrdInput value={x.valor} onChange={function(v){setC(x.id,{valor:_prodNum(v)});}} placeholder="R$" mono align="right" type="number"/>
+          {canEdit&&<_PrdBtn small tone="danger" onClick={function(){del(x.id);}}>×</_PrdBtn>}
+        </div>; })}
+        {canEdit&&<div><_PrdBtn small onClick={add} ico="sparkles">Adicionar custo</_PrdBtn></div>}
+      </div>
+    </div>
+  </>;
+}
+
+/* ─── ETAPA 5 · Precificação + simulador ──────────────────────────────── */
+function _ProdEtapaPreco({p,c,cfg,set,canEdit,isMob}){
+  const pr=p.preco||{modo:"preco",valor:0,margemAlvoPct:65};
+  const setP=function(patch){ set(function(cur){ return Object.assign({},cur,{preco:Object.assign({},cur.preco||{},patch)}); }); };
+  const mMin=Number(cfg.margemMinPct||0)/100, mDes=Number(cfg.margemDesejadaPct||0)/100;
+  const [sim,setSim]=useState(c.preco||c.precoAlvo||10000);
+  useEffect(function(){ if(c.preco>0) setSim(c.preco); },[c.preco]);
+  const simC=prodCalc(Object.assign({},p,{preco:{modo:"preco",valor:sim}}),cfg);
+  const presets=[5000,7500,10000,12500,15000,20000];
+  const maxSlider=Math.max(30000, Math.ceil((c.precoAlvo||0)*1.6/1000)*1000);
+  const Linha=function(l,v,cor,neg,forte){ return <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"8px 0",borderTop:forte?"1px solid "+_PRD.PX_BD:"1px solid #f2f3f7",fontFeatureSettings:"'tnum'"}}><span style={{color:forte?_PRD.PX_DK:_PRD.MUTE,fontSize:forte?13:12.5,fontWeight:forte?800:600}}>{l}</span><span style={{color:cor||_PRD.INK,fontWeight:forte?900:700,fontSize:forte?15:13}}>{neg?"− ":""}{v}</span></div>; };
+  const simCor=simC.mcPct>=mDes?_PRD.OK:simC.mcPct>=mMin?_PRD.WARN:_PRD.BAD;
+  return <>
+    <_PrdModHeader num={5} ico="dollar" title="Precificação" subtitle="Defina o preço — ou diga a margem que quer e o sistema diz o preço. Deduções (imposto, comissão, taxa) vêm dos Parâmetros." done={c.preco>0} isMob={isMob}/>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      <_PrdPill label="Preço de venda desejado" active={pr.modo!=="margem"} onClick={canEdit?function(){setP({modo:"preco"});}:undefined}/>
+      <_PrdPill label="Margem que quero" active={pr.modo==="margem"} onClick={canEdit?function(){setP({modo:"margem"});}:undefined}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+      {pr.modo==="margem"
+        ?<div><_PrdRotulo>Margem de contribuição desejada</_PrdRotulo><_PrdQty label="" value={pr.margemAlvoPct} onChange={function(v){setP({margemAlvoPct:v});}} unidade="%" step={5} max={95}/><div style={{color:_PRD.MUTE,fontSize:11.5,marginTop:8}}>Preço calculado: <b style={{color:_PRD.INK}}>{_prodFmt(c.preco)}</b> — a partir do CSP de {_prodFmt(c.csp)} e {_prodPct(c.dedPct,0)} de deduções.</div></div>
+        :<div><_PrdRotulo>Preço de venda</_PrdRotulo><_PrdInput value={pr.valor||""} onChange={function(v){setP({valor:_prodNum(v)});}} placeholder="R$" type="number" mono align="right" style={{fontSize:18,fontWeight:800}}/></div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <_PrdKpi label={"Preço mínimo · "+_prodPct(mMin,0)} valor={c.csp?_prodFmt(c.precoMin):"—"} sub="margem mínima da Pixels" cor={_PRD.WARN}/>
+        <_PrdKpi label={"Preço alvo · "+_prodPct(mDes,0)} valor={c.csp?_prodFmt(c.precoAlvo):"—"} sub="margem desejada" cor={_PRD.OK}/>
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+      <div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:14,padding:"14px 16px"}}>
+        <div style={{color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase",marginBottom:6}}>Composição do preço</div>
+        {Linha("Receita bruta",_prodFmt(c.preco))}
+        {Linha("Impostos ("+cfg.impostoPct+"%)",_prodFmt(c.impostos),_PRD.MUTE,true)}
+        {Linha("Comissão comercial ("+cfg.comissaoPct+"%)",_prodFmt(c.comissao),_PRD.MUTE,true)}
+        {Linha("Taxas ("+cfg.taxaPct+"%)"+(Number(cfg.outrosVarPct)?" + outros ("+cfg.outrosVarPct+"%)":""),_prodFmt(c.taxas+c.outrosVar),_PRD.MUTE,true)}
+        {Linha("CSP",_prodFmt(c.csp),_PRD.MUTE,true)}
+        {Linha("Margem de contribuição",_prodFmt(c.mc)+"  ·  "+_prodPct(c.mcPct,1),c.mcPct>=mMin?_PRD.OK:_PRD.BAD,false,true)}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:8,color:_PRD.SOFT,fontSize:11}}><span>Lucro bruto (preço − CSP)</span><span style={{fontFeatureSettings:"'tnum'"}}>{_prodFmt(c.lucroBruto)} · {_prodPct(c.margemBruta,0)}</span></div>
+      </div>
+
+      <div style={{background:"#fff",border:"1px solid "+_PRD.PX_BD,borderRadius:14,padding:"14px 16px",boxShadow:"0 6px 18px rgba(159,67,246,.08)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+          <div style={{color:_PRD.PX_DK,fontSize:9.5,fontWeight:800,letterSpacing:.65,textTransform:"uppercase"}}>Simulador de preço</div>
+          <div style={{color:_PRD.INK,fontWeight:900,fontSize:18,fontFeatureSettings:"'tnum'"}}>{_prodFmt(sim)}</div>
+        </div>
+        <input type="range" min={0} max={maxSlider} step={250} value={sim} onChange={function(e){setSim(Number(e.target.value));}} style={{width:"100%",accentColor:_PRD.PX}}/>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:8}}>
+          {presets.map(function(v){ return <_PrdPill key={v} label={"R$ "+(v/1000).toLocaleString("pt-BR")+"k"} active={sim===v} onClick={function(){setSim(v);}}/>; })}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+          {[["CSP",_prodFmt(simC.csp)],["Margem bruta",_prodPct(simC.margemBruta,0)],["Margem contr.",_prodFmt(simC.mc)],["Margem %",_prodPct(simC.mcPct,1)],["Lucro estimado",_prodFmt(simC.mc)],["R$/hora",simC.rsHora?_prodFmt(simC.rsHora):"—"]].map(function(kv,i){
+            return <div key={i} style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:10,padding:"8px 10px"}}><div style={{color:_PRD.SOFT,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{kv[0]}</div><div style={{color:(i===2||i===3||i===4)?simCor:_PRD.INK,fontWeight:800,fontSize:13.5,fontFeatureSettings:"'tnum'",marginTop:2}}>{kv[1]}</div></div>; })}
+        </div>
+        <div style={{marginTop:10,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{color:simCor,fontSize:11.5,fontWeight:700}}>{simC.mcPct>=mDes?"Acima da margem desejada":simC.mcPct>=mMin?"Entre a mínima e a desejada":"Abaixo da margem mínima"}</span>
+          {canEdit&&pr.modo!=="margem"&&<_PrdBtn small tone="primary" onClick={function(){setP({valor:sim});}}>Usar este preço</_PrdBtn>}
+        </div>
+      </div>
+    </div>
+  </>;
+}
+
+/* ─── ETAPA 6 · Capacidade ────────────────────────────────────────────── */
+function _ProdEtapaCapacidade({p,c,cfg,isMob}){
+  const funcoes=cfg.funcoes||[];
+  const lb=function(id){ const f=funcoes.find(function(x){return x.id===id;}); return f?f.label:id; };
+  const cap=c.capacidade;
+  return <>
+    <_PrdModHeader num={6} ico="barchart" title="Capacidade operacional" subtitle="Dá pra vender em escala? Horas por função, duração e quantos clientes cabem ao mesmo tempo com o time de hoje." done={c.preco>0&&c.horasTotal>0} isMob={isMob}/>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,minmax(0,1fr))",gap:10}}>
+      <_PrdKpi label="Horas por produto" valor={c.horasTotal+"h"} sub={c.pessoas.length+(c.pessoas.length===1?" função":" funções")} ico="users"/>
+      <_PrdKpi label="Duração" valor={c.duracaoDias+" dias"} sub={"≈ "+cap.mesesEntrega+" mês"+(cap.mesesEntrega>1?"es":"")+" de entrega"} ico="calendar"/>
+      <_PrdKpi label="Clientes simultâneos" valor={cap.simultaneos} sub={"com "+cap.horasProdutivasMes+"h produtivas/mês por pessoa"} ico="target"/>
+      <_PrdKpi label="R$/hora vendida" valor={c.rsHora?_prodFmt(c.rsHora):"—"} sub={"MC/hora "+(c.mcHora?_prodFmt(c.mcHora):"—")} ico="dollar"/>
+    </div>
+    <div>
+      <_PrdRotulo>Horas por função (por produto)</_PrdRotulo>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {c.pessoas.map(function(k){ const h=c.horasPorFuncao[k]; const w=Math.round(100*h/Math.max(1,c.horasTotal)); return <div key={k} style={{display:"grid",gridTemplateColumns:"150px 1fr 60px",gap:10,alignItems:"center"}}><span style={{color:_PRD.INK,fontSize:12.5,fontWeight:700}}>{lb(k)}</span><div style={{height:10,borderRadius:99,background:"#eef0f5",overflow:"hidden"}}><div style={{width:w+"%",height:"100%",background:"linear-gradient(90deg,#9F43F6,#7c3aed)",borderRadius:99}}/></div><span style={{textAlign:"right",color:_PRD.INK,fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{h}h</span></div>; })}
+        {c.pessoas.length===0&&<div style={{color:_PRD.SOFT,fontSize:12.5}}>Sem horas nas fases ainda.</div>}
+      </div>
+    </div>
+    <div>
+      <_PrdRotulo>Simulação de vendas por mês</_PrdRotulo>
+      <div style={{border:"1px solid #eef0f5",borderRadius:12,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",minWidth:560,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>
+          <thead><tr style={{background:_PRD.BG_INNER}}>{["Vendas/mês","Faturamento","CSP","Margem contr.","Horas (entrega)","Equipe necessária"].map(function(h,i){return <th key={h} style={{textAlign:i===0?"left":"right",padding:"9px 12px",color:_PRD.SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{h}</th>;})}</tr></thead>
+          <tbody>{c.cenarios.map(function(s){ const eq=Object.keys(s.equipe).map(function(k){return s.equipe[k]+"× "+lb(k);}).join(" · ");
+            return <tr key={s.n} style={{borderTop:"1px solid #f2f3f7"}}>
+              <td style={{padding:"10px 12px",color:_PRD.INK,fontWeight:800}}>{s.n} venda{s.n>1?"s":""}</td>
+              <td style={{padding:"10px 12px",textAlign:"right",color:_PRD.INK,fontWeight:800}}>{_prodFmt(s.faturamento)}</td>
+              <td style={{padding:"10px 12px",textAlign:"right",color:_PRD.MUTE}}>{_prodFmt(s.csp)}</td>
+              <td style={{padding:"10px 12px",textAlign:"right",color:c.mcPct>=Number(cfg.margemMinPct||0)/100?_PRD.OK:_PRD.BAD,fontWeight:800}}>{_prodFmt(s.mc)}</td>
+              <td style={{padding:"10px 12px",textAlign:"right",color:_PRD.INK}}>{s.horas}h<span style={{color:_PRD.SOFT,fontSize:10.5}}> · {Math.round(s.horasMes)}h/mês</span></td>
+              <td style={{padding:"10px 12px",textAlign:"right",color:_PRD.MUTE,fontSize:11.5}}>{eq||"—"}<span style={{color:_PRD.INK,fontWeight:800}}> ({s.pessoasTotal} pessoa{s.pessoasTotal===1?"":"s"})</span></td>
+            </tr>; })}</tbody>
+        </table>
+      </div>
+      <div style={{color:_PRD.SOFT,fontSize:11,marginTop:6,lineHeight:1.5}}>Equipe necessária = horas da função × vendas ÷ meses de entrega ÷ {cap.horasProdutivasMes}h produtivas/mês, arredondado pra cima. Serve pra ver quando o time de hoje deixa de dar conta.</div>
+    </div>
+  </>;
+}
+
+/* ─── ETAPA 7 · Índices ───────────────────────────────────────────────── */
+function _ProdEtapaIndices({p,c,isMob}){
+  const ix=c.indices;
+  return <>
+    <_PrdModHeader num={7} ico="sliders" title="Índice de padronização" subtitle="Quatro números simples pra comparar produtos: o quanto é padrão, o quanto depende do cliente, o quanto pesa pra operar e o quanto escala." done={p.entregaveis.length>0} isMob={isMob}/>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
+      <_PrdIndice label="Padronização" valor={ix.padronizacao} hint={"templates "+_prodPct(ix.pctTemplate,0)+" · reutilizáveis "+_prodPct(ix.pctReut,0)+" · quanto mais alto, menos trabalho do zero"}/>
+      <_PrdIndice label="Dependência do cliente" valor={ix.dependencia} inverso hint="média da dependência marcada nas fases · alto = o prazo fica na mão do cliente"/>
+      <_PrdIndice label="Complexidade operacional" valor={ix.complexidade} inverso hint={c.horasTotal+"h · "+c.pessoas.length+(c.pessoas.length===1?" função":" funções")+" · "+c.reunioes+" reuni"+(c.reunioes===1?"ão":"ões")+" · "+ix.nPersonal+" personalizado"+(ix.nPersonal===1?"":"s")}/>
+      <_PrdIndice label="Potencial de escala" valor={ix.escala} hint="40% padronização + 30% baixa dependência + 30% baixa complexidade"/>
+    </div>
+    <div style={{background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:12,padding:"12px 14px",color:_PRD.MUTE,fontSize:12,lineHeight:1.6}}>
+      <b style={{color:_PRD.INK}}>O que sobe a escala:</b> marcar template e reutilizável nos entregáveis, reduzir reuniões e fases com dependência alta, tirar entregáveis personalizados que não precisam existir. <b style={{color:_PRD.INK}}>Não é nota</b> — é onde mexer.
+    </div>
+  </>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FICHA DO PRODUTO — página final
+   ═══════════════════════════════════════════════════════════════════════ */
+function _ProdFichaCorpo({p,c,cfg,isMob,compacta}){
+  const i=p.ideia; const tipo=PROD_TIPOS.find(function(t){return t.id===i.tipo;});
+  const funcoes=cfg.funcoes||[]; const lb=function(id){ const f=funcoes.find(function(x){return x.id===id;}); return f?f.label:id; };
+  const resp=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===i.responsavel;});
+  const Sec=function(t,children){ return <div><div style={{color:_PRD.PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:8}}>{t}</div>{children}</div>; };
+  const Lista=function(itens){ return <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>{itens.map(function(it,k){return <li key={k} style={{color:"#334155",fontSize:13,lineHeight:1.5,display:"flex",gap:9,alignItems:"flex-start"}}><span style={{width:15,height:15,borderRadius:5,background:"#f6f0ff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>{typeof _PxIco==="function"&&<_PxIco n="check" size={9} color={_PRD.PX} strokeWidth={3.4}/>}</span><span>{it}</span></li>;})}</ul>; };
+  const mMin=Number(cfg.margemMinPct||0)/100;
+  return <div style={{display:"flex",flexDirection:"column",gap:compacta?16:22}}>
+    <div style={{background:"linear-gradient(135deg,#faf5ff 0%,#ffffff 60%)",border:"1px solid "+_PRD.PX_BD,borderRadius:18,padding:isMob?"18px 16px":"24px 26px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,bottom:0,width:5,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><_PrdStatusChip status={p.status}/><span style={{color:_PRD.SOFT,fontSize:11,fontWeight:700}}>v{p.versao||1} · {_prodDataBR(p.atualizadoEm)}</span></div>
+      <div style={{color:_PRD.INK,fontWeight:900,fontSize:isMob?24:30,letterSpacing:-1,marginTop:8,lineHeight:1.1}}>{(i.nome||"Produto").toUpperCase()}</div>
+      <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:10,color:_PRD.MUTE,fontSize:12.5}}>
+        {i.categoria&&<span><b style={{color:_PRD.INK}}>Categoria:</b> {i.categoria}</span>}
+        {tipo&&<span><b style={{color:_PRD.INK}}>Tipo:</b> {tipo.label}</span>}
+        <span><b style={{color:_PRD.INK}}>Duração:</b> {c.duracaoDias} dias</span>
+        {resp&&<span><b style={{color:_PRD.INK}}>Comercial:</b> {resp.name}</span>}
+      </div>
+      {i.resultado&&<div style={{marginTop:14}}><div style={{color:_PRD.PX_DK,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Objetivo</div><div style={{color:"#334155",fontSize:13.5,lineHeight:1.55,marginTop:3}}>{i.resultado}</div></div>}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(6,minmax(0,1fr))",gap:10}}>
+      <_PrdKpi label="Preço" valor={c.preco?_prodFmt(c.preco):"—"}/>
+      <_PrdKpi label="CSP" valor={_prodFmt(c.csp)}/>
+      <_PrdKpi label="Margem contribuição" valor={c.preco?_prodFmt(c.mc):"—"} cor={c.mcPct>=mMin?_PRD.OK:_PRD.BAD}/>
+      <_PrdKpi label="Margem %" valor={c.preco?_prodPct(c.mcPct,1):"—"} cor={c.mcPct>=mMin?_PRD.OK:_PRD.BAD}/>
+      <_PrdKpi label="Horas" valor={c.horasTotal+"h"}/>
+      <_PrdKpi label="R$/hora vendida" valor={c.rsHora?_prodFmt(c.rsHora):"—"} sub={c.mcHora?("MC/h "+_prodFmt(c.mcHora)):undefined}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
+      {Sec("Para quem é",<div style={{color:"#334155",fontSize:13,lineHeight:1.55}}>{i.clienteIdeal||"—"}{(i.segmento||i.tamanho)&&<div style={{color:_PRD.MUTE,fontSize:12,marginTop:6}}>{[i.segmento,i.tamanho&&("empresa "+i.tamanho.toLowerCase())].filter(Boolean).join(" · ")}</div>}</div>)}
+      {Sec("Problema que resolve",<div style={{color:"#334155",fontSize:13,lineHeight:1.55}}>{i.problema||"—"}</div>)}
+    </div>
+    {i.descricao&&Sec("Escopo",<div style={{color:"#334155",fontSize:13,lineHeight:1.55}}>{i.descricao}</div>)}
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
+      {Sec("Etapas",<div style={{display:"flex",flexDirection:"column",gap:8}}>{p.fases.map(function(f,k){return <div key={f.id} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{width:26,height:26,borderRadius:8,background:_PRD.PX_BG,color:_PRD.PX,border:"1px solid "+_PRD.PX_BD,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{String(k+1).padStart(2,"0")}</span><span style={{minWidth:0}}><span style={{display:"block",color:_PRD.INK,fontSize:13,fontWeight:800}}>{f.nome} <span style={{color:_PRD.SOFT,fontWeight:600,fontSize:11}}>· {f.prazoDias} dias</span></span>{f.objetivo&&<span style={{display:"block",color:_PRD.MUTE,fontSize:12,lineHeight:1.45}}>{f.objetivo}</span>}</span></div>;})}{p.fases.length===0&&<span style={{color:_PRD.SOFT,fontSize:12.5}}>—</span>}</div>)}
+      {Sec("Entregáveis",p.entregaveis.length?Lista(p.entregaveis.map(function(e){return (e.nome||"—")+(e.formato?(" · "+e.formato):"");})):<span style={{color:_PRD.SOFT,fontSize:12.5}}>—</span>)}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:18}}>
+      {Sec("Equipe e horas",<div style={{display:"flex",flexDirection:"column",gap:5}}>{c.pessoas.map(function(k){return <div key={k} style={{display:"flex",justifyContent:"space-between",color:"#334155",fontSize:13}}><span>{lb(k)}</span><span style={{fontWeight:800,color:_PRD.INK,fontFeatureSettings:"'tnum'"}}>{c.horasPorFuncao[k]}h</span></div>;})}{c.pessoas.length===0&&<span style={{color:_PRD.SOFT,fontSize:12.5}}>—</span>}<div style={{borderTop:"1px solid #f2f3f7",paddingTop:6,marginTop:3,display:"flex",justifyContent:"space-between",color:_PRD.INK,fontSize:13,fontWeight:800}}><span>Prazo</span><span>{c.duracaoDias} dias · {c.reunioes} reuni{c.reunioes===1?"ão":"ões"}</span></div></div>)}
+      {Sec("Indicadores",<div style={{display:"flex",flexDirection:"column",gap:10}}><_PrdIndice label="Padronização" valor={c.indices.padronizacao}/><_PrdIndice label="Dependência do cliente" valor={c.indices.dependencia} inverso/><_PrdIndice label="Complexidade operacional" valor={c.indices.complexidade} inverso/><_PrdIndice label="Potencial de escala" valor={c.indices.escala}/></div>)}
+    </div>
+    {!cfg.custoHoraEditado&&<div style={{background:_PRD.WARN_BG,border:"1px solid #fde68a",borderRadius:12,padding:"10px 14px",color:"#92400e",fontSize:12,lineHeight:1.5}}>CSP calculado com <b>custo-hora estimado</b> (padrão do sistema). Ajuste os valores em Parâmetros pra ficha refletir o custo real.</div>}
+  </div>;
+}
+
+function _ProdFicha({produto,cfg,abrir,voltar,salvarVersao,duplicar,isMob,canEdit}){
+  const p=produto; const c=prodCalc(p,cfg);
+  function copiar(){
+    const i=p.ideia; const L=[];
+    L.push((i.nome||"Produto").toUpperCase()); if(i.categoria) L.push("Categoria: "+i.categoria); L.push("Duração: "+c.duracaoDias+" dias");
+    if(i.resultado) L.push("","Objetivo: "+i.resultado); if(i.clienteIdeal) L.push("","PARA QUEM É","" ,i.clienteIdeal);
+    if(p.fases.length){ L.push("","ETAPAS"); p.fases.forEach(function(f,k){ L.push(String(k+1).padStart(2,"0")+" "+f.nome+" ("+f.prazoDias+" dias)"); }); }
+    if(p.entregaveis.length){ L.push("","ENTREGÁVEIS"); p.entregaveis.forEach(function(e){ L.push("• "+e.nome+(e.formato?" · "+e.formato:"")); }); }
+    L.push("","PREÇO: "+_prodFmt(c.preco),"CSP: "+_prodFmt(c.csp),"MARGEM DE CONTRIBUIÇÃO: "+_prodFmt(c.mc)+" ("+_prodPct(c.mcPct,1)+")","HORAS DE ENTREGA: "+c.horasTotal+"h","R$/HORA VENDIDA: "+_prodFmt(c.rsHora));
+    const txt=L.join("\n");
+    try{ navigator.clipboard.writeText(txt).then(function(){ if(typeof pixelsToast!=="undefined") pixelsToast.success("Ficha copiada."); }); }catch(_){ window.prompt("Copie:",txt); }
+  }
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PRD.FF}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}><_PrdBtn small tone="ghost" onClick={voltar}>← Portfólio</_PrdBtn><div style={{color:_PRD.INK,fontWeight:800,fontSize:17,letterSpacing:-.4}}>Ficha do produto</div></div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <_PrdBtn small onClick={copiar} ico="copy">Copiar ficha</_PrdBtn>
+        {canEdit&&<_PrdBtn small onClick={function(){duplicar(p);}}>Duplicar</_PrdBtn>}
+        {canEdit&&<_PrdBtn small tone="primary" onClick={function(){abrir(p.id);}} ico="pentool">Editar</_PrdBtn>}
+      </div>
+    </div>
+    <_PrdCard pad={isMob?"16px 14px":"26px 28px"}><_ProdFichaCorpo p={p} c={c} cfg={cfg} isMob={isMob}/></_PrdCard>
+    <_PrdCard>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
+        <div style={{color:_PRD.INK,fontWeight:800,fontSize:14}}>Versões</div>
+        {canEdit&&<_PrdBtn small onClick={function(){ _prodPerguntarVersao().then(function(alt){ if(alt===null||alt===undefined) return; salvarVersao(p,alt); }); }}>Salvar versão atual</_PrdBtn>}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {(p.versoes||[]).slice().reverse().map(function(v){ return <div key={v.n} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"70px 100px 1fr 110px 110px 90px",gap:10,alignItems:"center",padding:"9px 12px",background:_PRD.BG_INNER,border:"1px solid "+_PRD.BORD,borderRadius:10,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>
+          <span style={{color:_PRD.PX_DK,fontWeight:800}}>v{v.n}</span><span style={{color:_PRD.MUTE}}>{_prodDataBR(v.data)}</span><span style={{color:"#334155"}}>{v.alteracoes||"—"}</span>
+          <span style={{color:_PRD.INK,fontWeight:700,textAlign:isMob?"left":"right"}}>{v.preco!=null?_prodFmt(v.preco):"—"}</span><span style={{color:_PRD.MUTE,textAlign:isMob?"left":"right"}}>{v.csp!=null?("CSP "+_prodFmt(v.csp)):""}</span><span style={{color:_PRD.INK,fontWeight:800,textAlign:isMob?"left":"right"}}>{v.mcPct!=null?_prodPct(v.mcPct,0):""}</span>
+        </div>; })}
+        {(p.versoes||[]).length===0&&<div style={{color:_PRD.SOFT,fontSize:12.5}}>Nenhuma versão registrada ainda.</div>}
+      </div>
+    </_PrdCard>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PARÂMETROS — só sócios
+   ═══════════════════════════════════════════════════════════════════════ */
+function _ProdParametros({cfg,setConfig,onBack,isMob,isSocio}){
+  const [buscando,setBuscando]=useState(false);
+  const setF=function(id,v){ setConfig(function(c){ return Object.assign({},c,{custoHoraEditado:true,funcoes:(c.funcoes||[]).map(function(f){return f.id===id?Object.assign({},f,{custoHora:v}):f;})}); }); };
+  const setK=function(k,v){ setConfig(function(c){ const o=Object.assign({},c); o[k]=v; if(k==="impostoPct") o.impostoOrigem="manual"; return o; }); };
+  function puxarImposto(){
+    setBuscando(true);
+    _prodImpostoDoFinanceiro().then(function(r){
+      setBuscando(false);
+      if(!r){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Não achei uma alíquota sobre receita na Projeção financeira."); return; }
+      setConfig(function(c){ return Object.assign({},c,{impostoPct:r.pct,impostoOrigem:"Financeiro › "+r.origem}); });
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Imposto "+r.pct+"% puxado do Financeiro ("+r.origem+").");
+    });
+  }
+  if(!isSocio) return <_PrdCard><div style={{color:_PRD.MUTE,fontSize:13}}>Só sócios editam os parâmetros.</div><div style={{marginTop:10}}><_PrdBtn small tone="ghost" onClick={onBack}>← Voltar</_PrdBtn></div></_PrdCard>;
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PRD.FF}}>
+    <div style={{display:"flex",alignItems:"center",gap:10}}><_PrdBtn small tone="ghost" onClick={onBack}>← Portfólio</_PrdBtn><div><div style={{color:_PRD.INK,fontWeight:800,fontSize:17,letterSpacing:-.4}}>Parâmetros do Criador</div><div style={{color:_PRD.MUTE,fontSize:12}}>Valem pra todos os produtos. Mudou aqui, recalcula em todo lugar.</div></div></div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+      <_PrdCard>
+        <_PrdRotulo extra={cfg.custoHoraEditado?"ajustado":"estimativa inicial"}>Custo-hora interno por função</_PrdRotulo>
+        <div style={{color:_PRD.MUTE,fontSize:11.5,lineHeight:1.5,marginBottom:12}}>Custo pra empresa por hora trabalhada (salário + encargos ÷ horas produtivas). Não existia cadastrado no sistema — estes são pontos de partida.</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>{(cfg.funcoes||[]).map(function(f){ return <_PrdQty key={f.id} label={f.label} value={f.custoHora} onChange={function(v){setF(f.id,v);}} step={5} unidade="R$/h"/>; })}</div>
+      </_PrdCard>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <_PrdCard>
+          <_PrdRotulo extra={cfg.impostoOrigem&&cfg.impostoOrigem!=="padrão"?cfg.impostoOrigem:"padrão"}>Deduções sobre a venda</_PrdRotulo>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <_PrdQty label="Imposto sobre receita" sub="Simples Nacional / ISS. O INSS da folha não entra — já está no custo-hora." value={cfg.impostoPct} onChange={function(v){setK("impostoPct",v);}} step={0.5} unidade="%" max={40}/>
+            <div><_PrdBtn small onClick={puxarImposto} disabled={buscando} ico="barchart">{buscando?"Buscando…":"Puxar do Financeiro"}</_PrdBtn></div>
+            <_PrdQty label="Comissão comercial" value={cfg.comissaoPct} onChange={function(v){setK("comissaoPct",v);}} step={1} unidade="%" max={50}/>
+            <_PrdQty label="Taxa de pagamento" value={cfg.taxaPct} onChange={function(v){setK("taxaPct",v);}} step={0.5} unidade="%" max={20}/>
+            <_PrdQty label="Outros custos variáveis" value={cfg.outrosVarPct} onChange={function(v){setK("outrosVarPct",v);}} step={0.5} unidade="%" max={30}/>
+          </div>
+        </_PrdCard>
+        <_PrdCard>
+          <_PrdRotulo>Margens e capacidade</_PrdRotulo>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <_PrdQty label="Margem de contribuição mínima" sub="abaixo disso o produto não deveria ser vendido" value={cfg.margemMinPct} onChange={function(v){setK("margemMinPct",v);}} step={5} unidade="%" max={95}/>
+            <_PrdQty label="Margem desejada" sub="o alvo do preço" value={cfg.margemDesejadaPct} onChange={function(v){setK("margemDesejadaPct",v);}} step={5} unidade="%" max={95}/>
+            <_PrdQty label="Horas produtivas por pessoa/mês" sub="usadas na simulação de capacidade" value={cfg.horasProdutivasMes} onChange={function(v){setK("horasProdutivasMes",v);}} step={10} unidade="h" min={20} max={220}/>
+          </div>
+        </_PrdCard>
       </div>
     </div>
   </div>;
