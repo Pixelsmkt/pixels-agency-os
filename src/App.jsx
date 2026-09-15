@@ -3476,10 +3476,15 @@ function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   if(ehComemorativa){
     r+="- Esta é uma homenagem: o fecho é leve, se colocando à disposição — não é chamada de venda.\n";
   }else{
-    r+="- Feche com uma chamada curta e direta, do tipo “Entre em contato agora mesmo”, “Fala com a gente”, “Chama no WhatsApp”, “Solicite seu orçamento”. Varie entre os posts, não repita sempre a mesma frase.\n";
+    // CTA ACOLHEDOR (Vinicius, 15/09/2026): o modelo fechava quase toda legenda em
+    // "Solicite seu orçamento" — soa a cobrança. O fecho é convite pra conversa.
+    r+="- Feche com um CONVITE ACOLHEDOR, de porta aberta — do tipo “Converse com a gente agora mesmo”, “Fala com a gente, estamos prontos pra te atender”, “Chama no WhatsApp que a gente te ajuda”, “Estamos à disposição pra pensar a melhor solução com você”. Varie entre os posts, nunca repita a mesma frase do post anterior.\n";
+    r+="- ⛔ PROIBIDO fechar com orçamento: “Solicite seu orçamento”, “peça um orçamento”, “faça já seu orçamento”, “peça sua proposta/cotação” e qualquer variante. Convite pra CONVERSAR, nunca pedido de compra.\n";
+    r+="- O tom é de quem atende, não de quem vende: gentil, próximo, na segunda pessoa (“você”). Sem urgência fabricada (“última chance”, “corre”, “só hoje”) e sem ponto de exclamação em excesso.\n";
+    r+="- As legendas antigas que você recebeu como exemplo podem fechar em “Solicite seu orçamento” — era o padrão antigo, está revogado. NÃO copie esse fecho de lá.\n";
   }
   if(_tem){
-    r+="- Logo abaixo da chamada vem a linha do telefone, assim e SÓ assim:\n";
+    r+="- O telefone vem na linha IMEDIATAMENTE abaixo da chamada — um Enter só, SEM linha em branco entre as duas. Chamada e telefone são o mesmo bloco. Assim e SÓ assim:\n";
     r+="    📱 "+_cts[0].num+"\n";
     r+="- NADA além do emoji e do número nessa linha. Sem nome de pessoa, sem “WhatsApp:”, sem observação, sem parênteses explicativos.\n";
     if(_cts.length>1){
@@ -3636,19 +3641,34 @@ function _pxCtxTxt(v){
     const x=_pxCtxTxt(v[k]); return x?(k+": "+x):""; }).filter(Boolean).join(" | ");
   return String(v).trim();
 }
+/* TELEFONE COLADO NO CTA (Vinicius, 15/09/2026) — "sem esse espaçamento de enter entre
+   telefone e a frase do CTA". A linha do 📱 é a continuação da chamada, no mesmo bloco.
+   Vale pra legenda que a IA escreve agora E pras que já estão gravadas com Enter duplo. */
+const _PX_RE_TEL_LINHA=/\n[ \t\u00a0]*\n+(?=[ \t\u00a0]*(?:\ud83d\udcf1|\ud83d\udcde|\u260e))/g;
+function _pxColaTelefone(txt){
+  return String(txt||"").replace(_PX_RE_TEL_LINHA,"\n");
+}
+
 function _pxHtmlParaTexto(html){
   return String(html||"")
     .replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n")
     .replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&")
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-    .replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
+    .replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n")
+    .replace(_PX_RE_TEL_LINHA,"\n").trim();
 }
+
 function _pxTextoParaHtml(txt){
-  const linhas=String(txt||"").split(/\n/);
+  const linhas=_pxColaTelefone(txt).split(/\n/);
   let out="";
   for(let i=0;i<linhas.length;i++){
     const l=linhas[i].trim();
     if(!l){ out+="<p>&nbsp;</p>"; continue; }
+    // A linha do telefone entra como <br> DENTRO do parágrafo do CTA. Se virasse um <p>
+    // próprio ganharia a margem do parágrafo e o buraco voltava — no cartão e na avaliação.
+    if(/^(?:\ud83d\udcf1|\ud83d\udcde|\u260e)/.test(l) && /<\/p>$/.test(out) && !/<p>&nbsp;<\/p>$/.test(out)){
+      out=out.slice(0,-4)+"<br>"+l+"</p>"; continue;
+    }
     // rótulos do briefing (• Título, • Texto na arte, • Roteiro) vão em negrito
     if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|Pin no mapa|Pin en el mapa|Frase na arte|Frase en el arte|O que precisamos)/i.test(l)){
       out+="<p><strong>"+l.replace(/^[-]\s*/,"• ")+"</strong></p>";
@@ -28625,6 +28645,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [lote,setLote]=useState(null);   // {total,feitos,erros,atual,parar}
   const loteRef=useRef(null);
   const [refazerText,setRefazerText]=useState("");
+  // Barra do topo da Avaliação de copys editando o card (Vinicius, 15/09/2026):
+  // {id, campo} do bloco aberto — "pub" | "ct" | "dl" | "ref".
+  const [metaAberto,setMetaAberto]=useState(null);
   // O QUE A IA VAI REESCREVER (15/09/2026): "ambos" | "briefing" | "legenda".
   // Só aparece no Ajustar copy — nova abordagem e refazer do zero trocam a copy inteira.
   const [refazerAlvo,setRefazerAlvo]=useState("ambos");
@@ -29229,6 +29252,27 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }else{
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.");
     }
+  };
+
+  /* ── EDITAR OS METADADOS PELA BARRA DO TOPO (Vinicius, 15/09/2026) ─────
+     "essa barra podia ser mais útil: mudar o tipo de conteúdo por ali, a data de
+     pagamento também, e que salve dentro do card."
+     Mesmo caminho do editCopyField — `setTasks` e o wrapper sincroniza com o
+     Supabase (camelCase vira snake_case no `toRow` do 17_gestao_midia).
+     Tipo de conteúdo e mês de pagamento entram no cálculo do freelancer, então
+     TODA mudança grava linha de timeline com o de/para. */
+  const salvarMetaCard=(task,patch,oQue,deTxt,paraTxt,fechar)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const tl={type:"edit",label:actor+" alterou "+oQue+" pela avalia\u00e7\u00e3o",at:now,atFmt:nowFmt(),user:actor,
+                from:String(deTxt||"em branco").slice(0,80),to:String(paraTxt||"em branco").slice(0,80)};
+      return {...t,...patch,timeline:[...(t.timeline||[]),tl]};
+    }));
+    if(typeof pixelsToast!=="undefined")pixelsToast.success(oQue+": "+(paraTxt||"em branco")+".");
+    if(fechar!==false)setMetaAberto(null);
   };
 
   // ── PUBLICATION ACTIONS ──
@@ -30289,7 +30333,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           const _vIdx=(_vSel===null||_vSel===undefined)?_vNoAr:Math.max(0,Math.min(_vNoAr,_vSel));
           const _vOutra=_vs.length>1&&_vIdx!==_vNoAr;
           const _vAtiva=_vOutra?(_vs[_vIdx]||{}):null;
-          const captionTxt2=stripHtml(_vAtiva?_vAtiva.legenda:current.caption);
+          // Telefone colado no CTA tambem nas legendas JA gravadas (_pxColaTelefone, 00_clientes_data.jsx)
+          const captionTxt2=(typeof _pxColaTelefone==="function"?_pxColaTelefone:function(x){return x;})(stripHtml(_vAtiva?_vAtiva.legenda:current.caption));
           // Tradução pt-BR da copy do Paraguay — entra em VERDE dentro de cada bloco
           // (briefing embaixo do briefing, legenda embaixo da legenda). Vinicius, 14/09:
           // "não tudo junto".
@@ -30392,10 +30437,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
             {/* Metadados do card — um por linha, grandes.
                  Ordem pedida pelo Vinicius: data de publicação, tipo de conteúdo, entrega, pagamento.
-                 Prioridade NÃO entra aqui. */}
+                 Prioridade NÃO entra aqui.
+                 EDITÁVEIS (15/09/2026): quem aprova clica no bloco e troca o valor ali mesmo —
+                 salva no card pelo `salvarMetaCard`. Quem não aprova continua só lendo, e nesse
+                 caso bloco sem valor nem aparece (era o comportamento antigo). */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Folder",icon:"file-text"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -30403,24 +30451,92 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const refMes=current.referenceMonth||current.reference_month||"";
               const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
-              const linhas=[];
-              if(pubD)linhas.push({key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD)+(pubT?("  ·  "+pubT):""),color:"#0ea5e9",escura:"#0369a1"});
-              if(ctCfg)linhas.push({key:"ct",icon:ctCfg.icon,rot:"Tipo de conteúdo",val:ctCfg.label,color:"#7c3aed",escura:"#5b21b6"});
-              if(dl)linhas.push({key:"dl",icon:"clock",rot:"Entrega",val:fmtBR(dl),color:"#f97316",escura:"#c2410c"});
-              if(refMes)linhas.push({key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a",escura:"#15803d"});
+              const podeEditar=!!isApprover;
+              const linhas=[
+                {key:"pub",icon:"calendar",rot:"Data de publicação",val:pubD?(fmtBR(pubD)+(pubT?("  ·  "+pubT):"")):"",color:"#0ea5e9",escura:"#0369a1"},
+                {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed",escura:"#5b21b6"},
+                {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316",escura:"#c2410c"},
+                {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a",escura:"#15803d"},
+              ].filter(l=>podeEditar||l.val);
               if(linhas.length===0)return null;
-              return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
-                {linhas.map(l=>(
-                  <div key={l.key} style={{display:"flex",alignItems:"center",gap:isMob?9:11,background:l.color+"0D",border:"1px solid "+l.color+"2E",borderRadius:12,padding:isMob?"9px 12px":"10px 14px",flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":224,boxSizing:"border-box"}}>
-                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?27:30,height:isMob?27:30,borderRadius:9,background:l.color+"1F",flexShrink:0}}>
-                      <Ico n={l.icon} size={isMob?14:15} color={l.color}/>
-                    </span>
-                    <span style={{minWidth:0}}>
-                      <span style={{display:"block",color:l.color,fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,lineHeight:1.2}}>{l.rot}</span>
-                      <span style={{display:"block",color:l.escura||l.color,fontSize:isMob?13:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap"}}>{l.val}</span>
-                    </span>
+              const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
+              const CX={position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:60,background:"#fff",border:"1px solid "+C.b1,borderRadius:13,boxShadow:"0 14px 34px rgba(15,23,42,.17)",padding:12,minWidth:248,maxWidth:"min(300px, calc(100vw - 48px))",boxSizing:"border-box"};
+              const INP={width:"100%",border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",fontSize:13,fontFamily:"inherit",color:"#0f172a",outline:"none",boxSizing:"border-box"};
+              const ROT={display:"block",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,color:"#94a3b8",marginBottom:4};
+              const _pop=(l)=>{
+                if(l.key==="pub")return(<div style={CX} onClick={e=>e.stopPropagation()}>
+                  <label style={ROT}>Dia</label>
+                  <input id={"px-meta-pub-d-"+current.id} type="date" value={pubD||""} style={INP}
+                    onChange={e=>salvarMetaCard(current,{publishDate:e.target.value||""},"data de publicação",fmtBR(pubD),fmtBR(e.target.value),false)}/>
+                  <label style={{...ROT,marginTop:10}}>Hora</label>
+                  <input id={"px-meta-pub-h-"+current.id} type="time" value={pubT||""} style={INP}
+                    onChange={e=>salvarMetaCard(current,{publishTime:e.target.value||""},"hora de publicação",pubT,e.target.value,false)}/>
+                  <button type="button" onClick={()=>setMetaAberto(null)} style={{marginTop:11,width:"100%",background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 0",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Pronto</button>
+                </div>);
+                if(l.key==="dl")return(<div style={CX} onClick={e=>e.stopPropagation()}>
+                  <label style={ROT}>Prazo de entrega</label>
+                  <input id={"px-meta-dl-"+current.id} type="date" value={dl||""} style={INP}
+                    onChange={e=>salvarMetaCard(current,{deadline:e.target.value||""},"prazo de entrega",fmtBR(dl),fmtBR(e.target.value))}/>
+                </div>);
+                if(l.key==="ref")return(<div style={CX} onClick={e=>e.stopPropagation()}>
+                  <label style={ROT}>Mês de pagamento</label>
+                  <input id={"px-meta-ref-"+current.id} type="month" value={refMes?String(refMes).slice(0,7):""} style={INP}
+                    onChange={e=>salvarMetaCard(current,{referenceMonth:e.target.value||""},"mês de pagamento",fmtMes(refMes),fmtMes(e.target.value))}/>
+                  <div style={{display:"flex",gap:6,marginTop:9,flexWrap:"wrap"}}>
+                    {(function(){
+                      const hoje=new Date(); const opts=[];
+                      for(let k=-1;k<=2;k++){
+                        const d=new Date(hoje.getFullYear(),hoje.getMonth()+k,1);
+                        opts.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+                      }
+                      return opts.map(function(v){
+                        const sel=String(refMes||"").slice(0,7)===v;
+                        return <button key={v} type="button" onClick={()=>salvarMetaCard(current,{referenceMonth:v},"mês de pagamento",fmtMes(refMes),fmtMes(v))}
+                          style={{background:sel?"#16a34a":"#f8fafc",color:sel?"#fff":"#475569",border:"1px solid "+(sel?"#16a34a":C.b1),borderRadius:99,padding:"4px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{fmtMes(v)}</button>;
+                      });
+                    })()}
                   </div>
-                ))}
+                </div>);
+                // tipo de conteúdo — lista fechada, a mesma do cartão
+                return(<div style={{...CX,minWidth:262,padding:"8px 8px"}} onClick={e=>e.stopPropagation()}>
+                  {(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).map(function(o){
+                    const sel=ct===o.id; const cfg=CT_MAP[o.id]||{icon:"image"};
+                    return <button key={o.id} type="button" title={o.quando||""}
+                      onClick={()=>salvarMetaCard(current,{contentType:o.id},"tipo de conteúdo",ctCfg?ctCfg.label:"",o.label)}
+                      style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:sel?"#7c3aed14":"transparent",border:"none",borderRadius:9,padding:"8px 10px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel?800:600,color:sel?"#5b21b6":"#334155",textAlign:"left"}}
+                      onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.background="transparent";}}>
+                      <Ico n={cfg.icon} size={14} color={sel?"#7c3aed":"#94a3b8"}/>
+                      <span style={{flex:1,minWidth:0}}>{o.label}</span>
+                      {sel&&<Ico n="check" size={13} color="#7c3aed"/>}
+                    </button>;
+                  })}
+                </div>);
+              };
+              return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
+                {aberto&&<div onClick={()=>setMetaAberto(null)} style={{position:"fixed",inset:0,zIndex:55}}/>}
+                {linhas.map(l=>{
+                  const vazio=!l.val;
+                  const aqui=aberto===l.key;
+                  const caixa=(<div style={{display:"flex",alignItems:"center",gap:isMob?9:11,background:vazio?"#f8fafc":l.color+"0D",border:"1px solid "+(aqui?l.color:(vazio?C.b1:l.color+"2E")),borderRadius:12,padding:isMob?"9px 12px":"10px 14px",width:"100%",boxSizing:"border-box",textAlign:"left",fontFamily:"inherit",cursor:podeEditar?"pointer":"default",transition:"border-color .12s,box-shadow .12s",boxShadow:aqui?("0 0 0 3px "+l.color+"22"):"none"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?27:30,height:isMob?27:30,borderRadius:9,background:vazio?"#e2e8f0":l.color+"1F",flexShrink:0}}>
+                      <Ico n={l.icon} size={isMob?14:15} color={vazio?"#94a3b8":l.color}/>
+                    </span>
+                    <span style={{minWidth:0,flex:1}}>
+                      <span style={{display:"block",color:vazio?"#94a3b8":l.color,fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,lineHeight:1.2}}>{l.rot}</span>
+                      <span style={{display:"block",color:vazio?"#94a3b8":(l.escura||l.color),fontSize:isMob?13:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.val||"definir"}</span>
+                    </span>
+                    {podeEditar&&<Ico n="edit" size={12} color={vazio?"#94a3b8":l.color}/>}
+                  </div>);
+                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":252}}>
+                    {podeEditar
+                      ? <button type="button" onClick={()=>setMetaAberto(aqui?null:{id:current.id,campo:l.key})}
+                          title={"Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"}
+                          style={{display:"block",width:"100%",background:"none",border:"none",padding:0,margin:0,font:"inherit",color:"inherit",textAlign:"left",cursor:"pointer",boxSizing:"border-box"}}>{caixa}</button>
+                      : caixa}
+                    {aqui&&_pop(l)}
+                  </div>);
+                })}
               </div>);
             })()}
 
@@ -30918,7 +31034,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               // Limpa quebras múltiplas
               return t.replace(/^[ \t\u00a0]+$/gm,"").replace(/[ \t\u00a0]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim();
             };
-            const captionTxt=stripHtml(current.caption);
+            const captionTxt=(typeof _pxColaTelefone==="function"?_pxColaTelefone:function(x){return x;})(stripHtml(current.caption));
             const descTxt=stripHtml(current.desc);
             return(
               <div style={{background:C.card,borderRadius:14,padding:"18px 20px",border:"1px solid "+C.b1,display:"flex",flexDirection:"column",gap:14}}>
@@ -44039,10 +44155,14 @@ function _cardPodeSerResp(u){
                    Em arte de data comemorativa são DOIS botões roxos aqui (roteiro de vídeo e
                    Gerar/Ajustar briefing). Empilhados ficavam feios: agora ficam lado a lado, cada
                    um com a dica embaixo. O BOTÃO NÃO ESTICA — mesmo tamanho natural do botão da aba
-                   Legenda; quem divide a largura em duas colunas é a coluna, não o botão. Em tela
-                   estreita quebram um sobre o outro sozinhos. Com um botão só, fica como era. */}
-              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}.px-ia-row>div{flex:1 1 230px;min-width:0;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start}"}</style>
-              <div className={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?"px-ia-row":undefined} style={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?{marginBottom:10}:undefined}>
+                   Legenda. A COLUNA TEM TETO (max-width:290px): sem ele cada coluna virava
+                   metade do painel e sobrava um vazio enorme entre os dois botões (Vinicius,
+                   15/09/2026). white-space:nowrap no botão pra o rótulo não quebrar em duas
+                   linhas dentro do teto. Abaixo de ~575px de painel eles quebram um
+                   sobre o outro sozinhos. Com um botão só, fica como era. O marginBottom do
+                   wrapper dá o respiro até a barra de formatação e a caixa do briefing. */}
+              <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start}.px-ia-row>div{flex:1 1 280px;min-width:0;max-width:290px;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start;white-space:nowrap}"}</style>
+              <div className={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?"px-ia-row":undefined} style={{marginBottom:(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?18:8}}>
               {/* ── Qualquer peça escrita (arte, carrossel, foto) → roteiro de vídeo de 60s ── */}
               {pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&(<div style={{marginBottom:10}}>
                 <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
