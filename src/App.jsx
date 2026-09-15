@@ -3874,6 +3874,9 @@ async function pxReescreverCopy(opts){
     }
     if(!soBrief){
       u+="\nFORMATO DA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, o que foi entregue nesta obra, a marca entra na história, fecho com CTA e contato, e a linha de hashtags — NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
+      /* Mesmo aperto do botão "Gerar/Ajustar legenda" (Vinicius, 15/09/2026). */
+      u+="\n- A legenda tem que NOMEAR O PRODUTO da foto (lagoa de piscicultura, lagoa de estabilização, cisterna inflada, ETA, biodigestor, geomembrana, piso vazado…) e dizer o BENEFÍCIO PRINCIPAL dele — o mesmo da “Frase na arte”.";
+      u+="\n- ⛔ Nada de “cada etapa da implantação importa”, “estrutura adequada às necessidades da produção”, “infraestrutura pensada para aquilo que realmente importa”. Se serve pra qualquer obra, está genérica.";
       u+=_pxRegrasLegenda(pb,unit,false,task.client);
       if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda como string vazia.";
     }
@@ -4122,7 +4125,17 @@ async function pxGerarLegendas(opts){
       u+="Elas precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
     }
   }
-  if(ehFotoObra) u+="É uma FOTO DE OBRA: o post mostra serviço entregue. Fale do que foi feito e de onde, com orgulho e sem exagero. Nada de promessa nem número que não esteja no briefing.\n";
+  if(ehFotoObra){
+    /* NOME DO PRODUTO + BENEFÍCIO (Vinicius, 15/09/2026, Terra Boa/PR): a legenda vinha
+       genérica — "cada etapa da implantação importa", "infraestrutura pensada para aquilo
+       que realmente importa" — e o benefício que estava na Frase na arte não aparecia.
+       Regra 38 de `claude_copy_regras` diz o mesmo; aqui fica o ramo específico. */
+    u+="É uma FOTO DE OBRA: o post mostra serviço entregue. Fale do que foi feito e de onde, com orgulho e sem exagero. Nada de promessa nem número que não esteja no briefing.\n";
+    u+="- DIGA O NOME DO PRODUTO com todas as letras (lagoa de piscicultura, lagoa de estabilização, cisterna inflada, ETA, biodigestor, geomembrana, piso vazado…). “obra”, “estrutura” e “infraestrutura” sozinhos não valem.\n";
+    u+="- DIGA O BENEFÍCIO PRINCIPAL desse produto, concreto — o MESMO que está na “Frase na arte” do briefing (reduzir perda de água, estanqueidade, manejo de dejetos, sanidade, durabilidade…).\n";
+    u+="- ⛔ PROIBIDA frase de enchimento que serve pra qualquer obra: “cada etapa da implantação importa”, “estrutura adequada às necessidades da produção”, “infraestrutura pensada para aquilo que realmente importa”, “colocar a atividade para funcionar”, “mais uma obra entregue”.\n";
+    u+="- TESTE antes de devolver: se dá pra trocar o produto por outro da empresa e o texto continuar fazendo sentido, está genérica — reescreva.\n";
+  }
   if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
   if(ehComemorativa){
     u+="É DATA COMEMORATIVA: é homenagem, não é post de venda. Sem CTA, sem telefone, sem falar de produto, prazo ou garantia.\n";
