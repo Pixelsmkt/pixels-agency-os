@@ -3958,6 +3958,10 @@ async function pxGerarLegendas(opts){
   const modo=String((opts&&opts.modo)||"gerar")==="alterar"?"alterar":"gerar";
   const legAtual=_pxHtmlParaTexto((opts&&opts.legendaAtual)||"");
   const historico=Array.isArray(opts&&opts.historico)?opts.historico:[];
+  // QUANTAS LEGENDAS (15/09/2026): o botão da aba Legenda pede 3 pra escolher; o
+  // "briefing + legenda" da aba Briefing pede 1 — não faz sentido gastar o triplo
+  // de saída pra oferecer escolha num fluxo que já está mostrando a proposta.
+  const quantas=Math.max(1,Math.min(3,parseInt((opts&&opts.quantas)||3,10)||3));
   if(briefing.length<3) throw new Error(modo==="alterar"
     ? "Escreva o que precisa ajustar antes de gerar."
     : "Escreva um briefing curto antes de gerar (produto, cidade, ou o que aparece na foto).");
@@ -3996,7 +4000,9 @@ async function pxGerarLegendas(opts){
        :"Escreva em português do Brasil.")+
     (modo==="alterar"?"Você está AJUSTANDO uma legenda que já existe: mexa só no que foi criticado e devolva o texto inteiro. ":"")+
     "\nResponda EXATAMENTE neste formato, texto puro, sem markdown, sem comentário antes nem depois:"+
-    "\n===OPCAO 1===\n(legenda)\n===OPCAO 2===\n(legenda)\n===OPCAO 3===\n(legenda)";
+    (quantas===1?"\n===OPCAO 1===\n(a legenda)"
+     :quantas===2?"\n===OPCAO 1===\n(legenda)\n===OPCAO 2===\n(legenda)"
+     :"\n===OPCAO 1===\n(legenda)\n===OPCAO 2===\n(legenda)\n===OPCAO 3===\n(legenda)");
 
   let u="CLIENTE: "+(cliente||"—")+(unit?(" — unidade "+unit):"")+"\n";
   u+="CARD: "+(titulo||"—")+"\n";
@@ -4069,14 +4075,18 @@ async function pxGerarLegendas(opts){
   }
 
   if(modo==="alterar"){
-    u+="TAREFA: reescreva a LEGENDA ATUAL aplicando o ajuste pedido, em 3 versões.\n";
+    u+="TAREFA: reescreva a LEGENDA ATUAL aplicando o ajuste pedido"+(quantas>1?(", em "+quantas+" versões"):"")+".\n";
     u+="- MANTENHA tudo que não foi criticado, com as mesmas palavras. Não reescreva o que já está bom.\n";
     u+="- Não invente dado novo pra preencher o que foi tirado.\n";
-    u+="- As 3 versões corrigem a MESMA coisa de jeitos diferentes — não são 3 assuntos diferentes.\n";
+    if(quantas>1) u+="- As "+quantas+" versões corrigem a MESMA coisa de jeitos diferentes — não são "+quantas+" assuntos diferentes.\n";
     u+="- Devolva a legenda INTEIRA já corrigida, nunca só o pedaço que mudou.\n";
   }else{
-    u+="TAREFA: escreva 3 LEGENDAS DIFERENTES para este post, todas a partir do mesmo briefing.\n";
-    u+="As três precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
+    if(quantas===1){
+      u+="TAREFA: escreva A LEGENDA deste post a partir do briefing acima.\n";
+    }else{
+      u+="TAREFA: escreva "+quantas+" LEGENDAS DIFERENTES para este post, todas a partir do mesmo briefing.\n";
+      u+="Elas precisam ser caminhos de verdade diferentes (abertura diferente, ângulo diferente), não a mesma legenda com sinônimo trocado.\n";
+    }
   }
   if(ehFotoObra) u+="É uma FOTO DE OBRA: o post mostra serviço entregue. Fale do que foi feito e de onde, com orgulho e sem exagero. Nada de promessa nem número que não esteja no briefing.\n";
   if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
@@ -4087,9 +4097,9 @@ async function pxGerarLegendas(opts){
     u+="\nFORMATO DE CADA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
   }
   u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
-  if(soStory) u+="\nESTE CARD É SOMENTE STORY: mesmo assim escreva as 3, porém curtas (até 220 caracteres) e sem hashtags.";
+  if(soStory) u+="\nESTE CARD É SOMENTE STORY: escreva "+(quantas===1?"a legenda":"as "+quantas)+" curta (até 220 caracteres) e sem hashtags.";
 
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:3000,system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:(quantas===1?1400:3000),system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
   // Normaliza variações do separador (**OPÇÃO 1**, ### Opcao 1, OPÇÃO 1:) antes de cortar
@@ -4099,7 +4109,7 @@ async function pxGerarLegendas(opts){
     return p.replace(/^===+\s*/,"").replace(/\s*===+$/,"").trim();
   }).filter(Boolean);
   if(!out.length) throw new Error("A IA respondeu vazio. Tente de novo.");
-  return out.slice(0,3);
+  return out.slice(0,quantas);
 }
 
 /* ─── GERAR BRIEFING (botão "Gerar briefing" da aba Briefing) ─────────────
@@ -40628,6 +40638,13 @@ function pxEhArteComemorativa(t){
   // arte única é o padrão da comemorativa; só não oferece se o card já é vídeo
   return ct!=="video" && ct!=="video_short" && ct!=="reels";
 }
+/* Foto de obra: pelo TITULO (é o que a equipe escreve) ou pelo tipo do card.
+   O mesmo par que a regra 37 do banco e o pxReescreverCopy usam. (15/09/2026) */
+function pxEhFotoDeObra(t){
+  if(!t) return false;
+  const ct=String(t.contentType||t.content_type||"").toLowerCase();
+  return /foto\s*de\s*obra/i.test(String(t.title||"")) || ct==="foto";
+}
 /* 15/09/2026 — o botão nasceu preso à data comemorativa e o Vinicius abriu um carrossel
    comum procurando por ele. Qualquer peça escrita pode virar roteiro: o que não faz
    sentido é oferecer num card que JÁ é vídeo. O tom (homenagem × conteúdo) quem decide
@@ -42998,6 +43015,23 @@ function _cardPodeSerResp(u){
                 ? "Diz só o que está errado. Ele mantém com as mesmas palavras tudo que você não criticou, e devolve o briefing inteiro já corrigido."
                 : "Escreve como você falaria pra equipe. Se disser o formato (“um carrossel”, “vídeo curto”, “só trocar a foto do template”), ele obedece — senão, ele escolhe o tipo e explica por quê."}
             </div>
+            {/* BRIEFING + LEGENDA NUMA TACADA (15/09/2026, Vinicius): em Foto de obra o card
+                nasce vazio dos dois lados e a Hellen tinha que abrir dois modais. Vídeo short
+                fica de fora de propósito — lá só falta a legenda, e pra isso existe o botão
+                da aba Legenda. */}
+            {briefIA.modo!=="alterar"&&!somenteStory&&(
+              <label style={{display:"flex",alignItems:"flex-start",gap:9,cursor:"pointer",background:briefIA.comLegenda?"#faf5ff":"#f8fafc",border:"1px solid "+(briefIA.comLegenda?"#ddd6fe":"#e2e8f0"),borderRadius:11,padding:"10px 12px",marginBottom:12}}>
+                <input type="checkbox" checked={!!briefIA.comLegenda} disabled={!!briefIA.loading}
+                  onChange={function(e){ const v=e.target.checked; setBriefIA(function(p){return Object.assign({},p,{comLegenda:v});}); }}
+                  style={{marginTop:2,width:15,height:15,accentColor:"#7c3aed",cursor:"pointer"}}/>
+                <span style={{minWidth:0}}>
+                  <span style={{display:"block",color:"#0f172a",fontSize:12.5,fontWeight:700}}>Escrever a legenda também</span>
+                  <span style={{display:"block",color:"#64748b",fontSize:11.5,lineHeight:1.5,marginTop:2}}>
+                    Numa tacada só: ele monta o briefing e escreve a legenda a partir dele. Sem isso, o card sai só com o briefing.
+                  </span>
+                </span>
+              </label>
+            )}
             <textarea
               value={briefIA.pedido}
               onChange={function(e){ const v=e.target.value; setBriefIA(function(p){return Object.assign({},p,{pedido:v});}); }}
@@ -43011,7 +43045,7 @@ function _cardPodeSerResp(u){
             {briefIA.erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"12px 14px",color:"#991b1b",fontSize:12.5,lineHeight:1.6,marginTop:12}}>{briefIA.erro}</div>}
 
             {briefIA.loading&&<div style={{padding:"30px 0 18px",textAlign:"center",color:"#64748b",fontSize:13}}>
-              {briefIA.modo==="alterar"?"Aplicando o ajuste no briefing que já está no card…":"Lendo o playbook e os briefings aprovados… montando."}
+              {briefIA.modo==="alterar"?"Aplicando o ajuste no briefing que já está no card…":(briefIA.comLegenda?"Lendo o playbook, os briefings e as legendas aprovadas… montando o briefing e a legenda.":"Lendo o playbook e os briefings aprovados… montando.")}
             </div>}
 
             {!briefIA.loading&&_v&&<div style={{marginTop:18}}>
@@ -43037,8 +43071,19 @@ function _cardPodeSerResp(u){
 
               <div style={{border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",color:"#1e293b",fontSize:12.8,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"#fff"}}>{_v.briefingTexto}</div>
 
-              {desc&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55,marginTop:10}}>
-                Este card já tem briefing. Usar esta proposta troca o texto na tela — nada é gravado até você clicar em <strong>Salvar</strong>, lá em cima.
+              {_v.legenda&&<div style={{border:"1px solid #ede9fe",borderRadius:12,overflow:"hidden",marginTop:10,background:"#fdfaff"}}>
+                <div style={{padding:"8px 14px",borderBottom:"1px solid #f3e8ff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <span style={{color:"#7c3aed",fontWeight:800,fontSize:11,letterSpacing:.3,textTransform:"uppercase"}}>Legenda</span>
+                  <span style={{color:"#a78bfa",fontSize:10.5}}>{_v.legenda.length} caracteres</span>
+                </div>
+                <div style={{padding:"13px 15px",color:"#1e293b",fontSize:12.8,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{_v.legenda}</div>
+              </div>}
+              {_v.legendaErro&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55,marginTop:10}}>
+                O briefing saiu, mas a legenda não: {_v.legendaErro} — dá pra escrever a legenda pelo botão da aba Legenda.
+              </div>}
+
+              {(desc||(caption&&_v.legenda))&&<div style={{color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 12px",fontSize:11.5,lineHeight:1.55,marginTop:10}}>
+                Este card já tem {(desc&&caption&&_v.legenda)?"briefing e legenda":(desc?"briefing":"legenda")}. Usar esta proposta troca o texto na tela — nada é gravado até você clicar em <strong>Salvar</strong>, lá em cima.
               </div>}
             </div>}
           </div>
@@ -43065,6 +43110,16 @@ function _cardPodeSerResp(u){
                   const r=await pxGerarBriefing({task:_t,clienteNome:_nome,necessidade:_p,
                     modo:briefIA.modo||"gerar", briefingAtual:_base, historico:_hist});
                   r.pedido=_p;
+                  // LEGENDA NA MESMA RODADA: escrita a partir do briefing que acabou de sair,
+                  // nao do pedido cru — legenda e briefing tem que contar a mesma historia.
+                  // Se falhar, o briefing NAO se perde: entra so um aviso amarelo.
+                  if(briefIA.comLegenda&&briefIA.modo!=="alterar"){
+                    try{
+                      const _ops=await pxGerarLegendas({task:_t,clienteNome:_nome,
+                        briefing:r.briefingTexto||_pxTextoPuro(r.briefing),quantas:1});
+                      r.legenda=(Array.isArray(_ops)&&_ops[0])||"";
+                    }catch(_e){ r.legendaErro=(_e&&_e.message)||String(_e); }
+                  }
                   setBriefIA(function(p){
                     const vs=(Array.isArray(p.versoes)?p.versoes:[]).concat([r]);
                     return Object.assign({},p,{loading:false,erro:"",pedido:"",versoes:vs,idx:vs.length-1});
@@ -43082,10 +43137,16 @@ function _cardPodeSerResp(u){
                 try{ if(descRef.current) descRef.current.innerHTML=_v.briefing; }catch(_){}
                 if(canEditContentType) setContentType(_v.tipo);
                 if(_v.ehVideo){ try{ setAssignees(function(p){ return p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]); }); }catch(_){} }
+                if(_v.legenda){
+                  const _h=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml(_v.legenda):("<p>"+_v.legenda.replace(/\n/g,"</p><p>")+"</p>");
+                  setCaption(_h);
+                  try{ if(captionRef.current) captionRef.current.innerHTML=_h; }catch(_){}
+                }
                 setBriefIA(null);
-                if(typeof pixelsToast!=="undefined") pixelsToast.info("Briefing colado e tipo marcado como \""+_v.tipoLabel+"\" — revise e clique em Salvar.",6000);
+                if(typeof pixelsToast!=="undefined") pixelsToast.info((_v.legenda?"Briefing e legenda colados":"Briefing colado")+" e tipo marcado como \""+_v.tipoLabel+"\" — revise e clique em Salvar.",6000);
               }}
-              style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>Usar este</button>}
+              style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 3px 12px rgba(124,58,237,.35)"}}>
+              {_v.legenda?"Usar briefing + legenda":"Usar este"}</button>}
           </div>
         </div>
       </div>;
@@ -43986,7 +44047,10 @@ function _cardPodeSerResp(u){
                              :"Você escreve o que precisa em linguagem normal e a IA monta o briefing, já marcando o tipo de conteúdo."}
                   hint={_tem?"Diz o que está errado — ele corrige e mantém o resto igual. Pra começar outro do zero, é só apagar o briefing."
                             :"Descreve a necessidade em duas linhas — ele monta o briefing e já marca o tipo de conteúdo."}
-                  onClick={function(){ setBriefIA({modo:_tem?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:""}); }}/>;
+                  onClick={function(){ setBriefIA({modo:_tem?"alterar":"gerar",pedido:"",loading:false,versoes:[],idx:0,erro:"",
+                    // Foto de obra ja abre com "escrever a legenda tambem" marcado: e o caso
+                    // em que o card nasce vazio dos dois lados (Vinicius, 15/09/2026).
+                    comLegenda:(!_tem&&!somenteStory&&pxEhFotoDeObra({title:title||task.title,contentType:contentType}))}); }}/>;
               })()}
               </div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
