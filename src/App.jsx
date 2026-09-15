@@ -83759,7 +83759,6 @@ function pxEventoBriefing(slot, ev, alvo, nomeCliente){
   const feira=String(ev.title||"o evento");
   const ondeTxt=onde?(" · "+onde):"";
   const py=!!(alvo&&alvo.py)&&alvo.unit!=="paraguay";
-  const legES=py?("\n\n⚠ A unidade Paraguay participa desta feira: este vídeo precisa de LEGENDA EM ESPANHOL também, além da em português."):"";
   if(slot==="aniversario"){
     // Padrão de data comemorativa: título = a saudação, texto curto de homenagem,
     // sem produto, sem número, sem CTA (claude/padrao-copy-data-comemorativa-REGRA.md).
@@ -83790,18 +83789,28 @@ function pxEventoBriefing(slot, ev, alvo, nomeCliente){
       "Te esperamos lá!\n\n"+
       "• O que precisamos\nConfirmar com o cliente o número do estande e o horário de funcionamento antes de produzir — não publicar sem isso.";
   }
+  /* ROTEIRO DE 1 MINUTO, SEM INSTRUÇÃO TÉCNICA (Vinicius, 15/09/2026):
+     "roteiro péssimo, não fica dando instrução técnica nem de tempo, só cena 1, 2, 3.
+      Falando sempre da importância da feira, do setor, convidando pra visitar o estande.
+      E roteiros de vídeo de 1 minuto, não 30 segundos."
+     Fora: "(0–8s)", "gravar no celular", "na horizontal", "sem narração".
+     Dentro: o que a pessoa fala em cada cena. A única linha de produção que sobra é a
+     do espanhol, quando o Paraguay está na feira — o editor precisa saber. */
   if(slot==="abertura"){
-    return "• Roteiro (vídeo simples — 15 a 30s)\n"+
-      "Cena 1 (0–8s) — chegada no estande com a feira abrindo. Na tela: “Começou o "+feira+"”\n"+
-      "Cena 2 (8–20s) — panorâmica do estande e do time trabalhando. Na tela: “"+nomeCliente+" está aqui"+(onde?(" em "+onde):"")+((fim&&fim!==ini)?(" até "+fim):"")+"”\n"+
-      "Cena 3 (20–30s) — convite pra visita, gente conversando. Na tela: “Passa aqui pra conhecer de perto”\n\n"+
-      "• O que precisamos\nGravar no PRIMEIRO dia da feira, no celular mesmo, na horizontal. Sem narração — o texto entra na tela."+legES;
+    return "\u2022 Roteiro (v\u00eddeo de 60s)\n"+
+      "Cena 1 \u2014 Estande montado, movimento da feira ao fundo. Fale do que o "+feira+" representa para o setor: \u00e9 onde o produtor v\u00ea a tecnologia de perto e decide o que vai levar para a propriedade.\n"+
+      "Cena 2 \u2014 O time no estande. Conte o que "+nomeCliente+" est\u00e1 mostrando nesta edi\u00e7\u00e3o e por que isso muda a rotina de quem produz.\n"+
+      "Cena 3 \u2014 Olhando para a c\u00e2mera, convide: o estande est\u00e1 aberto"+((fim&&fim!==ini)?(" at\u00e9 "+fim):"")+(onde?(" em "+onde):"")+". Passe para conversar com a equipe e tirar as d\u00favidas do seu projeto."+
+      (py?"\n\n\u2022 O que precisamos\nA unidade Paraguay participa desta feira: este v\u00eddeo precisa de legenda em espanhol tamb\u00e9m.":"");
   }
-  return "• Roteiro (vídeo simples — 15 a 30s)\n"+
-    "Cena 1 (0–8s) — movimento do estande, o melhor momento da feira. Na tela: “Foram dias de "+feira+"”\n"+
-    "Cena 2 (8–20s) — o time junto, agradecendo quem passou. Na tela: “Obrigado a quem veio conversar com a gente”\n"+
-    "Cena 3 (20–30s) — fecho. Na tela: “Até a próxima”\n\n"+
-    "• O que precisamos\nGravar no ÚLTIMO dia da feira, no celular mesmo, na horizontal. Aproveitar imagens dos dias anteriores se tiver."+legES;
+  if(slot==="fechamento"){
+    return "\u2022 Roteiro (v\u00eddeo de 60s)\n"+
+      "Cena 1 \u2014 \u00daltimas horas de feira, movimento no estande. Fale do que foram esses dias de "+feira+" e do tanto de gente do setor que passou por aqui.\n"+
+      "Cena 2 \u2014 O time reunido. Agrade\u00e7a a quem visitou, conversou e trouxe projeto para a mesa.\n"+
+      "Cena 3 \u2014 Olhando para a c\u00e2mera, feche: quem n\u00e3o conseguiu passar pode falar com "+nomeCliente+" quando quiser \u2014 a conversa continua depois da feira."+
+      (py?"\n\n\u2022 O que precisamos\nA unidade Paraguay participa desta feira: este v\u00eddeo precisa de legenda em espanhol tamb\u00e9m.":"");
+  }
+  return "";
 }
 
 /* Os slots de um evento, num lugar só — o gerador E a limpeza leem daqui. */
