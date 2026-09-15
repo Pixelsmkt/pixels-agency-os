@@ -3472,9 +3472,14 @@ function _pxCoracaoCliente(clientId){
 function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   const _cts=_pxContatoUtil(pb, unit);
   const _tem=_cts.length>0;
-  let r="\nCTA E CONTATO (obrigatório em toda legenda):\n";
+  let r=ehComemorativa?"\nFECHO DA HOMENAGEM:\n":"\nCTA E CONTATO (obrigatório em toda legenda):\n";
   if(ehComemorativa){
-    r+="- Esta é uma homenagem: o fecho é leve, se colocando à disposição — não é chamada de venda.\n";
+    // 15/09/2026 — a regra dizia "sem CTA" e logo abaixo mandava a linha do telefone.
+    // O modelo obedecia as duas e a homenagem saia com "segue à disposição" + número.
+    // Data comemorativa NÃO tem contato: `claude/padrao-copy-data-comemorativa-REGRA.md`.
+    r+="- Esta é uma homenagem: fecha na saudação da data e para por aí.\n";
+    r+="- ⛔ SEM CTA, SEM TELEFONE, SEM “estamos à disposição”, sem convite pra conversar. Nada de contato em data comemorativa.\n";
+    return r+_pxRegrasEmoji(ehComemorativa,clientId,false);
   }else{
     // CTA ACOLHEDOR (Vinicius, 15/09/2026): o modelo fechava quase toda legenda em
     // "Solicite seu orçamento" — soa a cobrança. O fecho é convite pra conversa.
@@ -3498,6 +3503,12 @@ function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   }else{
     r+="- ⛔ ESTA EMPRESA NÃO TEM TELEFONE CADASTRADO NO PLAYBOOK. Feche o CTA SEM número — ex.: “chama a gente no direct”, “manda uma mensagem pra gente”. NUNCA invente um telefone, e sem o emoji de celular (não há número pra anunciar).\n";
   }
+  return r+_pxRegrasEmoji(ehComemorativa,clientId,_tem);
+}
+
+/* Bloco de emoji — separado porque data comemorativa sai antes do bloco de contato. */
+function _pxRegrasEmoji(ehComemorativa, clientId, _tem){
+  let r="";
   // 14/09/2026 — a regra antiga terminava em "se nenhum emoji fizer sentido, não use nenhum".
   // O modelo lia isso como permissão e devolvia legenda seca em toda rodada; o Vinicius cobrou
   // ("vc ainda não começou a utilizar os emojis como eu pedi"). Agora emoji é OBRIGATÓRIO, no
@@ -3840,7 +3851,10 @@ async function pxReescreverCopy(opts){
         "\n(curto, 180 a 340 caracteres: a linha da data em caixa alta, linha em branco, 2 a 3 frases de agradecimento, linha em branco, a saudação de fecho. NÃO repita o título aqui.)\n";
     }
     if(!soBrief){
-      u+="\nFORMATO DA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato, a linha da data e a linha de hashtags — NO MÁXIMO 5 HASHTAGS.";
+      /* CURTA e SEM CONTATO (Vinicius, 15/09/2026) — mesmo formato do botão "Ajustar legenda"
+         do cartão. Antes pedia 280–560 e ainda uma "linha do CTA com o contato" numa peça que
+         a regra proibia ter CTA. Os dois caminhos de copy agora dizem a mesma coisa. */
+      u+="\nFORMATO DA LEGENDA — CURTA: 150 a 300 caracteres NO TOTAL, três blocos separados por linha em branco: (1) uma frase de reconhecimento com emoji no fim; (2) uma frase de homenagem citando a marca, dizendo que essa gente faz parte da história dela; (3) a saudação da data. Depois, SÓ a linha de hashtags — no máximo 3. ⛔ Sem telefone, sem “segue à disposição”, sem linha de data em caixa alta.";
       u+=_pxRegrasLegenda(pb,unit,true,task.client);
       if(soStory) u+="\nESTE CARD É SOMENTE STORY: devolva a legenda vazia.";
     }
@@ -4098,7 +4112,7 @@ async function pxGerarLegendas(opts){
     u+="TAREFA: reescreva a LEGENDA ATUAL aplicando o ajuste pedido"+(quantas>1?(", em "+quantas+" versões"):"")+".\n";
     u+="- MANTENHA tudo que não foi criticado, com as mesmas palavras. Não reescreva o que já está bom.\n";
     u+="- Não invente dado novo pra preencher o que foi tirado.\n";
-    if(quantas>1) u+="- As "+quantas+" versões corrigem a MESMA coisa de jeitos diferentes — não são "+quantas+" assuntos diferentes.\n";
+    if(quantas>1) u+="- As "+quantas+" versões corrigem a MESMA coisa — mas são REESCRITAS diferentes, não a mesma frase com sinônimo trocado: abertura diferente, ordem das frases diferente. Assunto é um só.\n";
     u+="- Devolva a legenda INTEIRA já corrigida, nunca só o pedaço que mudou.\n";
   }else{
     if(quantas===1){
@@ -4112,9 +4126,30 @@ async function pxGerarLegendas(opts){
   if(ehVideo&&!ehFotoObra) u+="É um VÍDEO CURTO: a legenda complementa o vídeo, não narra cena por cena. Primeira linha precisa segurar quem está passando o feed.\n";
   if(ehComemorativa){
     u+="É DATA COMEMORATIVA: é homenagem, não é post de venda. Sem CTA, sem telefone, sem falar de produto, prazo ou garantia.\n";
-    u+="\nFORMATO DE CADA LEGENDA: 280 a 560 caracteres, em blocos separados por linha em branco — abertura de agradecimento, 2 ou 3 frases de homenagem citando a marca, a saudação de fecho, a linha do CTA com o contato e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.";
+    /* CURTA (Vinicius, 15/09/2026): "ficou um monte de coisa e tudo parecida, deixa menor".
+       Era 280–560 e ainda mandava linha de CTA com contato — saia um post de venda fantasiado
+       de homenagem. Agora é o formato do padrão: agradecimento, homenagem, saudação. */
+    u+="\nFORMATO DE CADA LEGENDA — CURTA: 150 a 300 caracteres NO TOTAL, três blocos separados por linha em branco:\n";
+    u+="  1) uma frase de reconhecimento, com emoji no fim;\n";
+    u+="  2) uma frase de homenagem citando a marca — tem que dizer que essa gente faz parte da história da marca;\n";
+    u+="  3) a saudação da data (“Feliz Dia de X!”).\n";
+    u+="Depois dos três blocos, SÓ a linha de hashtags: no máximo 3, e nenhuma linha a mais.\n";
+    u+="⛔ NÃO ESCREVA: telefone, “segue à disposição”, “conte com a gente”, linha de data em caixa alta, produto, número, promessa. Legenda de homenagem que passa de 300 caracteres está errada.\n";
   }else{
     u+="\nFORMATO DE CADA LEGENDA: 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS, é o limite do Instagram.";
+  }
+  /* AS OPÇÕES TÊM QUE SER DIFERENTES DE VERDADE (Vinicius, 15/09/2026):
+     "ficou um monte de coisa e tudo parecida, uma completamente distinta da outra".
+     As três vinham com a mesma abertura e sinônimo trocado no meio — escolher entre elas
+     não era escolha nenhuma. A regra vale pros dois modos (gerar e ajustar). */
+  if(quantas>1){
+    u+="\n\nAS "+quantas+" OPÇÕES SÃO CAMINHOS DIFERENTES, NÃO VARIAÇÕES:\n";
+    u+="- Cada uma começa de um jeito. ⛔ PROIBIDO duas opções começarem com as mesmas 3 palavras.\n";
+    u+="- Cada uma entra por um ângulo diferente"+(ehComemorativa
+        ? ": (1) a gente que é homenageada e o trabalho dela; (2) o que a data representa; (3) a relação dessa gente com a marca. Uma delas NÃO começa pela data."
+        : ": ganchos, ordem das ideias e ritmo de frase diferentes entre elas.")+"\n";
+    u+="- Se dá pra trocar uma opção pela outra e ninguém notar, as duas estão erradas. Reescreva.\n";
+    u+="- Mesma data, mesma marca, mesmo sentido de homenagem — o que muda é o caminho, nunca o assunto.\n";
   }
   u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: escreva "+(quantas===1?"a legenda":"as "+quantas)+" curta (até 220 caracteres) e sem hashtags.";
