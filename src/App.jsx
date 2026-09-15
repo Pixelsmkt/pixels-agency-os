@@ -17751,11 +17751,17 @@ function _getClientBdaysDM(clientId){
    confere o id no Supabase inclusive apagado.
    `manter(row)` → true = o card continua válido (usado na edição).           */
 function pxAutoComLimparDoEvento(eventId, manter, descsEvento){
+  return pxAutoLimparDoEvento("autocom-", eventId, manter, descsEvento);
+}
+/* Mesma limpeza, para qualquer família de card automático. Prefixo "autocom-" =
+   data comemorativa; "autoev-" = feira/evento (15/09/2026). O resto da regra é
+   idêntico: só sai card VAZIO, e quem saiu volta como vaga pro autoplan repor. */
+function pxAutoLimparDoEvento(prefixo, eventId, manter, descsEvento){
   const sb=window._sb; if(!sb||!eventId) return Promise.resolve(0);
   // (11/09) a descrição do evento é copiada pro card na criação — ela não conta como "trabalho"
   const _descs=(Array.isArray(descsEvento)?descsEvento:[descsEvento]).map(function(x){return String(x||"").trim();}).filter(Boolean);
   return sb.from("tasks").select("id,status,publish_date,client,bioter_unit,files,caption,description,comments,somente_story,title")
-    .like("id","autocom-"+String(eventId)+"-%").is("deleted_at",null).then(function(r){
+    .like("id",String(prefixo)+String(eventId)+"-%").is("deleted_at",null).then(function(r){
       if(!r||r.error||!Array.isArray(r.data)||!r.data.length) return 0;
       const _vazio=function(t){
         const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
@@ -18270,6 +18276,36 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             .then(function(n){ if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" que não bat"+(n>1?"em":"e")+" mais com a data foi"+(n>1?"ram":"")+" removido"+(n>1?"s":"")+".",6000); }).catch(function(){});
         }catch(_e){ console.warn("[autocom limpar]",_e); }
       }
+      // (15/09) FEIRA/EVENTO editado: cliente desmarcado, fim tirado ou categoria trocada →
+      // os cards automáticos VAZIOS que não batem mais somem e o autoplan repõe a semana.
+      // O alvo é por CLIENTE e por SLOT, nunca por data: data que mudou é o pxGerarCardsEventos
+      // que remarca (se apagasse aqui, o gerador não recriaria — ele respeita card apagado).
+      (function(){
+        try{
+          const _catAntes=String((initial&&initial.category)||"");
+          const _catAgora=String((_savedRow&&_savedRow.category)||"");
+          const _lista=(typeof PX_EVENTO_CATEGORIAS!=="undefined")?PX_EVENTO_CATEGORIAS:[];
+          const _eraEvento=_lista.indexOf(_catAntes)>=0, _ehEvento=_lista.indexOf(_catAgora)>=0;
+          if(!isEdit||!_savedRow||(!_eraEvento&&!_ehEvento)) return;
+          if(typeof pxAutoLimparDoEvento!=="function"||typeof pxEventoTargets!=="function") return;
+          let _ids=_savedRow.client_ids; if(typeof _ids==="string"){ try{ _ids=JSON.parse(_ids); }catch(_){ _ids=[]; } }
+          if(!Array.isArray(_ids)||!_ids.length) _ids=_savedRow.client_id?[_savedRow.client_id]:[];
+          const _alvos=new Set(_ehEvento?pxEventoTargets(_ids,null).map(function(t){ return t.client+"|"+(t.unit||""); }):[]);
+          const _slots=new Set(_ehEvento?((typeof pxEventoSlots==="function"?pxEventoSlots(_savedRow):[]).map(function(x){return x.slot;})):[]);
+          const _pref="autoev-"+String(_savedRow.id)+"-";
+          const _manter=function(t){
+            const _resto=String(t.id||"").slice(_pref.length);
+            const _slot=_resto.split("-")[0];
+            return _slots.has(_slot) && _alvos.has(String(t.client||"")+"|"+String(t.bioter_unit||""));
+          };
+          const _descs=(typeof pxEventoDescsEsperadas==="function")
+            ? pxEventoDescsEsperadas(_savedRow).concat(initial?pxEventoDescsEsperadas(initial):[])
+            : [];
+          pxAutoLimparDoEvento("autoev-",_savedRow.id,_manter,_descs).then(function(n){
+            if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" de evento que não bat"+(n>1?"em":"e")+" mais foi"+(n>1?"ram":"")+" removido"+(n>1?"s":"")+" do calendário.",6000);
+          }).catch(function(e){ console.warn("[autoev limpar]",e&&e.message?e.message:e); });
+        }catch(_e){ console.warn("[autoev limpar]",_e); }
+      })();
       // (11/09) Somente story mudou (ou está ligado) num evento que já tinha cards → acerta os cards
       if(isEdit&&_savedRow&&String(_savedRow.category||"")==="comemorativa"
          &&(!!_savedRow.somente_story||!!(initial&&initial.somente_story))&&typeof pxAutoComSyncStory==="function"){
@@ -18307,6 +18343,13 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         pxAutoComLimparDoEvento(initial.id,null,[initial.description]).then(function(n){
           if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" automático"+(n>1?"s":"")+" vazio"+(n>1?"s":"")+" removido"+(n>1?"s":"")+" do calendário de publicações.",5000);
         }).catch(function(){}).then(function(){
+          // (15/09) feira/evento apagado leva junto convite, abertura e fechamento vazios
+          if(typeof pxAutoLimparDoEvento!=="function") return 0;
+          const _d=(typeof pxEventoDescsEsperadas==="function")?pxEventoDescsEsperadas(initial):[];
+          return pxAutoLimparDoEvento("autoev-",initial.id,null,_d).then(function(n){
+            if(n&&typeof pixelsToast!=="undefined") pixelsToast.info(n+" card"+(n>1?"s":"")+" de evento removido"+(n>1?"s":"")+" do calendário de publicações.",5000);
+          },function(e){ console.warn("[autoev limpar del]",e&&e.message?e.message:e); });
+        }).then(function(){
           window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel,function(e){console.warn("[internal_events del]",e);_doneDel();});
         });
       };
@@ -52834,7 +52877,16 @@ export default function AgencyOS(){
     const _run=function(){
       pxGerarCardsComemorativos({getTasks:function(){return _tasksRefAutoCom.current;}, setTasks:setTasks})
         .then(function(n){ if(_alive&&n>0&&typeof pixelsToast!=="undefined") pixelsToast.info(n+(n===1?" card de data comemorativa criado":" cards de datas comemorativas criados")+" no Calendário de publicações.",5000); })
-        .catch(function(e){ console.warn("[autocom]",e&&e.message?e.message:e); });
+        .catch(function(e){ console.warn("[autocom]",e&&e.message?e.message:e); })
+        // FEIRA/EVENTO → convite + abertura + fechamento (15/09/2026). Roda DEPOIS da
+        // comemorativa, na mesma passada e com o mesmo debounce, pra as duas não
+        // disputarem a mesma vaga da semana ao mesmo tempo.
+        .then(function(){
+          if(typeof pxGerarCardsEventos!=="function") return 0;
+          return pxGerarCardsEventos({getTasks:function(){return _tasksRefAutoCom.current;}, setTasks:setTasks});
+        })
+        .then(function(n){ if(_alive&&n>0&&typeof pixelsToast!=="undefined") pixelsToast.info(n+(n===1?" card de evento criado":" cards de evento criados")+" no Calendário de publicações.",5000); })
+        .catch(function(e){ console.warn("[autoev]",e&&e.message?e.message:e); });
     };
     const _agenda=function(){ if(_t) clearTimeout(_t); _t=setTimeout(_run,1500); };
     _agenda();
@@ -83634,6 +83686,318 @@ async function pxGerarCardsComemorativos(opts){
       if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
     }); }catch(_e){ if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e2){} } }
   } else if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(novos); }catch(_e){} }
+  return novos.length;
+}
+
+/* ===================================================================
+   pxGerarCardsEventos — FEIRA/EVENTO → 3 cards automáticos (15/09/2026)
+
+   Pedido do Vinicius: "tal qual datas comemorativas, os eventos também devem
+   criar card automático. Ex.: criei o Show Rural Coopavel no planejamento →
+   card de convite (somente story) 15 dias antes e dois vídeos durante a feira,
+   roteiro pra eles gravarem: um de abertura e um de fechamento."
+
+   A RECEITA (por alvo):
+     1. convite     → data do evento − 15 dias · Somente story · arte
+     2. abertura    → 1º dia da feira · Vídeo básico (video_feira)
+     3. fechamento  → último dia (end_date) · Vídeo básico
+   Sem `end_date` (ou com fim = início) NÃO cria o fechamento: feira de um dia
+   não tem abertura e fechamento em posts separados, e dois posts no mesmo dia
+   pro mesmo cliente quebra a regra de um post por dia.
+
+   ALVOS (decidido com o Vinicius em 15/09/2026): UM JOGO POR CLIENTE. Todas as
+   unidades Bioter marcadas viram UM alvo só (unidade "brasil"), igual ao Collab
+   — quem grava na feira é um time só. O Paraguay NÃO vira card separado: quando
+   ele está marcado, o roteiro ganha a linha avisando o editor que o vídeo precisa
+   de legenda em espanhol também. Só se a feira for marcada EXCLUSIVAMENTE pro
+   Paraguay é que o jogo nasce na unidade dele.
+
+   POR QUE NÃO BUGA — é a mesma máquina da comemorativa:
+   - id determinístico "autoev-<evento>-<slot>-<cliente>[-<unidade>]" (sem data,
+     porque feira não tem recorrência): rodar de novo não duplica, dois PCs ao
+     mesmo tempo gravam o mesmo id;
+   - antes de criar confere no state E no Supabase (inclusive apagados) — apagou,
+     não volta;
+   - card nasce COM briefing (nenhum card nasce vazio);
+   - depois de criar, desempilha o dia e corta a sobra da semana, igual à comemorativa;
+   - mudou a data da feira? o card ainda INTOCADO (automático, em Rascunhos, sem
+     arquivo e sem legenda) é remarcado pra data nova. Card em que alguém já mexeu
+     nunca é tocado — aí a data se ajusta à mão, de propósito.
+   =================================================================== */
+const PX_EVENTO_CONVITE_DIAS = 15;
+// "evento" (palestra, dia de campo, inauguração, workshop) usa a mesma receita da feira
+// — convite antes, abertura no primeiro dia, fechamento no último. 15/09/2026.
+const PX_EVENTO_CATEGORIAS = ["feira","presenca_feira","evento","aniversario"];
+// "aniversario" tem receita PRÓPRIA: UM card de homenagem no dia, não o trio da feira.
+// E só nasce se não existir já uma comemorativa daquele cliente no mesmo dia — várias
+// datas de aniversário já estão cadastradas como "comemorativa" (15/09/2026).
+
+function pxEventoTargets(clientIds, ativos){
+  const ids=(Array.isArray(clientIds)?clientIds:[]).map(String).filter(Boolean);
+  const out=[];
+  const bioter=ids.filter(function(id){ return id==="bioter"||id.indexOf("bioter_")===0; });
+  ids.forEach(function(id){
+    if(id==="bioter"||id.indexOf("bioter_")===0) return;
+    out.push({client:id, unit:null, py:false});
+  });
+  if(bioter.length){
+    const soPy=bioter.every(function(id){ return id==="bioter_paraguay"; });
+    const temPy=soPy||bioter.indexOf("bioter_paraguay")>=0||bioter.indexOf("bioter")>=0||bioter.indexOf("bioter_brasil")>=0;
+    out.push({client:"bioter", unit:(soPy?"paraguay":"brasil"), py:temPy});
+  }
+  return out.filter(function(t){ return !ativos || !!ativos[t.client]; });
+}
+
+/* Briefing de cada card. NUNCA volta vazio — o card nasce pronto pro designer ou
+   pro editor começar. O que a equipe ainda precisa confirmar vai escrito como
+   pendência, no lugar de ser inventado (número do estande, horário). */
+function pxEventoBriefing(slot, ev, alvo, nomeCliente){
+  const _br=function(iso){ const m=String(iso||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m?(m[3]+"/"+m[2]):""; };
+  const ini=_br(ev.date), fim=_br(ev.end_date||"");
+  const quando=(fim&&fim!==ini)?(ini+" a "+fim):ini;
+  const onde=ev.city?String(ev.city):"";
+  const feira=String(ev.title||"o evento");
+  const ondeTxt=onde?(" · "+onde):"";
+  const py=!!(alvo&&alvo.py)&&alvo.unit!=="paraguay";
+  const legES=py?("\n\n⚠ A unidade Paraguay participa desta feira: este vídeo precisa de LEGENDA EM ESPANHOL também, além da em português."):"";
+  if(slot==="aniversario"){
+    // Padrão de data comemorativa: título = a saudação, texto curto de homenagem,
+    // sem produto, sem número, sem CTA (claude/padrao-copy-data-comemorativa-REGRA.md).
+    const _quem=String(ev.title||"").replace(/^anivers[\u00e1a]rio\s+(de|da|do)?\s*/i,"").trim()||String(ev.title||"");
+    // Anivers\u00e1rio DA PR\u00d3PRIA marca l\u00ea diferente de anivers\u00e1rio de uma cidade: "a Bioter
+    // parabeniza a Bioter" fica esquisito. Se o t\u00edtulo cita o nome do cliente, \u00e9 o dele.
+    const _n=function(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); };
+    const _daMarca=_n(nomeCliente).split(/\s+/).some(function(w){ return w.length>3 && _n(_quem).indexOf(w)>=0; });
+    if(_daMarca){
+      return "\u2022 T\u00edtulo\nFELIZ ANIVERS\u00c1RIO, "+String(nomeCliente).toUpperCase()+"!\n\n"+
+        "\u2022 Texto na arte\n"+ini+"\n\n"+
+        "Hoje \u00e9 dia de comemorar mais um ano de hist\u00f3ria da "+nomeCliente+".\n\n"+
+        "Obrigado a quem caminha junto com a gente \u2014 clientes, parceiros e time.\n\n"+
+        "Parab\u00e9ns a todos n\u00f3s!\n\n"+
+        "\u2022 O que precisamos\nHomenagem, n\u00e3o post de venda: sem produto, sem n\u00famero de obras, sem CTA e sem telefone. Conferir com o cliente se ele quer citar quantos anos completa.";
+    }
+    return "\u2022 T\u00edtulo\nFELIZ ANIVERS\u00c1RIO, "+_quem.toUpperCase()+"!\n\n"+
+      "\u2022 Texto na arte\n"+ini+(onde?(" | "+onde.toUpperCase()):"")+"\n\n"+
+      nomeCliente+" parabeniza "+_quem+" por mais um ano de hist\u00f3ria.\n\n"+
+      "\u00c9 um orgulho fazer parte dessa caminhada junto com voc\u00eas.\n\n"+
+      "Parab\u00e9ns!\n\n"+
+      "\u2022 O que precisamos\nHomenagem, n\u00e3o post de venda: sem produto, sem n\u00famero, sem CTA e sem telefone. Se o nome no t\u00edtulo ficou estranho, ajuste \u2014 o t\u00edtulo \u00e9 a sauda\u00e7\u00e3o da data.";
+  }
+  if(slot==="convite"){
+    return "• Título\nVEM NOS VISITAR NO "+feira.toUpperCase()+"\n\n"+
+      "• Texto na arte\n"+(quando+ondeTxt).toUpperCase()+"\n\n"+
+      nomeCliente+" vai estar no "+feira+". Passe no estande pra conversar com o time e ver as soluções de perto.\n\n"+
+      "Te esperamos lá!\n\n"+
+      "• O que precisamos\nConfirmar com o cliente o número do estande e o horário de funcionamento antes de produzir — não publicar sem isso.";
+  }
+  if(slot==="abertura"){
+    return "• Roteiro (vídeo simples — 15 a 30s)\n"+
+      "Cena 1 (0–8s) — chegada no estande com a feira abrindo. Na tela: “Começou o "+feira+"”\n"+
+      "Cena 2 (8–20s) — panorâmica do estande e do time trabalhando. Na tela: “"+nomeCliente+" está aqui"+(onde?(" em "+onde):"")+((fim&&fim!==ini)?(" até "+fim):"")+"”\n"+
+      "Cena 3 (20–30s) — convite pra visita, gente conversando. Na tela: “Passa aqui pra conhecer de perto”\n\n"+
+      "• O que precisamos\nGravar no PRIMEIRO dia da feira, no celular mesmo, na horizontal. Sem narração — o texto entra na tela."+legES;
+  }
+  return "• Roteiro (vídeo simples — 15 a 30s)\n"+
+    "Cena 1 (0–8s) — movimento do estande, o melhor momento da feira. Na tela: “Foram dias de "+feira+"”\n"+
+    "Cena 2 (8–20s) — o time junto, agradecendo quem passou. Na tela: “Obrigado a quem veio conversar com a gente”\n"+
+    "Cena 3 (20–30s) — fecho. Na tela: “Até a próxima”\n\n"+
+    "• O que precisamos\nGravar no ÚLTIMO dia da feira, no celular mesmo, na horizontal. Aproveitar imagens dos dias anteriores se tiver."+legES;
+}
+
+/* Os slots de um evento, num lugar só — o gerador E a limpeza leem daqui. */
+function pxEventoSlots(ev){
+  if(!ev||!ev.date) return [];
+  // ANIVERSÁRIO: um card só, no dia, homenagem — entra com a tag "Data comemorativa"
+  // pra cair nas regras de copy de homenagem (título = saudação, curta, sem CTA).
+  if(String(ev.category||"")==="aniversario"){
+    return [{slot:"aniversario", date:ev.date, story:!!ev.somente_story, tipo:"arte",
+             tag:"Data comemorativa", titulo:(ev.title||"Anivers\u00e1rio")}];
+  }
+  const _menos=function(iso,dias){ const a=String(iso).split("-"); const d=new Date(+a[0],+a[1]-1,+a[2]); d.setDate(d.getDate()-dias);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const fim=(ev.end_date&&ev.end_date>ev.date)?ev.end_date:"";
+  const out=[
+    {slot:"convite",  date:_menos(ev.date,PX_EVENTO_CONVITE_DIAS), story:true,  tipo:"arte",        tag:"Feira", titulo:"Convite \u2014 "+(ev.title||"")},
+    {slot:"abertura", date:ev.date,                                story:false, tipo:"video_feira", tag:"Feira", titulo:"Abertura \u2014 "+(ev.title||"")},
+  ];
+  if(fim) out.push({slot:"fechamento", date:fim, story:false, tipo:"video_feira", tag:"Feira", titulo:"Fechamento \u2014 "+(ev.title||"")});
+  return out;
+}
+
+/* Briefings que ESTE evento geraria hoje, em HTML. A limpeza usa isso pra saber se
+   alguém mexeu no briefing do card: briefing igual ao gerado = card intocado. */
+function pxEventoDescsEsperadas(ev){
+  const out=[];
+  try{
+    let ids=ev&&ev.client_ids;
+    if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
+    if((!ids||!ids.length)&&ev&&ev.client_id) ids=[ev.client_id];
+    const alvos=pxEventoTargets(ids||[],null);
+    const _nome=function(id){ const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===id;}); return (c&&c.name)||id; };
+    pxEventoSlots(ev).forEach(function(sl){
+      alvos.forEach(function(t){
+        const txt=pxEventoBriefing(sl.slot,ev,t,_nome(t.client));
+        out.push(typeof _pxTextoParaHtml==="function"?_pxTextoParaHtml(txt):txt);
+      });
+    });
+  }catch(e){ console.warn("[autoev descs] falhou:",e&&e.message?e.message:e); }
+  return out;
+}
+
+async function pxGerarCardsEventos(opts){
+  const sb=window._sb; if(!sb) return 0;
+  const getTasks=opts.getTasks, setTasks=opts.setTasks;
+  const r=await sb.from("internal_events").select("*").in("category",PX_EVENTO_CATEGORIAS);
+  if(!r||r.error||!Array.isArray(r.data)){ if(r&&r.error) console.warn("[autoev] leitura falhou:",r.error.message); return 0; }
+  const _f=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  const _menos=function(iso,dias){ const a=String(iso).split("-"); const d=new Date(+a[0],+a[1]-1,+a[2]); d.setDate(d.getDate()-dias); return _f(d); };
+  const hoje=new Date(); const startISO=_f(hoje);
+  const endISO=_f(new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()+PX_AUTOCOM_DIAS));
+  const ativos={};
+  (typeof CLIENTS!=="undefined"?CLIENTS:[]).forEach(function(c){ if(c&&c.id&&c.status!=="encerrado") ativos[c.id]=c; });
+  const _nome=function(id){ const c=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===id;}); return (c&&c.name)||id; };
+
+  const cand=[];
+  r.data.forEach(function(ev){
+    if(!ev||!ev.date) return;
+    if(ev.date<startISO||ev.date>endISO) return;
+    let ids=ev.client_ids;
+    if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
+    if((!ids||!ids.length)&&ev.client_id) ids=[ev.client_id];
+    if(!ids||!ids.length) return;
+    const targets=pxEventoTargets(ids,ativos);
+    if(!targets.length) return;
+    const slots=pxEventoSlots(ev);
+    targets.forEach(function(t){
+      slots.forEach(function(sl){
+        if(sl.date<startISO) return;
+        const id=("autoev-"+ev.id+"-"+sl.slot+"-"+t.client+(t.unit?"-"+t.unit:"")).replace(/[^a-zA-Z0-9_-]/g,"");
+        cand.push({id:id, ev:ev, alvo:t, sl:sl});
+      });
+    });
+  });
+  if(!cand.length) return 0;
+
+  const _tasks=getTasks()||[];
+  const _porId={}; _tasks.forEach(function(t){ if(t) _porId[String(t.id)]=t; });
+  let faltam=cand.filter(function(c){ return !_porId[c.id]; });
+
+  const _remarcar=[];
+  cand.forEach(function(c){
+    const t=_porId[c.id]; if(!t||t.deletedAt) return;
+    if(String(t.publishDate||"")===c.sl.date) return;
+    const intocado=String(t.createdBy||"")==="Automático" && t.status==="rascunhos"
+                   && !(t.files&&t.files.length) && !String(t.caption||"").trim();
+    if(intocado) _remarcar.push({id:c.id, date:c.sl.date, de:String(t.publishDate||"")});
+  });
+
+  if(faltam.length){
+    const existentes=new Set();
+    for(let i=0;i<faltam.length;i+=100){
+      const chunk=faltam.slice(i,i+100).map(function(c){return c.id;});
+      const q=await sb.from("tasks").select("id").in("id",chunk);
+      if(q&&q.error){ console.warn("[autoev] consulta falhou:",q.error.message); return 0; }
+      (q&&q.data||[]).forEach(function(row){ existentes.add(String(row.id)); });
+    }
+    faltam=faltam.filter(function(c){ return !existentes.has(c.id); });
+  }
+
+  /* ── TRAVA DO ANIVERSÁRIO (Vinicius, 15/09/2026) ──────────────────────
+     Várias datas de aniversário já estão cadastradas como "comemorativa" (ex.:
+     "Aniversário de Itapiranga-SC"). Se a mesma data for cadastrada também como
+     categoria "aniversário", o cliente ganharia DOIS posts de homenagem no mesmo
+     dia. Então: aniversário não nasce se aquele cliente JÁ TEM comemorativa
+     naquele dia — por cliente e data, ignorando a unidade, porque o Collab Brasil
+     cobre as unidades e o limite é de um post por dia mesmo. */
+  const _aniv=faltam.filter(function(c){ return c.sl.slot==="aniversario"; });
+  if(_aniv.length){
+    const _chave=function(client,date){ return String(client||"")+"|"+String(date||""); };
+    const _ocupado=new Set();
+    (getTasks()||[]).forEach(function(t){
+      if(!t||t.deletedAt) return;
+      const _ehCom=String(t.id||"").indexOf("autocom-")===0
+                || (Array.isArray(t.tags)&&t.tags.some(function(x){ return /data\s*comemorativa/i.test(String(x||"")); }));
+      if(_ehCom) _ocupado.add(_chave(t.client,t.publishDate));
+    });
+    const _datasAniv=Array.from(new Set(_aniv.map(function(c){ return c.sl.date; })));
+    for(let i=0;i<_datasAniv.length;i+=50){
+      const q3=await sb.from("tasks").select("id,client,publish_date,tags,deleted_at")
+        .like("id","autocom-%").in("publish_date",_datasAniv.slice(i,i+50));
+      if(q3&&q3.error){ console.warn("[autoev] trava do aniversário falhou:",q3.error.message); return 0; } // sem certeza, não cria
+      (q3&&q3.data||[]).forEach(function(r2){ if(!r2.deleted_at) _ocupado.add(_chave(r2.client,r2.publish_date)); });
+    }
+    const _antes=faltam.length;
+    faltam=faltam.filter(function(c){
+      if(c.sl.slot!=="aniversario") return true;
+      if(_ocupado.has(_chave(c.alvo.client,c.sl.date))){
+        console.info("[autoev] aniversário ignorado — já existe comemorativa de",c.alvo.client,"em",c.sl.date);
+        return false;
+      }
+      return true;
+    });
+    if(_antes!==faltam.length&&typeof pixelsToast!=="undefined"){
+      try{ pixelsToast.info((_antes-faltam.length)+" aniversário não virou card: o cliente já tem data comemorativa nesse dia.",6000); }catch(_e){}
+    }
+  }
+
+  if(!faltam.length&&!_remarcar.length) return 0;
+
+  const now=new Date();
+  const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  const novos=faltam.map(function(c){
+    const ehVideo=c.sl.tipo==="video_feira";
+    const nomeCli=_nome(c.alvo.client);
+    const _txt=pxEventoBriefing(c.sl.slot,c.ev,c.alvo,nomeCli);
+    return {
+      id:c.id,
+      title:(typeof smartFormatTitle==="function"?smartFormatTitle(c.sl.titulo):c.sl.titulo),
+      desc:(typeof _pxTextoParaHtml==="function"?_pxTextoParaHtml(_txt):_txt),
+      caption:"",
+      assignee:"ellen", assignees:(ehVideo?["ellen","guilherme"]:["ellen"]), watchers:[],
+      client:c.alvo.client, sector:(ehVideo?"video":"design"), priority:"", status:"rascunhos",
+      startDate:_f(now), deadline:c.sl.date,
+      publishDate:c.sl.date, publish_date:c.sl.date, publishTime:"11:00",
+      contentType:c.sl.tipo,
+      completedAt:null, score:null,
+      tags:[c.sl.tag||"Feira"].concat(c.sl.story?["Somente story"]:[]).concat(c.alvo.unit==="paraguay"?["Español"]:[]),
+      comments:[], files:[], cover:null, checklist:[],
+      deletedAt:null,
+      bioterUnit:c.alvo.unit||null,
+      somenteStory:!!c.sl.story,
+      referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto(c.sl.date):""),
+      colEnteredAt:now.toISOString(),
+      createdAt:nowFmt, createdBy:"Automático",
+      timeline:[{type:"created",label:"Card gerado automaticamente do evento \""+(c.ev.title||"")+"\" (calendário interno)",atFmt:nowFmt,user:"Automático"}],
+    };
+  });
+
+  const _mapRemarcar={}; _remarcar.forEach(function(x){ _mapRemarcar[x.id]=x; });
+  setTasks(function(prev){
+    let base=prev||[];
+    if(_remarcar.length){
+      base=base.map(function(t){
+        const x=_mapRemarcar[String(t.id)];
+        if(!x) return t;
+        return Object.assign({},t,{publishDate:x.date,deadline:x.date,
+          referenceMonth:(typeof pxMesPagamentoAuto==="function"?pxMesPagamentoAuto(x.date):t.referenceMonth),
+          timeline:[].concat(t.timeline||[],[{type:"edit",label:"Data do evento mudou — card automático remarcado",at:now.toISOString(),atFmt:nowFmt,user:"Automático",from:x.de,to:x.date}])});
+      });
+    }
+    const have=new Set(base.map(function(t){return String(t.id);}));
+    const add=novos.filter(function(t){ return !have.has(t.id); });
+    return add.length? [].concat(base,add) : base;
+  });
+
+  const _contam=novos.filter(function(t){ return !t.somenteStory; });
+  if(_contam.length){
+    if(typeof pxAutoplanDesempilhar==="function"){
+      try{ Promise.resolve(pxAutoplanDesempilhar(_contam)).then(function(){
+        if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(_contam); }catch(_e){} }
+      },function(){
+        if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(_contam); }catch(_e){} }
+      }); }catch(_e){ if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(_contam); }catch(_e2){} } }
+    } else if(typeof pxAutoplanAbrirEspaco==="function"){ try{ pxAutoplanAbrirEspaco(_contam); }catch(_e){} }
+  }
   return novos.length;
 }
 
