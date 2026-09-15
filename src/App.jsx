@@ -30417,30 +30417,79 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   {u.grupo&&<span style={{background:u.color,color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{u.grupo}</span>}
                 </span>));
               })()}
-              {/* Designers/Editores designados (todos do array assignees) */}
+              {/* Responsáveis — clique abre a grade com a foto de cada um (15/09/2026).
+                   Mesma lista do cartão (`_cardPodeSerResp`) e mesmo `ensureSupervisors`,
+                   pra não existirem duas regras de quem pode ser responsável. */}
               {(()=>{
                 const ids=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
                 const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
-                if(users.length===0)return null;
-                return(<div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"4px 15px 4px 5px"}}>
-                  <div style={{display:"flex",alignItems:"center"}}>
+                const podeEditar=!!isApprover;
+                if(users.length===0&&!podeEditar)return null;
+                const aqui=podeEditar&&metaAberto&&metaAberto.id===current.id&&metaAberto.campo==="resp";
+                const _elegiveis=TEAM.filter(u=>(typeof _cardPodeSerResp==="function")?_cardPodeSerResp(u):true);
+                const _ROLE_SETOR={designer:"design",editor:"video",coordinator:"social",gestor:"trafego"};
+                const _trocar=(uid)=>{
+                  const tem=ids.indexOf(uid)>=0;
+                  let prox=tem?ids.filter(x=>x!==uid):((typeof ensureSupervisors==="function")?ensureSupervisors(ids.concat([uid])):ids.concat([uid]));
+                  // Setor segue o primeiro executor, igual ao cartão (10_radar_entrega).
+                  let setor=current.sector||"";
+                  for(let i=0;i<prox.length;i++){
+                    const u=TEAM.find(x=>x.id===prox[i]);
+                    if(!u||u.level===1)continue;
+                    if(_ROLE_SETOR[u.dash]){setor=_ROLE_SETOR[u.dash];break;}
+                  }
+                  const nomes=(arr)=>arr.map(id=>{const u=TEAM.find(x=>x.id===id);return u?u.name.split(" ")[0]:id;}).join(", ");
+                  salvarMetaCard(current,{assignees:prox,assignee:prox[0]||"",sector:setor},"respons\u00e1veis",nomes(ids),nomes(prox),false);
+                };
+                const caixa=(<div style={{display:"inline-flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid "+(aqui?"#7c3aed":"#e9ecf3"),borderRadius:99,padding:users.length?"4px 15px 4px 5px":"9px 16px",boxShadow:aqui?"0 0 0 3px rgba(124,58,237,.13)":"0 1px 2px rgba(15,23,42,.04)",transition:"border-color .12s,box-shadow .12s"}}>
+                  {users.length>0&&<div style={{display:"flex",alignItems:"center"}}>
                     {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
                       style={{width:40,height:40,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-9,zIndex:3-i,flexShrink:0}}>
                       <UserAvatar user={u} size={40} border={false}/>
                     </div>))}
-                  </div>
+                  </div>}
                   {users.length>3&&<span style={{color:C.td,fontSize:12,fontWeight:700}}>+{users.length-3}</span>}
-                  <span style={{color:"#0f172a",fontSize:15,fontWeight:600,marginLeft:3}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                  <span style={{color:users.length?"#0f172a":"#94a3b8",fontSize:15,fontWeight:600,marginLeft:users.length?3:0}}>{users.length?users.map(u=>u.name.split(" ")[0]).join(", "):"Sem responsável"}</span>
+                  {podeEditar&&<Ico n="edit" size={13} color="#94a3b8"/>}
+                </div>);
+                return(<div style={{position:"relative",zIndex:aqui?61:1}}>
+                  {podeEditar
+                    ? <button type="button" onClick={()=>setMetaAberto(aqui?null:{id:current.id,campo:"resp"})}
+                        title="Clique pra trocar os responsáveis — salva no card"
+                        style={{display:"block",background:"none",border:"none",padding:0,margin:0,font:"inherit",color:"inherit",cursor:"pointer"}}>{caixa}</button>
+                    : caixa}
+                  {aqui&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 8px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:16,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:12,width:"min(430px, calc(100vw - 48px))",boxSizing:"border-box"}}>
+                    <div style={{fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,color:"#94a3b8",marginBottom:9}}>Quem fica responsável</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(112px,1fr))",gap:7}}>
+                      {_elegiveis.map(u=>{
+                        const sel=ids.indexOf(u.id)>=0;
+                        return <button key={u.id} type="button" onClick={()=>_trocar(u.id)}
+                          style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"10px 6px 9px",background:sel?"#f5efff":"#fff",border:"1.5px solid "+(sel?"#7c3aed":"#eef1f6"),borderRadius:13,cursor:"pointer",fontFamily:"inherit",transition:"all .12s",position:"relative"}}
+                          onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.borderColor="#cbd5e1";}}
+                          onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.borderColor="#eef1f6";}}>
+                          <span style={{position:"relative",display:"inline-flex",opacity:sel?1:.78}}>
+                            <UserAvatar user={u} size={40} border={false}/>
+                            {sel&&<span style={{position:"absolute",right:-3,bottom:-3,width:17,height:17,borderRadius:"50%",background:"#7c3aed",border:"2px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="check" size={9} color="#fff"/></span>}
+                          </span>
+                          <span style={{fontSize:11.5,fontWeight:sel?800:600,color:sel?"#5b21b6":"#475569",maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.name.split(" ")[0]}</span>
+                        </button>;
+                      })}
+                    </div>
+                  </div>)}
                 </div>);
               })()}
             </div>
 
-            {/* Metadados do card — um por linha, grandes.
-                 Ordem pedida pelo Vinicius: data de publicação, tipo de conteúdo, entrega, pagamento.
-                 Prioridade NÃO entra aqui.
-                 EDITÁVEIS (15/09/2026): quem aprova clica no bloco e troca o valor ali mesmo —
-                 salva no card pelo `salvarMetaCard`. Quem não aprova continua só lendo, e nesse
-                 caso bloco sem valor nem aparece (era o comportamento antigo). */}
+            {/* Barra de metadados do card — EDITÁVEL E DIRETA (15/09/2026).
+                 Vinicius: "clica e abre outra aba pra abrir o calendário, tem que ser direto
+                 o calendário" + "moderniza essas abas, com essas cores tá feio".
+                 → Data, entrega e pagamento abrem o seletor NATIVO na hora (`showPicker()`
+                   num input invisível dentro do bloco). Só "tipo de conteúdo" abre lista,
+                   porque aí a lista é o próprio seletor.
+                 → Visual: cartão branco, borda neutra, valor em tinta escura. A cor do campo
+                   ficou só no ícone — antes fundo, borda e número eram coloridos e as quatro
+                   caixas viravam arco-íris. Bloco vazio = borda tracejada.
+                 Quem não aprova continua só lendo, e bloco sem valor nem aparece. */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
               const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Ajuste de template",icon:"camera"},folder:{label:"Folder",icon:"file-text"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},video_short:{label:"Short",icon:"play"},corte:{label:"Corte de vídeo",icon:"scissors"}};
@@ -30448,93 +30497,98 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
               const dl=current.deadline||"";
-              const refMes=current.referenceMonth||current.reference_month||"";
+              const refMes=String(current.referenceMonth||current.reference_month||"").slice(0,7);
               const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
               const podeEditar=!!isApprover;
+              /* Abre o seletor nativo do input. `showPicker()` exige gesto do usuário — o
+                 clique no bloco é o gesto. Sem ele (navegador velho), foca e clica no input,
+                 que no Chrome também abre. O input fica invisível DENTRO do bloco, então o
+                 calendário nasce ancorado logo abaixo dele. */
+              const abrirSeletor=(id)=>{
+                const el=document.getElementById(id);
+                if(!el){console.warn("[meta] input não encontrado:",id);return;}
+                try{ if(typeof el.showPicker==="function"){ el.showPicker(); return; } }catch(e){ console.warn("[meta] showPicker falhou:",e&&e.message); }
+                try{ el.focus(); el.click(); }catch(e){ console.warn("[meta] focus/click falhou:",e&&e.message); }
+              };
               const linhas=[
-                {key:"pub",icon:"calendar",rot:"Data de publicação",val:pubD?(fmtBR(pubD)+(pubT?("  ·  "+pubT):"")):"",color:"#0ea5e9",escura:"#0369a1"},
-                {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed",escura:"#5b21b6"},
-                {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316",escura:"#c2410c"},
-                {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a",escura:"#15803d"},
+                {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
+                {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
+                {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316"},
+                {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
               ].filter(l=>podeEditar||l.val);
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
-              const CX={position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:60,background:"#fff",border:"1px solid "+C.b1,borderRadius:13,boxShadow:"0 14px 34px rgba(15,23,42,.17)",padding:12,minWidth:248,maxWidth:"min(300px, calc(100vw - 48px))",boxSizing:"border-box"};
-              const INP={width:"100%",border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",fontSize:13,fontFamily:"inherit",color:"#0f172a",outline:"none",boxSizing:"border-box"};
-              const ROT={display:"block",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,color:"#94a3b8",marginBottom:4};
-              const _pop=(l)=>{
-                if(l.key==="pub")return(<div style={CX} onClick={e=>e.stopPropagation()}>
-                  <label style={ROT}>Dia</label>
-                  <input id={"px-meta-pub-d-"+current.id} type="date" value={pubD||""} style={INP}
-                    onChange={e=>salvarMetaCard(current,{publishDate:e.target.value||""},"data de publicação",fmtBR(pubD),fmtBR(e.target.value),false)}/>
-                  <label style={{...ROT,marginTop:10}}>Hora</label>
-                  <input id={"px-meta-pub-h-"+current.id} type="time" value={pubT||""} style={INP}
-                    onChange={e=>salvarMetaCard(current,{publishTime:e.target.value||""},"hora de publicação",pubT,e.target.value,false)}/>
-                  <button type="button" onClick={()=>setMetaAberto(null)} style={{marginTop:11,width:"100%",background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 0",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Pronto</button>
-                </div>);
-                if(l.key==="dl")return(<div style={CX} onClick={e=>e.stopPropagation()}>
-                  <label style={ROT}>Prazo de entrega</label>
-                  <input id={"px-meta-dl-"+current.id} type="date" value={dl||""} style={INP}
-                    onChange={e=>salvarMetaCard(current,{deadline:e.target.value||""},"prazo de entrega",fmtBR(dl),fmtBR(e.target.value))}/>
-                </div>);
-                if(l.key==="ref")return(<div style={CX} onClick={e=>e.stopPropagation()}>
-                  <label style={ROT}>Mês de pagamento</label>
-                  <input id={"px-meta-ref-"+current.id} type="month" value={refMes?String(refMes).slice(0,7):""} style={INP}
-                    onChange={e=>salvarMetaCard(current,{referenceMonth:e.target.value||""},"mês de pagamento",fmtMes(refMes),fmtMes(e.target.value))}/>
-                  <div style={{display:"flex",gap:6,marginTop:9,flexWrap:"wrap"}}>
-                    {(function(){
-                      const hoje=new Date(); const opts=[];
-                      for(let k=-1;k<=2;k++){
-                        const d=new Date(hoje.getFullYear(),hoje.getMonth()+k,1);
-                        opts.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
-                      }
-                      return opts.map(function(v){
-                        const sel=String(refMes||"").slice(0,7)===v;
-                        return <button key={v} type="button" onClick={()=>salvarMetaCard(current,{referenceMonth:v},"mês de pagamento",fmtMes(refMes),fmtMes(v))}
-                          style={{background:sel?"#16a34a":"#f8fafc",color:sel?"#fff":"#475569",border:"1px solid "+(sel?"#16a34a":C.b1),borderRadius:99,padding:"4px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{fmtMes(v)}</button>;
-                      });
-                    })()}
-                  </div>
-                </div>);
-                // tipo de conteúdo — lista fechada, a mesma do cartão
-                return(<div style={{...CX,minWidth:262,padding:"8px 8px"}} onClick={e=>e.stopPropagation()}>
-                  {(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).map(function(o){
-                    const sel=ct===o.id; const cfg=CT_MAP[o.id]||{icon:"image"};
-                    return <button key={o.id} type="button" title={o.quando||""}
-                      onClick={()=>salvarMetaCard(current,{contentType:o.id},"tipo de conteúdo",ctCfg?ctCfg.label:"",o.label)}
-                      style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:sel?"#7c3aed14":"transparent",border:"none",borderRadius:9,padding:"8px 10px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel?800:600,color:sel?"#5b21b6":"#334155",textAlign:"left"}}
-                      onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.background="#f8fafc";}}
-                      onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.background="transparent";}}>
-                      <Ico n={cfg.icon} size={14} color={sel?"#7c3aed":"#94a3b8"}/>
-                      <span style={{flex:1,minWidth:0}}>{o.label}</span>
-                      {sel&&<Ico n="check" size={13} color="#7c3aed"/>}
-                    </button>;
-                  })}
-                </div>);
-              };
+              const ID=(k)=>"pxmeta-"+k+"-"+current.id;
+              const INVIS={position:"absolute",opacity:0,pointerEvents:"none",border:"none",padding:0,margin:0,background:"transparent",width:1,height:1};
+              const ROT={display:"block",fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,lineHeight:1.2,color:"#94a3b8"};
+              const VAL=(vazio)=>({fontSize:isMob?13:14.5,fontWeight:800,letterSpacing:-.25,lineHeight:1.35,color:vazio?"#a5adba":"#0f172a",whiteSpace:"nowrap"});
               return(<div style={{display:"flex",flexWrap:"wrap",gap:isMob?8:10,marginBottom:isMob?16:26}}>
                 {aberto&&<div onClick={()=>setMetaAberto(null)} style={{position:"fixed",inset:0,zIndex:55}}/>}
                 {linhas.map(l=>{
                   const vazio=!l.val;
                   const aqui=aberto===l.key;
-                  const caixa=(<div style={{display:"flex",alignItems:"center",gap:isMob?9:11,background:vazio?"#f8fafc":l.color+"0D",border:"1px solid "+(aqui?l.color:(vazio?C.b1:l.color+"2E")),borderRadius:12,padding:isMob?"9px 12px":"10px 14px",width:"100%",boxSizing:"border-box",textAlign:"left",fontFamily:"inherit",cursor:podeEditar?"pointer":"default",transition:"border-color .12s,box-shadow .12s",boxShadow:aqui?("0 0 0 3px "+l.color+"22"):"none"}}>
-                    <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?27:30,height:isMob?27:30,borderRadius:9,background:vazio?"#e2e8f0":l.color+"1F",flexShrink:0}}>
-                      <Ico n={l.icon} size={isMob?14:15} color={vazio?"#94a3b8":l.color}/>
-                    </span>
-                    <span style={{minWidth:0,flex:1}}>
-                      <span style={{display:"block",color:vazio?"#94a3b8":l.color,fontSize:isMob?8.5:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,lineHeight:1.2}}>{l.rot}</span>
-                      <span style={{display:"block",color:vazio?"#94a3b8":(l.escura||l.color),fontSize:isMob?13:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.35,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.val||"definir"}</span>
-                    </span>
-                    {podeEditar&&<Ico n="edit" size={12} color={vazio?"#94a3b8":l.color}/>}
-                  </div>);
-                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":252}}>
-                    {podeEditar
-                      ? <button type="button" onClick={()=>setMetaAberto(aqui?null:{id:current.id,campo:l.key})}
-                          title={"Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"}
-                          style={{display:"block",width:"100%",background:"none",border:"none",padding:0,margin:0,font:"inherit",color:"inherit",textAlign:"left",cursor:"pointer",boxSizing:"border-box"}}>{caixa}</button>
-                      : caixa}
-                    {aqui&&_pop(l)}
+                  const clicar=()=>{
+                    if(!podeEditar)return;
+                    if(l.key==="ct"){ setMetaAberto(aqui?null:{id:current.id,campo:"ct"}); return; }
+                    setMetaAberto(null);
+                    abrirSeletor(ID(l.key));
+                  };
+                  return(<div key={l.key} style={{position:"relative",zIndex:aqui?61:1,flex:isMob?"1 1 100%":"0 0 auto",width:isMob?"100%":258}}>
+                    <div role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
+                      onClick={clicar}
+                      onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();clicar();}}):undefined}
+                      title={podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined}
+                      style={{position:"relative",display:"flex",alignItems:"center",gap:11,background:"#fff",
+                        border:"1px "+(vazio?"dashed":"solid")+" "+(aqui?"#7c3aed":(vazio?"#d7dde6":"#e9ecf3")),
+                        borderRadius:14,padding:isMob?"10px 12px":"11px 14px",width:"100%",boxSizing:"border-box",
+                        boxShadow:aqui?"0 0 0 3px rgba(124,58,237,.13)":"0 1px 2px rgba(15,23,42,.05)",
+                        cursor:podeEditar?"pointer":"default",transition:"border-color .12s,box-shadow .12s",outline:"none"}}
+                      onMouseEnter={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor="#cbd5e1";}}
+                      onMouseLeave={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor=vazio?"#d7dde6":"#e9ecf3";}}>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?29:32,height:isMob?29:32,borderRadius:10,background:vazio?"#f1f4f8":l.color+"14",flexShrink:0}}>
+                        <Ico n={l.icon} size={isMob?14:15} color={vazio?"#a5adba":l.color}/>
+                      </span>
+                      <span style={{minWidth:0,flex:1}}>
+                        <span style={ROT}>{l.rot}</span>
+                        <span style={{display:"flex",alignItems:"center",gap:6,marginTop:2,minWidth:0}}>
+                          <span style={{...VAL(vazio),overflow:"hidden",textOverflow:"ellipsis"}}>{l.val||"definir"}</span>
+                          {l.key==="pub"&&(<span role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
+                            onClick={podeEditar?(e=>{e.stopPropagation();setMetaAberto(null);abrirSeletor(ID("hora"));}):undefined}
+                            onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopPropagation();abrirSeletor(ID("hora"));}}):undefined}
+                            title={podeEditar?"Clique pra alterar a hora":undefined}
+                            style={{background:"#f1f4f8",color:pubT?"#334155":"#a5adba",borderRadius:7,padding:"2px 7px",fontSize:isMob?11:11.5,fontWeight:800,letterSpacing:-.1,flexShrink:0,cursor:podeEditar?"pointer":"default",outline:"none"}}>{pubT||"hora"}</span>)}
+                        </span>
+                      </span>
+                      {podeEditar&&<Ico n={l.key==="ct"?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
+                      {/* Inputs nativos invisíveis: são eles que abrem calendário, relógio e mês. */}
+                      {podeEditar&&l.key==="pub"&&(<>
+                        <input id={ID("pub")} type="date" value={pubD||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
+                          onChange={e=>salvarMetaCard(current,{publishDate:e.target.value||""},"data de publicação",fmtBR(pubD),fmtBR(e.target.value))}/>
+                        <input id={ID("hora")} type="time" value={pubT||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,right:26,bottom:6}}
+                          onChange={e=>salvarMetaCard(current,{publishTime:e.target.value||""},"hora de publicação",pubT,e.target.value)}/>
+                      </>)}
+                      {podeEditar&&l.key==="dl"&&(<input id={ID("dl")} type="date" value={dl||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
+                        onChange={e=>salvarMetaCard(current,{deadline:e.target.value||""},"prazo de entrega",fmtBR(dl),fmtBR(e.target.value))}/>)}
+                      {podeEditar&&l.key==="ref"&&(<input id={ID("ref")} type="month" value={refMes||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
+                        onChange={e=>salvarMetaCard(current,{referenceMonth:e.target.value||""},"mês de pagamento",fmtMes(refMes),fmtMes(e.target.value))}/>)}
+                    </div>
+
+                    {/* Tipo de conteúdo — a lista fechada do cartão, num clique só. */}
+                    {aqui&&l.key==="ct"&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:15,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:7,minWidth:262,maxWidth:"min(310px, calc(100vw - 48px))",boxSizing:"border-box"}}>
+                      {(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).map(function(o){
+                        const sel=ct===o.id; const cfg=CT_MAP[o.id]||{icon:"image"};
+                        return <button key={o.id} type="button" title={o.quando||""}
+                          onClick={()=>salvarMetaCard(current,{contentType:o.id},"tipo de conteúdo",ctCfg?ctCfg.label:"",o.label)}
+                          style={{display:"flex",alignItems:"center",gap:10,width:"100%",background:sel?"#f5efff":"transparent",border:"none",borderRadius:10,padding:"9px 10px",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:sel?800:600,color:sel?"#5b21b6":"#334155",textAlign:"left"}}
+                          onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.background="#f7f8fb";}}
+                          onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.background="transparent";}}>
+                          <Ico n={cfg.icon} size={14} color={sel?"#7c3aed":"#a5adba"}/>
+                          <span style={{flex:1,minWidth:0}}>{o.label}</span>
+                          {sel&&<Ico n="check" size={13} color="#7c3aed"/>}
+                        </button>;
+                      })}
+                    </div>)}
                   </div>);
                 })}
               </div>);
