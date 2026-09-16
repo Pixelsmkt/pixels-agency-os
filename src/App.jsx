@@ -74655,7 +74655,15 @@ const ONBOARDING_BLOCKS = [
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas"},
       {id:"d1_portal_acesso", label:"Acesso ao portal do cliente"}, // (08/09) unificou "Criar acesso" + "Criação e envio do acesso"
       // (09/09) Sem isso não dá pra publicar em conjunto (collab)
-      {id:"d1_paginas_meta", label:"Criar as páginas no Instagram e no Facebook (cliente ainda não tem) ou vincular páginas no Meta Business"},
+      {id:"d1_paginas_meta", label:"Meta: páginas, portfólio empresarial e vínculo Facebook + Instagram", sub:[
+        // (16/09/2026) Sem acesso TOTAL à página não dá pra criar o portfólio empresarial nem ligar FB ao IG.
+        {id:"d1_meta_acesso_total", label:"Verificar se os envolvidos têm acesso total à página do Facebook — se estiver parcial, solicitar ao cliente",
+          links:[{label:"Acesso à página do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
+            msg:"Oi! Pra gente conseguir criar o portfólio empresarial e ligar o Facebook ao Instagram, precisamos de acesso total à página. É rapidinho: entra neste link, vai em Acesso à página e dá acesso total pra nossa equipe 👇\nhttps://www.facebook.com/settings/?tab=profile_access"}]},
+        {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
+        {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
+        {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
+      ]},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
         {id:"d1_brief_gpt", label:"Criação do agente no GPT e upload do briefing"},
@@ -74784,7 +74792,15 @@ const ONBOARDING_BLOCKS_STARTER = [
       {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas (3 parcelas)"},
       {id:"d1_portal_acesso", label:"Acesso ao portal do cliente"}, // (08/09) unificou "Criar acesso" + "Criação e envio do acesso"
       // (09/09) Sem isso não dá pra publicar em conjunto (collab)
-      {id:"d1_paginas_meta", label:"Criar as páginas no Instagram e no Facebook (cliente ainda não tem) ou vincular páginas no Meta Business"},
+      {id:"d1_paginas_meta", label:"Meta: páginas, portfólio empresarial e vínculo Facebook + Instagram", sub:[
+        // (16/09/2026) Sem acesso TOTAL à página não dá pra criar o portfólio empresarial nem ligar FB ao IG.
+        {id:"d1_meta_acesso_total", label:"Verificar se os envolvidos têm acesso total à página do Facebook — se estiver parcial, solicitar ao cliente",
+          links:[{label:"Acesso à página do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
+            msg:"Oi! Pra gente conseguir criar o portfólio empresarial e ligar o Facebook ao Instagram, precisamos de acesso total à página. É rapidinho: entra neste link, vai em Acesso à página e dá acesso total pra nossa equipe 👇\nhttps://www.facebook.com/settings/?tab=profile_access"}]},
+        {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
+        {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
+        {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
+      ]},
       {id:"d1_brief", label:"Brief", sub:[
         {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
         {id:"d1_brief_gpt", label:"Criação do agente no GPT e upload do briefing"},
@@ -75570,6 +75586,48 @@ function _OnbPortalBtn({presetId,itemId}){
     Portal
   </button>;
 }
+/* ─── LINKS DO ITEM (16/09/2026) — modelo pra qualquer tarefa que precise de link ───
+   No checklist: links:[{label, url, tipo?, msg?}]
+     tipo → ícone/cor: facebook | instagram | meta | google | drive | whatsapp | (qualquer outro = link)
+     msg  → mensagem pronta pro cliente; vira o botão "Mensagem pro cliente" (copia)
+   Abrir leva direto pro link; "Copiar link" pra mandar no WhatsApp.                    */
+const _ONB_LINK_TIPOS={
+  facebook:{cor:"#1877F2",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13.4 21v-7.1h2.4l.45-2.9H13.4V9.15c0-.85.3-1.5 1.55-1.5h1.4V5.05c-.35-.05-1.15-.1-2.05-.1-2.05 0-3.45 1.25-3.45 3.55V11H8.4v2.9h2.45V21h2.55z"/></svg>},
+  instagram:{cor:"#E1306C",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="2.5" y="2.5" width="19" height="19" rx="5.2"/><circle cx="12" cy="12" r="4.3"/></svg>},
+  meta:{cor:"#0866FF",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M3 15c0-4 2-8 4.5-8S12 12 12 12s2-5 4.5-5S21 11 21 15c0 2-1 3-2.5 3S15 16 12 12c-3 4-4 6-6.5 6S3 17 3 15z"/></svg>},
+  google:{cor:"#EA4335",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 12h8"/></svg>},
+  drive:{cor:"#34A853",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="9.05,3.4 14.95,3.4 21.5,14.75 15.6,14.75"/><polygon points="7.95,5.35 2.5,14.85 5.85,20.6 11.3,11.1"/><polygon points="8.15,20.6 20.75,20.6 17.75,15.6 11.2,15.6"/></svg>},
+  whatsapp:{cor:"#25D366",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 01-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1121 11.5z"/></svg>},
+};
+function _OnbLinks({links}){
+  if(!links||!links.length) return null;
+  const _copiar=function(txt,ok){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(ok,1800); }catch(_){} };
+  const _link=<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+  return <div onClick={function(e){e.stopPropagation();}} style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+    {links.map(function(l,i){
+      const T=_ONB_LINK_TIPOS[l.tipo]||{cor:"#7c3aed",ico:_link};
+      const _mini={background:"#fff",border:"1px solid "+T.cor+"33",borderRadius:99,padding:"4px 10px",color:T.cor,fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:_ONB_FF,transition:"all .12s"};
+      return <div key={i} style={{display:"inline-flex",alignItems:"center",gap:4,background:T.cor+"0f",border:"1px solid "+T.cor+"30",borderRadius:99,padding:3}}>
+        <a href={l.url} target="_blank" rel="noreferrer" title={l.url}
+          style={{display:"inline-flex",alignItems:"center",gap:7,background:T.cor,color:"#fff",borderRadius:99,padding:"5px 12px 5px 6px",fontSize:11.5,fontWeight:800,textDecoration:"none",fontFamily:_ONB_FF,boxShadow:"0 2px 6px "+T.cor+"44"}}>
+          <span style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,255,255,.22)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{T.ico}</span>
+          {l.label}
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><polyline points="8 7 17 7 17 16"/></svg>
+        </a>
+        <button type="button" title="Copiar o link" style={_mini} onClick={function(){_copiar(l.url,"Link copiado");}}
+          onMouseEnter={function(e){e.currentTarget.style.background=T.cor+"14";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar link
+        </button>
+        {l.msg&&<button type="button" title={"Copia a mensagem pronta:\n\n"+l.msg} style={_mini} onClick={function(){_copiar(l.msg,"Mensagem copiada — é só colar no WhatsApp");}}
+          onMouseEnter={function(e){e.currentTarget.style.background=T.cor+"14";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 01-12.4 7.4L3 21l2.1-5.5A8.4 8.4 0 1121 11.5z"/></svg>
+          Mensagem pro cliente
+        </button>}
+      </div>;
+    })}
+  </div>;
+}
 function OnboardingItem(props){
   const { item, items, toggle, setResp, setDue, currentUserId, accent, level } = props;
   const it = items[item.id] || {};
@@ -75625,6 +75683,7 @@ function OnboardingItem(props){
           <span style={{background:"#b45309",color:"#fff",fontSize:8.5,fontWeight:900,padding:"2px 7px",borderRadius:5,letterSpacing:.6,textTransform:"uppercase",flexShrink:0}}>Entrega</span>
         </span>
         {item.docDesc && !it.done && <span style={{color:"#a16207",fontSize:10.5,fontWeight:600,fontFamily:_ONB_FF}}>{item.docDesc}</span>}
+        {!it.done&&<_OnbLinks links={item.links}/>}
       </span>
       <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
       <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
@@ -75637,7 +75696,10 @@ function OnboardingItem(props){
   return <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap",marginLeft:level>0?28:0}}>
     <input type="checkbox" checked={!!it.done} onChange={function(){toggle(item.id, currentUserId);}}
       style={{width:17,height:17,cursor:"pointer",accentColor:_ac,flexShrink:0}}/>
-    <span style={{flex:1,minWidth:200,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF}}>{item.label}</span>
+    <span style={{flex:1,minWidth:200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <span style={{color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF}}>{item.label}</span>
+      {!it.done&&<_OnbLinks links={item.links}/>}
+    </span>
     <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
     <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
     <_OnbPortalBtn presetId={items.__preset__||"completo"} itemId={item.id}/>
