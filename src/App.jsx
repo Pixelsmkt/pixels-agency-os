@@ -3644,6 +3644,58 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
    aprovadas e PROIBIDAS), foco do mês/trimestre do Planejamento, regras
    aprendidas com o feedback da agência e as copys já aprovadas. */
 
+/* ─── APRENDIZADO POR ESTILO (16/09/2026) ──────────────────────────────────
+   Pedido do Vinicius: "foto de obra aprovadas fazem as próximas foto de obra aprender?"
+   Antes: a IA via as últimas legendas aprovadas do cliente de QUALQUER tipo, e nenhum
+   briefing aprovado (só o gerador de briefing via briefings, por content_type).
+   Agora: RPC claude_exemplos_estilo devolve cards APROVADOS/PUBLICADOS do MESMO ESTILO
+   (comemorativa · foto_obra · video · carrossel · arte) com BRIEFING e LEGENDA —
+   primeiro do mesmo cliente/unidade (tom + estrutura), completando com outras marcas
+   (só estrutura). Paraguay só aprende com Paraguay. A régua de estilo é a mesma no banco
+   (claude_estilo_card) e aqui (pxEstiloCard). */
+function pxEstiloCard(task){
+  const id=String((task&&task.id)||""), ti=String((task&&task.title)||""), ct=String((task&&(task.contentType||task.content_type))||"").toLowerCase();
+  const tags=Array.isArray(task&&task.tags)?task.tags:[];
+  if(/^autocom-/i.test(id)||tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));})) return "comemorativa";
+  if(ct==="foto"||/foto\s*de\s*obra/i.test(ti)) return "foto_obra";
+  if(/^(video|video_short|video_feira|video_complexo|reels|corte)/.test(ct)||/(^|\s)(short|shorts|reels?)(\s|$)/i.test(ti)) return "video";
+  if(ct==="carrossel") return "carrossel";
+  return "arte";
+}
+const PX_ESTILO_LABEL={comemorativa:"data comemorativa",foto_obra:"foto de obra",video:"vídeo",carrossel:"carrossel",arte:"arte"};
+async function pxExemplosEstilo(task,unit){
+  const sb=window._sb; if(!sb||!task) return [];
+  try{
+    const {data,error}=await sb.rpc("claude_exemplos_estilo",{p_client:String(task.client||""),p_unit:String(unit||""),p_estilo:pxEstiloCard(task),p_excluir:String(task.id||""),p_limite:6});
+    return (error||!Array.isArray(data))?[]:data;
+  }catch(_){ return []; }
+}
+/* modo: "briefing" | "legenda" | "ambos" */
+function _pxBlocoExemplosEstilo(ex,task,modo){
+  if(!ex||!ex.length) return "";
+  const est=PX_ESTILO_LABEL[pxEstiloCard(task)]||"este estilo";
+  const meus=ex.filter(function(e){return e.mesmo_cliente;}), outros=ex.filter(function(e){return !e.mesmo_cliente;});
+  const um=function(e,lim){
+    let r="--- "+(e.titulo||"")+(e.mesmo_cliente?"":" ("+(e.cliente||"outra marca")+")")+"\n";
+    if(modo!=="legenda"&&e.briefing) r+="[BRIEFING]\n"+String(e.briefing).slice(0,lim)+"\n";
+    if(modo!=="briefing"&&e.legenda) r+="[LEGENDA]\n"+String(e.legenda).slice(0,lim)+"\n";
+    return r;
+  };
+  let u="";
+  if(meus.length){
+    u+="✅ "+(modo==="briefing"?"BRIEFINGS":modo==="legenda"?"LEGENDAS":"BRIEFINGS E LEGENDAS")+" DE "+est.toUpperCase()+" JÁ APROVADOS DESTE CLIENTE — é este o padrão que a agência aprova pra esse estilo (estrutura, tamanho e tom). Siga o molde, com o conteúdo DESTE card:\n";
+    meus.forEach(function(e){u+=um(e,700);});
+    u+="\n";
+  }
+  if(outros.length){
+    u+="✅ "+est.toUpperCase()+" APROVADOS EM OUTRAS MARCAS — use SÓ como referência de ESTRUTURA. Nunca copie frase, abertura ou tom de outra marca:\n";
+    outros.forEach(function(e){u+=um(e,420);});
+    u+="\n";
+  }
+  u+="Se algum exemplo acima contrariar as REGRAS APRENDIDAS, valem as REGRAS (os exemplos mais antigos podem ser de antes da regra).\n\n";
+  return u;
+}
+
 async function pxContextoCopy(client, unit){
   const sb=window._sb; if(!sb) return null;
   const d=new Date();
@@ -3727,6 +3779,7 @@ async function pxReescreverCopy(opts){
     || _tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
   const ctx=await pxContextoCopy(task.client, unit);
+  let exEstilo=[]; try{ exEstilo=await pxExemplosEstilo(task,unit); }catch(_){}
   const pb=(ctx&&ctx.playbook)||{};
   const regras=(ctx&&ctx.regras)||[];
   const foco=(ctx&&ctx.foco_do_mes)||[];
@@ -3779,6 +3832,7 @@ async function pxReescreverCopy(opts){
     }
     u+="\n";
   }
+  u+=_pxBlocoExemplosEstilo(exEstilo,task,soBrief?"briefing":soLeg?"legenda":"ambos");
   if(aprov.length){
     u+="COPYS JÁ APROVADAS DESTE CLIENTE (é este o tom que funciona):\n";
     for(let i=0;i<Math.min(aprov.length,8);i++)
@@ -4036,7 +4090,9 @@ async function pxGerarLegendas(opts){
   const aprov=(ctx&&ctx.aprovadas)||[];
   const recus=(ctx&&ctx.recusadas)||[];
   let mesmoTipo=[];
-  try{ mesmoTipo=await pxLegendasDoMesmoTipo(task.client,unit,titulo,task.id); }catch(_){}
+  let exEstilo=[]; try{ exEstilo=await pxExemplosEstilo(task,unit); }catch(_){}
+  // (16/09/2026) só cai no "mesmo título" antigo se não houver nenhum aprovado do mesmo estilo
+  if(!exEstilo.length){ try{ mesmoTipo=await pxLegendasDoMesmoTipo(task.client,unit,titulo,task.id); }catch(_){} }
 
   const sys="Você escreve legendas de Instagram para empresas do agronegócio e da construção no Brasil, "+
     "sempre na voz da marca que te passarem. Escreve como gente que conhece o campo e a obra: direto, "+
@@ -4103,6 +4159,7 @@ async function pxGerarLegendas(opts){
     }
     u+="\n";
   }
+  u+=_pxBlocoExemplosEstilo(exEstilo,task,"legenda");
   if(mesmoTipo.length){
     u+="LEGENDAS DE CARDS DO MESMO TIPO (\""+titulo+"\") JÁ PUBLICADOS — COPIE A ESTRUTURA, NÃO O CONTEÚDO:\n";
     for(let i=0;i<mesmoTipo.length;i++)
@@ -4263,6 +4320,7 @@ async function pxGerarBriefing(opts){
   const foco=(ctx&&ctx.foco_do_mes)||[];
   let moldes=[];
   try{ moldes=await pxBriefingsAprovados(task.client,unit,tipoAtual); }catch(_){}
+  let exEstilo=[]; try{ exEstilo=await pxExemplosEstilo(task,unit); }catch(_){}
 
   const sys="Você prepara briefings de produção para a equipe interna de uma agência que atende "+
     "agronegócio e construção no Brasil. Quem lê é o designer ou o editor de vídeo: o briefing precisa "+
@@ -4327,6 +4385,7 @@ async function pxGerarBriefing(opts){
     if(_pxCtxTxt(f.produtos_foco)) partes.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco));
     if(partes.length) u+="FOCO DO MÊS: "+partes.join("; ")+"\n\n";
   }
+  u+=_pxBlocoExemplosEstilo(exEstilo,task,"briefing");
   if(moldes.length){
     u+="BRIEFINGS DE CARDS JÁ APROVADOS DESTE CLIENTE — COPIE O FORMATO, NÃO O CONTEÚDO:\n";
     for(let i=0;i<moldes.length;i++)
