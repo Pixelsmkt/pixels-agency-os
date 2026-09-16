@@ -3502,7 +3502,7 @@ const PX_ROTEIRO_FALA_FORMATO=
   "Cena 3 — Fechamento\n(a fala: o final que amarra a ideia e convida a falar com a empresa)\n";
 const PX_ROTEIRO_FALA_REGRAS=
   "REGRAS DO ROTEIRO (é o texto que o CLIENTE vai FALAR olhando pra câmera — a gente manda pra ele gravar):\n"+
-  "- 90 segundos falados: de 200 a 240 palavras NO TOTAL.\n"+
+  "- 90 segundos falados COM CALMA: de 170 a 200 palavras NO TOTAL. Frases curtas, de falar. Passou de 200, corta.\n"+
   "- As 3 cenas são UM discurso contínuo: início, complemento e final. Cada cena continua a anterior — não são frases soltas.\n"+
   "- Frases completas, do jeito que se fala, na voz da empresa (\"aqui na <marca> a gente…\"). Nada de frase de legenda nem de título de arte.\n"+
   "- PROIBIDO: marcação de tempo (0–8s), \"Na tela:\", \"o que aparece\", instrução de câmera, de gravação ou de edição.\n"+
@@ -96923,6 +96923,7 @@ async function pxGerarRoteiros(opts){
     u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
   }
   u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
+  u+="- TAMANHO: 170 a 200 palavras NO TOTAL (90 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 200 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
   u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
@@ -96945,6 +96946,24 @@ async function pxGerarRoteiros(opts){
   return out.slice(0,quantos);
 }
 
+/* Ícone diferente em cada roteiro (16/09/2026): os 1-2-3 das seções confundiam; o que
+   distingue um roteiro do outro é o TÍTULO, então o ícone vai nele, escolhido pelo id. */
+const _RT_ICONES=[
+  <g><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 00-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0012 2z"/></g>,                 // lâmpada
+  <g><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></g>,                                                                          // balão
+  <g><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></g>,                                               // alvo
+  <g><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></g>,                                                                                            // gráfico
+  <g><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></g>, // chave
+  <g><path d="M11 2a10 10 0 0110 10c0 5.5-4.5 10-10 10S1 17.5 1 12"/><path d="M11 2v10h10"/></g>,                                                       // pizza
+  <g><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></g>,                                                                     // megafone
+  <g><path d="M12 22c4-4 8-7.5 8-12a8 8 0 10-16 0c0 4.5 4 8 8 12z"/><circle cx="12" cy="10" r="3"/></g>,                                                // pin
+  <g><path d="M4 4h16v12H4z"/><path d="M8 20h8"/><path d="M12 16v4"/><path d="M8 10l3 3 5-6"/></g>,                                                     // tela check
+  <g><path d="M12 2l3 7 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 9.5 9 9z"/></g>,                                                                             // estrela
+  <g><path d="M4 21V9l8-6 8 6v12"/><path d="M9 21v-7h6v7"/></g>,                                                                                        // casa/galpão
+  <g><path d="M12 2v20"/><path d="M17 5.5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></g>,                                                               // cifrão
+];
+function _rtIcone(id){ let h=0; const t=String(id||""); for(let i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return _RT_ICONES[h%_RT_ICONES.length]; }
+
 /* ── CARD DE UM ROTEIRO (agência e portal usam o mesmo) ── */
 function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
   const [aberto,setAberto]=useState(true);
@@ -96958,14 +96977,14 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
     <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:200}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <span style={{width:26,height:26,borderRadius:8,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="video" size={13} color="#fff"/></span>
+          <span style={{width:30,height:30,borderRadius:9,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+_c+"55"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rtIcone(r.id)}</svg></span>
           <span style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{r.assunto||"Roteiro"}</span>
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
         </div>
         <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~90 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
         <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           {agencia?"Copiar pro WhatsApp":"Copiar roteiro"}
@@ -96981,15 +97000,16 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
         {agencia&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
+        <span style={{flex:1}}/>
         <button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
     </div>
-    {aberto&&<div style={{padding:"0 16px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.4fr 1fr",gap:10}}>
+    {aberto&&<div style={{padding:"0 16px 16px",display:"flex",flexDirection:"column",gap:8}}>
       {partes.map(function(p,i){
         return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <span style={{width:18,height:18,borderRadius:"50%",background:_c,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+            <span style={{width:3,height:12,borderRadius:2,background:_c,flexShrink:0}}/>
             <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{p[1]}</span>
             {i===2&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:700}}>· com CTA</span>}
           </div>
@@ -97142,7 +97162,7 @@ function PageRoteiros({isMob}){
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>Nenhum roteiro pra {_nomeCl(clId,unit)} ainda</div>
         <div style={{color:"#64748b",fontSize:12.5}}>Clica em "Gerar 5 roteiros". A IA escreve com base no playbook, no foco do mês e no que já foi aprovado pra esse cliente.</div>
       </div>}
-      {!loading&&visiveis.length>0&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {!loading&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14,alignItems:"start"}}>
         {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
@@ -97201,7 +97221,7 @@ function PageRoteiros({isMob}){
               <button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
             </div>
           </div>
-          {gerados.length>0&&<div style={{padding:12,display:"flex",flexDirection:"column",gap:10,background:"#fafbfc"}}>
+          {gerados.length>0&&<div style={{padding:12,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:12,alignItems:"start",background:"#fafbfc"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
                 <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={function(){_excluir(r);}}/></div>; })}
@@ -97241,6 +97261,8 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
     </div>
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
     {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
-    {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}/>; })}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14,alignItems:"start"}}>
+      {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}/>; })}
+    </div>
   </div>;
 }
