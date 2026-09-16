@@ -5976,6 +5976,7 @@ function pixelsPersistPreview(taskId,fileId,previewUrl,previewPath,previewSize){
       var updated=current.files.map(function(f){
         if(!f)return f;
         var hit=(fileId&&f.id===fileId)||(previewPath&&f.storagePath&&previewPath.indexOf(f.storagePath.replace(/\.[^.]+$/,""))===0);
+        if(hit&&f.previewEngine==="ffmpeg")return f; // PRÉVIA FFMPEG MANDA: a do navegador nunca vai por cima
         if(hit){matched=true;return Object.assign({},f,patch);}
         return f;
       });
@@ -20721,7 +20722,54 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
           else if(typeof pxProntoPraPostar==="function"?pxProntoPraPostar(t):(t.status==="aprovado"||t.status==="agendado"||t.status==="aprovacao_final")) _agendar++;
           else _producao++;
         });
+        // CONTAGEM DE MATERIAL — FOTO DE OBRA E SHORT (16/09/2026, pedido do Vinicius):
+        // quantos cards dessas duas categorias já têm material anexado e quantos faltam.
+        // Escopo: pipeline não aprovado de todos os meses (ver _pipelineMat). "Tem material" = qualquer arquivo real
+        // (material, referência ou final); anotação, anexo de ajuste e upload em curso não contam.
+        const _ehFotoObraCal=function(t){return t.contentType==="foto"||/foto\s*de\s*obra/i.test(String(t.title||""));};
+        const _ehShortCal=function(t){
+          const _ct=String(t.contentType||t.tipo||"");
+          return _ct==="video_short"||_ct==="short"||!!t.fromDrive||/^short-/i.test(String(t.id||""))||/^\s*short\b/i.test(String(t.title||""));
+        };
+        const _temMaterialCal=function(t){
+          return (t.files||[]).some(function(a){
+            if(!a||a.isAnnotation||a.uploading||!a.url)return false;
+            if(a.isRef&&a.tipo!=="referencia"&&a.tipo!=="material")return false;
+            return true;
+          });
+        };
+        // Escopo (ajustado no mesmo dia): NÃO é só o mês visto — é todo o pipeline ainda não
+        // aprovado/publicado (o material vai até dezembro). Respeita só o filtro de cliente/unidade.
+        const _pipelineMat=agendados.filter(function(t){
+          if(t.status==="publicado"||t.status==="agendado"||t.status==="aprovado"||t.status==="aprovacao_final")return false;
+          if(typeof pxProntoPraPostar==="function"&&pxProntoPraPostar(t))return false;
+          return true;
+        });
+        const _contaMat=function(fn){
+          const _l=_pipelineMat.filter(fn);
+          const _com=_l.filter(_temMaterialCal).length;
+          return {total:_l.length,com:_com,falta:_l.length-_com};
+        };
+        const _matFoto=_contaMat(_ehFotoObraCal), _matShort=_contaMat(_ehShortCal);
         const _mesLabel=calMonth.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+        const _kpiMat=function(label,c,color,iconSvg){
+          const _pct=c.total?Math.round(c.com/c.total*100):0;
+          return <div style={{flex:"1 1 260px",minWidth:220,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
+            <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,minWidth:0,flex:1}}>
+              <span style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
+              <div style={{display:"flex",alignItems:"baseline",gap:10,marginTop:2,flexWrap:"wrap"}}>
+                <span style={{fontSize:22,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
+                <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>com material</span>
+                <span style={{fontSize:11,fontWeight:500,color:"#94a3b8"}}>· não aprovados, todos os meses</span>
+                <span style={{fontSize:12,fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
+              </div>
+              <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginTop:7,overflow:"hidden"}}>
+                <div style={{width:_pct+"%",height:"100%",background:"#16a34a",borderRadius:99,transition:"width .3s"}}></div>
+              </div>
+            </div>
+          </div>;
+        };
         const _kpi=function(label,value,color,iconSvg){
           return <div style={{flex:"1 1 140px",minWidth:140,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
@@ -20743,6 +20791,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
             {_kpi("Em produção",_producao,"#06b6d4",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>)}
             {_kpi("Agendar",_agendar,"#ec4899",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
             {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {_kpiMat("Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
+            {_kpiMat("Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
           </div>
         </div>;
       })()}
@@ -42277,6 +42329,14 @@ function _cardPodeSerResp(u){
         }
         return;
       }
+      // PRÉVIA FFMPEG MANDA (16/09/2026): se o PC da agência já gravou a prévia feita com
+      // ffmpeg, a do navegador (pior e de tamanho imprevisível) é jogada fora — nunca por cima.
+      const _dbF=current.files.find(function(f){return f&&f.id===attachmentId;});
+      if(_dbF&&_dbF.previewEngine==="ffmpeg"){
+        setAttachments(p=>p.map(a=>a.id===attachmentId?{...a,previewUrl:_dbF.previewUrl,previewPath:_dbF.previewPath,previewSize:_dbF.previewSize,previewEngine:"ffmpeg"}:a));
+        try{await sb.storage.from("agency-files").remove([previewPath]);}catch(_){}
+        return;
+      }
       const updated=current.files.map(function(f){return (f&&f.id===attachmentId)?Object.assign({},f,patch):f;});
       const _upd=await sb.from("tasks").update({files:updated}).eq("id",task.id);
       if(_upd&&_upd.error){console.warn("[preview] update tasks.files:",_upd.error.message);return;}
@@ -51996,6 +52056,10 @@ export default function AgencyOS(){
         if(typeof fl.size==="number" && fl.size<=20*1024*1024)continue;
         cands.push({taskId:t.id,file:fl});
       }
+      // BACKFILL NO NAVEGADOR DESLIGADO (16/09/2026): a versão leve de vídeo antigo agora é feita
+      // com ffmpeg pelo PC da agência (previews_ffmpeg.py no sync). A do navegador saía borrada e
+      // baixava o original de novo à toa (egress em dobro).
+      cands.length=0;
       if(cands.length===0||stopped)return;
       console.log("[backfill] candidatos sem versão leve:",cands.length);
       let feitos=0;
