@@ -3504,6 +3504,7 @@ const PX_ROTEIRO_FALA_REGRAS=
   "REGRAS DO ROTEIRO (é o texto que o CLIENTE vai FALAR olhando pra câmera — a gente manda pra ele gravar):\n"+
   "- 90 segundos falados COM CALMA: de 170 a 200 palavras NO TOTAL. Frases curtas, de falar. Passou de 200, corta.\n"+
   "- As 3 cenas são UM discurso contínuo: início, complemento e final. Cada cena continua a anterior — não são frases soltas.\n"+
+  "- Dentro de cada cena, parágrafos CURTOS separados por linha em branco (uma ideia por parágrafo; o Desenvolvimento tem 3 a 4). Nunca um bloco só.\n"+
   "- Frases completas, do jeito que se fala, na voz da empresa (\"aqui na <marca> a gente…\"). Nada de frase de legenda nem de título de arte.\n"+
   "- PROIBIDO: marcação de tempo (0–8s), \"Na tela:\", \"o que aparece\", instrução de câmera, de gravação ou de edição.\n"+
   "- Não invente número, prazo, garantia nem dado técnico que não esteja no card.\n";
@@ -96865,11 +96866,22 @@ function PageMatrizResponsabilidades({isMob}){
 const _RT_FF="'Inter',system-ui,sans-serif";
 const _RT_AC="#7c3aed";
 
+/* Parágrafos (16/09/2026, Vinicius: "cadê os parágrafos… embananado, péssimo pra ler").
+   Texto que veio num bloco só é quebrado a cada 2 frases; texto que já tem quebra fica como está. */
+function _rtParagrafos(txt){
+  const t=String(txt||"").replace(/\r/g,"").trim();
+  if(!t) return "";
+  if(/\n\s*\n/.test(t)) return t.replace(/\n{3,}/g,"\n\n");
+  if(/\n/.test(t)) return t.replace(/\n+/g,"\n\n");
+  const fr=t.match(/[^.!?…]+[.!?…]+["”)]?\s*|[^.!?…]+$/g)||[t];
+  const out=[]; for(let i=0;i<fr.length;i+=2) out.push(fr.slice(i,i+2).join("").trim());
+  return out.filter(Boolean).join("\n\n");
+}
 function _rtTexto(r,semCabecalho){
   const py=String(r.unidade||"")==="paraguay";
   const L=py?{a:"Apertura",d:"Desarrollo",f:"Cierre"}:{a:"Abertura",d:"Desenvolvimento",f:"Fechamento"};
   return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
-    "*"+L.a+"*\n"+(r.abertura||"")+"\n\n*"+L.d+"*\n"+(r.desenvolvimento||"")+"\n\n*"+L.f+"*\n"+(r.fechamento||"");
+    "*"+L.a+"*\n"+_rtParagrafos(r.abertura)+"\n\n*"+L.d+"*\n"+_rtParagrafos(r.desenvolvimento)+"\n\n*"+L.f+"*\n"+_rtParagrafos(r.fechamento);
 }
 function _rtPalavras(r){ return ((r.abertura||"")+" "+(r.desenvolvimento||"")+" "+(r.fechamento||"")).trim().split(/\s+/).filter(Boolean).length; }
 function _rtCopiar(txt,msg){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800); }catch(_){} }
@@ -96923,6 +96935,7 @@ async function pxGerarRoteiros(opts){
     u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
   }
   u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
+  u+="- PARÁGRAFOS: escreva em parágrafos CURTOS, uma ideia por parágrafo, com uma linha em branco entre eles. O DESENVOLVIMENTO tem 3 a 4 parágrafos; abertura e fechamento, 1 ou 2. Nunca um bloco só.\n";
   u+="- TAMANHO: 170 a 200 palavras NO TOTAL (90 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 200 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
@@ -97012,7 +97025,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
             <span style={{width:3,height:12,borderRadius:2,background:_c,flexShrink:0}}/>
             <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{p[1]}</span>
           </div>
-          <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{p[2]}</div>
+          <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{_rtParagrafos(p[2])}</div>
         </div>;
       })}
     </div>}
