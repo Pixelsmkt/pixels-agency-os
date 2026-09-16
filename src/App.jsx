@@ -37693,15 +37693,15 @@ function _RsIcon({rede,size}){
   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
 
-// ── Layout v2 (16/09/2026, pedido do Vinicius: "q bagunça… deixa claro cliente por cliente") ──
-// Antes: grade de cards soltos (masonry), cada conta com um formato diferente, e o Grupo Bioter
-// espalhado em 7 cards pela tela. Agora:
-//   • UMA faixa por cliente, uma embaixo da outra, com logo, nome e total de contas;
-//   • Bioter numa faixa só, com subtítulo por unidade;
-//   • toda conta é UMA LINHA com as MESMAS colunas: Rede · Perfil · Login e-mail · Login telefone ·
-//     Senha · Recuperação — o que não tem aparece como "—", então dá pra bater o olho e ver o que falta;
-//   • LOGIN POR E-MAIL e LOGIN POR TELEFONE em caixas separadas (Facebook entra pelos dois);
-//   • clientes sem nenhuma conta ficam numa linha compacta no fim, não ocupam card vazio.
+// ── Layout v3 (16/09/2026) ──
+// A v2 (faixas largas com colunas tipo planilha) foi REPROVADA: "ficou pior ainda… deixa COMO TAVA ANTES
+// MAS MAIS MODERNO, COM MAIS ESPAÇAMENTO". Não voltar pra tabela.
+// Agora: grade de cards como era (um card por cliente; Bioter = Grupo + um card por unidade), com mais
+// respiro (gap 20, padding 14–18, cantos 14–18) e cada conta num bloco próprio:
+//   topo = ícone da rede + @ (ou nome da rede) + ações;
+//   LOGIN POR E-MAIL e LOGIN POR TELEFONE em caixas separadas lado a lado, senha embaixo
+//   (só aparece se a conta tem login/senha — conta só com @ fica enxuta);
+//   recuperação numa faixa âmbar só quando existe.
 const RS_ORDEM=["instagram","facebook","tiktok","youtube","linkedin","google","gads","gdrive","gmb","outro"];
 // unidade gravada com id antigo (ex.: vinculação de página da Meta) → unidade atual
 const RS_UNIDADE_ALIAS={gloria_dourados:"gloria"};
@@ -37783,7 +37783,7 @@ function PageRedesSociais({isMob}){
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
   const _unidades=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
-  const _nomeUnidade=function(u){ if(!u)return "Grupo (contas gerais)"; const x=_unidades.find(function(y){return y.id===u;}); return "Bioter "+(x?(x.pickerLabel||x.label):u); };
+  const _nomeUnidade=function(u){ if(!u)return "Grupo Bioter"; const x=_unidades.find(function(y){return y.id===u;}); return "Bioter "+(x?(x.pickerLabel||x.label):u); };
   const _ordRede=function(a,b){ const ia=RS_ORDEM.indexOf(a.network), ib=RS_ORDEM.indexOf(b.network); return (ia<0?99:ia)-(ib<0?99:ib) || String(a.handle||a.login||"").localeCompare(String(b.handle||b.login||"")); };
 
   const _qn=busca.trim().toLowerCase();
@@ -37791,146 +37791,119 @@ function PageRedesSociais({isMob}){
     if(!_qn)return true;
     return [c.handle,c.login,c.login_telefone,c.rec_email,c.rec_telefone,c.obs,_rsRede(c.network).label].some(function(v){return String(v||"").toLowerCase().indexOf(_qn)>=0;});
   };
-  // Monta as faixas: [{cl, grupos:[{unidade,titulo,contas}] , total}]
-  const _faixas=[], _vazios=[];
-  _clientes.forEach(function(cl){
-    const _todas=contas.filter(function(c){return c.client_id===cl.id;});
-    const _nomeBate=!_qn||cl.name.toLowerCase().indexOf(_qn)>=0||(cl.id==="bioter"&&_unidades.some(function(u){return ("bioter "+(u.pickerLabel||u.label)).toLowerCase().indexOf(_qn)>=0;}));
-    let _grupos;
-    if(cl.id==="bioter"){
-      const _ids=[""].concat(_unidades.map(function(u){return u.id;}));
-      _todas.forEach(function(c){ const u=_rsUnidade(c.unidade); if(_ids.indexOf(u)<0)_ids.push(u); });
-      _grupos=_ids.map(function(u){
-        const _titulo=_nomeUnidade(u);
-        const _tituloBate=!_qn||_titulo.toLowerCase().indexOf(_qn)>=0;
-        const _l=_todas.filter(function(c){return _rsUnidade(c.unidade)===u&&(_nomeBate||_tituloBate||_contaBate(c));}).sort(_ordRede);
-        return {unidade:u,titulo:_titulo,contas:_l,mostrarVazio:!_qn||_tituloBate};
-      });
-    } else {
-      _grupos=[{unidade:"",titulo:"",contas:_todas.filter(function(c){return _nomeBate||_contaBate(c);}).sort(_ordRede),mostrarVazio:!_qn}];
-    }
-    const _total=_grupos.reduce(function(s,g){return s+g.contas.length;},0);
-    if(_todas.length===0){ if(_nomeBate)_vazios.push(cl); return; }
-    if(_total===0&&!_nomeBate)return;
-    _faixas.push({cl:cl,grupos:_grupos,total:_total});
+  // Cards: um por cliente; Bioter = Grupo + um card por unidade (como era antes)
+  const _cards=[];
+  _clientes.forEach(function(c){
+    if(c.id==="bioter"&&_unidades.length){
+      _cards.push({cl:c,unidade:"",nome:"Grupo Bioter"});
+      _unidades.forEach(function(u){ _cards.push({cl:c,unidade:u.id,nome:"Bioter "+(u.pickerLabel||u.label)}); });
+    } else _cards.push({cl:c,unidade:"",nome:c.name});
+  });
+  const _visiveis=[];
+  _cards.forEach(function(k){
+    const _todas=contas.filter(function(c){return c.client_id===k.cl.id&&(k.cl.id!=="bioter"||_rsUnidade(c.unidade)===k.unidade);}).sort(_ordRede);
+    const _nomeBate=!_qn||k.nome.toLowerCase().indexOf(_qn)>=0;
+    const _l=_nomeBate?_todas:_todas.filter(_contaBate);
+    if(!_nomeBate&&_l.length===0)return;
+    _visiveis.push(Object.assign({},k,{contas:_l}));
   });
 
-  // ── peças visuais ──
   const _Logo=function(cl){
     return (typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-      ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"5px 9px",height:36,display:"inline-flex",alignItems:"center",flexShrink:0}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:24,maxWidth:78,objectFit:"contain"}}/></div>
-      : <span style={{width:36,height:36,borderRadius:10,background:(cl.color||AC)+"18",color:cl.color||AC,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>;
+      ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"5px 9px",height:34,display:"inline-flex",alignItems:"center",flexShrink:0}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:22,maxWidth:72,objectFit:"contain"}}/></div>
+      : <span style={{width:34,height:34,borderRadius:10,background:(cl.color||AC)+"18",color:cl.color||AC,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>;
   };
-  const _BtnMais=function(props){
-    return <button title={props.title} onClick={props.onClick}
-      style={{background:"#fff",border:"1px solid "+B1,borderRadius:8,padding:props.label?"5px 10px":"0",width:props.label?"auto":26,height:26,color:TS,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:11.5,fontWeight:700,fontFamily:"inherit",flexShrink:0}}
-      onMouseEnter={function(e){e.currentTarget.style.borderColor=AC;e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=B1;e.currentTarget.style.color=TS;}}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>{props.label||null}
-    </button>;
-  };
-  // Caixa de valor: sempre existe; vazia = "—". Clique copia.
-  const _Caixa=function(props){
+  const _icoBtn={background:"none",border:"none",color:TD,cursor:"pointer",padding:4,display:"inline-flex",borderRadius:7,transition:"all .12s"};
+  const _hoverOn=function(cor){return function(e){e.currentTarget.style.color=cor;e.currentTarget.style.background="#f1f5f9";};};
+  const _hoverOff=function(cor){return function(e){e.currentTarget.style.color=cor||TD;e.currentTarget.style.background="none";};};
+  // Campo rotulado dentro da conta. Clique copia.
+  const _Campo=function(props){
     const v=props.valor, vazio=!v;
-    return <div title={vazio?"":(props.titulo||"Clique pra copiar")} onClick={function(){if(!vazio&&!props.semCopia)_copy(props.copiar||v,props.lbl);}}
-      style={{background:vazio?"transparent":"#fff",border:"1px solid "+(vazio?"#f1f5f9":"#e8ebf0"),borderRadius:8,padding:"6px 9px",minHeight:30,boxSizing:"border-box",display:"flex",alignItems:"center",gap:6,cursor:vazio?"default":"copy",minWidth:0}}>
-      {isMob&&<span style={{color:TD,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,flexShrink:0}}>{props.rotulo}</span>}
-      {vazio
-        ? <span style={{color:"#cbd5e1",fontSize:12}}>—</span>
-        : (props.children||<span style={{color:props.cor||TX,fontSize:12,fontWeight:props.forte?800:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>)}
+    return <div onClick={function(){if(!vazio)_copy(props.copiar||v,props.lbl);}} title={vazio?"":"Clique pra copiar"}
+      style={{background:vazio?"#fafbfc":"#fff",border:"1px solid "+(vazio?"#f1f3f6":"#e8ebf0"),borderRadius:10,padding:"8px 11px",cursor:vazio?"default":"copy",minWidth:0,transition:"border-color .12s"}}
+      onMouseEnter={function(e){if(!vazio)e.currentTarget.style.borderColor="#cbd5e1";}} onMouseLeave={function(e){if(!vazio)e.currentTarget.style.borderColor="#e8ebf0";}}>
+      <div style={{color:TD,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:3,display:"flex",alignItems:"center",gap:5}}>{props.icone}{props.rotulo}</div>
+      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+        {vazio
+          ? <span style={{color:"#cbd5e1",fontSize:12.5}}>—</span>
+          : (props.children||<span style={{color:props.cor||TX,fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>)}
+      </div>
     </div>;
   };
-  const _COLS=isMob?"1fr":"minmax(150px,1.1fr) minmax(140px,1.1fr) minmax(170px,1.4fr) minmax(130px,1fr) 128px minmax(150px,1.2fr) 88px";
-  const _Cabecalho=function(){
-    if(isMob)return null;
-    return <div style={{display:"grid",gridTemplateColumns:_COLS,gap:8,padding:"0 12px 6px"}}>
-      {["Rede","Perfil","Login por e-mail","Login por telefone","Senha","Recuperação",""].map(function(h,i){
-        return <span key={i} style={{color:TD,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{h}</span>;
-      })}
-    </div>;
-  };
-  const _Linha=function(c){
+  const _icMail=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>;
+  const _icTel=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>;
+  const _icLock=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+
+  const _Conta=function(c){
     const R=_rsRede(c.network);
     const _rev=!!reveal[c.id];
     const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
-    const _pagina=c.obs&&!/^https?:/.test(c.obs)?c.obs:"";
+    const _nota=c.obs&&!/^https?:/.test(c.obs)?c.obs:"";
+    const _temAcesso=!!(c.login||c.login_telefone||c.senha);
     const _rec=[c.rec_email,c.rec_telefone].filter(Boolean);
-    return <div key={c.id} style={{display:"grid",gridTemplateColumns:_COLS,gap:8,alignItems:"center",padding:isMob?"10px 12px":"7px 12px",borderTop:"1px solid #f1f5f9"}}
-      onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-      {/* Rede */}
-      <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-        <span style={{width:28,height:28,borderRadius:8,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><_RsIcon rede={c.network} size={15}/></span>
-        <div style={{display:"flex",flexDirection:"column",minWidth:0,lineHeight:1.2}}>
-          <span style={{color:TX,fontWeight:700,fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{R.label}</span>
-          {_pagina&&<span title={_pagina} style={{color:TD,fontSize:10.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_pagina}</span>}
+    return <div key={c.id} style={{border:"1px solid #eef1f5",borderRadius:14,padding:14,display:"flex",flexDirection:"column",gap:12,background:"#fcfcfd"}}>
+      {/* topo: rede + @ + ações */}
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <span style={{width:36,height:36,borderRadius:11,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px "+R.cor+"40"}}><_RsIcon rede={c.network} size={18}/></span>
+        <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.25}}>
+          {c.handle
+            ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,textAlign:"left",color:TX,fontWeight:800,fontSize:13.5,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
+            : <span style={{color:TX,fontWeight:800,fontSize:13.5}}>{R.label}</span>}
+          <span style={{color:TD,fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.handle?R.label:""}{c.handle&&_nota?" · ":""}{_nota}</span>
         </div>
-        {isMob&&<span style={{flex:1}}/>}
-        {isMob&&_Acoes(c,_url)}
+        <div style={{display:"flex",alignItems:"center",gap:1,flexShrink:0}}>
+          {(c.handle||_temAcesso)&&<button title="Copiar acesso completo" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}
+            onClick={function(){var l=[];if(c.handle)l.push("@"+c.handle);if(c.login)l.push("Login (e-mail): "+c.login);if(c.login_telefone)l.push("Login (telefone): "+c.login_telefone);if(c.senha)l.push("Senha: "+c.senha);_copy(l.join("\n"),"Acesso copiado");}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>}
+          {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
+          <button title="Editar" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}
+            onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:_rsUnidade(c.unidade),network:c.network,handle:c.handle||"",login:c.login||"",login_telefone:c.login_telefone||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button title="Excluir" style={Object.assign({},_icoBtn,{color:"#e2b3b3"})} onMouseEnter={_hoverOn("#dc2626")} onMouseLeave={_hoverOff("#e2b3b3")} onClick={function(){_excluir(c);}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+        </div>
       </div>
-      {/* Perfil */}
-      <_Caixa rotulo="Perfil" valor={c.handle?("@"+c.handle):""} lbl="@ copiado" forte={true}/>
-      {/* Login e-mail */}
-      <_Caixa rotulo="E-mail" valor={c.login} lbl="E-mail de login copiado">
-        {c.login&&<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>
-          <span style={{color:TX,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login}</span></>}
-      </_Caixa>
-      {/* Login telefone */}
-      <_Caixa rotulo="Telefone" valor={c.login_telefone} lbl="Telefone de login copiado">
-        {c.login_telefone&&<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-          <span style={{color:TX,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login_telefone}</span></>}
-      </_Caixa>
-      {/* Senha */}
-      <_Caixa rotulo="Senha" valor={c.senha} lbl="Senha copiada" titulo="Clique pra copiar a senha">
-        {c.senha&&<>
-          <span style={{color:TX,fontSize:12,fontWeight:700,letterSpacing:_rev?0:1.5,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?c.senha:"••••••"}</span>
-          <button title={_rev?"Ocultar":"Mostrar"} onClick={function(e){e.stopPropagation();setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex",flexShrink:0}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
-        </>}
-      </_Caixa>
-      {/* Recuperação */}
-      <_Caixa rotulo="Recup." valor={_rec.join(" · ")} lbl="Recuperação copiada" copiar={_rec.join("\n")}>
-        {_rec.length>0&&<span style={{color:"#92400e",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rec.join(" · ")}</span>}
-      </_Caixa>
-      {!isMob&&_Acoes(c,_url)}
-    </div>;
-  };
-  const _Acoes=function(c,_url){
-    const _ico={background:"none",border:"none",color:TD,cursor:"pointer",padding:3,display:"inline-flex",borderRadius:6};
-    return <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:2}}>
-      {(c.handle||c.login||c.login_telefone||c.senha)&&<button title="Copiar acesso completo" style={_ico}
-        onClick={function(){var l=[];if(c.handle)l.push("@"+c.handle);if(c.login)l.push("Login (e-mail): "+c.login);if(c.login_telefone)l.push("Login (telefone): "+c.login_telefone);if(c.senha)l.push("Senha: "+c.senha);_copy(l.join("\n"),"Acesso copiado");}}
-        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>}
-      {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={_ico}
-        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
-      <button title="Editar" style={_ico} onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:_rsUnidade(c.unidade),network:c.network,handle:c.handle||"",login:c.login||"",login_telefone:c.login_telefone||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
-        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-      <button title="Excluir" style={Object.assign({},_ico,{color:"#e2b3b3"})} onClick={function(){_excluir(c);}}
-        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+      {/* acesso: e-mail e telefone lado a lado, senha embaixo — só aparece se a conta tem login/senha */}
+      {_temAcesso&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <_Campo rotulo="Login por e-mail" icone={_icMail} valor={c.login} lbl="E-mail de login copiado"/>
+        <_Campo rotulo="Login por telefone" icone={_icTel} valor={c.login_telefone} lbl="Telefone de login copiado"/>
+        <div style={{gridColumn:"1 / -1"}}>
+          <_Campo rotulo="Senha" icone={_icLock} valor={c.senha} lbl="Senha copiada">
+            {c.senha&&<>
+              <span style={{color:TX,fontSize:12.5,fontWeight:700,letterSpacing:_rev?0:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?c.senha:"••••••••"}</span>
+              <button title={_rev?"Ocultar":"Mostrar"} onClick={function(e){e.stopPropagation();setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex",flexShrink:0}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
+            </>}
+          </_Campo>
+        </div>
+      </div>}
+      {_rec.length>0&&<div onClick={function(){_copy(_rec.join("\n"),"Recuperação copiada");}} title="Clique pra copiar"
+        style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"7px 11px",cursor:"copy",display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+        <span style={{color:"#b45309",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,flexShrink:0}}>Recuperação</span>
+        <span style={{color:"#92400e",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rec.join(" · ")}</span>
+      </div>}
     </div>;
   };
 
   const _lbl={color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6};
   const _inp={width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"};
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:11,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:12,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente, @, e-mail, telefone..."
-          style={{background:"#fff",border:"1px solid "+B1,borderRadius:10,padding:"9px 14px 9px 34px",color:TX,fontSize:12.5,outline:"none",width:isMob?"100%":300,fontWeight:500,boxSizing:"border-box"}}/>
+          style={{background:"#fff",border:"1px solid "+B1,borderRadius:12,padding:"10px 14px 10px 36px",color:TX,fontSize:13,outline:"none",width:isMob?"100%":300,fontWeight:500,boxSizing:"border-box"}}/>
       </div>
-      {!loading&&<span style={{color:TD,fontSize:12,fontWeight:600}}>{contas.length} contas · {_faixas.length} clientes</span>}
       {!loading&&<span title="Instagram, Facebook, TikTok, LinkedIn e Email conversam com o Briefing › Logins e acessos do portal do cliente: mudou aqui, muda lá, e vice-versa."
-        style={{display:"inline-flex",alignItems:"center",gap:5,background:"#ecfdf5",border:"1px solid #bbf7d0",color:"#15803d",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+        style={{display:"inline-flex",alignItems:"center",gap:6,background:"#ecfdf5",border:"1px solid #bbf7d0",color:"#15803d",borderRadius:99,padding:"4px 11px",fontSize:11.5,fontWeight:700}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
         Sincronizado com o portal</span>}
       <span style={{flex:1}}/>
       <button onClick={function(){setForm(_novoForm(_clientes[0]?_clientes[0].id:"",""));}}
-        style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:800,fontSize:12.5,cursor:"pointer",boxShadow:"0 4px 14px "+AC+"44",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
+        style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:12,padding:"11px 20px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 6px 18px "+AC+"40",display:"inline-flex",alignItems:"center",gap:8,fontFamily:"inherit"}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nova conta
       </button>
@@ -37938,52 +37911,29 @@ function PageRedesSociais({isMob}){
 
     {loading&&<div style={{padding:"40px 0",textAlign:"center",color:TD,fontSize:12.5}}>Carregando contas…</div>}
 
-    {/* Uma faixa por cliente */}
-    {!loading&&_faixas.map(function(f){
-      const cl=f.cl, _cor=cl.color||AC;
-      return <div key={cl.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",borderLeft:"4px solid "+_cor}}>
-        <div style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9"}}>
-          {_Logo(cl)}
-          <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.2}}>
-            <span style={{color:TX,fontWeight:800,fontSize:15,letterSpacing:-.2}}>{cl.name}</span>
-            <span style={{color:TD,fontSize:11.5,fontWeight:600}}>{f.total} {f.total===1?"conta":"contas"}{cl.id==="bioter"?(" · "+(_unidades.length+1)+" perfis (grupo + unidades)"):""}</span>
+    {/* Grade: um card por cliente (Bioter: grupo + unidades) */}
+    {!loading&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(400px,1fr))",gap:20,alignItems:"start"}}>
+      {_visiveis.map(function(k){
+        const cl=k.cl, _cor=cl.color||AC;
+        return <div key={cl.id+"_"+k.unidade} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:18,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.04)"}}>
+          <div style={{padding:"16px 18px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,"+_cor+"0a,#fff)"}}>
+            {_Logo(cl)}
+            <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.25}}>
+              <span style={{color:TX,fontWeight:800,fontSize:14.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{k.nome}</span>
+              <span style={{color:TD,fontSize:11.5,fontWeight:600}}>{k.contas.length?(k.contas.length+(k.contas.length===1?" conta":" contas")):"sem contas"}</span>
+            </div>
+            <button title={"Adicionar conta em "+k.nome} onClick={function(){setForm(_novoForm(cl.id,k.unidade));}}
+              style={{background:_cor+"12",border:"1px solid "+_cor+"30",borderRadius:10,width:32,height:32,color:_cor,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
           </div>
-          {cl.id!=="bioter"&&<_BtnMais title={"Adicionar conta de "+cl.name} label="Conta" onClick={function(){setForm(_novoForm(cl.id,""));}}/>}
-        </div>
-        <div style={{padding:"8px 0 4px"}}>
-          {(function(){ let _cabecalhoFeito=false; return f.grupos.map(function(g){
-            if(g.contas.length===0&&!(cl.id==="bioter"&&g.mostrarVazio))return null;
-            // cabeçalho das colunas só UMA vez por cliente (antes do primeiro grupo com contas)
-            const _mostraCab=g.contas.length>0&&!_cabecalhoFeito; if(_mostraCab)_cabecalhoFeito=true;
-            return <div key={g.unidade||"_"} style={{paddingBottom:6}}>
-              {cl.id==="bioter"&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px 6px"}}>
-                <span style={{width:6,height:6,borderRadius:"50%",background:_cor}}/>
-                <span style={{color:TS,fontSize:12,fontWeight:800}}>{g.titulo}</span>
-                <span style={{color:TD,fontSize:11}}>{g.contas.length||"sem contas"}</span>
-                <span style={{flex:1,height:1,background:"#f1f5f9"}}/>
-                <_BtnMais title={"Adicionar conta em "+g.titulo} onClick={function(){setForm(_novoForm("bioter",g.unidade));}}/>
-              </div>}
-              {g.contas.length>0&&<>
-                {_mostraCab&&_Cabecalho()}
-                {g.contas.map(_Linha)}
-              </>}
-            </div>;
-          }); })()}
-        </div>
-      </div>;
-    })}
-
-    {/* Clientes sem conta: compacto */}
-    {!loading&&_vazios.length>0&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"10px 14px",background:"#fff",border:"1px dashed "+B1,borderRadius:12}}>
-      <span style={{color:TD,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4}}>Sem contas cadastradas</span>
-      {_vazios.map(function(cl){
-        return <button key={cl.id} onClick={function(){setForm(_novoForm(cl.id,""));}} title={"Adicionar conta de "+cl.name}
-          style={{background:"#f8fafc",border:"1px solid "+B1,borderRadius:99,padding:"5px 12px",color:TS,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-          {cl.name}<span style={{color:AC,fontWeight:800}}>+</span></button>;
+          {k.contas.length===0
+            ? <div style={{padding:"22px 18px",color:"#cbd5e1",fontSize:12.5,fontStyle:"italic"}}>Nenhuma conta registrada ainda.</div>
+            : <div style={{padding:14,display:"flex",flexDirection:"column",gap:12}}>{k.contas.map(_Conta)}</div>}
+        </div>;
       })}
+      {_visiveis.length===0&&<div style={{gridColumn:"1 / -1",padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:18,border:"1px dashed "+B1}}>Nada encontrado.</div>}
     </div>}
-
-    {!loading&&_faixas.length===0&&_vazios.length===0&&<div style={{padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:16,border:"1px dashed "+B1}}>Nada encontrado.</div>}
 
     {/* Modal nova conta / editar */}
     {form&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setForm(null);}}
