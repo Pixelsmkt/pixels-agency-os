@@ -3696,13 +3696,16 @@ function _pxBlocoExemplosEstilo(ex,task,modo){
   return u;
 }
 
-async function pxContextoCopy(client, unit){
+// p_estilo (16/09/2026): COMEMORATIVA SÓ ENSINA COMEMORATIVA — o banco filtra as aprovadas e as
+// recusadas pelo estilo do card (comemorativa × todo o resto), pra homenagem não contaminar copy comercial.
+async function pxContextoCopy(client, unit, task){
   const sb=window._sb; if(!sb) return null;
   const d=new Date();
   try{
     const {data,error}=await sb.rpc("claude_contexto_copy",{
       p_client:String(client||""), p_unit:String(unit||""),
-      p_year:d.getFullYear(), p_month:d.getMonth()+1 });
+      p_year:d.getFullYear(), p_month:d.getMonth()+1,
+      p_estilo:task?pxEstiloCard(task):null });
     if(error) return null;
     return data||null;
   }catch(_){ return null; }
@@ -3778,7 +3781,7 @@ async function pxReescreverCopy(opts){
   const ehComemorativa=/^autocom-/i.test(String(task.id||""))
     || _tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
-  const ctx=await pxContextoCopy(task.client, unit);
+  const ctx=await pxContextoCopy(task.client, unit, task);
   let exEstilo=[]; try{ exEstilo=await pxExemplosEstilo(task,unit); }catch(_){}
   const pb=(ctx&&ctx.playbook)||{};
   const regras=(ctx&&ctx.regras)||[];
@@ -4083,7 +4086,7 @@ async function pxGerarLegendas(opts){
   const ehComemorativa=/^autocom-/i.test(String(task.id||""))
     || _tags.some(function(t){return /data\s*comemorativa/i.test(String(t||""));});
 
-  const ctx=await pxContextoCopy(task.client,unit);
+  const ctx=await pxContextoCopy(task.client,unit,task);
   const pb=(ctx&&ctx.playbook)||{};
   const regras=(ctx&&ctx.regras)||[];
   const foco=(ctx&&ctx.foco_do_mes)||[];
@@ -4314,7 +4317,7 @@ async function pxGerarBriefing(opts){
   const py=unit==="paraguay";
   const tipoAtual=String(task.contentType||task.content_type||"");
 
-  const ctx=await pxContextoCopy(task.client,unit);
+  const ctx=await pxContextoCopy(task.client,unit,task);
   const pb=(ctx&&ctx.playbook)||{};
   const regras=(ctx&&ctx.regras)||[];
   const foco=(ctx&&ctx.foco_do_mes)||[];
