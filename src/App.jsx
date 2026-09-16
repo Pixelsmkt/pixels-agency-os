@@ -96361,14 +96361,17 @@ function _MtzIcone({nome, size, color}){
   const sz=size||18, c=color||"currentColor";
   const P={strokeWidth:2,stroke:c,fill:"none",strokeLinecap:"round",strokeLinejoin:"round"};
   let d;
-  if(/projeto|gerente|coordena|operac/.test(n)) d=<g {...P}><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7"/><path d="M3 12.5h18"/><path d="M10.5 12.5v1.5h3v-1.5"/></g>;
+  // (16/09/2026) Diretores: ícone do CARGO, nada de coroa.
+  if(/growth|crescimento/.test(n)) d=<g {...P}><path d="M3 20h18"/><path d="M5 16l4.5-4.5 3.5 3.5L20 7"/><path d="M15 7h5v5"/></g>; // gráfico subindo
+  else if(/executiv/.test(n)) d=<g {...P}><path d="M12 14l3.5-3.5"/><path d="M3.5 17a9 9 0 1 1 17 0"/><circle cx="12" cy="14" r="1.4" fill={c}/><path d="M7 17h10"/></g>; // painel de controle (operação)
+  else if(/projeto|gerente|coordena|operac/.test(n)) d=<g {...P}><rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7"/><path d="M3 12.5h18"/><path d="M10.5 12.5v1.5h3v-1.5"/></g>;
   else if(/rede|social|midias sociais/.test(n)) d=<g {...P}><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></g>;
   else if(/trafego|midia|ads|anuncio/.test(n)) d=<g {...P}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill={c}/></g>;
   else if(/design|arte|criacao/.test(n)) d=<g {...P}><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></g>;
   else if(/video|edicao|editor/.test(n)) d=<g {...P}><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5l6-3.5v10l-6-3.5"/></g>;
   else if(/comercial|venda/.test(n)) d=<g {...P}><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></g>;
   else if(/financ/.test(n)) d=<g {...P}><path d="M12 2v20"/><path d="M17 5.5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></g>;
-  else if(/direc|socio|ceo|diretor/.test(n)) d=<g {...P}><path d="M3 18h18l-2-10-5 4-2-6-2 6-5-4z"/></g>;
+  else if(/direc|socio|ceo|diretor/.test(n)) d=<g {...P}><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21v-4h6v4"/><path d="M8 7h2M14 7h2M8 11h2M14 11h2"/></g>; // prédio (sem coroa)
   else if(/conteudo|estrateg|copy|redac/.test(n)) d=<g {...P}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></g>;
   else d=<g {...P}><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></g>;
   return <svg width={sz} height={sz} viewBox="0 0 24 24" style={{display:"block",flexShrink:0}}>{d}</svg>;
