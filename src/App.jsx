@@ -3480,6 +3480,56 @@ function _pxCoracaoCliente(clientId){
 }
 
 /* Regras de CTA e emoji que valem pra TODA legenda do sistema. */
+/* ─── LEGENDA NÃO REPETE O TEXTO NA ARTE (Vinicius, 16/09/2026) ────────────────
+   "ele fica repetindo a legenda igual o briefing… a legenda não pode ser o mesmo texto do texto
+   na arte — falar do mesmo assunto sim, mas não ficar repetindo a mesma coisa."
+   A arte já é lida por quem vê o post; a legenda complementa, não copia.
+   Três camadas: regra no banco (claude_copy_regras id 39), instrução com as frases da arte
+   no prompt (_pxAvisoNaoRepeteArte) e uma trava que confere a resposta e, se repetiu, pede
+   uma reescrita só da legenda (_pxDesrepeteLegenda). */
+function _pxFrasesDaArte(briefTxt){
+  const t=String(briefTxt||"")
+    .replace(/^[\s•·\-*]*(t[íi]tulo|texto na arte|texto en el arte|frase na arte|frase en el arte|pin no mapa|pin en el mapa|roteiro|l[âa]mina\s*\d+)[^\n]*$/gim,"\n")
+    .replace(/\r/g,"");
+  return t.split(/(?<=[.!?…])\s+|\n+/).map(function(x){return x.replace(/[|]/g," ").trim();})
+    // saudação curta ("Feliz Dia do Gaúcho!") pode e deve se repetir no fecho — só conta frase de 6+ palavras
+    .filter(function(x){return x.split(/\s+/).length>=6;});
+}
+function _pxNorm(x){ return String(x||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s]/g," ").replace(/\s+/g," ").trim(); }
+/* Devolve as frases da arte que a legenda repetiu (igual, ou 6+ palavras seguidas iguais). */
+function _pxLegendaRepeteArte(leg, briefTxt){
+  const L=" "+_pxNorm(leg)+" ";
+  const rep=[];
+  _pxFrasesDaArte(briefTxt).forEach(function(f){
+    const w=_pxNorm(f).split(" ");
+    if(w.length<4) return;
+    if(L.indexOf(" "+w.join(" ")+" ")>=0){ rep.push(f); return; }
+    for(let i=0;i+6<=w.length;i++){ if(L.indexOf(" "+w.slice(i,i+6).join(" ")+" ")>=0){ rep.push(f); return; } }
+  });
+  return rep;
+}
+function _pxAvisoNaoRepeteArte(briefTxt){
+  const fr=_pxFrasesDaArte(briefTxt);
+  let u="\n⛔ A LEGENDA NÃO REPETE O TEXTO DA ARTE. Mesmo assunto, sim — mesmas frases, NUNCA. Quem vê o post já leu a arte; a legenda complementa com outras palavras e outro ângulo (outra abertura, outro detalhe, outra construção). Não copie nem parafraseie de perto nenhuma destas frases:\n";
+  fr.slice(0,8).forEach(function(f){ u+="- “"+f.slice(0,160)+"”\n"; });
+  return fr.length?u:"\n⛔ A LEGENDA NÃO REPETE O TEXTO DA ARTE. Mesmo assunto, sim — mesmas frases, nunca.\n";
+}
+async function _pxDesrepeteLegenda(leg, briefTxt, py){
+  const rep=_pxLegendaRepeteArte(leg, briefTxt);
+  if(!rep.length) return leg;
+  try{
+    const sys="Você corrige legendas de Instagram. Devolva SÓ a legenda corrigida, texto puro, sem aspas, sem comentário. "+(py?"Escreva em espanhol.":"Escreva em português do Brasil.");
+    let u="LEGENDA:\n"+leg+"\n\nESTAS FRASES DA LEGENDA ESTÃO IGUAIS AO TEXTO QUE JÁ ESTÁ NA ARTE:\n";
+    rep.forEach(function(f){ u+="- “"+f+"”\n"; });
+    u+="\nReescreva SÓ esses trechos com outras palavras e outro ângulo, falando do mesmo assunto. Mantenha todo o resto EXATAMENTE igual: as outras frases, os emojis (mesma quantidade e posição), a linha do contato e a linha de hashtags. Mesmo tamanho aproximado.";
+    const data=await askIA({model:PX_IA_MODELO,max_tokens:1400,system:sys,messages:[{role:"user",content:u}]});
+    let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+    txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/^===+\s*LEGENDA\s*===+\s*/i,"").trim();
+    if(txt.length<Math.min(60,leg.length*0.5)) return leg;
+    return _pxLegendaRepeteArte(txt, briefTxt).length<rep.length ? txt : leg;
+  }catch(_){ return leg; }
+}
+
 function _pxRegrasLegenda(pb, unit, ehComemorativa, clientId){
   const _cts=_pxContatoUtil(pb, unit);
   const _tem=_cts.length>0;
@@ -3965,6 +4015,7 @@ async function pxReescreverCopy(opts){
   }
   }
 
+  if(!soBrief&&!soStory) u+=soLeg?_pxAvisoNaoRepeteArte(_pxHtmlParaTexto(task.desc||task.description)):"\n⛔ A LEGENDA NÃO REPETE O TEXTO DA ARTE que você escreveu no briefing. Mesmo assunto, sim — mesmas frases, nunca. A legenda complementa com outras palavras e outro ângulo.\n";
   const data=await askIA({model:PX_IA_MODELO,max_tokens:3600,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
   txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").trim();
@@ -3987,6 +4038,8 @@ async function pxReescreverCopy(opts){
   }
   brief=brief.replace(/^===+\s*/,"").trim();
   leg=leg.replace(/^===+\s*/,"").trim();
+  // TRAVA: legenda que repete o texto da arte volta pra reescrever (só os trechos repetidos)
+  if(leg&&!soBrief&&!soStory){ leg=await _pxDesrepeteLegenda(leg, soLeg?_pxHtmlParaTexto(task.desc||task.description):(brief||_pxHtmlParaTexto(task.desc||task.description)), py); }
   const _tituloOk=(ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"";
   // AJUSTE PARCIAL: o lado que não foi pedido volta IGUAL ao que já estava no card.
   if(soLeg){
@@ -4236,6 +4289,8 @@ async function pxGerarLegendas(opts){
     u+="- Mesma data, mesma marca, mesmo sentido de homenagem — o que muda é o caminho, nunca o assunto.\n";
   }
   u+=_pxRegrasLegenda(pb,unit,ehComemorativa,task.client);
+  const _artePx=_pxHtmlParaTexto(task.desc||task.description)||briefing;
+  if(!soStory) u+=_pxAvisoNaoRepeteArte(_artePx);
   if(soStory) u+="\nESTE CARD É SOMENTE STORY: escreva "+(quantas===1?"a legenda":"as "+quantas)+" curta (até 220 caracteres) e sem hashtags.";
 
   const data=await askIA({model:PX_IA_MODELO,max_tokens:(quantas===1?1400:3000),system:sys,messages:[{role:"user",content:u}]});
@@ -4248,7 +4303,9 @@ async function pxGerarLegendas(opts){
     return p.replace(/^===+\s*/,"").replace(/\s*===+$/,"").trim();
   }).filter(Boolean);
   if(!out.length) throw new Error("A IA respondeu vazio. Tente de novo.");
-  return out.slice(0,quantas);
+  const _fin=out.slice(0,quantas);
+  if(!soStory){ for(let i=0;i<_fin.length;i++){ _fin[i]=await _pxDesrepeteLegenda(_fin[i], _artePx, py); } }
+  return _fin;
 }
 
 /* ─── GERAR BRIEFING (botão "Gerar briefing" da aba Briefing) ─────────────
