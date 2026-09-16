@@ -96649,7 +96649,11 @@ function PageMatrizResponsabilidades({isMob}){
     if((r.entregas||[]).some(function(a){return _norm(a).indexOf(_qn)>=0;})) return true;
     return false;
   });
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_MTZ_FF,maxWidth:1400,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+  // LADO A LADO (16/09/2026, Vinicius: "não tem como deixar tudo visível lado a lado?")
+  // Tela usa a largura toda; cada cadeira é uma coluna. Com 3+ cadeiras entra o modo compacto
+  // (banner menor, atribuições em 1 coluna) pra caber tudo; se a tela for estreita, rola de lado.
+  const _cmp=!isMob&&vista==="cadeiras"&&visiveis.length>=3;
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_MTZ_FF,maxWidth:_cmp?"none":1400,width:"100%",boxSizing:"border-box",margin:"0 auto",padding:isMob?"14px":"18px"}}>
     {/* Header */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
       <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
@@ -96688,7 +96692,7 @@ function PageMatrizResponsabilidades({isMob}){
       <div style={{color:"#64748b",fontSize:12.5}}>{_q?"Tenta outro termo — a busca olha nome, responsável, atribuições e entregas.":(canEdit?'Clica em "+ Nova cadeira" pra começar.':"Os sócios vão cadastrar as cadeiras em breve.")}</div>
     </div>}
     {/* ── VISTA CADEIRAS ── */}
-    {!loading&&vista==="cadeiras"&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(480px,1fr))",gap:14}}>
+    {!loading&&vista==="cadeiras"&&visiveis.length>0&&<div style={{overflowX:_cmp?"auto":"visible",paddingBottom:_cmp?6:0}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(_cmp?("repeat("+visiveis.length+",minmax(300px,1fr))"):"repeat(auto-fill,minmax(480px,1fr))"),gap:_cmp?12:14,alignItems:"start"}}>
       {visiveis.map(function(r){
         const u=_mtzRespUser(r);
         const _atr=(r.atribuicoes||[]);
@@ -96698,12 +96702,12 @@ function PageMatrizResponsabilidades({isMob}){
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 14px 34px "+cor+"22";e.currentTarget.style.borderColor=cor+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,.04)";e.currentTarget.style.borderColor="#e8ebf0";}}>
           {/* Banner com a cor do responsável */}
-          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:isMob?"20px 18px":"24px 26px",display:"flex",alignItems:"center",gap:isMob?16:22,position:"relative",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,"+cor+" 0%,"+cor+"b8 100%)",padding:isMob?"20px 18px":(_cmp?"16px 16px":"24px 26px"),display:"flex",alignItems:"center",gap:isMob?16:(_cmp?12:22),position:"relative",overflow:"hidden"}}>
             <div style={{position:"absolute",top:-40,right:-40,width:170,height:170,borderRadius:"50%",background:"rgba(255,255,255,0.12)",filter:"blur(2px)",pointerEvents:"none"}}/>
             <div style={{position:"absolute",bottom:-60,right:90,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,0.07)",pointerEvents:"none"}}/>
-            <div style={{width:isMob?84:108,height:isMob?84:108,borderRadius:"50%",overflow:"hidden",border:"4px solid rgba(255,255,255,0.95)",boxShadow:"0 10px 24px rgba(0,0,0,.22)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+            <div style={{width:isMob?84:(_cmp?62:108),height:isMob?84:(_cmp?62:108),borderRadius:"50%",overflow:"hidden",border:(_cmp?"3px":"4px")+" solid rgba(255,255,255,0.95)",boxShadow:"0 10px 24px rgba(0,0,0,.22)",flexShrink:0,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
               {u&&typeof UserAvatar==="function"
-                ? <UserAvatar user={u} size={isMob?76:100} border={false}/>
+                ? <UserAvatar user={u} size={isMob?76:(_cmp?56:100)} border={false}/>
                 : <span style={{color:cor,fontSize:34,fontWeight:900}}>{String(r.responsavel_nome||"?").charAt(0).toUpperCase()}</span>}
             </div>
             <div style={{minWidth:0,position:"relative",display:"flex",flexDirection:"column",gap:10}}>
@@ -96711,7 +96715,7 @@ function PageMatrizResponsabilidades({isMob}){
                 <span style={{width:38,height:38,borderRadius:11,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.32)",boxShadow:"inset 0 1px 0 rgba(255,255,255,.25)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
                   <_MtzIcone nome={r.nome} size={19}/>
                 </span>
-                <div style={{color:"#fff",fontWeight:800,fontSize:isMob?17:20,letterSpacing:-.5,lineHeight:1.2,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:isMob?17:(_cmp?15:20),letterSpacing:-.4,lineHeight:1.2,textShadow:"0 1px 3px rgba(0,0,0,.12)"}}>{r.nome}</div>
               </div>
               <div style={{alignSelf:"flex-start",color:"#fff",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.26)",borderRadius:99,padding:"5px 12px 5px 10px"}}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -96719,14 +96723,14 @@ function PageMatrizResponsabilidades({isMob}){
               </div>
             </div>
           </div>
-          <div style={{padding:isMob?"18px 16px 20px":"22px 24px 24px",display:"flex",flexDirection:"column",gap:20,flex:1}}>
-            {r.missao&&<div style={{background:cor+"0a",borderLeft:"3px solid "+cor,borderRadius:"0 12px 12px 0",padding:"14px 18px",color:"#475569",fontSize:13,lineHeight:1.7,fontWeight:500}}>{r.missao}</div>}
+          <div style={{padding:isMob?"18px 16px 20px":(_cmp?"14px 14px 16px":"22px 24px 24px"),display:"flex",flexDirection:"column",gap:_cmp?14:20,flex:1}}>
+            {r.missao&&<div style={{background:cor+"0a",borderLeft:"3px solid "+cor,borderRadius:"0 12px 12px 0",padding:_cmp?"10px 12px":"14px 18px",color:"#475569",fontSize:_cmp?12:13,lineHeight:_cmp?1.55:1.7,fontWeight:500}}>{r.missao}</div>}
             {_atr.length>0&&<div>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <span style={{color:"#0f172a",fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Atribuições</span>
                 <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e8ebf0,transparent)"}}/>
               </div>
-              {_atr.some(_mtzEhSecao)?<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:14,padding:isMob?"16px 14px":"20px 22px",display:"flex",flexDirection:"column",gap:24}}>
+              {_atr.some(_mtzEhSecao)?<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:14,padding:isMob?"16px 14px":(_cmp?"14px 12px":"20px 22px"),display:"flex",flexDirection:"column",gap:_cmp?16:24}}>
                 {_mtzGrupos(_atr).map(function(g,gi){
                   return <div key={gi}>
                     {g.titulo&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:13}}>
@@ -96734,13 +96738,13 @@ function PageMatrizResponsabilidades({isMob}){
                       <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{g.titulo}</span>
                       <span style={{flex:1,height:1,background:"linear-gradient(90deg,#e2e8f0,transparent)",marginLeft:4}}/>
                     </div>}
-                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:"13px 28px"}}>
+                    <div style={{display:"grid",gridTemplateColumns:(isMob||_cmp)?"1fr":"1fr 1fr",gap:_cmp?"8px":"13px 28px"}}>
                       {g.itens.map(function(a,i){
                         return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
                           <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           </span>
-                          <span style={{color:"#334155",fontSize:12.5,lineHeight:1.55,fontWeight:500}}>{a}</span>
+                          <span style={{color:"#334155",fontSize:_cmp?12:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
                         </div>;
                       })}
                     </div>
@@ -96748,14 +96752,14 @@ function PageMatrizResponsabilidades({isMob}){
                 })}
               </div>
               :<div style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:14,padding:isMob?"16px 14px":"20px 22px",display:"flex",gap:28}}>
-                {(isMob?[_atr]:[_atr.slice(0,Math.ceil(_atr.length/2)),_atr.slice(Math.ceil(_atr.length/2))]).map(function(_col,_ci){
+                {((isMob||_cmp)?[_atr]:[_atr.slice(0,Math.ceil(_atr.length/2)),_atr.slice(Math.ceil(_atr.length/2))]).map(function(_col,_ci){
                   return <div key={_ci} style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:13}}>
                     {_col.map(function(a,i){
                       return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:7}}>
                         <span style={{width:15,height:15,borderRadius:5,background:"#16a34a15",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2}}>
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </span>
-                        <span style={{color:"#334155",fontSize:12.5,lineHeight:1.55,fontWeight:500}}>{a}</span>
+                        <span style={{color:"#334155",fontSize:_cmp?12:12.5,lineHeight:1.5,fontWeight:500}}>{a}</span>
                       </div>;
                     })}
                   </div>;
@@ -96765,7 +96769,7 @@ function PageMatrizResponsabilidades({isMob}){
           </div>
         </div>;
       })}
-    </div>}
+    </div></div>}
     {/* ── VISTA FLUXO — cadeia vertical simples (por ordem), preparada pra crescer ── */}
     {!loading&&vista==="fluxo"&&visiveis.length>0&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"28px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:0}}>
       {visiveis.map(function(r,i){
