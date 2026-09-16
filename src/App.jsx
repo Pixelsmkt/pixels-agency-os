@@ -1273,7 +1273,7 @@ function calcFunnelConversions(stages){
 const TEAM = [
   { id:"vinicius",  name:"Vinicius",  role:"Gestão de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true,  birthday:"25/02" },
   { id:"gustavo",   name:"Gustavo",   role:"Gestão de performance", av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true,  birthday:"21/09" },
-  { id:"ellen",     name:"Hellen",     role:"Estratégia",           av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"ellen",     name:"Hellen",     role:"Gestora de projetos",  av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestão de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Design",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
   { id:"maria",     name:"Maria Clara", role:"Design",             av:"M", color:"#ec4899", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
@@ -1374,6 +1374,16 @@ const DEFAULT_PERMS={
   verCliente_construschorr_metricas:false, verCliente_construschorr_mindmap:false, verCliente_construschorr_concorrencia:false, verCliente_construschorr_links:false, verCliente_bioter_metricas:false, verCliente_bioter_mindmap:false, verCliente_bioter_concorrencia:false, verCliente_bioter_links:false, verCliente_arabuta_metricas:false, verCliente_arabuta_mindmap:false, verCliente_arabuta_concorrencia:false, verCliente_arabuta_links:false, verCliente_climaves_metricas:false, verCliente_climaves_mindmap:false, verCliente_climaves_concorrencia:false, verCliente_climaves_links:false, verCliente_vetservice_metricas:false, verCliente_vetservice_mindmap:false, verCliente_vetservice_concorrencia:false, verCliente_vetservice_links:false, verCliente_pixels_metricas:false, verCliente_pixels_mindmap:false, verCliente_pixels_concorrencia:false, verCliente_pixels_links:false,
 };
 
+// HELLEN = GESTORA DE PROJETOS (16/09/2026, pedido do Vinicius): o mínimo garantido pro cargo,
+// aplicado por cima do que estiver salvo em Acessos (não dá pra desmarcar sem mexer aqui).
+// Estratégia (Clientes, Scripts, Planejamento, Matriz, Playbooks) + Avaliações (copys, design, vídeo)
+// + Linha de produção + Calendário de publicações/interno.
+const PX_PERMS_GESTORA_PROJETOS={
+  verDashboard:true, verClientes:true, verDadosCliente:true, verLinksCliente:true, verBriefingCard:true, verPlaybooks:true,
+  verDemandas:true, verTodosKanban:true, criarDemanda:true, editarDemanda:true, arrastarCards:true, filtroSetor:true, filtroCliente:true, filtroPerfil:true,
+  verAprovacoes:true, verAprCopys:true, verAprPublicacao:true, verAprAjuste:true, aprovar:true,
+  verCalPub:true, verCalendario:true, verInterno:true, verDemandasInternas:true, criarDemandaInterna:true,
+};
 const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{});
 
 // Helper: retorna true se o usuário é sócio (level 1).
@@ -22091,7 +22101,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       const data=await askClaude({
         model:PX_IA_MODELO,max_tokens:1000,
         system:`Você é a Pixels IA, assistente criativa de uma agência de marketing digital chamada Pixels. Transforme ideias em demandas de produção claras. Gere APENAS JSON válido sem markdown:\n{"titulo":"...","descricao":"...","formato":"...","objetivo":"...","pontos_atencao":"...","tags":["tag1","tag2"]}`,
-        messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Estratégia)":"Erick (Gestão de mídia)"}\n\nGere a demanda.`}]
+        messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Gestão de projetos)":"Erick (Gestão de mídia)"}\n\nGere a demanda.`}]
       });
       const text=(data.content||[]).map(b=>b.text||"").join("");
       let parsed;
@@ -22190,7 +22200,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
         <div>
           <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>👥 Direcionar para</div>
           <div style={{display:"flex",gap:8}}>
-            {[{id:"ellen",label:"Hellen",sublabel:"Estratégia",color:C.a},{id:"erick",label:"Erick",sublabel:"Gestão de mídia",color:C.or},{id:"both",label:"Ambos",sublabel:"Hellen + Erick",color:C.gr}].map(r=>(
+            {[{id:"ellen",label:"Hellen",sublabel:"Gestão de projetos",color:C.a},{id:"erick",label:"Erick",sublabel:"Gestão de mídia",color:C.or},{id:"both",label:"Ambos",sublabel:"Hellen + Erick",color:C.gr}].map(r=>(
               <button key={r.id} onClick={()=>setRecipient(r.id)}
                 style={{flex:1,background:recipient===r.id?`linear-gradient(135deg,${r.color},${r.color}88)`:C.s1,border:`2px solid ${recipient===r.id?r.color:C.b1}`,borderRadius:12,padding:"10px 8px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
                 <div style={{color:recipient===r.id?"#fff":r.color,fontWeight:800,fontSize:13}}>{r.label}</div>
@@ -52580,7 +52590,7 @@ export default function AgencyOS(){
     });
     return base;
   });
-  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};const _p={...DEFAULT_PERMS,...(ACCESS_STORE[uid]||{}),...(livePerms[uid]||{})};if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(u||uid))_p.excluirDemanda=false;return _p;};
+  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};const _p={...DEFAULT_PERMS,...(ACCESS_STORE[uid]||{}),...(livePerms[uid]||{})};if(typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(u||uid))_p.excluirDemanda=false;if(uid==="ellen"&&typeof PX_PERMS_GESTORA_PROJETOS!=="undefined")Object.assign(_p,PX_PERMS_GESTORA_PROJETOS);return _p;};
   const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Fetch tasks do Supabase ───────────────────────────────
@@ -53119,24 +53129,26 @@ export default function AgencyOS(){
     switch(n.id){
       case "meudash":              return p.verDashboard;
       case "demandas":
-      case "demandas_kanban":      return p.verDemandas;
+      case "demandas_kanban":      return p.verDemandas||effectiveUser.id==="ellen";
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
-      case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
+      case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||effectiveUser.id==="ellen"||p.verCalPub;
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
-      case "planejamento":         return isSocio||effectiveUser.id==="ellen";
+      // HELLEN = GESTORA DE PROJETOS (16/09/2026): Estratégia inteira (Clientes, Scripts, Planejamento,
+      // Matriz, Playbooks) + Avaliações, Linha de produção e Calendário — por id E por dash "coordinator".
+      case "planejamento":         return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator";
       case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
-      case "aprovacoes_video":     return p.verAprovacoes;
+      case "aprovacoes_video":     return p.verAprovacoes||effectiveUser.id==="ellen";
       case "gestaomidia":          return isSocio||effectiveUser.dash==="gestor"; // socios + gestor de midia (Erick)
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return false; // chat interno desligado por enquanto
       // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
       // e tem acesso de Estrategista). Mesmo padrão de "playbooks" e "planejamento".
-      case "clientes":             return p.verClientes||effectiveUser.id==="ellen"||isSocio;
+      case "clientes":             return p.verClientes||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||isSocio;
       case "analises":
       case "ia":
       case "ia_diagnostico":
@@ -53223,7 +53235,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
-      case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "planejamento":          return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
       case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
@@ -73457,7 +73469,7 @@ const OP_ROTINA_DIAS = [
 
 /* ─── COLABORADORES — cores e configs fixas ──────────────── */
 const OP_COLABS_DEF = [
-  {id:"ellen",     name:"Hellen Benning",       role:"Estrategista",          color:"#ec4899", priority:"Itens-base e copys"},
+  {id:"ellen",     name:"Hellen Benning",       role:"Gestora de projetos",        color:"#ec4899", priority:"Itens-base e copys"},
   {id:"vinicius",  name:"Vinicius",             role:"Gestor de Projetos",    color:"#0891b2", priority:"Destravar aprovações"},
   {id:"andre",     name:"André Leal",           role:"Designer",              color:"#f59e0b", priority:"Artes da semana"},
   {id:"guilherme", name:"Guilherme Ferreira",   role:"Editor de Vídeo",       color:"#7c3aed", priority:"Vídeos previstos"},
