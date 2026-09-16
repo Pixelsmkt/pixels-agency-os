@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 41/41 | Nao editar diretamente
+// Modulos: 42/42 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -3015,6 +3015,7 @@ function NavIcon({id,size=18,color}){
   // ── Estratégia ──
   if(id==="planejamento")       return <svg {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill={cl}/></svg>;
   if(id==="matriz")             return <svg {...p}><rect x="9" y="2" width="6" height="5" rx="1.5"/><rect x="2" y="16" width="6" height="5" rx="1.5"/><rect x="16" y="16" width="6" height="5" rx="1.5"/><path d="M12 7v4"/><path d="M5 16v-2a2 2 0 012-2h10a2 2 0 012 2v2"/></svg>;
+  if(id==="roteiros")           return <svg {...p}><rect x="2" y="5" width="15" height="14" rx="2.5"/><path d="M17 10l5-3v10l-5-3"/><path d="M6 9.5l4 2.5-4 2.5z" fill={cl} stroke="none"/></svg>;
   if(id==="scripts")            return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="playbooks")          return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
@@ -3025,6 +3026,7 @@ const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   // "Demandas" categoria pai REMOVIDA — só tinha 2 filhos, promovidos pra top-level.
   {id:"demandas_kanban",  icon:"demandas_kanban", label:"Linha de produção"},
+  {id:"roteiros",   icon:"roteiros", label:"Roteiros"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends
   {id:"demandas_cal_pub", icon:"demandas_cal_pub", label:"Calendário de publicações"},
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
@@ -3487,6 +3489,27 @@ function _pxCoracaoCliente(clientId){
    Três camadas: regra no banco (claude_copy_regras id 39), instrução com as frases da arte
    no prompt (_pxAvisoNaoRepeteArte) e uma trava que confere a resposta e, se repetiu, pede
    uma reescrita só da legenda (_pxDesrepeteLegenda). */
+/* ─── ROTEIRO DE FALA — 90s, o cliente grava (Vinicius, 16/09/2026) ─────────────────
+   "roteiro é pra nós enviar pro cliente gravar.. faz 90 segundos, porque eles tem que ter uma frase
+   de início, um complemento e um final.. não frases jogadas". O formato antigo (Cena N (0–8s) — o que
+   aparece. Na tela: "…") virava 6 frases soltas de legenda. Agora é UM discurso em 3 partes.
+   Vale pra Avaliação de copys, Gerar briefing e "Transformar em roteiro". Vídeo simples (15–30s,
+   sem fala) continua existindo quando o briefing já declara "vídeo simples". */
+const PX_ROTEIRO_FALA_FORMATO=
+  "• ROTEIRO (vídeo de 90s — o cliente grava)\n"+
+  "Cena 1 — Abertura\n(a fala: uma frase de início que prende e apresenta o assunto)\n\n"+
+  "Cena 2 — Desenvolvimento\n(a fala: o complemento — explica o assunto com os fatos do card)\n\n"+
+  "Cena 3 — Fechamento\n(a fala: o final que amarra a ideia e convida a falar com a empresa)\n";
+const PX_ROTEIRO_FALA_REGRAS=
+  "REGRAS DO ROTEIRO (é o texto que o CLIENTE vai FALAR olhando pra câmera — a gente manda pra ele gravar):\n"+
+  "- 90 segundos falados: de 200 a 240 palavras NO TOTAL.\n"+
+  "- As 3 cenas são UM discurso contínuo: início, complemento e final. Cada cena continua a anterior — não são frases soltas.\n"+
+  "- Frases completas, do jeito que se fala, na voz da empresa (\"aqui na <marca> a gente…\"). Nada de frase de legenda nem de título de arte.\n"+
+  "- PROIBIDO: marcação de tempo (0–8s), \"Na tela:\", \"o que aparece\", instrução de câmera, de gravação ou de edição.\n"+
+  "- Não invente número, prazo, garantia nem dado técnico que não esteja no card.\n";
+const PX_ROTEIRO_SIMPLES_FORMATO=
+  "• ROTEIRO (vídeo simples — 15 a 30s)\nCena 1 — o que aparece\nCena 2 — o que aparece\nCena 3 — o que aparece\n(sem fala, sem marcação de tempo)\n";
+
 function _pxFrasesDaArte(briefTxt){
   const t=String(briefTxt||"")
     .replace(/^[\s•·\-*]*(t[íi]tulo|texto na arte|texto en el arte|frase na arte|frase en el arte|pin no mapa|pin en el mapa|roteiro|l[âa]mina\s*\d+)[^\n]*$/gim,"\n")
@@ -4002,7 +4025,7 @@ async function pxReescreverCopy(opts){
   if(!soLeg){
   u+="\nFORMATO DO BRIEFING (obrigatório, só estas seções):\n";
   u+=ehVideo
-    ? ("• ROTEIRO"+"\nCena N (0–8s) — o que aparece. Na tela: “…”\n(5 a 6 cenas somando ~60s)\n")
+    ? (/v[íi]deo simples/i.test(_pxHtmlParaTexto(task.desc||task.description)) ? PX_ROTEIRO_SIMPLES_FORMATO : (PX_ROTEIRO_FALA_FORMATO+"\n"+PX_ROTEIRO_FALA_REGRAS))
     : ("• TÍTULO"+"\n(a headline que vai na peça, em caixa alta)\n\n• TEXTO NA ARTE"+
        "\n(⚠️ NÃO REPITA O TÍTULO AQUI — ele já está na arte, repetir faz o colaborador ler a mesma coisa duas vezes. "+
        "Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres. "+
@@ -4460,7 +4483,7 @@ async function pxGerarBriefing(opts){
     u+="- Devolva o briefing INTEIRO já corrigido, nunca só o pedaço que mudou.\n\n";
   }
   u+="FORMATO DO BRIEFING, conforme o tipo que você escolher:\n";
-  u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → seção \"• ROTEIRO\" com Cena 1 (0–8s) — o que aparece / Na tela: \"…\", 5 a 6 cenas somando ~60s.\n";
+  u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → roteiro de FALA pro cliente gravar, neste formato:\n"+PX_ROTEIRO_FALA_FORMATO+PX_ROTEIRO_FALA_REGRAS+"  (só se o pedido disser \"vídeo simples\"/sem fala: "+PX_ROTEIRO_SIMPLES_FORMATO.replace(/\n/g," ")+")\n";
   u+="- design que não é carrossel (foto, arte, folder) → seção \"• TÍTULO\" (a headline que vai na peça, em caixa alta) e seção \"• TEXTO NA ARTE\".\n";
   u+="  ⚠️ O TEXTO NA ARTE NÃO PODE REPETIR O TÍTULO. O título já está na peça; repetir faz o colaborador ler a mesma coisa duas vezes. Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres.\n";
   u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", a 5 é o CTA.\n";
@@ -4513,7 +4536,7 @@ async function pxGerarBriefing(opts){
   if(!achado){
     // último recurso antes do tipo atual: o próprio formato que ele escreveu
     const _b=String(brief||"").toLowerCase();
-    const _id=/(^|\n)\s*(•\s*)?roteiro|cena\s*1\s*\(/.test(_b) ? "video"
+    const _id=/(^|\n)\s*(•\s*)?roteiro|cena\s*1\b/.test(_b) ? "video"
             : /(^|\n)\s*l[âa]mina\s*1/.test(_b) ? "carrossel"
             : /(^|\n)\s*(•\s*)?t[íi]tulo/.test(_b) ? "arte" : "";
     if(_id) achado=PX_TIPOS_CONTEUDO.find(function(x){return x.id===_id;});
@@ -29104,8 +29127,28 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                               pro freelancer.
      Antes era sempre "recebida": a Hellen escrevia a copy e já subia as imagens no
      mesmo passo. Com a IA escrevendo a copy, esse passo ficou órfão. */
+  /* TRAVA DE APROVAÇÃO DA COPY (Vinicius, 16/09/2026): não aprova (nem pra Demanda, nem pra
+     Preencher material) sem FREELANCER marcado (designer ou editor de vídeo), sem TIPO DE
+     CONTEÚDO e sem MÊS DE PAGAMENTO. Card sem isso chegava na produção sem dono e sem mês
+     pra entrar no pagamento. */
+  const _PX_TIPOS_VALIDOS=["arte","carrossel","foto","folder","video","video_complexo","video_feira","video_short","corte"];
+  const _faltasParaAprovar=(task)=>{
+    const f=[];
+    const ids=Array.isArray(task.assignees)&&task.assignees.length?task.assignees:(task.assignee?[task.assignee]:[]);
+    const temFreela=ids.some(uid=>{const u=(TEAM||[]).find(x=>x.id===uid);return u&&(u.dash==="designer"||u.dash==="editor"||u.dash==="video");});
+    if(!temFreela) f.push("freelancer (designer ou editor de vídeo)");
+    const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
+    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0) f.push("tipo de conteúdo");
+    if(!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
+    return f;
+  };
   const approveCopy=(task,destino)=>{
     if(!isApprover)return;
+    const _faltas=_faltasParaAprovar(task);
+    if(_faltas.length){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Não dá pra aprovar ainda. Falta marcar: "+_faltas.join(", ")+".",5000);
+      return;
+    }
     const _dest=(destino==="recebida")?"recebida":"preencher_material";
     const _lbl=(_dest==="recebida")?"Demandas":"Preencher material";
     const actor=effectiveUser?.name||CURRENT_USER.name;
@@ -31142,19 +31185,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               ? {position:"fixed",left:0,right:0,bottom:0,zIndex:60,background:C.card,borderRadius:"16px 16px 0 0",padding:"10px 12px",paddingBottom:"max(10px, env(safe-area-inset-bottom))",borderTop:"1px solid "+C.b1,boxShadow:"0 -8px 24px rgba(15,23,42,0.12)",display:"grid",gridTemplateColumns:(tab==="publicacao"||tab==="video")?"1fr 1fr":"1fr",gap:8}
               : {position:"sticky",top:8,zIndex:5,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1,boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
             {tab==="copys"&&(<>
+              {(()=>{const _f=_faltasParaAprovar(current);return _f.length?<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"9px 11px",color:"#9a3412",fontSize:11.5,fontWeight:600,lineHeight:1.45,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                <div style={{fontWeight:800,fontSize:10.5,textTransform:"uppercase",letterSpacing:.4,marginBottom:3}}>Pra aprovar, falta marcar</div>
+                {_f.map((x,i)=><div key={i}>• {x}</div>)}
+              </div>:null;})()}
               {/* APROVAR TEM DOIS CAMINHOS. O de cima (verde cheio, 15/09/2026) é o
                   atalho pra quando o card já tem o material pronto — vira demanda direto.
                   O de baixo para em "Preencher material" até alguém anexar as imagens. */}
               <button onClick={()=>approveCopy(current,"recebida")}
                 title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
-                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
+                style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar e ir direto pra Demanda
               </button>
               <button onClick={()=>approveCopy(current,"preencher_material")}
                 title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
-                style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
                 Aprovar copy → Preencher material
@@ -41231,31 +41278,20 @@ async function pxRoteiro60(task, clienteNome){
     (_ehCarrossel?"BRIEFING DO CARROSSEL (cada lâmina é um bloco do assunto — use a ordem delas como a ordem das cenas):\n"
                  :"TEXTO QUE IRIA NA ARTE:\n")+(brief||"(vazio)")+"\n\n"+
     "LEGENDA APROVADA:\n"+(leg||"(vazia)")+"\n\n"+
-    "Transforme isso num ROTEIRO DE VÍDEO DE 60 SEGUNDOS para mandarmos ao cliente. Regras:\n"+
-    "- 5 a 6 cenas, somando ~60s, com o tempo de cada uma.\n"+
-    "- Em cada cena diga O QUE APARECE na imagem e a FALA (ou o texto na tela).\n"+
-    (_ehCom?"- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca.\n"
-           :"- Mantenha o assunto e os fatos do briefing: o vídeo é a mesma ideia contada em imagem e fala, não um texto novo.\n"+
-            "- A fala é de quem conhece o campo: direto e concreto, sem jargão de marketing.\n")+
-    (_ehCom?"- A última cena é a assinatura da marca.\n"
-           :"- A última cena é o CTA: o convite pra falar com a empresa, do jeito que a legenda faz.\n")+
-    "- Não invente número, prazo, garantia nem dado técnico que não esteja no material acima.\n\n"+
-    "Formato exato da resposta (sem introdução, sem comentário no fim):\n"+
-    "Cena 1 (0–10s) — o que aparece\n"+
-    "Fala: \"…\"\n\n"+
-    "Cena 2 (10–22s) — o que aparece\n"+
-    "Fala: \"…\"\n\n"+
-    "(e assim por diante até fechar 60s)\n\n"+
-    "O QUE PRECISAMOS CAPTAR:\n"+
-    "- item\n- item\n- item";
-  const data=await askClaude({model:PX_IA_MODELO,max_tokens:1100,system:sys,messages:[{role:"user",content:usr}]});
+    "Transforme isso num ROTEIRO DE VÍDEO DE 90 SEGUNDOS pro cliente gravar.\n"+
+    (typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+
+    (_ehCom?"- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca. O final é a homenagem, sem venda.\n"
+           :"- Mantenha o assunto e os fatos do briefing: é a mesma ideia, agora falada. O final convida a falar com a empresa, do jeito que a legenda faz.\n")+
+    "\nFormato exato da resposta (sem introdução, sem comentário no fim):\n"+
+    "Cena 1 — Abertura\n(fala)\n\nCena 2 — Desenvolvimento\n(fala)\n\nCena 3 — Fechamento\n(fala)";
+  const data=await askClaude({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:usr}]});
   const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   if(!txt) throw new Error("A IA não devolveu roteiro. Tente de novo.");
   return txt;
 }
 function _pxRoteiroParaHtml(txt){
   const linhas=String(txt||"").split("\n");
-  let out="<p><strong>• Roteiro do vídeo (60s)</strong></p>";
+  let out="<p><strong>• ROTEIRO (vídeo de 90s — o cliente grava)</strong></p>";
   linhas.forEach(function(l){
     const t=l.trim();
     if(!t) return;
@@ -43389,7 +43425,7 @@ function _cardPodeSerResp(u){
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
             </div>
             <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Roteiro de vídeo · 60 segundos</div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Roteiro de vídeo · 90 segundos</div>
               <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>{task.title}</div>
             </div>
           </div>
@@ -44590,12 +44626,12 @@ function _cardPodeSerResp(u){
                       setRoteiroSt({texto:txt});
                     }catch(e){ setRoteiroSt({erro:(e&&e.message)||String(e)}); }
                   }}
-                  title="Usa o briefing e a legenda deste card pra escrever um roteiro de vídeo de 60 segundos."
+                  title="Usa o briefing e a legenda deste card pra escrever um roteiro de vídeo de 90 segundos pro cliente gravar."
                   style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:(roteiroSt&&roteiroSt.loading)?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 2px 8px rgba(124,58,237,.30)",opacity:(roteiroSt&&roteiroSt.loading)?.7:1}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10.5 22 7v10l-6-3.5z"/></svg>
                   {(roteiroSt&&roteiroSt.loading)?"Escrevendo o roteiro…":"Transformar em roteiro de vídeo"}
                 </button>
-                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 60s a partir deste briefing e da legenda — dá pra copiar, colar embaixo do briefing ou virar o card em vídeo.</div>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 90s a partir deste briefing e da legenda — dá pra copiar, colar embaixo do briefing ou virar o card em vídeo.</div>
               </div>)}
               {canEdit&&(function(){
                 // Sem briefing ele gera, com briefing ele ajusta. Pra recomeçar do
@@ -53252,6 +53288,7 @@ export default function AgencyOS(){
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       // HELLEN = GESTORA DE PROJETOS (16/09/2026): Estratégia inteira (Clientes, Scripts, Planejamento,
       // Matriz, Playbooks) + Avaliações, Linha de produção e Calendário — por id E por dash "coordinator".
+      case "roteiros":             return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social"||effectiveUser.dash==="gestor";
       case "planejamento":         return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator";
       case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
@@ -53352,6 +53389,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
+      case "roteiros":              return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social"||effectiveUser.dash==="gestor")?<PageRoteiros isMob={isMob}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
@@ -60004,6 +60042,7 @@ const PORTAL_ALL_TABS=[
   {id:"parcerias",   ico:"users",       label:"Parcerias",    sec:"Estratégia"},
   {id:"concorrencia",ico:"eye",         label:"Concorrência", sec:"Estratégia"},
   {id:"playbook",    ico:"book",        label:"Playbook",     sec:"Estratégia"},
+  {id:"sugestoes",   ico:"video",       label:"Sugestões de conteúdo", sec:"Estratégia"}, // (16/09/2026) roteiros de vídeo marcados pra o portal
   {id:"demandas",    ico:"zap",         label:"Demandas",     sec:"Operação"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações",   sec:"Operação"},
   {id:"marcos",      ico:"flame",       label:"Checkpoints",  sec:"Operação"},
@@ -66078,6 +66117,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       const _socio=!lockedClientId&&(typeof CURRENT_USER!=="undefined")&&CURRENT_USER&&CURRENT_USER.level===1;
       return <CConquistasAlbum cl={cl} canEdit={!!_socio} selUnit={selUnit} isMob={isMob}/>;
     })()}
+    {tab==="sugestoes"&&typeof PortalSugestoesConteudo==="function"&&<PortalSugestoesConteudo cl={cl} selUnit={selUnit} isMob={isMob}/>}
     {tab==="playbook"&&typeof PortalPlaybookCliente==="function"&&(function(){
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       return <PortalPlaybookCliente cl={cl} canEdit={!!_gestor} isMob={isMob}/>;
@@ -96804,5 +96844,403 @@ function PageMatrizResponsabilidades({isMob}){
       onFechar={function(){setDetalhe(null);}}/>}
     {form&&<_MtzForm inicial={form.id?form:null} cadeiras={cadeiras}
       onSalvar={_salvar} onFechar={function(){setForm(null);}}/>}
+  </div>;
+}
+
+// ======= 31_roteiros.jsx =======
+/* ═══════════════════════════════════════════════════════════════════════
+   ROTEIROS — sidebar, logo abaixo da Linha de produção (ideia do Vinicius, 16/09/2026)
+   Criador de roteiros de vídeo pra mandar pro cliente gravar.
+   • Aba Roteiros: um clique → a IA escreve 5 roteiros de 90s sobre 5 ASSUNTOS diferentes
+     pro cliente escolhido, no formato Abertura / Desenvolvimento / Fechamento com CTA.
+     Cada um fica inteiro na tela, com "Copiar pro WhatsApp" e um olho que manda pro portal.
+   • Aba Trends: a Luiza cadastra a trend (título + do que se trata) e clica pra gerar
+     5 ideias adaptando a trend pro cliente.
+   • Portal do cliente › "Sugestões de conteúdo" mostra os roteiros marcados com o olho.
+   Mesma inteligência da Linha de produção: antes de escrever, a IA lê playbook, foco do
+   mês, regras aprendidas, vídeos aprovados do cliente e os roteiros que já existem aqui
+   (pra não repetir assunto). Tabelas: roteiros_video, roteiros_trends (RLS agência;
+   cliente só lê o que está visível no portal).
+   ═══════════════════════════════════════════════════════════════════════ */
+const _RT_FF="'Inter',system-ui,sans-serif";
+const _RT_AC="#7c3aed";
+
+function _rtTexto(r,semCabecalho){
+  const py=String(r.unidade||"")==="paraguay";
+  const L=py?{a:"Apertura",d:"Desarrollo",f:"Cierre"}:{a:"Abertura",d:"Desenvolvimento",f:"Fechamento"};
+  return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
+    "*"+L.a+"*\n"+(r.abertura||"")+"\n\n*"+L.d+"*\n"+(r.desenvolvimento||"")+"\n\n*"+L.f+"*\n"+(r.fechamento||"");
+}
+function _rtPalavras(r){ return ((r.abertura||"")+" "+(r.desenvolvimento||"")+" "+(r.fechamento||"")).trim().split(/\s+/).filter(Boolean).length; }
+function _rtCopiar(txt,msg){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800); }catch(_){} }
+
+/* ── GERADOR ──
+   Devolve [{assunto,abertura,desenvolvimento,fechamento}] × quantos.
+   trend = {titulo,descricao} quando vem da aba Trends. */
+async function pxGerarRoteiros(opts){
+  const client=String((opts&&opts.client)||""), unit=String((opts&&opts.unit)||"");
+  const clienteNome=String((opts&&opts.clienteNome)||client);
+  const trend=(opts&&opts.trend)||null;
+  const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
+  const quantos=Math.max(1,Math.min(5,(opts&&opts.quantos)||5));
+  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const py=unit==="paraguay";
+  const fake={id:"roteiros-"+client, client:client, bioterUnit:unit, title:"Roteiro de vídeo", contentType:"video", tags:[]};
+  const ctx=(typeof pxContextoCopy==="function")?await pxContextoCopy(client,unit,fake):null;
+  let ex=[]; try{ if(typeof pxExemplosEstilo==="function") ex=await pxExemplosEstilo(fake,unit); }catch(_){}
+  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[], foco=(ctx&&ctx.foco_do_mes)||[], aprov=(ctx&&ctx.aprovadas)||[], recus=(ctx&&ctx.recusadas)||[];
+
+  const sys="Você escreve roteiros de vídeo pra empresas do agronegócio e da construção no Brasil, na voz de cada marca. "+
+    "O roteiro é a FALA que o dono ou o técnico da empresa vai gravar olhando pra câmera. Escreve como gente que conhece o campo e a obra: "+
+    "direto, concreto, sem jargão de marketing e sem frase de efeito vazia. Nunca inventa número, cidade, prazo, garantia ou depoimento que não tenha sido informado. "+
+    (py?"ESCREVA AS FALAS EM ESPANHOL (é a unidade do Paraguai); os rótulos ficam em português.":"Escreva em português do Brasil.")+
+    " Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
+
+  let u="CLIENTE: "+clienteNome+(unit?(" — unidade "+unit):"")+"\n\n";
+  if(pb.descricao||pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.descricao||pb.sobre)+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  if(pb.produtos&&pb.produtos.length) u+="PRODUTOS E SERVIÇOS: "+_pxCtxTxt(pb.produtos).slice(0,900)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  if(regras.length){ u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n"; regras.forEach(function(r){ u+="- ["+String(r.tipo||"").toUpperCase()+"] "+r.regra+"\n"; }); u+="\n"; }
+  if(foco.length){
+    u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
+    foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
+    u+="\n";
+  }
+  if(ex.length){
+    u+="VÍDEOS JÁ APROVADOS DESTE CLIENTE (é este o padrão que a agência aprova — siga o molde, não o conteúdo):\n";
+    ex.filter(function(e){return e.mesmo_cliente;}).slice(0,3).forEach(function(e){ u+="--- "+e.titulo+"\n"+String(e.briefing||"").slice(0,600)+"\n"; });
+    u+="\n";
+  }
+  if(aprov.length){ u+="LEGENDAS JÁ APROVADAS (o tom que funciona):\n"; aprov.slice(0,4).forEach(function(a){ u+="---\n"+_pxHtmlParaTexto(a.legenda).slice(0,400)+"\n"; }); u+="\n"; }
+  if(recus.length){ u+="RECUSADAS E O MOTIVO (não repetir o erro):\n"; recus.slice(0,4).forEach(function(r){ if(r.feedback) u+="- "+(r.titulo||"")+": "+r.feedback+"\n"; }); u+="\n"; }
+  if(jaFeitos.length){ u+="⛔ ASSUNTOS QUE JÁ TÊM ROTEIRO (NÃO repita nem chegue perto):\n"; jaFeitos.slice(0,40).forEach(function(a){ u+="- "+a+"\n"; }); u+="\n"; }
+  if(trend){
+    u+="TREND DO MOMENTO (a social media explicou):\n"+"Título: "+(trend.titulo||"")+"\n"+"Do que se trata: "+(trend.descricao||"")+"\n\n";
+    u+="TAREFA: escreva "+quantos+" IDEIAS DE ROTEIRO que adaptem ESSA TREND pra "+clienteNome+" — cada uma encaixa a trend num assunto diferente do negócio do cliente (produto, rotina, bastidor, dúvida do cliente, resultado). A trend é o formato/gancho; o conteúdo é da marca. Nunca invente que a marca fez algo que não fez.\n";
+  }else{
+    u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
+  }
+  u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
+  u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
+  u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
+  u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
+  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\nABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
+
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:4200,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"");
+  const blocos=txt.split(/===\s*ROTEIRO\s*\d+\s*===/i).map(function(b){return b.trim();}).filter(Boolean);
+  const out=[];
+  blocos.forEach(function(b){
+    const pega=function(rot,prox){ const re=new RegExp("(?:"+rot+")\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:"+prox+")\\s*:|$)","i"); const m=b.match(re); return m?m[1].trim():""; };
+    const r={assunto:pega("ASSUNTO","ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,""),
+      abertura:pega("ABERTURA|APERTURA","DESENVOLVIMENTO|DESARROLLO"),
+      desenvolvimento:pega("DESENVOLVIMENTO|DESARROLLO","FECHAMENTO|CIERRE"),
+      fechamento:pega("FECHAMENTO|CIERRE","NUNCA_ACHA_ISSO_AQUI")};
+    if(r.abertura&&r.desenvolvimento&&r.fechamento) out.push(r);
+  });
+  if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
+  return out.slice(0,quantos);
+}
+
+/* ── CARD DE UM ROTEIRO (agência e portal usam o mesmo) ── */
+function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
+  const [aberto,setAberto]=useState(true);
+  const py=String(r.unidade||"")==="paraguay";
+  const L=py?["Apertura","Desarrollo","Cierre"]:["Abertura","Desenvolvimento","Fechamento"];
+  const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]];
+  const _c=cor||_RT_AC;
+  const _pill=function(on,c){ return {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}; };
+  const dt=r.created_at?new Date(r.created_at):null;
+  return <div style={{background:"#fff",border:"1px solid "+(r.visivel_portal?_c+"66":"#e8ebf0"),borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",borderTop:"4px solid "+_c}}>
+    <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{width:26,height:26,borderRadius:8,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="video" size={13} color="#fff"/></span>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{r.assunto||"Roteiro"}</span>
+          {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
+          {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
+        </div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~90 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          {agencia?"Copiar pro WhatsApp":"Copiar roteiro"}
+        </button>
+        {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Sugestões de conteúdo). Clique pra tirar.":"Mostrar no portal do cliente, em Sugestões de conteúdo"} onClick={onPortal} style={_pill(!!r.visivel_portal,"#0ea5e9")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          {r.visivel_portal?"No portal":"Portal"}
+        </button>}
+        {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {r.status==="enviado"?"Enviado":"Enviado?"}
+        </button>}
+        {agencia&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
+          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
+        <button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
+      </div>
+    </div>
+    {aberto&&<div style={{padding:"0 16px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.4fr 1fr",gap:10}}>
+      {partes.map(function(p,i){
+        return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <span style={{width:18,height:18,borderRadius:"50%",background:_c,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+            <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{p[1]}</span>
+            {i===2&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:700}}>· com CTA</span>}
+          </div>
+          <div style={{color:"#334155",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{p[2]}</div>
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+
+/* ── PÁGINA DA AGÊNCIA ── */
+function PageRoteiros({isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const _lista=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c&&c.status!=="interno"&&c.status!=="encerrado"&&String(c.name||"").trim();})
+    .slice().sort(function(a,b){return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"});});
+  const _unidades=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+  const [clId,setClId]=useState(function(){ try{ const s=localStorage.getItem("pixels-roteiros-cliente"); if(s&&_lista.some(function(c){return c.id===s;})) return s; }catch(_){} return _lista[0]?_lista[0].id:""; });
+  const [unit,setUnit]=useState(function(){ try{ return localStorage.getItem("pixels-roteiros-unidade")||""; }catch(_){ return ""; } });
+  const [aba,setAba]=useState("roteiros");
+  const [roteiros,setRoteiros]=useState([]);
+  const [trends,setTrends]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [gerando,setGerando]=useState("");   // "" | "ia" | trendId
+  const [filtro,setFiltro]=useState("todos"); // todos | sugestao | enviado
+  const [trendForm,setTrendForm]=useState(null);
+  const [trendCliente,setTrendCliente]=useState({}); // trendId -> {client,unit}
+  useEffect(function(){ try{ localStorage.setItem("pixels-roteiros-cliente",clId||""); localStorage.setItem("pixels-roteiros-unidade",unit||""); }catch(_){} },[clId,unit]);
+  const cl=_lista.find(function(c){return c.id===clId;})||null;
+  const isBioter=clId==="bioter";
+  const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:_RT_AC;
+  const _logo=cl&&((typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null);
+  const _nomeCl=function(id,un){ const c=_lista.find(function(x){return x.id===id;}); const n=c?c.name:id; if(id==="bioter"&&un){ const x=_unidades.find(function(y){return y.id===un;}); return "Bioter "+(x?(x.pickerLabel||x.label):un); } return n; };
+
+  const _carregar=async function(){
+    if(!sb) { setLoading(false); return; }
+    try{
+      const [a,b]=await Promise.all([
+        sb.from("roteiros_video").select("*").neq("status","descartado").order("created_at",{ascending:false}).limit(600),
+        sb.from("roteiros_trends").select("*").eq("ativa",true).order("created_at",{ascending:false}),
+      ]);
+      if(!a.error) setRoteiros(a.data||[]);
+      if(!b.error) setTrends(b.data||[]);
+    }catch(e){ console.warn("[roteiros]",e&&e.message); }
+    setLoading(false);
+  };
+  useEffect(function(){
+    _carregar();
+    let ch=null,t=null; const rec=function(){ clearTimeout(t); t=setTimeout(_carregar,400); };
+    try{ if(sb) ch=sb.channel("roteiros-rt").on("postgres_changes",{event:"*",schema:"public",table:"roteiros_video"},rec).on("postgres_changes",{event:"*",schema:"public",table:"roteiros_trends"},rec).subscribe(); }catch(_){}
+    return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[]);
+
+  const _trendTitulo=function(id){ const t=trends.find(function(x){return x.id===id;}); return t?t.titulo:""; };
+  const doCliente=roteiros.filter(function(r){ return r.client_id===clId && (!isBioter || String(r.unidade||"")===String(unit||"")); });
+  const visiveis=doCliente.filter(function(r){ return filtro==="todos"||r.status===filtro; }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id)}); });
+
+  const _gerar=async function(trend,clientAlvo,unitAlvo){
+    const cId=clientAlvo||clId, uId=(cId==="bioter")?(unitAlvo||""):"";
+    if(!cId){ pixelsToast.warning("Escolhe o cliente."); return; }
+    const chave=trend?trend.id:"ia";
+    setGerando(chave);
+    try{
+      const ja=roteiros.filter(function(r){return r.client_id===cId&&String(r.unidade||"")===uId;}).map(function(r){return r.assunto;}).filter(Boolean);
+      const lista=await pxGerarRoteiros({client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,quantos:5});
+      const lote=Date.now().toString(36);
+      const rows=lista.map(function(r){ return {client_id:cId,unidade:uId,origem:trend?"trend":"ia",trend_id:trend?trend.id:null,lote:lote,assunto:r.assunto,abertura:r.abertura,desenvolvimento:r.desenvolvimento,fechamento:r.fechamento,status:"sugestao",visivel_portal:false,created_by:(_u&&_u.name)||""}; });
+      const ins=await sb.from("roteiros_video").insert(rows).select("*");
+      if(ins.error) throw ins.error;
+      setRoteiros(function(p){ return (ins.data||[]).concat(p); });
+      pixelsToast.success(lista.length+" roteiros prontos pra "+_nomeCl(cId,uId)+".",3000);
+      if(trend){ setAba("roteiros"); setClId(cId); if(cId==="bioter") setUnit(uId); }
+    }catch(e){ pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
+    setGerando("");
+  };
+  const _patch=async function(r,patch){
+    setRoteiros(function(p){ return p.map(function(x){ return x.id===r.id?Object.assign({},x,patch):x; }); });
+    const up=await sb.from("roteiros_video").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",r.id);
+    if(up.error){ pixelsToast.error("Não salvou: "+up.error.message); _carregar(); }
+  };
+  const _excluir=async function(r){
+    const ok=(typeof pixelsConfirm==="function")?await pixelsConfirm({title:"Excluir roteiro?",message:'"'+(r.assunto||"Roteiro")+'" sai da lista e do portal.',confirmLabel:"Excluir",danger:true}):window.confirm("Excluir?");
+    if(!ok) return;
+    setRoteiros(function(p){ return p.filter(function(x){ return x.id!==r.id; }); });
+    await sb.from("roteiros_video").update({status:"descartado",visivel_portal:false,updated_at:new Date().toISOString()}).eq("id",r.id);
+  };
+  const _salvarTrend=async function(){
+    const f=trendForm||{};
+    if(!String(f.titulo||"").trim()){ pixelsToast.warning("Dá um nome pra trend."); return; }
+    if(String(f.descricao||"").trim().length<15){ pixelsToast.warning("Explica do que se trata a trend (é isso que a IA usa)."); return; }
+    const row={titulo:f.titulo.trim(),descricao:f.descricao.trim(),link:String(f.link||"").trim(),created_by:(_u&&_u.name)||"",updated_at:new Date().toISOString()};
+    const r=f.id?await sb.from("roteiros_trends").update(row).eq("id",f.id):await sb.from("roteiros_trends").insert(row);
+    if(r.error){ pixelsToast.error("Não salvou: "+r.error.message); return; }
+    setTrendForm(null); _carregar(); pixelsToast.success("Trend salva.",2000);
+  };
+  const _excluirTrend=async function(t){
+    const ok=(typeof pixelsConfirm==="function")?await pixelsConfirm({title:"Excluir trend?",message:'"'+t.titulo+'" sai da lista. Os roteiros já gerados continuam.',confirmLabel:"Excluir",danger:true}):window.confirm("Excluir?");
+    if(!ok) return;
+    await sb.from("roteiros_trends").update({ativa:false}).eq("id",t.id); _carregar();
+  };
+
+  const _inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_RT_FF};
+  const _lbl={color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
+  const _btnGerar=function(label,on,busy,cor){ return {background:busy?"#e2e8f0":("linear-gradient(135deg,"+(cor||_RT_AC)+","+(cor||_RT_AC)+"cc)"),color:busy?"#94a3b8":"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:13,fontWeight:800,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:busy?"none":("0 6px 18px "+(cor||_RT_AC)+"44"),whiteSpace:"nowrap"}; };
+  const Spin=function(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite"}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>; };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF,maxWidth:1400,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+    <style>{"@keyframes pxspin{to{transform:rotate(360deg)}}"}</style>
+    {/* Header */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
+      <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}><Ico n="video" size={22} color="#fff"/></div>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Roteiros</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
+      </div>
+      <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
+        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"}].map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}</button>; })}
+      </div>
+    </div>
+
+    {aba==="roteiros"&&<>
+      {/* Cliente + unidade + gerar */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <label style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 10px 6px 6px"}}>
+          <span style={{width:28,height:28,borderRadius:7,background:"#fff",border:"1px solid "+_cor+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+            {_logo?<img src={_logo} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>:<span style={{color:_cor,fontSize:9,fontWeight:900}}>{String((cl&&cl.name)||"?").slice(0,2).toUpperCase()}</span>}
+          </span>
+          <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Cliente</span>
+          <select value={clId} onChange={function(e){setClId(e.target.value); setUnit("");}} style={{border:"none",background:"transparent",color:"#0f172a",fontSize:13,fontWeight:800,outline:"none",cursor:"pointer",fontFamily:"inherit",maxWidth:240}}>
+            {_lista.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+          </select>
+        </label>
+        {isBioter&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {[{id:"",label:"Grupo"}].concat(_unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{u.label}</button>; })}
+        </div>}
+        <span style={{flex:1}}/>
+        <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
+          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
+        </div>
+        <button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
+          {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
+        </button>
+      </div>
+      {gerando==="ia"&&<div style={{background:_cor+"0d",border:"1px dashed "+_cor+"66",borderRadius:14,padding:"14px 18px",color:"#475569",fontSize:12.5,lineHeight:1.6}}>
+        Lendo o playbook, o foco do mês, as regras aprendidas e os vídeos já aprovados de <b>{_nomeCl(clId,unit)}</b>… Os 5 roteiros vão sair sobre 5 assuntos diferentes dos {doCliente.length} que já existem aqui. Leva uns 30 a 60 segundos.
+      </div>}
+      {loading&&<div style={{padding:"40px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
+      {!loading&&visiveis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"44px 24px",textAlign:"center"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>Nenhum roteiro pra {_nomeCl(clId,unit)} ainda</div>
+        <div style={{color:"#64748b",fontSize:12.5}}>Clica em "Gerar 5 roteiros". A IA escreve com base no playbook, no foco do mês e no que já foi aprovado pra esse cliente.</div>
+      </div>}
+      {!loading&&visiveis.length>0&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
+          onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
+          onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
+          onExcluir={function(){_excluir(r);}}/>; })}
+      </div>}
+    </>}
+
+    {aba==="trends"&&<>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:220,color:"#475569",fontSize:12.5,lineHeight:1.5}}>Cadastre a trend e explique do que se trata. Depois, em cada trend, escolha o cliente e clique em <b>Gerar 5 ideias</b>: a IA adapta a trend pro negócio dele, no mesmo formato de 90s.</div>
+        <button type="button" onClick={function(){setTrendForm({titulo:"",descricao:"",link:""});}} style={_btnGerar("",true,false,"#db2777")}><Ico n="plus" size={13} color="#fff"/> Nova trend</button>
+      </div>
+      {trendForm&&<div style={{background:"#fff",border:"1px solid #fbcfe8",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12,boxShadow:"0 8px 24px rgba(219,39,119,.08)"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{trendForm.id?"Editar trend":"Nova trend"}</div>
+        <div><div style={_lbl}>Nome da trend *</div><input value={trendForm.titulo} onChange={function(e){setTrendForm(Object.assign({},trendForm,{titulo:e.target.value}));}} placeholder='ex: "POV: você chega na obra e…"' style={_inp}/></div>
+        <div><div style={_lbl}>Do que se trata *</div><textarea value={trendForm.descricao} onChange={function(e){setTrendForm(Object.assign({},trendForm,{descricao:e.target.value}));}} rows={4} placeholder="Explica a trend como você explicaria pra um colega: qual é o formato, o áudio ou o gancho, por que está funcionando, que tipo de vídeo as pessoas estão fazendo com ela." style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/></div>
+        <div><div style={_lbl}>Link de referência (opcional)</div><input value={trendForm.link||""} onChange={function(e){setTrendForm(Object.assign({},trendForm,{link:e.target.value}));}} placeholder="https://instagram.com/reel/…" style={_inp}/></div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+          <button type="button" onClick={function(){setTrendForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#475569",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:_RT_FF}}>Cancelar</button>
+          <button type="button" onClick={_salvarTrend} style={{background:"#db2777",border:"none",borderRadius:9,padding:"10px 20px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:_RT_FF}}>Salvar trend</button>
+        </div>
+      </div>}
+      {!loading&&trends.length===0&&!trendForm&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"44px 24px",textAlign:"center"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>Nenhuma trend cadastrada</div>
+        <div style={{color:"#64748b",fontSize:12.5}}>Viu uma trend que combina com os clientes? Cadastra aqui e gera as ideias.</div>
+      </div>}
+      {trends.map(function(t){
+        const sel=trendCliente[t.id]||{client:clId,unit:""};
+        const gerados=roteiros.filter(function(r){return r.trend_id===t.id;});
+        const busy=gerando===t.id;
+        const cSel=_lista.find(function(c){return c.id===sel.client;});
+        const corSel=(cSel&&/^#[0-9a-f]{6}$/i.test(cSel.color||""))?cSel.color:_RT_AC;
+        return <div key={t.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+          <div style={{padding:"14px 16px",background:"linear-gradient(135deg,#fdf2f8,#fff)",borderBottom:"1px solid #fce7f3",display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <span style={{width:36,height:36,borderRadius:10,background:"#db2777",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px rgba(219,39,119,.3)"}}><Ico n="zap" size={17} color="#fff"/></span>
+            <div style={{flex:1,minWidth:220}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{t.titulo}</div>
+              <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,marginTop:4,whiteSpace:"pre-wrap"}}>{t.descricao}</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:6,display:"flex",gap:10,flexWrap:"wrap"}}>
+                {t.link&&<a href={t.link} target="_blank" rel="noreferrer" style={{color:"#db2777",fontWeight:700,textDecoration:"none"}}>Ver referência ↗</a>}
+                <span>por {t.created_by||"—"} · {new Date(t.created_at).toLocaleDateString("pt-BR")}</span>
+                <span>{gerados.length} ideia{gerados.length===1?"":"s"} gerada{gerados.length===1?"":"s"}</span>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <select value={sel.client} onChange={function(e){ const v=e.target.value; setTrendCliente(Object.assign({},trendCliente,{[t.id]:{client:v,unit:""}})); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",fontFamily:_RT_FF,outline:"none"}}>
+                {_lista.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+              </select>
+              {sel.client==="bioter"&&<select value={sel.unit||""} onChange={function(e){ setTrendCliente(Object.assign({},trendCliente,{[t.id]:{client:sel.client,unit:e.target.value}})); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",fontFamily:_RT_FF,outline:"none"}}>
+                <option value="">Grupo</option>{_unidades.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
+              </select>}
+              <button type="button" disabled={!!gerando} onClick={function(){_gerar(t,sel.client,sel.unit);}} style={_btnGerar("",true,!!gerando,corSel)}>
+                {busy?<><Spin/> Criando…</>:<><Ico n="sparkles" size={13} color="#fff"/> Gerar 5 ideias</>}
+              </button>
+              <button type="button" title="Editar" onClick={function(){setTrendForm({id:t.id,titulo:t.titulo,descricao:t.descricao,link:t.link||""});}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+            </div>
+          </div>
+          {gerados.length>0&&<div style={{padding:12,display:"flex",flexDirection:"column",gap:10,background:"#fafbfc"}}>
+            {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
+              return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
+                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={function(){_excluir(r);}}/></div>; })}
+          </div>}
+        </div>;
+      })}
+    </>}
+  </div>;
+}
+
+/* ── PORTAL DO CLIENTE › Sugestões de conteúdo ── */
+function PortalSugestoesConteudo({cl, selUnit, isMob}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const [lista,setLista]=useState(null);
+  const cid=String((cl&&cl.id)||"").replace(/^bioter_.*/,"bioter");
+  const unitFiltro=(cid==="bioter")?String(selUnit||""):"";
+  const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:_RT_AC;
+  const _carregar=async function(){
+    if(!sb||!cid){ setLista([]); return; }
+    const r=await sb.from("roteiros_video").select("*").eq("client_id",cid).eq("visivel_portal",true).neq("status","descartado").order("created_at",{ascending:false}).limit(100);
+    setLista(r.error?[]:(r.data||[]));
+  };
+  useEffect(function(){
+    _carregar();
+    let ch=null,t=null; const rec=function(){ clearTimeout(t); t=setTimeout(_carregar,400); };
+    try{ if(sb) ch=sb.channel("portal-roteiros-"+cid).on("postgres_changes",{event:"*",schema:"public",table:"roteiros_video"},rec).subscribe(); }catch(_){}
+    return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[cid]);
+  const vis=(lista||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF}}>
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+      <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="video" size={20} color="#fff"/></div>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>Sugestões de conteúdo</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 90 segundos pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
+      </div>
+    </div>
+    {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
+    {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
+    {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}/>; })}
   </div>;
 }
