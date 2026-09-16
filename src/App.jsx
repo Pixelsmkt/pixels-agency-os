@@ -74716,9 +74716,12 @@ const ONBOARDING_BLOCKS = [
       // (09/09) Sem isso não dá pra publicar em conjunto (collab)
       {id:"d1_paginas_meta", label:"Meta: páginas, portfólio empresarial e vínculo Facebook + Instagram", sub:[
         // (16/09/2026) Sem acesso TOTAL à página não dá pra criar o portfólio empresarial nem ligar FB ao IG.
-        {id:"d1_meta_acesso_total", label:"Verificar se os envolvidos têm acesso total à página do Facebook — se estiver parcial, solicitar ao cliente",
-          links:[{label:"Acesso à página do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
-            msg:"Oi! Pra gente conseguir criar o portfólio empresarial e ligar o Facebook ao Instagram, precisamos de acesso total à página. É rapidinho: entra neste link, vai em Acesso à página e dá acesso total pra nossa equipe 👇\nhttps://www.facebook.com/settings/?tab=profile_access"}]},
+        {id:"d1_meta_acesso_total", label:"Verificar se a equipe está em \"Pessoas com acesso do Facebook\" (acesso completo à página) — se não estiver, pedir ao cliente pra adicionar",
+          links:[{label:"Pessoas com acesso do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
+            // (16/09/2026) O acesso que serve é o da seção "Pessoas com acesso do Facebook" (botão "Adicionar novo").
+            // Acesso só por tarefas/parcial não deixa criar o portfólio empresarial nem vincular FB ao IG.
+            passos:["Entrar no link logado no perfil que administra a página","Seção \"Pessoas com acesso do Facebook\"","Botão \"Adicionar novo\" e adicionar a pessoa da equipe","Liberar o acesso completo (controle total)"],
+            msg:"Oi! Pra gente criar o portfólio empresarial e vincular o Facebook ao Instagram, precisamos de acesso completo à página. É rapidinho 👇\n\n1. Entre neste link (logado no perfil que administra a página): https://www.facebook.com/settings/?tab=profile_access\n2. Na seção \"Pessoas com acesso do Facebook\", clique em \"Adicionar novo\"\n3. Adicione a pessoa da nossa equipe e libere o acesso completo\n\nQualquer dúvida é só chamar!"}]},
         {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
         {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
         {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
@@ -74853,9 +74856,12 @@ const ONBOARDING_BLOCKS_STARTER = [
       // (09/09) Sem isso não dá pra publicar em conjunto (collab)
       {id:"d1_paginas_meta", label:"Meta: páginas, portfólio empresarial e vínculo Facebook + Instagram", sub:[
         // (16/09/2026) Sem acesso TOTAL à página não dá pra criar o portfólio empresarial nem ligar FB ao IG.
-        {id:"d1_meta_acesso_total", label:"Verificar se os envolvidos têm acesso total à página do Facebook — se estiver parcial, solicitar ao cliente",
-          links:[{label:"Acesso à página do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
-            msg:"Oi! Pra gente conseguir criar o portfólio empresarial e ligar o Facebook ao Instagram, precisamos de acesso total à página. É rapidinho: entra neste link, vai em Acesso à página e dá acesso total pra nossa equipe 👇\nhttps://www.facebook.com/settings/?tab=profile_access"}]},
+        {id:"d1_meta_acesso_total", label:"Verificar se a equipe está em \"Pessoas com acesso do Facebook\" (acesso completo à página) — se não estiver, pedir ao cliente pra adicionar",
+          links:[{label:"Pessoas com acesso do Facebook", url:"https://www.facebook.com/settings/?tab=profile_access", tipo:"facebook",
+            // (16/09/2026) O acesso que serve é o da seção "Pessoas com acesso do Facebook" (botão "Adicionar novo").
+            // Acesso só por tarefas/parcial não deixa criar o portfólio empresarial nem vincular FB ao IG.
+            passos:["Entrar no link logado no perfil que administra a página","Seção \"Pessoas com acesso do Facebook\"","Botão \"Adicionar novo\" e adicionar a pessoa da equipe","Liberar o acesso completo (controle total)"],
+            msg:"Oi! Pra gente criar o portfólio empresarial e vincular o Facebook ao Instagram, precisamos de acesso completo à página. É rapidinho 👇\n\n1. Entre neste link (logado no perfil que administra a página): https://www.facebook.com/settings/?tab=profile_access\n2. Na seção \"Pessoas com acesso do Facebook\", clique em \"Adicionar novo\"\n3. Adicione a pessoa da nossa equipe e libere o acesso completo\n\nQualquer dúvida é só chamar!"}]},
         {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
         {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
         {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
@@ -75649,6 +75655,7 @@ function _OnbPortalBtn({presetId,itemId}){
    No checklist: links:[{label, url, tipo?, msg?}]
      tipo → ícone/cor: facebook | instagram | meta | google | drive | whatsapp | (qualquer outro = link)
      msg  → mensagem pronta pro cliente; vira o botão "Mensagem pro cliente" (copia)
+     passos → ["onde clicar", …] vira um mini-roteiro numerado embaixo do link
    Abrir leva direto pro link; "Copiar link" pra mandar no WhatsApp.                    */
 const _ONB_LINK_TIPOS={
   facebook:{cor:"#1877F2",ico:<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M13.4 21v-7.1h2.4l.45-2.9H13.4V9.15c0-.85.3-1.5 1.55-1.5h1.4V5.05c-.35-.05-1.15-.1-2.05-.1-2.05 0-3.45 1.25-3.45 3.55V11H8.4v2.9h2.45V21h2.55z"/></svg>},
@@ -75662,7 +75669,9 @@ function _OnbLinks({links}){
   if(!links||!links.length) return null;
   const _copiar=function(txt,ok){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(ok,1800); }catch(_){} };
   const _link=<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
-  return <div onClick={function(e){e.stopPropagation();}} style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+  const _passos=links.filter(function(l){return l.passos&&l.passos.length;});
+  return <div onClick={function(e){e.stopPropagation();}} style={{display:"flex",flexDirection:"column",gap:6,marginTop:6}}>
+  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
     {links.map(function(l,i){
       const T=_ONB_LINK_TIPOS[l.tipo]||{cor:"#7c3aed",ico:_link};
       const _mini={background:"#fff",border:"1px solid "+T.cor+"33",borderRadius:99,padding:"4px 10px",color:T.cor,fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:_ONB_FF,transition:"all .12s"};
@@ -75685,6 +75694,20 @@ function _OnbLinks({links}){
         </button>}
       </div>;
     })}
+  </div>
+  {/* passos:[...] no link → mini-roteiro numerado de onde clicar (16/09/2026) */}
+  {_passos.map(function(l,k){
+    const T=_ONB_LINK_TIPOS[l.tipo]||{cor:"#7c3aed"};
+    return <div key={"p"+k} style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6,padding:"6px 8px",background:T.cor+"08",border:"1px dashed "+T.cor+"40",borderRadius:10}}>
+      {l.passos.map(function(ps,n){
+        return <span key={n} style={{display:"inline-flex",alignItems:"center",gap:6,color:"#334155",fontSize:11,fontWeight:600,fontFamily:_ONB_FF}}>
+          <span style={{width:17,height:17,borderRadius:"50%",background:T.cor,color:"#fff",fontSize:10,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{n+1}</span>
+          {ps}
+          {n<l.passos.length-1&&<span style={{color:T.cor,fontWeight:800,opacity:.6}}>›</span>}
+        </span>;
+      })}
+    </div>;
+  })}
   </div>;
 }
 function OnboardingItem(props){
