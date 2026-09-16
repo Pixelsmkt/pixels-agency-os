@@ -37703,7 +37703,7 @@ function _RsIcon({rede,size}){
   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
 
-// ── Layout v3 (16/09/2026) ──
+// ── Layout v4 (16/09/2026) ──
 // A v2 (faixas largas com colunas tipo planilha) foi REPROVADA: "ficou pior ainda… deixa COMO TAVA ANTES
 // MAS MAIS MODERNO, COM MAIS ESPAÇAMENTO". Não voltar pra tabela.
 // Agora: grade de cards como era (um card por cliente; Bioter = Grupo + um card por unidade), com mais
@@ -37818,51 +37818,54 @@ function PageRedesSociais({isMob}){
     _visiveis.push(Object.assign({},k,{contas:_l}));
   });
 
+  // ── v4 (16/09/2026): "muito poluído, muito transparente, tudo brancão… usa cores dos clientes" ──
+  // Cabeçalho do card em COR SÓLIDA do cliente, corpo levemente tingido, e cada conta mostra SÓ o que
+  // tem (nada de caixa vazia com "—"). E-mail, telefone, senha e recuperação viram chips com cor
+  // própria e ícone, então a social media bate o olho e sabe como aquela conta entra.
+  const _hex=function(c){return /^#[0-9a-f]{6}$/i.test(c||"")?c:AC;};
+  // cor clara (Climaves lima, por ex.) → texto escuro no cabeçalho, senão branco
+  const _clara=function(c){var r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);return (0.299*r+0.587*g+0.114*b)>170;};
   const _Logo=function(cl){
     return (typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-      ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"5px 9px",height:34,display:"inline-flex",alignItems:"center",flexShrink:0}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:22,maxWidth:72,objectFit:"contain"}}/></div>
-      : <span style={{width:34,height:34,borderRadius:10,background:(cl.color||AC)+"18",color:cl.color||AC,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>;
+      ? <div style={{background:"#fff",borderRadius:10,padding:"5px 9px",height:34,display:"inline-flex",alignItems:"center",flexShrink:0,boxShadow:"0 2px 6px rgba(0,0,0,.15)"}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:22,maxWidth:72,objectFit:"contain"}}/></div>
+      : <span style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.3)",color:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12,flexShrink:0,border:"1px solid rgba(255,255,255,.45)"}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>;
   };
-  const _icoBtn={background:"none",border:"none",color:TD,cursor:"pointer",padding:4,display:"inline-flex",borderRadius:7,transition:"all .12s"};
+  const _icoBtn={background:"none",border:"none",color:"#b6bcc8",cursor:"pointer",padding:4,display:"inline-flex",borderRadius:7,transition:"all .12s"};
   const _hoverOn=function(cor){return function(e){e.currentTarget.style.color=cor;e.currentTarget.style.background="#f1f5f9";};};
-  const _hoverOff=function(cor){return function(e){e.currentTarget.style.color=cor||TD;e.currentTarget.style.background="none";};};
-  // Campo rotulado dentro da conta. Clique copia.
-  const _Campo=function(props){
-    const v=props.valor, vazio=!v;
-    return <div onClick={function(){if(!vazio)_copy(props.copiar||v,props.lbl);}} title={vazio?"":"Clique pra copiar"}
-      style={{background:vazio?"#fafbfc":"#fff",border:"1px solid "+(vazio?"#f1f3f6":"#e8ebf0"),borderRadius:10,padding:"8px 11px",cursor:vazio?"default":"copy",minWidth:0,transition:"border-color .12s"}}
-      onMouseEnter={function(e){if(!vazio)e.currentTarget.style.borderColor="#cbd5e1";}} onMouseLeave={function(e){if(!vazio)e.currentTarget.style.borderColor="#e8ebf0";}}>
-      <div style={{color:TD,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:3,display:"flex",alignItems:"center",gap:5}}>{props.icone}{props.rotulo}</div>
-      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-        {vazio
-          ? <span style={{color:"#cbd5e1",fontSize:12.5}}>—</span>
-          : (props.children||<span style={{color:props.cor||TX,fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>)}
-      </div>
+  const _hoverOff=function(cor){return function(e){e.currentTarget.style.color=cor||"#b6bcc8";e.currentTarget.style.background="none";};};
+  // Chip de dado: cor por TIPO (e-mail azul, telefone verde, senha grafite, recuperação âmbar). Clique copia.
+  const _Chip=function(props){
+    return <div onClick={function(){if(!props.semCopia)_copy(props.copiar||props.valor,props.lbl);}} title={props.titulo||(props.rotulo+" — clique pra copiar")}
+      style={{display:"inline-flex",alignItems:"center",gap:7,background:props.bg,border:"1px solid "+props.borda,borderRadius:9,padding:"6px 10px",cursor:props.semCopia?"default":"copy",minWidth:0,maxWidth:"100%",transition:"transform .1s"}}
+      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";}} onMouseLeave={function(e){e.currentTarget.style.transform="none";}}>
+      <span style={{color:props.cor,display:"inline-flex",flexShrink:0}}>{props.icone}</span>
+      <span style={{color:props.cor,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,flexShrink:0}}>{props.rotulo}</span>
+      <span style={{color:TX,fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{props.children||props.valor}</span>
     </div>;
   };
-  const _icMail=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>;
-  const _icTel=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>;
-  const _icLock=<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+  const _icMail=<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>;
+  const _icTel=<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>;
+  const _icLock=<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+  const _icLife=<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/></svg>;
 
   const _Conta=function(c){
     const R=_rsRede(c.network);
     const _rev=!!reveal[c.id];
     const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
     const _nota=c.obs&&!/^https?:/.test(c.obs)?c.obs:"";
-    const _temAcesso=!!(c.login||c.login_telefone||c.senha);
     const _rec=[c.rec_email,c.rec_telefone].filter(Boolean);
-    return <div key={c.id} style={{border:"1px solid #eef1f5",borderRadius:14,padding:14,display:"flex",flexDirection:"column",gap:12,background:"#fcfcfd"}}>
-      {/* topo: rede + @ + ações */}
+    const _temAlgo=!!(c.login||c.login_telefone||c.senha||_rec.length);
+    return <div key={c.id} style={{background:"#fff",borderRadius:14,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,boxShadow:"0 1px 2px rgba(15,23,42,.06)",borderLeft:"4px solid "+R.cor}}>
       <div style={{display:"flex",alignItems:"center",gap:11}}>
-        <span style={{width:36,height:36,borderRadius:11,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px "+R.cor+"40"}}><_RsIcon rede={c.network} size={18}/></span>
+        <span style={{width:38,height:38,borderRadius:11,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 10px "+R.cor+"55"}}><_RsIcon rede={c.network} size={19}/></span>
         <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.25}}>
           {c.handle
-            ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,textAlign:"left",color:TX,fontWeight:800,fontSize:13.5,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
-            : <span style={{color:TX,fontWeight:800,fontSize:13.5}}>{R.label}</span>}
-          <span style={{color:TD,fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.handle?R.label:""}{c.handle&&_nota?" · ":""}{_nota}</span>
+            ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,textAlign:"left",color:TX,fontWeight:800,fontSize:14,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
+            : <span style={{color:TX,fontWeight:800,fontSize:14}}>{R.label}</span>}
+          <span style={{color:TD,fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.handle?R.label:""}{c.handle&&_nota?" · ":""}{_nota}</span>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:1,flexShrink:0}}>
-          {(c.handle||_temAcesso)&&<button title="Copiar acesso completo" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}
+        <div style={{display:"flex",alignItems:"center",gap:0,flexShrink:0}}>
+          {(c.handle||c.login||c.login_telefone||c.senha)&&<button title="Copiar acesso completo" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}
             onClick={function(){var l=[];if(c.handle)l.push("@"+c.handle);if(c.login)l.push("Login (e-mail): "+c.login);if(c.login_telefone)l.push("Login (telefone): "+c.login_telefone);if(c.senha)l.push("Senha: "+c.senha);_copy(l.join("\n"),"Acesso copiado");}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>}
           {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}>
@@ -37870,28 +37873,21 @@ function PageRedesSociais({isMob}){
           <button title="Editar" style={_icoBtn} onMouseEnter={_hoverOn(AC)} onMouseLeave={_hoverOff()}
             onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:_rsUnidade(c.unidade),network:c.network,handle:c.handle||"",login:c.login||"",login_telefone:c.login_telefone||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-          <button title="Excluir" style={Object.assign({},_icoBtn,{color:"#e2b3b3"})} onMouseEnter={_hoverOn("#dc2626")} onMouseLeave={_hoverOff("#e2b3b3")} onClick={function(){_excluir(c);}}>
+          <button title="Excluir" style={Object.assign({},_icoBtn,{color:"#e6c0c0"})} onMouseEnter={_hoverOn("#dc2626")} onMouseLeave={_hoverOff("#e6c0c0")} onClick={function(){_excluir(c);}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
         </div>
       </div>
-      {/* acesso: e-mail e telefone lado a lado, senha embaixo — só aparece se a conta tem login/senha */}
-      {_temAcesso&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-        <_Campo rotulo="Login por e-mail" icone={_icMail} valor={c.login} lbl="E-mail de login copiado"/>
-        <_Campo rotulo="Login por telefone" icone={_icTel} valor={c.login_telefone} lbl="Telefone de login copiado"/>
-        <div style={{gridColumn:"1 / -1"}}>
-          <_Campo rotulo="Senha" icone={_icLock} valor={c.senha} lbl="Senha copiada">
-            {c.senha&&<>
-              <span style={{color:TX,fontSize:12.5,fontWeight:700,letterSpacing:_rev?0:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?c.senha:"••••••••"}</span>
-              <button title={_rev?"Ocultar":"Mostrar"} onClick={function(e){e.stopPropagation();setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex",flexShrink:0}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
-            </>}
-          </_Campo>
-        </div>
-      </div>}
-      {_rec.length>0&&<div onClick={function(){_copy(_rec.join("\n"),"Recuperação copiada");}} title="Clique pra copiar"
-        style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"7px 11px",cursor:"copy",display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-        <span style={{color:"#b45309",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,flexShrink:0}}>Recuperação</span>
-        <span style={{color:"#92400e",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rec.join(" · ")}</span>
+      {_temAlgo&&<div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {c.login&&<_Chip rotulo="E-mail" icone={_icMail} valor={c.login} lbl="E-mail de login copiado" bg="#eff6ff" borda="#bfdbfe" cor="#1d4ed8"/>}
+        {c.login_telefone&&<_Chip rotulo="Telefone" icone={_icTel} valor={c.login_telefone} lbl="Telefone de login copiado" bg="#ecfdf5" borda="#a7f3d0" cor="#047857"/>}
+        {c.senha&&<_Chip rotulo="Senha" icone={_icLock} valor={c.senha} lbl="Senha copiada" bg="#f1f5f9" borda="#e2e8f0" cor="#334155">
+          <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+            <span style={{letterSpacing:_rev?0:2,fontWeight:700}}>{_rev?c.senha:"••••••••"}</span>
+            <button title={_rev?"Ocultar":"Mostrar"} onClick={function(e){e.stopPropagation();setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",padding:0,display:"inline-flex"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
+          </span>
+        </_Chip>}
+        {_rec.length>0&&<_Chip rotulo="Recuperação" icone={_icLife} valor={_rec.join(" · ")} copiar={_rec.join("\n")} lbl="Recuperação copiada" bg="#fffbeb" borda="#fde68a" cor="#b45309"/>}
       </div>}
     </div>;
   };
@@ -37924,22 +37920,24 @@ function PageRedesSociais({isMob}){
     {/* Grade: um card por cliente (Bioter: grupo + unidades) */}
     {!loading&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(400px,1fr))",gap:20,alignItems:"start"}}>
       {_visiveis.map(function(k){
-        const cl=k.cl, _cor=cl.color||AC;
-        return <div key={cl.id+"_"+k.unidade} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:18,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.04)"}}>
-          <div style={{padding:"16px 18px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,"+_cor+"0a,#fff)"}}>
+        const cl=k.cl;
+        const _cor=_hex(cl.color), _txt=_clara(_cor)?"#0f172a":"#fff", _sub=_clara(_cor)?"rgba(15,23,42,.7)":"rgba(255,255,255,.85)";
+        return <div key={cl.id+"_"+k.unidade} style={{background:"#fff",borderRadius:18,overflow:"hidden",boxShadow:"0 2px 4px rgba(15,23,42,.05), 0 10px 28px "+_cor+"22",border:"1px solid "+_cor+"33"}}>
+          <div style={{padding:"14px 16px",display:"flex",alignItems:"center",gap:12,background:"linear-gradient(135deg,"+_cor+","+_cor+"cc)",color:_txt}}>
             {_Logo(cl)}
-            <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.25}}>
-              <span style={{color:TX,fontWeight:800,fontSize:14.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{k.nome}</span>
-              <span style={{color:TD,fontSize:11.5,fontWeight:600}}>{k.contas.length?(k.contas.length+(k.contas.length===1?" conta":" contas")):"sem contas"}</span>
+            <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.2}}>
+              <span style={{fontWeight:800,fontSize:15,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textShadow:_clara(_cor)?"none":"0 1px 2px rgba(0,0,0,.15)"}}>{k.nome}</span>
+              <span style={{fontSize:11.5,fontWeight:600,color:_sub}}>{k.contas.length?(k.contas.length+(k.contas.length===1?" conta":" contas")):"sem contas"}</span>
             </div>
             <button title={"Adicionar conta em "+k.nome} onClick={function(){setForm(_novoForm(cl.id,k.unidade));}}
-              style={{background:_cor+"12",border:"1px solid "+_cor+"30",borderRadius:10,width:32,height:32,color:_cor,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              style={{background:_clara(_cor)?"rgba(15,23,42,.08)":"rgba(255,255,255,.2)",border:"1px solid "+(_clara(_cor)?"rgba(15,23,42,.2)":"rgba(255,255,255,.45)"),borderRadius:10,width:32,height:32,color:_txt,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,.35)";}} onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.2)";}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
           {k.contas.length===0
-            ? <div style={{padding:"22px 18px",color:"#cbd5e1",fontSize:12.5,fontStyle:"italic"}}>Nenhuma conta registrada ainda.</div>
-            : <div style={{padding:14,display:"flex",flexDirection:"column",gap:12}}>{k.contas.map(_Conta)}</div>}
+            ? <div style={{padding:"22px 18px",color:"#94a3b8",fontSize:12.5,fontStyle:"italic",background:_cor+"0a"}}>Nenhuma conta registrada ainda.</div>
+            : <div style={{padding:12,display:"flex",flexDirection:"column",gap:10,background:_cor+"0d"}}>{k.contas.map(_Conta)}</div>}
         </div>;
       })}
       {_visiveis.length===0&&<div style={{gridColumn:"1 / -1",padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:18,border:"1px dashed "+B1}}>Nada encontrado.</div>}
