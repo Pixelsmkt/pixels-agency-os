@@ -3026,8 +3026,8 @@ const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   // "Demandas" categoria pai REMOVIDA — só tinha 2 filhos, promovidos pra top-level.
   {id:"demandas_kanban",  icon:"demandas_kanban", label:"Linha de produção"},
-  {id:"roteiros",   icon:"roteiros", label:"Roteiros"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends
   {id:"demandas_cal_pub", icon:"demandas_cal_pub", label:"Calendário de publicações"},
+  {id:"roteiros",   icon:"roteiros", label:"Roteiros"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends — abaixo do Calendário
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
@@ -96971,14 +96971,14 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
   const L=py?["Apertura","Desarrollo","Cierre"]:["Abertura","Desenvolvimento","Fechamento"];
   const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]];
   const _c=cor||_RT_AC;
-  const _pill=function(on,c){ return {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}; };
+  const _pill=function(on,c){ return {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}; };
   const dt=r.created_at?new Date(r.created_at):null;
   return <div style={{background:"#fff",border:"1px solid "+(r.visivel_portal?_c+"66":"#e8ebf0"),borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",borderTop:"4px solid "+_c}}>
-    <div style={{padding:"14px 16px 10px",display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
-      <div style={{flex:1,minWidth:200}}>
+    <div style={{padding:"12px 12px 8px",display:"flex",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:160}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{width:30,height:30,borderRadius:9,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+_c+"55"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rtIcone(r.id)}</svg></span>
-          <span style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{r.assunto||"Roteiro"}</span>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.3,lineHeight:1.25}}>{r.assunto||"Roteiro"}</span>
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
         </div>
@@ -96987,7 +96987,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
         <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          {agencia?"Copiar pro WhatsApp":"Copiar roteiro"}
+          {agencia?"WhatsApp":"Copiar"}
         </button>
         {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Sugestões de conteúdo). Clique pra tirar.":"Mostrar no portal do cliente, em Sugestões de conteúdo"} onClick={onPortal} style={_pill(!!r.visivel_portal,"#0ea5e9")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -96995,7 +96995,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
         </button>}
         {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          {r.status==="enviado"?"Enviado":"Enviado?"}
+          {r.status==="enviado"?"Enviado":"Enviar"}
         </button>}
         {agencia&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
@@ -97005,15 +97005,14 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
     </div>
-    {aberto&&<div style={{padding:"0 16px 16px",display:"flex",flexDirection:"column",gap:8}}>
+    {aberto&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:7}}>
       {partes.map(function(p,i){
-        return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+        return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:7}}>
             <span style={{width:3,height:12,borderRadius:2,background:_c,flexShrink:0}}/>
             <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{p[1]}</span>
-            {i===2&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:700}}>· com CTA</span>}
           </div>
-          <div style={{color:"#334155",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{p[2]}</div>
+          <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{p[2]}</div>
         </div>;
       })}
     </div>}
@@ -97116,7 +97115,7 @@ function PageRoteiros({isMob}){
   const _btnGerar=function(label,on,busy,cor){ return {background:busy?"#e2e8f0":("linear-gradient(135deg,"+(cor||_RT_AC)+","+(cor||_RT_AC)+"cc)"),color:busy?"#94a3b8":"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:13,fontWeight:800,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:busy?"none":("0 6px 18px "+(cor||_RT_AC)+"44"),whiteSpace:"nowrap"}; };
   const Spin=function(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite"}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>; };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF,maxWidth:1400,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF,width:"100%",boxSizing:"border-box",padding:isMob?"14px":"18px"}}>
     <style>{"@keyframes pxspin{to{transform:rotate(360deg)}}"}</style>
     {/* Header */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
@@ -97162,12 +97161,12 @@ function PageRoteiros({isMob}){
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15,marginBottom:6}}>Nenhum roteiro pra {_nomeCl(clId,unit)} ainda</div>
         <div style={{color:"#64748b",fontSize:12.5}}>Clica em "Gerar 5 roteiros". A IA escreve com base no playbook, no foco do mês e no que já foi aprovado pra esse cliente.</div>
       </div>}
-      {!loading&&visiveis.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14,alignItems:"start"}}>
+      {!loading&&visiveis.length>0&&<div style={{overflowX:isMob?"visible":"auto",paddingBottom:6}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(250px,1fr))",gap:12,alignItems:"start"}}>
         {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
           onExcluir={function(){_excluir(r);}}/>; })}
-      </div>}
+      </div></div>}
     </>}
 
     {aba==="trends"&&<>
@@ -97221,11 +97220,11 @@ function PageRoteiros({isMob}){
               <button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
             </div>
           </div>
-          {gerados.length>0&&<div style={{padding:12,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:12,alignItems:"start",background:"#fafbfc"}}>
+          {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(250px,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
                 <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={function(){_excluir(r);}}/></div>; })}
-          </div>}
+          </div></div>}
         </div>;
       })}
     </>}
@@ -97261,8 +97260,8 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
     </div>
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
     {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:14,alignItems:"start"}}>
+    <div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(250px,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
       {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}/>; })}
-    </div>
+    </div></div>
   </div>;
 }
