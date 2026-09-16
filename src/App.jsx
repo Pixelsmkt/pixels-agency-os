@@ -4665,19 +4665,23 @@ const BRIEFING_SECTIONS = [
     fields:[
       // Instagram
       { id:"instagram_user", label:"Instagram — usuário", help:"@handle ou e-mail cadastrado", type:"text" },
+      { id:"instagram_tel", label:"Instagram — telefone de login", help:"quando a conta entra pelo número", type:"text" },
       { id:"instagram_pass", label:"Instagram — senha", type:"password" },
       // Facebook
       { id:"facebook_user",  label:"Facebook — usuário / e-mail", type:"text" },
+      { id:"facebook_tel", label:"Facebook — telefone de login", help:"quando a conta entra pelo número", type:"text" },
       { id:"facebook_pass",  label:"Facebook — senha", type:"password" },
       { id:"facebook_bm",    label:"Business Manager (BM) — ID/URL", help:"ID do gerenciador de negócios (Meta Business)", type:"text" },
       // TikTok
       { id:"tiktok_user",    label:"TikTok — usuário / e-mail", type:"text" },
+      { id:"tiktok_tel", label:"TikTok — telefone de login", help:"quando a conta entra pelo número", type:"text" },
       { id:"tiktok_pass",    label:"TikTok — senha", type:"password" },
       // Google / YouTube / Google Ads / Google Meu Negócio
       { id:"google_user",    label:"Google — e-mail principal", help:"conta usada em YouTube, Google Ads e Perfil de Empresa (Google Meu Negócio)", type:"text" },
       { id:"google_pass",    label:"Google — senha", type:"password" },
       // LinkedIn
       { id:"linkedin_user",  label:"LinkedIn — usuário / e-mail", type:"text" },
+      { id:"linkedin_tel", label:"LinkedIn — telefone de login", help:"quando a conta entra pelo número", type:"text" },
       { id:"linkedin_pass",  label:"LinkedIn — senha", type:"password" },
       // Site
       { id:"site_admin_url", label:"Site — URL do painel administrativo", help:"ex: meusite.com.br/wp-admin", type:"text" },
@@ -4931,19 +4935,19 @@ function _LoginsCardsView(props){
       brand:"linear-gradient(135deg,#f58529 0%,#dd2a7b 50%,#8134af 100%)",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>,
       userField:"instagram_user", userLabel:"@ ou e-mail",
-      passField:"instagram_pass"
+      telField:"instagram_tel", passField:"instagram_pass"
     },
     { id:"tiktok", name:"TikTok",
       brand:"#000000",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5.8 20.1a6.34 6.34 0 0 0 10.86-4.43V8.62a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.84-.05z"/></svg>,
       userField:"tiktok_user", userLabel:"Usuário / e-mail",
-      passField:"tiktok_pass"
+      telField:"tiktok_tel", passField:"tiktok_pass"
     },
     { id:"linkedin", name:"LinkedIn",
       brand:"#0A66C2",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>,
       userField:"linkedin_user", userLabel:"Usuário / e-mail",
-      passField:"linkedin_pass"
+      telField:"linkedin_tel", passField:"linkedin_pass"
     },
     { id:"google", name:"Google",
       brand:"linear-gradient(135deg,#4285F4 0%,#EA4335 100%)",
@@ -4955,8 +4959,8 @@ function _LoginsCardsView(props){
     { id:"facebook", name:"Facebook",
       brand:"#1877F2",
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>,
-      userField:"facebook_user", userLabel:"Usuário / e-mail",
-      passField:"facebook_pass",
+      userField:"facebook_user", userLabel:"E-mail ou usuário",
+      telField:"facebook_tel", passField:"facebook_pass",
       extraField:"facebook_bm", extraLabel:"Business Manager (BM) — ID / URL"
     },
     { id:"site", name:"Site — painel admin",
@@ -4978,7 +4982,7 @@ function _LoginsCardsView(props){
       {SERVICES.map(function(svc){
         const uv = get(svc.userField) || "";
         const pv = get(svc.passField) || "";
-        const filled = !!(uv || pv);
+        const filled = !!(uv || pv || (svc.telField && get(svc.telField)));
         return <div key={svc.id} style={{background:"#fff",border:"1px solid "+(filled?"#cbd5e1":"#e2e8f0"),borderRadius:12,padding:16,boxShadow:"0 1px 3px rgba(15,23,42,.04)",transition:"border-color .12s, box-shadow .12s",display:"flex",flexDirection:"column",minWidth:0}}
           onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.08)";}}
           onMouseLeave={function(e){e.currentTarget.style.borderColor=filled?"#cbd5e1":"#e2e8f0";e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,.04)";}}>
@@ -4989,6 +4993,8 @@ function _LoginsCardsView(props){
             <div style={{fontSize:13.5,fontWeight:800,color:"#0f172a",letterSpacing:-.15,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{svc.name}</div>
             {filled && <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",flexShrink:0}} title="Preenchido"/>}
           </div>
+          {/* LOGIN POR TELEFONE NO PORTAL (16/09/2026): e-mail/usuário e telefone em caixas separadas,
+              igual Acessos › Redes sociais. Tudo aqui é sincronizado com client_social_accounts por gatilho. */}
           <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
             <div style={{minWidth:0}}>
               <div style={microLbl}>{svc.userLabel}</div>
@@ -4996,12 +5002,22 @@ function _LoginsCardsView(props){
                 onChange={function(e){ setField("logins", svc.userField, e.target.value); }}
                 style={inpStyle}/>
             </div>
-            <div style={{minWidth:0}}>
+            {svc.telField ? <div style={{minWidth:0}}>
+              <div style={microLbl}>Telefone de login</div>
+              <input type="text" value={get(svc.telField)||""} disabled={!canEdit} spellCheck={false} autoComplete="off" placeholder="(00) 0 0000-0000"
+                onChange={function(e){ setField("logins", svc.telField, e.target.value); }}
+                style={inpStyle}/>
+            </div> : <div style={{minWidth:0}}>
               <div style={microLbl}>Senha</div>
               <_BriefingPasswordField val={pv} canEdit={canEdit}
                 onChange={function(v){ setField("logins", svc.passField, v); }}/>
-            </div>
+            </div>}
           </div>
+          {svc.telField && <div style={{marginTop:10,minWidth:0}}>
+            <div style={microLbl}>Senha</div>
+            <_BriefingPasswordField val={pv} canEdit={canEdit}
+              onChange={function(v){ setField("logins", svc.passField, v); }}/>
+          </div>}
           {svc.userHint && <div style={microHint}>{svc.userHint}</div>}
           {svc.extraField && <div style={{marginTop:11,paddingTop:11,borderTop:"1px solid #f5f6f8"}}>
             <div style={microLbl}>{svc.extraLabel}</div>
@@ -37677,6 +37693,19 @@ function _RsIcon({rede,size}){
   return <svg {...F} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 010 18"/><path d="M12 3a15 15 0 000 18"/></svg>;
 }
 
+// ── Layout v2 (16/09/2026, pedido do Vinicius: "q bagunça… deixa claro cliente por cliente") ──
+// Antes: grade de cards soltos (masonry), cada conta com um formato diferente, e o Grupo Bioter
+// espalhado em 7 cards pela tela. Agora:
+//   • UMA faixa por cliente, uma embaixo da outra, com logo, nome e total de contas;
+//   • Bioter numa faixa só, com subtítulo por unidade;
+//   • toda conta é UMA LINHA com as MESMAS colunas: Rede · Perfil · Login e-mail · Login telefone ·
+//     Senha · Recuperação — o que não tem aparece como "—", então dá pra bater o olho e ver o que falta;
+//   • LOGIN POR E-MAIL e LOGIN POR TELEFONE em caixas separadas (Facebook entra pelos dois);
+//   • clientes sem nenhuma conta ficam numa linha compacta no fim, não ocupam card vazio.
+const RS_ORDEM=["instagram","facebook","tiktok","youtube","linkedin","google","gads","gdrive","gmb","outro"];
+// unidade gravada com id antigo (ex.: vinculação de página da Meta) → unidade atual
+const RS_UNIDADE_ALIAS={gloria_dourados:"gloria"};
+function _rsUnidade(u){ u=u||""; return RS_UNIDADE_ALIAS[u]||u; }
 
 function PageRedesSociais({isMob}){
   const B1="#e2e8f0", TX="#0f172a", TS="#475569", TD="#94a3b8", AC="#7c3aed";
@@ -37684,7 +37713,7 @@ function PageRedesSociais({isMob}){
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
   const [reveal,setReveal]=useState({});
-  const [form,setForm]=useState(null); // {id?,client_id,network,handle,login,senha,obs}
+  const [form,setForm]=useState(null);
   const [busy,setBusy]=useState(false);
 
   const _load=async function(){
@@ -37695,23 +37724,46 @@ function PageRedesSociais({isMob}){
       setContas(data||[]);
     }catch(e){console.warn("[redes]",e);}finally{setLoading(false);}
   };
-  useEffect(function(){_load();},[]);
+  // SINCRONIZADO COM O PORTAL (16/09/2026): o Briefing › Logins e acessos do portal e esta tela
+  // são a mesma coisa no banco (gatilhos _rs_sync_briefing / _rs_sync_conta). Recarrega sozinho
+  // quando alguém muda lá (realtime) e quando a aba volta a ter foco.
+  useEffect(function(){
+    _load();
+    let ch=null, t=null;
+    const _recarrega=function(){ clearTimeout(t); t=setTimeout(_load,400); };
+    try{
+      const sb=window._sb;
+      if(sb) ch=sb.channel("redes-sociais-rt").on("postgres_changes",{event:"*",schema:"public",table:"client_social_accounts"},_recarrega).subscribe();
+    }catch(_){}
+    window.addEventListener("focus",_recarrega);
+    return function(){ clearTimeout(t); window.removeEventListener("focus",_recarrega); try{ if(ch) window._sb.removeChannel(ch); }catch(_){} };
+  },[]);
 
-  const _copy=function(v,lbl){ if(!v)return; try{navigator.clipboard.writeText(v);if(typeof pixelsToast!=="undefined")pixelsToast.success((lbl||"Copiado")+"!",1800);}catch(_){}};
+  const _toast=function(tipo,msg,ms){ if(typeof pixelsToast!=="undefined"&&pixelsToast[tipo])pixelsToast[tipo](msg,ms); };
+  const _copy=function(v,lbl){ if(!v)return; try{navigator.clipboard.writeText(v);_toast("success",(lbl||"Copiado")+"!",1800);}catch(_){}};
+  const _novoForm=function(clientId,unidade){ return {client_id:clientId||"",unidade:unidade||"",network:"instagram",handle:"",login:"",login_telefone:"",senha:"",rec_email:"",rec_telefone:"",obs:""}; };
+
   const _salvar=async function(){
-    if(!form||!form.client_id){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escolhe o cliente.");return;}
-    if(!(form.handle||"").trim()&&!(form.login||"").trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preenche pelo menos o @ ou o login.");return;}
+    if(!form||!form.client_id){_toast("warning","Escolhe o cliente.");return;}
+    if(!(form.handle||"").trim()&&!(form.login||"").trim()&&!(form.login_telefone||"").trim()){_toast("warning","Preenche o @, o login por e-mail ou o login por telefone.");return;}
     setBusy(true);
     try{
       const sb=window._sb;
-      const row={client_id:form.client_id,network:form.network||"instagram",handle:String(form.handle||"").trim().replace(/^@+/,""),login:String(form.login||"").trim(),senha:form.senha||"",rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),unidade:form.client_id==="bioter"?(form.unidade||""):"",obs:form.obs||"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+      const row={client_id:form.client_id,network:form.network||"instagram",
+        handle:String(form.handle||"").trim().replace(/^@+/,""),
+        login:String(form.login||"").trim(),
+        login_telefone:String(form.login_telefone||"").trim(),
+        senha:form.senha||"",
+        rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),
+        unidade:form.client_id==="bioter"?(form.unidade||""):"",obs:form.obs||"",
+        updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
       const r=form.id
         ? await sb.from("client_social_accounts").update(row).eq("id",form.id)
         : await sb.from("client_social_accounts").insert(row);
-      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);setBusy(false);return;}
-      if(typeof pixelsToast!=="undefined")pixelsToast.success("Conta salva!",2200);
+      if(r&&r.error){_toast("error","Erro: "+r.error.message);setBusy(false);return;}
+      _toast("success","Conta salva!",2200);
       setForm(null);setBusy(false);_load();
-    }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e&&e.message||e));setBusy(false);}
+    }catch(e){_toast("error","Erro: "+(e&&e.message||e));setBusy(false);}
   };
   const _excluir=async function(c){
     const _lbl=_rsRede(c.network).label+(c.handle?(" @"+c.handle):"");
@@ -37722,43 +37774,163 @@ function PageRedesSociais({isMob}){
     try{
       const sb=window._sb;
       const r=await sb.from("client_social_accounts").delete().eq("id",c.id).select("id");
-      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao excluir: "+r.error.message);return;}
-      if(!r||!r.data||r.data.length===0){if(typeof pixelsToast!=="undefined")pixelsToast.error("Não consegui excluir (sem permissão).");return;}
+      if(r&&r.error){_toast("error","Erro ao excluir: "+r.error.message);return;}
+      if(!r||!r.data||r.data.length===0){_toast("error","Não consegui excluir (sem permissão).");return;}
       setContas(function(p){return p.filter(function(x){return x.id!==c.id;});});
-      if(typeof pixelsToast!=="undefined")pixelsToast.success("Conta excluída.",2200);
-    }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+((e&&e.message)||e));}
+      _toast("success","Conta excluída.",2200);
+    }catch(e){_toast("error","Erro: "+((e&&e.message)||e));}
   };
 
   const _clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&c.status!=="encerrado";});
-  // Bioter é POR UNIDADE: vira um card do Grupo + um card por unidade
-  const _cards=[];
-  _clientes.forEach(function(c){
-    if(c.id==="bioter"&&typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS.length){
-      _cards.push(Object.assign({},c,{_unidade:"",_nome:"Grupo Bioter"}));
-      BIOTER_UNITS.forEach(function(u){ _cards.push(Object.assign({},c,{_unidade:u.id,_nome:"Bioter "+(u.pickerLabel||u.label)})); });
-    } else {
-      _cards.push(Object.assign({},c,{_unidade:"",_nome:c.name}));
-    }
-  });
-  const _qn=busca.trim().toLowerCase();
-  const _match=function(cl){
-    if(!_qn)return true;
-    if(cl._nome.toLowerCase().indexOf(_qn)>=0)return true;
-    return contas.some(function(c){return c.client_id===cl.id&&(c.unidade||"")===(cl._unidade||"")&&((c.handle||"").toLowerCase().indexOf(_qn)>=0||(c.login||"").toLowerCase().indexOf(_qn)>=0||(c.rec_email||"").toLowerCase().indexOf(_qn)>=0||_rsRede(c.network).label.toLowerCase().indexOf(_qn)>=0);});
-  };
-  const _visiveis=_cards.filter(_match);
+  const _unidades=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+  const _nomeUnidade=function(u){ if(!u)return "Grupo (contas gerais)"; const x=_unidades.find(function(y){return y.id===u;}); return "Bioter "+(x?(x.pickerLabel||x.label):u); };
+  const _ordRede=function(a,b){ const ia=RS_ORDEM.indexOf(a.network), ib=RS_ORDEM.indexOf(b.network); return (ia<0?99:ia)-(ib<0?99:ib) || String(a.handle||a.login||"").localeCompare(String(b.handle||b.login||"")); };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  const _qn=busca.trim().toLowerCase();
+  const _contaBate=function(c){
+    if(!_qn)return true;
+    return [c.handle,c.login,c.login_telefone,c.rec_email,c.rec_telefone,c.obs,_rsRede(c.network).label].some(function(v){return String(v||"").toLowerCase().indexOf(_qn)>=0;});
+  };
+  // Monta as faixas: [{cl, grupos:[{unidade,titulo,contas}] , total}]
+  const _faixas=[], _vazios=[];
+  _clientes.forEach(function(cl){
+    const _todas=contas.filter(function(c){return c.client_id===cl.id;});
+    const _nomeBate=!_qn||cl.name.toLowerCase().indexOf(_qn)>=0||(cl.id==="bioter"&&_unidades.some(function(u){return ("bioter "+(u.pickerLabel||u.label)).toLowerCase().indexOf(_qn)>=0;}));
+    let _grupos;
+    if(cl.id==="bioter"){
+      const _ids=[""].concat(_unidades.map(function(u){return u.id;}));
+      _todas.forEach(function(c){ const u=_rsUnidade(c.unidade); if(_ids.indexOf(u)<0)_ids.push(u); });
+      _grupos=_ids.map(function(u){
+        const _titulo=_nomeUnidade(u);
+        const _tituloBate=!_qn||_titulo.toLowerCase().indexOf(_qn)>=0;
+        const _l=_todas.filter(function(c){return _rsUnidade(c.unidade)===u&&(_nomeBate||_tituloBate||_contaBate(c));}).sort(_ordRede);
+        return {unidade:u,titulo:_titulo,contas:_l,mostrarVazio:!_qn||_tituloBate};
+      });
+    } else {
+      _grupos=[{unidade:"",titulo:"",contas:_todas.filter(function(c){return _nomeBate||_contaBate(c);}).sort(_ordRede),mostrarVazio:!_qn}];
+    }
+    const _total=_grupos.reduce(function(s,g){return s+g.contas.length;},0);
+    if(_todas.length===0){ if(_nomeBate)_vazios.push(cl); return; }
+    if(_total===0&&!_nomeBate)return;
+    _faixas.push({cl:cl,grupos:_grupos,total:_total});
+  });
+
+  // ── peças visuais ──
+  const _Logo=function(cl){
+    return (typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+      ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"5px 9px",height:36,display:"inline-flex",alignItems:"center",flexShrink:0}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:24,maxWidth:78,objectFit:"contain"}}/></div>
+      : <span style={{width:36,height:36,borderRadius:10,background:(cl.color||AC)+"18",color:cl.color||AC,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:13,flexShrink:0}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>;
+  };
+  const _BtnMais=function(props){
+    return <button title={props.title} onClick={props.onClick}
+      style={{background:"#fff",border:"1px solid "+B1,borderRadius:8,padding:props.label?"5px 10px":"0",width:props.label?"auto":26,height:26,color:TS,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,fontSize:11.5,fontWeight:700,fontFamily:"inherit",flexShrink:0}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=AC;e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=B1;e.currentTarget.style.color=TS;}}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>{props.label||null}
+    </button>;
+  };
+  // Caixa de valor: sempre existe; vazia = "—". Clique copia.
+  const _Caixa=function(props){
+    const v=props.valor, vazio=!v;
+    return <div title={vazio?"":(props.titulo||"Clique pra copiar")} onClick={function(){if(!vazio&&!props.semCopia)_copy(props.copiar||v,props.lbl);}}
+      style={{background:vazio?"transparent":"#fff",border:"1px solid "+(vazio?"#f1f5f9":"#e8ebf0"),borderRadius:8,padding:"6px 9px",minHeight:30,boxSizing:"border-box",display:"flex",alignItems:"center",gap:6,cursor:vazio?"default":"copy",minWidth:0}}>
+      {isMob&&<span style={{color:TD,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,flexShrink:0}}>{props.rotulo}</span>}
+      {vazio
+        ? <span style={{color:"#cbd5e1",fontSize:12}}>—</span>
+        : (props.children||<span style={{color:props.cor||TX,fontSize:12,fontWeight:props.forte?800:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</span>)}
+    </div>;
+  };
+  const _COLS=isMob?"1fr":"minmax(150px,1.1fr) minmax(140px,1.1fr) minmax(170px,1.4fr) minmax(130px,1fr) 128px minmax(150px,1.2fr) 88px";
+  const _Cabecalho=function(){
+    if(isMob)return null;
+    return <div style={{display:"grid",gridTemplateColumns:_COLS,gap:8,padding:"0 12px 6px"}}>
+      {["Rede","Perfil","Login por e-mail","Login por telefone","Senha","Recuperação",""].map(function(h,i){
+        return <span key={i} style={{color:TD,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{h}</span>;
+      })}
+    </div>;
+  };
+  const _Linha=function(c){
+    const R=_rsRede(c.network);
+    const _rev=!!reveal[c.id];
+    const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
+    const _pagina=c.obs&&!/^https?:/.test(c.obs)?c.obs:"";
+    const _rec=[c.rec_email,c.rec_telefone].filter(Boolean);
+    return <div key={c.id} style={{display:"grid",gridTemplateColumns:_COLS,gap:8,alignItems:"center",padding:isMob?"10px 12px":"7px 12px",borderTop:"1px solid #f1f5f9"}}
+      onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+      {/* Rede */}
+      <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+        <span style={{width:28,height:28,borderRadius:8,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><_RsIcon rede={c.network} size={15}/></span>
+        <div style={{display:"flex",flexDirection:"column",minWidth:0,lineHeight:1.2}}>
+          <span style={{color:TX,fontWeight:700,fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{R.label}</span>
+          {_pagina&&<span title={_pagina} style={{color:TD,fontSize:10.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_pagina}</span>}
+        </div>
+        {isMob&&<span style={{flex:1}}/>}
+        {isMob&&_Acoes(c,_url)}
+      </div>
+      {/* Perfil */}
+      <_Caixa rotulo="Perfil" valor={c.handle?("@"+c.handle):""} lbl="@ copiado" forte={true}/>
+      {/* Login e-mail */}
+      <_Caixa rotulo="E-mail" valor={c.login} lbl="E-mail de login copiado">
+        {c.login&&<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><polyline points="21 7 12 13.5 3 7"/></svg>
+          <span style={{color:TX,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login}</span></>}
+      </_Caixa>
+      {/* Login telefone */}
+      <_Caixa rotulo="Telefone" valor={c.login_telefone} lbl="Telefone de login copiado">
+        {c.login_telefone&&<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          <span style={{color:TX,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login_telefone}</span></>}
+      </_Caixa>
+      {/* Senha */}
+      <_Caixa rotulo="Senha" valor={c.senha} lbl="Senha copiada" titulo="Clique pra copiar a senha">
+        {c.senha&&<>
+          <span style={{color:TX,fontSize:12,fontWeight:700,letterSpacing:_rev?0:1.5,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rev?c.senha:"••••••"}</span>
+          <button title={_rev?"Ocultar":"Mostrar"} onClick={function(e){e.stopPropagation();setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex",flexShrink:0}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
+        </>}
+      </_Caixa>
+      {/* Recuperação */}
+      <_Caixa rotulo="Recup." valor={_rec.join(" · ")} lbl="Recuperação copiada" copiar={_rec.join("\n")}>
+        {_rec.length>0&&<span style={{color:"#92400e",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_rec.join(" · ")}</span>}
+      </_Caixa>
+      {!isMob&&_Acoes(c,_url)}
+    </div>;
+  };
+  const _Acoes=function(c,_url){
+    const _ico={background:"none",border:"none",color:TD,cursor:"pointer",padding:3,display:"inline-flex",borderRadius:6};
+    return <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:2}}>
+      {(c.handle||c.login||c.login_telefone||c.senha)&&<button title="Copiar acesso completo" style={_ico}
+        onClick={function(){var l=[];if(c.handle)l.push("@"+c.handle);if(c.login)l.push("Login (e-mail): "+c.login);if(c.login_telefone)l.push("Login (telefone): "+c.login_telefone);if(c.senha)l.push("Senha: "+c.senha);_copy(l.join("\n"),"Acesso copiado");}}
+        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>}
+      {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={_ico}
+        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
+      <button title="Editar" style={_ico} onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:_rsUnidade(c.unidade),network:c.network,handle:c.handle||"",login:c.login||"",login_telefone:c.login_telefone||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
+        onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+      <button title="Excluir" style={Object.assign({},_ico,{color:"#e2b3b3"})} onClick={function(){_excluir(c);}}
+        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+    </div>;
+  };
+
+  const _lbl={color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6};
+  const _inp={width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",left:11,pointerEvents:"none"}}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente, @, login..."
-          style={{background:"#fff",border:"1px solid "+B1,borderRadius:10,padding:"9px 14px 9px 34px",color:TX,fontSize:12.5,outline:"none",width:260,fontWeight:500}}/>
+        <input value={busca} onChange={function(e){setBusca(e.target.value);}} placeholder="Buscar cliente, @, e-mail, telefone..."
+          style={{background:"#fff",border:"1px solid "+B1,borderRadius:10,padding:"9px 14px 9px 34px",color:TX,fontSize:12.5,outline:"none",width:isMob?"100%":300,fontWeight:500,boxSizing:"border-box"}}/>
       </div>
+      {!loading&&<span style={{color:TD,fontSize:12,fontWeight:600}}>{contas.length} contas · {_faixas.length} clientes</span>}
+      {!loading&&<span title="Instagram, Facebook, TikTok, LinkedIn e Email conversam com o Briefing › Logins e acessos do portal do cliente: mudou aqui, muda lá, e vice-versa."
+        style={{display:"inline-flex",alignItems:"center",gap:5,background:"#ecfdf5",border:"1px solid #bbf7d0",color:"#15803d",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Sincronizado com o portal</span>}
       <span style={{flex:1}}/>
-      <button onClick={function(){setForm({client_id:_clientes[0]?_clientes[0].id:"",unidade:"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
-        style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:800,fontSize:12.5,cursor:"pointer",boxShadow:"0 4px 14px "+AC+"44",display:"inline-flex",alignItems:"center",gap:7}}>
+      <button onClick={function(){setForm(_novoForm(_clientes[0]?_clientes[0].id:"",""));}}
+        style={{background:"linear-gradient(135deg,"+AC+",#9333ea)",border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontWeight:800,fontSize:12.5,cursor:"pointer",boxShadow:"0 4px 14px "+AC+"44",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nova conta
       </button>
@@ -37766,163 +37938,123 @@ function PageRedesSociais({isMob}){
 
     {loading&&<div style={{padding:"40px 0",textAlign:"center",color:TD,fontSize:12.5}}>Carregando contas…</div>}
 
-    {/* Grid por cliente */}
-    {!loading&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14,alignItems:"start"}}>
-      {_visiveis.map(function(cl){
-        const _minhas=contas.filter(function(c){return c.client_id===cl.id&&(c.unidade||"")===(cl._unidade||"");});
-        const _cor=cl.color||AC;
-        return <div key={cl.id+"_"+(cl._unidade||"")} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:16,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
-          {/* header do cliente */}
-          <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,"+_cor+"0d,#fff)"}}>
-            {typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id]
-              ? <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:9,padding:"4px 8px",height:30,display:"inline-flex",alignItems:"center"}}><img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:64,objectFit:"contain"}}/></div>
-              : <span style={{width:30,height:30,borderRadius:9,background:_cor+"18",color:_cor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:12}}>{(cl.abbr||cl.name.slice(0,2)).toUpperCase()}</span>}
-            <span style={{color:TX,fontWeight:800,fontSize:13.5,letterSpacing:-.2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl._nome}</span>
-            <button title={"Adicionar conta de "+cl._nome} onClick={function(){setForm({client_id:cl.id,unidade:cl._unidade||"",network:"instagram",handle:"",login:"",senha:"",rec_email:"",rec_telefone:"",obs:""});}}
-              style={{background:_cor+"14",border:"1px solid "+_cor+"33",borderRadius:8,width:26,height:26,color:_cor,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
+    {/* Uma faixa por cliente */}
+    {!loading&&_faixas.map(function(f){
+      const cl=f.cl, _cor=cl.color||AC;
+      return <div key={cl.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",borderLeft:"4px solid "+_cor}}>
+        <div style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #f1f5f9"}}>
+          {_Logo(cl)}
+          <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,lineHeight:1.2}}>
+            <span style={{color:TX,fontWeight:800,fontSize:15,letterSpacing:-.2}}>{cl.name}</span>
+            <span style={{color:TD,fontSize:11.5,fontWeight:600}}>{f.total} {f.total===1?"conta":"contas"}{cl.id==="bioter"?(" · "+(_unidades.length+1)+" perfis (grupo + unidades)"):""}</span>
           </div>
-          {/* contas */}
-          {_minhas.length===0
-            ? <div style={{padding:"16px",color:"#cbd5e1",fontSize:11.5,fontStyle:"italic"}}>Nenhuma conta registrada ainda.</div>
-            : <div style={{padding:"10px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
-              {_minhas.map(function(c){
-                const R=_rsRede(c.network);
-                const _rev=!!reveal[c.id];
-                const _url=R.prefix&&c.handle?(R.prefix+c.handle):(c.obs&&/^https?:/.test(c.obs)?c.obs:null);
-                return <div key={c.id} style={{border:"1px solid #eef1f5",borderRadius:12,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6,background:"#fcfcfd"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{width:30,height:30,borderRadius:9,background:R.cor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+R.cor+"55"}}><_RsIcon rede={c.network} size={17}/></span>
-                    {c.handle
-                      ? <button title="Copiar @" onClick={function(){_copy("@"+c.handle,"@ copiado");}} style={{background:"none",border:"none",padding:0,color:TX,fontWeight:800,fontSize:13,cursor:"copy",fontFamily:"inherit",letterSpacing:-.2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>@{c.handle}</button>
-                      : <span style={{color:TS,fontWeight:700,fontSize:12}}>{R.label}</span>}
-                    <span style={{flex:1}}/>
-                    {_url&&<a href={_url} target="_blank" rel="noreferrer" title="Abrir perfil" style={{color:TD,display:"inline-flex",padding:2}}
-                      onMouseEnter={function(e){e.currentTarget.style.color=R.cor;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>}
-                    {(c.handle||c.login||c.senha)&&<button title={"Copiar tudo num clique ("+[c.handle?"@":null,c.login?"login":null,c.senha?"senha":null].filter(Boolean).join(" + ")+")"}
-                      onClick={function(){
-                        var _ls=[];
-                        if(c.handle)_ls.push("@"+c.handle);
-                        if(c.login)_ls.push("Login: "+c.login);
-                        if(c.senha)_ls.push("Senha: "+c.senha);
-                        _copy(_ls.join("\n"),"Acesso copiado");
-                      }}
-                      style={{background:R.cor+"14",border:"1px solid "+R.cor+"33",borderRadius:7,width:24,height:24,color:R.cor,cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                      onMouseEnter={function(e){e.currentTarget.style.background=R.cor;e.currentTarget.style.color="#fff";}}
-                      onMouseLeave={function(e){e.currentTarget.style.background=R.cor+"14";e.currentTarget.style.color=R.cor;}}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                    </button>}
-                    <button title="Editar" onClick={function(){setForm({id:c.id,client_id:c.client_id,unidade:c.unidade||"",network:c.network,handle:c.handle||"",login:c.login||"",senha:c.senha||"",rec_email:c.rec_email||"",rec_telefone:c.rec_telefone||"",obs:c.obs||""});}}
-                      style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:2,display:"inline-flex"}}
-                      onMouseEnter={function(e){e.currentTarget.style.color=AC;}} onMouseLeave={function(e){e.currentTarget.style.color=TD;}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                    <button title="Excluir" onClick={function(){_excluir(c);}}
-                      style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:2,display:"inline-flex"}}
-                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
-                  </div>
-                  {(c.login||c.senha)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {c.login&&<button title="Copiar login + senha num clique" onClick={function(){var _txt="Login: "+c.login+(c.senha?("\nSenha: "+c.senha):"");_copy(_txt,"Login e senha copiados");}}
-                      style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",color:TS,fontSize:11.5,fontWeight:600,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,minWidth:0,maxWidth:"100%"}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.login}</span></button>}
-                    {c.senha&&<span title={c.login?"":"Clique no cadeado pra copiar a senha"} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 10px",display:"inline-flex",alignItems:"center",gap:7,cursor:c.login?"default":"copy"}} onClick={function(){if(!c.login)_copy(c.senha,"Senha copiada");}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={TD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                      <span style={{color:TX,fontSize:11.5,fontWeight:700,letterSpacing:_rev?0:1.5}}>{_rev?c.senha:"••••••"}</span>
-                      <button title={_rev?"Ocultar":"Mostrar"} onClick={function(){setReveal(function(m){var n=Object.assign({},m);n[c.id]=!m[c.id];return n;});}} style={{background:"none",border:"none",color:TD,cursor:"pointer",padding:0,display:"inline-flex"}}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rev?<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22"/>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}</svg></button>
-                    </span>}
-                  </div>}
-                  {(c.rec_email||c.rec_telefone)&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {c.rec_email&&<button title="Copiar e-mail de recuperação" onClick={function(){_copy(c.rec_email,"E-mail de recuperação copiado");}}
-                      style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"4px 10px",color:"#92400e",fontSize:10.5,fontWeight:700,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,minWidth:0,maxWidth:"100%"}}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
-                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>rec: {c.rec_email}</span></button>}
-                    {c.rec_telefone&&<button title="Copiar telefone de recuperação" onClick={function(){_copy(c.rec_telefone,"Telefone de recuperação copiado");}}
-                      style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"4px 10px",color:"#92400e",fontSize:10.5,fontWeight:700,cursor:"copy",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.12.81.37 1.6.72 2.34a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.74-1.29a2 2 0 012.11-.45c.74.35 1.53.6 2.34.72A2 2 0 0122 16.92z"/></svg>
-                      rec: {c.rec_telefone}</button>}
-                  </div>}
-                  {c.obs&&!/^https?:/.test(c.obs)&&<div style={{color:TD,fontSize:10.5,lineHeight:1.4}}>{c.obs}</div>}
-                </div>;
-              })}
-            </div>}
-        </div>;
+          {cl.id!=="bioter"&&<_BtnMais title={"Adicionar conta de "+cl.name} label="Conta" onClick={function(){setForm(_novoForm(cl.id,""));}}/>}
+        </div>
+        <div style={{padding:"8px 0 4px"}}>
+          {(function(){ let _cabecalhoFeito=false; return f.grupos.map(function(g){
+            if(g.contas.length===0&&!(cl.id==="bioter"&&g.mostrarVazio))return null;
+            // cabeçalho das colunas só UMA vez por cliente (antes do primeiro grupo com contas)
+            const _mostraCab=g.contas.length>0&&!_cabecalhoFeito; if(_mostraCab)_cabecalhoFeito=true;
+            return <div key={g.unidade||"_"} style={{paddingBottom:6}}>
+              {cl.id==="bioter"&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px 6px"}}>
+                <span style={{width:6,height:6,borderRadius:"50%",background:_cor}}/>
+                <span style={{color:TS,fontSize:12,fontWeight:800}}>{g.titulo}</span>
+                <span style={{color:TD,fontSize:11}}>{g.contas.length||"sem contas"}</span>
+                <span style={{flex:1,height:1,background:"#f1f5f9"}}/>
+                <_BtnMais title={"Adicionar conta em "+g.titulo} onClick={function(){setForm(_novoForm("bioter",g.unidade));}}/>
+              </div>}
+              {g.contas.length>0&&<>
+                {_mostraCab&&_Cabecalho()}
+                {g.contas.map(_Linha)}
+              </>}
+            </div>;
+          }); })()}
+        </div>
+      </div>;
+    })}
+
+    {/* Clientes sem conta: compacto */}
+    {!loading&&_vazios.length>0&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:"10px 14px",background:"#fff",border:"1px dashed "+B1,borderRadius:12}}>
+      <span style={{color:TD,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4}}>Sem contas cadastradas</span>
+      {_vazios.map(function(cl){
+        return <button key={cl.id} onClick={function(){setForm(_novoForm(cl.id,""));}} title={"Adicionar conta de "+cl.name}
+          style={{background:"#f8fafc",border:"1px solid "+B1,borderRadius:99,padding:"5px 12px",color:TS,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          {cl.name}<span style={{color:AC,fontWeight:800}}>+</span></button>;
       })}
-      {_visiveis.length===0&&<div style={{gridColumn:"1 / -1",padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:16,border:"1px dashed "+B1}}>Nenhum cliente encontrado.</div>}
     </div>}
+
+    {!loading&&_faixas.length===0&&_vazios.length===0&&<div style={{padding:"50px 20px",textAlign:"center",color:TD,fontSize:13,background:"#fff",borderRadius:16,border:"1px dashed "+B1}}>Nada encontrado.</div>}
 
     {/* Modal nova conta / editar */}
     {form&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setForm(null);}}
       style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(3px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"#fff",borderRadius:16,border:"1px solid "+B1,width:"100%",maxWidth:460,boxShadow:"0 24px 60px rgba(0,0,0,.28)",overflow:"hidden"}}>
+      <div style={{background:"#fff",borderRadius:16,border:"1px solid "+B1,width:"100%",maxWidth:500,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.28)"}}>
         <div style={{padding:"16px 22px 13px",borderBottom:"1px solid #f1f5f9"}}>
-          <div style={{color:TX,fontWeight:800,fontSize:16,letterSpacing:-.2}}>{form.id?"Editar conta":"Nova conta de rede social"}</div>
+          <div style={{color:TX,fontWeight:800,fontSize:16,letterSpacing:-.2}}>{form.id?"Editar conta":"Nova conta"}</div>
         </div>
-        <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:14}}>
           <div>
-            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Cliente</div>
-            <select value={form.client_id} onChange={function(e){setForm(Object.assign({},form,{client_id:e.target.value}));}}
-              style={{width:"100%",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:13,color:TX,outline:"none",fontFamily:"inherit",cursor:"pointer"}}>
+            <div style={_lbl}>Cliente</div>
+            <select value={form.client_id} onChange={function(e){setForm(Object.assign({},form,{client_id:e.target.value}));}} style={Object.assign({},_inp,{fontSize:13,cursor:"pointer"})}>
               {_clientes.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
             </select>
           </div>
-          {form.client_id==="bioter"&&typeof BIOTER_UNITS!=="undefined"&&<div>
-            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Unidade Bioter</div>
+          {form.client_id==="bioter"&&<div>
+            <div style={_lbl}>Unidade Bioter</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {[{id:"",label:"Grupo"}].concat(BIOTER_UNITS.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){
+              {[{id:"",label:"Grupo"}].concat(_unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){
                 const _on=(form.unidade||"")===u.id;
                 return <button key={u.id||"grupo"} type="button" onClick={function(){setForm(Object.assign({},form,{unidade:u.id}));}}
-                  style={{background:_on?"#0f172a":"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?"#0f172a":B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}>{u.label}</button>;
+                  style={{background:_on?"#0f172a":"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?"#0f172a":B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{u.label}</button>;
               })}
             </div>
           </div>}
           <div>
-            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Rede</div>
+            <div style={_lbl}>Rede</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
               {RS_REDES.map(function(r){
                 const _on=form.network===r.id;
                 return <button key={r.id} type="button" onClick={function(){setForm(Object.assign({},form,{network:r.id}));}}
-                  style={{background:_on?r.cor:"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?r.cor:B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+                  style={{background:_on?r.cor:"#fff",color:_on?"#fff":TS,border:"1px solid "+(_on?r.cor:B1),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
                   <_RsIcon rede={r.id} size={11}/>{r.label}</button>;
               })}
             </div>
           </div>
           <div>
-            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>@ do perfil</div>
-            <input value={form.handle} onChange={function(e){setForm(Object.assign({},form,{handle:e.target.value}));}} placeholder="usuario (sem @)"
-              style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:13,fontWeight:700,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            <div style={_lbl}>@ do perfil</div>
+            <input value={form.handle} onChange={function(e){setForm(Object.assign({},form,{handle:e.target.value}));}} placeholder="usuario (sem @)" style={Object.assign({},_inp,{fontSize:13,fontWeight:700})}/>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Login / e-mail</div>
-              <input value={form.login} onChange={function(e){setForm(Object.assign({},form,{login:e.target.value}));}} placeholder="email de acesso"
-                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+          {/* Acesso: e-mail e telefone em caixas separadas — a mesma conta pode entrar pelos dois */}
+          <div style={{border:"1px solid "+B1,borderRadius:12,padding:"12px 12px 12px",background:"#fcfcfd",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{color:TX,fontSize:12,fontWeight:800}}>Acesso <span style={{color:TD,fontWeight:500}}>· preencha um ou os dois</span></div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+              <div>
+                <div style={_lbl}>Login por e-mail</div>
+                <input value={form.login} onChange={function(e){setForm(Object.assign({},form,{login:e.target.value}));}} placeholder="email@exemplo.com" style={_inp}/>
+              </div>
+              <div>
+                <div style={_lbl}>Login por telefone</div>
+                <input value={form.login_telefone} onChange={function(e){setForm(Object.assign({},form,{login_telefone:e.target.value}));}} placeholder="(00) 0 0000-0000" style={_inp}/>
+              </div>
             </div>
             <div>
-              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Senha</div>
-              <input value={form.senha} onChange={function(e){setForm(Object.assign({},form,{senha:e.target.value}));}} placeholder="senha da conta"
-                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+              <div style={_lbl}>Senha</div>
+              <input value={form.senha} onChange={function(e){setForm(Object.assign({},form,{senha:e.target.value}));}} placeholder="senha da conta" style={_inp}/>
             </div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
             <div>
-              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>E-mail de recuperação</div>
-              <input value={form.rec_email} onChange={function(e){setForm(Object.assign({},form,{rec_email:e.target.value}));}} placeholder="email de recuperação"
-                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+              <div style={_lbl}>E-mail de recuperação</div>
+              <input value={form.rec_email} onChange={function(e){setForm(Object.assign({},form,{rec_email:e.target.value}));}} placeholder="email de recuperação" style={_inp}/>
             </div>
             <div>
-              <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Telefone de recuperação</div>
-              <input value={form.rec_telefone} onChange={function(e){setForm(Object.assign({},form,{rec_telefone:e.target.value}));}} placeholder="(00) 0 0000-0000"
-                style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+              <div style={_lbl}>Telefone de recuperação</div>
+              <input value={form.rec_telefone} onChange={function(e){setForm(Object.assign({},form,{rec_telefone:e.target.value}));}} placeholder="(00) 0 0000-0000" style={_inp}/>
             </div>
           </div>
           <div>
-            <div style={{color:TD,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Observação (opcional)</div>
-            <input value={form.obs} onChange={function(e){setForm(Object.assign({},form,{obs:e.target.value}));}} placeholder="ex: 2FA no celular do Gustavo · link do perfil"
-              style={{width:"100%",boxSizing:"border-box",background:"#f8fafc",border:"1px solid "+B1,borderRadius:9,padding:"9px 12px",fontSize:12.5,color:TX,outline:"none",fontFamily:"inherit"}}/>
+            <div style={_lbl}>Observação (opcional)</div>
+            <input value={form.obs} onChange={function(e){setForm(Object.assign({},form,{obs:e.target.value}));}} placeholder="ex: 2FA no celular do Gustavo · link do perfil" style={_inp}/>
           </div>
         </div>
         <div style={{padding:"13px 22px 17px",borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"flex-end",gap:8}}>
