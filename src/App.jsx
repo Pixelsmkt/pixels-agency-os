@@ -24083,11 +24083,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     // Tipo de conteúdo serve pra classificar o PAGAMENTO por demanda —
                     // card só com sócios/coordenação (sem equipe de produção) não precisa dele.
                     const _semTipo = !t.contentType && !_dead && _demTemProducao(t);
-                    if(!_semPagamento && !_semTipo) return null;
+                    // Alerta 3 (Vinicius, 17/09/2026): card na coluna DEMANDA sem designer nem editor
+                    // de vídeo marcado — ninguém vai executar. Produção = quem é pagamentoPorDemanda no TEAM.
+                    const _semProdutor = t.status==="recebida" && !_demTemProducao(t);
+                    if(!_semPagamento && !_semTipo && !_semProdutor) return null;
                     const _dot=function(title,children){
                       return <div title={title} style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>{children}</div>;
                     };
                     return <div style={{position:"absolute",top:6,right:6,zIndex:5,display:"flex",gap:5,alignItems:"center"}}>
+                      {_semProdutor && _dot("Em Demanda sem designer ou editor de vídeo — clique no card pra marcar quem executa",
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>)}
                       {_semTipo && _dot("Sem tipo de conteúdo — clique no card pra definir (arte única, carrossel, foto de obra, vídeo…)",
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>)}
                       {_semPagamento && _dot("Sem mês de pagamento — clique no card pra definir",
