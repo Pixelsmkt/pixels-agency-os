@@ -18319,7 +18319,10 @@ async function _pxAutoplanAbrirEspacoBase(novos){
    - É só PRÉVIA: `pxCascataPlanejar` calcula e devolve a lista; quem chama mostra a
      pixelsConfirm e só então roda `pxCascataAplicar`. Nada anda sem confirmação. Tudo fica
      registrado em claude_plano_execucoes (o botão de emergência desfaz).                  */
-const PX_CASCATA_CAP=Object.assign({vetservice:1},PX_AUTOPLAN_CAP);
+const PX_CASCATA_CAP=Object.assign({vetservice:1,acreforte:1,construesclem:1},PX_AUTOPLAN_CAP);
+// (17/09, Vinicius) Acreforte e Clem entram na cascata respeitando o FIM DO CONTRATO: o que não
+// couber antes dessa data vai pra lixeira com aviso, em vez de ser empurrado pra depois do fim.
+const PX_CASCATA_FIM_CONTRATO={acreforte:"2026-10-30",construesclem:"2026-11-18"};
 // VetService: comemorativa fica à parte (não conta na cadência) — regra do planejamento de 11/09.
 const PX_CASCATA_COMEM_NAO_CONTA=["vetservice"];
 const PX_CASCATA_HORIZONTE_SEMANAS=30;
@@ -18346,7 +18349,8 @@ function _pxCasMovivel(t,hoje,novoId){
   if(!iso||iso<=hoje) return false;
   // (17/09, Vinicius) Foto de obra e Short PODEM andar — feira/urgente vale mais que o grupo das
   // três unidades. Só a unidade afetada mexe; as outras ficam. Collab continua travado.
-  if(_pxCasFixo(t)||_pxApEhCollab(t)) return false;
+  // (17/09, Vinicius) Collab que NÃO é comemorativa ANDA — pela fila de quartas de collab.
+  if(_pxCasFixo(t)) return false;
   return true;
 }
 function _pxCasConta(rows,alvo){
@@ -18371,7 +18375,8 @@ function _pxCasBr(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):""; }
    se não tem vaga, TOMA O DIA EXATO do último card da mesma trilha lá, que por sua vez anda.
    Semana sem card da trilha (só fixos, ou só a outra trilha) é pulada. */
 function _pxCasTrilha(t){
-  if(_pxCasFixo(t)||_pxApEhCollab(t)) return "fixa";
+  if(_pxCasFixo(t)) return "fixa";
+  if(_pxApEhCollab(t)) return "collab";
   if(_pxCasGrupo(t)||String(t.content_type||t.contentType||"")==="foto") return "material";
   if(String(t.client)==="bioter") return "conteudo";
   const ct=String(t.content_type||t.contentType||"");
@@ -18380,10 +18385,13 @@ function _pxCasTrilha(t){
 }
 function _pxCasTrilhaAlvo(novo){
   const tr=_pxCasTrilha(novo);
-  if(tr==="material") return ["material","conteudo","arte","video"];
+  if(tr==="material") return ["material","conteudo","collab","arte","video"];
   if(tr==="video") return ["video","arte","material"];
   if(tr==="arte") return ["arte","video","material"];
-  return ["conteudo","arte","video","material"]; // fixo ou conteúdo desloca a trilha de conteúdo
+  // collab novo (ou comemorativa collab) desloca primeiro a fila de collabs; card fixo de UMA
+  // unidade ou conteúdo desloca a trilha de conteúdo, e só depois o collab.
+  if(_pxApEhCollab(novo)) return ["collab","conteudo","material","arte","video"];
+  return ["conteudo","collab","material","arte","video"];
 }
 /* Dia com folga na semana L pro card t: mesmo dia da semana da data antiga; senão o dia útil
    mais perto. Exige não ter post da unidade no dia; prefere ≥2 dias de distância dos outros
@@ -18426,7 +18434,7 @@ function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   }
   // Paraguay não entra no collab: o post próprio de conteúdo dele faz o papel do collab e
   // prefere a QUARTA (assim fica equilibrado com a Foto de obra/Short do outro dia). 17/09.
-  const pyQuarta=(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo");
+  const pyQuarta=(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo")||_pxCasTrilha(t)==="collab";
   const score=function(iso,i){ return (dist(iso)>=2?0:100)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+i*0.01; };
   return cand.map(function(iso,i){return {iso:iso,s:score(iso,i)};}).sort(function(a,b){return a.s-b.s;})[0].iso;
 }
@@ -18440,7 +18448,7 @@ function _pxCasGrupoBioter(t){
 /* pxCascataPlanejar(novo,extras) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana}
    `novo` em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
 async function pxCascataPlanejar(novo,extras){
-  const vazio={moves:[],travou:[],semana:""};
+  const vazio={moves:[],travou:[],lixeira:[],semana:""};
   try{
     const sb=window._sb; if(!sb||!novo) return vazio;
     const hoje=_pxApIso(new Date());
@@ -18469,7 +18477,8 @@ async function pxCascataPlanejar(novo,extras){
         somente_story:!!(e.somenteStory||e.somente_story),nao_publica:!!(e.naoPublica||e.nao_publica),
         content_type:e.contentType||e.content_type||null,title:e.title||"",tags:e.tags||[]});
     });
-    const moves=[], travou=[];
+    const moves=[], travou=[], lixeira=[];
+    const fimContrato=PX_CASCATA_FIM_CONTRATO[String(nn.client)]||null;
     const semanaDe=function(x){ return _pxApLinha(String(x.publish_date||"").slice(0,10)).iniIso; };
     const jaMovido=function(x){ return moves.some(function(m){ return m.id===x.id; }); };
     const registra=function(t,para){
@@ -18496,6 +18505,12 @@ async function pxCascataPlanejar(novo,extras){
       // 2) o deslocado anda de semana em semana, sempre na mesma trilha
       while(t&&guard++<PX_CASCATA_HORIZONTE_SEMANAS){
         const prox=_pxApLinha(_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+7)));
+        // fim de contrato (Acreforte/Clem): não empurra pra depois do fim — vai pra lixeira com aviso
+        if(fimContrato&&prox.iniIso>fimContrato){
+          lixeira.push({id:t.id,title:t.title||"",de:String(t.publish_date).slice(0,10),fim:fimContrato});
+          const _ix=rows.indexOf(t); if(_ix>=0) rows.splice(_ix,1);
+          t=null; break;
+        }
         const rowsProx=rows.filter(function(x){ return semanaDe(x)===prox.iniIso; });
         const contProx=_pxCasConta(rowsProx,alvo);
         if(contProx.length<cap){
@@ -18510,7 +18525,8 @@ async function pxCascataPlanejar(novo,extras){
           // a vaga "Antes e depois 04 + 05" de Castro e o Vinicius pegou dois dias seguidos.)
           const dia=String(sai.publish_date).slice(0,10);
           const semSai=rows.filter(function(x){ return x.id!==sai.id; });
-          const para=_pxCasDiaComFolga(t,prox,semSai,hoje,_pxApData(dia).getDay())||(dia>hoje?dia:null);
+          // Collab herda o dia EXATO (a quarta é a grade; folga contra 5 unidades não fecha nunca).
+          const para=(trilha==="collab")?(dia>hoje?dia:null):(_pxCasDiaComFolga(t,prox,semSai,hoje,_pxApData(dia).getDay())||(dia>hoje?dia:null));
           if(para){ registra(t,para); t=sai; L=prox; continue; }
         }
         // semana sem card da trilha (só fixos / outra trilha) → pula a semana
@@ -18518,7 +18534,7 @@ async function pxCascataPlanejar(novo,extras){
       }
       if(t) travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo});
     }
-    return {moves:moves,travou:travou,semana:_pxCasBr(L0.iniIso)+"–"+_pxCasBr(L0.fimIso)};
+    return {moves:moves,travou:travou,lixeira:lixeira,semana:_pxCasBr(L0.iniIso)+"–"+_pxCasBr(L0.fimIso)};
   }catch(e){ console.warn("[cascata planejar]",e); return vazio; }
 }
 /* Texto da prévia pra pixelsConfirm (usa quebras de linha). */
@@ -18526,14 +18542,15 @@ function pxCascataTexto(plano,nomeCliente){
   const n=plano.moves.length;
   let s="A semana "+plano.semana+(nomeCliente?(" de "+nomeCliente):"")+" já está na cadência. Pra encaixar o card novo, "+(n>1?"estes "+n+" cards andam":"este card anda")+" uma vaga na fila, na mesma trilha (arte/vídeo com arte/vídeo, foto de obra/short com foto de obra/short):\n";
   plano.moves.forEach(function(m){ s+="• "+(m.title||"(sem título)")+" — "+_pxCasBr(m.de)+" → "+_pxCasBr(m.para)+"\n"; });
-  s+="\nDatas comemorativas e collabs ficam onde estão.";
+  (plano.lixeira||[]).forEach(function(m){ s+="• "+(m.title||"(sem título)")+" — "+_pxCasBr(m.de)+" → LIXEIRA (contrato acaba "+_pxCasBr(m.fim)+", não sobrou semana)\n"; });
+  s+="\nDatas comemorativas ficam onde estão; collabs andam pela fila de quartas.";
   if(plano.travou.length) s+="\n⚠ Na semana "+plano.travou[0].semana+" não tem card que possa andar — ela fica acima da cadência.";
   return s;
 }
 /* pxCascataAplicar(plano, setTasks?) — grava no Supabase, atualiza o state local e registra. */
 async function pxCascataAplicar(plano,setTasks,quem){
   try{
-    const sb=window._sb; if(!sb||!plano||!plano.moves.length) return 0;
+    const sb=window._sb; if(!sb||!plano||(!plano.moves.length&&!(plano.lixeira||[]).length)) return 0;
     const agora=new Date();
     const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
     const alterados=[]; let ok=0; const feitos={};
@@ -18552,10 +18569,21 @@ async function pxCascataAplicar(plano,setTasks,quem){
       alterados.push({id:mv.id,antes:{publish_date:mv.de,deadline:mv.de},depois:{publish_date:mv.para,deadline:mv.para}});
       ok++;
     }
+    const lixo=[];
+    for(const lx of (plano.lixeira||[])){
+      const q=await sb.from("tasks").select("timeline,publish_date").eq("id",lx.id).maybeSingle();
+      if(!q||q.error||!q.data||String(q.data.publish_date||"").slice(0,10)!==lx.de) continue;
+      const tl=Array.isArray(q.data.timeline)?q.data.timeline:[];
+      const r=await sb.from("tasks").update({deleted_at:agora.toISOString(),
+        timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,label:"Lixeira: entrou um card novo na semana"+(quem?(" ("+quem+")"):"")+" e a fila andou, mas o contrato acaba em "+_pxCasBr(lx.fim)+" — não sobrou semana. Restaure se quiser publicar depois"}])}).eq("id",lx.id);
+      if(r&&r.error){ console.warn("[cascata lixeira]",lx.id,r.error.message); continue; }
+      lixo.push(lx.id); alterados.push({id:lx.id,antes:{deleted_at:null},depois:{deleted_at:agora.toISOString()}});
+    }
+    if(lixo.length&&typeof setTasks==="function"){ setTasks(function(prev){ return (prev||[]).map(function(t){ return lixo.indexOf(String(t.id))>=0?Object.assign({},t,{deletedAt:agora.toISOString(),deleted_at:agora.toISOString()}):t; }); }); }
     if(ok&&typeof setTasks==="function"){
       setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
     }
-    if(ok) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente",[],alterados);
+    if(ok||lixo.length) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente"+(lixo.length?" ("+lixo.length+" pra lixeira: fim de contrato)":""),[],alterados);
     if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo.",6000);
     return ok;
   }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
@@ -18596,7 +18624,7 @@ async function pxCascataAuto(novos){
     for(let i=0;i<lista.length;i++){
       const novo=lista[i];
       const plano=await pxCascataPlanejar(novo,lista.filter(function(x,j){ return j>i; }));
-      if(!plano.moves.length) continue;
+      if(!plano.moves.length&&!(plano.lixeira||[]).length) continue;
       total+=await pxCascataAplicar(plano,null,"data fixa: "+String(novo.title||"").slice(0,40));
     }
     return total;
@@ -18606,7 +18634,7 @@ async function pxCascataAuto(novos){
 async function pxCascataConfirmar(novo,setTasks,quem){
   try{
     const plano=await pxCascataPlanejar(novo);
-    if(!plano.moves.length) return true;
+    if(!plano.moves.length&&!(plano.lixeira||[]).length) return true;
     const nome=(typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS))?((CLIENTS.find(function(c){return c.id===novo.client;})||{}).name||""):"";
     const ok=(typeof pixelsConfirm==="function")
       ? await pixelsConfirm(pxCascataTexto(plano,nome),{title:"Semana cheia — reajustar o calendário?",okText:"Reajustar e salvar",cancelText:"Salvar sem mexer"})
@@ -18614,6 +18642,100 @@ async function pxCascataConfirmar(novo,setTasks,quem){
     if(ok) await pxCascataAplicar(plano,setTasks,quem);
     return true;
   }catch(e){ console.warn("[cascata confirmar]",e); return true; }
+}
+/* ═══ AUDITORIA DO CALENDÁRIO (17/09/2026) — o calendário aponta o que está fora da regra ═══
+   Pedido do Vinicius depois de um dia passando print de erro: "tem algum outro cliente que
+   você verificou erro ou eu vou ter que ficar te falando?". Só AVISA, não mexe.
+   Checagens (as mesmas da auditoria que rodei no banco em 17/09):
+   - mesmo_dia : dois posts do mesmo cliente/unidade no mesmo dia (story/não publica não contam)
+   - seguidos  : dois posts do mesmo cliente/unidade em dias seguidos
+   - acima     : semana (dom–sáb) com mais posts que a cadência (PX_CASCATA_CAP; VetService não
+                 conta comemorativa)
+   - grupo     : Bioter — post próprio de uma principal (ou filial) num dia em que as irmãs não
+                 postam, ou no mesmo dia do outro grupo
+   `nivel`: "movivel" (vermelho: tem card que a cascata poderia mover) ou "fixo" (cinza: só
+   comemorativa/collab envolvidos — é decisão, não bug).
+   Entrada: tasks no formato do app (camelCase). Devolve [{tipo,dia,semanaIni,alvo,rotulo,texto,nivel,ids}]. */
+function pxAuditoriaCalendario(tasks, iniIso, fimIso){
+  try{
+    const rows=(tasks||[]).filter(function(t){
+      if(!t||t.deletedAt||t.deleted_at) return false;
+      const st=String(t.status||""); if(st==="reprovado"||st==="pausado") return false;
+      if(_pxNaoEhPublicacao(t)) return false;
+      const d=String(t.publishDate||t.publish_date||"").slice(0,10);
+      return d&&d>=iniIso&&d<=fimIso&&PX_COLISAO_CLIENTES.indexOf(String(t.client||""))>=0;
+    }).map(function(t){
+      return {id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:String(t.publishDate||t.publish_date||"").slice(0,10),
+        status:t.status,title:t.title||"",tags:t.tags||[],content_type:t.contentType||t.content_type||null,somente_story:false,nao_publica:false};
+    });
+    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Clem",
+      "bioter:chapeco":"Chapecó","bioter:castro":"Castro","bioter:toledo":"Toledo","bioter:gloria":"Glória","bioter:uberlandia":"Uberlândia","bioter:paraguay":"Paraguay"};
+    const rot=function(a){ return NOME[a]||a; };
+    const br=function(iso){ return iso.slice(8,10)+"/"+iso.slice(5,7); };
+    const fixoOuCollab=function(t){ return _pxCasFixo(t)||_pxApEhCollab(t); };
+    const out=[];
+    const porAlvo={};
+    rows.forEach(function(t){ _pxColAlvos(t).forEach(function(a){ (porAlvo[a]=porAlvo[a]||[]).push(t); }); });
+    Object.keys(porAlvo).forEach(function(a){
+      const cli=a.split(":")[0];
+      const lista=porAlvo[a].slice().sort(function(x,y){ return x.publish_date.localeCompare(y.publish_date); });
+      // mesmo dia / seguidos
+      const porDia={};
+      lista.forEach(function(t){ (porDia[t.publish_date]=porDia[t.publish_date]||[]).push(t); });
+      Object.keys(porDia).forEach(function(d){
+        const g=porDia[d]; if(g.length<2) return;
+        out.push({tipo:"mesmo_dia",dia:d,semanaIni:_pxApLinha(d).iniIso,alvo:a,rotulo:rot(a),ids:g.map(function(x){return x.id;}),
+          nivel:g.every(fixoOuCollab)?"fixo":"movivel",
+          texto:rot(a)+" · "+br(d)+": "+g.length+" posts no mesmo dia — "+g.map(function(x){return x.title.slice(0,28);}).join(" + ")});
+      });
+      const dias=Object.keys(porDia).sort();
+      for(let i=1;i<dias.length;i++){
+        const d1=dias[i-1], d2=dias[i];
+        if((_pxApData(d2).getTime()-_pxApData(d1).getTime())/86400000!==1) continue;
+        const g=porDia[d1].concat(porDia[d2]);
+        out.push({tipo:"seguidos",dia:d2,semanaIni:_pxApLinha(d2).iniIso,alvo:a,rotulo:rot(a),ids:g.map(function(x){return x.id;}),
+          nivel:g.every(fixoOuCollab)?"fixo":"movivel",
+          texto:rot(a)+" · "+br(d1)+" e "+br(d2)+": dias seguidos — "+porDia[d1][0].title.slice(0,24)+" | "+porDia[d2][0].title.slice(0,24)});
+      }
+      // acima da cadência (semana dom–sáb)
+      const cap=PX_CASCATA_CAP[a]; if(!cap) return;
+      const porSemana={};
+      lista.forEach(function(t){
+        if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(cli)>=0&&_pxCasFixo(t)) return;
+        const w=_pxApLinha(t.publish_date).iniIso; (porSemana[w]=porSemana[w]||[]).push(t);
+      });
+      Object.keys(porSemana).forEach(function(w){
+        const g=porSemana[w]; if(g.length<=cap) return;
+        out.push({tipo:"acima",dia:w,semanaIni:w,alvo:a,rotulo:rot(a),ids:g.map(function(x){return x.id;}),
+          nivel:g.every(fixoOuCollab)?"fixo":"movivel",
+          texto:rot(a)+" · semana de "+br(w)+": "+g.length+" posts (cadência "+cap+") — "+g.map(function(x){return br(x.publish_date).slice(0,2)+" "+x.title.slice(0,16);}).join(" | ")});
+      });
+    });
+    // grupo Bioter: post próprio (não collab, não fixo) fora do dia das irmãs / no dia do outro grupo
+    const proprios=rows.filter(function(t){ return String(t.client)==="bioter"&&!fixoOuCollab(t)&&_pxCasGrupoBioter(t); });
+    const porSem={};
+    proprios.forEach(function(t){ const w=_pxApLinha(t.publish_date).iniIso; (porSem[w]=porSem[w]||[]).push(t); });
+    Object.keys(porSem).forEach(function(w){
+      const g=porSem[w];
+      const diasDe=function(grupo){ const o={}; g.forEach(function(t){ if(_pxCasGrupoBioter(t)===grupo) o[t.publish_date]=(o[t.publish_date]||0)+1; }); return o; };
+      const dP=diasDe("principais"), dF=diasDe("filiais");
+      Object.keys(dP).forEach(function(d){ if(dF[d]) out.push({tipo:"grupo",dia:d,semanaIni:w,alvo:"bioter",rotulo:"Bioter",ids:[],nivel:"movivel",
+        texto:"Bioter · "+br(d)+": principais e filiais postando no mesmo dia (a regra é um dia pra cada grupo)"}); });
+      g.forEach(function(t){
+        const grupo=_pxCasGrupoBioter(t); const dd=(grupo==="principais"?dP:dF);
+        // Paraguay não tem collab: o post de conteúdo dele na QUARTA é o "collab" — sozinho de propósito
+        if(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo"&&_pxApData(t.publish_date).getDay()===3) return;
+        const outrasNoDia=g.some(function(x){ return x!==t&&_pxCasGrupoBioter(x)===grupo&&x.publish_date===t.publish_date&&!_pxColAlvos(x).some(function(a){return _pxColAlvos(t).indexOf(a)>=0;}); });
+        const grupoPostaNaSemana=g.some(function(x){ return x!==t&&_pxCasGrupoBioter(x)===grupo&&!_pxColAlvos(x).some(function(a){return _pxColAlvos(t).indexOf(a)>=0;}); });
+        if(!outrasNoDia&&grupoPostaNaSemana) out.push({tipo:"grupo",dia:t.publish_date,semanaIni:w,alvo:"bioter:"+_pxApUnits(t)[0],rotulo:rot("bioter:"+_pxApUnits(t)[0]),ids:[t.id],nivel:"movivel",
+          texto:rot("bioter:"+_pxApUnits(t)[0])+" · "+br(t.publish_date)+": \""+t.title.slice(0,26)+"\" sozinho — as outras "+grupo+" postam em outro dia nessa semana"});
+      });
+    });
+    // sem duplicar avisos idênticos
+    const seen={};
+    return out.filter(function(x){ const k=x.tipo+"|"+x.alvo+"|"+x.dia+"|"+x.texto; if(seen[k]) return false; seen[k]=true; return true; })
+      .sort(function(x,y){ return x.dia.localeCompare(y.dia)||x.rotulo.localeCompare(y.rotulo); });
+  }catch(e){ console.warn("[auditoria calendário]",e); return []; }
 }
 /* (11/09/2026) Card criado automaticamente pelo Claude (planejamento do calendário até dez/2026):
    id "autoplan-..." ou createdBy "Claude". Mostra o selo roxo com brilho no card do Calendário
@@ -21040,6 +21162,22 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
       });
   };
 
+  // (17/09/2026) Auditoria do mês visível (+1 semana de cada lado) — só avisa. Respeita o filtro de cliente.
+  const _audit=React.useMemo(function(){
+    if(typeof pxAuditoriaCalendario!=="function") return [];
+    const y=calMonth.getFullYear(), m=calMonth.getMonth();
+    const ini=new Date(y,m,1); ini.setDate(ini.getDate()-ini.getDay()-7);
+    const fim=new Date(y,m+1,0); fim.setDate(fim.getDate()+(6-fim.getDay())+7);
+    const iso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    return pxAuditoriaCalendario(tasks,iso(ini),iso(fim)).filter(function(x){
+      if(filterClient!=="todos"&&String(x.alvo).split(":")[0]!==filterClient) return false;
+      if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&x.alvo!=="bioter"&&x.alvo!=="bioter:"+filterBioterUnit) return false;
+      const d=new Date(x.dia+"T12:00:00"); return d.getFullYear()===y&&d.getMonth()===m;
+    });
+  },[tasks,calMonth,filterClient,filterBioterUnit]);
+  const _auditPorDia=React.useMemo(function(){ const o={}; _audit.forEach(function(x){ (o[x.dia]=o[x.dia]||[]).push(x); }); return o; },[_audit]);
+  const [auditAberta,setAuditAberta]=useState(false);
+
   // Contador total do mês para badges
   const tasksThisMonth=agendados.filter(t=>{
     const d=new Date(t.publishDate+"T12:00:00");
@@ -21427,6 +21565,33 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
            segue no arquivo, sem botão chamando. */}
       </div>
 
+      {/* ── (17/09/2026) Fora da regra — auditoria do mês, só avisa ── */}
+      {_audit.length>0&&(function(){
+        const nMov=_audit.filter(function(x){return x.nivel==="movivel";}).length, nFix=_audit.length-nMov;
+        return <div style={{border:"1px solid "+(nMov?"#fecaca":"#e2e8f0"),background:nMov?"#fff7f7":"#f8fafc",borderRadius:14,padding:"10px 14px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div onClick={function(){ setAuditAberta(!auditAberta); }} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+            <span style={{width:26,height:26,borderRadius:8,background:nMov?"#dc2626":"#94a3b8",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+            </span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:800,color:nMov?"#991b1b":"#334155"}}>{_audit.length} ponto{_audit.length>1?"s":""} fora da regra em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
+              <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginTop:1}}>{nMov} com card que dá pra mover · {nFix} só entre comemorativas/collabs (decisão, não bug) · o calendário só avisa, não mexe</div>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:auditAberta?"rotate(180deg)":"none",transition:"transform .15s"}}><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          {auditAberta&&<div style={{marginTop:10,display:"grid",gap:4}}>
+            {_audit.map(function(x,i){
+              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:11.5,color:x.nivel==="movivel"?"#7f1d1d":"#475569",fontWeight:500,lineHeight:1.45}}>
+                <span style={{flexShrink:0,marginTop:1,padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",background:x.nivel==="movivel"?"#fee2e2":"#e2e8f0",color:x.nivel==="movivel"?"#b91c1c":"#475569"}}>
+                  {({mesmo_dia:"mesmo dia",seguidos:"dias seguidos",acima:"acima da cadência",grupo:"grupo Bioter"})[x.tipo]||x.tipo}
+                </span>
+                <span>{x.texto}</span>
+              </div>;
+            })}
+          </div>}
+        </div>;
+      })()}
+
       {/* ── Grade do calendário ── */}
       <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
         {/* Cabeçalho dos dias da semana */}
@@ -21482,6 +21647,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                           <span style={{fontSize:10,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",opacity:.95}}>Hoje</span>
                         </div>
                       : <div style={{color:C.ts,fontWeight:600,fontSize:13,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{day.getDate()}</div>}
+                    {(function(){
+                      // (17/09/2026) selo da auditoria no dia — vermelho: tem card movível; cinza: só comemorativa/collab
+                      const av=_auditPorDia[fmtDay(day)]||[]; if(!av.length) return null;
+                      const mov=av.some(function(x){return x.nivel==="movivel";});
+                      return <span onClick={function(e){ e.stopPropagation(); setAuditAberta(true); }} title={av.map(function(x){return x.texto;}).join("\n")}
+                        style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:3,height:18,padding:"0 6px",borderRadius:999,background:mov?"#dc2626":"#94a3b8",color:"#fff",fontSize:9.5,fontWeight:800,cursor:"pointer",boxShadow:"0 1px 2px rgba(0,0,0,.18)"}}>
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                        {av.length}
+                      </span>;
+                    })()}
                   </div>
 
                   {/* Eventos sinalizados pelo cliente (cards amarelos com selo DO CLIENTE) */}
@@ -60744,6 +60919,18 @@ function pxHexAlpha(hex,a){
 /* ── PERSONALIZAR CORES DO MENU (Vinicius, 17/09/2026): "tem tons que ficam ruim demais".
    O cliente escolhe fundo, letra e ícone do menu lateral. Salva em clients.portal_tema
    (a linha do próprio cliente; o portal aberto em outro lugar atualiza por realtime). */
+/* Campo de cor FORA do modal (17/09/2026): definido dentro, virava um componente novo a cada
+   mudança de valor e o React remontava o <input> — o seletor de cores do navegador fechava
+   no primeiro arrasto. Aqui fora ele é estável e dá pra arrastar à vontade. */
+function _TemaCampo({l,v,set}){
+  const ok=/^#[0-9a-f]{6}$/i.test(v);
+  return <label style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",cursor:"pointer"}}>
+    <input type="color" value={ok?v:"#000000"} onInput={function(e){set(e.target.value);}} onChange={function(e){set(e.target.value);}} style={{width:34,height:34,border:"none",background:"none",padding:0,cursor:"pointer"}}/>
+    <span style={{flex:1,color:"#0f172a",fontSize:13,fontWeight:700}}>{l}</span>
+    <input value={v} onChange={function(e){ const x=e.target.value.trim(); set(x.charAt(0)==="#"?x:"#"+x); }} spellCheck={false} maxLength={7}
+      style={{width:82,color:"#334155",fontSize:12,fontFamily:"monospace",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 8px",background:"#fff",textAlign:"center"}}/>
+  </label>;
+}
 function PortalTemaModal({cl, tema, onClose, onSalvo}){
   const _t=(tema&&typeof tema==="object")?tema:{};
   const _neon=(typeof pxSideIconColor==="function")?pxSideIconColor(cl):"#fff";
@@ -60773,15 +60960,8 @@ function PortalTemaModal({cl, tema, onClose, onSalvo}){
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
     setSalvando(false);
   };
-  const Campo=function({l,v,set}){
-    return <label style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",cursor:"pointer"}}>
-      <input type="color" value={/^#[0-9a-f]{6}$/i.test(v)?v:"#000000"} onChange={function(e){set(e.target.value);}} style={{width:34,height:34,border:"none",background:"none",padding:0,cursor:"pointer"}}/>
-      <span style={{flex:1,color:"#0f172a",fontSize:13,fontWeight:700}}>{l}</span>
-      <span style={{color:"#64748b",fontSize:11.5,fontFamily:"monospace"}}>{v}</span>
-    </label>;
-  };
   const _dim=pxHexAlpha(texto,.72);
-  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+  return <div onClick={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
     <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:640,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 40px 100px rgba(15,23,42,.35)",fontFamily:"'Inter',system-ui,sans-serif",padding:20,display:"flex",flexDirection:"column",gap:14}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Personalizar cores do menu</div>
@@ -60796,9 +60976,9 @@ function PortalTemaModal({cl, tema, onClose, onSalvo}){
               <span style={{width:18,height:18,borderRadius:"50%",background:p.fundo,border:"1px solid rgba(0,0,0,.12)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span style={{width:6,height:6,borderRadius:"50%",background:p.icone}}/></span>{p.l}</button>; })}
           </div>
           <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginTop:6}}>Ajuste fino</div>
-          <Campo l="Fundo do menu" v={fundo} set={setFundo}/>
-          <Campo l="Cor da letra" v={texto} set={setTexto}/>
-          <Campo l="Cor dos ícones" v={icone} set={setIcone}/>
+          <_TemaCampo l="Fundo do menu" v={fundo} set={setFundo}/>
+          <_TemaCampo l="Cor da letra" v={texto} set={setTexto}/>
+          <_TemaCampo l="Cor dos ícones" v={icone} set={setIcone}/>
         </div>
         <div style={{flex:"0 0 200px"}}>
           <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Prévia</div>
