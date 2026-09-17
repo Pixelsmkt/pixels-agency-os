@@ -18329,7 +18329,6 @@ function _pxCasFixo(t){
   const tags=Array.isArray(t&&t.tags)?t.tags:[];
   if(tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); })) return true;
   // rede de segurança: aniversário da marca criado à mão sem a tag ("Arte de 29 anos/años")
-  // idem marco de seguidores ("Comemoração 4k seguidores") — data fixa pela regra de 12/09
   return /anivers[áa]rio|aniversario|cumplea|seguidor|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""));
 }
 function _pxCasGrupo(t){
@@ -18358,29 +18357,60 @@ function _pxCasConta(rows,alvo){
   });
 }
 function _pxCasBr(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):""; }
-/* Dia de destino na semana L (objeto de _pxApLinha) pro card `t`: mesmo dia da semana da data
-   antiga; ocupado → dia útil livre mais perto; nada livre de seg a sex → sáb/dom. */
-function _pxCasDestino(t,L,rows,hoje){
+/* ── TRILHAS (17/09/2026, 2ª versão) ─────────────────────────────────────────────
+   A 1ª versão empurrava "o último card da semana pro mesmo dia da semana seguinte" e saiu de
+   fase com a grade do planejamento (Chapecó em dias seguidos, duas Fotos de obra na mesma
+   semana, unidades desalinhadas). Agora A GRADE FICA E SÓ A FILA ANDA:
+   - fixa     : comemorativa / evento / aniversário / marco / collab — nunca sai do lugar;
+   - material : Foto de obra e Short — vagas fixas (segunda, em grupo);
+   - conteudo : arte/vídeo (Bioter) — ou, nos outros clientes, "arte" e "video" separados
+                (Construschorr: segunda arte, quinta vídeo).
+   Card novo entra → sai o último card da trilha que ele desloca (fixo/conteúdo → trilha
+   conteúdo; material → material). O deslocado vai pra semana seguinte: se lá tem VAGA,
+   ganha um dia com folga (≥2 dias de outro post da unidade, mesmo dia da semana quando dá);
+   se não tem vaga, TOMA O DIA EXATO do último card da mesma trilha lá, que por sua vez anda.
+   Semana sem card da trilha (só fixos, ou só a outra trilha) é pulada. */
+function _pxCasTrilha(t){
+  if(_pxCasFixo(t)||_pxApEhCollab(t)) return "fixa";
+  if(_pxCasGrupo(t)||String(t.content_type||t.contentType||"")==="foto") return "material";
+  if(String(t.client)==="bioter") return "conteudo";
+  const ct=String(t.content_type||t.contentType||"");
+  if(/video|corte/.test(ct)||/v[ií]deo|depoimento/i.test(String(t.title||""))) return "video";
+  return "arte";
+}
+function _pxCasTrilhaAlvo(novo){
+  const tr=_pxCasTrilha(novo);
+  if(tr==="material") return ["material","conteudo","arte","video"];
+  if(tr==="video") return ["video","arte","material"];
+  if(tr==="arte") return ["arte","video","material"];
+  return ["conteudo","arte","video","material"]; // fixo ou conteúdo desloca a trilha de conteúdo
+}
+/* Dia com folga na semana L pro card t: mesmo dia da semana da data antiga; senão o dia útil
+   mais perto. Exige não ter post da unidade no dia; prefere ≥2 dias de distância dos outros
+   posts da unidade (olhando também os vizinhos da semana anterior/seguinte). */
+function _pxCasDiaComFolga(t,L,rows,hoje){
   const de=String(t.publish_date||"").slice(0,10);
   const dow=_pxApData(de).getDay();
   const alvos=_pxColAlvos(t);
-  const ocup={};
+  const ocup=[];
   rows.forEach(function(x){
     if(x.deleted_at||String(x.id)===String(t.id)) return;
     if(x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return;
-    const ax=_pxColAlvos(x); if(!ax.some(function(a){return alvos.indexOf(a)>=0;})) return;
-    ocup[String(x.publish_date||"").slice(0,10)]=true;
+    if(!_pxColAlvos(x).some(function(a){return alvos.indexOf(a)>=0;})) return;
+    const d=String(x.publish_date||"").slice(0,10);
+    if(d>=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()-3))&&d<=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+9))) ocup.push(d);
   });
   const ordem=[dow];
   for(let k=1;k<=6;k++){ [dow-k,dow+k].forEach(function(dd){ if(dd>=0&&dd<=6&&ordem.indexOf(dd)<0) ordem.push(dd); }); }
-  // dias úteis primeiro, fim de semana só se não sobrar nada
   const uteis=ordem.filter(function(dd){return dd>=1&&dd<=5;}), fds=ordem.filter(function(dd){return dd===0||dd===6;});
   const cand=uteis.concat(fds).map(function(dd){ const d=new Date(L.ini); d.setDate(L.ini.getDate()+dd); return _pxApIso(d); })
-    .filter(function(iso){ return iso>hoje&&!ocup[iso]; });
-  return cand.length?cand[0]:null;
+    .filter(function(iso){ return iso>hoje&&ocup.indexOf(iso)<0; });
+  if(!cand.length) return null;
+  const dist=function(iso){ if(!ocup.length) return 9; const tt=_pxApData(iso).getTime(); return Math.min.apply(null,ocup.map(function(o){return Math.abs(tt-_pxApData(o).getTime())/86400000;})); };
+  return cand.find(function(iso){return dist(iso)>=2;})||cand[0];
 }
-/* pxCascataPlanejar(novo) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana:"dd/mm–dd/mm"}
-   `novo` = card em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
+/* pxCascataPlanejar(novo,extras) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana}
+   `novo` em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
 async function pxCascataPlanejar(novo,extras){
   const vazio={moves:[],travou:[],semana:""};
   try{
@@ -18399,10 +18429,8 @@ async function pxCascataPlanejar(novo,extras){
     const L0=_pxApLinha(iso);
     const fimH=new Date(L0.ini); fimH.setDate(L0.ini.getDate()+7*PX_CASCATA_HORIZONTE_SEMANAS-1);
     const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
-      .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fimH)).in("client",PX_COLISAO_CLIENTES);
+      .is("deleted_at",null).gte("publish_date",_pxApIso(new Date(L0.ini.getFullYear(),L0.ini.getMonth(),L0.ini.getDate()-7))).lte("publish_date",_pxApIso(fimH)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return vazio;
-    // extras = outros cards novos do mesmo lote (feira cria 2–3 de uma vez) que talvez ainda não
-    // estejam no banco — entram na conta pra semana não ser lida como vazia.
     const _ids={}; _ids[String(nn.id)]=true;
     const rows=(r.data||[]).filter(function(x){ if(_ids[String(x.id)]) return false; _ids[String(x.id)]=true; return true; }).concat([nn]);
     (Array.isArray(extras)?extras:[]).forEach(function(e){
@@ -18415,37 +18443,48 @@ async function pxCascataPlanejar(novo,extras){
     });
     const moves=[], travou=[];
     const semanaDe=function(x){ return _pxApLinha(String(x.publish_date||"").slice(0,10)).iniIso; };
+    const jaMovido=function(x){ return moves.some(function(m){ return m.id===x.id; }); };
+    const registra=function(t,para){
+      const de=String(t.publish_date).slice(0,10);
+      const ja=moves.find(function(m){ return m.id===t.id; });
+      if(ja) ja.para=para; else moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
+      t.publish_date=para;
+    };
+    const prefs=_pxCasTrilhaAlvo(nn);
+    // último card movível de uma trilha na semana (o que já estava lá vem antes do recém-chegado)
+    const ultimoDaTrilha=function(daSemana,trilha){
+      return daSemana.filter(function(x){ return _pxCasMovivel(x,hoje,nn.id)&&_pxCasTrilha(x)===trilha; })
+        .sort(function(a,b){ const ma=jaMovido(a)?1:0, mb=jaMovido(b)?1:0; if(ma!==mb) return ma-mb; return String(b.publish_date).localeCompare(String(a.publish_date)); })[0]||null;
+    };
     for(const alvo of alvos){
-      let L=L0, guard=0;
-      while(guard++<PX_CASCATA_HORIZONTE_SEMANAS){
-        const daSemana=rows.filter(function(x){ return semanaDe(x)===L.iniIso; });
-        const cont=_pxCasConta(daSemana,alvo);
-        if(cont.length<=PX_CASCATA_CAP[alvo]) break;
-        // Quem sai da semana: o ÚLTIMO card que já estava nela. O card que acabou de chegar
-        // (vindo da semana anterior) só sai se não houver mais ninguém movível — assim o que
-        // chega toma o lugar e o antigo anda, e ninguém é arrastado até o fim do calendário.
-        const jaMovido=function(x){ return moves.some(function(m){ return m.id===x.id; }); };
-        const ordena=function(a,b){ const ma=jaMovido(a)?1:0, mb=jaMovido(b)?1:0; if(ma!==mb) return ma-mb; return String(b.publish_date).localeCompare(String(a.publish_date)); };
-        const mov=cont.filter(function(x){ return _pxCasMovivel(x,hoje,nn.id); }).sort(ordena);
-        if(!mov.length){ travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo}); break; }
-        const t=mov[0];
+      const cap=PX_CASCATA_CAP[alvo];
+      let L=L0, guard=0, t=null;
+      // 1) quem sai da semana do card novo
+      const daSemana0=rows.filter(function(x){ return semanaDe(x)===L.iniIso; });
+      if(_pxCasConta(daSemana0,alvo).length<=cap) continue;
+      for(const tr of prefs){ t=ultimoDaTrilha(_pxCasConta(daSemana0,alvo),tr); if(t) break; }
+      if(!t){ travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo}); continue; }
+      const trilha=_pxCasTrilha(t);
+      // 2) o deslocado anda de semana em semana, sempre na mesma trilha
+      while(t&&guard++<PX_CASCATA_HORIZONTE_SEMANAS){
         const prox=_pxApLinha(_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+7)));
         const rowsProx=rows.filter(function(x){ return semanaDe(x)===prox.iniIso; });
-        // Se a semana seguinte também vai estourar, quem sai de lá é o último dela — então o
-        // dia dele fica livre pro que está chegando (segunda continua segunda).
-        let sai=null;
-        if(_pxCasConta(rowsProx,alvo).length>=PX_CASCATA_CAP[alvo]){
-          const mp=_pxCasConta(rowsProx,alvo).filter(function(x){ return _pxCasMovivel(x,hoje,nn.id); }).sort(ordena);
-          sai=mp.length?mp[0]:null;
+        const contProx=_pxCasConta(rowsProx,alvo);
+        if(contProx.length<cap){
+          // tem vaga: dia com folga e acabou a cadeia
+          const para=_pxCasDiaComFolga(t,prox,rows,hoje);
+          if(para){ registra(t,para); t=null; break; }
         }
-        const para=_pxCasDestino(t,prox,rowsProx.filter(function(x){ return !sai||x.id!==sai.id; }),hoje);
-        if(!para){ travou.push({semana:_pxCasBr(prox.iniIso)+"–"+_pxCasBr(prox.fimIso),alvo:alvo}); break; }
-        const de=String(t.publish_date).slice(0,10);
-        const ja=moves.find(function(m){ return m.id===t.id; });
-        if(ja){ ja.para=para; } else { moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""}); }
-        t.publish_date=para;
+        const sai=ultimoDaTrilha(contProx,trilha);
+        if(sai){
+          // toma o dia exato do último da trilha lá; ele passa a ser o deslocado
+          const dia=String(sai.publish_date).slice(0,10);
+          if(dia>hoje){ registra(t,dia); t=sai; L=prox; continue; }
+        }
+        // semana sem card da trilha (só fixos / outra trilha) → pula a semana
         L=prox;
       }
+      if(t) travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo});
     }
     return {moves:moves,travou:travou,semana:_pxCasBr(L0.iniIso)+"–"+_pxCasBr(L0.fimIso)};
   }catch(e){ console.warn("[cascata planejar]",e); return vazio; }
@@ -18453,7 +18492,7 @@ async function pxCascataPlanejar(novo,extras){
 /* Texto da prévia pra pixelsConfirm (usa quebras de linha). */
 function pxCascataTexto(plano,nomeCliente){
   const n=plano.moves.length;
-  let s="A semana "+plano.semana+(nomeCliente?(" de "+nomeCliente):"")+" já está na cadência. Pra encaixar o card novo, "+(n>1?"estes "+n+" cards andam":"este card anda")+" uma semana, na sequência em que estavam:\n";
+  let s="A semana "+plano.semana+(nomeCliente?(" de "+nomeCliente):"")+" já está na cadência. Pra encaixar o card novo, "+(n>1?"estes "+n+" cards andam":"este card anda")+" uma vaga na fila, na mesma trilha (arte/vídeo com arte/vídeo, foto de obra/short com foto de obra/short):\n";
   plano.moves.forEach(function(m){ s+="• "+(m.title||"(sem título)")+" — "+_pxCasBr(m.de)+" → "+_pxCasBr(m.para)+"\n"; });
   s+="\nDatas comemorativas e collabs ficam onde estão.";
   if(plano.travou.length) s+="\n⚠ Na semana "+plano.travou[0].semana+" não tem card que possa andar — ela fica acima da cadência.";
@@ -18485,7 +18524,7 @@ async function pxCascataAplicar(plano,setTasks,quem){
       setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
     }
     if(ok) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente",[],alterados);
-    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma semana pra dar lugar ao card novo.",6000);
+    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo.",6000);
     return ok;
   }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
 }
@@ -36281,6 +36320,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   });
 
   const [editClientId,setEditClientId]=useState(null);
+  const [abasPortal,setAbasPortal]=useState(null); // {clientId, unidade} — modal "Abas do portal" (17/09/2026)
   const [editClientDraft,setEditClientDraft]=useState(null);
 
   const saveClientAccess=(clientId,data)=>{
@@ -37117,6 +37157,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       </>}
 
       {/* ══ CLIENTES DO PORTAL — REDESIGN MODERNO ══ */}
+      {abasPortal&&<PortalAbasModal clientId={abasPortal.clientId} unidadeInicial={abasPortal.unidade} onClose={()=>setAbasPortal(null)}/>}
       {mainTab==="clientes"&&(
         <div style={{display:"flex",flexDirection:"column",gap:18,width:"100%"}}>
           {(()=>{
@@ -37298,7 +37339,14 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                           return nx;
                         })}/>
                       {/* Ações */}
-                      {isPartner && <div style={{display:"flex",gap:6,paddingTop:9,borderTop:"1px solid #f1f5f9"}}>
+                      {isPartner && <div style={{display:"flex",gap:6,paddingTop:9,borderTop:"1px solid #f1f5f9",flexWrap:"wrap"}}>
+                        <button onClick={()=>setAbasPortal({clientId:cl.id,unidade:_isBioter?String(user.primary_unit||"").split(",")[0].trim():""})} title="Escolher quais abas do portal este cliente vê" type="button"
+                          style={{flex:1,background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 12px",color:"#7c3aed",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s",fontFamily:"inherit"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                          Abas do portal
+                        </button>
                         {onViewAsClient && <button onClick={()=>onViewAsClient(user)} title={"Ver o portal como "+(user.name||cl.name)} type="button"
                           style={{flex:1,background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 12px",color:C.a,fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s",fontFamily:"inherit"}}
                           onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";}}
@@ -38212,6 +38260,96 @@ async function _portalNivelSalvar(userId,papel){
   if(!res.ok||data.error) throw new Error(data.error||("Erro "+res.status));
   return data;
 }
+/* ── ABAS DO PORTAL POR CLIENTE / UNIDADE (Vinicius, 17/09/2026) ────────────────────
+   Mesmo desenho das permissões do colaborador: grupos à esquerda, interruptores à direita.
+   Regra e formato em 13_novidades.jsx (PORTAL_PERM_GRUPOS / pxPortalAbasSet). Salva em
+   clients.portal_access a cada clique; o portal do cliente atualiza sozinho (realtime). */
+function PortalAbasModal({clientId, unidadeInicial, onClose}){
+  const _sb=window._sb;
+  const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(c=>c.id===clientId)||{id:clientId,name:clientId,color:"#7c3aed"};
+  const isBioter=clientId==="bioter";
+  const unidades=isBioter?(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]):[];
+  const [unidade,setUnidade]=useState(isBioter?(unidadeInicial||(unidades[0]&&unidades[0].id)||""):"");
+  const [access,setAccess]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [grupo,setGrupo]=useState((typeof PORTAL_PERM_GRUPOS!=="undefined"&&PORTAL_PERM_GRUPOS[0])?PORTAL_PERM_GRUPOS[0].id:"geral");
+  const [salvo,setSalvo]=useState(false);
+  const _mob=(typeof _pxMob==="function")?_pxMob():(typeof window!=="undefined"&&window.innerWidth<760);
+  useEffect(()=>{
+    let alive=true;
+    if(!_sb){ setLoading(false); return; }
+    _sb.from("clients").select("portal_access").eq("client_id",clientId).maybeSingle().then(r=>{
+      if(!alive) return;
+      setAccess((r&&r.data&&r.data.portal_access)||{}); setLoading(false);
+    });
+    return ()=>{alive=false;};
+  },[clientId]);
+  const ligada=(key)=>pxPortalAbaLigada(access,unidade,key,clientId);
+  const trocar=async(item)=>{
+    if(item.fixo||loading) return;
+    const novo=pxPortalAbasSet(access,unidade,item.key,!ligada(item.key));
+    setAccess(novo);
+    try{
+      const {error}=await _sb.from("clients").update({portal_access:novo,updated_at:new Date().toISOString()}).eq("client_id",clientId);
+      if(error) throw error;
+      setSalvo(true); setTimeout(()=>setSalvo(false),1400);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
+  };
+  const grupos=(typeof PORTAL_PERM_GRUPOS!=="undefined")?PORTAL_PERM_GRUPOS:[];
+  const g=grupos.find(x=>x.id===grupo)||grupos[0]||{itens:[]};
+  const totalOn=grupos.reduce((n,gr)=>n+gr.itens.filter(i=>ligada(i.key)).length,0);
+  const totalAll=grupos.reduce((n,gr)=>n+gr.itens.length,0);
+  const _logo=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[clientId])||cl.logoUrl||null;
+  return <div onMouseDown={e=>{ if(e.target===e.currentTarget) onClose(); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:860,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 40px 100px rgba(15,23,42,.35)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{padding:"16px 20px",borderBottom:"1px solid #eef0f3",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <div style={{width:40,height:40,borderRadius:11,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:4,flexShrink:0}}>
+          {_logo?<img src={_logo} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>:<span style={{fontWeight:800,color:cl.color}}>{(cl.abbr||cl.name||"?").slice(0,2)}</span>}
+        </div>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Abas do portal — {cl.name}</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O que este cliente vê no portal. {totalOn} de {totalAll} abas ligadas{salvo?" · salvo ✓":""}</div>
+        </div>
+        {isBioter&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {unidades.map(u=>{ const on=unidade===u.id; return <button key={u.id} type="button" onClick={()=>setUnidade(u.id)}
+            style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{u.pickerLabel||u.label}</button>; })}
+        </div>}
+        <button type="button" onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",color:"#475569",fontSize:18,fontWeight:700}}>×</button>
+      </div>
+      <div style={{display:"flex",flexDirection:_mob?"column":"row",minHeight:0,flex:1}}>
+        <div style={{width:_mob?"100%":230,flexShrink:0,background:"#f8fafc",borderRight:_mob?"none":"1px solid #eef0f3",borderBottom:_mob?"1px solid #eef0f3":"none",padding:8,display:"flex",flexDirection:_mob?"row":"column",gap:2,overflowX:_mob?"auto":"hidden"}}>
+          {grupos.map(gr=>{
+            const on=grupo===gr.id; const n=gr.itens.filter(i=>ligada(i.key)).length;
+            return <button key={gr.id} type="button" onClick={()=>setGrupo(gr.id)}
+              style={{display:"flex",alignItems:"center",gap:9,padding:"9px 12px",background:on?"#fff":"transparent",border:on?"1px solid #e8ecf1":"1px solid transparent",borderRadius:10,cursor:"pointer",textAlign:"left",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:gr.cor,flexShrink:0}}/>
+              <span style={{flex:1,fontSize:12.5,fontWeight:on?800:600,color:on?"#0f172a":"#64748b"}}>{gr.label}</span>
+              <span style={{fontSize:10,fontWeight:800,color:n>0?gr.cor:"#cbd5e1",background:n>0?gr.cor+"14":"#f1f5f9",borderRadius:99,padding:"2px 7px"}}>{n}/{gr.itens.length}</span>
+            </button>;
+          })}
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"14px 18px",display:"flex",flexDirection:"column",gap:8}}>
+          {loading?<div style={{color:"#94a3b8",fontSize:12.5,padding:20}}>Carregando…</div>:g.itens.map(item=>{
+            const on=ligada(item.key);
+            const travada=!!item.fixo||(item.dependeDe&&!ligada(item.dependeDe));
+            return <div key={item.key} onClick={()=>{ if(!travada) trocar(item); }}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"11px 13px",background:on?"#fff":"#fafbfc",border:"1px solid "+(on?"#e2e8f0":"#eef0f3"),borderRadius:12,cursor:travada?"default":"pointer",opacity:travada&&!item.fixo?.55:1}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:700}}>{item.label}{item.fixo&&<span style={{marginLeft:7,fontSize:9.5,fontWeight:800,color:"#64748b",background:"#f1f5f9",borderRadius:6,padding:"2px 6px",textTransform:"uppercase"}}>sempre</span>}</div>
+                <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>{item.desc}{item.dependeDe&&!ligada(item.dependeDe)?" · depende de "+((PORTAL_PERM_ITENS.find(i=>i.key===item.dependeDe)||{}).label||item.dependeDe):""}</div>
+              </div>
+              <div style={{width:40,height:22,borderRadius:99,background:on?g.cor:"#cbd5e1",position:"relative",flexShrink:0,transition:"background .15s"}}>
+                <div style={{position:"absolute",top:2,left:on?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.25)",transition:"left .15s"}}/>
+              </div>
+            </div>;
+          })}
+          {!loading&&<div style={{color:"#94a3b8",fontSize:11,marginTop:6}}>Muda na hora pro cliente, em qualquer aparelho. Cliente novo nasce com tudo ligado{isBioter?" — cada unidade tem a sua lista":""}.</div>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function AcessoNivelPortal({user,podeEditar,onSalvo}){
   const [salvando,setSalvando]=useState(false);
   const atual=_portalNivelDe(user);
@@ -60468,9 +60606,185 @@ const PORTAL_ALL_TABS=[
   {id:"marcos",      ico:"flame",       label:"Checkpoints",  sec:"Operação"},
   {id:"calendario",  ico:"calendar",    label:"Calendário",   sec:"Operação"},
   {id:"publicacoes", ico:"check",       label:"Publicações",  sec:"Operação"},
+  {id:"ideias",      ico:"sparkles",    label:"Ideias da Pixels", sec:"Operação"}, // (17/09/2026) trends/referências pro cliente aprovar
   // {id:"analises",    ico:"chart",       label:"Análises"}, // DESATIVADA por enquanto (pedido 2026-08-31) — automação do Reportei ainda não resolve pro cliente
   {id:"nps",         ico:"sparkles",    label:"NPS",          sec:"Relacionamento"},
 ];
+/* ── ABAS DO PORTAL POR CLIENTE / UNIDADE (Vinicius, 17/09/2026) ─────────────────────
+   Igual às permissões do colaborador, só que pro cliente: em Acessos › Clientes a agência
+   liga/desliga cada aba do portal. Bioter: cada unidade tem a sua lista.
+   Guardado em clients.portal_access:
+     { abas:{ performance:false, ... },                // cliente simples (ou login "grupo" da Bioter)
+       unidades:{ chapeco:{ abas:{...} }, toledo:{...} } }   // Bioter, por unidade
+   Só aparece o que está DESLIGADO; ausente = ligado (cliente novo nasce com tudo).
+   Um gatilho no banco impede o próprio cliente de mudar esse campo. */
+const PORTAL_PERM_GRUPOS=[
+  {id:"geral", label:"Visão geral", cor:"#7c3aed", itens:[
+    {key:"dashboard",   label:"Dashboard",    desc:"Tela inicial do portal — fica sempre ligada", fixo:true},
+    {key:"performance", label:"Performance",  desc:"Funil de leads, vendas e retorno do marketing"},
+    {key:"performance_trafego", label:"Performance › Tráfego pago", desc:"Investimento em mídia/anúncios e custo por lead dentro da Performance. Desligue pra cliente sem tráfego", dependeDe:"performance"},
+    {key:"metas",       label:"Metas",        desc:"Metas combinadas com o cliente"},
+    {key:"conquistas",  label:"Conquistas",   desc:"Marcos e conquistas do cliente"},
+  ]},
+  {id:"estrategia", label:"Estratégia", cor:"#0ea5e9", itens:[
+    {key:"planejamento",label:"Planejamento", desc:"Foco do mês e do trimestre"},
+    {key:"briefing",    label:"Briefing",     desc:"Briefing que o cliente preenche (produtos, público, acessos)"},
+    {key:"parcerias",   label:"Parcerias",    desc:"Parcerias e collabs"},
+    {key:"concorrencia",label:"Concorrência", desc:"Concorrentes acompanhados"},
+    {key:"playbook",    label:"Playbook",     desc:"Tom de voz, pilares, chamadas"},
+    {key:"sugestoes",   label:"Sugestões de conteúdo", desc:"Roteiros de vídeo marcados pra ele gravar"},
+  ]},
+  {id:"operacao", label:"Operação", cor:"#16a34a", itens:[
+    {key:"demandas",    label:"Demandas",     desc:"Acompanhamento das demandas"},
+    {key:"aprovacoes",  label:"Aprovações",   desc:"Cliente aprova ou pede ajuste nas peças"},
+    {key:"marcos",      label:"Checkpoints",  desc:"Marcos do projeto"},
+    {key:"calendario",  label:"Calendário",   desc:"Calendário de publicações"},
+    {key:"publicacoes", label:"Publicações",  desc:"O que já foi publicado (depende de Demandas)", dependeDe:"demandas"},
+    {key:"ideias",      label:"Ideias da Pixels", desc:"Trends e referências que a Pixels sugere e o cliente aprova"},
+  ]},
+  {id:"relacionamento", label:"Relacionamento", cor:"#ec4899", itens:[
+    {key:"nps",         label:"NPS",          desc:"Pesquisa de satisfação"},
+  ]},
+  {id:"extras", label:"Extras", cor:"#f59e0b", itens:[
+    {key:"calculadora", label:"Monte seu pacote", desc:"Calculadora de pacote dentro do portal. Desligada por padrão (hoje só Lero Fibras)", padraoOff:true},
+  ]},
+];
+const PORTAL_PERM_ITENS=PORTAL_PERM_GRUPOS.reduce(function(a,g){return a.concat(g.itens);},[]);
+function pxPortalAbasMapa(portalAccess, unidade){
+  const pa=(portalAccess&&typeof portalAccess==="object")?portalAccess:{};
+  const base=(pa.abas&&typeof pa.abas==="object")?pa.abas:{};
+  const u=unidade?(((pa.unidades||{})[unidade]||{}).abas||{}):{};
+  return Object.assign({},base,u);
+}
+/* Liga/desliga uma aba e devolve o objeto novo pra gravar (só guarda o que está desligado). */
+function pxPortalAbasSet(portalAccess, unidade, key, ligada){
+  const pa=JSON.parse(JSON.stringify((portalAccess&&typeof portalAccess==="object")?portalAccess:{}));
+  let alvo;
+  if(unidade){ pa.unidades=pa.unidades||{}; pa.unidades[unidade]=pa.unidades[unidade]||{}; pa.unidades[unidade].abas=pa.unidades[unidade].abas||{}; alvo=pa.unidades[unidade].abas; }
+  else { pa.abas=pa.abas||{}; alvo=pa.abas; }
+  const item=PORTAL_PERM_ITENS.find(function(i){return i.key===key;});
+  if(item&&item.padraoOff){ if(ligada) alvo[key]=true; else delete alvo[key]; }
+  else { if(ligada) delete alvo[key]; else alvo[key]=false; }
+  return pa;
+}
+function pxPortalAbaLigada(portalAccess, unidade, key, clientId){
+  const item=PORTAL_PERM_ITENS.find(function(i){return i.key===key;});
+  if(item&&item.fixo) return true;
+  const m=pxPortalAbasMapa(portalAccess,unidade);
+  if(item&&item.dependeDe&&!pxPortalAbaLigada(portalAccess,unidade,item.dependeDe,clientId)) return false;
+  if(m[key]===false) return false;
+  if(m[key]===true) return true;
+  if(item&&item.padraoOff){
+    if(key==="calculadora") return (typeof PORTAL_CALC_CLIENTS!=="undefined"&&PORTAL_CALC_CLIENTS.indexOf(clientId)>=0);
+    return false;
+  }
+  return true;
+}
+/* Config do portal (abas + tema) de um cliente, ao vivo. */
+function usePortalConfig(clientId){
+  const [cfg,setCfg]=useState({access:null,tema:null,ok:false});
+  useEffect(function(){
+    const sb=(typeof window!=="undefined")?window._sb:null;
+    if(!sb||!clientId){ setCfg({access:null,tema:null,ok:true}); return; }
+    let alive=true;
+    const carregar=function(){
+      sb.from("clients").select("portal_access,portal_tema").eq("client_id",clientId).maybeSingle().then(function(r){
+        if(!alive) return;
+        const d=(r&&r.data)||{};
+        setCfg({access:d.portal_access||null,tema:d.portal_tema||null,ok:true});
+      },function(){ if(alive) setCfg(function(c){return Object.assign({},c,{ok:true});}); });
+    };
+    carregar();
+    let ch=null;
+    try{ ch=sb.channel("portal-cfg-"+clientId).on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients",filter:"client_id=eq."+clientId},carregar).subscribe(); }catch(_){}
+    return function(){ alive=false; try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[clientId]);
+  return [cfg,setCfg];
+}
+function pxHexAlpha(hex,a){
+  const m=String(hex||"").match(/^#?([0-9a-f]{6})$/i);
+  if(!m) return hex;
+  const n=parseInt(m[1],16);
+  return "rgba("+(n>>16&255)+","+(n>>8&255)+","+(n&255)+","+a+")";
+}
+/* ── PERSONALIZAR CORES DO MENU (Vinicius, 17/09/2026): "tem tons que ficam ruim demais".
+   O cliente escolhe fundo, letra e ícone do menu lateral. Salva em clients.portal_tema
+   (a linha do próprio cliente; o portal aberto em outro lugar atualiza por realtime). */
+function PortalTemaModal({cl, tema, onClose, onSalvo}){
+  const _t=(tema&&typeof tema==="object")?tema:{};
+  const _neon=(typeof pxSideIconColor==="function")?pxSideIconColor(cl):"#fff";
+  const [fundo,setFundo]=useState(_t.fundo||cl.color||"#7c3aed");
+  const [texto,setTexto]=useState(_t.texto||"#ffffff");
+  const [icone,setIcone]=useState(_t.icone||_neon||"#ffffff");
+  const [salvando,setSalvando]=useState(false);
+  const _mix=function(hex,alvo,f){ const m=String(hex||"").match(/^#?([0-9a-f]{6})$/i); if(!m) return hex; const n=parseInt(m[1],16); const t=parseInt(alvo.slice(1),16);
+    const c=[16,8,0].map(function(sh){ const a=(n>>sh)&255, b=(t>>sh)&255; return Math.round(a+(b-a)*f); }); return "#"+c.map(function(v){return v.toString(16).padStart(2,"0");}).join(""); };
+  const presets=[
+    {l:"Cor da marca", fundo:cl.color, texto:"#ffffff", icone:_neon},
+    {l:"Marca mais escura", fundo:_mix(cl.color,"#000000",.35), texto:"#ffffff", icone:"#ffffff"},
+    {l:"Marca suave", fundo:_mix(cl.color,"#ffffff",.82), texto:_mix(cl.color,"#000000",.45), icone:cl.color},
+    {l:"Grafite", fundo:"#1e2229", texto:"#ffffff", icone:cl.color},
+    {l:"Branco", fundo:"#ffffff", texto:"#334155", icone:cl.color},
+  ];
+  const salvar=async function(reset){
+    const sb=window._sb; if(!sb) return;
+    const novo=reset?null:{fundo:fundo,texto:texto,icone:icone};
+    setSalvando(true);
+    try{
+      const {error}=await sb.from("clients").update({portal_tema:novo}).eq("client_id",cl.id);
+      if(error) throw error;
+      if(onSalvo) onSalvo(novo);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(reset?"Cores da marca de volta.":"Cores do menu salvas.",2200);
+      onClose();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
+    setSalvando(false);
+  };
+  const Campo=function({l,v,set}){
+    return <label style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",cursor:"pointer"}}>
+      <input type="color" value={/^#[0-9a-f]{6}$/i.test(v)?v:"#000000"} onChange={function(e){set(e.target.value);}} style={{width:34,height:34,border:"none",background:"none",padding:0,cursor:"pointer"}}/>
+      <span style={{flex:1,color:"#0f172a",fontSize:13,fontWeight:700}}>{l}</span>
+      <span style={{color:"#64748b",fontSize:11.5,fontFamily:"monospace"}}>{v}</span>
+    </label>;
+  };
+  const _dim=pxHexAlpha(texto,.72);
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget) onClose(); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(4px)",zIndex:1200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:640,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 40px 100px rgba(15,23,42,.35)",fontFamily:"'Inter',system-ui,sans-serif",padding:20,display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Personalizar cores do menu</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:2}}>Escolha um tom que fique bom pra ler. Vale pra todo mundo que entra neste portal.</div>
+      </div>
+      <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 260px",display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Sugestões</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {presets.map(function(p){ return <button key={p.l} type="button" onClick={function(){setFundo(p.fundo);setTexto(p.texto);setIcone(p.icone);}}
+              style={{display:"inline-flex",alignItems:"center",gap:7,background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:"5px 10px 5px 6px",fontSize:11.5,fontWeight:700,color:"#334155",cursor:"pointer",fontFamily:"inherit"}}>
+              <span style={{width:18,height:18,borderRadius:"50%",background:p.fundo,border:"1px solid rgba(0,0,0,.12)",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span style={{width:6,height:6,borderRadius:"50%",background:p.icone}}/></span>{p.l}</button>; })}
+          </div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginTop:6}}>Ajuste fino</div>
+          <Campo l="Fundo do menu" v={fundo} set={setFundo}/>
+          <Campo l="Cor da letra" v={texto} set={setTexto}/>
+          <Campo l="Cor dos ícones" v={icone} set={setIcone}/>
+        </div>
+        <div style={{flex:"0 0 200px"}}>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Prévia</div>
+          <div style={{background:fundo,borderRadius:14,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+fundo+"55"}}>
+            {[["home","Dashboard",true],["trendingUp","Performance",false],["target","Metas",false]].map(function(x){ const a=x[2];
+              return <div key={x[1]} style={{background:a?"#fff":"transparent",borderRadius:10,padding:"8px 10px",color:a?"#334155":texto,fontWeight:a?800:600,fontSize:12,display:"flex",alignItems:"center",gap:9}}>
+                <span style={{width:24,height:24,borderRadius:7,background:a?"#eef1f5":pxHexAlpha(texto,.13),display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n={x[0]} size={12} color={a?"#334155":icone}/></span>{x[1]}</div>; })}
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px 2px"}}><span style={{color:_dim,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:1}}>Estratégia</span><span style={{flex:1,height:1,background:pxHexAlpha(texto,.35)}}/></div>
+            <div style={{borderRadius:10,padding:"8px 10px",color:texto,fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:9}}><span style={{width:24,height:24,borderRadius:7,background:pxHexAlpha(texto,.13),display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="layers" size={12} color={icone}/></span>Planejamento</div>
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap",borderTop:"1px solid #eef0f3",paddingTop:12}}>
+        <button type="button" disabled={salvando} onClick={function(){salvar(true);}} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",color:"#64748b",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginRight:"auto"}}>Voltar à cor da marca</button>
+        <button type="button" onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",color:"#475569",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button type="button" disabled={salvando} onClick={function(){salvar(false);}} style={{background:"#7c3aed",border:"none",borderRadius:9,padding:"8px 16px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":"Salvar cores"}</button>
+      </div>
+    </div>
+  </div>;
+}
 const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
   {id:"interno_aprovado"},{id:"interno_executado"},
@@ -64773,18 +65087,18 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
 
 /* Aba Performance — dona do período. Funil e ROI recebem month/year por prop,
    então o seletor único do topo governa a página inteira. */
-function PortalPerformance({cl, selUnit, isMob, unitId}){
+function PortalPerformance({cl, selUnit, isMob, unitId, semTrafego}){
   const _hoje=new Date();
   const [mes,setMes]=useState(_hoje.getMonth()+1);
   const [ano,setAno]=useState(_hoje.getFullYear());
   return <div style={{display:"flex",flexDirection:"column",gap:28}}>
     <PortalFunil cl={cl} isMob={isMob} unitId={unitId}
       month={mes} year={ano} setMonth={setMes} setYear={setAno}/>
-    <PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob} month={mes} year={ano}/>
+    <PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob} month={mes} year={ano} semTrafego={!!semTrafego}/>
   </div>;
 }
 
-function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
+function PortalFaturamentoROI({cl, selUnit, isMob, month, year, semTrafego}){
   const _now=new Date();
   const [midia,setMidia]=useState(0);
   const [pixelsServ,setPixelsServ]=useState(0);
@@ -64976,7 +65290,8 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
   const _aggVendido=_aggVendas.reduce(function(s,v){return s+(Number(v.value)||0);},0);
   const _aggInvestido=unidadesAgg?(Number(unidadesAgg.midia)||0)+(Number(unidadesAgg.pixels)||0):0;
   const totalVendido=sales.reduce(function(s,v){return s+(Number(v.value)||0);},0)+_aggVendido;
-  const totalInvestido=Number(midia||0)+Number(pixelsServ||0)+_aggInvestido;
+  // Cliente sem tráfego pago (aba desligada em Acessos): mídia não entra na conta nem aparece
+  const totalInvestido=(semTrafego?0:Number(midia||0))+Number(pixelsServ||0)+_aggInvestido;
   // Tabela: vendas do grupo (editáveis) + das unidades (badge, só leitura aqui)
   const _salesView=sales.concat(_aggVendas);
   const _unitLabel=function(uid){
@@ -65150,7 +65465,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
     <PortalRetornoDigital
       clientId={effectiveClientId}
       year={year} month={month}
-      midiaSpend={Number(midia)||0}
+      midiaSpend={semTrafego?0:(Number(midia)||0)}
       totalVendido={totalVendido}
       salesCount={sales.length}/>
 
@@ -65271,7 +65586,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
                     : <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Serviço Pixels</span>}
                   <_PxValorEdit value={pixelsServ} onChange={setPixelsServVal} accent={cl.color} label="serviço da Pixels"/>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {!semTrafego&&<div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{width:22,height:22,borderRadius:7,background:"#f4f5f7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.4"/><path d="M6 12h.01M18 12h.01"/>
@@ -65279,7 +65594,7 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year}){
                   </span>
                   <span style={{color:"#64748b",fontSize:11,fontWeight:700}}>Mídia / anúncios</span>
                   <_PxValorEdit value={midia} onChange={setMidiaVal} accent={cl.color} label="mídia / anúncios"/>
-                </div>
+                </div>}
                 {_grupoMode&&_aggInvestido>0&&<div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{width:22,height:22,borderRadius:7,background:"#f4f5f7",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0f172a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-4h6v4"/></svg>
@@ -66306,29 +66621,30 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     if(!isBioter&&selUnit!=="grupo")setSelUnit("grupo");
   },[selCl]);
 
-  // Load client access config (modules enabled)
-  const clientAccess=(()=>{
-    try{const s=localStorage.getItem("pixels-portal-access-"+selCl);if(s)return JSON.parse(s);}catch(e){}
-    return {enabled:true,modulos:{dashboard:true,demandas:true,calendario:true,chat:true,analises:true,faturamento:true}};
-  })();
-  const mods=clientAccess.modulos||{};
-
+  // ── ABAS LIBERADAS PRA ESTE CLIENTE/UNIDADE (17/09/2026) — vem do banco, ao vivo ──
+  // (o "clientAccess" antigo em localStorage nunca chegava no cliente; saiu.)
+  const [portalCfg,setPortalCfg]=usePortalConfig(selCl);
+  const [temaAberto,setTemaAberto]=useState(false);
+  const _permUnit=isBioter?(_hasLockedUnits?_unitLocked:((selUnit&&selUnit!=="grupo"&&selUnit!=="_minhas_")?selUnit:"")):"";
+  const _abaOn=function(id){ return pxPortalAbaLigada(portalCfg.access,_permUnit,id,selCl); };
+  const _socioLivre=isSocio&&!lockedClientId;   // sócio navegando: vê tudo, com selo no que o cliente não vê
   const ALL_TABS=PORTAL_ALL_TABS;
-
-  // Module → tab mapping (publicacoes is always enabled alongside demandas)
   const tabEnabled=(id)=>{
     if(_soPerformance)return id==="performance";   // nível Comercial
-    if(isSocio)return true;
-    if(id==="publicacoes")return mods.demandas!==false;
-    if(!mods[id]&&mods[id]!==undefined)return false;
-    return true;
+    if(_socioLivre)return true;
+    return _abaOn(id);
   };
   const TABS=ALL_TABS.filter(t=>tabEnabled(t.id));
-  // Calculadora no portal — clientes liberados montam o próprio pacote;
-  // as respostas são salvas no Supabase (tabela portal_calculadora).
-  if(!_soPerformance && PORTAL_CALC_CLIENTS.indexOf(selCl)>=0 && typeof _CalculadoraModular==="function"){
+  // Calculadora no portal ("Monte seu pacote") — agora é uma aba como as outras, ligada em Acessos.
+  const _calcOn=!_soPerformance && _abaOn("calculadora") && typeof _CalculadoraModular==="function";
+  if(_calcOn){
     TABS.unshift({id:"calculadora", ico:"package", label:"Monte seu pacote"});
   }
+  // Aba que o cliente não pode ver (link direto, ou desligada enquanto ele estava nela) → Dashboard
+  useEffect(function(){
+    if(!portalCfg.ok||_socioLivre||_soPerformance) return;
+    if(tab&&!TABS.some(function(t){return t.id===tab;})) _setTabRaw("dashboard");
+  },[portalCfg.ok,portalCfg.access,selCl,_permUnit,tab]);
 
   // Se ainda nao carregou o cliente dinamico, mostra loading em vez de "nao disponivel"
   if(!clResolved){
@@ -66464,37 +66780,53 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
                 style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 11px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5,flexShrink:0,whiteSpace:"nowrap",fontFamily:"inherit",letterSpacing:-.15,transition:"color .12s",whiteSpace:"nowrap",flexShrink:0}}>
                 <Ico n={t.ico||"dot"} size={13}/>
                 {t.label}
+                {_socioLivre&&!_abaOn(t.id)&&<span title="O cliente não vê esta aba" style={{fontSize:8,fontWeight:800,textTransform:"uppercase",background:"#fef3c7",color:"#92400e",borderRadius:5,padding:"1px 4px"}}>oculta</span>}
                 {t.id==="aprovacoes"&&_aprovPend>0&&<span style={{minWidth:18,height:18,borderRadius:99,background:"#dc2626",color:"#fff",fontSize:9.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 5px",fontFeatureSettings:"'tnum'"}}>+{_aprovPend}</span>}
               </button></React.Fragment>;
             })}
           </div>
         : (function(){
             const _neon=(typeof pxSideIconColor==="function")?pxSideIconColor(cl):((typeof pxNeonColor==="function")?pxNeonColor(cl.color):"#fff");
-            return <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:cl.color,border:"none",borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+cl.color+"55"}}>
+            // TEMA DO MENU (17/09/2026): o cliente ajusta fundo / letra / ícone em "Personalizar cores"
+            const _tm=(portalCfg.tema&&typeof portalCfg.tema==="object")?portalCfg.tema:{};
+            const _sBg=_tm.fundo||cl.color, _sTx=_tm.texto||"#fff", _sIc=_tm.icone||_neon;
+            const _sTxDim=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.72):_sTx;
+            const _sTxLine=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.35):_sTx;
+            const _sHover=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.13):"rgba(255,255,255,.13)";
+            return <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:_sBg,border:"none",borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+_sBg+"55"}}>
             {TABS.map(function(t,_i){
               const active=tab===t.id;
               const _prevSec=_i>0?(TABS[_i-1].sec||""):"";
               const _sec=t.sec||"";
               const _header=_sec&&_sec!==_prevSec
                 ? <div key={"sec-"+_sec} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 4px"}}>
-                    <span style={{color:"rgba(255,255,255,.72)",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>{_sec}</span>
-                    <span style={{flex:1,height:1,background:"linear-gradient(90deg,rgba(255,255,255,.35),transparent)"}}/>
+                    <span style={{color:_sTxDim,fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2,whiteSpace:"nowrap"}}>{_sec}</span>
+                    <span style={{flex:1,height:1,background:"linear-gradient(90deg,"+_sTxLine+",transparent)"}}/>
                   </div>
                 : null;
               return <React.Fragment key={t.id}>{_header}<button onClick={function(){setTab(t.id);}}
-                style={{background:active?"#fff":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?"#334155":"#fff",fontWeight:active?800:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%",boxShadow:active?"0 3px 10px rgba(0,0,0,.16)":"none"}}
-                onMouseEnter={function(e){if(!active)e.currentTarget.style.background="rgba(255,255,255,.12)";}}
+                style={{background:active?"#fff":"transparent",border:"none",borderRadius:10,padding:"9px 12px",color:active?"#334155":_sTx,fontWeight:active?800:600,fontSize:12.5,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s",textAlign:"left",width:"100%",boxShadow:active?"0 3px 10px rgba(0,0,0,.16)":"none"}}
+                onMouseEnter={function(e){if(!active)e.currentTarget.style.background=_sHover;}}
                 onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
-                <span style={{width:26,height:26,borderRadius:8,background:active?"#eef1f5":"rgba(255,255,255,.13)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Ico n={t.ico||"dot"} size={13} color={active?"#334155":_neon}/>
+                <span style={{width:26,height:26,borderRadius:8,background:active?"#eef1f5":_sHover,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Ico n={t.ico||"dot"} size={13} color={active?"#334155":_sIc}/>
                 </span>
                 <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.label}</span>
+                {_socioLivre&&!_abaOn(t.id)&&<span title="O cliente não vê esta aba (Acessos › Clientes › Abas do portal)" style={{fontSize:8.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,background:active?"#fef3c7":"rgba(0,0,0,.28)",color:active?"#92400e":"#fde68a",borderRadius:6,padding:"2px 5px",flexShrink:0}}>oculta</span>}
                 {t.id==="aprovacoes"&&_aprovPend>0&&<span style={{minWidth:22,height:22,borderRadius:99,background:"#dc2626",color:"#fff",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:"0 6px",flexShrink:0,fontFeatureSettings:"'tnum'",boxShadow:"0 2px 6px rgba(220,38,38,.45)"}}>+{_aprovPend}</span>}
               </button></React.Fragment>;
             })}
+            <button type="button" onClick={function(){setTemaAberto(true);}} title="Ajustar as cores deste menu"
+              style={{marginTop:6,background:"transparent",border:"1px dashed "+_sTxLine,borderRadius:10,padding:"7px 12px",color:_sTxDim,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontFamily:"inherit"}}
+              onMouseEnter={function(e){e.currentTarget.style.background=_sHover;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.6-.7 1.6-1.6 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.6 1.6-1.6H16c3.3 0 6-2.7 6-6 0-4.9-4.5-8.6-10-8.6z"/></svg>
+              Personalizar cores
+            </button>
           </div>;
           })()
       }
+      {temaAberto&&<PortalTemaModal cl={cl} tema={portalCfg.tema} onClose={function(){setTemaAberto(false);}}
+        onSalvo={function(t){ setPortalCfg(function(c){return Object.assign({},c,{tema:t});}); }}/>}
 
       {/* ── CONTEÚDO ── */}
       <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:16}}>
@@ -66537,6 +66869,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       const _socio=!lockedClientId&&(typeof CURRENT_USER!=="undefined")&&CURRENT_USER&&CURRENT_USER.level===1;
       return <CConquistasAlbum cl={cl} canEdit={!!_socio} selUnit={selUnit} isMob={isMob}/>;
     })()}
+    {tab==="ideias"&&typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!lockedClientId}/>}
     {tab==="sugestoes"&&typeof PortalSugestoesConteudo==="function"&&<PortalSugestoesConteudo cl={cl} selUnit={selUnit} isMob={isMob}/>}
     {tab==="playbook"&&typeof PortalPlaybookCliente==="function"&&(function(){
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
@@ -66583,7 +66916,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob} selUnit={selUnit}/>}
 
     {/* ── PERFORMANCE ── funil + ROI unificados (cliente preenche etapas, vê resultado) */}
-    {tab==="performance"&&<PortalPerformance cl={cl} selUnit={selUnit} isMob={isMob}
+    {tab==="performance"&&<PortalPerformance cl={cl} selUnit={selUnit} isMob={isMob} semTrafego={!_abaOn("performance_trafego")}
       unitId={isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null}/>}
 
     {/* ── PUBLICAÇÕES ── grid estilo feed (cards pequenos, capa única) */}
@@ -97525,6 +97858,12 @@ function PageRoteiros({isMob}){
   const [gerando,setGerando]=useState("");   // "" | "ia" | trendId
   const [filtro,setFiltro]=useState("todos"); // todos | sugestao | enviado
   const [trendForm,setTrendForm]=useState(null);
+  // IDEIAS DA PIXELS (17/09/2026): trends/referências que o cliente aprova no portal
+  const [ideias,setIdeias]=useState([]);
+  const [ideiaForm,setIdeiaForm]=useState(null); // {titulo,descricao,link,trend_id,alvos:[{client,unit}]}
+  const [ideiaFiltro,setIdeiaFiltro]=useState("todas");
+  const [vistoIdeias,setVistoIdeias]=useState(function(){ try{ return localStorage.getItem("pixels-ideias-visto")||""; }catch(_){ return ""; } });
+  const ideiasNovas=ideias.filter(function(i){ return i.status!=="enviada"&&i.status!=="arquivada"&&i.respondido_em&&i.respondido_em>vistoIdeias; }).length;
   const [trendCliente,setTrendCliente]=useState({}); // trendId -> {client,unit}
   useEffect(function(){ try{ localStorage.setItem("pixels-roteiros-cliente",clId||""); localStorage.setItem("pixels-roteiros-unidade",unit||""); }catch(_){} },[clId,unit]);
   const cl=_lista.find(function(c){return c.id===clId;})||null;
@@ -97536,19 +97875,21 @@ function PageRoteiros({isMob}){
   const _carregar=async function(){
     if(!sb) { setLoading(false); return; }
     try{
-      const [a,b]=await Promise.all([
+      const [a,b,c]=await Promise.all([
         sb.from("roteiros_video").select("*").neq("status","descartado").order("created_at",{ascending:false}).limit(600),
         sb.from("roteiros_trends").select("*").eq("ativa",true).order("created_at",{ascending:false}),
+        sb.from("portal_ideias").select("*").neq("status","arquivada").order("created_at",{ascending:false}).limit(600),
       ]);
       if(!a.error) setRoteiros(a.data||[]);
       if(!b.error) setTrends(b.data||[]);
+      if(!c.error) setIdeias(c.data||[]);
     }catch(e){ console.warn("[roteiros]",e&&e.message); }
     setLoading(false);
   };
   useEffect(function(){
     _carregar();
     let ch=null,t=null; const rec=function(){ clearTimeout(t); t=setTimeout(_carregar,400); };
-    try{ if(sb) ch=sb.channel("roteiros-rt").on("postgres_changes",{event:"*",schema:"public",table:"roteiros_video"},rec).on("postgres_changes",{event:"*",schema:"public",table:"roteiros_trends"},rec).subscribe(); }catch(_){}
+    try{ if(sb) ch=sb.channel("roteiros-rt").on("postgres_changes",{event:"*",schema:"public",table:"roteiros_video"},rec).on("postgres_changes",{event:"*",schema:"public",table:"roteiros_trends"},rec).on("postgres_changes",{event:"*",schema:"public",table:"portal_ideias"},rec).subscribe(); }catch(_){}
     return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
   },[]);
 
@@ -97575,6 +97916,44 @@ function PageRoteiros({isMob}){
     }catch(e){ pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
     setGerando("");
   };
+  const _salvarIdeia=async function(f){
+    if(!sb) return;
+    const titulo=String(f.titulo||"").trim(); if(!titulo){ pixelsToast.warning("Dá um título pra ideia."); return; }
+    const alvos=(f.alvos||[]).filter(function(a){return a&&a.client;});
+    if(!alvos.length){ pixelsToast.warning("Escolhe pelo menos um cliente."); return; }
+    const link=String(f.link||"").trim();
+    const rows=alvos.map(function(a){ return {client_id:a.client,unidade:a.client==="bioter"?String(a.unit||""):"",trend_id:f.trend_id||null,titulo:titulo,descricao:String(f.descricao||"").trim(),link:link||null,plataforma:_rtPlataforma(link),status:"enviada",created_by:(_u&&_u.name)||""}; });
+    const r=await sb.from("portal_ideias").insert(rows).select("*");
+    if(r.error){ pixelsToast.error("Não salvou: "+r.error.message); return; }
+    setIdeias(function(p){ return (r.data||[]).concat(p); });
+    setIdeiaForm(null); setAba("ideias");
+    pixelsToast.success(rows.length===1?"Ideia enviada pro portal.":rows.length+" ideias enviadas (uma por cliente/unidade).",3000);
+  };
+  const _arquivarIdeia=async function(i){
+    if(!(await pixelsConfirm("Tirar esta ideia do portal do cliente?"))) return;
+    await sb.from("portal_ideias").update({status:"arquivada"}).eq("id",i.id);
+    setIdeias(function(p){ return p.filter(function(x){return x.id!==i.id;}); });
+  };
+  /* Aprovada → vira card em Rascunhos, com a ideia e o link no briefing (mesmo formato do PortalSolicitar) */
+  const _virarCard=async function(i){
+    if(!sb) return;
+    if(i.task_id){ pixelsToast.info("Essa ideia já virou card."); return; }
+    const id="ideia-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const now=new Date().toISOString();
+    const nomeCl=_nomeCl(i.client_id,i.unidade);
+    const desc="<p><strong>• Ideia aprovada pelo cliente (Ideias da Pixels)</strong></p><p>"+String(i.descricao||"").replace(/</g,"&lt;").replace(/\n/g,"<br>")+"</p>"+(i.link?("<p>Referência: <a href=\""+i.link+"\" target=\"_blank\">"+i.link+"</a></p>"):"");
+    const payload={ id:id, title:i.titulo, status:"rascunhos", description:desc, priority:"normal", client:i.client_id, bioter_unit:i.unidade||"",
+      origem:"ideia_portal", content_type:"video", assignee:"", assignees:[], checklist:[], tags:["Ideia aprovada"],
+      timeline:[{type:"created",from:"",to:"rascunhos",fromLabel:"",toLabel:"Rascunhos",at:now,atFmt:new Date().toLocaleDateString("pt-BR"),user:(_u&&_u.name)||"Pixels",label:"Card criado a partir de ideia aprovada pelo cliente ("+nomeCl+")"}],
+      created_by:(_u&&_u.id)||"", created_at:now, col_entered_at:now, comments:[], files:[], watchers:[], cover:null, ajustar:false, is_alteracao:false, score:null,
+      publish_date:null, publish_time:"09:00", deadline_time:"", deleted_at:null };
+    const r=await sb.from("tasks").insert(payload);
+    if(r.error){ pixelsToast.error("Não criou o card: "+r.error.message); return; }
+    await sb.from("portal_ideias").update({task_id:id}).eq("id",i.id);
+    setIdeias(function(p){ return p.map(function(x){return x.id===i.id?Object.assign({},x,{task_id:id}):x;}); });
+    pixelsToast.success("Card criado em Rascunhos pra "+nomeCl+".",3000);
+  };
+  useEffect(function(){ if(aba==="ideias"){ const t=new Date().toISOString(); setVistoIdeias(t); try{ localStorage.setItem("pixels-ideias-visto",t); }catch(_){} } },[aba]);
   const _patch=async function(r,patch){
     setRoteiros(function(p){ return p.map(function(x){ return x.id===r.id?Object.assign({},x,patch):x; }); });
     const up=await sb.from("roteiros_video").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",r.id);
@@ -97617,7 +97996,7 @@ function PageRoteiros({isMob}){
         <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
       </div>
       <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"}].map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}</button>; })}
+        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:"Ideias pro cliente"}].map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
     </div>
 
@@ -97721,6 +98100,7 @@ function PageRoteiros({isMob}){
               <button type="button" disabled={!!gerando} onClick={function(){_gerar(t,sel.client,sel.unit);}} style={_btnGerar("",true,!!gerando,corSel)}>
                 {busy?<><Spin/> Criando…</>:<><Ico n="sparkles" size={13} color="#fff"/> Gerar 5 ideias</>}
               </button>
+              <button type="button" title="Mandar essa trend como ideia pro cliente aprovar no portal" onClick={function(){setIdeiaForm({titulo:t.titulo,descricao:t.descricao||"",link:t.link||"",trend_id:t.id,alvos:[{client:sel.client,unit:sel.unit||""}]});setAba("ideias");}} style={{background:"#fff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 14px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}><Ico n="send" size={13} color="#7c3aed"/> Mandar pro cliente</button>
               <button type="button" title="Editar" onClick={function(){setTrendForm({id:t.id,titulo:t.titulo,descricao:t.descricao,link:t.link||""});}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
               <button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
             </div>
@@ -97733,6 +98113,174 @@ function PageRoteiros({isMob}){
         </div>;
       })}
     </>}
+
+    {aba==="ideias"&&<>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Operação › Ideias da Pixels</b>. O que ele aprova vira card com um clique.</div>
+        <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
+          {[{id:"todas",l:"Todas"},{id:"enviada",l:"Aguardando"},{id:"aprovada",l:"Aprovadas"},{id:"recusada",l:"Recusadas"}].map(function(v){ const on=ideiaFiltro===v.id; const n=v.id==="todas"?ideias.length:ideias.filter(function(i){return i.status===v.id;}).length; return <button key={v.id} type="button" onClick={function(){setIdeiaFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l} · {n}</button>; })}
+        </div>
+        <button type="button" onClick={function(){setIdeiaForm({titulo:"",descricao:"",link:"",trend_id:null,alvos:[{client:clId,unit:clId==="bioter"?(unit||""):""}]});}} style={_btnGerar("",true,false,"#7c3aed")}><Ico n="plus" size={13} color="#fff"/> Nova ideia</button>
+      </div>
+      {ideiaForm&&<IdeiaForm f={ideiaForm} setF={setIdeiaForm} lista={_lista} unidades={_unidades} onSalvar={_salvarIdeia} onCancel={function(){setIdeiaForm(null);}}/>}
+      {ideias.length===0&&!ideiaForm&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:32,textAlign:"center",color:"#64748b",fontSize:12.5}}>Nenhuma ideia enviada ainda. Clica em "Nova ideia" ou, na aba Trends, em "Mandar pro cliente".</div>}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:12,alignItems:"start"}}>
+        {ideias.filter(function(i){ return ideiaFiltro==="todas"||i.status===ideiaFiltro; }).map(function(i){
+          const c=_lista.find(function(x){return x.id===i.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
+          const st={enviada:{l:"Aguardando o cliente",bg:"#fffbeb",c:"#b45309",b:"#fde68a"},aprovada:{l:"Aprovada pelo cliente",bg:"#ecfdf5",c:"#047857",b:"#a7f3d0"},recusada:{l:"Recusada",bg:"#fef2f2",c:"#b91c1c",b:"#fecaca"}}[i.status]||{l:i.status,bg:"#f1f5f9",c:"#475569",b:"#e2e8f0"};
+          return <div key={i.id} style={{background:"#fff",border:"1px solid "+st.b,borderTop:"4px solid "+cc,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:8,boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{background:cc+"18",color:cc,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_nomeCl(i.client_id,i.unidade)}</span>
+              <span style={{background:st.bg,color:st.c,border:"1px solid "+st.b,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{st.l}</span>
+              {i.trend_id&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase"}}>Trend</span>}
+              <span style={{flex:1}}/>
+              <button type="button" title="Tirar do portal" onClick={function(){_arquivarIdeia(i);}} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+            </div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>{i.titulo}</div>
+            {i.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{i.descricao}</div>}
+            {i.link&&<IdeiaLinkCard link={i.link} plataforma={i.plataforma}/>}
+            {i.status==="recusada"&&i.motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"8px 11px",color:"#991b1b",fontSize:12}}><b>Por que não curtiu:</b> {i.motivo}</div>}
+            {i.status==="aprovada"&&i.motivo&&<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:10,padding:"8px 11px",color:"#065f46",fontSize:12}}><b>Comentário:</b> {i.motivo}</div>}
+            <div style={{color:"#94a3b8",fontSize:11,display:"flex",gap:10,flexWrap:"wrap"}}>
+              <span>por {i.created_by||"—"} · {new Date(i.created_at).toLocaleDateString("pt-BR")}</span>
+              {i.respondido_em&&<span>respondida em {new Date(i.respondido_em).toLocaleDateString("pt-BR")}{i.respondido_por?(" por "+i.respondido_por):""}</span>}
+            </div>
+            {i.status==="aprovada"&&<div style={{display:"flex",gap:6,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+              {i.task_id?<span style={{color:"#047857",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6}}><Ico n="check" size={13} color="#047857"/> Já virou card na Linha de produção</span>
+              :<button type="button" onClick={function(){_virarCard(i);}} style={_btnGerar("",true,false,cc)}><Ico n="plus" size={13} color="#fff"/> Virar card</button>}
+            </div>}
+          </div>;
+        })}
+      </div>
+    </>}
+  </div>;
+}
+
+/* Plataforma pelo link (ícone e rótulo do cartão de referência) */
+function _rtPlataforma(link){
+  const l=String(link||"").toLowerCase();
+  if(!l) return null;
+  if(l.indexOf("tiktok.com")>=0) return "tiktok";
+  if(l.indexOf("instagram.com")>=0) return "instagram";
+  if(l.indexOf("youtube.com")>=0||l.indexOf("youtu.be")>=0) return "youtube";
+  if(l.indexOf("facebook.com")>=0||l.indexOf("fb.watch")>=0) return "facebook";
+  if(l.indexOf("linkedin.com")>=0) return "linkedin";
+  return "link";
+}
+function IdeiaLinkCard({link, plataforma}){
+  const p=plataforma||_rtPlataforma(link)||"link";
+  const info={tiktok:{l:"Ver no TikTok",c:"#0f172a"},instagram:{l:"Ver no Instagram",c:"#db2777"},youtube:{l:"Ver no YouTube",c:"#dc2626"},facebook:{l:"Ver no Facebook",c:"#1d4ed8"},linkedin:{l:"Ver no LinkedIn",c:"#0369a1"},link:{l:"Abrir referência",c:"#7c3aed"}}[p];
+  let host=""; try{ host=new URL(link).hostname.replace(/^www\./,""); }catch(_){ host=link; }
+  return <a href={link} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"10px 12px",textDecoration:"none"}}>
+    <span style={{width:34,height:34,borderRadius:10,background:info.c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="link" size={15} color="#fff"/></span>
+    <span style={{flex:1,minWidth:0}}>
+      <span style={{display:"block",color:"#0f172a",fontSize:12.5,fontWeight:800}}>{info.l} ↗</span>
+      <span style={{display:"block",color:"#94a3b8",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{host}</span>
+    </span>
+  </a>;
+}
+function IdeiaForm({f, setF, lista, unidades, onSalvar, onCancel}){
+  const inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:_RT_FF,color:"#0f172a",boxSizing:"border-box"};
+  const alvos=f.alvos||[];
+  const setAlvo=function(i,patch){ const n=alvos.slice(); n[i]=Object.assign({},n[i],patch); setF(Object.assign({},f,{alvos:n})); };
+  return <div style={{background:"#fff",border:"1px solid #ddd6fe",borderRadius:16,padding:16,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 6px 18px rgba(124,58,237,.08)"}}>
+    <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{f.trend_id?"Mandar trend como ideia":"Nova ideia pro cliente"}</div>
+    <input value={f.titulo} onChange={function(e){setF(Object.assign({},f,{titulo:e.target.value}));}} placeholder="Título da ideia (ex.: Trend do 'antes e depois' com a obra)" style={inp}/>
+    <textarea value={f.descricao} onChange={function(e){setF(Object.assign({},f,{descricao:e.target.value}));}} placeholder="Explica pro cliente: do que se trata e como adaptar pra marca dele" rows={4} style={Object.assign({},inp,{resize:"vertical"})}/>
+    <input value={f.link} onChange={function(e){setF(Object.assign({},f,{link:e.target.value}));}} placeholder="Link da referência (TikTok, Instagram, YouTube…)" style={inp}/>
+    <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Pra quem</div>
+    {alvos.map(function(a,i){ return <div key={i} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+      <select value={a.client} onChange={function(e){setAlvo(i,{client:e.target.value,unit:""});}} style={Object.assign({},inp,{width:"auto",flex:"1 1 180px"})}>{lista.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}</select>
+      {a.client==="bioter"&&<select value={a.unit||""} onChange={function(e){setAlvo(i,{unit:e.target.value});}} style={Object.assign({},inp,{width:"auto",flex:"1 1 140px"})}><option value="">Grupo (todas)</option>{unidades.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}</select>}
+      {alvos.length>1&&<button type="button" onClick={function(){ setF(Object.assign({},f,{alvos:alvos.filter(function(_x,j){return j!==i;})})); }} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:18}}>×</button>}
+    </div>; })}
+    <button type="button" onClick={function(){ setF(Object.assign({},f,{alvos:alvos.concat([{client:lista[0]?lista[0].id:"",unit:""}])})); }} style={{alignSelf:"flex-start",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:9,padding:"6px 11px",color:"#7c3aed",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>+ outro cliente</button>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+      <button type="button" onClick={onCancel} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px",color:"#475569",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Cancelar</button>
+      <button type="button" onClick={function(){onSalvar(f);}} style={{background:"#7c3aed",border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF}}>Enviar pro portal</button>
+    </div>
+  </div>;
+}
+
+/* ── PORTAL DO CLIENTE › Ideias da Pixels (17/09/2026) ──
+   Mesma pegada da Aprovações: uma ideia por vez, cartão grande, Aprovar / Não curti. */
+function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixels}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const cid=cl&&cl.id;
+  const unitFiltro=(cid==="bioter")?String(selUnit||""):"";
+  const [lista,setLista]=useState(null);
+  const [idx,setIdx]=useState(0);
+  const [filtro,setFiltro]=useState("enviada");
+  const [motivo,setMotivo]=useState("");
+  const [pedindoMotivo,setPedindoMotivo]=useState(false);
+  const carregar=async function(){
+    if(!sb||!cid){ setLista([]); return; }
+    const r=await sb.from("portal_ideias").select("*").eq("client_id",cid).neq("status","arquivada").order("created_at",{ascending:false}).limit(200);
+    if(!r.error) setLista(r.data||[]);
+  };
+  useEffect(function(){
+    carregar();
+    let ch=null,t=null; const rec=function(){ clearTimeout(t); t=setTimeout(carregar,300); };
+    try{ if(sb&&cid) ch=sb.channel("portal-ideias-"+cid).on("postgres_changes",{event:"*",schema:"public",table:"portal_ideias",filter:"client_id=eq."+cid},rec).subscribe(); }catch(_){}
+    return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[cid]);
+  const todas=(lista||[]).filter(function(i){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(i.unidade||"")===unitFiltro||!i.unidade; });
+  const vis=todas.filter(function(i){ return filtro==="todas"||i.status===filtro; });
+  const atual=vis[Math.min(idx,Math.max(0,vis.length-1))]||null;
+  useEffect(function(){ setIdx(0); setPedindoMotivo(false); setMotivo(""); },[filtro,cid,unitFiltro]);
+  const quem=(currentClientUser&&currentClientUser.name)||(cl&&cl.name)||"cliente";
+  const responder=async function(status){
+    if(!atual||!sb) return;
+    const r=await sb.from("portal_ideias").update({status:status,motivo:String(motivo||"").trim()||null,respondido_por:quem}).eq("id",atual.id);
+    if(r.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu: "+r.error.message); return; }
+    setLista(function(p){ return (p||[]).map(function(x){return x.id===atual.id?Object.assign({},x,{status:status,motivo:motivo||null,respondido_em:new Date().toISOString()}):x;}); });
+    setMotivo(""); setPedindoMotivo(false);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(status==="aprovada"?"Ideia aprovada! A Pixels já fica sabendo.":"Combinado, a Pixels fica sabendo.",2500);
+  };
+  const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:"#7c3aed";
+  const nEnv=todas.filter(function(i){return i.status==="enviada";}).length;
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Ideias da Pixels</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Trends e referências que separamos pra sua marca. Aprova o que faz sentido e a gente produz.</div>
+      </div>
+      <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
+        {[{id:"enviada",l:"Pra avaliar",n:nEnv},{id:"aprovada",l:"Aprovadas",n:todas.filter(function(i){return i.status==="aprovada";}).length},{id:"recusada",l:"Recusadas",n:todas.filter(function(i){return i.status==="recusada";}).length}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{v.l} · {v.n}</button>; })}
+      </div>
+    </div>
+    {lista===null&&<div style={{color:"#94a3b8",fontSize:12.5,padding:20}}>Carregando…</div>}
+    {lista!==null&&!atual&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:36,textAlign:"center",color:"#64748b",fontSize:13}}>{filtro==="enviada"?"Nenhuma ideia pra avaliar agora. Quando a Pixels separar algo novo, aparece aqui.":"Nada por aqui ainda."}</div>}
+    {atual&&<div style={{background:"#fff",border:"1px solid #e8ebf0",borderRadius:18,overflow:"hidden",boxShadow:"0 4px 16px rgba(15,23,42,.05)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc"}}>
+        <button type="button" disabled={idx<=0} onClick={function(){setIdx(idx-1);setPedindoMotivo(false);setMotivo("");}} style={{width:30,height:30,borderRadius:9,border:"1px solid #e2e8f0",background:"#fff",cursor:idx<=0?"default":"pointer",color:idx<=0?"#cbd5e1":"#334155",fontWeight:800}}>‹</button>
+        <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{Math.min(idx+1,vis.length)} <span style={{color:"#94a3b8",fontWeight:600}}>de {vis.length}</span></span>
+        <button type="button" disabled={idx>=vis.length-1} onClick={function(){setIdx(idx+1);setPedindoMotivo(false);setMotivo("");}} style={{width:30,height:30,borderRadius:9,border:"1px solid #e2e8f0",background:"#fff",cursor:idx>=vis.length-1?"default":"pointer",color:idx>=vis.length-1?"#cbd5e1":"#334155",fontWeight:800}}>›</button>
+        <span style={{flex:1}}/>
+        {atual.trend_id&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"3px 9px",fontSize:10,fontWeight:800,textTransform:"uppercase"}}>Trend do momento</span>}
+        {cid==="bioter"&&atual.unidade&&<span style={{background:_cor+"18",color:_cor,borderRadius:99,padding:"3px 9px",fontSize:10.5,fontWeight:800}}>{(function(){ const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(function(x){return x.id===atual.unidade;}); return u?(u.pickerLabel||u.label):atual.unidade; })()}</span>}
+        <span style={{color:"#94a3b8",fontSize:11}}>{new Date(atual.created_at).toLocaleDateString("pt-BR")}</span>
+      </div>
+      <div style={{padding:isMob?16:22,display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.4,lineHeight:1.2}}>{atual.titulo}</div>
+        {atual.descricao&&<div style={{color:"#334155",fontSize:14,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{atual.descricao}</div>}
+        {atual.link&&<IdeiaLinkCard link={atual.link} plataforma={atual.plataforma}/>}
+        {atual.status!=="enviada"&&<div style={{background:atual.status==="aprovada"?"#ecfdf5":"#fef2f2",border:"1px solid "+(atual.status==="aprovada"?"#a7f3d0":"#fecaca"),borderRadius:12,padding:"10px 14px",color:atual.status==="aprovada"?"#065f46":"#991b1b",fontSize:12.5,fontWeight:600}}>
+          {atual.status==="aprovada"?"Você aprovou esta ideia":"Você não curtiu esta ideia"}{atual.respondido_em?(" em "+new Date(atual.respondido_em).toLocaleDateString("pt-BR")):""}{atual.motivo?(" — "+atual.motivo):""}
+          {atual.task_id&&atual.status==="aprovada"&&<span style={{display:"block",marginTop:4,fontWeight:700}}>A Pixels já colocou em produção.</span>}
+        </div>}
+        {atual.status==="enviada"&&!viewerIsPixels&&<div style={{display:"flex",flexDirection:"column",gap:10,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+          {pedindoMotivo&&<textarea value={motivo} onChange={function(e){setMotivo(e.target.value);}} rows={2} placeholder="Se quiser, conta por quê (opcional)" style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,fontFamily:"inherit",resize:"vertical"}}/>}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <button type="button" onClick={function(){responder("aprovada");}} style={{flex:"1 1 160px",background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:12,padding:"13px 18px",color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 16px rgba(22,163,74,.3)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8}}><Ico n="check" size={16} color="#fff"/> Aprovar, quero essa</button>
+            {!pedindoMotivo
+              ?<button type="button" onClick={function(){setPedindoMotivo(true);}} style={{flex:"1 1 160px",background:"#fff",border:"1px solid #fecaca",borderRadius:12,padding:"13px 18px",color:"#b91c1c",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Não curti</button>
+              :<button type="button" onClick={function(){responder("recusada");}} style={{flex:"1 1 160px",background:"#dc2626",border:"none",borderRadius:12,padding:"13px 18px",color:"#fff",fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Confirmar que não curti</button>}
+          </div>
+        </div>}
+        {atual.status==="enviada"&&viewerIsPixels&&<div style={{color:"#94a3b8",fontSize:11.5,borderTop:"1px solid #f1f5f9",paddingTop:8}}>Aguardando o cliente responder (você está vendo como Pixels).</div>}
+      </div>
+    </div>}
   </div>;
 }
 
