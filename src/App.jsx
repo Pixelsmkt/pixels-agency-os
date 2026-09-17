@@ -3792,6 +3792,29 @@ function _pxCtxTxt(v){
     const x=_pxCtxTxt(v[k]); return x?(k+": "+x):""; }).filter(Boolean).join(" | ");
   return String(v).trim();
 }
+/* PRODUTOS DO BRIEFING DO PORTAL (Vinicius, 17/09/2026: "óbvio que precisa sair do briefing
+   também"). É onde o cliente preenche a lista real de produtos/serviços, com prioridade
+   (🟣 🟢 🟡 🔴) em alguns. Vem de claude_contexto_copy → briefing_produtos (Bioter: unidade,
+   senão grupo). Preço fica de fora de propósito: copy não cita valor. */
+const _PX_BRIEF_PROD_CAMPOS=[
+  ["principais","Produtos e serviços",2200],["detalhes","Detalhes",900],
+  ["foco_campanha","Foco de campanha",700],["campanha_atual","Campanha atual",500],
+  ["diferenciais","Diferenciais",600],["beneficios","Benefícios",700],
+  ["dores_resolvidas","Dores que resolve",500],["sazonalidade","Sazonalidade",400]];
+function pxBriefingProdutosTxt(ctx,limite){
+  const bp=(ctx&&ctx.briefing_produtos)||{};
+  if(!bp||typeof bp!=="object") return "";
+  const max=limite||4000; let out="";
+  for(let i=0;i<_PX_BRIEF_PROD_CAMPOS.length;i++){
+    const c=_PX_BRIEF_PROD_CAMPOS[i]; const v=_pxCtxTxt(bp[c[0]]);
+    if(!v) continue;
+    const t=v.length>c[2]?(v.slice(0,c[2]).replace(/\s+\S*$/,"")+"…"):v;
+    if(out.length+t.length>max) break;
+    out+=c[1]+":\n"+t+"\n\n";
+  }
+  if(!out) return "";
+  return "PRODUTOS E SERVIÇOS — BRIEFING QUE O CLIENTE PREENCHEU NO PORTAL (fonte principal de fatos sobre o que a empresa vende; 🟣 prioridade · 🟢 importante · 🟡 complementar · 🔴 inativo = nunca usar):\n"+out;
+}
 /* TELEFONE COLADO NO CTA (Vinicius, 15/09/2026) — "sem esse espaçamento de enter entre
    telefone e a frase do CTA". A linha do 📱 é a continuação da chamada, no mesmo bloco.
    Vale pra legenda que a IA escreve agora E pras que já estão gravadas com Enter duplo. */
@@ -3887,6 +3910,7 @@ async function pxReescreverCopy(opts){
 
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
@@ -4218,6 +4242,7 @@ async function pxGerarLegendas(opts){
   if(pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.sobre).slice(0,900)+"\n\n";
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
@@ -4463,6 +4488,7 @@ async function pxGerarBriefing(opts){
     for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
     u+="\n";
   }
+  { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
     const f=foco[0]; const partes=[];
     if(f.objetivo) partes.push("objetivo: "+f.objetivo);
@@ -96894,6 +96920,7 @@ async function pxGerarRoteiros(opts){
   const clienteNome=String((opts&&opts.clienteNome)||client);
   const trend=(opts&&opts.trend)||null;
   const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
+  const produtosFeitos=(opts&&opts.produtosFeitos)||{}; // {produto: quantos roteiros já tem}
   const quantos=Math.max(1,Math.min(5,(opts&&opts.quantos)||5));
   if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const py=unit==="paraguay";
@@ -96912,7 +96939,11 @@ async function pxGerarRoteiros(opts){
   if(pb.descricao||pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.descricao||pb.sobre)+"\n\n";
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
-  if(pb.produtos&&pb.produtos.length) u+="PRODUTOS E SERVIÇOS: "+_pxCtxTxt(pb.produtos).slice(0,900)+"\n\n";
+  // PRODUTOS (17/09/2026): o briefing do portal é a fonte principal; o playbook complementa.
+  const _bpTxt=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,4200):"";
+  if(_bpTxt) u+=_bpTxt;
+  if(pb.produtos&&pb.produtos.length) u+="PRODUTOS NO PLAYBOOK (complemento): "+_pxCtxTxt(pb.produtos).slice(0,900)+"\n\n";
+  const _temProdutos=!!_bpTxt||!!(pb.produtos&&pb.produtos.length);
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   if(regras.length){ u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n"; regras.forEach(function(r){ u+="- ["+String(r.tipo||"").toUpperCase()+"] "+r.regra+"\n"; }); u+="\n"; }
   if(foco.length){
@@ -96927,6 +96958,8 @@ async function pxGerarRoteiros(opts){
   }
   if(aprov.length){ u+="LEGENDAS JÁ APROVADAS (o tom que funciona):\n"; aprov.slice(0,4).forEach(function(a){ u+="---\n"+_pxHtmlParaTexto(a.legenda).slice(0,400)+"\n"; }); u+="\n"; }
   if(recus.length){ u+="RECUSADAS E O MOTIVO (não repetir o erro):\n"; recus.slice(0,4).forEach(function(r){ if(r.feedback) u+="- "+(r.titulo||"")+": "+r.feedback+"\n"; }); u+="\n"; }
+  const _pf=Object.keys(produtosFeitos).filter(Boolean);
+  if(_pf.length){ u+="PRODUTOS QUE JÁ TÊM ROTEIRO (quantos) — dê preferência aos que ainda não têm ou têm menos:\n"; _pf.sort(function(a,b){return produtosFeitos[b]-produtosFeitos[a];}).slice(0,30).forEach(function(k){ u+="- "+k+" ("+produtosFeitos[k]+")\n"; }); u+="\n"; }
   if(jaFeitos.length){ u+="⛔ ASSUNTOS QUE JÁ TÊM ROTEIRO (NÃO repita nem chegue perto):\n"; jaFeitos.slice(0,40).forEach(function(a){ u+="- "+a+"\n"; }); u+="\n"; }
   if(trend){
     u+="TREND DO MOMENTO (a social media explicou):\n"+"Título: "+(trend.titulo||"")+"\n"+"Do que se trata: "+(trend.descricao||"")+"\n\n";
@@ -96934,13 +96967,17 @@ async function pxGerarRoteiros(opts){
   }else{
     u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
   }
+  if(_temProdutos){
+    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize 🟣, depois 🟢; 🟡 só de vez em quando; 🔴 NUNCA. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
+    u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
+  }
   u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
   u+="- PARÁGRAFOS: escreva em parágrafos CURTOS, uma ideia por parágrafo, com uma linha em branco entre eles. O DESENVOLVIMENTO tem 3 a 4 parágrafos; abertura e fechamento, 1 ou 2. Nunca um bloco só.\n";
   u+="- TAMANHO: 170 a 200 palavras NO TOTAL (90 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 200 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
   u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
-  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\nABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
+  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (o nome curto do produto/serviço da lista, em português, 1 a 5 palavras)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
 
   const data=await askIA({model:PX_IA_MODELO,max_tokens:4200,system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
@@ -96949,7 +96986,8 @@ async function pxGerarRoteiros(opts){
   const out=[];
   blocos.forEach(function(b){
     const pega=function(rot,prox){ const re=new RegExp("(?:"+rot+")\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:"+prox+")\\s*:|$)","i"); const m=b.match(re); return m?m[1].trim():""; };
-    const r={assunto:pega("ASSUNTO","ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,""),
+    const r={assunto:pega("ASSUNTO","PRODUTO|PRODUCTO|ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,""),
+      produto:pega("PRODUTO|PRODUCTO","ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,"").slice(0,60),
       abertura:pega("ABERTURA|APERTURA","DESENVOLVIMENTO|DESARROLLO"),
       desenvolvimento:pega("DESENVOLVIMENTO|DESARROLLO","FECHAMENTO|CIERRE"),
       fechamento:pega("FECHAMENTO|CIERRE","NUNCA_ACHA_ISSO_AQUI")};
@@ -96992,6 +97030,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{width:30,height:30,borderRadius:9,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+_c+"55"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rtIcone(r.id)}</svg></span>
           <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.3,lineHeight:1.25}}>{r.assunto||"Roteiro"}</span>
+          {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.2,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.produto}</span>}
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
         </div>
@@ -97086,9 +97125,10 @@ function PageRoteiros({isMob}){
     setGerando(chave);
     try{
       const ja=roteiros.filter(function(r){return r.client_id===cId&&String(r.unidade||"")===uId;}).map(function(r){return r.assunto;}).filter(Boolean);
-      const lista=await pxGerarRoteiros({client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,quantos:5});
+      const pf={}; roteiros.forEach(function(r){ if(r.client_id===cId&&String(r.unidade||"")===uId&&r.produto){ pf[r.produto]=(pf[r.produto]||0)+1; } });
+      const lista=await pxGerarRoteiros({produtosFeitos:pf,client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,quantos:5});
       const lote=Date.now().toString(36);
-      const rows=lista.map(function(r){ return {client_id:cId,unidade:uId,origem:trend?"trend":"ia",trend_id:trend?trend.id:null,lote:lote,assunto:r.assunto,abertura:r.abertura,desenvolvimento:r.desenvolvimento,fechamento:r.fechamento,status:"sugestao",visivel_portal:false,created_by:(_u&&_u.name)||""}; });
+      const rows=lista.map(function(r){ return {client_id:cId,unidade:uId,origem:trend?"trend":"ia",trend_id:trend?trend.id:null,lote:lote,assunto:r.assunto,produto:r.produto||null,abertura:r.abertura,desenvolvimento:r.desenvolvimento,fechamento:r.fechamento,status:"sugestao",visivel_portal:false,created_by:(_u&&_u.name)||""}; });
       const ins=await sb.from("roteiros_video").insert(rows).select("*");
       if(ins.error) throw ins.error;
       setRoteiros(function(p){ return (ins.data||[]).concat(p); });
