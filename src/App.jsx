@@ -20087,6 +20087,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
+  const [matAberto,setMatAberto]=useState(null); // "foto" | "short" | null — lista de material do contador
   // Ref síncrono de tasks salvas nesta sessão (draft → não-draft).
   // Evita o bug do card sumir após save: o close checa este ref em vez do estado stale de openCard.
   const _savedInSessionRef=useRef(new Set());
@@ -20947,22 +20948,71 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
         };
         const _matFoto=_contaMat(_ehFotoObraCal), _matShort=_contaMat(_ehShortCal);
         const _mesLabel=calMonth.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
-        const _kpiMat=function(label,c,color,iconSvg){
-          const _pct=c.total?Math.round(c.com/c.total*100):0;
-          return <div style={{flex:"1 1 260px",minWidth:220,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
-            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
-            <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,minWidth:0,flex:1}}>
-              <span style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
-              <div style={{display:"flex",alignItems:"baseline",gap:10,marginTop:2,flexWrap:"wrap"}}>
-                <span style={{fontSize:22,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:14,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
-                <span style={{fontSize:12,fontWeight:600,color:"#16a34a"}}>com material</span>
-                <span style={{fontSize:11,fontWeight:500,color:"#94a3b8"}}>· não aprovados, todos os meses</span>
-                <span style={{fontSize:12,fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
-              </div>
-              <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginTop:7,overflow:"hidden"}}>
-                <div style={{width:_pct+"%",height:"100%",background:"#16a34a",borderRadius:99,transition:"width .3s"}}></div>
-              </div>
+        /* CONTADOR MENOR + CLIQUE MOSTRA A LISTA (Vinicius, 17/09/2026): "não precisa barra de
+           progresso, deixa menor sem esse espaço sobrando… quando clicar mostra quais já estão
+           com material, com a miniatura". Card compacto (só o conteúdo), clique abre o painel. */
+        const _thumbMat=function(t){
+          const f=(t.files||[]).slice().reverse().find(function(a){
+            if(!a||a.isAnnotation||a.uploading||!a.url)return false;
+            if(a.isRef&&a.tipo!=="referencia"&&a.tipo!=="material")return false;
+            const tp=String(a.type||""); return tp.indexOf("image/")===0||tp.indexOf("video/")===0||/\.(jpe?g|png|webp|gif|heic|mp4|mov|webm|m4v)(\?|$)/i.test(String(a.url));
+          });
+          if(!f)return null;
+          const vid=String(f.type||"").indexOf("video/")===0||/\.(mp4|mov|webm|m4v)(\?|$)/i.test(String(f.url));
+          return {url:f.thumbnail||f.url, video:vid, player:vid&&!f.thumbnail};
+        };
+        const _kpiMat=function(chave,label,c,color,iconSvg){
+          const on=matAberto===chave;
+          return <button type="button" onClick={function(){setMatAberto(on?null:chave);}} title={on?"Fechar lista":"Ver quais já estão com material"}
+            style={{flex:"0 0 auto",background:on?"#f8fafc":"#fff",border:"1px solid "+(on?color:"#e2e8f0"),borderRadius:12,padding:"9px 14px 9px 10px",display:"inline-flex",alignItems:"center",gap:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"border-color .15s"}}>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:8,background:color,color:"#fff",flexShrink:0}}>{iconSvg}</span>
+            <span style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
+              <span style={{fontSize:10.5,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
+              <span style={{display:"inline-flex",alignItems:"baseline",gap:8,marginTop:2,whiteSpace:"nowrap"}}>
+                <span style={{fontSize:19,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
+                <span style={{fontSize:11.5,fontWeight:600,color:"#16a34a"}}>com material</span>
+                <span style={{fontSize:11.5,fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
+              </span>
+            </span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>;
+        };
+        const _painelMat=function(){
+          if(!matAberto)return null;
+          const fn=matAberto==="foto"?_ehFotoObraCal:_ehShortCal;
+          const lista=_pipelineMat.filter(fn).slice().sort(function(a,b){return String(a.publishDate||"9").localeCompare(String(b.publishDate||"9"));});
+          const com=lista.filter(_temMaterialCal), sem=lista.filter(function(t){return !_temMaterialCal(t);});
+          const _dt=function(t){ const d=String(t.publishDate||""); return d?(d.slice(8,10)+"/"+d.slice(5,7)):"sem data"; };
+          const _nomeCl=function(t){ const c=(CLIENTS||[]).find(function(x){return x.id===t.client;}); let n=c?c.name:(t.client||""); if(t.bioterUnit){ const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(function(x){return x.id===t.bioterUnit;}); n+=" · "+(u?u.label:t.bioterUnit); } return n; };
+          return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,fontWeight:800,color:"#0f172a"}}>{matAberto==="foto"?"Fotos de obra":"Vídeos short"} com material ({com.length})</span>
+              <span style={{fontSize:11,color:"#94a3b8"}}>· não aprovados, todos os meses · clique pra abrir o card</span>
+              <span style={{flex:1}}/>
+              <button type="button" onClick={function(){setMatAberto(null);}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Fechar</button>
             </div>
+            {com.length?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+              {com.map(function(t){ const th=_thumbMat(t);
+                return <div key={t.id} onClick={function(){setOpenCard(t);}} title={t.title} style={{cursor:"pointer",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:"#fff"}}>
+                  <div style={{position:"relative",height:92,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {th&&(th.player?<video src={th.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<img src={th.url} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}}/>)}
+                    {th&&th.video&&<span style={{position:"absolute",width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,.9)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="10" height="10" viewBox="0 0 24 24" fill="#0f172a"><polygon points="6 3 20 12 6 21 6 3"/></svg></span>}
+                    <span style={{position:"absolute",top:5,left:5,background:"rgba(15,23,42,.75)",color:"#fff",borderRadius:6,padding:"1px 6px",fontSize:10,fontWeight:700}}>{_dt(t)}</span>
+                  </div>
+                  <div style={{padding:"5px 7px"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title||"Sem título"}</div>
+                    <div style={{fontSize:10,color:"#94a3b8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_nomeCl(t)}</div>
+                  </div>
+                </div>; })}
+            </div>:<div style={{fontSize:12,color:"#94a3b8"}}>Nenhum ainda.</div>}
+            {sem.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <span style={{fontSize:11.5,fontWeight:800,color:"#dc2626"}}>Faltam material ({sem.length})</span>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {sem.map(function(t){ return <button key={t.id} type="button" onClick={function(){setOpenCard(t);}} title={t.title}
+                  style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  {_dt(t)} · {_nomeCl(t)}</button>; })}
+              </div>
+            </div>}
           </div>;
         };
         const _kpi=function(label,value,color,iconSvg){
@@ -20988,9 +21038,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
             {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
           </div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {_kpiMat("Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
-            {_kpiMat("Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
+            {_kpiMat("foto","Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
+            {_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
           </div>
+          {_painelMat()}
         </div>;
       })()}
 
