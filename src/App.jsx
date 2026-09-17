@@ -18250,7 +18250,14 @@ async function pxAutoplanDesempilhar(novos){
     return ok;
   }catch(e){ console.warn("[autoplan desempilhar]",e); return 0; }
 }
+/* (17/09/2026) Depois de tirar os rascunhos vazios do Claude, o que AINDA estourar a semana anda
+   em cascata (pxCascataAuto) — vale pra comemorativa E pra feira/evento novo no Planejamento. */
 async function pxAutoplanAbrirEspaco(novos){
+  const n=await _pxAutoplanAbrirEspacoBase(novos);
+  if(typeof pxCascataAuto==="function"){ try{ await pxCascataAuto(novos); }catch(_e){ console.warn("[cascata auto]",_e); } }
+  return n;
+}
+async function _pxAutoplanAbrirEspacoBase(novos){
   try{
     const sb=window._sb; if(!sb||!Array.isArray(novos)||!novos.length) return 0;
     const hoje=_pxApIso(new Date());
@@ -18304,9 +18311,10 @@ async function pxAutoplanAbrirEspaco(novos){
      cliente, pega o dia útil livre mais perto. Se a semana seguinte também estourar, o último
      de lá anda também — e assim por diante, até achar uma semana com vaga.
    - NUNCA se move: data comemorativa / evento / aniversário (id autocom-/autoev- ou tag
-     "Data comemorativa"), Collab (ocupa 5 unidades, mexer nele bagunça as outras), Foto de
-     obra e Short (andam em grupo), card já publicado ou com data passada, card "Somente
-     story" / "Não publica" / folder (não ocupam o dia), e o card novo.
+     "Data comemorativa"), Collab (ocupa 5 unidades, mexer nele bagunça as outras), card já
+     publicado ou com data passada, card "Somente story" / "Não publica" / folder (não ocupam
+     o dia), e o card novo. Foto de obra e Short ANDAM (decisão de 17/09: feira/urgente vale
+     mais que o grupo das três unidades; só a unidade afetada mexe).
    - Quando não há card movível na semana, a cascata para ali e a prévia avisa.
    - É só PRÉVIA: `pxCascataPlanejar` calcula e devolve a lista; quem chama mostra a
      pixelsConfirm e só então roda `pxCascataAplicar`. Nada anda sem confirmação. Tudo fica
@@ -18319,7 +18327,9 @@ function _pxCasFixo(t){
   const id=String((t&&t.id)||"");
   if(id.indexOf("autocom-")===0||id.indexOf("autoev-")===0) return true;
   const tags=Array.isArray(t&&t.tags)?t.tags:[];
-  return tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); });
+  if(tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); })) return true;
+  // rede de segurança: aniversário da marca criado à mão sem a tag ("Arte de 29 anos/años")
+  return /anivers[áa]rio|aniversario|cumplea|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""));
 }
 function _pxCasGrupo(t){
   const ct=String((t&&(t.content_type||t.contentType))||"");
@@ -18334,7 +18344,9 @@ function _pxCasMovivel(t,hoje,novoId){
   if(_pxNaoEhPublicacao(t)) return false;
   const iso=String(t.publish_date||"").slice(0,10);
   if(!iso||iso<=hoje) return false;
-  if(_pxCasFixo(t)||_pxApEhCollab(t)||_pxCasGrupo(t)) return false;
+  // (17/09, Vinicius) Foto de obra e Short PODEM andar — feira/urgente vale mais que o grupo das
+  // três unidades. Só a unidade afetada mexe; as outras ficam. Collab continua travado.
+  if(_pxCasFixo(t)||_pxApEhCollab(t)) return false;
   return true;
 }
 function _pxCasConta(rows,alvo){
@@ -18368,7 +18380,7 @@ function _pxCasDestino(t,L,rows,hoje){
 }
 /* pxCascataPlanejar(novo) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana:"dd/mm–dd/mm"}
    `novo` = card em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
-async function pxCascataPlanejar(novo){
+async function pxCascataPlanejar(novo,extras){
   const vazio={moves:[],travou:[],semana:""};
   try{
     const sb=window._sb; if(!sb||!novo) return vazio;
@@ -18387,7 +18399,18 @@ async function pxCascataPlanejar(novo){
     const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fimH)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return vazio;
-    const rows=(r.data||[]).filter(function(x){ return String(x.id)!==String(nn.id); }).concat([nn]);
+    // extras = outros cards novos do mesmo lote (feira cria 2–3 de uma vez) que talvez ainda não
+    // estejam no banco — entram na conta pra semana não ser lida como vazia.
+    const _ids={}; _ids[String(nn.id)]=true;
+    const rows=(r.data||[]).filter(function(x){ if(_ids[String(x.id)]) return false; _ids[String(x.id)]=true; return true; }).concat([nn]);
+    (Array.isArray(extras)?extras:[]).forEach(function(e){
+      if(!e||_ids[String(e.id)]) return;
+      const ei=String(e.publishDate||e.publish_date||"").slice(0,10); if(!ei) return;
+      _ids[String(e.id)]=true;
+      rows.push({id:e.id,client:e.client,bioter_unit:e.bioterUnit||e.bioter_unit||"",publish_date:ei,status:e.status||"rascunhos",
+        somente_story:!!(e.somenteStory||e.somente_story),nao_publica:!!(e.naoPublica||e.nao_publica),
+        content_type:e.contentType||e.content_type||null,title:e.title||"",tags:e.tags||[]});
+    });
     const moves=[], travou=[];
     const semanaDe=function(x){ return _pxApLinha(String(x.publish_date||"").slice(0,10)).iniIso; };
     for(const alvo of alvos){
@@ -18430,7 +18453,7 @@ function pxCascataTexto(plano,nomeCliente){
   const n=plano.moves.length;
   let s="A semana "+plano.semana+(nomeCliente?(" de "+nomeCliente):"")+" já está na cadência. Pra encaixar o card novo, "+(n>1?"estes "+n+" cards andam":"este card anda")+" uma semana, na sequência em que estavam:\n";
   plano.moves.forEach(function(m){ s+="• "+(m.title||"(sem título)")+" — "+_pxCasBr(m.de)+" → "+_pxCasBr(m.para)+"\n"; });
-  s+="\nDatas comemorativas, collabs, foto de obra e short ficam onde estão.";
+  s+="\nDatas comemorativas e collabs ficam onde estão.";
   if(plano.travou.length) s+="\n⚠ Na semana "+plano.travou[0].semana+" não tem card que possa andar — ela fica acima da cadência.";
   return s;
 }
@@ -18460,9 +18483,51 @@ async function pxCascataAplicar(plano,setTasks,quem){
       setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
     }
     if(ok) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente",[],alterados);
-    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+" andou"+(ok>1?"ram":"")+" uma semana pra dar lugar ao card novo.",6000);
+    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma semana pra dar lugar ao card novo.",6000);
     return ok;
   }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
+}
+async function _pxCascataComemorativaViraStory(novo){
+  const sb=window._sb; if(!sb||!novo||String(novo.id||"").indexOf("autoev-")!==0) return 0;
+  const iso=String(novo.publishDate||novo.publish_date||"").slice(0,10); if(!iso) return 0;
+  const nn={id:novo.id,client:novo.client,bioter_unit:novo.bioterUnit||novo.bioter_unit||""};
+  const alvos=_pxColAlvos(nn); if(!alvos.length) return 0;
+  const r=await sb.from("tasks").select("id,title,client,bioter_unit,tags,somente_story,timeline").eq("publish_date",iso).eq("client",String(novo.client||"")).is("deleted_at",null);
+  if(!r||r.error||!Array.isArray(r.data)) return 0;
+  let n=0;
+  const agora=new Date(); const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  for(const t of r.data){
+    if(String(t.id)===String(nn.id)||t.somente_story||!_pxCasFixo(t)||String(t.id).indexOf("autoev-")===0) continue;
+    if(!_pxColAlvos(t).some(function(a){ return alvos.indexOf(a)>=0; })) continue;
+    const tags=(Array.isArray(t.tags)?t.tags:[]).filter(function(x){ return String(x)!=="Somente story"; }).concat(["Somente story"]);
+    const tl=(Array.isArray(t.timeline)?t.timeline:[]).concat([{type:"edit",user:"Claude",atFmt:fmt,label:"Virou Somente story: a feira/evento \""+String(novo.title||"").slice(0,60)+"\" publica no feed neste mesmo dia"}]);
+    const u=await sb.from("tasks").update({somente_story:true,tags:tags,timeline:tl}).eq("id",t.id);
+    if(u&&u.error){ console.warn("[cascata story]",t.id,u.error.message); continue; }
+    n++;
+    _pxApRegistrar("Comemorativa virou Somente story: feira/evento no mesmo dia",[],[{id:t.id,antes:{somente_story:false},depois:{somente_story:true}}]);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info("\""+String(t.title||"")+"\" virou Somente story: a feira publica no feed no mesmo dia.",7000);
+  }
+  return n;
+}
+/* pxCascataAuto(novos) — versão SEM prévia, pros cards que o app cria sozinho (data comemorativa,
+   feira/evento do Planejamento). Não tem ninguém pra confirmar: a data fixa manda, o resto anda em
+   sequência. Fica registrado em claude_plano_execucoes (desfaz pelo botão de emergência) + toast. */
+async function pxCascataAuto(novos){
+  try{
+    const lista=(Array.isArray(novos)?novos:[]).filter(function(t){ return t&&!(t.somenteStory||t.somente_story)&&!(t.naoPublica||t.nao_publica); });
+    if(!lista.length) return 0;
+    let total=0;
+    // (17/09, Vinicius) Feira/evento caindo NO MESMO DIA de uma comemorativa do mesmo cliente/unidade:
+    // o feed fica com a feira e a comemorativa vira "Somente story" (não conta na cadência).
+    for(const novo of lista){ try{ await _pxCascataComemorativaViraStory(novo); }catch(_e){ console.warn("[cascata story]",_e); } }
+    for(let i=0;i<lista.length;i++){
+      const novo=lista[i];
+      const plano=await pxCascataPlanejar(novo,lista.filter(function(x,j){ return j>i; }));
+      if(!plano.moves.length) continue;
+      total+=await pxCascataAplicar(plano,null,"data fixa: "+String(novo.title||"").slice(0,40));
+    }
+    return total;
+  }catch(e){ console.warn("[cascata auto]",e); return 0; }
 }
 /* pxCascataConfirmar(novo,setTasks,quem) → Promise<true> sempre (o save segue). Prévia + OK. */
 async function pxCascataConfirmar(novo,setTasks,quem){
