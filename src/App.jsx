@@ -19075,7 +19075,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             {somenteStory&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>}
           </span>
           <span title="Somente story" style={{width:34,height:34,borderRadius:10,background:somenteStory?"#f59e0b":"#fef3c7",color:somenteStory?"#fff":"#d97706",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.2"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>
           </span>
           <span style={{minWidth:0,flex:1}}>
             <span style={{display:"block",fontSize:13,fontWeight:800,color:somenteStory?"#92400e":"#0f172a",letterSpacing:-.2}}>Somente story</span>
@@ -21600,7 +21600,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
                             </div>
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
                               style={{display:"inline-flex",alignItems:"center",gap:4,height:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:pxEscurecerCor(cardColor,.42),color:"#fff",border:"1px solid rgba(255,255,255,0.18)",fontSize:9,fontWeight:800,letterSpacing:.5,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><circle cx="12" cy="12" r="9.5" strokeDasharray="4.2 2.6"/><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></svg>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
                             {(function(){
