@@ -1409,6 +1409,30 @@ function withPartnerOverride(perms, userId){
   return isPartner(userId)?{...PARTNER_PERMS}:(perms||{...DEFAULT_PERMS});
 }
 
+/* ═══ PERMISSÕES POR BLOCO (17/09/2026) — menu › aba › bloco ═══
+   Além das chaves ligado/desligado acima, cada colaborador pode ter em
+   profiles.permissions.blocos um mapa { "<chave>": true|false } com SÓ o que o sócio
+   mexeu à mão em Acessos › Time › gerenciar acesso. Quem nunca foi mexido segue a regra
+   fixa do sistema (o "padrão" que cada tela passa). Chaves em uso:
+     menu.playbooks                       — enxerga o menu Playbooks
+     playbooks.cadeira.<cadeira>          — enxerga a aba (cadeira) do playbook
+     playbooks.<cadeira>.<pb-bloco>       — enxerga o bloco dentro daquela cadeira
+   pxPode(chave, padrao, ctx): sócio SEMPRE true; override manual manda; senão o padrão.
+   ctx = {user, perms} (visão "ver como") ou o id do colaborador; sem ctx = CURRENT_USER. */
+function pxPermBlocos(perms){ return (perms&&perms.blocos&&typeof perms.blocos==="object")?perms.blocos:{}; }
+function pxPode(chave, padrao, ctx){
+  let u=null, perms=null, uid=null;
+  if(ctx&&typeof ctx==="object"){ u=ctx.user||null; perms=ctx.perms||null; }
+  else if(typeof ctx==="string") uid=ctx;
+  if(!uid) uid=(u&&u.id)||(typeof CURRENT_USER!=="undefined"&&CURRENT_USER?CURRENT_USER.id:null);
+  if(!u&&uid&&typeof TEAM!=="undefined") u=TEAM.find(function(t){return t.id===uid;})||null;
+  if(u&&u.level===1) return true;
+  if(!perms) perms=(typeof ACCESS_STORE!=="undefined"&&ACCESS_STORE[uid])||{};
+  const b=pxPermBlocos(perms);
+  if(typeof b[chave]==="boolean") return b[chave];
+  return !!padrao;
+}
+
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
@@ -35444,6 +35468,7 @@ const PERM_TABS=[
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
+  {id:"playbooks",    navIcon:"playbooks",  label:"Playbooks",          color:"#7c3aed", arvore:true}, // permissões por bloco (17/09/2026)
   {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
   {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
@@ -35583,6 +35608,111 @@ async function _pixelsOcultarMembro(teamId){
   }catch(_){}
 }
 
+/* ═══ PLAYBOOKS — permissões por bloco (17/09/2026) ═══
+   Árvore menu › cadeira › bloco. Cada item mostra o estado EFETIVO: o que o sócio ligou/desligou
+   à mão (perms.blocos[chave]) ou, se nunca mexeu, o padrão fixo do sistema. O padrão vem das
+   mesmas funções que o playbook usa pra se montar (_pbCadeiraPadrao/_pbBlocoPadrao), então a
+   tela e a permissão nunca discordam. */
+function _pbPermItens(user, perms){
+  if(typeof PB_CADEIRAS==="undefined") return [];
+  const b=(perms&&perms.blocos)||{};
+  const ef=(key,padrao)=>(typeof b[key]==="boolean")?b[key]:!!padrao;
+  const itens=[];
+  const cadOn=PB_CADEIRAS.filter(c=>ef("playbooks.cadeira."+c.id,_pbCadeiraPadrao(user,c.id)));
+  const _fixo=user.level===1||user.id==="ellen"||user.dash==="coordinator"||user.dash==="designer"||user.dash==="editor"||user.dash==="social"||user.id==="erick"||!!(perms&&perms.verPlaybooks)||cadOn.length>0;
+  itens.push({key:"menu.playbooks",nivel:"menu",padrao:_fixo,label:"Acessar Playbooks (menu)"});
+  PB_CADEIRAS.forEach(c=>{
+    const pc=_pbCadeiraPadrao(user,c.id);
+    itens.push({key:"playbooks.cadeira."+c.id,nivel:"cadeira",cadeira:c.id,padrao:pc,label:c.label});
+    (typeof PB_BLOCOS!=="undefined"?PB_BLOCOS:[]).forEach(bl=>{
+      itens.push({key:"playbooks."+c.id+"."+bl.id,nivel:"bloco",cadeira:c.id,padrao:_pbBlocoPadrao(c.id,bl.id),label:bl.label});
+    });
+  });
+  return itens.map(i=>({...i,manual:typeof b[i.key]==="boolean",on:ef(i.key,i.padrao)}));
+}
+function PermsPlaybooksArvore({user,perms,setPerms,cor,isPartnerUser,onDirty,isMobP}){
+  const [aberta,setAberta]=useState(()=>{ const o={}; (typeof PB_CADEIRAS!=="undefined"?PB_CADEIRAS:[]).forEach(c=>{o[c.id]=false;}); return o; });
+  if(typeof PB_CADEIRAS==="undefined") return <div style={{color:"#94a3b8",fontSize:12.5}}>Playbooks ainda não carregou.</div>;
+  const itens=_pbPermItens(user,perms);
+  const by={}; itens.forEach(i=>{by[i.key]=i;});
+  const setChave=(key,val)=>{
+    if(isPartnerUser)return;
+    setPerms(p=>{ const nb={...((p&&p.blocos)||{})}; if(val===null) delete nb[key]; else nb[key]=val; return {...p,blocos:nb}; });
+    if(onDirty)onDirty();
+  };
+  const Sw=({item,size})=>{
+    const on=isPartnerUser?true:item.on;
+    const w=size==="sm"?34:38, h=size==="sm"?20:22, k=size==="sm"?14:16;
+    return <div style={{width:w,height:h,borderRadius:99,background:on?cor:"#e2e8f0",position:"relative",transition:"background .18s",flexShrink:0}}>
+      <div style={{position:"absolute",top:3,left:on?(w-k-3):3,width:k,height:k,borderRadius:"50%",background:"#fff",transition:"left .18s",boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}/>
+    </div>;
+  };
+  const Badge=({item})=>{
+    if(isPartnerUser) return null;
+    return <span title={item.manual?"Ligado/desligado à mão — clique em ↺ pra voltar ao padrão":"Regra padrão do sistema pra essa função"}
+      style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,color:item.manual?cor:"#94a3b8",background:item.manual?cor+"14":"#f1f5f9",borderRadius:99,padding:"2px 6px",flexShrink:0}}>{item.manual?"manual":"padrão"}</span>;
+  };
+  const Reset=({item})=>{
+    if(isPartnerUser||!item.manual) return null;
+    return <button onClick={e=>{e.stopPropagation();setChave(item.key,null);}} title="Voltar ao padrão"
+      style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:7,width:22,height:22,color:"#64748b",cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"inherit"}}>↺</button>;
+  };
+  const menu=by["menu.playbooks"];
+  const menuOn=isPartnerUser?true:menu.on;
+  const _card=(on)=>({display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,padding:"11px 14px",background:on?cor+"08":"#fff",borderRadius:11,border:"1px solid "+(on?cor+"40":"#eef0f3"),transition:"all .12s",cursor:isPartnerUser?"default":"pointer"});
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {/* menu */}
+    <div onClick={()=>setChave(menu.key,!menu.on)} style={_card(menuOn)}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{color:menuOn?"#0f172a":"#64748b",fontSize:13,fontWeight:700}}>{menu.label}</span><Badge item={menu}/></div>
+        <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>Desligado, o menu Playbooks some pra esse colaborador — mesmo que a função dele normalmente enxergue.</div>
+      </div>
+      <Reset item={menu}/><Sw item={menu}/>
+    </div>
+    <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginTop:6,paddingBottom:5,borderBottom:"1px solid #f1f5f9"}}>Cadeiras e blocos</div>
+    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45,marginTop:-4}}>Cada cadeira é uma aba do playbook. Dentro dela, ligue só os blocos que essa pessoa precisa ver. Sem nenhuma cadeira ligada, quem tem o menu vê o playbook inteiro.</div>
+    {PB_CADEIRAS.map(c=>{
+      const item=by["playbooks.cadeira."+c.id];
+      const on=isPartnerUser?true:item.on;
+      const blocos=itens.filter(i=>i.nivel==="bloco"&&i.cadeira===c.id);
+      const nOn=blocos.filter(i=>isPartnerUser?true:i.on).length;
+      const ab=!!aberta[c.id];
+      return <div key={c.id} style={{border:"1px solid "+(on?c.color+"40":"#eef0f3"),borderRadius:12,background:"#fff",overflow:"hidden",opacity:menuOn?1:.55}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:on?c.color+"08":"#fafbfc"}}>
+          <button onClick={()=>setAberta(a=>({...a,[c.id]:!a[c.id]}))} title={ab?"Recolher":"Ver blocos"}
+            style={{background:"transparent",border:"none",cursor:"pointer",color:"#64748b",width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,flexShrink:0}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{transform:ab?"rotate(90deg)":"none",transition:"transform .15s"}}><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <span style={{width:26,height:26,borderRadius:8,background:c.color+"16",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {typeof Ico==="function"?<Ico n={c.icon} size={14} color={c.color}/>:null}
+          </span>
+          <div onClick={()=>setAberta(a=>({...a,[c.id]:!a[c.id]}))} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{color:on?"#0f172a":"#64748b",fontSize:13,fontWeight:800}}>{c.label}</span><Badge item={item}/></div>
+            <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1}}>{on?nOn+" de "+blocos.length+" blocos visíveis":"Aba escondida"}</div>
+          </div>
+          <Reset item={item}/>
+          <div onClick={()=>setChave(item.key,!item.on)} style={{cursor:isPartnerUser?"default":"pointer",display:"inline-flex"}}><Sw item={item}/></div>
+        </div>
+        {ab&&<div style={{padding:"10px 12px 12px",borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:6,opacity:on?1:.5}}>
+          {blocos.map(bl=>{
+            const bon=isPartnerUser?true:bl.on;
+            return <div key={bl.key} onClick={()=>setChave(bl.key,!bl.on)}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 11px",background:bon?c.color+"08":"#fff",borderRadius:9,border:"1px solid "+(bon?c.color+"40":"#eef0f3"),cursor:isPartnerUser?"default":"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1,flexWrap:"wrap"}}>
+                <span style={{color:bon?"#0f172a":"#64748b",fontSize:12.5,fontWeight:bon?700:600}}>{bl.label}</span><Badge item={bl}/>
+              </div>
+              <Reset item={bl}/>
+              <div style={{width:34,height:20,borderRadius:99,background:bon?c.color:"#e2e8f0",position:"relative",transition:"background .18s",flexShrink:0}}>
+                <div style={{position:"absolute",top:3,left:bon?17:3,width:14,height:14,borderRadius:"50%",background:"#fff",transition:"left .18s",boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}/>
+              </div>
+            </div>;
+          })}
+        </div>}
+      </div>;
+    })}
+  </div>;
+}
+
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
   // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
@@ -35656,6 +35786,11 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   const _tabCor=tabInfo.color||user.color||"#7c3aed";
   const _setTabAll=(v)=>{
     if(isPartnerUser)return;
+    if(tabInfo.arvore){ // Playbooks: liga/desliga TUDO à mão (menu, cadeiras e blocos)
+      const nb={...(perms.blocos||{})};
+      _pbPermItens(user,perms).forEach(i=>{ nb[i.key]=v; });
+      setPerms(p=>({...p,blocos:nb})); setSaved(false); return;
+    }
     const patch={};
     _itensTab.forEach(i=>{ if(i.key) patch[i.key]=v; });
     if(_exclTravada) patch.excluirDemanda=false;
@@ -35681,8 +35816,9 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
         <div style={{flex:1,minHeight:0,overflowY:isMobP?"hidden":"auto",overflowX:isMobP?"auto":"hidden",display:"flex",flexDirection:isMobP?"row":"column",gap:2,padding:isMobP?"8px 10px":"10px"}}>
           {PERM_TABS.map(tab=>{
             const items=PERM_GROUPS[tab.id]||[];
-            const totalKeys=items.filter(i=>i.key).length;
-            const activeCount=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
+            const _arv=tab.arvore?_pbPermItens(user,perms):null;
+            const totalKeys=_arv?_arv.length:items.filter(i=>i.key).length;
+            const activeCount=_arv?_arv.filter(i=>isPartnerUser?true:i.on).length:items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
             const on=activeTab===tab.id;
             return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
               style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:on?"#fff":"transparent",border:on?"1px solid #e8ecf1":"1px solid transparent",borderRadius:10,cursor:"pointer",textAlign:"left",whiteSpace:"nowrap",flexShrink:0,boxShadow:on?"0 1px 3px rgba(15,23,42,.06)":"none",transition:"all .12s",fontFamily:"inherit"}}
@@ -35719,7 +35855,8 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
 
         <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"16px 22px"}}>
           {isPartnerUser&&<div style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 15px",color:"#7c3aed",fontSize:12.5,fontWeight:700,marginBottom:14}}>⚡ Sócios têm acesso total e irrestrito ao sistema — nada aqui pode ser desligado.</div>}
-          <div style={{display:"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
+          {tabInfo.arvore&&<PermsPlaybooksArvore user={user} perms={perms} setPerms={setPerms} cor={_tabCor} isPartnerUser={isPartnerUser} onDirty={()=>setSaved(false)} isMobP={isMobP}/>}
+          <div style={{display:tabInfo.arvore?"none":"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
             {_itensTab.map((item,idx)=>{
               if(item.section) return <div key={"s"+idx} style={{gridColumn:isMobP?"auto":"span 2",color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginTop:idx>0?10:0,paddingBottom:5,borderBottom:"1px solid #f1f5f9"}}>{item.section}</div>;
               const _travado=item.key==="excluirDemanda"&&_exclTravada;
@@ -54045,6 +54182,14 @@ export default function AgencyOS(){
   },[searchQuery,tasks]);
 
   // ── Navegação ─────────────────────────────────────────────
+  // PLAYBOOKS (17/09/2026, permissões por bloco): regra fixa por dash/id OU chave verPlaybooks
+  // OU alguma cadeira ligada à mão em Acessos › Time; e o sócio pode desligar o menu inteiro
+  // pra qualquer um com menu.playbooks=false (pxPode — sócio sempre passa).
+  const _pbMenuPode=(p)=>{
+    const _fixo=isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!(p&&p.verPlaybooks);
+    let _cad=false; try{ _cad=(typeof _pbCadeirasDoUsuario==="function")&&_pbCadeirasDoUsuario(effectiveUser,p).length>0; }catch(_){}
+    return (typeof pxPode==="function")?pxPode("menu.playbooks",_fixo||_cad,{user:effectiveUser,perms:p}):_fixo;
+  };
   const canSee=(n,p)=>{
     switch(n.id){
       case "meudash":              return p.verDashboard;
@@ -54059,7 +54204,7 @@ export default function AgencyOS(){
       case "planejamento":         return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator";
       case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
-      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||!!p.verPlaybooks;
+      case "playbooks":            return _pbMenuPode(p); // regra fixa + chave verPlaybooks + cadeira ligada à mão; menu.playbooks=false desliga tudo
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
@@ -54160,7 +54305,7 @@ export default function AgencyOS(){
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
-      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.dash==="social"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
+      case "playbooks":             return _pbMenuPode(effectivePerms)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -91160,22 +91305,56 @@ const PB_CADEIRAS = [
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
    blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto","pb-checklist"]},
 ];
+// ═══ PERMISSÕES POR BLOCO (17/09/2026) ═══
+// Lista de TODOS os blocos do playbook (id + nome) — é o que aparece em
+// Acessos › Time › gerenciar acesso › Playbooks, cadeira por cadeira.
+const PB_BLOCOS = [
+  {id:"pb-sobre",               label:"Sobre a empresa"},
+  {id:"pb-briefing-auto",       label:"Dados do Briefing"},
+  {id:"pb-contatos",            label:"Contatos"},
+  {id:"pb-time",                label:"Equipe do cliente"},
+  {id:"pb-marcacoes",           label:"Marcar no post (@)"},
+  {id:"pb-comunicacao",         label:"Comunicação da marca"},
+  {id:"pb-produtos",            label:"Produtos/serviços"},
+  {id:"pb-social",              label:"Publicação social"},
+  {id:"pb-chamadas",            label:"Exemplos de chamadas"},
+  {id:"pb-designer",            label:"Instruções pro designer"},
+  {id:"pb-equipe",              label:"Orientações"},
+  {id:"pb-orientacoes-visuais", label:"Orientações visuais"},
+  {id:"pb-templates",           label:"Templates"},
+  {id:"pb-processos",           label:"Processos técnicos de vídeo"},
+  {id:"pb-checklist",           label:"Checklist"},
+];
+// Padrão FIXO (regra do sistema) — o que cada cadeira enxerga se ninguém mexeu.
+function _pbBlocoPadrao(cadeiraId, blocoId){
+  const c = PB_CADEIRAS.find(function(x){ return x.id===cadeiraId; });
+  return !c || !c.blocos || c.blocos.indexOf(blocoId)>=0;
+}
+// Padrão FIXO de quais cadeiras o colaborador enxerga (por dash / id).
+function _pbCadeiraPadrao(u, cadeiraId){
+  if(!u) return false;
+  if(u.level===1 || u.id==="ellen") return true;
+  if(cadeiraId==="estrategia") return u.dash==="coordinator"; // estrategista: playbook inteiro
+  if(cadeiraId==="social")     return u.dash==="social";
+  if(cadeiraId==="design")     return u.dash==="designer";
+  if(cadeiraId==="video")      return u.dash==="editor";
+  if(cadeiraId==="midia")      return u.id==="erick" || u.dash==="gestor";
+  return false;
+}
 let _PB_CADEIRA_ATUAL = null; // id da cadeira em exibição (null = tudo)
+let _PB_PERMS_ATUAL = null;   // {user, perms} de quem está vendo (respeita "ver como") — pra pxPode
 function _pbBlocoVisivel(id){
   if(!_PB_CADEIRA_ATUAL) return true;
-  const c = PB_CADEIRAS.find(function(x){ return x.id===_PB_CADEIRA_ATUAL; });
-  return !c || !c.blocos || c.blocos.indexOf(id)>=0;
+  const padrao = _pbBlocoPadrao(_PB_CADEIRA_ATUAL, id);
+  if(typeof pxPode!=="function") return padrao;
+  return pxPode("playbooks."+_PB_CADEIRA_ATUAL+"."+id, padrao, _PB_PERMS_ATUAL||undefined);
 }
-function _pbCadeirasDoUsuario(u){
-  const isAdmin = u.level===1 || u.id==="ellen";
-  if(isAdmin) return PB_CADEIRAS.slice();
-  const ids = [];
-  if(u.dash==="coordinator") ids.push("estrategia"); // estrategista: playbook inteiro
-  if(u.dash==="social") ids.push("social");
-  if(u.dash==="designer") ids.push("design");
-  if(u.dash==="editor") ids.push("video");
-  if(u.id==="erick" || u.dash==="gestor") ids.push("midia");
-  return PB_CADEIRAS.filter(function(c){ return ids.indexOf(c.id)>=0; });
+function _pbCadeirasDoUsuario(u, perms){
+  const ctx = {user:u, perms:perms||null};
+  return PB_CADEIRAS.filter(function(c){
+    const padrao = _pbCadeiraPadrao(u, c.id);
+    return (typeof pxPode==="function") ? pxPode("playbooks.cadeira."+c.id, padrao, ctx) : padrao;
+  });
 }
 
 function PagePlaybooks({isMob, perms, viewingAs}){
@@ -91190,8 +91369,12 @@ function PagePlaybooks({isMob, perms, viewingAs}){
 
   // UNIFICADO: sem sub-abas de área. Um playbook por cliente com tudo junto.
   const isEstrategista = effectiveUser.dash === "coordinator";
-  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial || isEstrategista;
-  const _cadeiras = _pbCadeirasDoUsuario(effectiveUser);
+  _PB_PERMS_ATUAL = {user:effectiveUser, perms:perms||null}; // pxPode dos blocos respeita "ver como"
+  const _cadeiras = _pbCadeirasDoUsuario(effectiveUser, perms);
+  // Acesso: regra fixa OU chave verPlaybooks OU alguma cadeira ligada à mão — e o sócio pode
+  // desligar o menu inteiro (menu.playbooks=false) mesmo pra quem tem regra fixa.
+  const _accessPadrao = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia || isSocial || isEstrategista || !!(perms&&perms.verPlaybooks) || _cadeiras.length>0;
+  const _accessOK = (typeof pxPode==="function") ? pxPode("menu.playbooks", _accessPadrao, _PB_PERMS_ATUAL) : _accessPadrao;
   const [cadeira, setCadeira] = useState(function(){
     try{ const _s=localStorage.getItem("pixels-pb-cadeira"); if(_s&&_cadeiras.some(function(c){return c.id===_s;})) return _s; }catch(_){}
     return _cadeiras[0] ? _cadeiras[0].id : null;
