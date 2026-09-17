@@ -3851,6 +3851,42 @@ function _pxTextoParaHtml(txt){
   return out;
 }
 
+/* TÍTULO DO CARD = TÍTULO DO BRIEFING (Vinicius, 17/09/2026): "quando pede pra alterar a copy o
+   Título no briefing deve ser colocado como título do Card, mas não tudo maiúsculo, só a primeira
+   letra". Paraguay: o título do briefing é em espanhol, então o do card também.
+   Lê "• TÍTULO" (linha de baixo) ou "• Título: xxx" (mesma linha). Volta "" se não achar. */
+const _PX_SIGLAS_TITULO=["PEAD","ETA","ETE","PVC","CAR","LAO","LAP","LAI","LAC","LAR","PRAD","PCA","RAS","RCA","SIGEF","INCRA","RTK","GPS","REURB","IA","MS","PR","SC","RS","MG","SP","CE","BR","PY","TV"];
+function pxTituloDoBriefing(briefTxt, task){
+  const linhas=String(briefTxt||"").replace(/\r/g,"").split("\n").map(function(l){return l.trim();});
+  let t="";
+  for(let i=0;i<linhas.length;i++){
+    const m=linhas[i].match(/^[•*\-]?\s*T[ÍI]TULO\s*(?:\(.*?\))?\s*[:\-—]?\s*(.*)$/i);
+    if(!m) continue;
+    t=(m[1]||"").trim();
+    for(let j=i+1;!t&&j<linhas.length;j++){
+      if(!linhas[j]) continue;
+      if(/^[•*]/.test(linhas[j])) break;
+      t=linhas[j];
+    }
+    break;
+  }
+  t=t.replace(/<[^>]+>/g,"").replace(/^["\u201c\u2018']+|["\u201d\u2019']+$/g,"").replace(/\s+/g," ").trim().replace(/\.$/,"");
+  if(!t||t.length>110) return "";
+  // tudo minúsculo e só a primeira letra maiúscula (¿ ¡ e aspas no começo não contam)
+  let out=t.toLocaleLowerCase("pt-BR");
+  out=out.replace(/^([^A-Za-zÀ-ÿ0-9]*)([A-Za-zÀ-ÿ])/,function(_m,a,b){return a+b.toLocaleUpperCase("pt-BR");});
+  // nomes próprios e siglas voltam como eram: marca do cliente, unidade, siglas técnicas
+  const _cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===(task&&task.client);});
+  const _nomes=[].concat(_PX_SIGLAS_TITULO, _cl?String(_cl.name||"").split(/\s+/):[],
+    ["Bioter","Paraguay","Paraguai","Chapecó","Toledo","Castro","Uberlândia","Glória","Dourados","Copacol","Expointer","Brasil"]);
+  _nomes.forEach(function(n){
+    if(!n||n.length<2) return;
+    const esc=n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    out=out.replace(new RegExp("(^|[^A-Za-zÀ-ÿ])("+esc+")(?=$|[^A-Za-zÀ-ÿ])","gi"),function(_m,a){return a+n;});
+  });
+  return out;
+}
+
 /* Devolve {briefing, legenda} em HTML, ou lança erro. */
 async function pxReescreverCopy(opts){
   const task=opts&&opts.task; if(!task) throw new Error("Card não informado.");
@@ -3897,7 +3933,7 @@ async function pxReescreverCopy(opts){
     // ⛔ COMEMORATIVA NUNCA TROCA DE TÍTULO (Vinicius, 14/09/2026: "não pode mudar o
     // título dos cards de data comemorativa, nenhum, NENHUM"). O assunto é a data.
     // Nem no "refazer do zero" — lá a copy é nova, o nome do cartão continua o mesmo.
-    ((ehRefazer&&!ehComemorativa)?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, em português do Brasil mesmo no Paraguay, sem ponto final)":"")+
+    ((ehRefazer&&!ehComemorativa)?"\n===TITULO===\n(o novo nome do cartão: o assunto em 3 a 7 palavras, "+(py?"em espanhol (é o Paraguay)":"em português do Brasil")+", só a primeira letra maiúscula, sem ponto final)":"")+
     (soBrief?"\n===BRIEFING===\n(o briefing aqui — NÃO escreva legenda, ela não vai ser usada)"
      :soLeg?"\n===LEGENDA===\n(a legenda aqui — NÃO escreva briefing, ele não vai ser usado)"
      :"\n===BRIEFING===\n(o briefing aqui)\n===LEGENDA===\n(a legenda aqui)");
@@ -4088,7 +4124,9 @@ async function pxReescreverCopy(opts){
   leg=leg.replace(/^===+\s*/,"").trim();
   // TRAVA: legenda que repete o texto da arte volta pra reescrever (só os trechos repetidos)
   if(leg&&!soBrief&&!soStory){ leg=await _pxDesrepeteLegenda(leg, soLeg?_pxHtmlParaTexto(task.desc||task.description):(brief||_pxHtmlParaTexto(task.desc||task.description)), py); }
-  const _tituloOk=(ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"";
+  let _tituloOk=(ehRefazer&&!ehComemorativa&&titulo&&titulo.length<=90)?titulo:"";
+  // O "• TÍTULO" do briefing novo manda no nome do card (qualquer reescrita que mexa no briefing)
+  if(!soLeg&&!ehComemorativa&&brief){ const _tb=pxTituloDoBriefing(brief,task); if(_tb) _tituloOk=_tb; }
   // AJUSTE PARCIAL: o lado que não foi pedido volta IGUAL ao que já estava no card.
   if(soLeg){
     if(!leg&&brief) leg=brief;            // veio tudo num bloco só: é a legenda
@@ -29432,7 +29470,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
         vs.push({v:vs.length+1,briefing:nova.briefing,legenda:nova.legenda,
           // 4ª trava: a VERSÃO também não guarda título novo em comemorativa — senão
           // restaurar essa versão depois trocaria o título pela porta dos fundos.
-          titulo:((nova&&nova.titulo&&!_pxEhComemorativa(t))||t.title||""),
+          titulo:((nova&&nova.titulo&&!_pxEhComemorativa(t))?String(nova.titulo).trim():(t.title||"")),
           autor:_pxNomeIA(),tipo:ehAjuste?"ajuste":(ehAbord?"abordagem":"refazer"),feedback:txt||null,
           alvo:_alvo,
           lote:!!lote,
@@ -76826,8 +76864,12 @@ const PRICE_CONFIG = {
   // (aba Growth, 3 meses, R$36k) e outro produto - nao confundir os precos.
   growth: { price: 3500 },
   audiovisualCapture: {
+    // COM Redes Sociais OU Tráfego Pago no pacote (Vinicius, 17/09/2026)
     firstDaily:     1500, // primeira diária/mês
     additionalDaily:1000, // cada diária adicional
+    // SEM nenhum dos dois: captação "bruta", só o material captado
+    firstDailyBruto:     2500,
+    additionalDailyBruto:2000,
     maxDailiesPerMonth: 12,
   },
   traffic: {
@@ -77021,11 +77063,17 @@ function calculateTrafficPrice(trafficKey){
 function calculateGrowthPrice(ativo){
   return ativo ? (PRICE_CONFIG.growth.price||0) : 0;
 }
-function calculateAudiovisualCapturePrice(dailies){
+/* comPacote = tem Redes Sociais OU Tráfego Pago no carrinho. Sem nenhum dos dois a
+   captação é "bruta" e usa a tabela cheia (17/09/2026). Chamada sem o 2º argumento
+   continua com a tabela antiga, pra não quebrar quem só passa as diárias. */
+function calculateAudiovisualCapturePrice(dailies, comPacote){
   const d = Math.max(0, Number(dailies)||0);
   if(d === 0) return 0;
   const cfg = PRICE_CONFIG.audiovisualCapture;
-  return cfg.firstDaily + (d - 1) * cfg.additionalDaily;
+  const bruto = comPacote === false;
+  const p1 = bruto ? cfg.firstDailyBruto : cfg.firstDaily;
+  const pn = bruto ? cfg.additionalDailyBruto : cfg.additionalDaily;
+  return p1 + (d - 1) * pn;
 }
 // Bonus: retorna os itens ja desbloqueados pelo valor mensal recorrente.
 function calculateUnlockedBonuses(monthlyRecurring){
@@ -77050,7 +77098,9 @@ function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey,
        + calculateTrafficPrice(trafficKey)
        + calculateGrowthPrice(growthOn)
        + (graficosRec ? PRICE_CONFIG.graficos.recorrente.price : 0)
-       + calculateAudiovisualCapturePrice(captureDailies);
+       + calculateAudiovisualCapturePrice(captureDailies,
+           // mesma regra da tela: com Redes Sociais OU Tráfego Pago = tabela normal
+           countSocialChannels((socialState&&socialState.channels)||{}) > 0 || (trafficKey && trafficKey !== "none"));
 }
 function calculateOneTimeTotal(selectedIds){
   return calculateOneTimeProjects(selectedIds);
@@ -78020,7 +78070,9 @@ function _CalculadoraModular({isMob, persistClientId}){
   const socialPrice   = calculateSocialManagementPrice(_socialState);
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
-  const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
+  // Captação: com Redes Sociais OU Tráfego Pago no pacote = tabela normal; sem os dois = bruta
+  const captureComPacote = socialActive || trafficKey!=="none";
+  const capturePrice   = calculateAudiovisualCapturePrice(captureDailies, captureComPacote);
   const growthPrice    = calculateGrowthPrice(growthOn);
   // Materiais Graficos so entram junto da Gestao de Redes Sociais (min. R$4.000)
   const _graficosMin     = cfg.graficos.requerSocialMin || 0;
@@ -78137,12 +78189,19 @@ function _CalculadoraModular({isMob, persistClientId}){
     "Criação de roteiros estratégicos para vídeos",
     "Padronização visual conforme identidade da marca",
   ];
-  const CAPTURE_INCLUSOS = [
+  // Sem Redes Sociais nem Tráfego Pago a captação é "bruta": sai a direção de conteúdo e a
+  // entrega é o material captado, sem edição (17/09/2026). A lista muda junto com o preço.
+  const CAPTURE_INCLUSOS = captureComPacote ? [
     "Cinegrafista profissional em campo",
     "Equipamento de captação (câmera, áudio, iluminação básica)",
     "Direção de conteúdo durante a diária",
     "Backup e organização do material captado",
     "Entrega dos arquivos brutos pra edição",
+  ] : [
+    "Cinegrafista profissional em campo",
+    "Equipamento de captação (câmera, áudio, iluminação básica)",
+    "Backup e organização do material captado",
+    "Entrega só do material bruto captado — sem direção de conteúdo e sem edição",
   ];
   // Entregaveis do Growth — 4 frentes.
   const TRAFFIC_BLOCOS = [
@@ -78794,7 +78853,8 @@ function _CalculadoraModular({isMob, persistClientId}){
       <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <div style={{minWidth:0,flex:1}}>
           <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Diárias de captação</div>
-          <div style={{color:MUTE,fontSize:11,marginTop:2}}>1ª diária {fmt(cfg.audiovisualCapture.firstDaily)} · cada adicional +{fmt(cfg.audiovisualCapture.additionalDaily)}</div>
+          <div style={{color:MUTE,fontSize:11,marginTop:2}}>1ª diária {fmt(captureComPacote?cfg.audiovisualCapture.firstDaily:cfg.audiovisualCapture.firstDailyBruto)} · cada adicional +{fmt(captureComPacote?cfg.audiovisualCapture.additionalDaily:cfg.audiovisualCapture.additionalDailyBruto)}</div>
+          <div style={{color:captureComPacote?"#16a34a":"#b45309",fontSize:11,marginTop:4,fontWeight:600}}>{captureComPacote?"Valor com Redes Sociais ou Tráfego Pago no pacote":"Captação bruta (só o material captado) — com Redes Sociais ou Tráfego Pago no pacote cai pra "+fmt(cfg.audiovisualCapture.firstDaily)+" / +"+fmt(cfg.audiovisualCapture.additionalDaily)}</div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <button type="button" onClick={function(){setCaptureDailies(function(v){return Math.max(0, v-1);});}}
