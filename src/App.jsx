@@ -2714,7 +2714,7 @@ function pixelsConfirm(message,opts={}){
     Object.assign(titleEl.style,{color:"#0f172a",fontSize:"16px",fontWeight:"700",letterSpacing:"-0.3px",lineHeight:"1.3",marginBottom:"4px"});
     titleEl.textContent=opts.title||(isDanger?"Confirmar exclusão":"Confirmação");
     const msgEl=document.createElement("div");
-    Object.assign(msgEl.style,{color:"#64748b",fontSize:"13px",lineHeight:"1.55",fontWeight:"500"});
+    Object.assign(msgEl.style,{color:"#64748b",fontSize:"13px",lineHeight:"1.55",fontWeight:"500",whiteSpace:"pre-line"});
     msgEl.textContent=message;
     titleBox.appendChild(titleEl);titleBox.appendChild(msgEl);
     header.appendChild(icoWrap);header.appendChild(titleBox);
@@ -18290,6 +18290,192 @@ async function pxAutoplanAbrirEspaco(novos){
     if(typeof pixelsToast!=="undefined") pixelsToast.info(lixo.length+" card"+(lixo.length>1?"s":"")+" do Claude saiu"+(lixo.length>1?"ram":"")+" do calendário pra dar lugar à data comemorativa nova.",6000);
     return lixo.length;
   }catch(e){ console.warn("[autoplan abrir espaço]",e); return 0; }
+}
+/* ═══ CASCATA — card novo numa semana cheia empurra os outros EM SEQUÊNCIA (17/09/2026) ═══
+   Pedido do Vinicius: "o cliente manda a gente postar algo urgente e é hoje, mas tinha outro
+   programado na semana — eles vão indo e se encaixando no futuro, na sequência que estavam.
+   Não arrastar o da semana lá pro final. Sem modificar as regras nem as datas comemorativas."
+
+   COMO FUNCIONA (efeito dominó, semana a semana):
+   - Linha = domingo a sábado. Cadência por alvo = PX_CASCATA_CAP (a mesma do planejamento).
+   - O card NOVO fica na data em que foi colocado.
+   - Na semana dele, se passou da cadência, o ÚLTIMO card movível da semana vai pra semana
+     seguinte, no MESMO dia da semana (segunda continua segunda). Se esse dia já tem post do
+     cliente, pega o dia útil livre mais perto. Se a semana seguinte também estourar, o último
+     de lá anda também — e assim por diante, até achar uma semana com vaga.
+   - NUNCA se move: data comemorativa / evento / aniversário (id autocom-/autoev- ou tag
+     "Data comemorativa"), Collab (ocupa 5 unidades, mexer nele bagunça as outras), Foto de
+     obra e Short (andam em grupo), card já publicado ou com data passada, card "Somente
+     story" / "Não publica" / folder (não ocupam o dia), e o card novo.
+   - Quando não há card movível na semana, a cascata para ali e a prévia avisa.
+   - É só PRÉVIA: `pxCascataPlanejar` calcula e devolve a lista; quem chama mostra a
+     pixelsConfirm e só então roda `pxCascataAplicar`. Nada anda sem confirmação. Tudo fica
+     registrado em claude_plano_execucoes (o botão de emergência desfaz).                  */
+const PX_CASCATA_CAP=Object.assign({vetservice:1},PX_AUTOPLAN_CAP);
+// VetService: comemorativa fica à parte (não conta na cadência) — regra do planejamento de 11/09.
+const PX_CASCATA_COMEM_NAO_CONTA=["vetservice"];
+const PX_CASCATA_HORIZONTE_SEMANAS=30;
+function _pxCasFixo(t){
+  const id=String((t&&t.id)||"");
+  if(id.indexOf("autocom-")===0||id.indexOf("autoev-")===0) return true;
+  const tags=Array.isArray(t&&t.tags)?t.tags:[];
+  return tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); });
+}
+function _pxCasGrupo(t){
+  const ct=String((t&&(t.content_type||t.contentType))||"");
+  if(ct==="video_short"||(t&&(t.fromDrive||t.from_drive))) return true;
+  return /foto de obra|\bshort\b/i.test(String((t&&t.title)||""));
+}
+function _pxCasMovivel(t,hoje,novoId){
+  if(!t||String(t.id)===String(novoId)) return false;
+  if(t.deleted_at) return false;
+  const st=String(t.status||"");
+  if(st==="publicado"||st==="reprovado"||st==="pausado") return false;
+  if(_pxNaoEhPublicacao(t)) return false;
+  const iso=String(t.publish_date||"").slice(0,10);
+  if(!iso||iso<=hoje) return false;
+  if(_pxCasFixo(t)||_pxApEhCollab(t)||_pxCasGrupo(t)) return false;
+  return true;
+}
+function _pxCasConta(rows,alvo){
+  const cli=String(alvo).split(":")[0];
+  return _pxColConta(rows,alvo).filter(function(t){
+    if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(cli)>=0&&_pxCasFixo(t)) return false;
+    return true;
+  });
+}
+function _pxCasBr(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):""; }
+/* Dia de destino na semana L (objeto de _pxApLinha) pro card `t`: mesmo dia da semana da data
+   antiga; ocupado → dia útil livre mais perto; nada livre de seg a sex → sáb/dom. */
+function _pxCasDestino(t,L,rows,hoje){
+  const de=String(t.publish_date||"").slice(0,10);
+  const dow=_pxApData(de).getDay();
+  const alvos=_pxColAlvos(t);
+  const ocup={};
+  rows.forEach(function(x){
+    if(x.deleted_at||String(x.id)===String(t.id)) return;
+    if(x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return;
+    const ax=_pxColAlvos(x); if(!ax.some(function(a){return alvos.indexOf(a)>=0;})) return;
+    ocup[String(x.publish_date||"").slice(0,10)]=true;
+  });
+  const ordem=[dow];
+  for(let k=1;k<=6;k++){ [dow-k,dow+k].forEach(function(dd){ if(dd>=0&&dd<=6&&ordem.indexOf(dd)<0) ordem.push(dd); }); }
+  // dias úteis primeiro, fim de semana só se não sobrar nada
+  const uteis=ordem.filter(function(dd){return dd>=1&&dd<=5;}), fds=ordem.filter(function(dd){return dd===0||dd===6;});
+  const cand=uteis.concat(fds).map(function(dd){ const d=new Date(L.ini); d.setDate(L.ini.getDate()+dd); return _pxApIso(d); })
+    .filter(function(iso){ return iso>hoje&&!ocup[iso]; });
+  return cand.length?cand[0]:null;
+}
+/* pxCascataPlanejar(novo) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana:"dd/mm–dd/mm"}
+   `novo` = card em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
+async function pxCascataPlanejar(novo){
+  const vazio={moves:[],travou:[],semana:""};
+  try{
+    const sb=window._sb; if(!sb||!novo) return vazio;
+    const hoje=_pxApIso(new Date());
+    const iso=String(novo.publishDate||novo.publish_date||"").slice(0,10);
+    if(!iso||iso<=hoje) return vazio;
+    const nn={id:novo.id,client:novo.client,bioter_unit:novo.bioterUnit||novo.bioter_unit||"",publish_date:iso,
+      status:novo.status||"rascunhos",somente_story:!!(novo.somenteStory||novo.somente_story),
+      nao_publica:!!(novo.naoPublica||novo.nao_publica),content_type:novo.contentType||novo.content_type||null,
+      title:novo.title||"",tags:novo.tags||[]};
+    if(_pxNaoEhPublicacao(nn)) return vazio;
+    const alvos=_pxColAlvos(nn).filter(function(a){ return !!PX_CASCATA_CAP[a]; });
+    if(!alvos.length) return vazio;
+    const L0=_pxApLinha(iso);
+    const fimH=new Date(L0.ini); fimH.setDate(L0.ini.getDate()+7*PX_CASCATA_HORIZONTE_SEMANAS-1);
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+      .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fimH)).in("client",PX_COLISAO_CLIENTES);
+    if(!r||r.error) return vazio;
+    const rows=(r.data||[]).filter(function(x){ return String(x.id)!==String(nn.id); }).concat([nn]);
+    const moves=[], travou=[];
+    const semanaDe=function(x){ return _pxApLinha(String(x.publish_date||"").slice(0,10)).iniIso; };
+    for(const alvo of alvos){
+      let L=L0, guard=0;
+      while(guard++<PX_CASCATA_HORIZONTE_SEMANAS){
+        const daSemana=rows.filter(function(x){ return semanaDe(x)===L.iniIso; });
+        const cont=_pxCasConta(daSemana,alvo);
+        if(cont.length<=PX_CASCATA_CAP[alvo]) break;
+        // Quem sai da semana: o ÚLTIMO card que já estava nela. O card que acabou de chegar
+        // (vindo da semana anterior) só sai se não houver mais ninguém movível — assim o que
+        // chega toma o lugar e o antigo anda, e ninguém é arrastado até o fim do calendário.
+        const jaMovido=function(x){ return moves.some(function(m){ return m.id===x.id; }); };
+        const ordena=function(a,b){ const ma=jaMovido(a)?1:0, mb=jaMovido(b)?1:0; if(ma!==mb) return ma-mb; return String(b.publish_date).localeCompare(String(a.publish_date)); };
+        const mov=cont.filter(function(x){ return _pxCasMovivel(x,hoje,nn.id); }).sort(ordena);
+        if(!mov.length){ travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo}); break; }
+        const t=mov[0];
+        const prox=_pxApLinha(_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+7)));
+        const rowsProx=rows.filter(function(x){ return semanaDe(x)===prox.iniIso; });
+        // Se a semana seguinte também vai estourar, quem sai de lá é o último dela — então o
+        // dia dele fica livre pro que está chegando (segunda continua segunda).
+        let sai=null;
+        if(_pxCasConta(rowsProx,alvo).length>=PX_CASCATA_CAP[alvo]){
+          const mp=_pxCasConta(rowsProx,alvo).filter(function(x){ return _pxCasMovivel(x,hoje,nn.id); }).sort(ordena);
+          sai=mp.length?mp[0]:null;
+        }
+        const para=_pxCasDestino(t,prox,rowsProx.filter(function(x){ return !sai||x.id!==sai.id; }),hoje);
+        if(!para){ travou.push({semana:_pxCasBr(prox.iniIso)+"–"+_pxCasBr(prox.fimIso),alvo:alvo}); break; }
+        const de=String(t.publish_date).slice(0,10);
+        const ja=moves.find(function(m){ return m.id===t.id; });
+        if(ja){ ja.para=para; } else { moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""}); }
+        t.publish_date=para;
+        L=prox;
+      }
+    }
+    return {moves:moves,travou:travou,semana:_pxCasBr(L0.iniIso)+"–"+_pxCasBr(L0.fimIso)};
+  }catch(e){ console.warn("[cascata planejar]",e); return vazio; }
+}
+/* Texto da prévia pra pixelsConfirm (usa quebras de linha). */
+function pxCascataTexto(plano,nomeCliente){
+  const n=plano.moves.length;
+  let s="A semana "+plano.semana+(nomeCliente?(" de "+nomeCliente):"")+" já está na cadência. Pra encaixar o card novo, "+(n>1?"estes "+n+" cards andam":"este card anda")+" uma semana, na sequência em que estavam:\n";
+  plano.moves.forEach(function(m){ s+="• "+(m.title||"(sem título)")+" — "+_pxCasBr(m.de)+" → "+_pxCasBr(m.para)+"\n"; });
+  s+="\nDatas comemorativas, collabs, foto de obra e short ficam onde estão.";
+  if(plano.travou.length) s+="\n⚠ Na semana "+plano.travou[0].semana+" não tem card que possa andar — ela fica acima da cadência.";
+  return s;
+}
+/* pxCascataAplicar(plano, setTasks?) — grava no Supabase, atualiza o state local e registra. */
+async function pxCascataAplicar(plano,setTasks,quem){
+  try{
+    const sb=window._sb; if(!sb||!plano||!plano.moves.length) return 0;
+    const agora=new Date();
+    const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const alterados=[]; let ok=0; const feitos={};
+    for(const mv of plano.moves){
+      const q=await sb.from("tasks").select("timeline,publish_date").eq("id",mv.id).maybeSingle();
+      if(!q||q.error||!q.data) continue;
+      // alguém mexeu nesse card entre a prévia e o OK → não sobrescreve
+      if(String(q.data.publish_date||"").slice(0,10)!==mv.de){ console.warn("[cascata] pulou",mv.id,"data mudou"); continue; }
+      const tl=Array.isArray(q.data.timeline)?q.data.timeline:[];
+      const r=await sb.from("tasks").update({publish_date:mv.para,deadline:mv.para,
+        timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,
+          label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": entrou um card novo na semana"+(quem?(" ("+quem+")"):"")+" e a cadência do cliente empurrou este pra frente"}])
+      }).eq("id",mv.id);
+      if(r&&r.error){ console.warn("[cascata aplicar]",mv.id,r.error.message); continue; }
+      feitos[mv.id]=mv.para;
+      alterados.push({id:mv.id,antes:{publish_date:mv.de,deadline:mv.de},depois:{publish_date:mv.para,deadline:mv.para}});
+      ok++;
+    }
+    if(ok&&typeof setTasks==="function"){
+      setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
+    }
+    if(ok) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente",[],alterados);
+    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+" andou"+(ok>1?"ram":"")+" uma semana pra dar lugar ao card novo.",6000);
+    return ok;
+  }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
+}
+/* pxCascataConfirmar(novo,setTasks,quem) → Promise<true> sempre (o save segue). Prévia + OK. */
+async function pxCascataConfirmar(novo,setTasks,quem){
+  try{
+    const plano=await pxCascataPlanejar(novo);
+    if(!plano.moves.length) return true;
+    const nome=(typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS))?((CLIENTS.find(function(c){return c.id===novo.client;})||{}).name||""):"";
+    const ok=(typeof pixelsConfirm==="function")
+      ? await pixelsConfirm(pxCascataTexto(plano,nome),{title:"Semana cheia — reajustar o calendário?",okText:"Reajustar e salvar",cancelText:"Salvar sem mexer"})
+      : window.confirm(pxCascataTexto(plano,nome));
+    if(ok) await pxCascataAplicar(plano,setTasks,quem);
+    return true;
+  }catch(e){ console.warn("[cascata confirmar]",e); return true; }
 }
 /* (11/09/2026) Card criado automaticamente pelo Claude (planejamento do calendário até dez/2026):
    id "autoplan-..." ou createdBy "Claude". Mostra o selo roxo com brilho no card do Calendário
@@ -42238,6 +42424,17 @@ function _cardPodeSerResp(u){
     // Pega o conteúdo atual dos contentEditable (pode ter links digitados) e aplica autoLinkifyHTML
     const descFinal=descRef.current?autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc)):autoLinkifyHTML(sanitizeRichText(desc));
     const captionFinal=captionRef.current?autoLinkifyHTML(sanitizeRichText(captionRef.current.innerHTML||caption)):autoLinkifyHTML(sanitizeRichText(caption));
+    // (17/09/2026) CASCATA: card NOVO (draft do calendário) caindo numa semana que já está na
+    // cadência do cliente → prévia "estes cards andam uma semana" + confirmar, antes de gravar.
+    // Só pra card novo; mudar a data de um card existente não reajusta nada (decisão do Vinicius).
+    if(task._isDraft && typeof pxCascataConfirmar==="function" && publishDate && !somenteStory && !naoPublica){
+      const _novo={id:task.id,client:client,bioterUnit:client==="bioter"?bioterUnit:null,publishDate:publishDate,status:task.status||"rascunhos",
+        somenteStory:!!somenteStory,naoPublica:!!naoPublica,contentType:contentType||null,title:formattedTitle,tags:tags||[]};
+      pxCascataConfirmar(_novo,setTasks,user&&user.name).then(function(){ _gravar(); },function(){ _gravar(); });
+      return;
+    }
+    _gravar();
+    function _gravar(){
     // Usa updater functional — preserva comments/timeline mais recentes do `prev`
     // (caso outro usuário tenha adicionado algo via realtime entre o open e o save)
     const cleanedFiles=cleanAttachments(attachments);
@@ -42352,6 +42549,7 @@ function _cardPodeSerResp(u){
       }
     }catch(e){ console.warn("[save persist outer]", e && e.message||e); }
     onClose();
+    } // _gravar
   };
 
   const handleConclusionConfirm=()=>{
@@ -76870,6 +77068,10 @@ const PRICE_CONFIG = {
     // SEM nenhum dos dois: captação "bruta", só o material captado
     firstDailyBruto:     2500,
     additionalDailyBruto:2000,
+    // Edição de vídeo avulsa, só no modo bruto (sem Redes nem Tráfego): R$ 400 por vídeo
+    // de até 3 min; acima disso é orçamento à parte.
+    editBrutoPrice:      400,
+    editBrutoMaxMin:     3,
     maxDailiesPerMonth: 12,
   },
   traffic: {
@@ -77093,14 +77295,13 @@ function calculateOneTimeProjects(selectedIds){
     .reduce((s,p) => s + p.price, 0);
 }
 function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies, growthOn, graficosRec){
+  const _comPacote = countSocialChannels((socialState&&socialState.channels)||{}) > 0 || (trafficKey && trafficKey !== "none");
   return calculateSocialManagementPrice(socialState)
        + calculateCreativesPrice(creativesState)
        + calculateTrafficPrice(trafficKey)
        + calculateGrowthPrice(growthOn)
        + (graficosRec ? PRICE_CONFIG.graficos.recorrente.price : 0)
-       + calculateAudiovisualCapturePrice(captureDailies,
-           // mesma regra da tela: com Redes Sociais OU Tráfego Pago = tabela normal
-           countSocialChannels((socialState&&socialState.channels)||{}) > 0 || (trafficKey && trafficKey !== "none"));
+       + calculateAudiovisualCapturePrice(captureDailies, _comPacote);
 }
 function calculateOneTimeTotal(selectedIds){
   return calculateOneTimeProjects(selectedIds);
@@ -78073,6 +78274,9 @@ function _CalculadoraModular({isMob, persistClientId}){
   // Captação: com Redes Sociais OU Tráfego Pago no pacote = tabela normal; sem os dois = bruta
   const captureComPacote = socialActive || trafficKey!=="none";
   const capturePrice   = calculateAudiovisualCapturePrice(captureDailies, captureComPacote);
+  // Texto do módulo nos resumos. No modo bruto lembra que a edição é cobrada à parte.
+  const captureDesc = (captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês")
+    + (captureComPacote ? "" : " · edição: "+fmt(cfg.audiovisualCapture.editBrutoPrice)+" por vídeo (até "+cfg.audiovisualCapture.editBrutoMaxMin+" min), cobrada à parte");
   const growthPrice    = calculateGrowthPrice(growthOn);
   // Materiais Graficos so entram junto da Gestao de Redes Sociais (min. R$4.000)
   const _graficosMin     = cfg.graficos.requerSocialMin || 0;
@@ -78193,15 +78397,16 @@ function _CalculadoraModular({isMob, persistClientId}){
   // entrega é o material captado, sem edição (17/09/2026). A lista muda junto com o preço.
   const CAPTURE_INCLUSOS = captureComPacote ? [
     "Cinegrafista profissional em campo",
-    "Equipamento de captação (câmera, áudio, iluminação básica)",
+    "Equipamento de captação (câmera, áudio, iluminação)",
     "Direção de conteúdo durante a diária",
     "Backup e organização do material captado",
     "Entrega dos arquivos brutos pra edição",
   ] : [
     "Cinegrafista profissional em campo",
-    "Equipamento de captação (câmera, áudio, iluminação básica)",
+    "Equipamento de captação (câmera, áudio, iluminação)",
     "Backup e organização do material captado",
-    "Entrega só do material bruto captado — sem direção de conteúdo e sem edição",
+    "Entrega do material bruto captado — edição não inclusa (a edição faz parte dos pacotes de Redes Sociais ou Tráfego Pago)",
+    "Edição: "+fmt(cfg.audiovisualCapture.editBrutoPrice)+" por material editado (vídeo de até "+cfg.audiovisualCapture.editBrutoMaxMin+" min) · acima disso, orçamento à parte",
   ];
   // Entregaveis do Growth — 4 frentes.
   const TRAFFIC_BLOCOS = [
@@ -78822,7 +79027,7 @@ function _CalculadoraModular({isMob, persistClientId}){
     <_ModuleHeader num="5" ico="video" active={captureActive}
       title="Captação Audiovisual"
       subtitle="Diárias de captação com equipamento e equipe."
-      versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
+      versaoLabel={captureActive?captureDesc:"Não selecionado"}
       nivelLabel="Pro"/>
 
     {/* ═══ Faixa do bônus de captação — some quando a recorrência bate o requisito ═══ */}
@@ -78865,6 +79070,12 @@ function _CalculadoraModular({isMob, persistClientId}){
         </div>
       </div>
     </div>
+    {/* EDIÇÃO — só no modo bruto (Vinicius, 17/09/2026): cada material entregue editado
+        custa R$ 400 (vídeo de até 3 min). Não é contador: é cobrado conforme for pedido. */}
+    {!captureComPacote && <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"12px 16px"}}>
+      <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Edição de vídeo: {fmt(cfg.audiovisualCapture.editBrutoPrice)} por material editado</div>
+      <div style={{color:"#92400e",fontSize:11.5,marginTop:3,lineHeight:1.45}}>Vale pra vídeo de até {cfg.audiovisualCapture.editBrutoMaxMin} minutos e é cobrado por material entregue, fora do valor mensal. Acima de {cfg.audiovisualCapture.editBrutoMaxMin} minutos: orçamento à parte. Com Redes Sociais ou Tráfego Pago no pacote, a edição já está inclusa.</div>
+    </div>}
     {captureActive && <_ValorModulo price={capturePrice}/>}
   </div>;
 
@@ -79444,7 +79655,7 @@ function _CalculadoraModular({isMob, persistClientId}){
             blocos={["Franquia mensal combinável de novos e ajustes","Excedente na tabela avulsa (R$ 400 novo · R$ 200 ajuste)"]}/>}
 
           {captureActive&&<_ResumoModulo ico="video" titulo="Captação Audiovisual"
-            config={captureDailies+" diária"+(captureDailies>1?"s":"")+" por mês"}
+            config={captureDesc}
             preco={capturePrice} blocos={CAPTURE_INCLUSOS}/>}
         </div>
       </div>
@@ -79579,7 +79790,7 @@ function _CalculadoraModular({isMob, persistClientId}){
       ].filter(Boolean).join(" · "), v:creativesPrice},
     (trafficKey!=="none") && {ico:"target", l:cfg.traffic[trafficKey].label, d:"Gestão de tráfego pago", v:trafficPrice},
     growthActive && {ico:"chart", l:"Growth", d:"Consultoria de crescimento junto da operação", v:growthPrice},
-    captureActive && {ico:"video", l:"Captação Audiovisual", d:captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês", v:capturePrice},
+    captureActive && {ico:"video", l:"Captação Audiovisual", d:captureDesc||(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"), v:capturePrice},
     (graficosKey==="recorrente") && {ico:"shapes", l:"Materiais Gráficos", d:"Plano mensal · até "+cfg.graficos.recorrente.novos+" novos ou "+cfg.graficos.recorrente.ajustes+" ajustes", v:graficosPrice},
     (graficosKey==="avulso") && {ico:"shapes", l:"Materiais Gráficos", d:"Avulso · cobrado por peça, sob demanda", v:0, semValor:true},
   ].filter(Boolean);
@@ -79795,7 +80006,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} captureDesc={captureDesc} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} oneTimeAPartir={oneTimeAPartir} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
       </div>
@@ -79806,7 +80017,7 @@ function _CalculadoraModular({isMob, persistClientId}){
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} captureDesc={captureDesc} capturePrice={capturePrice} growthActive={growthActive} growthPrice={growthPrice} graficosKey={graficosKey} graficosRec={graficosRec} graficosPrice={graficosPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} oneTimeAPartir={oneTimeAPartir} onCopy={copyResumo} packOpen={packOpen}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -79829,7 +80040,7 @@ function _CalculadoraModular({isMob, persistClientId}){
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
-    captureActive, captureDailies, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
+    captureActive, captureDailies, captureDesc, capturePrice, growthActive, growthPrice, graficosKey, graficosRec, graficosPrice, cfg,
     oneTimeIds, oneTimeAPartir, onCopy, packOpen, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || growthActive || captureActive || graficosKey!=="none" || oneTimeIds.length>0;
   // Monta a lista de modulos recorrentes contratados
@@ -79858,7 +80069,7 @@ function _ResumoBox(p){
     itens.push({ico:"shapes", nome:"Materiais Gráficos", linhas:["até 5 novos ou 10 ajustes/mês"], valor:graficosPrice});
   }
   if(captureActive){
-    itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"], valor:capturePrice});
+    itens.push({ico:"video", nome:"Captação Audiovisual", linhas:[captureDesc||(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês")], valor:capturePrice});
   }
 
   return <div style={{background:"#fff",border:"1px solid #eceaf4",borderRadius:20,padding:"22px 20px",boxShadow:"0 10px 30px rgba(88,64,166,.08), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
