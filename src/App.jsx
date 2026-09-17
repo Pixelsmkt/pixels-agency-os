@@ -24085,7 +24085,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     const _semTipo = !t.contentType && !_dead && _demTemProducao(t);
                     // Alerta 3 (Vinicius, 17/09/2026): card na coluna DEMANDA sem designer nem editor
                     // de vídeo marcado — ninguém vai executar. Produção = quem é pagamentoPorDemanda no TEAM.
-                    const _semProdutor = t.status==="recebida" && !_demTemProducao(t);
+                    // Short fica de fora (17/09/2026): a Hellen preenche, não passa por edição.
+                    // A maioria nasce sem contentType, então vale o título "Short…" também.
+                    const _ehShort = t.contentType==="video_short" || t.tipo==="video_short" || /^\s*shorts?\b/i.test(String(t.title||""));
+                    const _semProdutor = t.status==="recebida" && !_ehShort && !_demTemProducao(t);
                     if(!_semPagamento && !_semTipo && !_semProdutor) return null;
                     const _dot=function(title,children){
                       return <div title={title} style={{width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#ef4444,#dc2626)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(220,38,38,0.55), 0 0 0 2px #fff",cursor:"help",animation:"pixelsPulseAlert 1.8s ease-in-out infinite"}}>{children}</div>;
@@ -29874,6 +29877,37 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     cardIdRef.current=(queue[clampedIdx]&&String(queue[clampedIdx].id))||null;  // saiu da fila
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[_idsFila,clampedIdx]);
+  /* ── AUTOMÁTICO SÓ NA AVALIAÇÃO DE COPYS (Vinicius, 17/09/2026) ─────────────
+     1) Foto de obra sem tipo → "Ajuste de template" (id "foto").
+     2) Sem mês de pagamento → até o dia 10 conta o mês atual; do dia 11 em diante,
+        o mês seguinte (17/09 → 2026-10).
+     Só preenche o que está EM BRANCO — valor marcado à mão nunca é trocado. Fica
+     registrado na timeline do card ("automático pela avaliação"). Fora desta tela
+     nada muda, de propósito: é aqui que o controle do pagamento é feito. */
+  const _autoMetaFeito=useRef({});
+  useEffect(function(){
+    if(!current||!current.id||!isApprover||!setTasks) return;
+    if(tab!=="copys"||current.status!=="demanda") return;
+    const k=String(current.id); if(_autoMetaFeito.current[k]) return;
+    _autoMetaFeito.current[k]=true;
+    const patch={}; const tls=[];
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(!current.contentType&&!current.content_type&&/foto\s*de\s*obra/i.test(String(current.title||""))){
+      patch.contentType="foto";
+      tls.push({type:"edit",label:"Tipo de conteúdo marcado automático pela avaliação (foto de obra)",at:now,atFmt:nowFmt(),user:actor,from:"em branco",to:"Ajuste de template"});
+    }
+    if(!/^\d{4}-\d{2}/.test(String(current.referenceMonth||current.reference_month||""))){
+      const d=new Date(); const alvo=new Date(d.getFullYear(),d.getMonth()+(d.getDate()>10?1:0),1);
+      const ym=alvo.getFullYear()+"-"+String(alvo.getMonth()+1).padStart(2,"0");
+      const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][alvo.getMonth()]+"/"+String(alvo.getFullYear()).slice(-2);
+      patch.referenceMonth=ym;
+      tls.push({type:"edit",label:"Mês de pagamento marcado automático pela avaliação ("+(d.getDate()>10?"depois do dia 10 → próximo mês":"até o dia 10 → mês atual")+")",at:now,atFmt:nowFmt(),user:actor,from:"em branco",to:mn});
+    }
+    if(!tls.length) return;
+    setTasks(p=>p.map(t=>t.id!==current.id?t:{...t,...patch,timeline:[...(t.timeline||[]),...tls]}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[current&&current.id,tab,isApprover]);
   const cl=current?CLIENTS.find(c=>c.id===current.client):null;
   const assigneeUser=current?TEAM.find(x=>x.id===current.assignee):null;
 
@@ -96914,6 +96948,16 @@ function _rtTexto(r,semCabecalho){
   return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
     "*"+L.a+"*\n"+_rtParagrafos(r.abertura)+"\n\n*"+L.d+"*\n"+_rtParagrafos(r.desenvolvimento)+"\n\n*"+L.f+"*\n"+_rtParagrafos(r.fechamento);
 }
+/* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026): todos os roteiros da tela numa mensagem só,
+   na ordem em que aparecem, título em negrito e numerado, separador entre um e outro. */
+function _rtTextoTodos(lista,nome){
+  const n=lista.length;
+  let out="🎬 *Roteiros de vídeo — "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar_";
+  lista.forEach(function(r,i){
+    out+="\n\n━━━━━━━━━━━━━━\n\n*"+(i+1)+". "+String(r.assunto||"Roteiro").toUpperCase()+"*\n\n"+_rtTexto(r,true);
+  });
+  return out;
+}
 function _rtPalavras(r){ return ((r.abertura||"")+" "+(r.desenvolvimento||"")+" "+(r.fechamento||"")).trim().split(/\s+/).filter(Boolean).length; }
 function _rtCopiar(txt,msg){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800); }catch(_){} }
 
@@ -97214,6 +97258,12 @@ function PageRoteiros({isMob}){
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
           {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
         </div>
+        <button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela, em ordem, formatados pro WhatsApp"
+          onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
+          style={{background:"#fff",color:visiveis.length?"#16a34a":"#94a3b8",border:"1px solid "+(visiveis.length?"#86efac":"#e2e8f0"),borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:800,cursor:visiveis.length?"pointer":"default",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
+        </button>
         <button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
         </button>
