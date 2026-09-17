@@ -18329,7 +18329,8 @@ function _pxCasFixo(t){
   const tags=Array.isArray(t&&t.tags)?t.tags:[];
   if(tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); })) return true;
   // rede de segurança: aniversário da marca criado à mão sem a tag ("Arte de 29 anos/años")
-  return /anivers[áa]rio|aniversario|cumplea|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""));
+  // idem marco de seguidores ("Comemoração 4k seguidores") — data fixa pela regra de 12/09
+  return /anivers[áa]rio|aniversario|cumplea|seguidor|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""));
 }
 function _pxCasGrupo(t){
   const ct=String((t&&(t.content_type||t.contentType))||"");
@@ -18386,7 +18387,8 @@ async function pxCascataPlanejar(novo,extras){
     const sb=window._sb; if(!sb||!novo) return vazio;
     const hoje=_pxApIso(new Date());
     const iso=String(novo.publishDate||novo.publish_date||"").slice(0,10);
-    if(!iso||iso<=hoje) return vazio;
+    // Card de HOJE conta ("o cliente manda postar algo urgente e é hoje") — só data passada não.
+    if(!iso||iso<hoje) return vazio;
     const nn={id:novo.id,client:novo.client,bioter_unit:novo.bioterUnit||novo.bioter_unit||"",publish_date:iso,
       status:novo.status||"rascunhos",somente_story:!!(novo.somenteStory||novo.somente_story),
       nao_publica:!!(novo.naoPublica||novo.nao_publica),content_type:novo.contentType||novo.content_type||null,
