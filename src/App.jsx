@@ -18388,9 +18388,9 @@ function _pxCasTrilhaAlvo(novo){
 /* Dia com folga na semana L pro card t: mesmo dia da semana da data antiga; senão o dia útil
    mais perto. Exige não ter post da unidade no dia; prefere ≥2 dias de distância dos outros
    posts da unidade (olhando também os vizinhos da semana anterior/seguinte). */
-function _pxCasDiaComFolga(t,L,rows,hoje){
+function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   const de=String(t.publish_date||"").slice(0,10);
-  const dow=_pxApData(de).getDay();
+  const dow=(typeof dowPref==="number")?dowPref:_pxApData(de).getDay();
   const alvos=_pxColAlvos(t);
   const ocup=[];
   rows.forEach(function(x){
@@ -18407,7 +18407,35 @@ function _pxCasDiaComFolga(t,L,rows,hoje){
     .filter(function(iso){ return iso>hoje&&ocup.indexOf(iso)<0; });
   if(!cand.length) return null;
   const dist=function(iso){ if(!ocup.length) return 9; const tt=_pxApData(iso).getTime(); return Math.min.apply(null,ocup.map(function(o){return Math.abs(tt-_pxApData(o).getTime())/86400000;})); };
-  return cand.find(function(iso){return dist(iso)>=2;})||cand[0];
+  /* REGRA DO VINICIUS (17/09): posts próprios das três PRINCIPAIS (Chapecó, Castro, Toledo) caem
+     no MESMO dia; os das três FILIAIS (Glória, Uberlândia, Paraguay) caem juntos em OUTRO dia.
+     Entre os dias com folga, primeiro o dia em que as irmãs já postam; o dia do outro grupo vai
+     pro fim da fila. Collab e comemorativa não entram nessa conta (já são de todos). */
+  const grupo=_pxCasGrupoBioter(t);
+  const irmas={}, outras={};
+  if(grupo){
+    rows.forEach(function(x){
+      if(x.deleted_at||String(x.client)!=="bioter"||_pxApEhCollab(x)||_pxCasFixo(x)) return;
+      if(x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return;
+      const g=_pxCasGrupoBioter(x); if(!g) return;
+      const d=String(x.publish_date||"").slice(0,10);
+      if(d<L.iniIso||d>L.fimIso) return;
+      const mesmaUnidade=_pxColAlvos(x).some(function(a){return alvos.indexOf(a)>=0;});
+      if(g===grupo&&!mesmaUnidade) irmas[d]=true; else if(g!==grupo) outras[d]=true;
+    });
+  }
+  // Paraguay não entra no collab: o post próprio de conteúdo dele faz o papel do collab e
+  // prefere a QUARTA (assim fica equilibrado com a Foto de obra/Short do outro dia). 17/09.
+  const pyQuarta=(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo");
+  const score=function(iso,i){ return (dist(iso)>=2?0:100)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+i*0.01; };
+  return cand.map(function(iso,i){return {iso:iso,s:score(iso,i)};}).sort(function(a,b){return a.s-b.s;})[0].iso;
+}
+function _pxCasGrupoBioter(t){
+  if(String(t&&t.client)!=="bioter") return null;
+  const us=_pxApUnits(t);
+  if(us.some(function(u){return ["chapeco","castro","toledo"].indexOf(u)>=0;})) return "principais";
+  if(us.some(function(u){return ["gloria","uberlandia","paraguay"].indexOf(u)>=0;})) return "filiais";
+  return null;
 }
 /* pxCascataPlanejar(novo,extras) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana}
    `novo` em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
@@ -18477,9 +18505,13 @@ async function pxCascataPlanejar(novo,extras){
         }
         const sai=ultimoDaTrilha(contProx,trilha);
         if(sai){
-          // toma o dia exato do último da trilha lá; ele passa a ser o deslocado
+          // herda a vaga do último da trilha lá — mas o DIA é recalculado com folga (≥2 dias de
+          // qualquer post da unidade). Só fica no dia exato se ele já for bom. (17/09: a v2 copiou
+          // a vaga "Antes e depois 04 + 05" de Castro e o Vinicius pegou dois dias seguidos.)
           const dia=String(sai.publish_date).slice(0,10);
-          if(dia>hoje){ registra(t,dia); t=sai; L=prox; continue; }
+          const semSai=rows.filter(function(x){ return x.id!==sai.id; });
+          const para=_pxCasDiaComFolga(t,prox,semSai,hoje,_pxApData(dia).getDay())||(dia>hoje?dia:null);
+          if(para){ registra(t,para); t=sai; L=prox; continue; }
         }
         // semana sem card da trilha (só fixos / outra trilha) → pula a semana
         L=prox;
@@ -18624,10 +18656,12 @@ function pxAutoComSyncStory(eventId, story){
         if(!story&&temTag) patch.tags=tags.filter(function(x){ return x!==TAG; });
         const as=Array.isArray(t.assignees)?t.assignees:(t.assignee?[t.assignee]:[]);
         const soVini=as.length===1&&as[0]==="vinicius";
-        if(String(t.status||"")==="rascunhos"){
-          if(story&&!soVini){ patch.assignee="vinicius"; patch.assignees=["vinicius"]; }
-          if(!story&&soVini){ patch.assignee="ellen"; patch.assignees=["ellen"]; }
-        } else if(Object.keys(patch).length){ emProducao++; }
+        // (17/09, Vinicius) "Somente story" = desmarca todo mundo e deixa SÓ o Vinicius, em
+        // qualquer status — story não passa pela produção. Desmarcou story: se estava só com
+        // o Vinicius, volta pra Hellen (só em Rascunhos; em produção mantém quem está).
+        if(story&&!soVini){ patch.assignee="vinicius"; patch.assignees=["vinicius"]; }
+        if(!story&&soVini&&String(t.status||"")==="rascunhos"){ patch.assignee="ellen"; patch.assignees=["ellen"]; }
+        if(String(t.status||"")!=="rascunhos"&&Object.keys(patch).length) emProducao++;
         if(!Object.keys(patch).length) return;
         alterados++;
         jobs.push(sb.from("tasks").update(patch).eq("id",t.id));
@@ -18840,7 +18874,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           if(!res||!res.alterados||typeof pixelsToast==="undefined") return;
           const n=res.alterados, m=res.emProducao;
           pixelsToast.info((_savedRow.somente_story?"Somente story aplicado":"Somente story retirado")+" em "+n+" card"+(n>1?"s":"")+" já criado"+(n>1?"s":"")+
-            (m?" · "+m+" já em produção "+(m>1?"mantiveram":"manteve")+" os responsáveis":"")+".",5000);
+            (_savedRow.somente_story?" — responsável agora é só o Vinicius":"")+".",5000);
         }).catch(function(e){ console.warn("[autocom story]",e); });
       }
       // Sincronizar marco vinculado (se aplicável)
