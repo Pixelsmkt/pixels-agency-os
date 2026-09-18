@@ -42607,12 +42607,28 @@ async function pxRoteiro60(task, clienteNome){
     (_ehCom?"Data comemorativa é homenagem — o vídeo fala de quem trabalha, não do produto. "
           :"Este card NÃO é data comemorativa: é conteúdo. O vídeo explica ou mostra o assunto do card e termina convidando quem assiste a falar com a empresa. ")+
     (py?"ESCREVA TUDO EM ESPANHOL (é a unidade do Paraguai), menos os rótulos das cenas.":"Escreva em português do Brasil.");
+  /* (18/09/2026) Mesmo cérebro dos outros geradores: tom de voz, chamadas proibidas,
+     regras obrigatórias e "O que o cliente falou" (Playbook › Memória do cliente).
+     Falhou a RPC? Segue sem contexto — melhor um roteiro simples que botão travado. */
+  let _ctxTxt="";
+  try{
+    if(typeof pxContextoCopy==="function"){
+      const _unit=String((task&&(task.bioterUnit||task.bioter_unit))||"");
+      const _ctx=await pxContextoCopy((task&&task.client)||"", _unit, task);
+      const _pb=(_ctx&&_ctx.playbook)||{};
+      if(_pb.comunicacao) _ctxTxt+="COMO A MARCA FALA: "+String(_pb.comunicacao).slice(0,700)+"\n\n";
+      if(_pb.chamadas_proibidas&&_pb.chamadas_proibidas.length&&typeof _pxCtxTxt==="function")
+        _ctxTxt+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(_pb.chamadas_proibidas)+"\n\n";
+      if(typeof pxCtxRegrasTxt==="function") _ctxTxt+=pxCtxRegrasTxt((_ctx&&_ctx.regras)||[]);
+    }
+  }catch(_){ _ctxTxt=""; }
   const usr="Cliente: "+(clienteNome||"—")+"\n"+
     "Data da publicação: "+(dtBr||"—")+"\n"+
     "Card: "+((task&&task.title)||"—")+"\n\n"+
     (_ehCarrossel?"BRIEFING DO CARROSSEL (cada lâmina é um bloco do assunto — use a ordem delas como a ordem das cenas):\n"
                  :"TEXTO QUE IRIA NA ARTE:\n")+(brief||"(vazio)")+"\n\n"+
     "LEGENDA APROVADA:\n"+(leg||"(vazia)")+"\n\n"+
+    _ctxTxt+
     "Transforme isso num ROTEIRO DE VÍDEO DE 90 SEGUNDOS pro cliente gravar.\n"+
     (typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+
     (_ehCom?"- Mantenha o tom de homenagem da legenda: reconhecer quem trabalha, dizer que faz parte da história da marca. O final é a homenagem, sem venda.\n"
@@ -93914,6 +93930,21 @@ function _pbDataBr(iso){
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? (v.slice(8,10)+"/"+v.slice(5,7)+"/"+v.slice(0,4))
                                        : new Date().toLocaleDateString("pt-BR");
 }
+/* origem é uma string só ("WhatsApp 18/09/2026 · Gustavo"). Pra reabrir no Editar
+   ela é desmontada de volta em canal + data + autor. Canal desconhecido (anotação
+   antiga, escrita à mão) cai em "Outro" com o texto original no campo livre. */
+function _pbParseOrigem(txt){
+  const s=String(txt||"").trim();
+  const partes=s.split(" · ");
+  const cab=String(partes[0]||"").trim();
+  const autor=partes.slice(1).join(" · ").trim();
+  const m=cab.match(/^(.*?)\s+(\d{2}\/\d{2}\/\d{4})$/);
+  const canalTxt=(m?m[1]:cab).trim();
+  const dBr=m?m[2]:"";
+  const iso=/^\d{2}\/\d{2}\/\d{4}$/.test(dBr)?(dBr.slice(6,10)+"-"+dBr.slice(3,5)+"-"+dBr.slice(0,2)):_pbHojeIso();
+  const conhecido=PB_MEM_CANAIS.indexOf(canalTxt)>=0&&canalTxt!=="Outro";
+  return {canal:conhecido?canalTxt:"Outro", livre:conhecido?"":canalTxt, data:iso, autor:autor};
+}
 function _pbMemEtq(tipo){
   const k=String(tipo||"").split(":")[1]||"";
   return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
@@ -93929,12 +93960,15 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const [canal,setCanal]=useState("Reunião");
   const [dataOrig,setDataOrig]=useState("");
   const [origem,setOrigem]=useState(""); // texto livre — só usado quando o canal é Outro
+  const [disse,setDisse]=useState("");   // quem DO CLIENTE falou
+  const [editId,setEditId]=useState(null);   // null = anotação nova
+  const [autorOrig,setAutorOrig]=useState(""); // quem anotou na origem — preservado no Editar
   const [salvando,setSalvando]=useState(false);
   const carregar=async function(){
     try{
       const sb=window._sb; if(!sb||!clientId){ setItens([]); return; }
       const {data,error}=await sb.from("claude_copy_regras")
-        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,criado_em")
+        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,disse_quem,criado_em")
         .eq("client",clientId).like("tipo","memoria:%")
         .order("criado_em",{ascending:false});
       if(error) throw error;
@@ -93942,29 +93976,46 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     }catch(e){ setItens([]); setErro((e&&e.message)||String(e)); }
   };
   useEffect(function(){ setItens(null); carregar(); },[clientId]);
-  const _abrirForm=function(){
-    // Unidade já selecionada no topo do Playbook entra como sugestão (Bioter).
-    setUni(isBioter?(unitTab||""):"");
-    setCanal("Reunião"); setDataOrig(_pbHojeIso()); setOrigem("");
+  const _abrirForm=function(it){
+    if(it){
+      const o=_pbParseOrigem(it.origem);
+      setEditId(it.id); setAutorOrig(o.autor);
+      setTxt(it.regra||""); setPorque(it.porque||""); setEtq(_pbMemEtq(it.tipo).id);
+      setUni(it.bioter_unit||""); setDisse(it.disse_quem||"");
+      setCanal(o.canal); setDataOrig(o.data); setOrigem(o.livre);
+    }else{
+      setEditId(null); setAutorOrig("");
+      setTxt(""); setPorque(""); setEtq("produto"); setDisse("");
+      // Unidade já selecionada no topo do Playbook entra como sugestão (Bioter).
+      setUni(isBioter?(unitTab||""):"");
+      setCanal("Reunião"); setDataOrig(_pbHojeIso()); setOrigem("");
+    }
     setAbrir(true);
   };
+  const _fecharForm=function(){ setAbrir(false); setEditId(null); setAutorOrig(""); };
   const salvar=async function(){
     const _t=String(txt||"").trim(); if(!_t) return;
     const sb=window._sb; if(!sb) return;
     setSalvando(true);
     try{
       const _quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER.name)?CURRENT_USER.name:"";
-      // "Reunião 18/09/2026 · Vinicius" — canal (tag) + data + quem anotou.
+      // "WhatsApp 18/09/2026 · Gustavo" — canal (tag) + data + quem anotou.
+      // Editando, o autor original fica: quem anotou não muda porque outro passou e corrigiu.
       const _canal=(canal==="Outro")?(String(origem||"").trim()||"Anotação"):canal;
-      const _org=_canal+" "+_pbDataBr(dataOrig);
-      const {error}=await sb.from("claude_copy_regras").insert({
-        client:clientId, bioter_unit:(uni||null), tipo:"memoria:"+etq,
+      const _autor=editId?(autorOrig||_quem):_quem;
+      const _campos={
+        bioter_unit:(uni||null), tipo:"memoria:"+etq,
         regra:_t, porque:String(porque||"").trim()||null,
-        origem:_org+(_quem?(" · "+_quem):""), ativa:true });
+        disse_quem:String(disse||"").trim()||null,
+        origem:_canal+" "+_pbDataBr(dataOrig)+(_autor?(" · "+_autor):"") };
+      const {error}=editId
+        ? await sb.from("claude_copy_regras").update(_campos).eq("id",editId)
+        : await sb.from("claude_copy_regras").insert(Object.assign({client:clientId,ativa:true},_campos));
       if(error) throw error;
-      setTxt(""); setPorque(""); setOrigem(""); setAbrir(false);
+      const _era=editId;
+      setTxt(""); setPorque(""); setOrigem(""); setDisse(""); _fecharForm();
       await carregar();
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Anotado. O cérebro já usa isso na próxima copy deste cliente.",3200);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(_era?"Anotação atualizada.":"Anotado. O cérebro já usa isso na próxima copy deste cliente.",3200);
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
     setSalvando(false);
   };
@@ -93999,7 +94050,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler as anotações: {erro}</div>}
 
-    {isAdmin && !abrir && <button type="button" onClick={_abrirForm}
+    {isAdmin && !abrir && <button type="button" onClick={function(){_abrirForm();}}
       style={{background:PB_PURPLE_DK,border:"none",borderRadius:10,padding:"9px 15px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,marginBottom:(itens&&itens.length)?14:0}}>
       <Ico n="plus" size={14} color="#fff"/>Nova anotação
     </button>}
@@ -94007,15 +94058,16 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     {isAdmin && abrir && <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER,borderRadius:14,padding:14,marginBottom:16,display:"flex",flexDirection:"column",gap:10}}>
       <div>
         <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>O que o cliente falou</div>
-        <textarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2} autoFocus
+        {/* Cresce sozinho conforme digita — anotação de reunião é texto comprido (18/09/2026) */}
+        <_PbAutoTextarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2}
           placeholder="Ex.: comedouro Plasson deve ser abordado pelo manejo e pela fase do suíno, não pelo preço."
-          style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+          style={Object.assign({},_inp,{lineHeight:1.55,minHeight:64,overflow:"hidden",resize:"none"})}/>
       </div>
       <div>
         <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Por quê <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· opcional, mas é o que faz a IA entender o motivo</span></div>
-        <textarea value={porque} onChange={function(e){setPorque(e.target.value);}} rows={2}
+        <_PbAutoTextarea value={porque} onChange={function(e){setPorque(e.target.value);}} rows={2}
           placeholder="Ex.: o produtor decide olhando a rotina da granja — preço vira objeção."
-          style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+          style={Object.assign({},_inp,{lineHeight:1.55,minHeight:58,overflow:"hidden",resize:"none"})}/>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         {PB_MEM_ETIQUETAS.map(function(e){
@@ -94039,6 +94091,11 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
           {canal==="Outro" && <input value={origem} onChange={function(e){setOrigem(e.target.value);}}
             placeholder="De onde veio? (ex.: e-mail, visita na fábrica)" style={Object.assign({},_inp,{marginTop:7})}/>}
         </div>
+        {/* Quem DO CLIENTE falou — fica só aqui na tela, não vai pro prompt (18/09/2026) */}
+        <div style={{flex:"1 1 200px",minWidth:0}}>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Quem falou <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· do lado do cliente</span></div>
+          <input value={disse} onChange={function(e){setDisse(e.target.value);}} placeholder="Ex.: Gustavo Schorr" style={_inp}/>
+        </div>
         {isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{flex:"1 1 200px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Vale pra</div>
           <select value={uni} onChange={function(e){setUni(e.target.value);}} style={_inp}>
@@ -94048,10 +94105,10 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         </div>}
       </div>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button type="button" onClick={function(){setAbrir(false);}}
+        <button type="button" onClick={_fecharForm}
           style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"8px 15px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
         <button type="button" onClick={salvar} disabled={salvando||!String(txt||"").trim()}
-          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":"Salvar"}</button>
+          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":(editId?"Salvar alterações":"Salvar")}</button>
       </div>
     </div>}
 
@@ -94073,6 +94130,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
+                {it.disse_quem && <span title="Quem falou, do lado do cliente" style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="users" size={10} color="#1d4ed8"/>{it.disse_quem}</span>}
                 {it.origem && <span style={{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{it.origem}</span>}
                 {!on && <span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>fora do cérebro</span>}
               </div>
@@ -94083,6 +94141,11 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
                 <span style={{width:34,height:20,borderRadius:99,background:on?e.cor:"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
                   <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
                 </span>
+              </button>
+              <button type="button" onClick={function(){_abrirForm(it);}} title="Editar esta anotação"
+                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}
+                onMouseEnter={function(ev){ev.currentTarget.style.color=PB_PURPLE_DK;}} onMouseLeave={function(ev){ev.currentTarget.style.color="#94a3b8";}}>
+                <Ico n="edit" size={14}/>
               </button>
               <button type="button" onClick={function(){apagar(it);}} title="Apagar de vez"
                 style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
