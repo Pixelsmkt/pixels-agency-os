@@ -1619,7 +1619,8 @@ PX_BLOCOS.dashboard={label:"Meu Dashboard", navIcon:"meudash", color:"#7c3aed", 
   ]},
   {id:"blocos", label:"Blocos da página", itens:[
     {key:"dash.capa",                label:"Capa (foto, nome, data, demandas, sino)", desc:""},
-    {key:"dash.aprovacoes_cliente",  label:"Aprovações / ajustes vindos do portal",   desc:"Card de destaque no topo"},
+    {key:"dash.aprovacoes_cliente",  label:"Aprovações / ajustes vindos do portal",   desc:"Padrão: sócio, Hellen/coordenação e social media (18/09/2026 — antes aparecia pra todos)",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.dash==="coordinator"||u.dash==="social"))},
     {key:"dash.alertas",             label:"Alertas urgentes",  desc:"Vinicius e Gustavo nunca veem (fixo)"},
   ]},
   {id:"abas", label:"Abas do painel", itens:[
