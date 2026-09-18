@@ -21476,8 +21476,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       });
   };
 
+  /* (18/09/2026) AUDITORIA DESLIGADA — Vinicius: "tira essa merda de pontos fora da
+     regra, isso não ajudou em nada". Apontava colisão de cadência no calendário e só
+     virou ruído vermelho em cima de decisão que já tinha sido tomada na mão.
+     Desligar aqui derruba tudo de uma vez: a faixa do topo, a lista e o selo de aviso
+     no dia só existem quando _audit tem item. Pra ressuscitar, troque pra true —
+     pxAuditoriaCalendario continua inteira logo acima. */
+  const PX_CAL_AUDITORIA_ON=false;
   // (17/09/2026) Auditoria do mês visível (+1 semana de cada lado) — só avisa. Respeita o filtro de cliente.
   const _audit=React.useMemo(function(){
+    if(!PX_CAL_AUDITORIA_ON) return [];
     if(typeof pxAuditoriaCalendario!=="function") return [];
     const y=calMonth.getFullYear(), m=calMonth.getMonth();
     const ini=new Date(y,m,1); ini.setDate(ini.getDate()-ini.getDay()-7);
@@ -76406,6 +76414,12 @@ const ONBOARDING_BLOCKS = [
             // Acesso só por tarefas/parcial não deixa criar o portfólio empresarial nem vincular FB ao IG.
             passos:["Entrar no link logado no perfil que administra a página","Seção \"Pessoas com acesso do Facebook\"","Botão \"Adicionar novo\" e adicionar a pessoa da equipe","Liberar o acesso completo (controle total)"],
             msg:"Oi! Pra gente criar o portfólio empresarial e vincular o Facebook ao Instagram, precisamos de acesso completo à página. É rapidinho 👇\n\n1. Entre neste link (logado no perfil que administra a página): https://www.facebook.com/settings/?tab=profile_access\n2. Na seção \"Pessoas com acesso do Facebook\", clique em \"Adicionar novo\"\n3. Adicione a pessoa da nossa equipe e libere o acesso completo\n\nQualquer dúvida é só chamar!"}]},
+        // (18/09/2026) O convite NÃO chega por e-mail: fica parado na própria página, no
+        // perfil de quem foi convidado. Sem aceitar, o acesso não vale — e a gente já
+        // perdeu tempo achando que o passo de cima tinha resolvido.
+        {id:"d1_meta_aceitar_convite", label:"Aceitar o convite de acesso na página do Facebook (o convite fica na própria página — não chega por e-mail)",
+          links:[{label:"Convites de página no Facebook", url:"https://www.facebook.com/pages/?category=invites", tipo:"facebook",
+            passos:["Entrar logado no perfil da equipe que foi convidado","Abrir Páginas › Convites","Aceitar o convite da página do cliente","Conferir se a página já aparece na lista de páginas do perfil"]}]},
         {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
         {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
         {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
@@ -76546,6 +76560,12 @@ const ONBOARDING_BLOCKS_STARTER = [
             // Acesso só por tarefas/parcial não deixa criar o portfólio empresarial nem vincular FB ao IG.
             passos:["Entrar no link logado no perfil que administra a página","Seção \"Pessoas com acesso do Facebook\"","Botão \"Adicionar novo\" e adicionar a pessoa da equipe","Liberar o acesso completo (controle total)"],
             msg:"Oi! Pra gente criar o portfólio empresarial e vincular o Facebook ao Instagram, precisamos de acesso completo à página. É rapidinho 👇\n\n1. Entre neste link (logado no perfil que administra a página): https://www.facebook.com/settings/?tab=profile_access\n2. Na seção \"Pessoas com acesso do Facebook\", clique em \"Adicionar novo\"\n3. Adicione a pessoa da nossa equipe e libere o acesso completo\n\nQualquer dúvida é só chamar!"}]},
+        // (18/09/2026) O convite NÃO chega por e-mail: fica parado na própria página, no
+        // perfil de quem foi convidado. Sem aceitar, o acesso não vale — e a gente já
+        // perdeu tempo achando que o passo de cima tinha resolvido.
+        {id:"d1_meta_aceitar_convite", label:"Aceitar o convite de acesso na página do Facebook (o convite fica na própria página — não chega por e-mail)",
+          links:[{label:"Convites de página no Facebook", url:"https://www.facebook.com/pages/?category=invites", tipo:"facebook",
+            passos:["Entrar logado no perfil da equipe que foi convidado","Abrir Páginas › Convites","Aceitar o convite da página do cliente","Conferir se a página já aparece na lista de páginas do perfil"]}]},
         {id:"d1_meta_criar_paginas", label:"Criar as páginas no Instagram e no Facebook (se o cliente ainda não tem)"},
         {id:"d1_meta_portfolio", label:"Criação do portfólio empresarial no Meta Business"},
         {id:"d1_meta_vincular", label:"Vincular o Facebook ao Instagram"},
@@ -93883,6 +93903,17 @@ const PB_MEM_ETIQUETAS = [
   {id:"publico",   label:"Público",   cor:"#0d9488", dica:"quem ele quer alcançar"},
   {id:"evitar",    label:"Evitar",    cor:"#dc2626", dica:"o que ele não quer ver"},
 ];
+/* Canais de onde vem a anotação — vira a tag da Origem. "Outro" abre campo livre. */
+const PB_MEM_CANAIS = ["Reunião","WhatsApp","Conversa presencial","Outro"];
+function _pbHojeIso(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function _pbDataBr(iso){
+  const v=String(iso||"");
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? (v.slice(8,10)+"/"+v.slice(5,7)+"/"+v.slice(0,4))
+                                       : new Date().toLocaleDateString("pt-BR");
+}
 function _pbMemEtq(tipo){
   const k=String(tipo||"").split(":")[1]||"";
   return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
@@ -93895,7 +93926,9 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const [porque,setPorque]=useState("");
   const [etq,setEtq]=useState("produto");
   const [uni,setUni]=useState("");
-  const [origem,setOrigem]=useState("");
+  const [canal,setCanal]=useState("Reunião");
+  const [dataOrig,setDataOrig]=useState("");
+  const [origem,setOrigem]=useState(""); // texto livre — só usado quando o canal é Outro
   const [salvando,setSalvando]=useState(false);
   const carregar=async function(){
     try{
@@ -93912,7 +93945,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const _abrirForm=function(){
     // Unidade já selecionada no topo do Playbook entra como sugestão (Bioter).
     setUni(isBioter?(unitTab||""):"");
-    setOrigem("Reunião "+new Date().toLocaleDateString("pt-BR"));
+    setCanal("Reunião"); setDataOrig(_pbHojeIso()); setOrigem("");
     setAbrir(true);
   };
   const salvar=async function(){
@@ -93921,7 +93954,9 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     setSalvando(true);
     try{
       const _quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER.name)?CURRENT_USER.name:"";
-      const _org=String(origem||"").trim()||("Reunião "+new Date().toLocaleDateString("pt-BR"));
+      // "Reunião 18/09/2026 · Vinicius" — canal (tag) + data + quem anotou.
+      const _canal=(canal==="Outro")?(String(origem||"").trim()||"Anotação"):canal;
+      const _org=_canal+" "+_pbDataBr(dataOrig);
       const {error}=await sb.from("claude_copy_regras").insert({
         client:clientId, bioter_unit:(uni||null), tipo:"memoria:"+etq,
         regra:_t, porque:String(porque||"").trim()||null,
@@ -93990,9 +94025,19 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         })}
       </div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        <div style={{flex:"1 1 200px",minWidth:0}}>
+        <div style={{flex:"1 1 320px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Origem</div>
-          <input value={origem} onChange={function(e){setOrigem(e.target.value);}} placeholder="Reunião 18/09" style={_inp}/>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {PB_MEM_CANAIS.map(function(c){
+              const on=canal===c;
+              return <button key={c} type="button" onClick={function(){setCanal(c);}}
+                style={{background:on?"#334155":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#334155":PB_BORDER),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{c}</button>;
+            })}
+            <input type="date" value={dataOrig} onChange={function(e){setDataOrig(e.target.value);}}
+              style={Object.assign({},_inp,{width:"auto",flex:"0 0 auto",padding:"6px 9px",fontSize:12})}/>
+          </div>
+          {canal==="Outro" && <input value={origem} onChange={function(e){setOrigem(e.target.value);}}
+            placeholder="De onde veio? (ex.: e-mail, visita na fábrica)" style={Object.assign({},_inp,{marginTop:7})}/>}
         </div>
         {isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{flex:"1 1 200px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Vale pra</div>
@@ -94028,7 +94073,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
-                {it.origem && <span style={{color:"#94a3b8",fontSize:11}}>{it.origem}</span>}
+                {it.origem && <span style={{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{it.origem}</span>}
                 {!on && <span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>fora do cérebro</span>}
               </div>
             </div>
