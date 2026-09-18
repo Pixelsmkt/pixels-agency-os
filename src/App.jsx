@@ -3988,6 +3988,45 @@ async function pxTraduzirParaPt(opts){
 }
 if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
 
+/* ─── REGRAS vs. MEMÓRIA DO CLIENTE ───────────────────────────────────
+   As duas moram na MESMA tabela (claude_copy_regras) e chegam juntas pela RPC,
+   mas não pesam igual no prompt:
+
+   · REGRA       (tipo "sempre", "nunca", "fato", "obrigatorio"…) → obrigatória,
+                 a IA cumpre ao pé da letra. Vem do feedback de copy da agência.
+   · MEMÓRIA     (tipo começa com "memoria:") → contexto de reunião com o cliente:
+                 produto que ele quer puxar, ângulo que funciona, palavra que ele
+                 não gosta. ORIENTA o rumo, não vira lei — um comentário solto de
+                 reunião não pode engessar a copy inteira.
+
+   Editada no Playbook, bloco "O que o cliente falou" (27_playbooks.jsx).
+   Um lugar só monta os dois blocos: mudou aqui, muda nos 4 geradores. */
+function pxCtxRegrasTxt(regras){
+  const arr=Array.isArray(regras)?regras:[];
+  const _ehMem=function(r){ return String((r&&r.tipo)||"").toLowerCase().indexOf("memoria")===0; };
+  const obg=arr.filter(function(r){ return !_ehMem(r); });
+  const mem=arr.filter(_ehMem);
+  let u="";
+  if(obg.length){
+    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
+    for(let i=0;i<obg.length;i++) u+="- ["+String(obg[i].tipo||"").toUpperCase()+"] "+obg[i].regra+"\n";
+    u+="\n";
+  }
+  if(mem.length){
+    u+="O QUE O CLIENTE FALOU (contexto da conta, anotado em reunião — respeite o espírito disso: "+
+       "é o rumo que o cliente quer, não é regra literal nem texto pra copiar):\n";
+    for(let i=0;i<mem.length;i++){
+      const m=mem[i];
+      const _e=String(m.tipo||"").split(":")[1]||"contexto";
+      u+="- ["+_e.toUpperCase()+"] "+m.regra+
+         (m.porque?(" (por quê: "+m.porque+")"):"")+
+         (m.origem?(" — "+m.origem):"")+"\n";
+    }
+    u+="\n";
+  }
+  return u;
+}
+
 /* ─── REESCRITA DE COPY PELO CLAUDE ─────────────────────────────────
    Usado pelos botões "Testar nova abordagem" e "Refazer do zero" da
    Avaliação de copys. O card NÃO sai da fila: a copy é reescrita na hora e
@@ -4233,11 +4272,7 @@ async function pxReescreverCopy(opts){
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
-  if(regras.length){
-    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
-    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
-    u+="\n";
-  }
+  u+=pxCtxRegrasTxt(regras);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,3);i++){
@@ -4567,11 +4602,7 @@ async function pxGerarLegendas(opts){
   if(pb.chamadas_aprovadas&&pb.chamadas_aprovadas.length)
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
-  if(regras.length){
-    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
-    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
-    u+="\n";
-  }
+  u+=pxCtxRegrasTxt(regras);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,2);i++){
@@ -4802,11 +4833,7 @@ async function pxGerarBriefing(opts){
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
-  if(regras.length){
-    u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n";
-    for(let i=0;i<regras.length;i++) u+="- ["+String(regras[i].tipo||"").toUpperCase()+"] "+regras[i].regra+"\n";
-    u+="\n";
-  }
+  u+=pxCtxRegrasTxt(regras);
   { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
     const f=foco[0]; const partes=[];
@@ -91745,13 +91772,13 @@ const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
-   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto","pb-checklist"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto","pb-memoria","pb-checklist"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
    blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos","pb-checklist"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
    blocos:["pb-sobre","pb-time","pb-processos","pb-equipe","pb-orientacoes-visuais","pb-contatos","pb-produtos","pb-checklist"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
-   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto","pb-checklist"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto","pb-memoria","pb-checklist"]},
 ];
 // ═══ PERMISSÕES POR BLOCO (17/09/2026) ═══
 // Lista de TODOS os blocos do playbook (id + nome) — é o que aparece em
@@ -91759,6 +91786,7 @@ const PB_CADEIRAS = [
 const PB_BLOCOS = [
   {id:"pb-sobre",               label:"Sobre a empresa"},
   {id:"pb-briefing-auto",       label:"Dados do Briefing"},
+  {id:"pb-memoria",             label:"O que o cliente falou"},
   {id:"pb-contatos",            label:"Contatos"},
   {id:"pb-time",                label:"Equipe do cliente"},
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
@@ -92538,6 +92566,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const SECTIONS = [
     {id:"pb-sobre",        label:"Sobre",        icon:"building"},
     {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
+    {id:"pb-memoria",      label:"O cliente falou", icon:"message"},
     {id:"pb-designer",     label:"Designer",     icon:"image"},
     {id:"pb-equipe",       label:"Orientações",  icon:"sparkles"},
     {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
@@ -92685,6 +92714,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
           {/* Dados do Briefing — auto, read-only, copiável */}
           <_PbBriefingAuto clientId={cl.id}/>
+
+          {/* O que o cliente falou — contexto de reunião que alimenta a IA (18/09/2026) */}
+          <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
 
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
             {_isBioter && typeof BIOTER_UNITS!=="undefined" && (function(){
@@ -93826,6 +93858,200 @@ function _PbBriefingAuto({clientId}){
         </button>;
       })}
     </div>
+  </PlaybookBlock>;
+}
+
+/* ── O QUE O CLIENTE FALOU (Vinicius, 18/09/2026) ─────────────────────────────
+   O cliente solta em reunião coisa que vale ouro pro cérebro — "puxa o comedouro
+   pelo manejo, não pelo preço" — e não havia onde guardar:
+     · Planejamento morre no fim do mês;
+     · Briefing é território do cliente (ele edita pelo portal e sobrescreve);
+     · e a IA só lê a seção "produtos" do briefing, mais nada.
+
+   ONDE GRAVA: claude_copy_regras — a MESMA tabela das regras do cérebro. Por isso
+   entra sozinho nos 4 geradores (reescrever copy, gerar legendas, gerar briefing e
+   roteiros) sem migração de banco e sem tocar na RPC claude_contexto_copy.
+   COMO SE SEPARA DA REGRA: o `tipo` começa com "memoria:". Quem faz a separação no
+   prompt é pxCtxRegrasTxt (00_clientes_data.jsx) — regra é lei, memória é rumo.
+   QUEM VÊ: só a agência. A RLS da tabela é _pixels_is_agency(); o cliente não lê
+   nem grava, então dá pra anotar com sinceridade.
+   `bioter_unit` null = vale pra todas as unidades (é como a RPC filtra). */
+const PB_MEM_ETIQUETAS = [
+  {id:"produto",   label:"Produto",   cor:"#f59e0b", dica:"produto ou serviço pra puxar"},
+  {id:"abordagem", label:"Abordagem", cor:"#7c3aed", dica:"o ângulo que funciona"},
+  {id:"linguagem", label:"Linguagem", cor:"#0ea5e9", dica:"palavra/tom que o cliente gosta"},
+  {id:"publico",   label:"Público",   cor:"#0d9488", dica:"quem ele quer alcançar"},
+  {id:"evitar",    label:"Evitar",    cor:"#dc2626", dica:"o que ele não quer ver"},
+];
+function _pbMemEtq(tipo){
+  const k=String(tipo||"").split(":")[1]||"";
+  return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
+}
+function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
+  const [itens,setItens]=useState(null);
+  const [erro,setErro]=useState("");
+  const [abrir,setAbrir]=useState(false);
+  const [txt,setTxt]=useState("");
+  const [porque,setPorque]=useState("");
+  const [etq,setEtq]=useState("produto");
+  const [uni,setUni]=useState("");
+  const [origem,setOrigem]=useState("");
+  const [salvando,setSalvando]=useState(false);
+  const carregar=async function(){
+    try{
+      const sb=window._sb; if(!sb||!clientId){ setItens([]); return; }
+      const {data,error}=await sb.from("claude_copy_regras")
+        .select("id,tipo,regra,porque,origem,ativa,bioter_unit,criado_em")
+        .eq("client",clientId).like("tipo","memoria:%")
+        .order("criado_em",{ascending:false});
+      if(error) throw error;
+      setItens(Array.isArray(data)?data:[]); setErro("");
+    }catch(e){ setItens([]); setErro((e&&e.message)||String(e)); }
+  };
+  useEffect(function(){ setItens(null); carregar(); },[clientId]);
+  const _abrirForm=function(){
+    // Unidade já selecionada no topo do Playbook entra como sugestão (Bioter).
+    setUni(isBioter?(unitTab||""):"");
+    setOrigem("Reunião "+new Date().toLocaleDateString("pt-BR"));
+    setAbrir(true);
+  };
+  const salvar=async function(){
+    const _t=String(txt||"").trim(); if(!_t) return;
+    const sb=window._sb; if(!sb) return;
+    setSalvando(true);
+    try{
+      const _quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER.name)?CURRENT_USER.name:"";
+      const _org=String(origem||"").trim()||("Reunião "+new Date().toLocaleDateString("pt-BR"));
+      const {error}=await sb.from("claude_copy_regras").insert({
+        client:clientId, bioter_unit:(uni||null), tipo:"memoria:"+etq,
+        regra:_t, porque:String(porque||"").trim()||null,
+        origem:_org+(_quem?(" · "+_quem):""), ativa:true });
+      if(error) throw error;
+      setTxt(""); setPorque(""); setOrigem(""); setAbrir(false);
+      await carregar();
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Anotado. O cérebro já usa isso na próxima copy deste cliente.",3200);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
+    setSalvando(false);
+  };
+  const alternar=async function(it){
+    try{ const sb=window._sb; if(!sb) return;
+      const {error}=await sb.from("claude_copy_regras").update({ativa:!it.ativa}).eq("id",it.id);
+      if(error) throw error; await carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não mudou: "+((e&&e.message)||e)); }
+  };
+  const apagar=async function(it){
+    try{
+      if(typeof pixelsConfirm==="function"){
+        const ok=await pixelsConfirm("Apagar esta anotação de vez? Pra só tirar do cérebro, use o interruptor.",{danger:true});
+        if(!ok) return;
+      }
+      const sb=window._sb; if(!sb) return;
+      const {error}=await sb.from("claude_copy_regras").delete().eq("id",it.id);
+      if(error) throw error; await carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não apagou: "+((e&&e.message)||e)); }
+  };
+  const _inp={border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box"};
+  const _uniLabel=function(u){
+    if(!u) return "Todas as unidades";
+    if(typeof BIOTER_UNITS==="undefined") return u;
+    const _x=BIOTER_UNITS.find(function(b){return b.id===u;});
+    return _x?(_x.pickerLabel||_x.label):u;
+  };
+  const _ativas=(itens||[]).filter(function(x){return x.ativa;}).length;
+  return <PlaybookBlock id="pb-memoria" title="O que o cliente falou"
+    subtitle="Contexto de reunião e conversa — entra automático em toda copy, briefing e roteiro deste cliente"
+    icon="message" color={PB_PURPLE_DK}>
+
+    {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler as anotações: {erro}</div>}
+
+    {isAdmin && !abrir && <button type="button" onClick={_abrirForm}
+      style={{background:PB_PURPLE_DK,border:"none",borderRadius:10,padding:"9px 15px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,marginBottom:(itens&&itens.length)?14:0}}>
+      <Ico n="plus" size={14} color="#fff"/>Nova anotação
+    </button>}
+
+    {isAdmin && abrir && <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER,borderRadius:14,padding:14,marginBottom:16,display:"flex",flexDirection:"column",gap:10}}>
+      <div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>O que o cliente falou</div>
+        <textarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2} autoFocus
+          placeholder="Ex.: comedouro Plasson deve ser abordado pelo manejo e pela fase do suíno, não pelo preço."
+          style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+      </div>
+      <div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Por quê <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· opcional, mas é o que faz a IA entender o motivo</span></div>
+        <textarea value={porque} onChange={function(e){setPorque(e.target.value);}} rows={2}
+          placeholder="Ex.: o produtor decide olhando a rotina da granja — preço vira objeção."
+          style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        {PB_MEM_ETIQUETAS.map(function(e){
+          const on=etq===e.id;
+          return <button key={e.id} type="button" onClick={function(){setEtq(e.id);}} title={e.dica}
+            style={{background:on?e.cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?e.cor:PB_BORDER),borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{e.label}</button>;
+        })}
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <div style={{flex:"1 1 200px",minWidth:0}}>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Origem</div>
+          <input value={origem} onChange={function(e){setOrigem(e.target.value);}} placeholder="Reunião 18/09" style={_inp}/>
+        </div>
+        {isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{flex:"1 1 200px",minWidth:0}}>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Vale pra</div>
+          <select value={uni} onChange={function(e){setUni(e.target.value);}} style={_inp}>
+            <option value="">Todas as unidades</option>
+            {BIOTER_UNITS.map(function(b){ return <option key={b.id} value={b.id}>{b.pickerLabel||b.label}</option>; })}
+          </select>
+        </div>}
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button type="button" onClick={function(){setAbrir(false);}}
+          style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"8px 15px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button type="button" onClick={salvar} disabled={salvando||!String(txt||"").trim()}
+          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":"Salvar"}</button>
+      </div>
+    </div>}
+
+    {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
+
+    {itens!==null && itens.length===0 && typeof _PbEmpty==="function" &&
+      <_PbEmpty icon="message" text="Nada anotado ainda."
+        sub={isAdmin?"O que o cliente falar em reunião sobre produto, ângulo ou linguagem entra aqui — e a IA passa a escrever sabendo disso.":""}/>}
+
+    {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {itens.map(function(it){
+        const e=_pbMemEtq(it.tipo);
+        const on=!!it.ativa;
+        return <div key={it.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?e.cor:"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.6}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,lineHeight:1.5,wordBreak:"break-word"}}>{it.regra}</div>
+              {it.porque && <div style={{color:"#64748b",fontSize:12,lineHeight:1.5,marginTop:3,wordBreak:"break-word"}}><span style={{fontWeight:700}}>Por quê:</span> {it.porque}</div>}
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
+                <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
+                {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
+                {it.origem && <span style={{color:"#94a3b8",fontSize:11}}>{it.origem}</span>}
+                {!on && <span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>fora do cérebro</span>}
+              </div>
+            </div>
+            {isAdmin && <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              <button type="button" onClick={function(){alternar(it);}} title={on?"Tirar do cérebro (guarda a anotação)":"Voltar pro cérebro"}
+                style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex"}}>
+                <span style={{width:34,height:20,borderRadius:99,background:on?e.cor:"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+                  <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+                </span>
+              </button>
+              <button type="button" onClick={function(){apagar(it);}} title="Apagar de vez"
+                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
+                onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}>
+                <Ico n="trash" size={14}/>
+              </button>
+            </div>}
+          </div>
+        </div>;
+      })}
+      <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
+        {_ativas} de {itens.length} anotaç{itens.length===1?"ão":"ões"} indo pro cérebro. O interruptor tira do prompt sem apagar.
+      </div>
+    </div>}
   </PlaybookBlock>;
 }
 
@@ -98561,7 +98787,7 @@ async function pxGerarRoteiros(opts){
   if(pb.produtos&&pb.produtos.length) u+="PRODUTOS NO PLAYBOOK (complemento): "+_pxCtxTxt(pb.produtos).slice(0,900)+"\n\n";
   const _temProdutos=!!_bpTxt||!!(pb.produtos&&pb.produtos.length);
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
-  if(regras.length){ u+="REGRAS APRENDIDAS COM O FEEDBACK DA AGÊNCIA (obrigatórias):\n"; regras.forEach(function(r){ u+="- ["+String(r.tipo||"").toUpperCase()+"] "+r.regra+"\n"; }); u+="\n"; }
+  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
     foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
