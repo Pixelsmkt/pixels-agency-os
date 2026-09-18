@@ -1433,6 +1433,263 @@ function pxPode(chave, padrao, ctx){
   return !!padrao;
 }
 
+/* ═══ REGISTRO DE BLOCOS POR TELA (18/09/2026) ═══
+   Cada tela declara aqui a árvore que aparece em Acessos › Time › gerenciar acesso:
+   grupos › itens. Um item é OU uma chave antiga ligado/desligado ({perm:"colCopys"})
+   OU um bloco novo ({key:"demandas.card.ia.gerar_briefing"}) cujo padrão é `true`
+   (= como hoje) ou uma função (u, perms) => bool com a regra fixa que já existia.
+   A tela pergunta pxBloco(key, ctx): sócio sempre vê; override manual manda; senão o padrão.
+   REGRA: bloco novo com padrão true NÃO muda nada pra ninguém até alguém desligar à mão. */
+const _pxAdminCard=(u,p)=>!!(u&&(u.level===1||(p&&p.gerenciarEtiquetas===true)));
+const PX_BLOCOS={
+  demandas:{label:"Linha de produção", navIcon:"demandas", color:"#2563eb", grupos:[
+    {id:"menu", label:"Menu", itens:[
+      {perm:"verDemandas", label:"Acessar Linha de produção", desc:"Sem isso o menu some"},
+    ]},
+    {id:"topo", label:"Barra do topo", itens:[
+      {key:"demandas.topo.busca",          label:"Busca",                 desc:"Campo de busca por título, cliente ou responsável"},
+      {perm:"criarDemanda",                label:"Nova demanda",          desc:"Botão + e criar card clicando no calendário"},
+      {perm:"verLixeira",                  label:"Lixeira",               desc:"Botão da lixeira e restaurar cards"},
+      {perm:"filtroSetor",                 label:"Filtro por setor",      desc:"Design · Edição de vídeo · Copywriting"},
+      {perm:"filtroPerfil",                label:"Filtro por colaborador",desc:"Precisa também de Ver todos no kanban"},
+      {perm:"filtroCliente",               label:"Filtro por cliente",    desc:"Inclui as unidades Bioter"},
+    ]},
+    {id:"colunas", label:"Colunas", itens:[
+      {perm:"colRascunhos",      label:"Rascunhos",                 desc:"Estratégia trabalha o copy antes de ir pra aprovação"},
+      {perm:"colCopys",          label:"Copys",                     desc:"Novas demandas de copy"},
+      {perm:"colDemanda",        label:"Demandas",                  desc:"Demandas recebidas"},
+      {perm:"colExecucao",       label:"Em execução",               desc:""},
+      {perm:"colAjustes",        label:"Ajustes",                   desc:"Ajustes solicitados pelo cliente"},
+      {perm:"colAvaliacao",      label:"Concluídas para avaliação", desc:""},
+      {perm:"colAprovado",       label:"Aprovado internamente",     desc:"Aguardando o cliente"},
+      {perm:"colAprovacaoFinal", label:"Aprovado pelo cliente",     desc:"Prontas pra agendar"},
+      {perm:"colAgendado",       label:"Agendadas",                 desc:""},
+      {perm:"colPublicado",      label:"Publicadas",                desc:""},
+      {perm:"colPausado",        label:"Pausadas",                  desc:""},
+    ]},
+    {id:"cards", label:"Cards no kanban", itens:[
+      {perm:"verTodosKanban",    label:"Ver todos os cards",        desc:"Sem isso, vê só os seus"},
+      {perm:"verKanbanSocios",   label:"Ver cards de sócios",       desc:""},
+      {perm:"editarDemanda",     label:"Editar cards",              desc:"Campos, briefing, legenda e botões de ação do card"},
+      {perm:"arrastarCards",     label:"Arrastar entre colunas",    desc:""},
+      {perm:"desfazerCopy",      label:"Mover Copy → Rascunhos",    desc:"Cancela o envio à aprovação"},
+      {perm:"excluirDemanda",    label:"Excluir cards",             desc:"Manda pra lixeira (social media nunca)"},
+      {key:"demandas.cards.duplicar", label:"Duplicar card",        desc:"Botão direito no card (precisa de Nova demanda)"},
+      {perm:"novaColuna",        label:"Nova coluna",               desc:"Criar colunas personalizadas"},
+      {perm:"gerenciarEtiquetas",label:"Etiqueta interna e Tags",   desc:"Editar as faixas coloridas e a etiqueta admin (também libera mês de pagamento)"},
+    ]},
+    {id:"card_abas", label:"Card aberto › abas", itens:[
+      {key:"demandas.card.aba.briefing",    label:"Briefing",    desc:""},
+      {key:"demandas.card.aba.legenda",     label:"Legenda",     desc:""},
+      {key:"demandas.card.aba.arquivos",    label:"Arquivos",    desc:""},
+      {key:"demandas.card.aba.orientacoes", label:"Orientações", desc:"Orientações do cliente dentro do card"},
+      {key:"demandas.card.aba.historico",   label:"Histórico",   desc:""},
+    ]},
+    {id:"card_ia", label:"Card aberto › IA", itens:[
+      {key:"demandas.card.ia.briefing",  label:"Gerar / Ajustar briefing",  desc:"Botão roxo da aba Briefing (precisa de Editar cards)"},
+      {key:"demandas.card.ia.legenda",   label:"Gerar / Ajustar legenda",   desc:"Botão roxo da aba Legenda (precisa de Editar cards)"},
+      {key:"demandas.card.ia.roteiro",   label:"Transformar em roteiro de vídeo", desc:"Roteiro de 90s a partir do briefing"},
+      {key:"demandas.card.ia.traducao",  label:"Tradução do briefing (Paraguay)", desc:"Só aparece em cards da Bioter Paraguay"},
+      {perm:"escanear",                  label:"Escanear Storage",          desc:""},
+      {perm:"pixelsIA",                  label:"Pixels IA",                 desc:"Assistente de IA na Linha de produção"},
+    ]},
+    {id:"card_acoes", label:"Card aberto › ações", itens:[
+      {key:"demandas.card.acao.salvar",       label:"Salvar",                 desc:"Precisa de Editar cards"},
+      {key:"demandas.card.acao.concluir",     label:"Concluir p/ avaliação",  desc:"Cards em execução/ajustes"},
+      {key:"demandas.card.acao.enviar",       label:"Enviar p/ aprovação",    desc:"Cards em alteração de copy"},
+      {key:"demandas.card.acao.material",     label:"Preencher material → Demanda", desc:""},
+      {key:"demandas.card.acao.mover",        label:"Mover pra coluna",       desc:""},
+      {key:"demandas.card.acao.copiar_link",  label:"Copiar link",            desc:""},
+      {key:"demandas.card.acao.lixeira",      label:"Mover pra lixeira",      desc:"Precisa de Excluir cards"},
+      {key:"demandas.card.acao.drive",        label:"Abrir pasta no Drive",   desc:""},
+      {key:"demandas.card.acao.comentar",     label:"Comentários",            desc:"Ver e escrever comentários no card"},
+    ]},
+    {id:"card_campos", label:"Card aberto › campos", itens:[
+      {key:"demandas.card.campo.responsaveis",  label:"Responsáveis",          desc:""},
+      {key:"demandas.card.campo.tipo",          label:"Tipo de conteúdo",      desc:"Padrão: sócio, editor de vídeo e coordenação (afeta pagamento)",
+        padrao:(u,p)=>_pxAdminCard(u,p)||!!(u&&(u.dash==="editor"||u.dash==="coordinator"))},
+      {key:"demandas.card.campo.prazo",         label:"Prazo",                 desc:"Campo de prazo (editar precisa de Editar cards)"},
+      {key:"demandas.card.campo.publicacao",    label:"Data de publicação",    desc:"Mesma regra do Prazo",
+        padrao:(u,p)=>!!(u&&(u.level===1||u.dash==="coordinator"))||!!(p&&p.editarSLA===true)},
+      {key:"demandas.card.campo.mes_pagamento", label:"Mês de pagamento",      desc:"Ver o campo (só aparece com freela no card; só o Gustavo edita)"},
+      {key:"demandas.card.campo.etiquetas",     label:"Etiqueta interna e Tags", desc:"Padrão: sócio ou Etiquetas",
+        padrao:_pxAdminCard},
+    ]},
+    {id:"card_arquivos", label:"Card aberto › arquivos", itens:[
+      {key:"demandas.card.arq.referencias", label:"Imagens de referência",  desc:"Ver, baixar e enviar"},
+      {key:"demandas.card.arq.materiais",   label:"Materiais",              desc:"Fotos/vídeos brutos enviados pela Hellen"},
+      {key:"demandas.card.arq.finais",      label:"Arquivos finais",        desc:"Entrega do designer/editor"},
+      {key:"demandas.card.arq.ajustes",     label:"Anexos de ajuste",       desc:"Enviados junto com o pedido de ajuste"},
+      {key:"demandas.card.arq.remover",     label:"Remover arquivos",       desc:"Botão de excluir anexo (padrão: sócio, criador do card, designer/editor/coordenação)",
+        padrao:(u,p)=>!!(p&&p.criarDemanda)||!!(u&&(u.level===1||u.dash==="designer"||u.dash==="editor"||u.dash==="coordinator"))},
+    ]},
+  ]},
+};
+PX_BLOCOS.aprovacoes={label:"Avaliações", navIcon:"aprovacoes", color:"#16a34a", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {perm:"verAprovacoes", label:"Acessar Avaliações", desc:"Sem isso o menu some"},
+  ]},
+  {id:"abas", label:"Abas", itens:[
+    {key:"aval.aba.copys",      label:"Avaliação de copys",  desc:""},
+    {key:"aval.aba.publicacao", label:"Avaliação de design", desc:""},
+    {key:"aval.aba.video",      label:"Avaliação de vídeo",  desc:""},
+    {perm:"aprovarDemandaInterna", label:"Demanda interna",  desc:"Vê e aprova demandas internas"},
+    {perm:"verAprAjuste",       label:"Ajustes solicitados", desc:"Cards marcados pra ajuste"},
+  ]},
+  {id:"copys", label:"Avaliação de copys › botões", itens:[
+    {perm:"aprovar",                    label:"Avaliar (liga os botões)", desc:"Sem isso a pessoa só olha a fila, sem botões"},
+    {key:"aval.copys.aprovar_demanda",  label:"Aprovar e ir direto pra Demanda", desc:""},
+    {key:"aval.copys.aprovar_material", label:"Aprovar copy → Preencher material", desc:""},
+    {key:"aval.copys.ajuste",           label:"Solicitar ajuste",         desc:"Devolve pra Hellen com o pedido"},
+    {key:"aval.copys.ajustar_ia",       label:"Ajustar copy (IA)",        desc:"Você diz o que mudar e o Claude reescreve"},
+    {key:"aval.copys.refazer",          label:"Refazer do zero (IA)",     desc:"Descarta e escreve outra"},
+    {key:"aval.copys.pausar",           label:"Enviar para Pausadas",     desc:""},
+    {key:"aval.copys.reprovar",         label:"Reprovar copy",            desc:""},
+    {key:"aval.copys.lote",             label:"Reescrever em lote",       desc:"Ação da fila inteira (só no computador)"},
+    {key:"aval.copys.whatsapp",         label:"Copiar pro WhatsApp",      desc:"Briefing formatado"},
+  ]},
+  {id:"pub", label:"Avaliação de design / vídeo › botões", itens:[
+    {key:"aval.pub.aprovar",      label:"Aprovar publicação",        desc:""},
+    {key:"aval.pub.reprovar",     label:"Reprovar publicação",       desc:""},
+    {key:"aval.pub.ajuste",       label:"Solicitar ajuste (anotar na imagem)", desc:""},
+    {key:"aval.pub.ajuste_copy",  label:"Enviar para ajuste de copy", desc:""},
+    {key:"aval.pub.baixar",       label:"Baixar arte / vídeo",        desc:"Botões de download e versão leve"},
+  ]},
+  {id:"int", label:"Demanda interna › botões", itens:[
+    {key:"aval.int.aprovar",  label:"Aprovar demanda",        desc:""},
+    {key:"aval.int.devolver", label:"Devolver para execução", desc:""},
+  ]},
+  {id:"geral", label:"Geral", itens:[
+    {key:"aval.geral.detalhes", label:"Ver detalhes do cartão", desc:"Abre o card completo pela fila"},
+    {perm:"verLixeira",         label:"Excluir da fila",         desc:"Botão de lixeira nos cards da fila"},
+    {key:"aval.geral.editar_comentario", label:"Editar comentários dos outros", desc:"Padrão: sócio ou coordenação",
+      padrao:(u,p)=>!!(u&&(u.level===1||u.dash==="coordinator"))},
+  ]},
+]};
+PX_BLOCOS.calendario={label:"Calendário de publicações", navIcon:"demandas", color:"#0ea5e9", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"cal.menu", label:"Acessar Calendário de publicações", desc:"Padrão: sócio, Hellen, coordenação ou a chave abaixo",
+      padrao:(u,p)=>!!(u&&(u.level===1||u.dash==="coordinator"||u.id==="ellen"))||!!(p&&p.verCalPub)},
+    {perm:"verCalPub", label:"Chave: Calendário de publicações", desc:"Libera pra quem não entra por regra fixa"},
+  ]},
+  {id:"topo", label:"Barra do topo", itens:[
+    {key:"cal.filtro.cliente",    label:"Filtro por cliente / unidade", desc:""},
+    {key:"cal.resumo",            label:"Resumo do mês",             desc:"Progresso e contagem do mês visualizado"},
+    {key:"cal.resumo.contadores", label:"Contadores Fotos de obra / Vídeos short", desc:"Botões com a lista de quem já tem material"},
+    {key:"cal.acoes.desfazer",    label:"Desfazer última sugestão",  desc:"Volta as datas do último 'Aplicar datas'"},
+    {key:"cal.auditoria",         label:"Painel 'Fora da regra'",    desc:"Auditoria do mês (só avisa)"},
+  ]},
+  {id:"grade", label:"Grade do mês", itens:[
+    {key:"cal.criar", label:"Criar publicação clicando no dia", desc:"Padrão: sócio ou coordenação",
+      padrao:(u)=>!!(u&&(u.level===1||u.dash==="coordinator"))},
+  ]},
+]};
+PX_BLOCOS.roteiros={label:"Roteiros", navIcon:"roteiros", color:"#db2777", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"rot.menu", label:"Acessar Roteiros", desc:"Padrão: sócio, Hellen, coordenação, social media e gestor de mídia",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.dash==="coordinator"||u.dash==="social"||u.dash==="gestor"))},
+  ]},
+  {id:"abas", label:"Abas", itens:[
+    {key:"rot.aba.roteiros", label:"Roteiros",          desc:""},
+    {key:"rot.aba.trends",   label:"Trends",            desc:""},
+    {key:"rot.aba.ideias",   label:"Ideias pro cliente", desc:"O que a Pixels mandou pro portal e as respostas"},
+  ]},
+  {id:"roteiros", label:"Roteiros › botões", itens:[
+    {key:"rot.roteiros.gerar",        label:"Gerar 5 roteiros",  desc:"IA, por cliente/unidade"},
+    {key:"rot.roteiros.copiar_todos", label:"Copiar todos",      desc:"Pro WhatsApp, em ordem"},
+    {key:"rot.roteiros.excluir",      label:"Excluir roteiro",   desc:"Lixeirinha em cada roteiro"},
+  ]},
+  {id:"trends", label:"Trends › botões", itens:[
+    {key:"rot.trends.nova",    label:"Nova trend",          desc:""},
+    {key:"rot.trends.gerar",   label:"Gerar 5 ideias",      desc:"Roteiros a partir da trend"},
+    {key:"rot.trends.mandar",  label:"Mandar pro cliente",  desc:"Vira ideia no portal"},
+    {key:"rot.trends.editar",  label:"Editar trend",        desc:""},
+    {key:"rot.trends.excluir", label:"Excluir trend",       desc:""},
+  ]},
+  {id:"ideias", label:"Ideias pro cliente › botões", itens:[
+    {key:"rot.ideias.nova",       label:"Nova ideia",       desc:""},
+    {key:"rot.ideias.arquivar",   label:"Tirar do portal",  desc:""},
+    {key:"rot.ideias.virar_card", label:"Virar card",       desc:"Ideia aprovada → card em Rascunhos"},
+  ]},
+]};
+PX_BLOCOS.dashboard={label:"Meu Dashboard", navIcon:"meudash", color:"#7c3aed", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {perm:"verDashboard",  label:"Acessar Meu Dashboard",       desc:"Página inicial"},
+    {perm:"verDashOutros", label:"Ver dashboard de outros",     desc:"Pode abrir o dashboard de outros colaboradores"},
+  ]},
+  {id:"blocos", label:"Blocos da página", itens:[
+    {key:"dash.capa",                label:"Capa (foto, nome, data, demandas, sino)", desc:""},
+    {key:"dash.aprovacoes_cliente",  label:"Aprovações / ajustes vindos do portal",   desc:"Card de destaque no topo"},
+    {key:"dash.alertas",             label:"Alertas urgentes",  desc:"Vinicius e Gustavo nunca veem (fixo)"},
+  ]},
+  {id:"abas", label:"Abas do painel", itens:[
+    {perm:"verContagemDemandas",  label:"Aba Contagem",   desc:"Quem é pago por demanda já vê"},
+    {key:"dash.aba.pagamentos",   label:"Aba Pagamentos", desc:"Padrão: André e Guilherme",
+      padrao:(u)=>!!(u&&(u.id==="andre"||u.id==="guilherme"))},
+  ]},
+]};
+PX_BLOCOS.comercial={label:"Comercial", navIcon:"comercial", color:"#0d9488", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {perm:"verComercial",    label:"Acessar Comercial", desc:"Sem isso o menu some"},
+    {perm:"editarComercial", label:"Editar",            desc:"Criar e alterar prospects, propostas, follow-ups, produtos…"},
+  ]},
+  {id:"abas", label:"Abas", itens:[
+    {key:"com.aba.portfolio", label:"Portfólio",             desc:"Calculadora / monte seu pacote"},
+    {key:"com.aba.produtos",  label:"Criador de produtos",   desc:""},
+    {key:"com.aba.dashboard", label:"Dashboard",             desc:""},
+    {key:"com.aba.prospects", label:"Kanban de prospects",   desc:""},
+    {key:"com.aba.oportun",   label:"Oportunidades / upsell",desc:""},
+    {key:"com.aba.propostas", label:"Propostas",             desc:""},
+    {key:"com.aba.followups", label:"Follow-ups",            desc:""},
+    {key:"com.aba.scripts",   label:"Scripts",               desc:""},
+    {key:"com.aba.vendas",    label:"Vendas pontuais",       desc:"Padrão: só sócios", padrao:(u)=>!!(u&&u.level===1)},
+    {key:"com.aba.contratos", label:"Contratos",             desc:"Padrão: só sócios", padrao:(u)=>!!(u&&u.level===1)},
+    {key:"com.aba.historico", label:"Histórico",             desc:""},
+  ]},
+]};
+PX_BLOCOS.enps={label:"ENPS", navIcon:"gestao", color:"#8b5cf6", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"enps.menu", label:"Acessar ENPS", desc:"Padrão: todo mundo"},
+  ]},
+  {id:"blocos", label:"Blocos", itens:[
+    {key:"enps.responder",  label:"Responder o ENPS do mês", desc:"Formulário (sócios não respondem)"},
+    {key:"enps.resultados", label:"Ver resultados de todos",  desc:"Padrão: sócio ou Hellen",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.id==="hellen"))},
+  ]},
+]};
+function pxBlocoDef(key){
+  const telas=Object.keys(PX_BLOCOS);
+  for(let i=0;i<telas.length;i++){
+    const gs=PX_BLOCOS[telas[i]].grupos||[];
+    for(let g=0;g<gs.length;g++){
+      const it=(gs[g].itens||[]).find(function(x){return x.key===key;});
+      if(it) return it;
+    }
+  }
+  return null;
+}
+// Normaliza o contexto: {user, perms} | id do colaborador | nada (= CURRENT_USER)
+function pxCtx(ctx){
+  let u=null, perms=null;
+  if(ctx&&typeof ctx==="object"){ u=ctx.user||null; perms=ctx.perms||null; }
+  let uid=(typeof ctx==="string")?ctx:((u&&u.id)||(typeof CURRENT_USER!=="undefined"&&CURRENT_USER?CURRENT_USER.id:null));
+  if(!u&&uid&&typeof TEAM!=="undefined") u=TEAM.find(function(t){return t.id===uid;})||null;
+  if(!perms) perms=(typeof ACCESS_STORE!=="undefined"&&ACCESS_STORE[uid])||{};
+  return {user:u, perms:perms};
+}
+// Padrão do bloco (regra fixa) — sem override. Painel e tela usam o mesmo.
+function pxBlocoPadrao(key, ctx){
+  const c=pxCtx(ctx);
+  const d=pxBlocoDef(key);
+  if(!d) return true;
+  if(typeof d.padrao==="function"){ try{ return !!d.padrao(c.user,c.perms); }catch(_){ return true; } }
+  return d.padrao!==false;
+}
+function pxBloco(key, ctx){
+  const c=pxCtx(ctx);
+  return pxPode(key, pxBlocoPadrao(key,c), c);
+}
+
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
@@ -8047,9 +8304,12 @@ function PxAprovacoesClienteCard({tasks, isMob, userId}){
   </div>;
 }
 
-function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile,viewingAs}){
+function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile,viewingAs,perms}){
   // Quando estamos "visualizando como" outro colaborador, trocamos TUDO pra esse user
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
+  // Blocos da tela (Acessos › Time › Meu Dashboard) — usuário VISTO — 18/09/2026
+  const _blCtx={user:effectiveUser,perms:perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("dash."+k,_blCtx):true;
   const isViewingOther = !!viewingAs;
   // Se estamos visualizando outro, NÃO usar selfProfile (é do user real logado)
   // Em vez disso, tentar buscar o perfil do user visualizado do localStorage
@@ -8151,7 +8411,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
     {/* ── CAPA: foto grande + nome + cargo + data + demandas + sino ── */}
-    <div style={{position:"relative",borderRadius:18,overflow:"hidden",background:`linear-gradient(135deg,${coverColor} 0%,${coverColor}ee 42%,${coverColor}c4 100%)`,padding:isMob?"16px 16px":"22px 26px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
+    {_bl("capa")&&<div style={{position:"relative",borderRadius:18,overflow:"hidden",background:`linear-gradient(135deg,${coverColor} 0%,${coverColor}ee 42%,${coverColor}c4 100%)`,padding:isMob?"16px 16px":"22px 26px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap",border:"1px solid rgba(255,255,255,0.07)",boxShadow:"0 16px 40px rgba(8,10,14,0.30)"}}>
       {/* Brilho sutil no canto — da profundidade sem clarear o grafite */}
       <div aria-hidden style={{position:"absolute",top:-90,right:-40,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.10) 0%,rgba(255,255,255,0) 70%)",pointerEvents:"none"}}/>
       <div aria-hidden style={{position:"absolute",left:0,right:0,bottom:0,height:1,background:"linear-gradient(90deg,rgba(255,255,255,0) 0%,rgba(255,255,255,0.14) 50%,rgba(255,255,255,0) 100%)",pointerEvents:"none"}}/>
@@ -8193,14 +8453,14 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           {unread>0&&<span style={{color:"#fff",fontSize:13,fontWeight:700,lineHeight:1}}>{unread}</span>}
         </button>
       </div>}
-    </div>
+    </div>}
 
     {/* ── APROVAÇÕES / AJUSTES VINDOS DO PORTAL DO CLIENTE (destaque) ── */}
-    <PxAprovacoesClienteCard tasks={allTasks} isMob={isMob} userId={effectiveUser.id}/>
+    {_bl("aprovacoes_cliente")&&<PxAprovacoesClienteCard tasks={allTasks} isMob={isMob} userId={effectiveUser.id}/>}
 
     {/* ── ALERTAS URGENTES — criados por admins/social media ──
          Escondido pros sócios (Vinicius+Gustavo) pra dash começar direto com metas. */}
-    {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>}
+    {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&_bl("alertas")&&<DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>}
 
     <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs} isMob={isMob}/>
   </div>;
@@ -20576,9 +20836,12 @@ function _pxContadorProjeto(tasks, faseMap){
   return out;
 }
 
-function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}){
+function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs, perms}){
   // Social media (Luiza) nunca exclui — regra fixa, independe de Acessos
   const _calUser=(viewingAs&&(TEAM||[]).find(function(u){return u.id===viewingAs;}))||CURRENT_USER;
+  // Blocos da tela (Acessos › Time › Calendário de publicações) — usuário VISTO ("ver como" fiel) — 18/09/2026
+  const _blCtx={user:_calUser,perms:perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("cal."+k,_blCtx):true;
   const _calExclBloq=(typeof pxExclusaoBloqueada==="function")&&pxExclusaoBloqueada(_calUser);
   const tasks = propTasks||[];
   // Contador de conteúdos do projeto (só clientes com data de início registrada)
@@ -20678,7 +20941,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   // Cada rodada fica em claude_plano_execucoes (criados + antes/depois dos alterados) e a RPC
   // claude_reverter_plano volta tudo — sem apagar card que alguém já começou a preencher e sem
   // desfazer campo que alguém mudou depois. Só sócios veem.
-  const _podeEmergencia=!!(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+  const _podeEmergencia=!!(_calUser&&_calUser.level===1); // "ver como" fiel (18/09/2026)
   const [claudeExec,setClaudeExec]=useState(null);
   const [claudeRevertendo,setClaudeRevertendo]=useState(false);
   const _carregarClaudeExec=useCallback(function(){
@@ -20795,8 +21058,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
   },[setTasks]);
 
   // Hellen + sócios podem criar card direto do calendário (estilo Google Agenda)
-  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
-  const _canCreateFromCal=!!(_u&&(_u.level===1||_u.dash==="coordinator"));
+  const _u=_calUser; // "ver como" fiel (18/09/2026)
+  const _canCreateFromCal=_bl("criar"); // padrão: sócio ou coordenação
   // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
   // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
   function _createDraftAtDay(dateObj){
@@ -21389,7 +21652,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
              segue existindo e é usado no dash (mode="produzir"). Pra reativar, é só descomentar. ── */}
 
       {/* ── Filtro de cliente ── */}
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      {_bl("filtro.cliente")&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
         <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Cliente</span>
 
         {/* Chip "Todos" */}
@@ -21406,10 +21669,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
             {cl.name}
           </button>;
         })}
-      </div>
+      </div>}
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
-      {filterClient==="bioter"&&(
+      {_bl("filtro.cliente")&&filterClient==="bioter"&&(
         <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"12px 16px",background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
           <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Unidade</span>
           <button onClick={()=>setFilterBioterUnit("todos")}
@@ -21426,7 +21689,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
       )}
 
       {/* ── Contadores do cliente filtrado (Total + por status) ── */}
-      {(function(){
+      {_bl("resumo")&&(function(){
         // Escopo: mês visualizado + filtros já aplicados em `agendados`
         const _mesY=calMonth.getFullYear(), _mesM=calMonth.getMonth();
         const _doMes=agendados.filter(function(t){
@@ -21563,11 +21826,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
             {_kpi("Agendar",_agendar,"#ec4899",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
             {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
           </div>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {_bl("resumo.contadores")&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {_kpiMat("foto","Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
             {_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
-          </div>
-          {_painelMat()}
+          </div>}
+          {_bl("resumo.contadores")&&_painelMat()}
         </div>;
       })()}
 
@@ -21577,7 +21840,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
         {/* (11/09/2026) "Gerar plano do mês" REMOVIDO a pedido do Vinicius: o calendário agora
            é montado e mantido pelo Claude; o botão só arriscava bagunçar o que já está no lugar.
            handleGeneratePlan segue no arquivo, sem nada chamando. */}
-        {lastApplySnapshot&&<button onClick={handleUndoApply}
+        {lastApplySnapshot&&_bl("acoes.desfazer")&&<button onClick={handleUndoApply}
           title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
           style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
@@ -21590,7 +21853,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
       </div>
 
       {/* ── (17/09/2026) Fora da regra — auditoria do mês, só avisa ── */}
-      {_audit.length>0&&(function(){
+      {_audit.length>0&&_bl("auditoria")&&(function(){
         const nMov=_audit.filter(function(x){return x.nivel==="movivel";}).length, nFix=_audit.length-nMov;
         return <div style={{border:"1px solid "+(nMov?"#fecaca":"#e2e8f0"),background:nMov?"#fff7f7":"#f8fafc",borderRadius:14,padding:"10px 14px",fontFamily:"'Inter',system-ui,sans-serif"}}>
           <div onClick={function(){ setAuditAberta(!auditAberta); }} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
@@ -21931,8 +22194,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs}
             }
             setOpenCard(null);
           }}
-          currentUser={CURRENT_USER}
-          cardPerms={{verBriefingCard:true}}
+          currentUser={_calUser}
+          cardPerms={{verBriefingCard:true, blocos:(perms&&perms.blocos)||undefined}}
         />
       )}
     </div>
@@ -23430,7 +23693,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   useOpenCardSync(openCard,setOpenCard,tasks);
 
   // Hellen + sócios podem criar card direto do calendário (estilo Google Agenda)
-  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  // "Ver como" fiel (18/09/2026): a regra olha o usuário VISTO (effectiveUser), não o logado.
+  const _u=effectiveUser||((typeof CURRENT_USER!=="undefined")?CURRENT_USER:null);
   const _canCreateFromCal=!!(_u&&(_u.level===1||_u.dash==="coordinator"));
   // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
   // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
@@ -23569,7 +23833,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
   // isAdminUser = quem pode ver/editar etiquetas e tags. Gerenciado via perm "gerenciarEtiquetas".
   // Sócios sempre podem (level===1 mantido como fallback de segurança).
-  const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
+  // "Ver como" fiel (18/09/2026): usa o usuário visto + as perms dele (prop), não o logado.
+  const _admU=effectiveUser||CURRENT_USER;
+  const _admP=perms||(ACCESS_STORE[_admU.id]||{});
+  const isAdminUser = !!(_admU&&(_admU.level===1||_admP.gerenciarEtiquetas===true));
 
   // ═══ GRUPOS DE TAGS (admin) ═══
   // Cada grupo: { id, name, color, tags: [tagName...] }. Tags fora de qualquer grupo aparecem como "Sem grupo".
@@ -23812,6 +24079,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const canDrag       = myPerms.arrastarCards;
   const canNewCol     = myPerms.novaColuna;
   const isLevel1      = activeUser.level===1;
+  // Blocos da tela (Acessos › Time › Linha de produção) — sócio sempre vê (18/09/2026)
+  const _blCtx={user:activeUser,perms:myPerms};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("demandas."+k,_blCtx):true;
 
   // Helper: cria nova task com responsável correto
   const createTask=(colId,assigneeId,titleStr,extraProps={})=>{
@@ -23892,7 +24162,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const {colId,senha,pin}=deleteColConfirm;
     // Verificar senha do usuário atual no Supabase — usa a senha em memória não disponível
     // Por isso verificamos apenas o PIN fixo de admin + que o usuário é admin
-    if(CURRENT_USER.level!==1){pixelsToast.warning("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
+    if((effectiveUser||CURRENT_USER).level!==1){pixelsToast.warning("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
     if(pin!=="2125"){pixelsToast.error("PIN incorreto.");return;}
     setCols(p=>p.filter(c=>c.id!==colId));
     setDeleteColConfirm(null);
@@ -24274,7 +24544,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     {/* Context Menu (botao direito) no kanban */}
     {ctxMenuKanban&&<PxCtxMenu x={ctxMenuKanban.x} y={ctxMenuKanban.y} title={ctxMenuKanban.task&&ctxMenuKanban.task.title} onClose={function(){setCtxMenuKanban(null);}}
       items={[
-        canCreate&&{label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenuKanban.task,setTasks); }},
+        canCreate&&_bl("cards.duplicar")&&{label:"Duplicar card",desc:"Cópia com arquivos e legenda",icon:"copy",onClick:function(){ pxDuplicarCardEColar(ctxMenuKanban.task,setTasks); }},
         canDelete&&{label:"Excluir card",desc:pxCardTemConteudo(ctxMenuKanban.task)?"Tem conteúdo · vai pedir confirmação":"Vai direto pra lixeira · 30 dias pra restaurar",icon:"trash",danger:true,onClick:function(){
           // Card vazio → lixeira direto; com conteúdo → confirma dizendo o que vai junto
           const t=ctxMenuKanban.task;
@@ -24311,7 +24581,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         </div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
           {/* SEARCH input — pesquisar cards por título (altura 40 pra simetria com outros) */}
-          <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+          {_bl("topo.busca")&&<div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
             <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </span>
@@ -24323,7 +24593,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>}
-          </div>
+          </div>}
           {myPerms.verLixeira&&<button key="trash" onClick={_toggleTrash}
             style={{background:viewMode==="trash"?"#fee2e2":"#fff",color:viewMode==="trash"?"#dc2626":"#0f172a",border:`1px solid ${viewMode==="trash"?"#fecaca":"#e2e8f0"}`,borderRadius:11,padding:"0 16px",height:40,fontSize:13,fontWeight:viewMode==="trash"?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
             onMouseEnter={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}}
@@ -29640,7 +29910,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // A Hellen (e sócios) podem editar o texto de comentários já enviados.
   // Formato: {taskId, cmtId, text}
   const [editingCmt,setEditingCmt]=useState(null);
-  const canEditCmt = !!(CURRENT_USER && (CURRENT_USER.level===1 || CURRENT_USER.dash==="coordinator"));
+  // ═══ Blocos da tela (Acessos › Time › Avaliações) — 18/09/2026. Usa o usuário VISTO ("ver como" fiel).
+  const _blU=viewingAs?(TEAM.find(u=>u.id===viewingAs)||CURRENT_USER):CURRENT_USER;
+  const _blCtx={user:_blU,perms:perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("aval."+k,_blCtx):true;
+  const canEditCmt = _bl("geral.editar_comentario"); // padrão: sócio ou coordenação
   const saveEditedComment = (taskId, cmtId, newText)=>{
     const txt = String(newText||"").trim();
     if(!txt || !setTasks) { setEditingCmt(null); return; }
@@ -30782,14 +31056,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   },[current?.id,brokenImgs,imgIdx]);
   const filterFn=(tab==="publicacao"||tab==="video")?isFinalImg:isAnyImg;
 
-  const isSocio=CURRENT_USER.level===1;
+  const isSocio=effectiveUser.level===1; // "ver como" fiel (18/09/2026)
   const TABS=[
     {id:"copys",      label:"Avaliação de copys", count:copyQueue.length,     color:C.a},
     {id:"publicacao", label:"Avaliação de design",count:pubQueue.length,      color:C.gr},
     {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueue.length, color:"#0ea5e9"},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
     ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes solicitados", count:ajusteQueue.length, color:C.or}]:[]),
-  ];
+  ].filter(function(t){return (t.id==="copys"||t.id==="publicacao"||t.id==="video")?_bl("aba."+t.id):true;});
+  // Aba escondida por permissão de bloco → cai na primeira liberada (18/09/2026)
+  const _tabIds=TABS.map(function(t){return t.id;}).join(",");
+  useEffect(function(){ if(TABS.length&&_tabIds.split(",").indexOf(tab)<0) setTab(TABS[0].id); },[_tabIds,tab]);
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(() =>{})} onClose={()=>setOpenCard(null)} currentUser={effectiveUser}
@@ -30993,7 +31270,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   <Ico n={t.icon} size={12} color={t.color}/>{t.label}
                 </span>))}
                 {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento ═════ */}
-                {(tab==="video"||tab==="publicacao")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+                {(tab==="video"||tab==="publicacao")&&_bl("pub.baixar")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
                   <button type="button" title={tab==="video"?(_previewVideo?"Baixar vídeo ORIGINAL (arquivo cheio, alta qualidade)":"Baixar vídeo original"):((current.contentType||current.tipo||"").toLowerCase()==="carrossel"?"Baixar todas as lâminas do carrossel":"Baixar arte final")}
                     onClick={async function(){
                       try{
@@ -31387,11 +31664,47 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             }
             return out;
           };
-          const pxLinhas=(txt,cor)=>String(txt||"").split("\n").map((ln,i)=>(
-            _ehRotulo(_semNeg(ln))
-              ? <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{_semNeg(ln).replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>
-              : (_semNeg(ln).trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{_pedacos(ln)}</div>)
-          ));
+          /* CENAS DO ROTEIRO SEPARADAS (Vinicius, 18/09/2026): "tem que ter espaço
+             entre Cena 1, quando termina, enter, aí vem Cena 2 — pra ficar mais fácil
+             de ler no WhatsApp". A cena vira TÍTULO em negrito com ar em cima. Sem
+             CAIXA ALTA: caixa alta é dos rótulos de seção ("• ROTEIRO", "• TÍTULO"),
+             cena é título e tem texto depois do travessão. */
+          const _ehCena=(ln)=>/^\s*[•*-]?\s*(cena|escena|l[âaá]mina)\s*\d+\b/i.test(String(ln||""));
+          const pxLinhas=(txt,cor)=>String(txt||"").split("\n").map((ln,i)=>{
+            const _l=_semNeg(ln);
+            if(_ehRotulo(_l)) return <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:12,marginBottom:2}}>{_l.replace(/^\s*[•*-]\s*/,"• ").toUpperCase()}</div>;
+            if(_ehCena(_l)) return <div key={i} style={{fontWeight:800,color:cor||"#0f172a",marginTop:i===0?0:16,marginBottom:3}}>{_l.replace(/^\s*[•*-]\s*/,"")}</div>;
+            return _l.trim()===""? <div key={i} style={{height:6}}/> : <div key={i}>{_pedacos(ln)}</div>;
+          });
+          /* BRIEFING FORMATADO PRO WHATSAPP (botão no cabeçalho do bloco).
+             Rótulo de seção e título de cena saem em *negrito* do WhatsApp, com linha
+             em branco antes de cada um; o negrito feito à mão no cartão (marcadores
+             NEG_A/NEG_B) também vira *negrito*. O título do card abre o texto. */
+          const _pxBriefWhats=(txt)=>{
+            const out=[];
+            String(txt||"").split("\n").forEach(function(ln){
+              const cru=_semNeg(ln).replace(/[ \t\u00a0]+$/,"");
+              if(!cru.trim()){ out.push(""); return; }
+              if(_ehRotulo(cru)||_ehCena(cru)){
+                if(out.length&&out[out.length-1]!=="") out.push("");
+                out.push("*"+(_ehRotulo(cru)?cru.replace(/^\s*[•*-]\s*/,"• ").toUpperCase():cru.replace(/^\s*[•*-]\s*/,"")).trim()+"*");
+                return;
+              }
+              out.push(String(ln).replace(/\u0001/g,"*").replace(/\u0002/g,"*").replace(/[ \t\u00a0]+$/,""));
+            });
+            const corpo=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();
+            const tit=String((current&&current.title)||"").trim();
+            return (tit?("*"+tit+"*\n\n"):"")+corpo;
+          };
+          const _copiarBriefWhats=async ()=>{
+            const t=_pxBriefWhats(descTxt2);
+            if(!t) return;
+            try{
+              if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(t); }
+              else { const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+              if(typeof pixelsToast!=="undefined") pixelsToast.success("Briefing copiado — é só colar no WhatsApp.",2600);
+            }catch(_){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Selecione o texto e copie na mão."); }
+          };
           // Histórico de ajustes
           const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
           const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
@@ -31663,7 +31976,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   pequeno demais. O ponto certo é 13.5 desktop / 12.5 mobile, cabeçalho igual e
                   ícone 15. Não subir de novo pra 14.5 nem descer pra 12.5.
                   Se mudar um, muda o outro junto. */}
-              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"9px 14px":"10px 18px",color:"#0f172a",fontSize:isMob?12.5:13.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}><Ico n="users" size={15} color="#0f172a"/>Briefing pra equipe</div>
+              <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",padding:isMob?"7px 10px 7px 14px":"8px 12px 8px 18px",color:"#0f172a",fontSize:isMob?12.5:13.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"flex",alignItems:"center",gap:7}}>
+                <Ico n="users" size={15} color="#0f172a"/>Briefing pra equipe
+                {/* Vinicius, 18/09/2026: a equipe recebe o briefing pelo WhatsApp. Este
+                    botão copia já formatado — títulos em *negrito* e linha em branco
+                    entre as cenas — pra colar direto no grupo, sem arrumar na mão. */}
+                {_bl("copys.whatsapp")&&<button type="button" onClick={_copiarBriefWhats}
+                  title="Copia o briefing já formatado pro WhatsApp (títulos em negrito e linha em branco entre as cenas)"
+                  style={{marginLeft:"auto",background:"#25D366",border:"none",borderRadius:8,padding:isMob?"5px 9px":"5px 12px",color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,boxShadow:"0 1px 4px rgba(37,211,102,.35)"}}>
+                  <Ico n="copy" size={12} color="#fff"/>{isMob?"WhatsApp":"Copiar pro WhatsApp"}
+                </button>}
+              </div>
               <div style={{padding:isMob?"12px 14px":"14px 18px",color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.62,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{pxLinhas(descTxt2)}</div>
               {_blocoTrad(_tradAtual.briefing)}
             </div>)}
@@ -31872,50 +32195,50 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {/* APROVAR TEM DOIS CAMINHOS. O de cima (verde cheio, 15/09/2026) é o
                   atalho pra quando o card já tem o material pronto — vira demanda direto.
                   O de baixo para em "Preencher material" até alguém anexar as imagens. */}
-              <button onClick={()=>approveCopy(current,"recebida")}
+              {_bl("copys.aprovar_demanda")&&<button onClick={()=>approveCopy(current,"recebida")}
                 title="O card já tem o material. Pula a etapa de imagens e vira demanda pro freelancer."
                 style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar e ir direto pra Demanda
-              </button>
-              <button onClick={()=>approveCopy(current,"preencher_material")}
+              </button>}
+              {_bl("copys.aprovar_material")&&<button onClick={()=>approveCopy(current,"preencher_material")}
                 title="A copy está aprovada. O card vai pra coluna Preencher material até alguém anexar as imagens."
                 style={{opacity:_faltasParaAprovar(current).length?.45:1,width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.gr,border:"1px solid "+C.gr+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.gr+"10";e.currentTarget.style.borderColor=C.gr;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.gr+"66";}}>
                 Aprovar copy → Preencher material
-              </button>
-              <button onClick={()=>setAjusteModal(current)}
+              </button>}
+              {_bl("copys.ajuste")&&<button onClick={()=>setAjusteModal(current)}
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
-              </button>
+              </button>}
               {/* (14/09/2026) "Testar nova abordagem" + "Refazer do zero" viraram um só:
                   o que muda é o que você escreve no pedido, não qual botão você clica. */}
-              <button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"ajuste"});}}
+              {_bl("copys.ajustar_ia")&&<button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"ajuste"});}}
                 title="Você diz o que precisa mudar e o Claude reescreve na hora. A versão atual fica guardada."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#ddd6fe";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3"/><path d="M4.5 7.5l2.1 2.1"/><path d="M19.5 7.5l-2.1 2.1"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="9.5" cy="15" r="1.3" fill="currentColor" stroke="none"/><circle cx="14.5" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg>
                 Ajustar copy
-              </button>
+              </button>}
               {/* (14/09/2026) "Refazer do zero" VOLTOU a ser um botão próprio. Juntar tudo em
                   "Ajustar copy" não funcionou: quem quer jogar a copy fora e começar outra, com
                   outro assunto e outro título, não sabia que era só escrever isso na caixa.
                   São ações diferentes e continuam sendo dois botões — ajustar preserva o assunto,
                   refazer descarta tudo. */}
-              <button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"refazer"});}}
+              {_bl("copys.refazer")&&<button onClick={()=>{setRefazerText("");setRefazerAlvo("ambos");setRefazerModal({task:current,tipo:"refazer"});}}
                 title="Descarta a copy atual e escreve outra do zero — assunto e título novos. A versão atual fica guardada."
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:"#0369a1",border:"1px solid #bae6fd",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0369a1";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#bae6fd";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>
                 Refazer do zero
-              </button>
-              <button onClick={async()=>{
+              </button>}
+              {_bl("copys.pausar")&&<button onClick={async()=>{
                   if(typeof pixelsConfirm==="function"){
                     if(!await pixelsConfirm("Enviar essa copy pra Pausadas? Ela fica em standby no calendário até você tirar do pause.",{okText:"Enviar pra Pausadas"})) return;
                   }
@@ -31927,8 +32250,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
                 Enviar para Pausadas
-              </button>
-              <button onClick={async()=>{
+              </button>}
+              {_bl("copys.reprovar")&&<button onClick={async()=>{
                   const _m=await _pedirMotivoReprovacao("essa copy","Reprovar copy");
                   if(_m===null) return;
                   reprovarCopy(current,_m);
@@ -31939,9 +32262,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
                 Reprovar copy
-              </button>
+              </button>}
               {/* Ver detalhes do cartão — pra editar campos antes de aprovar */}
-              <button onClick={()=>setOpenCard(current)} title="Abre o cartão completo pra editar/ver detalhes"
+              {_bl("geral.detalhes")&&<button onClick={()=>setOpenCard(current)} title="Abre o cartão completo pra editar/ver detalhes"
                 style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:10,padding:"8px 11px",fontWeight:600,fontSize:12.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",marginTop:4}}
                 onMouseEnter={e=>{
                   e.currentTarget.style.background="linear-gradient(180deg,#fff,#64748b08)";
@@ -31964,13 +32287,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 </span>
                 <span style={{transition:"color .18s",letterSpacing:-.15}}>Ver detalhes do cartão</span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.4,transition:"opacity .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
+              </button>}
 
               {/* ── Reescrever em lote (14/09/2026) ──
                   Ação da FILA, não do card — por isso vem separada, embaixo de tudo.
                   Sempre "nova abordagem": mantém o assunto de cada card (o assunto veio do
                   planejamento, não pode mudar em massa) e reescreve só o texto. */}
-              {!isMob&&copyQueue.length>1&&(<>
+              {!isMob&&copyQueue.length>1&&_bl("copys.lote")&&(<>
                 <button onClick={()=>{const _f=(copyQueue||[]).filter(function(t){return !_pxJaNoLote(t);}).length;setLoteTexto("");setLoteTudo(false);setLoteQtd(Math.max(1,Math.min(30,_f||copyQueue.length)));setLoteModal(true);}}
                   disabled={!!(lote&&!lote.fim)}
                   title="Reescreve de uma vez as próximas copys da fila, começando pelas que publicam mais cedo."
@@ -31987,13 +32310,13 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {/* Botões estilo Linear/Vercel — chip colorido pro ícone, texto escuro, hover com glow */}
               {(function(){
                 const _BTNS=[
-                  {label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
-                  {label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ const _m=await _pedirMotivoReprovacao("este material (a produção foi feita, então ainda conta no pagamento do mês)","Reprovar"); if(_m===null) return; rejectPub(current,_m); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
-                  {label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
-                  {label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
-                  {label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
+                  {chave:"pub.aprovar", label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
+                  {chave:"pub.reprovar", label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ const _m=await _pedirMotivoReprovacao("este material (a produção foi feita, então ainda conta no pagamento do mês)","Reprovar"); if(_m===null) return; rejectPub(current,_m); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
+                  {chave:"pub.ajuste", label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
+                  {chave:"pub.ajuste_copy", label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
+                  {chave:"geral.detalhes", label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
-                return _BTNS.map(function(b,i){
+                return _BTNS.filter(function(b){return _bl(b.chave);}).map(function(b,i){
                   return <button key={i} onClick={b.onClick} title={b.title||b.label}
                     style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:10,padding:"8px 11px",fontWeight:600,fontSize:12.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
                     onMouseEnter={e=>{
@@ -32027,23 +32350,23 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
             </>)}
 
             {tab==="internas"&&(<>
-              <button onClick={()=>approvePub(current)}
+              {_bl("int.aprovar")&&<button onClick={()=>approvePub(current)}
                 style={{width:"100%",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #8b5cf640"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #8b5cf666";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #8b5cf640";}}>
                 Aprovar demanda
-              </button>
-              <button onClick={()=>requestAdjust(current,[],[],[],[])}
+              </button>}
+              {_bl("int.devolver")&&<button onClick={()=>requestAdjust(current,[],[],[],[])}
                 style={{width:"100%",fontFamily:"'Inter',system-ui,sans-serif",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Devolver para execução
-              </button>
+              </button>}
             </>)}
 
             {/* Ver detalhes agora eh o ULTIMO botao do _BTNS (mesmo estilo dos outros). */}
             {/* Bloco ghost antigo removido — Ver detalhes so aparece em internas: */}
-            {tab==="internas"&&<button onClick={()=>setOpenCard(current)}
+            {tab==="internas"&&_bl("geral.detalhes")&&<button onClick={()=>setOpenCard(current)}
               style={{width:"100%",background:"transparent",color:C.ts,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:.1}}
               onMouseEnter={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.tx;e.currentTarget.style.borderColor=C.tx+"33";}}
               onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
@@ -35463,15 +35786,19 @@ function PageGestaoProjecao({isMob}){
 // ======= 09_acessos.jsx =======
 // Grupos de permissões organizados por módulo (abas)
 const PERM_TABS=[
-  {id:"dashboard",    navIcon:"meudash",    label:"Dashboard",          color:"#7c3aed"},
-  {id:"demandas",     navIcon:"demandas",   label:"Demandas",           color:"#2563eb"},
+  {id:"dashboard",    navIcon:"meudash",    label:"Meu Dashboard",      color:"#7c3aed", tela:"dashboard"},
+  {id:"demandas",     navIcon:"demandas",   label:"Linha de produção",  color:"#2563eb", tela:"demandas"}, // árvore (PX_BLOCOS.demandas, 18/09/2026)
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
-  {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a"},
+  {id:"calendario",   navIcon:"demandas",   label:"Calendário de publicações", color:"#0ea5e9", tela:"calendario"},
+  {id:"roteiros",     navIcon:"roteiros",   label:"Roteiros",           color:"#db2777", tela:"roteiros"},
+  {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a", tela:"aprovacoes"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
   {id:"playbooks",    navIcon:"playbooks",  label:"Playbooks",          color:"#7c3aed", arvore:true}, // permissões por bloco (17/09/2026)
+  {id:"comercial",    navIcon:"comercial",  label:"Comercial",          color:"#0d9488", tela:"comercial"},
   {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
   {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
+  {id:"enps",         navIcon:"gestao",     label:"ENPS",               color:"#8b5cf6", tela:"enps"},
   {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
   {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
   {id:"notificacoes", navIcon:"notificacoes",label:"Notificações",      color:"#0ea5e9"},
@@ -35713,6 +36040,80 @@ function PermsPlaybooksArvore({user,perms,setPerms,cor,isPartnerUser,onDirty,isM
   </div>;
 }
 
+/* ═══ ÁRVORE GENÉRICA POR TELA (18/09/2026) — lê PX_BLOCOS[tela] ═══
+   Item com `perm` = chave antiga (liga/desliga direto em perms). Item com `key` = bloco
+   novo: estado efetivo = override em perms.blocos ou o padrão da regra fixa (pxBlocoPadrao). */
+function _telaPermItens(tela,user,perms){
+  const def=(typeof PX_BLOCOS!=="undefined")&&PX_BLOCOS[tela];
+  if(!def) return [];
+  const b=(perms&&perms.blocos)||{};
+  const out=[];
+  (def.grupos||[]).forEach(g=>{
+    (g.itens||[]).forEach(i=>{
+      if(i.perm){ out.push({...i,grupo:g.id,tipo:"perm",manual:false,on:!!perms[i.perm]}); }
+      else if(i.key){
+        const padrao=pxBlocoPadrao(i.key,{user,perms});
+        const manual=typeof b[i.key]==="boolean";
+        out.push({...i,grupo:g.id,tipo:"bloco",padrao,manual,on:manual?b[i.key]:padrao});
+      }
+    });
+  });
+  return out;
+}
+function PermsArvoreTela({tela,user,perms,setPerms,cor,isPartnerUser,onDirty,isMobP}){
+  const def=(typeof PX_BLOCOS!=="undefined")&&PX_BLOCOS[tela];
+  const [fechado,setFechado]=useState({});
+  if(!def) return <div style={{color:"#94a3b8",fontSize:12.5}}>Tela sem árvore cadastrada.</div>;
+  const itens=_telaPermItens(tela,user,perms);
+  const setItem=(item,val)=>{
+    if(isPartnerUser)return;
+    if(item.tipo==="perm"){
+      if(item.perm==="excluirDemanda"&&typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(user)){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Social media não pode excluir — regra fixa do sistema."); return; }
+      setPerms(p=>({...p,[item.perm]:!!val}));
+    }else{
+      setPerms(p=>{ const nb={...((p&&p.blocos)||{})}; if(val===null) delete nb[item.key]; else nb[item.key]=!!val; return {...p,blocos:nb}; });
+    }
+    if(onDirty)onDirty();
+  };
+  const Sw=({on,c})=>(<div style={{width:34,height:20,borderRadius:99,background:on?c:"#e2e8f0",position:"relative",transition:"background .18s",flexShrink:0}}>
+    <div style={{position:"absolute",top:3,left:on?17:3,width:14,height:14,borderRadius:"50%",background:"#fff",transition:"left .18s",boxShadow:"0 1px 3px rgba(15,23,42,.25)"}}/>
+  </div>);
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45}}>Itens com selo <b>padrão</b> seguem a regra do sistema pra função dessa pessoa; <b>manual</b> é o que você ligou ou desligou à mão (↺ volta ao padrão). Bloco desligado some da tela.</div>
+    {(def.grupos||[]).map(g=>{
+      const lst=itens.filter(i=>i.grupo===g.id);
+      const nOn=lst.filter(i=>isPartnerUser?true:i.on).length;
+      const ab=!fechado[g.id];
+      return <div key={g.id} style={{border:"1px solid #eef0f3",borderRadius:12,background:"#fff",overflow:"hidden"}}>
+        <div onClick={()=>setFechado(f=>({...f,[g.id]:!f[g.id]}))} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",background:"#fafbfc",cursor:"pointer"}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{transform:ab?"rotate(90deg)":"none",transition:"transform .15s",flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+          <div style={{flex:1,color:"#0f172a",fontSize:12.5,fontWeight:800}}>{g.label}</div>
+          <span style={{fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",color:nOn>0?cor:"#cbd5e1",background:nOn>0?cor+"14":"#f1f5f9",borderRadius:99,padding:"2px 7px"}}>{nOn}/{lst.length}</span>
+        </div>
+        {ab&&<div style={{padding:"8px 12px 12px",borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:6}}>
+          {lst.map(it=>{
+            const on=isPartnerUser?true:it.on;
+            const travado=it.perm==="excluirDemanda"&&typeof pxExclusaoBloqueada==="function"&&pxExclusaoBloqueada(user);
+            return <div key={it.perm||it.key} onClick={()=>setItem(it,!it.on)} title={travado?"Travado: social media nunca exclui":undefined}
+              style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"8px 11px",background:on?cor+"08":"#fff",borderRadius:9,border:"1px solid "+(on?cor+"40":"#eef0f3"),cursor:isPartnerUser?"default":"pointer"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                  <span style={{color:on?"#0f172a":"#64748b",fontSize:12.5,fontWeight:on?700:600}}>{it.label}</span>
+                  {!isPartnerUser&&it.tipo==="bloco"&&<span style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,color:it.manual?cor:"#94a3b8",background:it.manual?cor+"14":"#f1f5f9",borderRadius:99,padding:"2px 6px"}}>{it.manual?"manual":"padrão"}</span>}
+                </div>
+                {it.desc&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,lineHeight:1.4}}>{travado?"Travado pelo sistema — social media nunca exclui":it.desc}</div>}
+              </div>
+              {!isPartnerUser&&it.tipo==="bloco"&&it.manual&&<button onClick={e=>{e.stopPropagation();setItem(it,null);}} title="Voltar ao padrão"
+                style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:7,width:22,height:22,color:"#64748b",cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"inherit"}}>↺</button>}
+              <Sw on={travado?false:on} c={cor}/>
+            </div>;
+          })}
+        </div>}
+      </div>;
+    })}
+  </div>;
+}
+
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
   // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
@@ -35786,6 +36187,12 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   const _tabCor=tabInfo.color||user.color||"#7c3aed";
   const _setTabAll=(v)=>{
     if(isPartnerUser)return;
+    if(tabInfo.tela){ // árvore genérica: chaves antigas direto, blocos à mão
+      const nb={...(perms.blocos||{})}; const patch={};
+      _telaPermItens(tabInfo.tela,user,perms).forEach(i=>{ if(i.tipo==="perm") patch[i.perm]=v; else nb[i.key]=v; });
+      if(_exclTravada) patch.excluirDemanda=false;
+      setPerms(p=>({...p,...patch,blocos:nb})); setSaved(false); return;
+    }
     if(tabInfo.arvore){ // Playbooks: liga/desliga TUDO à mão (menu, cadeiras e blocos)
       const nb={...(perms.blocos||{})};
       _pbPermItens(user,perms).forEach(i=>{ nb[i.key]=v; });
@@ -35816,7 +36223,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
         <div style={{flex:1,minHeight:0,overflowY:isMobP?"hidden":"auto",overflowX:isMobP?"auto":"hidden",display:"flex",flexDirection:isMobP?"row":"column",gap:2,padding:isMobP?"8px 10px":"10px"}}>
           {PERM_TABS.map(tab=>{
             const items=PERM_GROUPS[tab.id]||[];
-            const _arv=tab.arvore?_pbPermItens(user,perms):null;
+            const _arv=tab.arvore?_pbPermItens(user,perms):(tab.tela?_telaPermItens(tab.tela,user,perms):null);
             const totalKeys=_arv?_arv.length:items.filter(i=>i.key).length;
             const activeCount=_arv?_arv.filter(i=>isPartnerUser?true:i.on).length:items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
             const on=activeTab===tab.id;
@@ -35856,7 +36263,8 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
         <div style={{flex:1,minHeight:0,overflowY:"auto",padding:"16px 22px"}}>
           {isPartnerUser&&<div style={{background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 15px",color:"#7c3aed",fontSize:12.5,fontWeight:700,marginBottom:14}}>⚡ Sócios têm acesso total e irrestrito ao sistema — nada aqui pode ser desligado.</div>}
           {tabInfo.arvore&&<PermsPlaybooksArvore user={user} perms={perms} setPerms={setPerms} cor={_tabCor} isPartnerUser={isPartnerUser} onDirty={()=>setSaved(false)} isMobP={isMobP}/>}
-          <div style={{display:tabInfo.arvore?"none":"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
+          {tabInfo.tela&&<PermsArvoreTela tela={tabInfo.tela} user={user} perms={perms} setPerms={setPerms} cor={_tabCor} isPartnerUser={isPartnerUser} onDirty={()=>setSaved(false)} isMobP={isMobP}/>}
+          <div style={{display:(tabInfo.arvore||tabInfo.tela)?"none":"grid",gridTemplateColumns:isMobP?"1fr":"1fr 1fr",gap:8}}>
             {_itensTab.map((item,idx)=>{
               if(item.section) return <div key={"s"+idx} style={{gridColumn:isMobP?"auto":"span 2",color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginTop:idx>0?10:0,paddingBottom:5,borderBottom:"1px solid #f1f5f9"}}>{item.section}</div>;
               const _travado=item.key==="excluirDemanda"&&_exclTravada;
@@ -42184,11 +42592,18 @@ async function pxRoteiro60(task, clienteNome){
 function _pxRoteiroParaHtml(txt){
   const linhas=String(txt||"").split("\n");
   let out="<p><strong>• ROTEIRO (vídeo de 90s — o cliente grava)</strong></p>";
+  /* Linha em branco ANTES de cada cena (Vinicius, 18/09/2026): o briefing é lido no
+     WhatsApp e as cenas vinham grudadas no texto da cena anterior. A primeira não
+     precisa — já vem logo abaixo do rótulo "• ROTEIRO". */
+  let _primeiro=true;
   linhas.forEach(function(l){
     const t=l.trim();
     if(!t) return;
     const esc=t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    out += /^(cena|escena|o que precisamos captar)/i.test(t) ? "<p><strong>"+esc+"</strong></p>" : "<p>"+esc+"</p>";
+    const _cab=/^(cena|escena|o que precisamos captar)/i.test(t);
+    if(_cab&&!_primeiro) out+="<p><br></p>";
+    out += _cab ? "<p><strong>"+esc+"</strong></p>" : "<p>"+esc+"</p>";
+    _primeiro=false;
   });
   return out;
 }
@@ -42241,6 +42656,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     _onClose();
   };
   const user=currentUser||CURRENT_USER;
+  // ═══ Blocos do card (Acessos › Time › Linha de produção › "Card aberto") — 18/09/2026.
+  // Sócio sempre vê; override manual em profiles.permissions.blocos; senão o padrão (regra fixa).
+  // Usa `user` (o VISTO no "ver como"), não o logado — a tela fica fiel ao que a pessoa vê.
+  const _blPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
+  const _blCtx={user:user,perms:_blPerms};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("demandas.card."+k,_blCtx):true;
   // status "publicado" mora na coluna "agendado" (Publicadas)
   const col=KANBAN_COLS.find(c=>c.id===(task.status==="publicado"?"agendado":task.status));
   // ═══ Player Frame.io no ajuste: ref pro <video> e helpers pra seek em [MM:SS] ═══
@@ -42536,10 +42957,10 @@ function _cardPodeSerResp(u){
   // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
   // isAdmin = pode editar etiquetas/tags + mês de pagamento. Sócios sempre podem.
-  const isAdmin = !!(CURRENT_USER && (CURRENT_USER.level === 1 || (cardPerms&&cardPerms.gerenciarEtiquetas===true)));
+  const isAdmin = _bl("campo.etiquetas"); // padrão: sócio ou gerenciarEtiquetas (do usuário VISTO)
   // canEditContentType: tipo de conteúdo. Admin + editor de vídeo (Guilherme) + coordenador (Hellen) podem.
   // Designers (André, Maria) NÃO podem — afeta cálculo de pagamento por demanda.
-  const canEditContentType = isAdmin || !!(CURRENT_USER && (CURRENT_USER.dash === "editor" || CURRENT_USER.dash === "coordinator"));
+  const canEditContentType = _bl("campo.tipo"); // padrão: sócio/etiquetas, editor de vídeo e coordenação (usuário VISTO)
   // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
   const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
   const [newTagInput,setNewTagInput]=useState("");
@@ -42547,6 +42968,12 @@ function _cardPodeSerResp(u){
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
   const [activeTab,setActiveTab]=useState((task.status==="agendado"||task.status==="publicado")?"legenda":"desc");
+  // Aba escondida por permissão de bloco → cai na primeira aba liberada (18/09/2026)
+  useEffect(function(){
+    const _ord=[["desc","briefing"],["legenda","legenda"],["files","arquivos"],["orientacoes","orientacoes"],["activity","historico"]];
+    const _cur=_ord.find(function(x){return x[0]===activeTab;});
+    if(_cur&&!_bl("aba."+_cur[1])){ const _f=_ord.find(function(x){return _bl("aba."+x[1]);}); if(_f&&_f[0]!==activeTab) setActiveTab(_f[0]); }
+  },[activeTab]);
   const [checklist,setChecklist]=useState(task.checklist||[]);
   const [newCheckItem,setNewCheckItem]=useState("");
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
@@ -42606,7 +43033,7 @@ function _cardPodeSerResp(u){
   const [slaPausedDuration,setSlaPausedDuration]=useState(task.slaPausedDuration||0); // segundos pausados
   // Quem pode definir SLA e data de publicação: só admin + coordinator
   // canEditSLAandPub: gerenciado via perm "editarSLA". Sócios e coordenadores sempre podem.
-  const canEditSLAandPub=(CURRENT_USER.level===1)||(CURRENT_USER.dash==="coordinator")||(cardPerms&&cardPerms.editarSLA===true);
+  const canEditSLAandPub=_bl("campo.publicacao"); // padrão: sócio, coordenação ou editarSLA (usuário VISTO)
 
 
   // Baixa todos os arquivos de uma lista sequencialmente
@@ -42789,9 +43216,9 @@ function _cardPodeSerResp(u){
     if(fromId===_MV_PUB) return _MV_APROV.indexOf(toId)>=0;
     return false;
   };
-  const canMoveCol=canEdit||(_isSocialOnly&&(_MV_APROV.indexOf(task.status)>=0||task.status===_MV_PUB||task.status==="publicado"));
+  const canMoveCol=(canEdit||(_isSocialOnly&&(_MV_APROV.indexOf(task.status)>=0||task.status===_MV_PUB||task.status==="publicado")))&&_bl("acao.mover");
   // ── Permissão pra REFERÊNCIAS ── só quem cria cartão (sócio/coord) ou criador da própria demanda
-  const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name)||user.dash==="designer"||user.dash==="editor"||user.dash==="coordinator";
+  const canEditRef=(userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name)||user.dash==="designer"||user.dash==="editor"||user.dash==="coordinator")&&_bl("arq.remover");
 
   // Fix 3 — cleanup do interval de gravação + para o MediaRecorder se o modal desmontar
   useEffect(()=>()=>{
@@ -44920,15 +45347,15 @@ function _cardPodeSerResp(u){
               </button>;
             })()}
             {/* Botões soltos no header: Copiar link, Duplicar cartão, Mover para lixeira */}
-            <button onClick={copyCardLink} title="Copiar link"
+            {_bl("acao.copiar_link")&&<button onClick={copyCardLink} title="Copiar link"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
               <Ico n="link" size={16}/>
-            </button>
+            </button>}
             {/* Duplicar cartão removido do header (10/09/2026): ficava colado no "Copiar link" e
                 as pessoas clicavam sem querer. Duplicar segue no botão direito do card, no kanban e no calendário. */}
-            {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
+            {canDelete&&onTrash&&_bl("acao.lixeira")&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
@@ -44937,16 +45364,16 @@ function _cardPodeSerResp(u){
             {/* Cor de Capa removida — botão de paleta sumiu do header */}
             {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:isMobile?"row":"column",gap:5,alignItems:"stretch",flex:isMobile?"1 1 100%":undefined,flexWrap:"wrap"}}>
-              {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
+              {canEdit&&_bl("acao.salvar")&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
               {/* Concluir p/ avaliação — designer/editor envia card de execução/ajustes pra aprovação interna */}
-              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
+              {canEdit&&_bl("acao.concluir")&&(task.status==="execucao"||task.status==="ajustes")&&<button
                 onClick={()=>setConclusionStep(1)}
                 style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)",minWidth:isMobile?0:170,flex:isMobile?1:undefined,textAlign:"center",letterSpacing:.1,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"inherit"}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Concluir p/ avaliação
               </button>}
               {/* Enviar p/ aprovação — só pra cards em "Alteração de copy"; volta pra Copys (demanda) e entra na fila de Avaliação. */}
-              {canEdit&&task.status==="alteracao_copy"&&<button
+              {canEdit&&_bl("acao.enviar")&&task.status==="alteracao_copy"&&<button
                 onClick={()=>{
                   // CRÍTICO: capturar edits LOCAIS dos campos antes de mudar status —
                   // senão o Vinicius vê a copy velha (o setTasks usaria `...t` do state global stale)
@@ -44982,7 +45409,7 @@ function _cardPodeSerResp(u){
                   Etapa nova: a copy já está aprovada, o card só está esperando alguém
                   anexar as imagens. Qualquer um que possa editar o card libera —
                   não é exclusivo da Hellen. O botão avisa se ainda não tem material. */}
-              {canEdit&&task.status==="preencher_material"&&(function(){
+              {canEdit&&_bl("acao.material")&&task.status==="preencher_material"&&(function(){
                 const _mats=(task.files||[]).filter(function(f){
                   return f&&!f.isAnnotation&&!f.isRef&&(!f.tipo||f.tipo==="material"||f.tipo==="referencia"||f.tipo==="final");
                 });
@@ -45003,7 +45430,7 @@ function _cardPodeSerResp(u){
                 </button>;
               })()}
               {/* Drive folder — shown when approved */}
-              {task.status==="aprovado"&&(()=>{
+              {task.status==="aprovado"&&_bl("acao.drive")&&(()=>{
                 const cl=CLIENTS.find(c=>c.id===task.client);
                 let driveUrl=cl?.driveUrl||"";
                 try{const s=localStorage.getItem("pixels-drive-"+(cl?.id||""));if(s)driveUrl=s;}catch(e){}
@@ -45033,7 +45460,7 @@ function _cardPodeSerResp(u){
         <div className={isMobile?"scroll-x":undefined} style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:isMobile?"auto":undefined,WebkitOverflowScrolling:"touch"}}>
           {/* Aba "Áudio" removida (14/09/2026): a seção "Áudios de Orientação" da aba
               Briefing faz o mesmo e melhor — lá dá pra revisar e salvar a gravação. */}
-          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].map(([id,lbl])=>(
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>_bl("aba."+({desc:"briefing",files:"arquivos",activity:"historico"}[id]||id))).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:isMobile?"11px 13px":"12px 18px",fontSize:isMobile?13:13.5,flexShrink:0,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -45519,7 +45946,7 @@ function _cardPodeSerResp(u){
               <style>{".px-ia-row{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-start}.px-ia-row>div{flex:1 1 280px;min-width:0;max-width:290px;margin-bottom:0!important;display:flex;flex-direction:column}.px-ia-row>div>button{align-self:flex-start;white-space:nowrap}"}</style>
               <div className={(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?"px-ia-row":undefined} style={{marginBottom:(pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&canEdit)?18:8}}>
               {/* ── Qualquer peça escrita (arte, carrossel, foto) → roteiro de vídeo de 60s ── */}
-              {pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&(<div style={{marginBottom:10}}>
+              {pxPodeVirarRoteiro(task)&&_pxTextoPuro(desc).length>20&&_bl("ia.roteiro")&&(<div style={{marginBottom:10}}>
                 <button type="button" disabled={!!(roteiroSt&&roteiroSt.loading)}
                   onClick={async function(){
                     setRoteiroSt({loading:true});
@@ -45537,7 +45964,7 @@ function _cardPodeSerResp(u){
                 </button>
                 <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Gera um roteiro de 90s a partir deste briefing e da legenda — dá pra copiar, colar embaixo do briefing ou virar o card em vídeo.</div>
               </div>)}
-              {canEdit&&(function(){
+              {canEdit&&_bl("ia.briefing")&&(function(){
                 // Sem briefing ele gera, com briefing ele ajusta. Pra recomeçar do
                 // zero, apaga o texto — o botão volta sozinho pra "Gerar".
                 const _tem=_pxTextoPuro(desc).length>20;
@@ -45708,7 +46135,7 @@ function _cardPodeSerResp(u){
             })()}
 
             {/* ── Tradução do briefing (só Paraguay) — o designer não fala espanhol ── */}
-            {_ehPy&&(tradCardLoad||(tradCard&&tradCard.briefing))&&(
+            {_ehPy&&_bl("ia.traducao")&&(tradCardLoad||(tradCard&&tradCard.briefing))&&(
               <div style={{background:"#f0fdf4",border:"1px dashed #bbf7d0",borderRadius:12,padding:"12px 14px"}}>
                 <div style={{color:"#16a34a",fontSize:9.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
                   <Ico n="globe" size={12} color="#16a34a"/>Tradução do briefing
@@ -45802,6 +46229,7 @@ function _cardPodeSerResp(u){
                 .reverse();
               const _visibleComments=(comments||[]).filter(function(c){return !_isFb(c)&&!_ehPedidoIA(c);});
               const _temVideoAjuste=!!_findAjusteVideoUrl();
+              if(!_bl("acao.comentar")) return null;
               return <div>
               <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
               {_visibleComments.length===0&&_rodadas.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
@@ -45892,7 +46320,7 @@ function _cardPodeSerResp(u){
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
           {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
-            {canEdit&&(function(){
+            {canEdit&&_bl("ia.legenda")&&(function(){
               // Mesmo componente da aba Briefing — mesmo tamanho, mesmo estilo, sempre.
               const _tem=_pxTextoPuro(caption).length>20;
               return <PxBotaoIA
@@ -46031,7 +46459,7 @@ function _cardPodeSerResp(u){
               })()}
 
               {/* ── SEÇÃO 0: ARQUIVO FINAL — designer/editor sobem aqui ── */}
-              {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
+              {_bl("arq.finais")&&(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
                 const totalFin=imgFin.length+vidFin.length;
                 const _finActive=dragOverSection==="fin";
                 return(<div
@@ -46273,7 +46701,7 @@ function _cardPodeSerResp(u){
               })()}
 
               {/* ── SEÇÃO — ANEXOS DE AJUSTES — imagens/videos subidos na hora de Solicitar ajuste ── */}
-              {adjItems.length>0&&(()=>{
+              {adjItems.length>0&&_bl("arq.ajustes")&&(()=>{
                 return(<div style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,padding:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
                     <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#fff7ed,#fed7aa)",color:"#c2410c",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid #fed7aa"}}>
@@ -46330,7 +46758,7 @@ function _cardPodeSerResp(u){
               })()}
 
               {/* ── SEÇÃO 2: MATERIAIS — imagens/vídeos brutos, takes crus, base pra edição ── */}
-              {(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
+              {_bl("arq.materiais")&&(imgMat.length>0||vidMat.length>0||canEditRef||canEdit)&&(()=>{
                 const totalMat=imgMat.length+vidMat.length;
                 const _matActive=dragOverSection==="mat";
                 const _matCanEdit=canEditRef||canEdit;
@@ -46471,7 +46899,7 @@ function _cardPodeSerResp(u){
               })()}
 
               {/* ── SEÇÃO 1: REFERÊNCIAS — só quem cria cartão sobe ── */}
-              {(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
+              {_bl("arq.referencias")&&(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
                 const totalRef=imgRef.length+vidRef.length;
                 const _refActive=dragOverSection==="ref";
                 return(<div
@@ -47165,7 +47593,7 @@ function _cardPodeSerResp(u){
           {/* Setor removido do UI — auto-inferido pelo useEffect baseado nos assignees:
               designer→design, editor→video, coordinator→social, gestor→trafego */}
 
-          {(!isAgendado||isAdmin)&&<div>
+          {(!isAgendado||isAdmin)&&_bl("campo.responsaveis")&&<div>
             <label style={LB}><Ico n="users" size={12} color="#94a3b8"/> Responsáveis</label>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:5}}>
               {TEAM.filter(u=>_cardPodeSerResp(u)).map(function(u){
@@ -47348,11 +47776,11 @@ function _cardPodeSerResp(u){
           })()}
 
           {/* Mês de pagamento — só aparece quando a EQUIPE DE PRODUÇÃO (pago por demanda: André/Maria/Guilherme) está marcada. Cards só com sócios/coordenação não têm pagamento por demanda. */}
-          {(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
+          {_bl("campo.mes_pagamento")&&(assignees||[]).some(function(_pid){var _pm=(typeof TEAM!=="undefined"?TEAM:[]).find(function(u){return u.id===_pid;});return !!(_pm&&_pm.pagamentoPorDemanda);}) && (
           <div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
               <span>Mês de pagamento</span>
-              {!(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id==="gustavo")&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só Gustavo edita</span>}
+              {!(user&&user.id==="gustavo")&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só Gustavo edita</span>}
             </label>
             {(()=>{
               // Stepper de mês com setas circulares prev/next + display formatado.
@@ -47367,7 +47795,7 @@ function _cardPodeSerResp(u){
               };
               const _label=referenceMonth?(_MN[parseInt(_cur.split("-")[1])-1]+" "+_cur.split("-")[0]):"Selecione o mês";
               // Mês de pagamento — só Gustavo edita (é ele quem gerencia a contabilização de pagamento)
-              const _enabled=canEdit&&(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id==="gustavo");
+              const _enabled=canEdit&&!!(user&&user.id==="gustavo"); // "ver como" fiel: usuário VISTO
               const _hidRef=_refMonthHidRef; // hook hoisted pro topo do componente
               const ArrowBtn=function(props){
                 const dir=props.dir;
@@ -47398,7 +47826,7 @@ function _cardPodeSerResp(u){
               o que manda é o PRAZO, e a ordem em que o card aparece pro colaborador
               vem da data de publicação (ver "Ordem de produção" no kanban). */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-            <div>
+            {_bl("campo.prazo")&&<div>
               <label style={LB}><Ico n="clock" size={12} color="#94a3b8"/> Prazo</label>
               {canEdit&&(function(){
                 // Atalhos de dias uteis (seg-sex, pula fim de semana)
@@ -47559,7 +47987,7 @@ function _cardPodeSerResp(u){
                   </div>}
                 </div>;
               })()}
-            </div>
+            </div>}
           </div>}
           {(task.createdAt||task.id)&&<div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:4}}>
             <div style={{color:"#cbd5e1",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Informações</div>
@@ -48802,7 +49230,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   const _userPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[user.id]||{}):{});
   const showContagemTab=!!user.pagamentoPorDemanda||_userPerms.verContagemDemandas===true;
   // Tab Pagamentos: aparece pra todos os freelancers (pagamentoPorDemanda) com preço configurado.
-  const showPagamentosTab=user.id==="andre"||user.id==="guilherme";
+  const showPagamentosTab=(typeof pxBloco==="function")?pxBloco("dash.aba.pagamentos",{user:user}):(user.id==="andre"||user.id==="guilherme");
   const allowedTabs=new Set(["geral"]);
   if(showContagemTab)allowedTabs.add("contagem");
   if(showPagamentosTab)allowedTabs.add("pagamentos");
@@ -54190,17 +54618,19 @@ export default function AgencyOS(){
     let _cad=false; try{ _cad=(typeof _pbCadeirasDoUsuario==="function")&&_pbCadeirasDoUsuario(effectiveUser,p).length>0; }catch(_){}
     return (typeof pxPode==="function")?pxPode("menu.playbooks",_fixo||_cad,{user:effectiveUser,perms:p}):_fixo;
   };
+  // Menus com bloco no registro PX_BLOCOS (padrão = regra fixa antiga; sócio pode desligar à mão)
+  const _menuBloco=(key,p)=>(typeof pxBloco==="function")?pxBloco(key,{user:effectiveUser,perms:p}):true;
   const canSee=(n,p)=>{
     switch(n.id){
       case "meudash":              return p.verDashboard;
       case "demandas":
       case "demandas_kanban":      return p.verDemandas||effectiveUser.id==="ellen";
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
-      case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||effectiveUser.id==="ellen"||p.verCalPub;
+      case "demandas_cal_pub":     return _menuBloco("cal.menu",p); // regra fixa + verCalPub; desligável em Acessos › Time
       case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
       // HELLEN = GESTORA DE PROJETOS (16/09/2026): Estratégia inteira (Clientes, Scripts, Planejamento,
       // Matriz, Playbooks) + Avaliações, Linha de produção e Calendário — por id E por dash "coordinator".
-      case "roteiros":             return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social"||effectiveUser.dash==="gestor";
+      case "roteiros":             return _menuBloco("rot.menu",p); // regra fixa por função; desligável em Acessos › Time
       case "planejamento":         return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator";
       case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
       case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
@@ -54238,7 +54668,7 @@ export default function AgencyOS(){
       case "gestao_time":          return isSocio;  // Time: só sócios podem ver
       case "gestao_administrativo": return isSocio;
       case "gestao_armazenamento": return isSocio;  // Armazenamento: só sócios
-      case "gestao_enps":          return true;  // todos veem (filtragem dentro)
+      case "gestao_enps":          return _menuBloco("enps.menu",p);  // todos veem (filtragem dentro); desligável em Acessos › Time
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
       case "interno_calendario":
@@ -54298,10 +54728,10 @@ export default function AgencyOS(){
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
-      case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "demandas_cal_pub":      return _menuBloco("cal.menu",effectivePerms)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
-      case "roteiros":              return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social"||effectiveUser.dash==="gestor")?<PageRoteiros isMob={isMob}/>:<NoPerm/>;
+      case "roteiros":              return _menuBloco("rot.menu",effectivePerms)?<PageRoteiros isMob={isMob} perms={effectivePerms} viewingAs={viewingAs}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
       case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
@@ -54312,7 +54742,7 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
       case "gestaomidia":          return (isSocio||effectiveUser.dash==="gestor")?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
-      case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
+      case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>; // "ver como" fiel (18/09/2026)
       case "analises":
       case "gestao":
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
@@ -54322,7 +54752,7 @@ export default function AgencyOS(){
       case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
       case "gestao_administrativo": return isSocio?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
       case "gestao_armazenamento":  return isSocio?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
-      case "gestao_enps":           return <PageGestaoENPS {...p}/>;
+      case "gestao_enps":           return _menuBloco("enps.menu",effectivePerms)?<PageGestaoENPS {...p}/>:<NoPerm/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} onViewAsClient={_enterClientPreview} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
@@ -61055,10 +61485,15 @@ function usePortalConfig(clientId){
   },[clientId]);
   return [cfg,setCfg];
 }
+/* 18/09/2026 — ACEITA #fff (3 dígitos) TAMBÉM. Era o bug da sidebar do portal: a cor
+   padrão da letra do menu é "#fff", o regex só casava 6 dígitos, a função devolvia
+   "#fff" CRU e o quadradinho do ícone (que usa esta cor com 13% de alpha como fundo)
+   virava BRANCO SÓLIDO — ícone branco em fundo branco = menu todo em branco. */
 function pxHexAlpha(hex,a){
-  const m=String(hex||"").match(/^#?([0-9a-f]{6})$/i);
-  if(!m) return hex;
-  const n=parseInt(m[1],16);
+  let h=String(hex||"").trim().replace(/^#/,"");
+  if(/^[0-9a-f]{3}$/i.test(h)) h=h.split("").map(function(x){return x+x;}).join("");
+  if(!/^[0-9a-f]{6}$/i.test(h)) return hex;
+  const n=parseInt(h,16);
   return "rgba("+(n>>16&255)+","+(n>>8&255)+","+(n&255)+","+a+")";
 }
 /* ── PERSONALIZAR CORES DO MENU (Vinicius, 17/09/2026): "tem tons que ficam ruim demais".
@@ -67148,10 +67583,15 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             const _neon=(typeof pxSideIconColor==="function")?pxSideIconColor(cl):((typeof pxNeonColor==="function")?pxNeonColor(cl.color):"#fff");
             // TEMA DO MENU (17/09/2026): o cliente ajusta fundo / letra / ícone em "Personalizar cores"
             const _tm=(portalCfg.tema&&typeof portalCfg.tema==="object")?portalCfg.tema:{};
-            const _sBg=_tm.fundo||cl.color, _sTx=_tm.texto||"#fff", _sIc=_tm.icone||_neon;
-            const _sTxDim=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.72):_sTx;
-            const _sTxLine=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.35):_sTx;
-            const _sHover=(typeof pxHexAlpha==="function")?pxHexAlpha(_sTx,.13):"rgba(255,255,255,.13)";
+            const _sBg=_tm.fundo||cl.color, _sTx=_tm.texto||"#ffffff", _sIc=_tm.icone||_neon;
+            /* _fade = cor com transparência OU o branco translúcido de sempre. Se a cor da
+               letra não for hex (nome de cor, rgb(), vazio) não dá pra tirar alpha dela —
+               e devolver a cor CRUA aqui é o que pintava o quadradinho do ícone de branco
+               sólido, escondendo o ícone. Fundo e borda nunca recebem cor opaca. */
+            const _fade=function(c,a,fb){ const r=(typeof pxHexAlpha==="function")?pxHexAlpha(c,a):c; return String(r).indexOf("rgba(")===0?r:fb; };
+            const _sTxDim=_fade(_sTx,.72,"rgba(255,255,255,.72)");
+            const _sTxLine=_fade(_sTx,.35,"rgba(255,255,255,.35)");
+            const _sHover=_fade(_sTx,.13,"rgba(255,255,255,.13)");
             return <div className="pxPortalSide" style={{width:212,flexShrink:0,position:"sticky",top:16,maxHeight:"calc(100vh - 32px)",overflowY:"auto",background:_sBg,border:"none",borderRadius:16,padding:8,display:"flex",flexDirection:"column",gap:2,boxShadow:"0 8px 22px "+_sBg+"55"}}>
             {TABS.map(function(t,_i){
               const active=tab===t.id;
@@ -70070,9 +70510,13 @@ function ComModal({title,subtitle,children,onClose,maxWidth}){
 function PageComercial({isMob, perms, effectiveUser}){
   const {store,update,log}=useComercialStore();
   const [tab,setTab]=useState("portfolio"); // Comercial abre direto no Portfolio
-  const isSocio=(effectiveUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null))?.level===1;
+  const _cu=effectiveUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
+  const isSocio=_cu?.level===1;
   const myPerms=perms||{};
   const canEdit=isSocio||myPerms.editarComercial;
+  // Blocos da tela (Acessos › Time › Comercial) — usuário VISTO — 18/09/2026
+  const _blCtx={user:_cu,perms:perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("com."+k,_blCtx):true;
 
   const SUBTABS=[
     {id:"portfolio", label:"Portfólio"},
@@ -70085,10 +70529,11 @@ function PageComercial({isMob, perms, effectiveUser}){
     {id:"scripts",   label:"Scripts"},
     // Vendas: registro de vendas pontuais por cliente (Captação, projetos avulsos, extras).
     // Alimenta o Financeiro (soma automática ao MRR do mês).
-    ...(isSocio?[{id:"vendas", label:"Vendas pontuais"}]:[]),
-    ...(isSocio?[{id:"contratos", label:"Contratos"}]:[]),
+    {id:"vendas", label:"Vendas pontuais"},   // padrão só sócio (bloco com.aba.vendas)
+    {id:"contratos", label:"Contratos"},      // padrão só sócio (bloco com.aba.contratos)
     {id:"historico", label:"Histórico"},
-  ];
+  ].filter(function(t){return _bl("aba."+t.id);});
+  useEffect(function(){ if(SUBTABS.length&&!SUBTABS.some(function(t){return t.id===tab;})) setTab(SUBTABS[0].id); },[SUBTABS.map(function(t){return t.id;}).join(","),tab]);
 
   return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
@@ -70119,8 +70564,8 @@ function PageComercial({isMob, perms, effectiveUser}){
     {tab==="scripts"&&<ComScripts store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="portfolio"&&typeof PagePortfolio==="function"&&<PagePortfolio isMob={isMob}/>}
     {tab==="produtos"&&typeof PageProdutos==="function"&&<PageProdutos isMob={isMob} canEdit={canEdit} isSocio={isSocio}/>}
-    {tab==="vendas"&&isSocio&&<ComVendasPontuais canEdit={canEdit&&isSocio} isMob={isMob}/>}
-    {tab==="contratos"&&isSocio&&<ComContratos canEdit={canEdit&&isSocio}/>}
+    {tab==="vendas"&&_bl("aba.vendas")&&<ComVendasPontuais canEdit={canEdit&&isSocio} isMob={isMob}/>}
+    {tab==="contratos"&&_bl("aba.contratos")&&<ComContratos canEdit={canEdit&&isSocio}/>}
     {tab==="historico"&&<ComHistorico store={store}/>}
   </div>;
 }
@@ -81734,10 +82179,13 @@ function PageGestaoENPS(props){
   // (só o próprio ENPS), não a visão de gestor. Login real de colaborador já era individual.
   const _effUser=(props.viewingAs&&typeof TEAM!=="undefined"&&TEAM.find(function(u){return u.id===props.viewingAs;}))||CURRENT_USER;
   const _emViewAs=!!(props.viewingAs&&_effUser.id!==CURRENT_USER.id);
-  const canAll = (_effUser.level===1)||_effUser.id==="ellen"||_effUser.id==="hellen";
+  // Blocos da tela (Acessos › Time › ENPS) — usuário VISTO — 18/09/2026
+  const _blCtx={user:_effUser,perms:props.perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("enps."+k,_blCtx):true;
+  const canAll = _bl("resultados"); // padrão: sócio ou Hellen
   const { rows, add, remove, loading } = useENPS();
-  // Sócios (level 1) não respondem ENPS — só acompanham resultados
-  const isSocio = (typeof CURRENT_USER!=="undefined" && CURRENT_USER.level===1);
+  // Sócios (level 1) não respondem ENPS — só acompanham resultados ("ver como" fiel: usuário VISTO)
+  const isSocio = !!(_effUser && _effUser.level===1);
   const cycle = _npsCurrentCycle();
   // viewCycle = ciclo que o gestor está olhando (default = atual). Setas prev/next navegam histórico.
   const [viewCycle, setViewCycle] = useState(cycle);
@@ -81874,7 +82322,7 @@ function PageGestaoENPS(props){
     </div>
 
     {/* ═══ CARD PRINCIPAL DE RESPOSTA — só pra colaboradores ═══ */}
-    {(!isSocio||_emViewAs) && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
+    {(!isSocio||_emViewAs) && _bl("responder") && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
       <div>
         <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pergunta do mês</div>
         <div style={{color:"#0f172a",fontSize:isMob?17:20,fontWeight:700,letterSpacing:-.4,lineHeight:1.3,marginTop:6,fontFamily:_NPS_FF,maxWidth:760}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar para trabalhar?</div>
@@ -98217,7 +98665,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           {r.status==="enviado"?"Enviado":"Enviar"}
         </button>}
-        {agencia&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
+        {agencia&&onExcluir&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
           onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
         <span style={{flex:1}}/>
@@ -98240,15 +98688,19 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
 }
 
 /* ── PÁGINA DA AGÊNCIA ── */
-function PageRoteiros({isMob}){
+function PageRoteiros({isMob, perms, viewingAs}){
   const sb=(typeof window!=="undefined")?window._sb:null;
-  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  // "Ver como" fiel (18/09/2026): usuário VISTO. Blocos da tela em Acessos › Time › Roteiros.
+  const _u=(viewingAs&&typeof TEAM!=="undefined"&&TEAM.find(function(t){return t.id===viewingAs;}))||((typeof CURRENT_USER!=="undefined")?CURRENT_USER:null);
+  const _blCtx={user:_u,perms:perms||null};
+  const _bl=(k)=>(typeof pxBloco==="function")?pxBloco("rot."+k,_blCtx):true;
   const _lista=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c&&c.status!=="interno"&&c.status!=="encerrado"&&String(c.name||"").trim();})
     .slice().sort(function(a,b){return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"});});
   const _unidades=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
   const [clId,setClId]=useState(function(){ try{ const s=localStorage.getItem("pixels-roteiros-cliente"); if(s&&_lista.some(function(c){return c.id===s;})) return s; }catch(_){} return _lista[0]?_lista[0].id:""; });
   const [unit,setUnit]=useState(function(){ try{ return localStorage.getItem("pixels-roteiros-unidade")||""; }catch(_){ return ""; } });
   const [aba,setAba]=useState("roteiros");
+  useEffect(function(){ if(!_bl("aba."+aba)){ const f=["roteiros","trends","ideias"].find(function(a){return _bl("aba."+a);}); if(f) setAba(f); } },[aba]);
   const [roteiros,setRoteiros]=useState([]);
   const [trends,setTrends]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -98393,7 +98845,7 @@ function PageRoteiros({isMob}){
         <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
       </div>
       <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:"Ideias pro cliente"}].map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
+        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:"Ideias pro cliente"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
     </div>
 
@@ -98423,15 +98875,15 @@ function PageRoteiros({isMob}){
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
           {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
         </div>
-        <button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela, em ordem, formatados pro WhatsApp"
+        {_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela, em ordem, formatados pro WhatsApp"
           onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
           style={{background:"#fff",color:visiveis.length?"#16a34a":"#94a3b8",border:"1px solid "+(visiveis.length?"#86efac":"#e2e8f0"),borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:800,cursor:visiveis.length?"pointer":"default",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
-        </button>
-        <button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
+        </button>}
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
-        </button>
+        </button>}
         </div>
       </div>
       {gerando==="ia"&&<div style={{background:_cor+"0d",border:"1px dashed "+_cor+"66",borderRadius:14,padding:"14px 18px",color:"#475569",fontSize:12.5,lineHeight:1.6}}>
@@ -98446,14 +98898,14 @@ function PageRoteiros({isMob}){
         {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
-          onExcluir={function(){_excluir(r);}}/>; })}
+          onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
     </>}
 
     {aba==="trends"&&<>
       <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:220,color:"#475569",fontSize:12.5,lineHeight:1.5}}>Cadastre a trend e explique do que se trata. Depois, em cada trend, escolha o cliente e clique em <b>Gerar 5 ideias</b>: a IA adapta a trend pro negócio dele, no mesmo formato de 90s.</div>
-        <button type="button" onClick={function(){setTrendForm({titulo:"",descricao:"",link:""});}} style={_btnGerar("",true,false,"#db2777")}><Ico n="plus" size={13} color="#fff"/> Nova trend</button>
+        {_bl("trends.nova")&&<button type="button" onClick={function(){setTrendForm({titulo:"",descricao:"",link:""});}} style={_btnGerar("",true,false,"#db2777")}><Ico n="plus" size={13} color="#fff"/> Nova trend</button>}
       </div>
       {trendForm&&<div style={{background:"#fff",border:"1px solid #fbcfe8",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12,boxShadow:"0 8px 24px rgba(219,39,119,.08)"}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{trendForm.id?"Editar trend":"Nova trend"}</div>
@@ -98494,18 +98946,18 @@ function PageRoteiros({isMob}){
               {sel.client==="bioter"&&<select value={sel.unit||""} onChange={function(e){ setTrendCliente(Object.assign({},trendCliente,{[t.id]:{client:sel.client,unit:e.target.value}})); }} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",fontFamily:_RT_FF,outline:"none"}}>
                 <option value="">Grupo</option>{_unidades.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
               </select>}
-              <button type="button" disabled={!!gerando} onClick={function(){_gerar(t,sel.client,sel.unit);}} style={_btnGerar("",true,!!gerando,corSel)}>
+              {_bl("trends.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(t,sel.client,sel.unit);}} style={_btnGerar("",true,!!gerando,corSel)}>
                 {busy?<><Spin/> Criando…</>:<><Ico n="sparkles" size={13} color="#fff"/> Gerar 5 ideias</>}
-              </button>
-              <button type="button" title="Mandar essa trend como ideia pro cliente aprovar no portal" onClick={function(){setIdeiaForm({titulo:t.titulo,descricao:t.descricao||"",link:t.link||"",trend_id:t.id,alvos:[{client:sel.client,unit:sel.unit||""}]});setAba("ideias");}} style={{background:"#fff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 14px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}><Ico n="send" size={13} color="#7c3aed"/> Mandar pro cliente</button>
-              <button type="button" title="Editar" onClick={function(){setTrendForm({id:t.id,titulo:t.titulo,descricao:t.descricao,link:t.link||""});}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-              <button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+              </button>}
+              {_bl("trends.mandar")&&<button type="button" title="Mandar essa trend como ideia pro cliente aprovar no portal" onClick={function(){setIdeiaForm({titulo:t.titulo,descricao:t.descricao||"",link:t.link||"",trend_id:t.id,alvos:[{client:sel.client,unit:sel.unit||""}]});setAba("ideias");}} style={{background:"#fff",color:"#7c3aed",border:"1px solid #ddd6fe",borderRadius:12,padding:"11px 14px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}><Ico n="send" size={13} color="#7c3aed"/> Mandar pro cliente</button>}
+              {_bl("trends.editar")&&<button type="button" title="Editar" onClick={function(){setTrendForm({id:t.id,titulo:t.titulo,descricao:t.descricao,link:t.link||""});}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>}
+              {_bl("trends.excluir")&&<button type="button" title="Excluir trend" onClick={function(){_excluirTrend(t);}} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
             </div>
           </div>
           {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
-                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={function(){_excluir(r);}}/></div>; })}
+                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
           </div></div>}
         </div>;
       })}
@@ -98517,7 +98969,7 @@ function PageRoteiros({isMob}){
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
           {[{id:"todas",l:"Todas"},{id:"enviada",l:"Aguardando"},{id:"aprovada",l:"Aprovadas"},{id:"recusada",l:"Recusadas"}].map(function(v){ const on=ideiaFiltro===v.id; const n=v.id==="todas"?ideias.length:ideias.filter(function(i){return i.status===v.id;}).length; return <button key={v.id} type="button" onClick={function(){setIdeiaFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l} · {n}</button>; })}
         </div>
-        <button type="button" onClick={function(){setIdeiaForm({titulo:"",descricao:"",link:"",trend_id:null,alvos:[{client:clId,unit:clId==="bioter"?(unit||""):""}]});}} style={_btnGerar("",true,false,"#7c3aed")}><Ico n="plus" size={13} color="#fff"/> Nova ideia</button>
+        {_bl("ideias.nova")&&<button type="button" onClick={function(){setIdeiaForm({titulo:"",descricao:"",link:"",trend_id:null,alvos:[{client:clId,unit:clId==="bioter"?(unit||""):""}]});}} style={_btnGerar("",true,false,"#7c3aed")}><Ico n="plus" size={13} color="#fff"/> Nova ideia</button>}
       </div>
       {ideiaForm&&<IdeiaForm f={ideiaForm} setF={setIdeiaForm} lista={_lista} unidades={_unidades} onSalvar={_salvarIdeia} onCancel={function(){setIdeiaForm(null);}}/>}
       {ideias.length===0&&!ideiaForm&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:32,textAlign:"center",color:"#64748b",fontSize:12.5}}>Nenhuma ideia enviada ainda. Clica em "Nova ideia" ou, na aba Trends, em "Mandar pro cliente".</div>}
@@ -98531,7 +98983,7 @@ function PageRoteiros({isMob}){
               <span style={{background:st.bg,color:st.c,border:"1px solid "+st.b,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{st.l}</span>
               {i.trend_id&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase"}}>Trend</span>}
               <span style={{flex:1}}/>
-              <button type="button" title="Tirar do portal" onClick={function(){_arquivarIdeia(i);}} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>
+              {_bl("ideias.arquivar")&&<button type="button" title="Tirar do portal" onClick={function(){_arquivarIdeia(i);}} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
             </div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3}}>{i.titulo}</div>
             {i.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{i.descricao}</div>}
@@ -98544,7 +98996,7 @@ function PageRoteiros({isMob}){
             </div>
             {i.status==="aprovada"&&<div style={{display:"flex",gap:6,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
               {i.task_id?<span style={{color:"#047857",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:6}}><Ico n="check" size={13} color="#047857"/> Já virou card na Linha de produção</span>
-              :<button type="button" onClick={function(){_virarCard(i);}} style={_btnGerar("",true,false,cc)}><Ico n="plus" size={13} color="#fff"/> Virar card</button>}
+              :(_bl("ideias.virar_card")&&<button type="button" onClick={function(){_virarCard(i);}} style={_btnGerar("",true,false,cc)}><Ico n="plus" size={13} color="#fff"/> Virar card</button>)}
             </div>}
           </div>;
         })}
