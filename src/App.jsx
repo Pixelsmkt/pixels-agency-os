@@ -18310,10 +18310,13 @@ function pxAutoLimparDoEvento(prefixo, eventId, manter, descsEvento){
   return sb.from("tasks").select("id,status,publish_date,client,bioter_unit,files,caption,description,comments,somente_story,title")
     .like("id",String(prefixo)+String(eventId)+"-%").is("deleted_at",null).then(function(r){
       if(!r||r.error||!Array.isArray(r.data)||!r.data.length) return 0;
+      /* (18/09/2026) Legenda e briefing NAO contam como trabalho: nos cards automaticos eles sao
+         escritos pelo proprio Claude. Caso real: Climaves tirou "Dia das Aves" e "Dia do Ovo" do
+         Planejamento e os dois cards ficaram no calendario so porque ja tinham legenda gerada.
+         Trabalho de gente = arquivo, comentario ou card que ja saiu de Rascunhos. */
       const _vazio=function(t){
         const nf=Array.isArray(t.files)?t.files.length:0, nc=Array.isArray(t.comments)?t.comments.length:0;
-        const ds=String(t.description||"").trim();
-        return String(t.status||"")==="rascunhos" && !nf && !nc && !String(t.caption||"").trim() && (!ds || _descs.indexOf(ds)>=0);
+        return String(t.status||"")==="rascunhos" && !nf && !nc;
       };
       const rem=r.data.filter(function(t){ return _vazio(t) && !(typeof manter==="function" && manter(t)); });
       const ids=rem.map(function(t){ return t.id; });
@@ -18461,7 +18464,7 @@ async function pxAutoplanRepor(removidos){
           novos.push(_pxApCard("bioter","brasil",d,"collab","Collab Brasil",[])); feitos.collab=true; continue;
         }
         const alvo=_pxApAlvos(t)[0];
-        if(!alvo||feitos[alvo]) continue;
+        if(!alvo) continue;
         const doAlvo=_pxApConta(linhas,alvo);
         if(doAlvo.length>=PX_AUTOPLAN_CAP[alvo]) continue;
         let client, unit="", tipo, titulo, prefs;
@@ -18477,7 +18480,11 @@ async function pxAutoplanRepor(removidos){
           prefs=tipo==="arte"?[1,4,2,5]:[4,1,2,5];
         }
         const d=_pxApDia(L,prefs,doAlvo,hoje); if(!d) continue;
-        novos.push(_pxApCard(client,unit,d,tipo,titulo,unit==="paraguay"?["Español"]:[])); feitos[alvo]=true;
+        const _nc=_pxApCard(client,unit,d,tipo,titulo,unit==="paraguay"?["Español"]:[]);
+        novos.push(_nc);
+        // (18/09/2026) o card novo entra na contagem da linha: se saíram DOIS posts do mesmo
+        // cliente na mesma semana, repõe os dois (até a cadência), em dias diferentes.
+        linhas.push(Object.assign({},_nc,{deleted_at:null}));
       }
     }
     if(!novos.length) return 0;
