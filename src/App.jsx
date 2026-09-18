@@ -67851,8 +67851,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
             {_cover
               ? (_ehVideo
                   ? (_tocando
-                      // Player inline: controls + autoplay, usando a versão leve
-                      ? <PxVideo key="play" src={_cover} controls autoPlay preload="auto" playsInline
+                      // Player inline: controls SEM autoplay — o cliente aperta play (versão leve)
+                      ? <PxVideo key="play" src={_cover} controls preload="metadata" playsInline
                           onClick={function(e){e.stopPropagation();}}
                           style={{width:"100%",height:"100%",objectFit:"contain",display:"block",background:"#000"}}/>
                       // Thumb: frame salvo no upload ou capturado da versão leve — nunca baixa o vídeo
@@ -67953,7 +67953,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       return <div onClick={function(){setPubLightbox(null);}} onTouchStart={_onTS} onTouchEnd={_onTE}
         style={{position:"fixed",inset:0,zIndex:320,background:"rgba(10,12,16,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:_mob?"56px 8px 64px":"24px 76px",backdropFilter:"blur(4px)"}}>
         {_cur.video
-          ? <PxVideo key={_i} src={_cur.url} controls autoPlay preload="auto" playsInline onClick={function(e){e.stopPropagation();}}
+          ? <PxVideo key={_i} src={_cur.url} controls preload="metadata" playsInline onClick={function(e){e.stopPropagation();}}
               style={{maxWidth:_mob?"100%":"88vw",maxHeight:_mob?"100%":"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block",background:"#000"}}/>
           : <img key={_i} src={_cur.url} alt={pubLightbox.title||""} onClick={function(e){e.stopPropagation();}}
               style={{maxWidth:_mob?"100%":"88vw",maxHeight:_mob?"100%":"88vh",objectFit:"contain",borderRadius:12,boxShadow:"0 24px 64px rgba(0,0,0,0.5)",display:"block"}}/>}
