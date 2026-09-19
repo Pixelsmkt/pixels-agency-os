@@ -57329,6 +57329,7 @@ const ADS_MAXW=1240;
 const _adsBRL=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return "R$ "+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:dec===undefined?2:dec,maximumFractionDigits:dec===undefined?2:dec}); };
 const _adsBRL0=function(n){ return _adsBRL(n,2); }; /* regra 09/09: dinheiro sempre com centavos */
 const _adsBRLc=function(n){ return (n!==null&&n!==undefined&&isFinite(n)&&n>0&&n<0.1)?_adsBRL(n,3):_adsBRL(n); };
+const _adsNum1=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1}); };
 const _adsNum=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:0}); };
 const _adsPct=function(n,dec){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:dec===undefined?1:dec,minimumFractionDigits:dec===undefined?1:dec})+"%"; };
 const _adsX=function(n){ if(n===null||n===undefined||!isFinite(n)) return "—"; return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:1})+"×"; };
@@ -57763,6 +57764,7 @@ function _adsMediaPorTipo(camps){ const m={}; camps.forEach(function(c){ if(!c.c
 function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
+  const BMc=useAdsBenchCriativos(X.P,"campanha");   /* régua da carteira no nível campanha */
   const [fStatus,setFStatus]=useState("ativas"); /* 19/09: a tela abre nas ativas; "Todas" continua disponível no chip */
   const [fTipo,setFTipo]=useState("todos");
   if(D.loading||X.loading) return <AdsLoading t="Lendo campanhas…"/>;
@@ -57773,6 +57775,10 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
   let lista=todas.filter(function(c){ return fStatus==="todas"||(fStatus==="ativas"?c.ativa:!c.ativa); }).filter(function(c){ return fTipo==="todos"||c.tipo===fTipo; });
   lista.forEach(function(c){ c.media=medias[c.tipo]||null; c.poucos=!c.marca&&c.res<ADS_MIN_RESULTADOS; c.nivel=c.marca||c.poucos?"n":_adsNivelCusto(c.custo,c.media,c.res); });
   lista.sort(function(a,b){ const ga=a.marca?2:(a.poucos?1:0), gb=b.marca?2:(b.poucos?1:0); if(ga!==gb) return ga-gb; if(ga===0){ const ra=a.media?a.custo/a.media:0, rb=b.media?b.custo/b.media:0; return rb-ra; } return b.gasto-a.gasto; });
+  /* NOTA da campanha (19/09): régua da conta = campanhas do mesmo objetivo neste cliente; carteira = ads_bench_criativos nível campanha */
+  const refCampConta=(function(){ const m={}; todas.forEach(function(c){ (m[c.tipo]=m[c.tipo]||[]).push(c); });
+    const o={}; Object.keys(m).forEach(function(k){ o[k]=_adsRefConta(m[k],null); }); return o; })();
+  const notaCamp=function(c){ return _adsNotas({impressoes:c.impressoes,cliques:c.cliques,gasto:c.gasto,res:c.res,p25:c.p25,dias:0},refCampConta[c.tipo],BMc.por,c.tipo,c.cfg); };
   const validas=todas.filter(function(c){return !c.marca&&c.res>=ADS_MIN_RESULTADOS&&c.custo;});
   const melhor=validas.slice().sort(function(a,b){return (a.custo/(medias[a.tipo]||1))-(b.custo/(medias[b.tipo]||1));})[0];
   const pior=validas.slice().sort(function(a,b){return (b.custo/(medias[b.tipo]||1))-(a.custo/(medias[a.tipo]||1));})[0];
@@ -57797,7 +57803,7 @@ function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
         <tbody>{lista.length===0&&<tr><td colSpan={9} style={Object.assign({},TD,{textAlign:"center",color:ADS.muted,padding:"22px 10px"})}>Nenhuma campanha com esse filtro.</td></tr>}
         {lista.map(function(c){ const st=_adsStatus(c.ent.status_efetivo); const r=c.media&&c.custo?c.custo/c.media:null; const w=r?Math.min(100,r/Math.max(2,r)*100*(r>=2?1:r/2)):0; const pv=prevC[c.id];
           return <tr key={c.id} onClick={function(){onAbrir(c.id);}} style={{cursor:"pointer"}} onMouseEnter={function(e){e.currentTarget.style.background=ADS.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-            <td style={Object.assign({},TD,{fontWeight:700,color:ADS.ink,minWidth:230})}><div style={{display:"flex",alignItems:"center",gap:8}}><span title={st[0]} style={{width:8,height:8,borderRadius:"50%",background:c.ativa?ADS.ok:"#c9c5d6",flexShrink:0}}/><span title={c.nome}>{_adsNomeCurto(c.nome)}</span>{!c.ativa&&<span style={{fontSize:11,color:ADS.muted,fontWeight:500}}>{st[0].toLowerCase()}</span>}{c.poucos&&<AdsTag n="n">amostra pequena</AdsTag>}</div></td>
+            <td style={Object.assign({},TD,{fontWeight:700,color:ADS.ink,minWidth:230})}><div style={{display:"flex",alignItems:"center",gap:8}}><span title={st[0]} style={{width:8,height:8,borderRadius:"50%",background:c.ativa?ADS.ok:"#c9c5d6",flexShrink:0}}/><span title={c.nome}>{_adsNomeCurto(c.nome)}</span>{!c.ativa&&<span style={{fontSize:11,color:ADS.muted,fontWeight:500}}>{st[0].toLowerCase()}</span>}{(function(){ const N=notaCamp(c); return <AdsNota conta={N.conta} carteira={N.carteira} cfgLbl={"campanhas de "+c.cfg.label.toLowerCase()} isMob={isMob} compacta/>; })()}{c.poucos&&<AdsTag n="n">amostra pequena</AdsTag>}</div></td>
             <td style={TD}><AdsObjTag tipo={c.tipo}/></td>
             <td style={TDR}>{_adsBRL0(c.gasto)}</td>
             <td style={Object.assign({},TDR,{fontWeight:700,color:ADS.ink})}>{c.marca?"—":_adsNum(c.res)}{!c.marca&&<div style={{fontSize:10,color:ADS.muted,fontWeight:500,fontFamily:ADS_FONT}}>{c.cfg.resLbl}</div>}</td>
@@ -59053,9 +59059,167 @@ function useAdsStatusAnuncios(accountId,snapshotEm){
   },[accountId,snapshotEm]);
   return st;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   NOTA DO CRIATIVO / CONJUNTO / CAMPANHA (19/09/2026)
+   ───────────────────────────────────────────────────────────────────────────
+   Régua: 5,0 = exatamente a mediana do grupo. Cada perna vale 5 × (quanto é melhor que a mediana),
+   limitada a 10. Nota final = média das pernas pelos pesos. Nunca é nota absoluta: é posição
+   contra quem disputa o MESMO objetivo, no MESMO período.
+
+   Duas notas lado a lado:
+     • na conta    → mediana dos criativos do mesmo cliente e mesmo objetivo (contexto idêntico)
+     • na carteira → mediana de todos os anúncios da agência no mesmo objetivo (ads_bench_criativos)
+
+   Sem base, não tem nota. Mínimos: 500 impressões, 3 dias rodando e — para objetivo que gera
+   resultado — 3 resultados. Abaixo disso a tela diz o que falta, não inventa número.
+
+   O que NÃO entra: o ranking de qualidade da Meta (vem UNKNOWN em 78% dos anúncios, puniria quem
+   não tem o dado) e o play de vídeo (video_3s/impressões dá ~95% pra todo mundo, não separa ninguém).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ADS_NOTA_MIN={imp:500,dias:3,res:ADS_MIN_RESULTADOS};
+
+/* mediana de uma lista de números */
+function _adsMediana(v){ const a=(v||[]).filter(function(x){return x!==null&&x!==undefined&&isFinite(x);}).sort(function(x,y){return x-y;}); if(!a.length) return null; const n=a.length; return n%2?a[(n-1)/2]:(a[n/2-1]+a[n/2])/2; }
+
+/* régua da carteira, por objetivo — vem do banco */
+window._pxAdsBench=window._pxAdsBench||{};
+function useAdsBenchCriativos(P,nivel){
+  const nv=nivel||"anuncio";
+  const key=P?(P.ini+"|"+P.fim+"|"+nv):"";
+  const [st,setSt]=useState(function(){ return window._pxAdsBench[key]||{loading:!!key,por:{}}; });
+  useEffect(function(){ if(!key||!window._sb) return; if(window._pxAdsBench[key]){ setSt(window._pxAdsBench[key]); return; } let vivo=true;
+    window._sb.rpc("ads_bench_criativos",{p_de:P.ini,p_ate:P.fim,p_nivel:nv}).then(function(r){ if(!vivo) return;
+      const por={}; (r.data||[]).forEach(function(x){ por[x.tipo]={custo:Number(x.mediana_custo)||null,nCusto:Number(x.n_custo)||0,ctr:Number(x.mediana_ctr)||null,nCtr:Number(x.n_ctr)||0,ret:Number(x.mediana_ret)||null,nRet:Number(x.n_ret)||0,cpm:Number(x.mediana_cpm)||null,nCpm:Number(x.n_cpm)||0}; });
+      const o={loading:false,por:por}; window._pxAdsBench[key]=o; setSt(o);
+    }).catch(function(){ if(vivo) setSt({loading:false,por:{}}); });
+    return function(){ vivo=false; }; },[key]);
+  return st;
+}
+
+/* régua da própria conta: mediana entre os criativos do mesmo objetivo que já têm base */
+function _adsRefConta(lista,fam){
+  const comBase=(lista||[]).filter(function(a){ return Number(a.impressoes||0)>=ADS_NOTA_MIN.imp&&Number(a.gasto||0)>0; });
+  const ref={n:comBase.length};
+  ref.ctr=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.cliques||0)/i*100:null; }));
+  ref.ret=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return (i>0&&a.p25!==null&&a.p25!==undefined)?Number(a.p25||0)/i*100:null; }));
+  ref.cpm=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.gasto||0)/i*1000:null; }));
+  const comRes=comBase.filter(function(a){ return Number(a.res||0)>=ADS_NOTA_MIN.res; });
+  ref.custo=_adsMediana(comRes.map(function(a){ return Number(a.gasto||0)/Number(a.res); }));
+  ref.nCusto=comRes.length; ref.nCtr=comBase.length; ref.nRet=comBase.length; ref.nCpm=comBase.length;
+  return ref;
+}
+
+/* 5 = na mediana; 10 = o dobro de eficiente; 0 = nada */
+const _adsPts=function(x){ if(!isFinite(x)||x<=0) return 0; return Math.max(0,Math.min(10,5*x)); };
+
+/* o cálculo em si. m = as métricas do que está sendo avaliado; ref = a régua */
+function _adsNotaCalc(m,ref,fam){
+  const imp=Number(m.impressoes||0), dias=Number(m.dias||0), res=Number(m.res||0), gasto=Number(m.gasto||0);
+  const temRes=!!(fam&&fam.campo);                       /* objetivo que gera resultado contável */
+  const falta=[];
+  if(imp<ADS_NOTA_MIN.imp) falta.push(_adsNum(ADS_NOTA_MIN.imp)+" impressões (tem "+_adsNum(imp)+")");
+  if(dias>0&&dias<ADS_NOTA_MIN.dias) falta.push(ADS_NOTA_MIN.dias+" dias rodando (tem "+dias+")");
+  if(temRes&&res<ADS_NOTA_MIN.res) falta.push(ADS_NOTA_MIN.res+" resultados (tem "+_adsNum(res)+")");
+  if(falta.length) return {ok:false,falta:falta};
+  if(!ref||!(ref.n>=3)) return {ok:false,falta:["pares pra comparar (só "+((ref&&ref.n)||0)+" no grupo)"]};
+
+  const custo=temRes&&res>0?gasto/res:null;
+  const ctr=imp>0?Number(m.cliques||0)/imp*100:null;
+  const cpm=imp>0?gasto/imp*1000:null;
+  const ret=(imp>0&&m.p25!==null&&m.p25!==undefined)?Number(m.p25||0)/imp*100:null;
+
+  const cand=temRes
+    ? [{k:"ef",lbl:"Eficiência",peso:65,val:custo,ref:ref.custo,inv:true,fmt:_adsBRLc,dica:"custo por resultado contra a mediana do grupo"},
+       {k:"ctr",lbl:"Atração",peso:20,val:ctr,ref:ref.ctr,inv:false,fmt:function(v){return _adsPct(v,2);},dica:"CTR — quantos clicam"},
+       {k:"ret",lbl:"Retenção",peso:15,val:ret,ref:ref.ret,inv:false,fmt:function(v){return _adsPct(v,1);},dica:"chegaram a 1/4 do vídeo"}]
+    : [{k:"cpm",lbl:"Custo de alcance",peso:50,val:cpm,ref:ref.cpm,inv:true,fmt:_adsBRL,dica:"CPM contra a mediana do grupo"},
+       {k:"ctr",lbl:"Atração",peso:30,val:ctr,ref:ref.ctr,inv:false,fmt:function(v){return _adsPct(v,2);},dica:"CTR — quantos clicam"},
+       {k:"ret",lbl:"Retenção",peso:20,val:ret,ref:ref.ret,inv:false,fmt:function(v){return _adsPct(v,1);},dica:"chegaram a 1/4 do vídeo"}];
+
+  /* perna sem dado sai e o peso dela se redistribui — nunca zera nota de quem não tem vídeo */
+  const vale=cand.filter(function(p){ return p.val!==null&&p.val!==undefined&&p.ref!==null&&p.ref!==undefined&&p.ref>0&&isFinite(p.val); });
+  if(!vale.length) return {ok:false,falta:["régua do objetivo (o grupo ainda não tem mediana)"]};
+  const somaPeso=vale.reduce(function(t,p){return t+p.peso;},0);
+  const partes=vale.map(function(p){ const x=p.inv?(p.ref/p.val):(p.val/p.ref); const pts=_adsPts(x); return Object.assign({},p,{x:x,pts:pts,pesoReal:p.peso/somaPeso*100}); });
+  const nota=partes.reduce(function(t,p){ return t+p.pts*p.pesoReal/100; },0);
+  return {ok:true,nota:Math.round(nota*10)/10,partes:partes,base:{res:res,dias:dias,imp:imp,gasto:gasto},nRef:ref.n};
+}
+
+/* as duas notas de uma entidade (criativo, conjunto ou campanha) */
+function _adsNotas(m,refConta,bench,tipo,fam){
+  const rw=bench&&bench[tipo]?Object.assign({},bench[tipo],{n:Math.max(bench[tipo].nCtr||0,bench[tipo].nCusto||0)}):null;
+  return {conta:_adsNotaCalc(m,refConta,fam),carteira:_adsNotaCalc(m,rw,fam)};
+}
+const _adsNotaCor=function(n){ return n>=7?ADS.ok:n>=5?"#b58900":n>=3?ADS.warn:ADS.crit; };
+const _adsNotaTxt=function(n){ return n>=7.5?"bem acima do grupo":n>=6?"acima do grupo":n>=4.5?"na média do grupo":n>=3?"abaixo do grupo":"bem abaixo do grupo"; };
+
+/* pílula da nota — clique (ou passar o mouse) abre a explicação */
+function AdsNota({conta,carteira,cfgLbl,isMob,compacta}){
+  const [ab,setAb]=useState(null);          /* null = fechado; {top,left,W} = aberto nessa posição */
+  const ref=useRef(null);
+  /* o cartão do criativo tem overflow:hidden e a pílula pode estar colada na borda da tela:
+     por isso a explicação é posicionada em tela cheia (fixed), presa ao gatilho e limitada à janela. */
+  const abrir=function(){ const el=ref.current; if(!el) return; const r=el.getBoundingClientRect();
+    const W=isMob?Math.min(280,window.innerWidth-24):308, ALT=300;
+    let left=Math.min(r.right-W,window.innerWidth-W-10); left=Math.max(10,left);
+    let top=r.bottom+8; if(top+ALT>window.innerHeight-10) top=Math.max(10,r.top-ALT-8);
+    setAb({top:top,left:left,W:W}); };
+  useEffect(function(){ if(!ab) return; const f=function(){ setAb(null); };
+    window.addEventListener("scroll",f,true); window.addEventListener("resize",f);
+    return function(){ window.removeEventListener("scroll",f,true); window.removeEventListener("resize",f); }; },[ab]);
+  const p=(conta&&conta.ok)?conta:((carteira&&carteira.ok)?carteira:null);
+  const semBase=!p;
+  const n=p?p.nota:null;
+  const cor=semBase?ADS.muted:_adsNotaCor(n);
+  const falta=((conta&&conta.falta)||(carteira&&carteira.falta)||[])[0];
+  return <span ref={ref} style={{position:"relative",display:"inline-block"}}
+      onMouseEnter={function(){ if(!isMob) abrir(); }} onMouseLeave={function(){ if(!isMob) setAb(null); }}>
+    <span onClick={function(e){ e.stopPropagation(); if(ab) setAb(null); else abrir(); }}
+      title={semBase?"sem base pra nota":"nota "+_adsNum1(n)+" — "+_adsNotaTxt(n)}
+      style={{display:"inline-flex",alignItems:"center",gap:5,padding:compacta?"2px 7px":"3px 9px",borderRadius:99,cursor:"pointer",
+        background:semBase?"#f0eef6":cor+"1a",border:"1px solid "+(semBase?ADS.line:cor+"55"),whiteSpace:"nowrap"}}>
+      <b style={Object.assign({fontSize:compacta?12:13.5,fontWeight:900,color:semBase?ADS.muted:cor,letterSpacing:"-.3px"},ADS_MONO)}>{semBase?"—":_adsNum1(n)}</b>
+      <span style={{fontSize:9,fontWeight:800,color:semBase?ADS.muted:cor,letterSpacing:".05em"}}>{semBase?"SEM NOTA":"NOTA"}</span>
+    </span>
+    {ab&&<AdsNotaPop pos={ab} conta={conta} carteira={carteira} cfgLbl={cfgLbl} falta={falta} isMob={isMob} onFechar={function(){setAb(null);}}/>}
+  </span>;
+}
+
+/* a explicação: de onde veio cada ponto, sem textão */
+function AdsNotaPop({pos,conta,carteira,cfgLbl,falta,isMob,onFechar}){
+  const p=(conta&&conta.ok)?conta:((carteira&&carteira.ok)?carteira:null);
+  const Linha=function(x,i){ const bom=x.pts>=5;
+    return <div key={x.k} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:10,alignItems:"center",padding:"7px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:11.5,fontWeight:700,color:ADS.ink2}}>{x.lbl} <span style={{fontWeight:600,color:ADS.muted}}>· peso {Math.round(x.pesoReal)}%</span></div>
+        <div style={{fontSize:10.5,color:ADS.muted,marginTop:1}}>{x.fmt(x.val)} contra {x.fmt(x.ref)} do grupo · <b style={{color:bom?ADS.ok:ADS.crit}}>{_adsX(x.x)}</b></div>
+      </div>
+      <b style={Object.assign({fontSize:13,fontWeight:900,color:bom?ADS.ok:ADS.crit},ADS_MONO)}>{_adsNum1(x.pts)}</b>
+    </div>; };
+  return <div onClick={function(e){e.stopPropagation();}} style={{position:"fixed",top:(pos&&pos.top)||0,left:(pos&&pos.left)||0,zIndex:9200,width:(pos&&pos.W)||308,maxHeight:"min(70vh,420px)",overflowY:"auto",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 18px 44px rgba(15,13,26,.18)",padding:14,cursor:"default",textAlign:"left",whiteSpace:"normal"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+      <div style={{fontSize:11,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,flex:1}}>Como essa nota saiu</div>
+      <span onClick={onFechar} style={{cursor:"pointer",color:ADS.muted,fontSize:16,lineHeight:1}}>×</span>
+    </div>
+    {!p&&<div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Ainda não dá pra dar nota: falta {falta||"base"}.<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>Nota só nasce com {_adsNum(ADS_NOTA_MIN.imp)} impressões, {ADS_NOTA_MIN.dias} dias rodando e {ADS_NOTA_MIN.res} resultados — abaixo disso o número seria chute.</div></div>}
+    {p&&<>
+      <div style={{fontSize:12,color:ADS.ink2,lineHeight:1.45,marginBottom:8}}><b style={{color:ADS.ink}}>{_adsNum1(p.nota)}</b> de 10 — {_adsNotaTxt(p.nota)}. <span style={{color:ADS.muted}}>5,0 é a mediana de {p.nRef} {cfgLbl||"peças do mesmo objetivo"}.</span></div>
+      <div style={{background:ADS.surface2,borderRadius:10,padding:"2px 10px"}}>{p.partes.map(Linha)}</div>
+      {conta&&conta.ok&&carteira&&carteira.ok&&<div style={{display:"flex",gap:14,marginTop:10,fontSize:11.5}}>
+        <span><b style={Object.assign({color:_adsNotaCor(conta.nota)},ADS_MONO)}>{_adsNum1(conta.nota)}</b> <span style={{color:ADS.muted}}>na conta</span></span>
+        <span><b style={Object.assign({color:_adsNotaCor(carteira.nota)},ADS_MONO)}>{_adsNum1(carteira.nota)}</b> <span style={{color:ADS.muted}}>na carteira</span></span>
+      </div>}
+      {conta&&conta.ok&&carteira&&!carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Sem régua da carteira nesse objetivo no período.</div>}
+      {conta&&!conta.ok&&carteira&&carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Comparado com a carteira — a conta ainda não tem pares suficientes.</div>}
+      <div style={{fontSize:10.5,color:ADS.muted,marginTop:8,paddingTop:8,borderTop:"1px solid "+ADS.line}}>Base: {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"} · {_adsNum(p.base.imp)} impressões{p.base.dias>0?" · "+p.base.dias+" dia"+(p.base.dias>1?"s":"")+" rodando":""}</div>
+    </>}
+  </div>;
+}
+
 function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
+  const BM=useAdsBenchCriativos(X.P);   /* régua da carteira p/ a nota — hook antes de qualquer return */
   const todosAn=((X.cur||{}).anuncios||[]).filter(function(a){ return !campId||a.campaign_id===campId; });
   const ids=todosAn.map(function(a){return a.id;});
   const C=useAdsCriativos(conta&&conta.ad_account_id,ids);
@@ -59071,6 +59235,14 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const campNome={}; ((X.cur||{}).campanhas||[]).forEach(function(c){ campNome[c.id]=c.nome; });
   /* enriquece cada anúncio: objetivo → família → resultado/custo */
   const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; const online=ST.pronto?(ST.mapa[a.id]==="ACTIVE"):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id,online:online}); });
+  /* ── NOTA (19/09): 5,0 = mediana do grupo. Régua da conta = criativos do mesmo objetivo neste cliente;
+        régua da carteira = todos os anúncios da agência no mesmo objetivo, no mesmo período. ── */
+  const refConta=(function(){ const m={}; enr.forEach(function(a){ (m[a.tipo]=m[a.tipo]||[]).push(a); });
+    const o={}; Object.keys(m).forEach(function(k){ o[k]=_adsRefConta(m[k],null); }); return o; })();
+  const notaDe=function(a){
+    const met={impressoes:a.impressoes,cliques:a.cliques,gasto:a.gasto,res:a.res,p25:a.p25,dias:0};
+    const rc=refConta[a.tipo]; const rw=BM.por[a.tipo]?Object.assign({n:Math.max(BM.por[a.tipo].nCtr||0,BM.por[a.tipo].nCusto||0)},BM.por[a.tipo]):null;
+    return {conta:_adsNotaCalc(met,rc,a.F),carteira:_adsNotaCalc(met,rw,a.F)}; };
   const fams=ADS_FAMS.filter(function(f){ return enr.some(function(a){return a.F.id===f.id;}); });
   const famAtiva=fam&&fams.find(function(f){return f.id===fam;})||null; // null = Geral
   const porStatus=function(a){ return fOn==="todos"||a.online===null||(fOn==="online"?a.online:!a.online); };
@@ -59110,7 +59282,10 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
         <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>{a.semMetrica?<><b style={{fontSize:20,fontWeight:900,letterSpacing:"-.5px"}}>CPM {_adsBRL(a.cpm)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{a.cfg.label}</small></>:a.gasto<=0?<><b style={{fontSize:16,fontWeight:900}}>sem gasto</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{resFmt(a)} {a.F.resLbl} atribuídos</small></>:a.res===0?<><b style={{fontSize:16,fontWeight:900}}>{_adsBRL0(a.gasto)} gastos</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>0 {a.F.resLbl}</small></>:<><b style={{fontSize:22,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(a.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{a.F.custoLbl}</small></>}</div>
       </AdsCapa>
       <div style={{padding:"12px 14px 14px"}}>
-        <div style={{fontWeight:700,fontSize:13,letterSpacing:"-.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={a.nome}>{a.nome}</div>
+        <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+          <div style={{fontWeight:700,fontSize:13,letterSpacing:"-.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}} title={a.nome}>{a.nome}</div>
+          {(function(){ const N=notaDe(a); return <AdsNota conta={N.conta} carteira={N.carteira} cfgLbl={"criativos de "+a.cfg.label.toLowerCase()} isMob={isMob} compacta/>; })()}
+        </div>
         <div style={{fontSize:10.5,color:_adsTipo(a.tipo).cor,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.cfg.label}{a.campNome?" · "+_adsNomeCurto(a.campNome):""}</div>
         <div style={{display:"flex",flexWrap:"wrap",columnGap:10,rowGap:2,marginTop:6,fontSize:11.5,color:ADS.muted}}>{!a.semMetrica&&<span><b style={{color:ADS.ink2}}>{resFmt(a)}</b> {a.F.resLbl==="mil alcançados"?"alc.":"res."}</span>}<span><b style={{color:ADS.ink2}}>{_adsBRL0(a.gasto)}</b> gasto</span><span><b style={{color:ADS.ink2}}>{_adsPct(a.ctr,2)}</b> CTR</span>{a.video&&a.r25!==null&&<span><b style={{color:ADS.ink2}}>{_adsPct(a.r25,0)}</b> ret.</span>}</div>
       </div>
