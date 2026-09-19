@@ -57320,8 +57320,8 @@ function _adsEnriquece(j){
   out.anuncios.forEach(function(a){ const base=Number(a.v3||0)||Number(a.impressoes||0); a.video=Number(a.v3||0)>0; a.r25=base>0?Number(a.p25||0)/base*100:null; a.r50=base>0?Number(a.p50||0)/base*100:null; a.r75=base>0?Number(a.p75||0)/base*100:null; a.r100=base>0?Number(a.p100||0)/base*100:null; });
   return out;
 }
-function useAdsPeriodoDados(accountId){
-  const {P}=useAdsPeriodo();
+function useAdsPeriodoDados(accountId,Pfixo){
+  const G=useAdsPeriodo(); const P=Pfixo||G.P; /* Pfixo: janela própria da tela (ex.: Estratégia usa no mínimo 14 dias) */
   const key=accountId+"|"+P.key;
   const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsPer[key])?window._pxAdsPer[key]:{loading:true,cur:null,prev:null}; });
   useEffect(function(){
@@ -58370,7 +58370,10 @@ function _adsSugestoes(ctx){
 function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const accountId=conta&&conta.ad_account_id;
   const D=useAdsVisaoGeral(accountId);
-  const X=useAdsPeriodoDados(accountId);
+  /* 19/09: a Estratégia precisa de amostra — com menos de 14 dias quase nada é julgado (mínimo de 3 resultados por campanha).
+     Então ela SEMPRE usa pelo menos 14 dias fechados, mesmo com o período em 7/ontem/hoje. Aviso na tela quando isso acontece. */
+  const Pg=useAdsPeriodo().P; const Pbase=(Pg.dias<14)?_adsPeriodoCalc({preset:"14"}):Pg; const alargado=Pbase!==Pg;
+  const X=useAdsPeriodoDados(accountId,Pbase);
   const AT=useAdsAtivosConta(accountId,X.P);
   const S=useAdsSugestoesStatus(accountId);
   const camps=useMemo(function(){ return (X.cur&&D.ent)?_adsCampanhasEnriquecidas(X.cur,D.ent):[]; },[X.cur,D.ent]);
@@ -58393,10 +58396,10 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   return <AdsWrap>
     <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:14}}>
       <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:"-.3px",color:ADS.ink}}>{pend.length?<span><b>{pend.length} {pend.length===1?"ação":"ações"}</b> pra fazer{nCampPend?" em "+nCampPend+" campanha"+(nCampPend>1?"s":""):""}{impTot>0?<span> · <b style={{color:ADS.crit}}>{_adsBRL0(impTot)}</b> em jogo</span>:null}</span>:<span>Nada pra fazer com os dados de {_adsFmtD(P.ini)}–{_adsFmtD(P.fim)}</span>}</div>
-      <span style={{fontSize:12,color:ADS.muted}}>dados de {_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · "em jogo" = o que a campanha gastou acima do que custaria na média da conta</span>
+      <span style={{fontSize:12,color:ADS.muted}}>dados de <b style={{color:ADS.ink2}}>{_adsFmtD(P.ini)} – {_adsFmtD(P.fim)}</b>{alargado?" (a estratégia usa no mínimo 14 dias — com "+Pg.dias+" dia"+(Pg.dias>1?"s":"")+" não há amostra pra julgar)":""} · "em jogo" = o que a campanha gastou acima do que custaria na média da conta</span>
       <div style={{marginLeft:"auto",display:"flex",gap:6}}>{[["pendentes","Pendentes",pend.length],["feitas","Feitas",feitas.length],["ignoradas","Ignoradas",ign.length]].map(function(o){ return <AdsChip key={o[0]} on={filtro===o[0]} onClick={function(){setFiltro(o[0]);}} n={o[2]}>{o[1]}</AdsChip>; })}</div>
     </div>
-    {lista.length===0&&<AdsCard style={{fontSize:13,color:ADS.muted}}>{filtro==="pendentes"?"Nenhuma recomendação pendente com os dados deste período. Amplie o período (30 dias) pra ter mais base.":"Nada aqui."}</AdsCard>}
+    {lista.length===0&&<AdsCard style={{fontSize:13,color:ADS.muted}}>{filtro==="pendentes"?"Nenhuma recomendação pendente com os dados de "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+". As campanhas estão dentro do esperado ou ainda sem amostra (menos de "+ADS_MIN_RESULTADOS+" resultados). Em 30 dias pode aparecer mais base.":"Nada aqui."}</AdsCard>}
     {lista.length>0&&<AdsCard style={{padding:0,overflow:"hidden"}}>
       {lista.map(function(s,i){ const c=s.c; const cor=corDe(s.regra); const stt=S.st[s.chave]; const on=abertoS===s.chave;
         return <div key={s.chave} style={{borderTop:i?"1px solid "+ADS.line:"none"}}>
