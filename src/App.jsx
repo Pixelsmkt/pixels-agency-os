@@ -36913,7 +36913,10 @@ function CollabProfilePage({user,profile,onSave,onClose}){
 }
 
 /* ─── Constantes de nível — fora do componente ─── */
-const LEVEL_LABELS={1:"Gestão",2:"Coordenação",3:"Colaborador",5:"Cliente"};
+/* Nível 4 = Leitor (acesso temporário, só leitura) — 19/09/2026.
+   O app conhecia 1, 2, 3 e 5. O Leitor nasceu no 4 e ficava órfão: sem nome,
+   sem aba e sem linha na Estrutura de níveis — o card sumia da tela de Time. */
+const LEVEL_LABELS={1:"Gestão",2:"Coordenação",3:"Colaborador",4:"Leitor",5:"Cliente"};
 const LEVEL_COLORS={1:C.a,2:C.pk,3:C.bl,4:C.yw,5:C.gr};
 
 const LEVEL_FILTER_BUTTONS=[{v:0,l:"Todos"},{v:1,l:"Gestão"},{v:2,l:"Coordenação"},{v:3,l:"Colaborador"}];
@@ -36981,10 +36984,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     try{
       const sb=window._sb; if(!sb) return;
       const{data:rows}=await sb.from("profiles")
-        .select("team_id,acesso_tipo,acesso_expira_em,acesso_ativo")
+        .select("team_id,acesso_tipo,acesso_expira_em,acesso_ativo,primary_client")
         .not("acesso_tipo","is",null);
       const m={};
-      (rows||[]).forEach(function(r){ if(r.team_id) m[r.team_id]={tipo:r.acesso_tipo,expira:r.acesso_expira_em,ativo:r.acesso_ativo!==false}; });
+      (rows||[]).forEach(function(r){ if(r.team_id) m[r.team_id]={tipo:r.acesso_tipo,expira:r.acesso_expira_em,ativo:r.acesso_ativo!==false,cliente:r.primary_client||null}; });
       setAcessosTemp(m);
     }catch(_e){}
   },[]);
@@ -37317,11 +37320,19 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   };
 
   // filtered team
+  /* 19/09/2026 — O Leitor nao entra na grade de colaboradores nem na Estrutura de
+     niveis: ele nao e um degrau da hierarquia, e um acesso temporario. Fica numa
+     secao propria, logo abaixo, com validade e botao de revogar. */
+  const _ehLeitor=function(u){ const a=acessosTemp[u&&u.id]; return !!(a&&a.tipo==="leitor"); };
+  const _buscaBate=function(u){
+    return search===""||u.name.toLowerCase().includes(search.toLowerCase())||(u.role||"").toLowerCase().includes(search.toLowerCase());
+  };
   const allMembers=TEAM.filter(u=>{
-    const matchSearch=search===""||u.name.toLowerCase().includes(search.toLowerCase())||u.role.toLowerCase().includes(search.toLowerCase());
+    if(_ehLeitor(u)) return false;
     const matchLevel=filterLevel===0||u.level===filterLevel;
-    return matchSearch&&matchLevel;
+    return _buscaBate(u)&&matchLevel;
   });
+  const leitores=TEAM.filter(function(u){ return _ehLeitor(u)&&_buscaBate(u); });
 
   const taskCount=(uid)=>(tasks||[]).filter(t=>t.assignee===uid&&!t.deletedAt).length;
   const doneCount=(uid)=>(tasks||[]).filter(t=>t.assignee===uid&&!t.deletedAt&&t.status==="aprovado").length;
@@ -38135,6 +38146,57 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         })}
         {allMembers.length===0&&(<div style={{gridColumn:"1 / -1",padding:"60px 20px",textAlign:"center",color:C.td,fontSize:14,background:C.card,borderRadius:16,border:"1px dashed "+C.b1}}>Nenhum colaborador encontrado.</div>)}
       </div>
+
+      {/* ══ ACESSOS TEMPORÁRIOS (modo leitor) — 19/09/2026 ══
+          Fora da hierarquia de níveis de propósito: não é cargo, é acesso com prazo. */}
+      {isMePartner&&leitores.length>0&&(<div style={{background:C.card,borderRadius:16,border:"1px solid #0ea5e933",overflow:"hidden"}}>
+        <div style={{padding:"16px 22px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px #0ea5e940"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:C.tx,fontWeight:800,fontSize:15,letterSpacing:-.2}}>Acessos temporários</div>
+            <div style={{color:C.td,fontSize:11.5,marginTop:1}}>Somente leitura, com data pra vencer. Não fazem parte da equipe.</div>
+          </div>
+          <div style={{color:C.ts,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{leitores.length} {leitores.length===1?"acesso":"acessos"}</div>
+        </div>
+        <div style={{padding:"6px 0"}}>
+          {leitores.map(function(u,i){
+            const _at=acessosTemp[u.id]||{};
+            const _venc=_at.expira?new Date(_at.expira):null;
+            const _passou=_venc&&_venc<new Date();
+            const _off=!_at.ativo||_passou;
+            const _cor=_off?"#b91c1c":"#0284c7";
+            const _nome=(collabProfiles[u.id]&&collabProfiles[u.id].nome)||u.name;
+            const _email=(loginSecrets[u.id]&&loginSecrets[u.id].email)||(u.id+"@pixelsmarketing.com.br");
+            const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===_at.cliente;});
+            return <div key={u.id} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 22px",borderTop:i?"1px solid "+C.b1+"44":"none",flexWrap:"wrap"}}>
+              <div style={{width:34,height:34,borderRadius:"50%",background:_cor+"1a",border:"1.5px solid "+_cor+"44",display:"flex",alignItems:"center",justifyContent:"center",color:_cor,fontWeight:900,fontSize:13,flexShrink:0}}>{u.av||"?"}</div>
+              <div style={{flex:1,minWidth:170}}>
+                <div style={{color:C.tx,fontWeight:800,fontSize:13.5,letterSpacing:-.15}}>{_nome}</div>
+                <div style={{color:C.td,fontSize:11,marginTop:2}}>{_email}</div>
+              </div>
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,background:_cor+"12",border:"1px solid "+_cor+"2e",borderRadius:99,padding:"4px 11px"}}>
+                <span style={{width:6,height:6,borderRadius:"50%",background:_cor,display:"inline-block"}}/>
+                <span style={{color:_cor,fontSize:10.5,fontWeight:800}}>
+                  {_off?(_passou?"Venceu":"Encerrado"):("Ativo · vence "+(_venc?_venc.toLocaleDateString("pt-BR"):"—"))}
+                </span>
+              </div>
+              <div style={{color:C.ts,fontSize:11.5,minWidth:120}}>{_cli?("Vê só "+(_cli.name||_cli.id)):"Leitura da Gestão de mídia"}</div>
+              <div style={{display:"flex",gap:7}}>
+                <button onClick={()=>setEditCollab(u.id)}
+                  title="Ajustar o que ele enxerga, igual a um colaborador"
+                  style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>
+                  Gerenciar acesso
+                </button>
+                {_off
+                  ?<button onClick={()=>reativarAcesso(u.id,_nome)} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>Reativar</button>
+                  :<button onClick={()=>revogarAcesso(u.id,_nome)} style={{background:"#b91c1c10",border:"1px solid #b91c1c33",borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:"#b91c1c",cursor:"pointer",fontFamily:"inherit"}}>Revogar agora</button>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>)}
 
       {isPartner&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
         <div style={{padding:"16px 22px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:12}}>
