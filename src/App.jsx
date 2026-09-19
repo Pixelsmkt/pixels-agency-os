@@ -58551,7 +58551,34 @@ function _adsSugestoes(ctx){
 /* ─── Estratégia: painel de evidência de cada ação (19/09). Mostra O QUE mexer e POR QUÊ, com o dado do lado:
    ativos (R5) → os dois vídeos lado a lado · conjuntos (R6/R9) → verba × custo por conjunto · quebras (R8) → faixas ·
    campanha (R1/2/3/4/7/10/11) → custo vs. média, CTR, frequência, verba e os anúncios da campanha com capa. ─── */
+/* criativo em tamanho real (19/09): a capa de 124px não deixa julgar nada.
+   Clique na capa abre aqui, na proporção original. Vídeo de anúncio não toca fora da Meta — o botão leva pra lá. */
+function AdsAtivoZoom({a,lbl,cfg,onClose}){
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
+  const nome=String(a.nome||"").replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,"");
+  const r=Number(a.resultados||0), gs=Number(a.gasto||0), cl=Number(a.cliques||0), imp=Number(a.impressoes||0);
+  const Met=function(l,v){ return <div><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{l}</div><b style={Object.assign({fontSize:16,fontWeight:900},ADS_MONO)}>{v}</b></div>; };
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(20,16,36,.62)",zIndex:9000,display:"grid",placeItems:"center",padding:20}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,padding:16,maxWidth:"min(92vw,620px)",width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 70px rgba(15,13,26,.35)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+        <div style={{fontSize:14,fontWeight:800,minWidth:0,flex:1,wordBreak:"break-word"}}>{nome}</div>
+        <span onClick={onClose} style={{cursor:"pointer",fontSize:20,color:ADS.muted,lineHeight:1,padding:"0 4px"}} title="fechar (Esc)">×</span>
+      </div>
+      <div style={{display:"grid",placeItems:"center"}}><div style={{maxWidth:"100%"}}><AdsCapa ativo={{ad:a.ad_id,valor:a.valor,thumb:a.thumb,video:a.dimensao==="video_asset"}} h={320} maxH={Math.round(window.innerHeight*0.58)} radius={12}/></div></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(88px,1fr))",gap:12,marginTop:14}}>
+        {Met("Gasto",_adsBRL0(gs))}
+        {Met(_adsMai(cfg&&cfg.resLbl||lbl+"s"),_adsNum(r))}
+        {Met("Custo por "+lbl,r>0?_adsBRLc(gs/r):"—")}
+        {Met("CTR",imp>0?_adsPct(cl/imp*100,2):"—")}
+      </div>
+      {Number(a.dias)>0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:10}}>rodou {a.dias} dia{a.dias>1?"s":""}{a.primeiro&&a.ultimo?" · "+_adsFmtD(a.primeiro)+" a "+_adsFmtD(a.ultimo):""}</div>}
+      {a.url&&<div style={{marginTop:12}}><AdsBtn small onClick={function(){ window.open("https://www.facebook.com"+a.url,"_blank","noopener"); }}>Assistir na Meta ›</AdsBtn></div>}
+    </div>
+  </div>;
+}
 function AdsEstrategiaDetalhe({s,ctx,isMob}){
+  const [zoom,setZoom]=useState(null);      /* capa aberta em tamanho real */
+  const [verCtx,setVerCtx]=useState(false);  /* linhas de contexto recolhidas por padrão */
   const c=s.c; const cfg=c.cfg; const lbl=cfg.resSing||"resultado"; const media=ctx.medias[c.tipo]||null; const rel=c.custo&&media?c.custo/media:null;
   const K=function(t){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:6}}>{t}</div>; };
   const Num=function(lab,val,sub,cor){ return <div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{lab}</div><div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:3,color:cor||ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{val}</div>{sub&&<div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{sub}</div>}</div>; };
@@ -58565,9 +58592,9 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
   const orcTxt=orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":" total"):null;
   let evid=null;
   if(s.regra===5){
-    /* ── R5: dois ativos dentro do MESMO anúncio agrupado, lado a lado e comparados de verdade (19/09) ──
-       capa na proporção original do ativo (9:16 fica vertical) + as métricas principais uma embaixo da outra,
-       com o vencedor marcado em cada linha. Tudo somado do ads_breakdowns pela ads_ativos_conta. */
+    /* ── R5: dois ativos do MESMO anúncio agrupado, comparados de verdade (19/09 v2) ──
+       Ordem de leitura: capas → conclusão (ganho + se dá pra confiar) → o que decide → contexto (recolhido).
+       A tabela existe pra provar a frase, não pra você ter que chegar nela. */
     const m=String(s.chave).match(/^r5:([^:]+):(.+)$/); const adId=m&&m[1], fracoId=m&&m[2];
     const arr=(ctx.ativos||[]).filter(function(a){return a.ad_id===adId;});
     const tot=arr.reduce(function(t,a){return t+Number(a.gasto||0);},0)||1;
@@ -58580,69 +58607,110 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
     const melhor=comCpa.filter(function(a){return a.r>=2&&a.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
     const nomeAt=function(a){ return String(a.nome||"").replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,""); };
 
-    /* cabeçalho de cada lado: capa no formato original + nome + custo */
+    /* ── cabeçalho: capa grande e clicável (abre o criativo no tamanho real) ── */
     const Lado=function(a,papel){ if(!a) return null; const cor=papel==="manter"?ADS.ok:ADS.crit;
       return <div style={{background:"#fff",border:"1.5px solid "+cor+"88",borderRadius:14,padding:12,minWidth:0}}>
         <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,marginBottom:8}}>{papel==="manter"?"✓ Manter — puxa o custo":"✕ Remover — consome sem entregar"}</div>
         <div style={{display:"flex",gap:12,alignItems:"center"}}>
-          <div style={{width:isMob?104:124,flexShrink:0}}><AdsCapa ativo={{ad:a.ad_id,valor:a.valor,thumb:a.thumb,video:a.dimensao==="video_asset"}} h={150} maxH={300} radius={10}/></div>
+          <div style={{width:isMob?104:124,flexShrink:0}} title="ver o criativo em tamanho real">
+            <AdsCapa ativo={{ad:a.ad_id,valor:a.valor,thumb:a.thumb,video:a.dimensao==="video_asset"}} h={150} maxH={300} radius={10} onClick={function(e){ if(e&&e.stopPropagation) e.stopPropagation(); setZoom(a); }}/>
+          </div>
           <div style={{minWidth:0,flex:1}}>
             <div style={{fontSize:13,fontWeight:800,lineHeight:1.3,wordBreak:"break-word"}} title={a.nome}>{nomeAt(a)}</div>
             <div style={Object.assign({fontSize:22,fontWeight:900,letterSpacing:"-.6px",color:cor,marginTop:6},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"sem "+lbl}</div>
             <div style={{fontSize:11,color:ADS.muted}}>{a.cpa?"por "+lbl:_adsBRL0(a.gs)+" gastos, nenhum "+lbl}</div>
             <div style={{marginTop:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,marginBottom:3}}><span>verba do anúncio</span><span>{Math.round(a.fatia)}%</span></div>{Barra(a.fatia,cor)}</div>
-            {a.url&&<a href={"https://www.facebook.com"+a.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{fontSize:11,color:ADS.accent,fontWeight:700,display:"inline-block",marginTop:8}}>assistir ›</a>}
+            {Number(a.dias)>0&&<div style={{fontSize:10.5,color:ADS.muted,marginTop:6}}>rodou {a.dias} dia{a.dias>1?"s":""}{a.primeiro&&a.ultimo?" · "+_adsFmtD(a.primeiro)+"–"+_adsFmtD(a.ultimo):""}</div>}
           </div>
         </div>
       </div>; };
 
-    /* linhas de comparação — só métrica que os dois têm de verdade */
-    const LIN=[
-      {k:"cpa",lbl:"Custo por "+lbl,dir:"menor",dica:"gasto ÷ "+(cfg.resLbl||lbl+"s"),fmt:function(v){return v?_adsBRLc(v):"—";}},
-      {k:"r",lbl:_adsMai(cfg.resLbl||lbl+"s"),dir:"maior",dica:"o que cada um trouxe",fmt:function(v){return _adsNum(v);}},
-      {k:"conv",lbl:"Do clique pro "+lbl,dir:"maior",dica:"de cada 100 cliques, quantos viram "+lbl,fmt:function(v){return v===null?"—":_adsPct(v,1);}},
-      {k:"ctr",lbl:"CTR",dir:"maior",dica:"de cada 100 que veem, quantos clicam",fmt:function(v){return v===null?"—":_adsPct(v,2);}},
-      {k:"cpc",lbl:"Custo por clique",dir:"menor",dica:null,fmt:function(v){return v?_adsBRLc(v):"—";}},
-      {k:"cpm",lbl:"CPM",dir:"menor",dica:"custo por mil impressões",fmt:function(v){return v?_adsBRL(v):"—";}},
-      {k:"vvr",lbl:"Assistiram o vídeo",dir:"maior",dica:"de cada 100 que veem, quantos dão play",fmt:function(v){return v===null?"—":_adsPct(v,0);}},
-      {k:"imp",lbl:"Impressões",dir:null,dica:"quanto cada um apareceu",fmt:function(v){return _adsNum(v);}},
-      {k:"gs",lbl:"Gasto",dir:null,dica:null,fmt:function(v){return _adsBRL0(v);}}
-    ].filter(function(L){ const x=melhor?melhor[L.k]:null, y=fraco?fraco[L.k]:null; return (x!==null&&x!==undefined)||(y!==null&&y!==undefined); });
-
-    const Cel=function(L,a,outro){ if(!a) return <div/>;
-      const v=a[L.k], w=outro?outro[L.k]:null;
-      const temDois=v!==null&&v!==undefined&&w!==null&&w!==undefined&&Number(v)>0&&Number(w)>0;
-      const ganha=temDois&&L.dir?(L.dir==="menor"?Number(v)<Number(w):Number(v)>Number(w)):false;
-      /* a barra mostra QUÃO BOM está, não o número cru: em custo, quem gasta menos tem a barra maior */
-      const mx=Math.max(Number(v)||0,Number(w)||0)||1, mn=Math.min(Number(v)||0,Number(w)||0);
-      const pct=(L.dir==="menor"&&Number(v)>0&&mn>0)?(mn/Number(v)*100):((Number(v)||0)/mx*100);
-      const cor=ganha?ADS.ok:ADS.ink2;
-      return <div style={{minWidth:0}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-          <b style={Object.assign({fontSize:13.5,fontWeight:900,color:cor},ADS_MONO)}>{L.fmt(v)}</b>
-          {ganha&&<span style={{fontSize:9.5,fontWeight:800,color:ADS.ok,letterSpacing:".04em"}}>MELHOR</span>}
-        </div>
-        <div style={{marginTop:4}}>{Barra(pct,ganha?ADS.ok:"#c9bde4")}</div>
-      </div>; };
-
-    /* leitura honesta do caso: às vezes o fraco tem CTR melhor e mesmo assim não converte */
-    const nota=(function(){ if(!melhor||!fraco) return null;
+    /* ── conclusão: o ganho concreto e se dá pra confiar no número ── */
+    const ganho=(function(){ if(!melhor||!fraco||!melhor.cpa||!(fraco.gs>0)) return null;
+      const esperado=fraco.gs/melhor.cpa, dif=esperado-fraco.r; if(!(dif>=0.5)) return null;
+      return {dif:dif,esperado:esperado}; })();
+    const confia=(function(){ if(!melhor||!fraco) return null;
+      if(melhor.conv===null||melhor.conv===undefined||!(fraco.cl>0)) return null;
+      const esp=fraco.cl*melhor.conv/100;
+      if(fraco.cl<30) return {ok:false,t:"Amostra ainda pequena: "+_adsNum(fraco.cl)+" clique"+(fraco.cl===1?"":"s")+" nesse ativo. Dá pra observar mais alguns dias antes de remover."};
+      return {ok:true,t:_adsNum(fraco.cl)+" cliques nesse ativo. Na taxa de conversão do outro ("+_adsPct(melhor.conv,1)+") isso teria virado ~"+_adsNum(Math.round(esp))+" "+(Math.round(esp)===1?lbl:(cfg.resLbl||lbl+"s"))+". Virou "+_adsNum(fraco.r)+"."}; })();
+    const janela=(function(){ if(!melhor||!fraco) return null; const dm=Number(melhor.dias||0), df=Number(fraco.dias||0); if(!(dm>0&&df>0)) return null;
+      if(dm===df) return {ok:true,t:"Os dois rodaram os mesmos "+dm+" dia"+(dm>1?"s":"")+(melhor.primeiro&&melhor.ultimo?" ("+_adsFmtD(melhor.primeiro)+"–"+_adsFmtD(melhor.ultimo)+")":"")+" — comparação justa."};
+      const mx=Math.max(dm,df), mn=Math.min(dm,df);
+      return {ok:mn/mx>=0.6,t:"\""+nomeAt(melhor)+"\" rodou "+dm+" dia"+(dm>1?"s":"")+" e \""+nomeAt(fraco)+"\" "+df+(mn/mx<0.6?" — tempos diferentes, pese isso na decisão.":" — tempos parecidos.")}; })();
+    const leitura=(function(){ if(!melhor||!fraco) return null;
       if(fraco.ctr!==null&&melhor.ctr!==null&&fraco.ctr>melhor.ctr&&(fraco.conv===null||melhor.conv===null||fraco.conv<melhor.conv))
-        return "\""+nomeAt(fraco)+"\" até chama mais clique (CTR "+_adsPct(fraco.ctr,2)+" contra "+_adsPct(melhor.ctr,2)+"), mas o clique não vira "+lbl+": "+_adsNum(fraco.cl)+" cliques e "+_adsNum(fraco.r)+" "+(fraco.r===1?lbl:(cfg.resLbl||lbl+"s"))+". O problema está depois do clique, não no alcance.";
-      if(fraco.r===0) return "\""+nomeAt(fraco)+"\" levou "+_adsBRL0(fraco.gs)+" ("+Math.round(fraco.fatia)+"% da verba do anúncio) e não trouxe nenhum "+lbl+". Essa verba pode ir toda pro outro.";
+        return "\""+nomeAt(fraco)+"\" chama mais clique (CTR "+_adsPct(fraco.ctr,2)+" contra "+_adsPct(melhor.ctr,2)+"), mas o clique não vira "+lbl+". O problema está depois do clique, não no alcance.";
+      if(fraco.r===0) return "\""+nomeAt(fraco)+"\" levou "+_adsBRL0(fraco.gs)+" ("+Math.round(fraco.fatia)+"% da verba do anúncio) e não trouxe nenhum "+lbl+".";
       if(melhor.cpa&&fraco.cpa) return "Cada "+lbl+" por \""+nomeAt(fraco)+"\" custa "+_adsX(fraco.cpa/melhor.cpa)+" o do \""+nomeAt(melhor)+"\". Com a Meta dividindo a entrega entre os dois, a média do anúncio fica pior do que poderia.";
       return null; })();
 
+    /* ── linhas: as 3 que decidem ficam abertas; o resto é contexto ── */
+    const DEC=[
+      {k:"cpa",lbl:"Custo por "+lbl,dir:"menor",dica:"gasto ÷ "+(cfg.resLbl||lbl+"s"),fmt:function(v){return v?_adsBRLc(v):"—";}},
+      {k:"r",lbl:_adsMai(cfg.resLbl||lbl+"s"),dir:"maior",dica:"o que cada um trouxe",fmt:function(v){return _adsNum(v);}},
+      {k:"conv",lbl:"Do clique pro "+lbl,dir:"maior",dica:"de cada 100 cliques, quantos viram "+lbl,fmt:function(v){return v===null?"—":_adsPct(v,1);}}
+    ];
+    const CTX=[
+      {k:"ctr",lbl:"CTR",dir:"maior",dica:"de cada 100 que veem, quantos clicam",fmt:function(v){return v===null?"—":_adsPct(v,2);}},
+      {k:"vvr",lbl:"Assistiram o vídeo",dir:"maior",dica:"de cada 100 que veem, quantos dão play",fmt:function(v){return v===null?"—":_adsPct(v,0);}},
+      {k:"cpc",lbl:"Custo por clique",dir:"menor",dica:"métrica de leilão",fmt:function(v){return v?_adsBRLc(v):"—";}},
+      {k:"cpm",lbl:"CPM",dir:"menor",dica:"métrica de leilão",fmt:function(v){return v?_adsBRL(v):"—";}},
+      {k:"imp",lbl:"Impressões",dir:null,dica:"quanto cada um apareceu",fmt:function(v){return _adsNum(v);}},
+      {k:"gs",lbl:"Gasto",dir:null,dica:null,fmt:function(v){return _adsBRL0(v);}}
+    ];
+    const usa=function(L){ const x=melhor?melhor[L.k]:null, y=fraco?fraco[L.k]:null; return (x!==null&&x!==undefined)||(y!==null&&y!==undefined); };
+
+    /* célula: barra = quão bom está (em custo, quem gasta menos tem barra maior) */
+    const Cel=function(L,a,outro,decide){ if(!a) return <div/>;
+      const v=a[L.k], w=outro?outro[L.k]:null;
+      const temDois=v!==null&&v!==undefined&&w!==null&&w!==undefined&&Number(v)>0&&Number(w)>0;
+      const ganhaEsta=temDois&&L.dir?(L.dir==="menor"?Number(v)<Number(w):Number(v)>Number(w)):false;
+      const doFraco=a===fraco;
+      const mx=Math.max(Number(v)||0,Number(w)||0)||1, mn=Math.min(Number(v)||0,Number(w)||0);
+      const pct=(L.dir==="menor"&&Number(v)>0&&mn>0)?(mn/Number(v)*100):((Number(v)||0)/mx*100);
+      /* no contexto, o ativo que vai sair pode ganhar a linha — isso não é virtude, é sintoma */
+      const selo=ganhaEsta?(decide?"MELHOR":(doFraco?"GANHA AQUI":"MELHOR")):null;
+      const corSelo=(ganhaEsta&&!decide&&doFraco)?ADS.muted:ADS.ok;
+      const corVal=ganhaEsta?((!decide&&doFraco)?ADS.ink2:ADS.ok):ADS.ink2;
+      const corBar=ganhaEsta?((!decide&&doFraco)?"#c9bde4":ADS.ok):"#c9bde4";
+      return <div style={{minWidth:0}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,flexWrap:"wrap"}}>
+          <b style={Object.assign({fontSize:13.5,fontWeight:900,color:corVal},ADS_MONO)}>{L.fmt(v)}</b>
+          {selo&&<span style={{fontSize:9.5,fontWeight:800,color:corSelo,letterSpacing:".04em"}}>{selo}</span>}
+        </div>
+        <div style={{marginTop:4}}>{Barra(pct,corBar)}</div>
+      </div>; };
+
+    const Linha=function(L,i,decide){ return <div key={L.k} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 1fr":"minmax(120px,1fr) minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"center",padding:"10px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+      <div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,color:ADS.ink2,lineHeight:1.25}}>{L.lbl}</div>{L.dica&&!isMob&&<div style={{fontSize:10,color:ADS.muted,marginTop:1}}>{L.dica}</div>}</div>
+      {Cel(L,melhor,fraco,decide)}{Cel(L,fraco,melhor,decide)}
+    </div>; };
+
     evid=<div>{K("Os dois ativos do mesmo anúncio agrupado")}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>{Lado(melhor,"manter")}{Lado(fraco,"remover")}</div>
-      {melhor&&fraco&&<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:"4px 14px",marginTop:10}}>
-        {LIN.map(function(L,i){ return <div key={L.k} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 1fr":"minmax(120px,1fr) minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"center",padding:"10px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
-          <div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,color:ADS.ink2,lineHeight:1.25}}>{L.lbl}</div>{L.dica&&!isMob&&<div style={{fontSize:10,color:ADS.muted,marginTop:1}}>{L.dica}</div>}</div>
-          {Cel(L,melhor,fraco)}{Cel(L,fraco,melhor)}
-        </div>; })}
+
+      {(ganho||leitura||confia||janela)&&<div style={{background:"#f6f2ff",border:"1px solid #e2d6fb",borderRadius:14,padding:isMob?"12px 14px":"14px 16px",marginTop:10}}>
+        {ganho&&<div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:leitura||confia?8:0}}>
+          <b style={Object.assign({fontSize:isMob?19:22,fontWeight:900,letterSpacing:"-.6px",color:ADS.accent},ADS_MONO)}>+{_adsNum(Math.round(ganho.dif))} {Math.round(ganho.dif)===1?lbl:(cfg.resLbl||lbl+"s")}</b>
+          <span style={{fontSize:12.5,color:ADS.ink2}}>com a mesma verba — estimativa: os {_adsBRL0(fraco.gs)} desse ativo, no ritmo do outro ({_adsBRLc(melhor.cpa)} cada), dariam ~{_adsNum(Math.round(ganho.esperado))} em vez de {_adsNum(fraco.r)}.</span>
+        </div>}
+        {leitura&&<p style={{fontSize:13,color:ADS.ink,lineHeight:1.55,margin:0,fontWeight:600}}>{leitura}</p>}
+        {(confia||janela)&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #e2d6fb",display:"flex",flexDirection:"column",gap:3}}>
+          {confia&&<div style={{fontSize:11.5,color:confia.ok?ADS.ink2:ADS.warn,lineHeight:1.45}}><b style={{color:confia.ok?ADS.ink2:ADS.warn}}>{confia.ok?"Dá pra confiar:":"Atenção:"}</b> {confia.t}</div>}
+          {janela&&<div style={{fontSize:11.5,color:janela.ok?ADS.muted:ADS.warn,lineHeight:1.45}}>{janela.t}</div>}
+        </div>}
       </div>}
-      {nota&&<p style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.55,margin:"10px 0 0"}}>{nota}</p>}
-      {arr.length>2&&<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>+ {arr.length-2} outro{arr.length>3?"s":""} ativo{arr.length>3?"s":""} no mesmo anúncio, dentro da média.</div>}
+
+      {melhor&&fraco&&<div style={{marginTop:10}}>
+        {K("O que decide")}
+        <div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:"4px 14px"}}>{DEC.filter(usa).map(function(L,i){ return Linha(L,i,true); })}</div>
+        <div style={{marginTop:8}}><AdsChip on={verCtx} onClick={function(){ setVerCtx(!verCtx); }}>{verCtx?"esconder o contexto":"ver o contexto (CTR, play, leilão)"}</AdsChip></div>
+        {verCtx&&<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:"4px 14px",marginTop:8}}>{CTX.filter(usa).map(function(L,i){ return Linha(L,i,false); })}</div>}
+      </div>}
+
+      {arr.length>2&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>+ {arr.length-2} outro{arr.length>3?"s":""} ativo{arr.length>3?"s":""} no mesmo anúncio, dentro da média.</div>}
+      {zoom&&<AdsAtivoZoom a={zoom} lbl={lbl} cfg={cfg} onClose={function(){setZoom(null);}}/>}
     </div>;
   } else if(s.regra===6||s.regra===9){
     const cjs=(ctx.conjuntos||[]).filter(function(x){return x.campaign_id===c.id&&Number(x.gasto||0)>0;}).map(function(x){ const r=Number(x.res||0); const e=(ctx.ent||[]).find(function(y){return y.nivel==="conjunto"&&y.entidade_id===x.id;})||{}; return Object.assign({},x,{r:r,cpa:_adsDiv(x.gasto,r),e:e}); }).sort(function(a,b){return b.gasto-a.gasto;});
