@@ -37368,8 +37368,16 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     <RenderDash user={viewUser} isViewing={true} tasks={tasks||[]} setTasks={()=>{}}/>
   </div>;
 
-  const collabUser=editCollab?TEAM.find(u=>u.id===editCollab):null;
-  const profileUser=editProfile?TEAM.find(u=>u.id===editProfile):null;
+  /* 19/09/2026 — o modal so abria pra quem estava no array TEAM. Um acesso
+     temporario criado agora nao esta la, entao "Gerenciar acesso" nao abria nada.
+     Agora, se nao achar no TEAM, monta o usuario a partir do que veio do banco. */
+  const _doBanco=function(id){
+    const a=acessosTemp[id]; if(!a) return null;
+    return {id:id,name:a.nome||id,role:a.role||"Leitor",av:a.av||"?",color:a.color||"#0ea5e9",
+            level:4,status:"online",dash:"gestor",canDelete:false,canPixelsIA:false,_doPerfil:true};
+  };
+  const collabUser=editCollab?(TEAM.find(u=>u.id===editCollab)||_doBanco(editCollab)):null;
+  const profileUser=editProfile?(TEAM.find(u=>u.id===editProfile)||_doBanco(editProfile)):null;
 
   return (<>
     {collabUser&&(<CollabProfileModal user={collabUser} onClose={()=>setEditCollab(null)} livePerms={livePerms} setLivePerms={setLivePerms} tasks={tasks}/>)}
