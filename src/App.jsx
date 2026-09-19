@@ -58367,6 +58367,75 @@ function _adsSugestoes(ctx){
   out.sort(function(a,b){ return (b.prio||0)-(a.prio||0); });
   return out;
 }
+/* ─── Estratégia: painel de evidência de cada ação (19/09). Mostra O QUE mexer e POR QUÊ, com o dado do lado:
+   ativos (R5) → os dois vídeos lado a lado · conjuntos (R6/R9) → verba × custo por conjunto · quebras (R8) → faixas ·
+   campanha (R1/2/3/4/7/10/11) → custo vs. média, CTR, frequência, verba e os anúncios da campanha com capa. ─── */
+function AdsEstrategiaDetalhe({s,ctx,isMob}){
+  const c=s.c; const cfg=c.cfg; const lbl=cfg.resSing||"resultado"; const media=ctx.medias[c.tipo]||null; const rel=c.custo&&media?c.custo/media:null;
+  const K=function(t){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:6}}>{t}</div>; };
+  const Num=function(lab,val,sub,cor){ return <div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{lab}</div><div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:3,color:cor||ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{val}</div>{sub&&<div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{sub}</div>}</div>; };
+  const Barra=function(pct,cor){ return <span style={{display:"block",height:7,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:Math.max(1.5,Math.min(100,pct))+"%",background:cor,borderRadius:99}}/></span>; };
+  const Capa=function(cr,h){ return <AdsCapa cr={cr} h={h||96} radius={10}/>; };
+  /* anúncios da campanha (com capa) — pra ver o que está rodando */
+  const ads=(ctx.anuncios||[]).filter(function(a){return a.campaign_id===c.id&&Number(a.gasto||0)>0;}).map(function(a){ const r=_adsResDe(a,cfg); return Object.assign({},a,{r:r,cpa:_adsDiv(a.gasto,r),cr:ctx.cr[a.id]||null}); }).sort(function(a,b){return b.gasto-a.gasto;});
+  const AdsLista=function(destaque){ if(!ads.length) return null; return <div>{K("Anúncios da campanha · do maior gasto pro menor")}<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>{ads.slice(0,6).map(function(a){ const ruim=destaque==="ruim"&&(a.r===0||(media&&a.cpa&&a.cpa>media*1.5)); const bom=destaque==="bom"&&a.cpa&&media&&a.cpa<media*0.8; return <div key={a.id} style={{background:"#fff",border:"1px solid "+(ruim?ADS.crit+"66":bom?ADS.ok+"66":ADS.line),borderRadius:12,padding:8,minWidth:0}}>{Capa(a.cr,86)}<div style={{fontSize:11.5,fontWeight:700,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome}>{a.nome}</div><div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{_adsBRL0(a.gasto)} · {_adsNum(a.r)} {a.r===1?lbl:(cfg.resLbl||lbl+"s")}</div><div style={Object.assign({fontSize:13,fontWeight:900,marginTop:2,color:ruim?ADS.crit:bom?ADS.ok:ADS.ink},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"—"}<span style={{fontSize:10,fontWeight:700,color:ADS.muted}}> /{lbl}</span></div>{ruim&&<div style={{fontSize:10,fontWeight:800,color:ADS.crit,marginTop:3}}>{a.r===0?"SEM RESULTADO":"CARO"}</div>}{bom&&<div style={{fontSize:10,fontWeight:800,color:ADS.ok,marginTop:3}}>PUXA O CUSTO</div>}</div>; })}</div></div>; };
+  /* verba atual (campanha ou soma dos conjuntos ativos) */
+  const orc=(function(){ const e=c.ent||{}; if(Number(e.orcamento)>0) return {v:Number(e.orcamento)/100,tipo:e.tipo_orcamento}; const cj=(ctx.ent||[]).filter(function(x){return x.nivel==="conjunto"&&x.parent_id===c.id&&x.status_efetivo==="ACTIVE"&&Number(x.orcamento)>0;}); if(!cj.length) return null; return {v:cj.reduce(function(t,x){return t+Number(x.orcamento)/100;},0),tipo:cj[0].tipo_orcamento}; })();
+  const orcTxt=orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":" total"):null;
+  let evid=null;
+  if(s.regra===5){
+    const m=String(s.chave).match(/^r5:([^:]+):(.+)$/); const adId=m&&m[1], fracoId=m&&m[2];
+    const arr=(ctx.ativos||[]).filter(function(a){return a.ad_id===adId;}); const tot=arr.reduce(function(t,a){return t+Number(a.gasto||0);},0)||1;
+    const comCpa=arr.map(function(a){ const r=Number(a.resultados||0); return Object.assign({},a,{r:r,cpa:r?Number(a.gasto)/r:null}); });
+    const fraco=comCpa.find(function(a){return String(a.valor)===String(fracoId);}); const melhor=comCpa.filter(function(a){return a.r>=2&&a.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
+    const nomeAt=function(a){ return String(a.nome||"").replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,""); };
+    const Ativo=function(a,papel){ if(!a) return null; const cor=papel==="manter"?ADS.ok:ADS.crit; const src=a.thumb||null; return <div style={{background:"#fff",border:"1.5px solid "+cor+"88",borderRadius:14,padding:10,minWidth:0}}>
+      <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,marginBottom:6}}>{papel==="manter"?"✓ Manter — puxa o custo":"✕ Remover — consome sem entregar"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"96px 1fr",gap:10,alignItems:"center"}}>
+        <div style={{position:"relative",height:96,borderRadius:10,overflow:"hidden",background:src?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)"}}>{src&&<img src={src} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"9px solid #1b1530",borderTop:"6px solid transparent",borderBottom:"6px solid transparent",marginLeft:2}}/></div></div>
+        <div style={{minWidth:0}}><div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome}>{nomeAt(a)}</div>
+          <div style={{fontSize:12,color:ADS.ink2,marginTop:4}}><b style={ADS_MONO}>{_adsBRL0(a.gasto)}</b> · {Math.round(Number(a.gasto)/tot*100)}% da verba do anúncio</div>
+          <div style={{fontSize:12,color:ADS.ink2,marginTop:2}}><b style={ADS_MONO}>{_adsNum(a.r)}</b> {a.r===1?lbl:(cfg.resLbl||lbl+"s")} · <b style={Object.assign({color:cor},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"sem resultado"}</b>{a.cpa?" cada":""}</div>
+          {a.video_url&&<a href={a.video_url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{fontSize:11,color:ADS.accent,fontWeight:700}}>assistir ›</a>}</div>
+      </div></div>; };
+    evid=<div>{K("Os dois ativos do mesmo anúncio agrupado")}<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>{Ativo(melhor,"manter")}{Ativo(fraco,"remover")}</div>{arr.length>2&&<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>+ {arr.length-2} outro{arr.length>3?"s":""} ativo{arr.length>3?"s":""} no mesmo anúncio, dentro da média.</div>}</div>;
+  } else if(s.regra===6||s.regra===9){
+    const cjs=(ctx.conjuntos||[]).filter(function(x){return x.campaign_id===c.id&&Number(x.gasto||0)>0;}).map(function(x){ const r=Number(x.res||0); const e=(ctx.ent||[]).find(function(y){return y.nivel==="conjunto"&&y.entidade_id===x.id;})||{}; return Object.assign({},x,{r:r,cpa:_adsDiv(x.gasto,r),e:e}); }).sort(function(a,b){return b.gasto-a.gasto;});
+    const soma=cjs.reduce(function(t,x){return t+Number(x.gasto);},0)||1; const val=cjs.filter(function(x){return x.r>=ADS_MIN_RESULTADOS&&x.cpa;}); const melhor=val.slice().sort(function(a,b){return a.cpa-b.cpa;})[0];
+    evid=<div>{K(s.regra===6?"Verba × custo por conjunto":"Conjuntos ativos e fase de aprendizado")}<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"4px 12px"}}>
+      {cjs.map(function(x,i){ const pior=s.regra===6&&x!==melhor&&Number(x.gasto)/soma>0.4&&(x.r===0||(x.cpa&&melhor&&x.cpa>melhor.cpa*1.8)); const cor=x===melhor?ADS.ok:pior?ADS.crit:ADS.ink2; const lim=x.e.fase_aprendizado==="LEARNING_LIMITED";
+        return <div key={x.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr 80px":"minmax(140px,1fr) 180px 90px 110px",gap:12,alignItems:"center",padding:"9px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+          <div style={{minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:cor}}>{x.nome}</div><div style={{fontSize:10.5,color:ADS.muted}}>{x===melhor?"melhor custo":pior?"leva a maior parte e rende menos":""}{lim?(x===melhor||pior?" · ":"")+"aprendizado limitado":""}{Number(x.e.orcamento)>0?" · "+_adsBRL(Number(x.e.orcamento)/100)+(x.e.tipo_orcamento==="diario"?"/dia":""):""}</div></div>
+          {!isMob&&<div><div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,marginBottom:3}}><span>verba</span><span>{Math.round(Number(x.gasto)/soma*100)}%</span></div>{Barra(Number(x.gasto)/soma*100,cor===ADS.ink2?"#b58ff2":cor)}</div>}
+          {!isMob&&<div style={{textAlign:"right",fontSize:12}}><b style={ADS_MONO}>{_adsNum(x.r)}</b> <span style={{color:ADS.muted}}>{x.r===1?lbl:(cfg.resLbl||lbl+"s")}</span></div>}
+          <div style={{textAlign:"right"}}><b style={Object.assign({fontSize:14,color:cor},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</b><div style={{fontSize:10,color:ADS.muted}}>por {lbl}</div></div>
+        </div>; })}
+    </div></div>;
+  } else if(s.regra===8){
+    const m=String(s.chave).match(/^r8:[^:]+:([^:]+):(.+)$/); const dim=m&&m[1], valor=m&&m[2];
+    const rows=((ctx.quebras||{})[c.id]||[]).filter(function(r){return r.dimensao===dim&&Number(r.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);}); const tq=rows.reduce(function(t,r){return t+Number(r.gasto);},0)||1;
+    evid=<div>{K(dim==="idade"?"Gasto e resultado por faixa etária":"Gasto e resultado por posicionamento")}<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"4px 12px"}}>{rows.map(function(r,i){ const ruim=String(r.valor)===String(valor); const res=Number(r.resultados||0); const cor=ruim?ADS.crit:res>0?ADS.ink2:ADS.muted; return <div key={r.valor} style={{display:"grid",gridTemplateColumns:isMob?"1fr 90px":"140px 1fr 90px 100px",gap:12,alignItems:"center",padding:"8px 0",borderTop:i?"1px solid "+ADS.line:"none"}}><div style={{fontSize:12.5,fontWeight:700,color:cor}}>{_adsValLbl(dim,r.valor)}{ruim&&<span style={{fontSize:10,fontWeight:800,marginLeft:6,color:ADS.crit}}>EXCLUIR</span>}</div>{!isMob&&<div>{Barra(Number(r.gasto)/tq*100,ruim?ADS.crit:"#b58ff2")}</div>}{!isMob&&<div style={{textAlign:"right",fontSize:12}}><b style={ADS_MONO}>{_adsBRL0(r.gasto)}</b> <span style={{color:ADS.muted}}>{Math.round(Number(r.gasto)/tq*100)}%</span></div>}<div style={{textAlign:"right",fontSize:12}}><b style={Object.assign({color:cor},ADS_MONO)}>{_adsNum(res)}</b> <span style={{color:ADS.muted}}>{res===1?lbl:(cfg.resLbl||lbl+"s")}</span></div></div>; })}</div></div>;
+  } else {
+    const ctr=Number(c.ctr||0), freq=Number(c.frequencia||0);
+    const custoCor=rel?(rel>1.5?ADS.crit:rel<0.8?ADS.ok:ADS.ink):ADS.ink;
+    const nums=[Num("Custo por "+lbl,c.custo?_adsBRLc(c.custo):"—",media?"média do objetivo "+_adsBRLc(media)+(rel?" · "+_adsX(rel):""):null,custoCor)];
+    nums.push(Num("Gasto no período",_adsBRL0(c.gasto),_adsNum(c.res)+" "+(c.res===1?lbl:(cfg.resLbl||lbl+"s"))));
+    if(s.regra===3||s.regra===4||s.regra===2) nums.push(Num("CTR",_adsPct(ctr,2),ctr<1?"abaixo de 1% — poucos clicam":"acima de 1% — clicam, o problema é depois",ctr<1?ADS.crit:ADS.ok));
+    if(s.regra===7||s.regra===10) nums.push(Num("Frequência",freq.toLocaleString("pt-BR",{maximumFractionDigits:1}),"acima de 3,5 = mesmo público cansando",ADS.warn));
+    if(s.regra===11){ const fatia=ctx.gastoLeadTotal>0?c.gasto/ctx.gastoLeadTotal*100:0; nums.push(Num("Fatia da verba de lead",Math.round(fatia)+"%","pouca verba pra um custo tão bom",ADS.ok)); if(orc) nums.push(Num("Verba hoje",orcTxt,"sugestão: "+_adsBRL(orc.v*1.4)+(orc.tipo==="diario"?"/dia":"")+" (+40%)",ADS.accent)); }
+    else if(orc) nums.push(Num("Verba hoje",orcTxt,null));
+    evid=<div style={{display:"grid",gap:14}}><div><div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat("+Math.min(nums.length,4)+",minmax(0,1fr))",gap:10}}>{nums}</div>{media&&c.custo&&<div style={{marginTop:10}}>{K("Custo por "+lbl+" · esta campanha × média do objetivo")}<div style={{display:"grid",gap:5}}><div style={{display:"flex",alignItems:"center",gap:10,fontSize:11.5}}><span style={{width:110,color:ADS.muted,flex:"none"}}>esta campanha</span>{(function(){ const mx=Math.max(c.custo,media)*1.15; return <><span style={{flex:1}}>{Barra(c.custo/mx*100,custoCor)}</span><b style={Object.assign({width:70,textAlign:"right",color:custoCor},ADS_MONO)}>{_adsBRLc(c.custo)}</b></>; })()}</div><div style={{display:"flex",alignItems:"center",gap:10,fontSize:11.5}}><span style={{width:110,color:ADS.muted,flex:"none"}}>média do objetivo</span>{(function(){ const mx=Math.max(c.custo,media)*1.15; return <><span style={{flex:1}}>{Barra(media/mx*100,"#b58ff2")}</span><b style={Object.assign({width:70,textAlign:"right"},ADS_MONO)}>{_adsBRLc(media)}</b></>; })()}</div></div></div>}</div>
+      {AdsLista(s.regra===11?"bom":(s.regra===3||s.regra===2||s.regra===7||s.regra===10)?"ruim":null)}
+    </div>;
+  }
+  return <div style={{display:"grid",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:16}}>
+      <div>{K("Por quê")}<div style={{fontSize:13,color:ADS.ink2,lineHeight:1.55}}>{s.motivo}</div></div>
+      <div style={{background:ADS.accentSoft,border:"1px solid "+ADS.accent+"33",borderRadius:12,padding:"10px 14px"}}>{K("O que fazer")}<div style={{fontSize:13,color:ADS.ink,lineHeight:1.55,fontWeight:600}}>{s.acao}</div></div>
+    </div>
+    {evid}
+  </div>;
+}
 function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const accountId=conta&&conta.ad_account_id;
   const D=useAdsVisaoGeral(accountId);
@@ -58379,6 +58448,8 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const camps=useMemo(function(){ return (X.cur&&D.ent)?_adsCampanhasEnriquecidas(X.cur,D.ent):[]; },[X.cur,D.ent]);
   const leadIds=camps.filter(function(c){return c.fam==="leads"&&Number(c.gasto||0)>0;}).sort(function(a,b){return b.gasto-a.gasto;}).map(function(c){return c.id;});
   const Q=useAdsQuebrasPorCampanha(accountId,X.P,leadIds);
+  const adIds=useMemo(function(){ return ((X.cur||{}).anuncios||[]).filter(function(a){return Number(a.gasto||0)>0;}).map(function(a){return a.id;}); },[X.cur]);
+  const CR=useAdsCriativos(accountId,adIds);
   const [filtro,setFiltro]=useState("pendentes");
   const [abertoS,setAbertoS]=useState(null);   // recomendação com o "porquê / como fazer" aberto (19/09)
   const [verRegras,setVerRegras]=useState(false);
@@ -58412,10 +58483,9 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
             {!isMob&&<div style={{textAlign:"right"}}>{s.impacto>0?<><div style={Object.assign({fontSize:15,fontWeight:900,color:ADS.ink,letterSpacing:"-.3px"},ADS_MONO)}>{_adsBRLc(s.impacto)}</div><div style={{fontSize:10.5,color:ADS.muted}}>em jogo</div></>:<span style={{fontSize:11,color:ADS.muted}}>—</span>}</div>}
             {!isMob&&<div style={{display:"flex",gap:6,alignItems:"center"}} onClick={function(e){e.stopPropagation();}}>{canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}{canEdit&&stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}<span style={{fontSize:12,color:ADS.muted,marginLeft:4,transform:on?"rotate(90deg)":"none",display:"inline-block",transition:"transform .15s"}}>›</span></div>}
           </div>
-          {on&&<div style={{padding:isMob?"0 14px 14px 14px":"0 18px 16px 58px",background:ADS.surface2,display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:16}}>
-            <div><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:4}}>Por quê</div><div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>{s.motivo}</div></div>
-            <div><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:4}}>Como fazer</div><div style={{fontSize:12.5,color:ADS.ink,lineHeight:1.5}}>{s.acao}</div>
-              <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn>{isMob&&canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{isMob&&canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}</div></div>
+          {on&&<div style={{padding:isMob?"0 14px 16px 14px":"4px 18px 18px 58px",background:ADS.surface2}}>
+            <AdsEstrategiaDetalhe s={s} isMob={isMob} ctx={{medias:medias,anuncios:(X.cur||{}).anuncios||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,ent:D.ent||[],cr:CR.cr||{},gastoLeadTotal:gastoLeadTotal}}/>
+            <div style={{display:"flex",gap:6,marginTop:14,flexWrap:"wrap"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn>{isMob&&canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{isMob&&canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}</div>
           </div>}
         </div>; })}
     </AdsCard>}
@@ -58530,13 +58600,23 @@ function QGAdsPerfilAnuncio({accountId,adId,periodo,mediaCtr}){
   return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:14}}>{dims.map(function(d){ const rows=q.filter(function(x){return x.dimensao===d[0]&&Number(x.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);}).slice(0,5); if(!rows.length) return null; const tot=rows.reduce(function(s,x){return s+Number(x.gasto);},0)||1;
     return <div key={d[0]}><AdsEyebrow>{d[1]}</AdsEyebrow><div style={{marginTop:6}}>{rows.map(function(x){ const cpa=Number(x.resultados)>0?Number(x.gasto)/Number(x.resultados):null; const ctr=Number(x.impressoes)>0?Number(x.cliques)/Number(x.impressoes)*100:null; const susp=mediaCtr&&ctr!==null&&ctr>mediaCtr*2; const lbl=(typeof _adsValLbl==="function")?_adsValLbl(d[0],x.valor):(GEN[x.valor]||x.valor); return <div key={x.valor} style={{display:"grid",gridTemplateColumns:"1fr 64px",gap:6,alignItems:"center",fontSize:11.5,marginBottom:5}}><div><div style={{display:"flex",justifyContent:"space-between",color:ADS.ink2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}{susp&&<span title="CTR muito acima da conta" style={{color:ADS.warn,marginLeft:4}}>⚠</span>}</span><span style={{color:ADS.muted}}>{Math.round(Number(x.gasto)/tot*100)}%</span></div><AdsBarra pct={Number(x.gasto)/tot*100} h={5} cor="#b58ff2" alt={1}/></div><span style={Object.assign({textAlign:"right",fontWeight:700,color:cpa?ADS.ink:ADS.muted},ADS_MONO)}>{cpa?_adsBRL(cpa):"—"}</span></div>; })}</div></div>; })}</div>;
 }
-/* capa do criativo (imagem real; vídeo com play) */
-function AdsCapa({cr,h,radius,children,onClick,dark}){
-  const src=(cr&&(cr.thumbnail_url||cr.image_url))||null; const video=!!(cr&&cr.video_id);
-  return <div onClick={onClick} style={{position:"relative",height:h||220,borderRadius:radius===undefined?14:radius,overflow:"hidden",background:src?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)",cursor:onClick?"pointer":"default",flexShrink:0}}>
-    {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:.96}}/>}
-    {!src&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:ADS.muted}}>sem prévia</div>}
-    {src&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.62) 100%)"}}/>}
+/* capa do criativo (imagem real; vídeo com play).
+   19/09: (1) se o link salvo expirou (CDN da Meta), cai pra edge function ads-thumb, que busca a miniatura fresca na hora;
+          (2) a capa assume a PROPORÇÃO ORIGINAL do criativo (9:16 fica vertical, 1:1 fica quadrado) — nada de cortar. */
+const _adsThumbUrl=function(adId){ const base=(window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co"; return base+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId); };
+function AdsCapa({cr,h,radius,children,onClick,dark,fixa}){
+  const inicial=(cr&&(cr.thumbnail_url||cr.image_url))||(cr&&cr.ad_id?_adsThumbUrl(cr.ad_id):null);
+  const [src,setSrc]=useState(inicial); const [ar,setAr]=useState(null); const [falhou,setFalhou]=useState(false);
+  useEffect(function(){ setSrc(inicial); setAr(null); setFalhou(false); },[inicial]);
+  const video=!!(cr&&cr.video_id);
+  const onErr=function(){ if(cr&&cr.ad_id&&src!==_adsThumbUrl(cr.ad_id)){ setSrc(_adsThumbUrl(cr.ad_id)); } else { setFalhou(true); } };
+  const onLoad=function(e){ const w=e.currentTarget.naturalWidth, hh=e.currentTarget.naturalHeight; if(w>1&&hh>1) setAr(w/hh); };
+  const box=(!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:560}:{height:h||220};
+  const mostra=src&&!falhou;
+  return <div onClick={onClick} style={Object.assign({position:"relative",borderRadius:radius===undefined?14:radius,overflow:"hidden",background:mostra?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)",cursor:onClick?"pointer":"default",flexShrink:0},box)}>
+    {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={onErr} onLoad={onLoad} style={{width:"100%",height:"100%",objectFit:"cover",display:mostra?"block":"none",opacity:.96}}/>}
+    {!mostra&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:ADS.muted}}>sem prévia</div>}
+    {mostra&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.62) 100%)"}}/>}
     {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"15px solid #1b1530",borderTop:"9px solid transparent",borderBottom:"9px solid transparent",marginLeft:4}}/></div>}
     {children}
   </div>;
@@ -58673,7 +58753,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
       <div style={{padding:"12px 14px 14px"}}>
         <div style={{fontWeight:700,fontSize:13,letterSpacing:"-.2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={a.nome}>{a.nome}</div>
         <div style={{fontSize:10.5,color:_adsTipo(a.tipo).cor,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.cfg.label}{a.campNome?" · "+_adsNomeCurto(a.campNome):""}</div>
-        <div style={{display:"flex",gap:10,marginTop:6,fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap",overflow:"hidden"}}>{!a.semMetrica&&<span><b style={{color:ADS.ink2}}>{resFmt(a)}</b> {a.F.resLbl==="mil alcançados"?"alc.":"res."}</span>}<span><b style={{color:ADS.ink2}}>{_adsBRL0(a.gasto)}</b> gasto</span><span><b style={{color:ADS.ink2}}>{_adsPct(a.ctr,2)}</b> CTR</span>{a.video&&a.r25!==null&&<span><b style={{color:ADS.ink2}}>{_adsPct(a.r25,0)}</b> ret.</span>}</div>
+        <div style={{display:"flex",flexWrap:"wrap",columnGap:10,rowGap:2,marginTop:6,fontSize:11.5,color:ADS.muted}}>{!a.semMetrica&&<span><b style={{color:ADS.ink2}}>{resFmt(a)}</b> {a.F.resLbl==="mil alcançados"?"alc.":"res."}</span>}<span><b style={{color:ADS.ink2}}>{_adsBRL0(a.gasto)}</b> gasto</span><span><b style={{color:ADS.ink2}}>{_adsPct(a.ctr,2)}</b> CTR</span>{a.video&&a.r25!==null&&<span><b style={{color:ADS.ink2}}>{_adsPct(a.r25,0)}</b> ret.</span>}</div>
       </div>
     </div>; };
   const cols=isMob?"1fr 1fr":"repeat(4,1fr)";
