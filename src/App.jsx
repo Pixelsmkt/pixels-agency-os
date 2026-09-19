@@ -36958,6 +36958,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   const [viewDash,setViewDash]=useState(null);
   const [editCollab,setEditCollab]=useState(null);
   const [editProfile,setEditProfile]=useState(null);
+  const [painelTemp,setPainelTemp]=useState(false); // painel de acessos temporarios (19/09/2026)
 
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
@@ -37461,6 +37462,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 primary_client:novoColab._cliente||null,
               }).eq("team_id",payload.team_id);
               if(typeof ACCESS_STORE!=="undefined") ACCESS_STORE[payload.team_id]={..._perms};
+              try{ recarregarAcessosTemp(); }catch(_e){}
             }catch(_e){console.warn("[acessos] leitor:",_e&&_e.message?_e.message:_e);}
           }
           // Registra a senha no cofre de login (só sócios veem no card do Time)
@@ -37984,8 +37986,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
           </button>}
-          {isMePartner&&<button onClick={()=>{setNovoColab({name:"",email:"",password:"",team_id:"",role:"Leitor",dash:"gestor",color:"#0ea5e9",av:"",level:4,photo_base64:"",photo_mime:"",_leitor:true,_dias:365,_cliente:""});setNovoColabOpen(true);}}
-            title="Cria um acesso somente leitura, com data pra vencer"
+          {isMePartner&&<button onClick={()=>setPainelTemp(true)}
+            title="Ver e criar acessos somente leitura, com data pra vencer"
             style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"8px 14px",color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
             Acesso temporário
@@ -38147,54 +38149,76 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         {allMembers.length===0&&(<div style={{gridColumn:"1 / -1",padding:"60px 20px",textAlign:"center",color:C.td,fontSize:14,background:C.card,borderRadius:16,border:"1px dashed "+C.b1}}>Nenhum colaborador encontrado.</div>)}
       </div>
 
-      {/* ══ ACESSOS TEMPORÁRIOS (modo leitor) — 19/09/2026 ══
+      {/* ══ PAINEL DE ACESSOS TEMPORÁRIOS — 19/09/2026 ══
+          Abre pelo botão "Acesso temporário". Lista os que existem e cria novos.
           Fora da hierarquia de níveis de propósito: não é cargo, é acesso com prazo. */}
-      {isMePartner&&leitores.length>0&&(<div style={{background:C.card,borderRadius:16,border:"1px solid #0ea5e933",overflow:"hidden"}}>
-        <div style={{padding:"16px 22px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px #0ea5e940"}}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+      {painelTemp&&(<div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",zIndex:380,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setPainelTemp(false)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:720,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,.35)"}}>
+          <div style={{background:"linear-gradient(135deg,#0ea5e9 0%,#0284c7 55%,#0c4a6e 100%)",padding:"20px 24px",display:"flex",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:-40,right:-30,width:150,height:150,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.16) 0%,transparent 65%)"}}/>
+            <div style={{position:"relative",zIndex:1,width:40,height:40,borderRadius:11,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </div>
+            <div style={{position:"relative",zIndex:1,flex:1,minWidth:0}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Acessos temporários</div>
+              <div style={{color:"rgba(255,255,255,.8)",fontSize:11.5,marginTop:2,fontWeight:500}}>Somente leitura, com data pra vencer. Não fazem parte da equipe.</div>
+            </div>
+            <button onClick={()=>setPainelTemp(false)} style={{position:"relative",zIndex:1,background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,width:34,height:34,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:C.tx,fontWeight:800,fontSize:15,letterSpacing:-.2}}>Acessos temporários</div>
-            <div style={{color:C.td,fontSize:11.5,marginTop:1}}>Somente leitura, com data pra vencer. Não fazem parte da equipe.</div>
+
+          <div style={{flex:1,overflowY:"auto"}}>
+            {leitores.length===0
+              ?<div style={{padding:"52px 24px",textAlign:"center"}}>
+                 <div style={{color:C.ts,fontSize:13.5,fontWeight:700}}>Nenhum acesso temporário ativo</div>
+                 <div style={{color:C.td,fontSize:12,marginTop:6,lineHeight:1.55,maxWidth:380,margin:"6px auto 0"}}>
+                   Serve pra quem precisa ver algo por um tempo e não faz parte da equipe — um auditor, um analista, um cliente conferindo métrica.
+                 </div>
+               </div>
+              :leitores.map(function(u,i){
+                const _at=acessosTemp[u.id]||{};
+                const _venc=_at.expira?new Date(_at.expira):null;
+                const _passou=_venc&&_venc<new Date();
+                const _off=!_at.ativo||_passou;
+                const _cor=_off?"#b91c1c":"#0284c7";
+                const _nome=(collabProfiles[u.id]&&collabProfiles[u.id].nome)||u.name;
+                const _email=(loginSecrets[u.id]&&loginSecrets[u.id].email)||(u.id+"@pixelsmarketing.com.br");
+                const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===_at.cliente;});
+                return <div key={u.id} style={{display:"flex",alignItems:"center",gap:13,padding:"14px 22px",borderTop:i?"1px solid "+C.b1+"55":"none",flexWrap:"wrap"}}>
+                  <div style={{width:34,height:34,borderRadius:"50%",background:_cor+"1a",border:"1.5px solid "+_cor+"44",display:"flex",alignItems:"center",justifyContent:"center",color:_cor,fontWeight:900,fontSize:13,flexShrink:0}}>{u.av||"?"}</div>
+                  <div style={{flex:1,minWidth:160}}>
+                    <div style={{color:C.tx,fontWeight:800,fontSize:13.5,letterSpacing:-.15}}>{_nome}</div>
+                    <div style={{color:C.td,fontSize:11,marginTop:2}}>{_email}</div>
+                    <div style={{color:C.ts,fontSize:11,marginTop:3}}>{_cli?("Vê só "+(_cli.name||_cli.id)):"Leitura da Gestão de mídia"}</div>
+                  </div>
+                  <div style={{display:"inline-flex",alignItems:"center",gap:6,background:_cor+"12",border:"1px solid "+_cor+"2e",borderRadius:99,padding:"4px 11px"}}>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:_cor,display:"inline-block"}}/>
+                    <span style={{color:_cor,fontSize:10.5,fontWeight:800,whiteSpace:"nowrap"}}>
+                      {_off?(_passou?"Venceu":"Encerrado"):("Vence "+(_venc?_venc.toLocaleDateString("pt-BR"):"—"))}
+                    </span>
+                  </div>
+                  <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                    <button onClick={()=>{setPainelTemp(false);setEditCollab(u.id);}}
+                      title="Ajustar o que ele enxerga, igual a um colaborador"
+                      style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>
+                      Gerenciar acesso
+                    </button>
+                    {_off
+                      ?<button onClick={()=>reativarAcesso(u.id,_nome)} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>Reativar</button>
+                      :<button onClick={()=>revogarAcesso(u.id,_nome)} style={{background:"#b91c1c10",border:"1px solid #b91c1c33",borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:"#b91c1c",cursor:"pointer",fontFamily:"inherit"}}>Revogar agora</button>}
+                  </div>
+                </div>;
+              })}
           </div>
-          <div style={{color:C.ts,fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{leitores.length} {leitores.length===1?"acesso":"acessos"}</div>
-        </div>
-        <div style={{padding:"6px 0"}}>
-          {leitores.map(function(u,i){
-            const _at=acessosTemp[u.id]||{};
-            const _venc=_at.expira?new Date(_at.expira):null;
-            const _passou=_venc&&_venc<new Date();
-            const _off=!_at.ativo||_passou;
-            const _cor=_off?"#b91c1c":"#0284c7";
-            const _nome=(collabProfiles[u.id]&&collabProfiles[u.id].nome)||u.name;
-            const _email=(loginSecrets[u.id]&&loginSecrets[u.id].email)||(u.id+"@pixelsmarketing.com.br");
-            const _cli=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===_at.cliente;});
-            return <div key={u.id} style={{display:"flex",alignItems:"center",gap:14,padding:"13px 22px",borderTop:i?"1px solid "+C.b1+"44":"none",flexWrap:"wrap"}}>
-              <div style={{width:34,height:34,borderRadius:"50%",background:_cor+"1a",border:"1.5px solid "+_cor+"44",display:"flex",alignItems:"center",justifyContent:"center",color:_cor,fontWeight:900,fontSize:13,flexShrink:0}}>{u.av||"?"}</div>
-              <div style={{flex:1,minWidth:170}}>
-                <div style={{color:C.tx,fontWeight:800,fontSize:13.5,letterSpacing:-.15}}>{_nome}</div>
-                <div style={{color:C.td,fontSize:11,marginTop:2}}>{_email}</div>
-              </div>
-              <div style={{display:"inline-flex",alignItems:"center",gap:6,background:_cor+"12",border:"1px solid "+_cor+"2e",borderRadius:99,padding:"4px 11px"}}>
-                <span style={{width:6,height:6,borderRadius:"50%",background:_cor,display:"inline-block"}}/>
-                <span style={{color:_cor,fontSize:10.5,fontWeight:800}}>
-                  {_off?(_passou?"Venceu":"Encerrado"):("Ativo · vence "+(_venc?_venc.toLocaleDateString("pt-BR"):"—"))}
-                </span>
-              </div>
-              <div style={{color:C.ts,fontSize:11.5,minWidth:120}}>{_cli?("Vê só "+(_cli.name||_cli.id)):"Leitura da Gestão de mídia"}</div>
-              <div style={{display:"flex",gap:7}}>
-                <button onClick={()=>setEditCollab(u.id)}
-                  title="Ajustar o que ele enxerga, igual a um colaborador"
-                  style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>
-                  Gerenciar acesso
-                </button>
-                {_off
-                  ?<button onClick={()=>reativarAcesso(u.id,_nome)} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",fontFamily:"inherit"}}>Reativar</button>
-                  :<button onClick={()=>revogarAcesso(u.id,_nome)} style={{background:"#b91c1c10",border:"1px solid #b91c1c33",borderRadius:9,padding:"7px 13px",fontSize:11,fontWeight:800,color:"#b91c1c",cursor:"pointer",fontFamily:"inherit"}}>Revogar agora</button>}
-              </div>
-            </div>;
-          })}
+
+          <div style={{padding:"14px 22px",borderTop:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div style={{color:C.td,fontSize:11.5}}>Vencem sozinhos na data. Dá pra cortar antes a qualquer momento.</div>
+            <button onClick={()=>{setPainelTemp(false);setNovoColab({name:"",email:"",password:"",team_id:"",role:"Leitor",dash:"gestor",color:"#0ea5e9",av:"",level:4,photo_base64:"",photo_mime:"",_leitor:true,_dias:365,_cliente:""});setNovoColabOpen(true);}}
+              style={{background:"linear-gradient(135deg,#0ea5e9,#0284c7)",border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 14px #0ea5e955",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              <span style={{fontSize:15,lineHeight:1}}>+</span>Novo acesso temporário
+            </button>
+          </div>
         </div>
       </div>)}
 
