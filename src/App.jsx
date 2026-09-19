@@ -57581,9 +57581,61 @@ function _adsEnriquece(j){
   out.anuncios.forEach(function(a){ const base=Number(a.v3||0)||Number(a.impressoes||0); a.video=Number(a.v3||0)>0; a.r25=base>0?Number(a.p25||0)/base*100:null; a.r50=base>0?Number(a.p50||0)/base*100:null; a.r75=base>0?Number(a.p75||0)/base*100:null; a.r100=base>0?Number(a.p100||0)/base*100:null; });
   return out;
 }
+/* ═══ FILTRO POR UNIDADE (19/09/2026) ═══
+   A conta "Bioter Toledo 2023" roda campanhas de quatro unidades e a unidade está no nome:
+   "[Pixels] [Uberlândia] [Leads - Wpp] [25/06/26]". Entrando pela unidade na lista de clientes,
+   a Gestão de mídia inteira passa a mostrar só as campanhas dela.
+   Campanha sem colchete de unidade fica com a unidade dona da conta — nada some do total. */
+const ADS_UNIDADES=[
+  {u:"uberlandia",lbl:"Uberlândia",re:/uberl[âa]ndia/i},
+  {u:"paraguay",lbl:"Paraguay",re:/paraguay|paraguai|obligado/i},
+  {u:"gloria",lbl:"Glória de Dourados",re:/gl[óo]ria/i},
+  {u:"toledo",lbl:"Toledo",re:/toledo/i},
+  {u:"chapeco",lbl:"Chapecó",re:/chapec[óo]/i},
+  {u:"castro",lbl:"Castro",re:/castro/i}
+];
+const _adsUnidadeLbl=function(u){ const o=ADS_UNIDADES.find(function(x){return x.u===u;}); return o?o.lbl:(u||""); };
+function _adsUnidadeCamp(nome,padrao){
+  const blocos=String(nome||"").match(/\[([^\]]+)\]/g)||[];
+  for(let i=0;i<blocos.length;i++){ const t=blocos[i].slice(1,-1).trim();
+    for(let j=0;j<ADS_UNIDADES.length;j++) if(ADS_UNIDADES[j].re.test(t)) return ADS_UNIDADES[j].u; }
+  return padrao||null;
+}
+/* unidade escolhida na lista de clientes (gravada pelo 17b) */
+const _adsUnidadeAtiva=function(){ return (typeof window!=="undefined"&&window._pxAdsUnidade)||null; };
+const _adsUnidadeDonaDaConta=function(accountId){
+  const l=(typeof window!=="undefined"&&window._pxAdsAccounts)||[];
+  const c=l.find(function(x){ return String(x.ad_account_id)===String(accountId); });
+  return (c&&c.unidade)||null;
+};
+/* corta um retorno de ads_periodo para uma unidade só e refaz os totais da conta */
+function _adsFiltraUnidade(cur,unidade,padrao){
+  if(!cur||!unidade) return cur;
+  const camps=(cur.campanhas||[]).filter(function(c){ return _adsUnidadeCamp(c.nome,padrao)===unidade; });
+  const ids={}; camps.forEach(function(c){ ids[c.id]=1; });
+  const som=function(k){ return camps.reduce(function(t,c){ return t+Number(c[k]||0); },0); };
+  const ehLead=function(t){ return t==="form"||t==="lead_wpp"||t==="eng_wpp"; };
+  const gastoLead=camps.reduce(function(t,c){ return t+(ehLead(c.tipo)?Number(c.gasto||0):0); },0);
+  const conta=Object.assign({},cur.conta||{},{
+    gasto:som("gasto"), impressoes:som("impressoes"), cliques:som("cliques"), cliques_link:som("cliques_link"),
+    alcance:som("alcance"), compras:som("compras"), valor_conversao:som("valor_conversao"),
+    eng:som("eng"), thru:som("thru"), res:som("res"),
+    leads_form:camps.reduce(function(t,c){ return t+(c.tipo==="form"?Number(c.leads||0):0); },0),
+    conversas_wpp:camps.reduce(function(t,c){ return t+((c.tipo==="lead_wpp"||c.tipo==="eng_wpp")?Number(c.conversas||0):0); },0),
+    gasto_lead:gastoLead, gasto_outras:Math.max(0,som("gasto")-gastoLead), gasto_campanhas:som("gasto")
+  });
+  return Object.assign({},cur,{
+    conta:conta, campanhas:camps,
+    conjuntos:(cur.conjuntos||[]).filter(function(x){ return ids[x.campaign_id]; }),
+    anuncios:(cur.anuncios||[]).filter(function(x){ return ids[x.campaign_id]; }),
+    serie:[],            /* a série diária é da conta inteira: filtrada por unidade ela mentiria */
+    _unidade:unidade
+  });
+}
 function useAdsPeriodoDados(accountId,Pfixo){
   const G=useAdsPeriodo(); const P=Pfixo||G.P; /* Pfixo: janela própria da tela (ex.: Estratégia usa no mínimo 14 dias) */
-  const key=accountId+"|"+P.key;
+  const uni=_adsUnidadeAtiva();
+  const key=accountId+"|"+P.key+(uni?"|u:"+uni:"");
   const [st,setSt]=useState(function(){ return _adsCacheOk(window._pxAdsPer[key])?window._pxAdsPer[key]:{loading:true,cur:null,prev:null}; });
   useEffect(function(){
     if(!accountId||!window._sb){ setSt({loading:false,cur:null,prev:null}); return; }
@@ -57592,7 +57644,7 @@ function useAdsPeriodoDados(accountId,Pfixo){
     Promise.all([
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.ini,p_ate:P.fim}),
       window._sb.rpc("ads_periodo",{p_account:accountId,p_de:P.prevIni,p_ate:P.prevFim}),
-    ]).then(function(r){ if(!alive) return; if(r[0].error){ setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsEnriquece(r[0].data),prev:_adsEnriquece(r[1].error?null:r[1].data),_em:Date.now()}; window._pxAdsPer[key]=res; setSt(res); })
+    ]).then(function(r){ if(!alive) return; if(r[0].error){ setSt({loading:false,cur:null,prev:null,erro:r[0].error.message}); return; } const res={loading:false,cur:_adsFiltraUnidade(_adsEnriquece(r[0].data),uni,_adsUnidadeDonaDaConta(accountId)),prev:_adsFiltraUnidade(_adsEnriquece(r[1].error?null:r[1].data),uni,_adsUnidadeDonaDaConta(accountId)),_em:Date.now()}; window._pxAdsPer[key]=res; setSt(res); })
     .catch(function(e){ if(alive) setSt({loading:false,cur:null,prev:null,erro:e.message||String(e)}); });
     return function(){ alive=false; };
   },[key]);
@@ -57643,7 +57695,18 @@ function _adsTiposDasCampanhas(ent,rows){
 function _adsTotaisConta(conta){ const c=conta||{}; const gl=Number(c.gasto_lead||0), r=Number(c.res||0); return Object.assign({},c,{resultados:r,leads:Number(c.leads_form||0),conversas:Number(c.conversas_wpp||0),gastoLead:gl,resLead:r,gastoOutras:Number(c.gasto_outras||0),cpa:_adsDiv(gl,r)}); }
 
 /* ─── primitivos visuais v2 ─── */
-function AdsWrap({children}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}>{children}</div>; }
+/* faixa de unidade: quando a tela está vendo só uma unidade da conta, isso não pode ficar escondido */
+function AdsFaixaUnidade(){
+  const u=_adsUnidadeAtiva(); if(!u) return null;
+  return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#f3eeff",border:"1px solid #e0d4fb",borderRadius:12,padding:"9px 14px",marginBottom:14}}>
+    <span style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.accent}}>Vendo só</span>
+    <b style={{fontSize:13.5,color:ADS.ink}}>{_adsUnidadeLbl(u)}</b>
+    <span style={{fontSize:11.5,color:ADS.muted}}>campanhas dessa unidade dentro da conta</span>
+    <a onClick={function(){ window._pxAdsUnidade=null; window._pxAdsPer={}; window.location.reload(); }}
+       style={{marginLeft:"auto",fontSize:12,fontWeight:700,color:ADS.accent,cursor:"pointer"}}>ver a conta inteira ›</a>
+  </div>;
+}
+function AdsWrap({children}){ return <div className="px-ads" style={{maxWidth:ADS_MAXW,margin:"0 auto",fontFamily:ADS_FONT,color:ADS.ink}}><AdsFaixaUnidade/>{children}</div>; }
 function AdsCard({children,style,borda,onClick,className}){ return <div className={className} onClick={onClick} style={Object.assign({background:ADS.surface,border:"1px solid "+(borda||ADS.line),borderRadius:18,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,13,26,.04)",minWidth:0},style||{})}>{children}</div>; }
 function AdsSec({t,s,children,right,style}){ return <section style={Object.assign({marginBottom:24},style||{})}>
   <div style={{display:"flex",alignItems:"baseline",gap:10,margin:"0 0 12px",flexWrap:"wrap"}}><h2 style={{margin:0,fontSize:15,fontWeight:800,letterSpacing:"-.2px",color:ADS.ink}}>{t}</h2>{s&&<span style={{fontSize:12,color:ADS.muted}}>{s}</span>}{right&&<span style={{marginLeft:"auto"}}>{right}</span>}</div>
@@ -59775,6 +59838,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   const [metrica,setMetrica]=useState("cpa");
   const [vistaCard,setVistaCard]=useState({});
   const [corte,setCorte]=useState(null); /* {dim,x} — janela de detalhe do corte */
+  const [dimSel,setDimSel]=useState("idade");  /* 19/09: uma dimensão por vez, escolhida no menu ao lado */
   const mudaVista=function(v){ setVista(v); setVistaCard({}); try{ localStorage.setItem("px_ads_vista",v); }catch(_){} };
   const camps=_adsCampanhasEnriquecidas(X.cur,D.ent);
   const temOutras=camps.some(function(c){return c.fam!=="leads"&&Number(c.gasto||0)>0;});
@@ -59851,7 +59915,24 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
         <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".06em",textTransform:"uppercase",marginLeft:isMob?0:10}}>Métrica</span><AdsSegMetrica v={metrica} onChange={setMetrica}/>
         <span style={{fontSize:11.5,color:ADS.muted,marginLeft:"auto"}}>{metrica==="cpa"?"roxo escuro = barato · roxo claro = caro · listrado = amostra pequena":metrica==="gasto"?"onde a verba foi parar":"quem entregou os resultados"}</span>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>{dims.map(bloco)}</div>
+      {/* 19/09: cinco cartões empilhados competiam entre si. Agora é um menu à esquerda e UM gráfico grande à direita. */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"236px minmax(0,1fr)",gap:14,alignItems:"start"}}>
+        <AdsCard style={{padding:6}}>
+          {dims.map(function(d){
+            const on=d===dimSel; const mm=melhorDe(d);
+            const temDado=rows.some(function(r){ return r.dimensao===d&&Number(r.gasto||0)>0; });
+            return <div key={d} onClick={function(){ setDimSel(d); }}
+              style={{padding:"11px 12px",borderRadius:11,cursor:"pointer",background:on?ADS.accent:"transparent",transition:"background .12s",marginBottom:2}}
+              onMouseEnter={function(e){ if(!on) e.currentTarget.style.background=ADS.surface2; }}
+              onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
+              <div style={{fontSize:13,fontWeight:800,color:on?"#fff":ADS.ink,letterSpacing:"-.2px"}}>{ADS_DIM_LBL[d]}</div>
+              <div style={{fontSize:11,marginTop:3,color:on?"rgba(255,255,255,.78)":ADS.muted,lineHeight:1.4}}>
+                {!temDado?"sem entrega no período":mm?<><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>melhor: <b style={{color:on?"#fff":ADS.ink2}}>{mm.lbl}</b></div><div style={Object.assign({color:on?"#fff":ADS.ink2,fontWeight:700},ADS_MONO)}>{_adsBRL(mm.cpa)}</div></>:"sem base pra comparar"}
+              </div>
+            </div>; })}
+        </AdsCard>
+        <div style={{minWidth:0}}>{bloco(dimSel)}</div>
+      </div>
       <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Passe o mouse num corte pra ver o cruzamento real da Meta (idade↔gênero, posicionamento↔aparelho — os únicos que ela entrega); clique pra abrir 3 meses por dia e a hora do dia. Só cortes com {ADS_MIN_RESULTADOS}+ resultados entram na comparação; na pizza o custo vira fatia da verba (custo não soma).</div>
     </AdsSec>
     {!embutido&&<AdsLeadALead conta={conta} P={P} campIds={campIds} filtroLbl={filtroLbl} isMob={isMob}/>}
