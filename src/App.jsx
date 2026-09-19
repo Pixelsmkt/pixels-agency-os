@@ -59168,7 +59168,12 @@ function useAdsBenchCriativos(P,nivel){
   const [st,setSt]=useState(function(){ return window._pxAdsBench[key]||{loading:!!key,por:{}}; });
   useEffect(function(){ if(!key||!window._sb) return; if(window._pxAdsBench[key]){ setSt(window._pxAdsBench[key]); return; } let vivo=true;
     window._sb.rpc("ads_bench_criativos",{p_de:P.ini,p_ate:P.fim,p_nivel:nv}).then(function(r){ if(!vivo) return;
-      const por={}; (r.data||[]).forEach(function(x){ por[x.tipo]={custo:Number(x.mediana_custo)||null,nCusto:Number(x.n_custo)||0,ctr:Number(x.mediana_ctr)||null,nCtr:Number(x.n_ctr)||0,ret:Number(x.mediana_ret)||null,nRet:Number(x.n_ret)||0,cpm:Number(x.mediana_cpm)||null,nCpm:Number(x.n_cpm)||0}; });
+      const por={}; (r.data||[]).forEach(function(x){ por[x.tipo]={
+        custo:Number(x.mediana_custo)||null,nCusto:Number(x.n_custo)||0,custoP25:Number(x.p25_custo)||null,custoP75:Number(x.p75_custo)||null,
+        ctr:Number(x.mediana_ctr)||null,nCtr:Number(x.n_ctr)||0,ctrP25:Number(x.p25_ctr)||null,ctrP75:Number(x.p75_ctr)||null,
+        ret:Number(x.mediana_ret)||null,nRet:Number(x.n_ret)||0,retP25:Number(x.p25_ret)||null,retP75:Number(x.p75_ret)||null,
+        cpm:Number(x.mediana_cpm)||null,nCpm:Number(x.n_cpm)||0,cpmP25:Number(x.p25_cpm)||null,cpmP75:Number(x.p75_cpm)||null,
+        nTotal:Number(x.n_total)||0}; });
       const o={loading:false,por:por}; window._pxAdsBench[key]=o; setSt(o);
     }).catch(function(){ if(vivo) setSt({loading:false,por:{}}); });
     return function(){ vivo=false; }; },[key]);
@@ -59176,15 +59181,26 @@ function useAdsBenchCriativos(P,nivel){
 }
 
 /* régua da própria conta: mediana entre os criativos do mesmo objetivo que já têm base */
+const _adsPerc=function(v,q){ const a=(v||[]).filter(function(x){return x!==null&&x!==undefined&&isFinite(x);}).sort(function(x,y){return x-y;}); if(!a.length) return null;
+  const i=(a.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return lo===hi?a[lo]:a[lo]+(a[hi]-a[lo])*(i-lo); };
 function _adsRefConta(lista,fam){
   const comBase=(lista||[]).filter(function(a){ return Number(a.impressoes||0)>=ADS_NOTA_MIN.imp&&Number(a.gasto||0)>0; });
-  const ref={n:comBase.length};
+  const ref={n:comBase.length,nTotal:comBase.length};
   ref.ctr=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.cliques||0)/i*100:null; }));
   ref.ret=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return (i>0&&a.p25!==null&&a.p25!==undefined)?Number(a.p25||0)/i*100:null; }));
   ref.cpm=_adsMediana(comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.gasto||0)/i*1000:null; }));
   const comRes=comBase.filter(function(a){ return Number(a.res||0)>=ADS_NOTA_MIN.res; });
-  ref.custo=_adsMediana(comRes.map(function(a){ return Number(a.gasto||0)/Number(a.res); }));
+  const custos=comRes.map(function(a){ return Number(a.gasto||0)/Number(a.res); });
+  ref.custo=_adsMediana(custos);
   ref.nCusto=comRes.length; ref.nCtr=comBase.length; ref.nRet=comBase.length; ref.nCpm=comBase.length;
+  /* faixa do grupo: onde ficam os 25% melhores e os 25% piores — a caixinha mostra isso */
+  const ctrs=comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.cliques||0)/i*100:null; });
+  const rets=comBase.map(function(a){ const i=Number(a.impressoes||0); return (i>0&&a.p25!==null&&a.p25!==undefined)?Number(a.p25||0)/i*100:null; });
+  const cpms=comBase.map(function(a){ const i=Number(a.impressoes||0); return i>0?Number(a.gasto||0)/i*1000:null; });
+  ref.custoP25=_adsPerc(custos,.25); ref.custoP75=_adsPerc(custos,.75); ref.listaCusto=custos.filter(function(x){return isFinite(x);});
+  ref.ctrP25=_adsPerc(ctrs,.25); ref.ctrP75=_adsPerc(ctrs,.75); ref.listaCtr=ctrs.filter(function(x){return x!==null&&isFinite(x);});
+  ref.retP25=_adsPerc(rets,.25); ref.retP75=_adsPerc(rets,.75);
+  ref.cpmP25=_adsPerc(cpms,.25); ref.cpmP75=_adsPerc(cpms,.75); ref.listaCpm=cpms.filter(function(x){return x!==null&&isFinite(x);});
   return ref;
 }
 
@@ -59195,16 +59211,19 @@ const _adsPts=function(x){ if(!isFinite(x)||x<=0) return 0; return Math.max(0,Ma
 function _adsNotaCalc(m,ref,fam){
   const imp=Number(m.impressoes||0), dias=Number(m.dias||0), res=Number(m.res||0), gasto=Number(m.gasto||0);
   const temRes=!!(fam&&fam.campo);                       /* objetivo que gera resultado contável */
-  const falta=[];
-  if(imp<ADS_NOTA_MIN.imp) falta.push(_adsNum(ADS_NOTA_MIN.imp)+" impressões (tem "+_adsNum(imp)+")");
-  if(dias>0&&dias<ADS_NOTA_MIN.dias) falta.push(ADS_NOTA_MIN.dias+" dias rodando (tem "+dias+")");
-  if(falta.length) return {ok:false,falta:falta};
-  if(!ref||!(ref.n>=3)) return {ok:false,falta:["pares pra comparar (só "+((ref&&ref.n)||0)+" no grupo)"]};
-  /* 19/09: gastar e NÃO trazer resultado não é "sem base" — é nota baixa, e das importantes.
-     O que define se dá pra julgar é ter tido CHANCE: já gastou pelo menos o que um resultado custa no grupo.
-     Antes eu exigia 3 resultados e isso escondia justamente o criativo que só queima verba. */
+  /* 19/09 v2 — A NOTA SEMPRE APARECE. O que varia é a CONFIANÇA, e ela vem separada, não embutida no número.
+     Só não há nota quando não houve entrega nenhuma (nada pra medir) ou quando o grupo não tem régua. */
+  if(!(imp>0)||!(gasto>0)) return {ok:false,falta:["entrega — o criativo ainda não apareceu"]};
+  if(!ref||!(ref.n>=3)) return {ok:false,falta:["pares pra comparar (só "+((ref&&ref.n)||0)+" no grupo do mesmo objetivo)"]};
+  /* confiança: volume de entrega, de resultado e de tempo. Alta = dá pra bater o martelo. */
   const teveChance=temRes?(res>0||(ref.custo>0&&gasto>=ref.custo)):true;
-  if(!teveChance) return {ok:false,falta:["gasto pra julgar — "+_adsBRL0(gasto)+" de "+_adsBRLc(ref.custo||0)+" que um resultado custa no grupo"]};
+  const pontosConf=(imp>=ADS_NOTA_MIN.imp?1:0)+((!temRes||res>=ADS_NOTA_MIN.res)?1:0)+((dias===0||dias>=ADS_NOTA_MIN.dias)?1:0)+(teveChance?1:0);
+  const conf=pontosConf>=4?"alta":pontosConf>=3?"media":"baixa";
+  const porQueConf=[];
+  if(imp<ADS_NOTA_MIN.imp) porQueConf.push(_adsNum(imp)+" impressões (o ideal é "+_adsNum(ADS_NOTA_MIN.imp)+")");
+  if(temRes&&res<ADS_NOTA_MIN.res) porQueConf.push(_adsNum(res)+" resultado"+(res===1?"":"s")+" (o ideal é "+ADS_NOTA_MIN.res+")");
+  if(dias>0&&dias<ADS_NOTA_MIN.dias) porQueConf.push(dias+" dia"+(dias>1?"s":"")+" rodando (o ideal é "+ADS_NOTA_MIN.dias+")");
+  if(temRes&&!teveChance&&ref.custo>0) porQueConf.push("gastou "+_adsBRL0(gasto)+", menos do que um resultado custa no grupo ("+_adsBRLc(ref.custo)+")");
 
   const custo=temRes&&res>0?gasto/res:null;
   const zerado=temRes&&res===0;                          /* gastou o bastante e não trouxe nada */
@@ -59221,15 +59240,23 @@ function _adsNotaCalc(m,ref,fam){
        {k:"ret",lbl:"Retenção",peso:20,val:ret,ref:ref.ret,inv:false,fmt:function(v){return _adsPct(v,1);},dica:"chegaram a 1/4 do vídeo"}];
 
   /* perna sem dado sai e o peso dela se redistribui — nunca zera nota de quem não tem vídeo */
-  if(zerado){ const ef=cand[0]; ef.zerado=true; }       /* eficiência entra zerada, não some da conta */
+  if(zerado&&teveChance){ cand[0].zerado=true; }        /* gastou o bastante e não trouxe nada: eficiência vale 0 */
   const vale=cand.filter(function(p){ return p.zerado||(p.val!==null&&p.val!==undefined&&p.ref!==null&&p.ref!==undefined&&p.ref>0&&isFinite(p.val)); });
   if(!vale.length) return {ok:false,falta:["régua do objetivo (o grupo ainda não tem mediana)"]};
   const somaPeso=vale.reduce(function(t,p){return t+p.peso;},0);
   const partes=vale.map(function(p){ if(p.zerado) return Object.assign({},p,{x:0,pts:0,pesoReal:p.peso/somaPeso*100,txt:"nenhum "+((fam&&fam.resSing)||"resultado")});
     const x=p.inv?(p.ref/p.val):(p.val/p.ref); const pts=_adsPts(x); return Object.assign({},p,{x:x,pts:pts,pesoReal:p.peso/somaPeso*100}); });
   const nota=partes.reduce(function(t,p){ return t+p.pts*p.pesoReal/100; },0);
-  const curta=temRes&&res>0&&res<ADS_NOTA_MIN.res;       /* tem nota, mas com poucos resultados pra sustentar */
-  return {ok:true,nota:Math.round(nota*10)/10,partes:partes,base:{res:res,dias:dias,imp:imp,gasto:gasto},nRef:ref.n,curta:curta,zerado:zerado};
+  /* posição dentro do grupo, pela métrica que manda no objetivo */
+  const listaPos=temRes?(ref.listaCusto||[]):(ref.listaCpm||[]);
+  const meuValor=temRes?(res>0?gasto/res:null):cpm;
+  let pos=null;
+  if(meuValor!==null&&listaPos.length>=3){ const melhores=listaPos.filter(function(v){ return v<meuValor; }).length; pos={lugar:melhores+1,de:listaPos.length}; }
+  return {ok:true,nota:Math.round(nota*10)/10,partes:partes,
+    base:{res:res,dias:dias,imp:imp,gasto:gasto,cliques:Number(m.cliques||0)},
+    nRef:ref.n,nTotal:ref.nTotal||ref.n,conf:conf,porQueConf:porQueConf,pos:pos,zerado:zerado&&teveChance,
+    faixa:temRes?{p25:ref.custoP25,p75:ref.custoP75,med:ref.custo,fmt:"brl"}:{p25:ref.cpmP25,p75:ref.cpmP75,med:ref.cpm,fmt:"brl"},
+    meuValor:meuValor};
 }
 
 /* as duas notas de uma entidade (criativo, conjunto ou campanha) */
@@ -59247,10 +59274,14 @@ function AdsNota({conta,carteira,cfgLbl,isMob,compacta}){
   /* o cartão do criativo tem overflow:hidden e a pílula pode estar colada na borda da tela:
      por isso a explicação é posicionada em tela cheia (fixed), presa ao gatilho e limitada à janela. */
   const abrir=function(){ const el=ref.current; if(!el) return; const r=el.getBoundingClientRect();
-    const W=isMob?Math.min(280,window.innerWidth-24):308, ALT=300;
+    const W=isMob?Math.min(280,window.innerWidth-24):308;
     let left=Math.min(r.right-W,window.innerWidth-W-10); left=Math.max(10,left);
-    let top=r.bottom+8; if(top+ALT>window.innerHeight-10) top=Math.max(10,r.top-ALT-8);
-    setAb({top:top,left:left,W:W}); };
+    /* escolhe o lado com mais espaço e limita a altura ao que couber — a caixinha nunca sai da tela */
+    const abaixo=window.innerHeight-r.bottom-18, acima=r.top-18;
+    const paraBaixo=abaixo>=acima;
+    const maxH=Math.max(160,Math.min(430,paraBaixo?abaixo:acima));
+    const top=paraBaixo?(r.bottom+8):Math.max(10,r.top-8-maxH);
+    setAb({top:top,left:left,W:W,maxH:maxH}); };
   useEffect(function(){ if(!ab) return; const f=function(){ setAb(null); };
     window.addEventListener("scroll",f,true); window.addEventListener("resize",f);
     return function(){ window.removeEventListener("scroll",f,true); window.removeEventListener("resize",f); }; },[ab]);
@@ -59267,6 +59298,7 @@ function AdsNota({conta,carteira,cfgLbl,isMob,compacta}){
         background:semBase?"#f0eef6":cor+"1a",border:"1px solid "+(semBase?ADS.line:cor+"55"),whiteSpace:"nowrap"}}>
       <b style={Object.assign({fontSize:compacta?12:13.5,fontWeight:900,color:semBase?ADS.muted:cor,letterSpacing:"-.3px"},ADS_MONO)}>{semBase?"—":_adsNum1(n)}</b>
       <span style={{fontSize:9,fontWeight:800,color:semBase?ADS.muted:cor,letterSpacing:".05em"}}>{semBase?"SEM NOTA":"NOTA"}</span>
+      {!semBase&&p.conf!=="alta"&&<span title={p.conf==="baixa"?"pouca base — a nota pode virar":"base média"} style={{width:5,height:5,borderRadius:"50%",background:p.conf==="baixa"?ADS.crit:ADS.warn,flexShrink:0}}/>}
     </span>
     {ab&&<AdsNotaPop pos={ab} conta={conta} carteira={carteira} cfgLbl={cfgLbl} falta={falta} isMob={isMob} onFechar={function(){setAb(null);}}/>}
   </span>;
@@ -59283,14 +59315,19 @@ function AdsNotaPop({pos,conta,carteira,cfgLbl,falta,isMob,onFechar}){
       </div>
       <b style={Object.assign({fontSize:13,fontWeight:900,color:bom?ADS.ok:ADS.crit},ADS_MONO)}>{_adsNum1(x.pts)}</b>
     </div>; };
-  return <div onClick={function(e){e.stopPropagation();}} style={{position:"fixed",top:(pos&&pos.top)||0,left:(pos&&pos.left)||0,zIndex:9200,width:(pos&&pos.W)||308,maxHeight:"min(70vh,420px)",overflowY:"auto",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 18px 44px rgba(15,13,26,.18)",padding:14,cursor:"default",textAlign:"left",whiteSpace:"normal"}}>
+  return <div onClick={function(e){e.stopPropagation();}} style={{position:"fixed",top:(pos&&pos.top)||0,left:(pos&&pos.left)||0,zIndex:9200,width:(pos&&pos.W)||308,maxHeight:(pos&&pos.maxH)||420,overflowY:"auto",background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,boxShadow:"0 18px 44px rgba(15,13,26,.18)",padding:14,cursor:"default",textAlign:"left",whiteSpace:"normal"}}>
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
       <div style={{fontSize:11,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,flex:1}}>Como essa nota saiu</div>
       <span onClick={onFechar} style={{cursor:"pointer",color:ADS.muted,fontSize:16,lineHeight:1}}>×</span>
     </div>
     {!p&&<div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>Ainda não dá pra dar nota: falta {falta||"base"}.<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>Nota só nasce com {_adsNum(ADS_NOTA_MIN.imp)} impressões, {ADS_NOTA_MIN.dias} dias rodando e {ADS_NOTA_MIN.res} resultados — abaixo disso o número seria chute.</div></div>}
     {p&&<>
-      <div style={{fontSize:12,color:ADS.ink2,lineHeight:1.45,marginBottom:8}}><b style={{color:ADS.ink}}>{_adsNum1(p.nota)}</b> de 10 — {_adsNotaTxt(p.nota)}. <span style={{color:ADS.muted}}>5,0 é a mediana de {p.nRef} {cfgLbl||"peças do mesmo objetivo"}.</span></div>
+      <div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:6}}>
+        <b style={Object.assign({fontSize:26,fontWeight:900,letterSpacing:"-1px",color:_adsNotaCor(p.nota)},ADS_MONO)}>{_adsNum1(p.nota)}</b>
+        <span style={{fontSize:11.5,color:ADS.muted}}>de 10 · {_adsNotaTxt(p.nota)}</span>
+      </div>
+      {p.pos&&<div style={{fontSize:12,color:ADS.ink2,marginBottom:6}}><b style={{color:ADS.ink}}>{p.pos.lugar}º de {p.pos.de}</b> <span style={{color:ADS.muted}}>no grupo, pelo custo</span></div>}
+      <div style={{fontSize:11.5,color:ADS.muted,lineHeight:1.45,marginBottom:8}}>5,0 é a mediana de {p.nRef} {cfgLbl||"peças do mesmo objetivo"} no período.{p.faixa&&p.faixa.p25&&p.faixa.p75?<span> Os 25% melhores ficam abaixo de <b style={{color:ADS.ink2}}>{_adsBRLc(p.faixa.p25)}</b> e os 25% piores acima de <b style={{color:ADS.ink2}}>{_adsBRLc(p.faixa.p75)}</b>.</span>:null}</div>
       <div style={{background:ADS.surface2,borderRadius:10,padding:"2px 10px"}}>{p.partes.map(Linha)}</div>
       {conta&&conta.ok&&carteira&&carteira.ok&&<div style={{display:"flex",gap:14,marginTop:10,fontSize:11.5}}>
         <span><b style={Object.assign({color:_adsNotaCor(conta.nota)},ADS_MONO)}>{_adsNum1(conta.nota)}</b> <span style={{color:ADS.muted}}>na conta</span></span>
@@ -59298,9 +59335,15 @@ function AdsNotaPop({pos,conta,carteira,cfgLbl,falta,isMob,onFechar}){
       </div>}
       {conta&&conta.ok&&carteira&&!carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Sem régua da carteira nesse objetivo no período.</div>}
       {conta&&!conta.ok&&carteira&&carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Comparado com a carteira — a conta ainda não tem pares suficientes.</div>}
-      {p.curta&&<div style={{fontSize:11,color:ADS.warn,marginTop:8,fontWeight:600}}>Base curta: só {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"} — a nota ainda pode virar.</div>}
       {p.zerado&&<div style={{fontSize:11,color:ADS.crit,marginTop:8,fontWeight:600}}>Gastou {_adsBRL0(p.base.gasto)} e não trouxe nenhum resultado.</div>}
-      <div style={{fontSize:10.5,color:ADS.muted,marginTop:8,paddingTop:8,borderTop:"1px solid "+ADS.line}}>Base: {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"} · {_adsNum(p.base.imp)} impressões{p.base.dias>0?" · "+p.base.dias+" dia"+(p.base.dias>1?"s":"")+" rodando":""}</div>
+      <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+ADS.line}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,whiteSpace:"nowrap"}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:p.conf==="alta"?ADS.ok:p.conf==="media"?ADS.warn:ADS.crit,flexShrink:0}}/>
+          <b style={{color:p.conf==="alta"?ADS.ok:p.conf==="media"?ADS.warn:ADS.crit}}>confiança {p.conf==="media"?"média":p.conf}</b>
+        </div>
+        <div style={{fontSize:10.5,color:ADS.muted,marginTop:2}}>{_adsNum(p.base.imp)} impressões · {_adsNum(p.base.cliques)} cliques · {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"}{p.base.dias>0?" · "+p.base.dias+" dia"+(p.base.dias>1?"s":""):""}</div>
+        {p.porQueConf&&p.porQueConf.length>0&&<div style={{fontSize:10.5,color:ADS.muted,marginTop:3,lineHeight:1.4}}>Pesa contra: {p.porQueConf.join(" · ")}.</div>}
+      </div>
     </>}
   </div>;
 }
