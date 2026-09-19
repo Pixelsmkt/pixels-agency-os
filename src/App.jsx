@@ -59112,8 +59112,8 @@ function useAdsAlertasStatus(){
    Regras de dado: janela = N dias FECHADOS terminando ontem (hoje, parcial, nunca entra); comparação com os N anteriores;
    lead = formulário + conversa WhatsApp (definição única do app); custo por lead = gasto SÓ das campanhas de lead ÷ leads;
    o selo do card nasce das MESMAS exceções da coluna "Precisa de você" — nunca se contradiz. ─── */
-const ADS_DK={bg:"#0f0d17",surface:"#171423",surface2:"#1f1b2e",ink:"#f3f1fa",ink2:"#c8c3da",muted:"#8c86a3",line:"#282440",line2:"#3a3554",accent:"#a78bfa",accentBtn:"#7c3aed",
-  crit:"#ff7a6e",critSoft:"#3a1a1a",warn:"#f5b142",warnSoft:"#3a2a12",ok:"#4ade80",okSoft:"#15301f",band1:"#3a3554",band2:"#2c2840",band3:"#221e32",bar:"#e4e0f2",
+const ADS_DK={bg:"transparent",surface:"#fff",surface2:"#f6f5fa",ink:"#0f0d1a",ink2:"#3d3853",muted:"#7b7590",line:"#e8e5f0",line2:"#cfc9dd",accent:"#7326d6",accentBtn:"#7326d6",shadow:"0 1px 2px rgba(15,13,26,.04), 0 8px 24px -14px rgba(15,13,26,.12)",
+  crit:"#c92a2a",critSoft:"#fde8e8",warn:"#b45309",warnSoft:"#fef3c7",ok:"#12805a",okSoft:"#e2f5ec",band1:"#d9d4e6",band2:"#ebe8f3",band3:"#f7f6fb",bar:"#2b2544",
   hero:"linear-gradient(120deg,#1e1440 0%,#3b1a86 55%,#6d28d9 100%)",heroMuted:"#cdbff2",heroLine:"rgba(255,255,255,.16)",heroGlass:"rgba(255,255,255,.08)"};
 const ADS_SERIF="'Newsreader',Georgia,'Times New Roman',serif";
 const _adsVar=function(a,b){ return b?Math.round((a-b)/b*100):null; };
@@ -59132,7 +59132,7 @@ function AdsSparkDK({serie,n,w,h,cor,fill,title,fmt}){
     {xs!==null&&<line x1={xs} x2={xs} y1={2} y2={h-1} stroke={cor} strokeOpacity=".35" strokeDasharray="2 2" strokeWidth="1"/>}
     <path d={area} fill={cor} fillOpacity={fill||.12}/>
     <path d={path} fill="none" stroke={cor} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
-    <circle cx={px(L-1)} cy={py(vals[L-1])} r="2.8" fill={cor} stroke="#171423" strokeWidth="1.5"/>
+    <circle cx={px(L-1)} cy={py(vals[L-1])} r="2.8" fill={cor} stroke="#fff" strokeWidth="1.5"/>
     {hi!==null&&<g><line x1={px(hi)} x2={px(hi)} y1={2} y2={h-1} stroke={cor} strokeOpacity=".6" strokeWidth="1"/><circle cx={px(hi)} cy={py(vals[hi])} r="3" fill={cor}/><title>{_adsFmtD(serie[hi].k)+" · "+(fmt?fmt(vals[hi]):vals[hi])+(title?" "+title:"")}</title></g>}
   </svg>;
 }
@@ -59216,72 +59216,72 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   const serieDe=function(conta){ const out=[]; for(let i=2*nDias-1;i>=0;i--){ const d=_adsAddDays(C.ontem,-i); if(d<W.prev[0]||d<C.jan.d30[0]) continue; const v=conta&&conta.porDia[d]; out.push({k:d,v:v?v.res:0}); } return out; };
   const jan=_adsFmtD(W.cur[0])+"–"+_adsFmtD(W.cur[1]);
   const Eyebrow=function(t,cor){ return <div style={{fontSize:10,fontWeight:800,letterSpacing:".1em",textTransform:"uppercase",color:cor||D.muted}}>{t}</div>; };
-  const Btn=function(p){ return <button onClick={p.onClick} style={Object.assign({background:p.primary?D.accentBtn:"transparent",color:p.primary?"#fff":D.muted,border:0,borderRadius:7,padding:p.primary?"5px 10px":"5px 6px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:F,minHeight:0,whiteSpace:"nowrap"},p.style||{})}>{p.children}</button>; };
+  const Btn=function(p){ return <button onClick={p.onClick} style={Object.assign({background:p.primary?D.accentBtn:"transparent",color:p.primary?"#fff":D.muted,border:0,borderRadius:8,padding:p.primary?"7px 12px":"7px 8px",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:F,minHeight:0,whiteSpace:"nowrap"},p.style||{})}>{p.children}</button>; };
   const Sel=<span style={{display:"inline-flex",background:D.surface2,borderRadius:9,padding:3,gap:1}}>{[[7,"7 dias"],[14,"14 dias"],[30,"30 dias"]].map(function(j){ const on=nDias===j[0]; return <button key={j[0]} onClick={function(){setNDias(j[0]);}} style={{background:on?D.accentBtn:"transparent",color:on?"#fff":D.ink2,border:0,borderRadius:7,padding:"5px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:F,minHeight:0}}>{j[1]}</button>; })}</span>;
 
   /* ── cards de cliente ── */
   const Card=function(c,i){ const l=c.l, o=c.o; const cur=o?o.cur:null, prev=o?o.prev:null; const cc=_adsCplDe(cur), cp=W.temPrev?_adsCplDe(prev):null;
     const tipos=c.conta?Object.keys(c.conta.tipos).filter(function(t){return c.conta.tipos[t].gasto>0;}).sort(function(a,b){return c.conta.tipos[b].gasto-c.conta.tipos[a].gasto;}).slice(0,3).map(function(t){return _adsTipo(t).curto;}).join(" · "):"sem campanha ativa";
-    const M=function(lab,val,sub){ return <div style={{minWidth:0}}>{Eyebrow(lab)}<div style={{fontSize:19,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.1,marginTop:2,color:D.ink,fontFeatureSettings:"'tnum'"}}>{val}</div><div style={{fontSize:10.5,color:D.muted,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sub}</div></div>; };
-    return <div key={l.mc.client_id} onClick={function(){ try{ window._pxSubDesejada="visao"; }catch(_){ } onOpenClient(l.mc.client_id); }} style={{background:D.surface,border:"1px solid "+D.line,borderRadius:14,padding:"12px 14px 10px",position:"relative",cursor:"pointer",minWidth:0,opacity:go?1:0,transform:go?"none":"translateY(6px)",transition:"opacity .4s ease "+(i*50)+"ms, transform .4s ease "+(i*50)+"ms"}}
+    const M=function(lab,val,sub){ return <div style={{minWidth:0}}>{Eyebrow(lab)}<div style={{fontSize:21,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.1,marginTop:4,color:D.ink,fontFeatureSettings:"'tnum'"}}>{val}</div><div style={{fontSize:11.5,color:D.muted,marginTop:3,lineHeight:1.4}}>{sub}</div></div>; };
+    return <div key={l.mc.client_id} onClick={function(){ try{ window._pxSubDesejada="visao"; }catch(_){ } onOpenClient(l.mc.client_id); }} style={{background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow,padding:"18px 20px 16px",position:"relative",cursor:"pointer",minWidth:0,opacity:go?1:0,transform:go?"none":"translateY(6px)",transition:"opacity .4s ease "+(i*50)+"ms, transform .4s ease "+(i*50)+"ms"}}
         onMouseEnter={function(e){e.currentTarget.style.borderColor=D.line2;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=D.line;}}>
-      {c.selo.k!=="o"&&c.selo.k!=="p"&&<span style={{position:"absolute",left:0,top:12,bottom:12,width:4,borderRadius:"0 4px 4px 0",background:c.selo.cor}}/>}
-      <div style={{display:"flex",alignItems:"center",gap:10}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}<div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:14,color:D.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.mc.name}</div><div style={{color:D.muted,fontSize:11,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tipos}</div></div><span style={{marginLeft:"auto",background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flex:"none"}}>{c.selo.t}</span></div>
-      {o?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10,alignItems:"end"}}>
+      {c.selo.k!=="o"&&c.selo.k!=="p"&&<span style={{position:"absolute",left:0,top:18,bottom:18,width:4,borderRadius:"0 4px 4px 0",background:c.selo.cor}}/>}
+      <div style={{display:"flex",alignItems:"center",gap:12}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}<div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:15,color:D.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.mc.name}</div><div style={{color:D.muted,fontSize:11.5,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tipos}</div></div><span style={{marginLeft:"auto",background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flex:"none"}}>{c.selo.t}</span></div>
+      {o?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginTop:18,alignItems:"start"}}>
         {M("Leads",_adsNum(cur.res),<span>{cur.leads?_adsNum(cur.leads)+" form · ":""}{_adsNum(cur.conversas)} wpp · <AdsDeltaDK p={W.temPrev?_adsVar(cur.res,prev.res):null} invert={false}/></span>)}
         {M("Custo por lead",cc?_adsBRL(cc):"—",cc?<span>{cp?"era "+_adsBRL(cp)+" · ":""}<AdsDeltaDK p={cc&&cp?_adsVar(cc,cp):null} invert={true}/></span>:(cur.gasto>0?"sem lead":"sem gasto"))}
         {M("Investido",_adsBRL(cur.gasto),W.temPrev&&prev.gasto>=50?<span>{_adsBRL(prev.gasto)+" antes · "}<AdsDeltaDK p={_adsVar(cur.gasto,prev.gasto)} invert={null}/></span>:(W.temPrev&&cur.gasto>0?"novo na janela":"—"))}
-      </div>:<div style={{fontSize:12,color:D.muted,marginTop:10}}>sem gasto nos últimos {2*nDias} dias</div>}
-      {o&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+D.line,display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center"}}>
-        <AdsSparkDK serie={serieDe(c.conta)} n={nDias} cor={D.accent} title="leads" fmt={_adsNum}/>
+      </div>:<div style={{fontSize:12.5,color:D.muted,marginTop:18}}>sem gasto nos últimos {2*nDias} dias</div>}
+      {o&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+D.line,display:"grid",gridTemplateColumns:"1fr auto",gap:16,alignItems:"center"}}>
+        <AdsSparkDK serie={serieDe(c.conta)} n={nDias} h={40} cor={D.accent} title="leads" fmt={_adsNum}/>
         <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}><AdsBullet cur={cc} prev={cp}/><small style={{fontSize:9.5,color:D.muted}}>custo por lead</small></div>
       </div>}
     </div>; };
 
   /* ── modo "só clientes" (aba Clientes de mídia): cabeçalho + cards, sem faixa nem coluna ── */
-  if(soClientes) return <div style={{fontFamily:F,background:D.bg,borderRadius:18,padding:isMob?12:14,color:D.ink}}>
+  if(soClientes) return <div style={{fontFamily:F,color:D.ink}}>
     <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,color:D.ink}}>Clientes de mídia · {cards.length}</span><span style={{fontSize:12,color:D.muted}}>{jan} · janela fechada</span>{direita}<span style={{marginLeft:"auto"}}>{Sel}</span></div>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:10}}>{cards.map(Card)}</div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:16}}>{cards.map(Card)}</div>
   </div>;
 
-  return <div className="px-sens" style={{fontFamily:F,background:D.bg,borderRadius:18,padding:isMob?12:14,color:D.ink,display:"flex",flexDirection:"column",gap:12}}>
+  return <div className="px-sens" style={{fontFamily:F,color:D.ink,display:"flex",flexDirection:"column",gap:22}}>
 
     {/* ── faixa: leitura da semana + 3 números ── */}
-    <div style={{position:"relative",overflow:"hidden",borderRadius:16,background:D.hero,color:"#fff",padding:isMob?"16px":"16px 22px 14px",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.2fr) minmax(0,1fr)",gap:isMob?14:24,alignItems:"center"}}>
+    <div style={{position:"relative",overflow:"hidden",borderRadius:16,background:D.hero,color:"#fff",padding:isMob?"20px 18px":"26px 30px 22px",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.2fr) minmax(0,1fr)",gap:isMob?18:36,alignItems:"center",boxShadow:"0 16px 36px -18px rgba(47,26,94,.45)"}}>
       <div style={{position:"absolute",right:"-8%",top:"-60%",width:460,height:460,borderRadius:"50%",background:"radial-gradient(closest-side,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
       <div style={{position:"relative",minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>{Eyebrow("Leitura · "+jan+" · fechada",D.heroMuted)}<span style={{fontSize:11,color:D.heroMuted}}>{C.atrasado?"a coleta de "+_adsFmtD(C.ontemReal)+" ainda não chegou":"coleta "+_adsFmtD(C.hoje)+" 07:00 · hoje fica fora"} · <a onClick={P.reload} style={{color:"#fff",cursor:"pointer",fontWeight:700}}>atualizar</a></span></div>
-        <div style={{margin:"6px 0 0",fontFamily:ADS_SERIF,fontWeight:400,fontSize:isMob?19:22,lineHeight:1.25,color:"#fff"}}>
+        <div style={{margin:"10px 0 0",fontFamily:ADS_SERIF,fontWeight:400,fontSize:isMob?20:25,lineHeight:1.3,color:"#fff",maxWidth:640}}>
           <span style={{fontWeight:500}}>{_adsNum(A.cur.res)} leads</span> por {_adsBRL(A.cur.gasto)}{cpl?<span> — <em style={{color:"#e9ddff"}}>{_adsBRL(cpl)} cada</em></span>:null}{dCpl!==null?", "+Math.abs(dCpl)+"% "+(dCpl<0?"mais barato":dCpl>0?"mais caro":"igual")+" que os "+nDias+" dias anteriores":""}{dG!==null?", gastando "+Math.abs(dG)+"% "+(dG<0?"menos":"mais"):""}. {nCrit?<span><span style={{fontWeight:500}}>{nCrit} ponto{nCrit>1?"s":""}</span> pede{nCrit>1?"m":""} ação hoje</span>:"Nada crítico hoje"}{nWarn?", "+nWarn+" pra conferir":""}.
         </div>
-        <div style={{marginTop:6,color:D.heroMuted,fontSize:12}}>{_adsNum(A.cur.conversas)} WhatsApp · {_adsNum(A.cur.leads)} formulário · {cards.length} contas{W.temPrev?" · contra "+_adsFmtD(W.prev[0])+"–"+_adsFmtD(W.prev[1]):" · sem base pra comparar"}</div>
+        <div style={{marginTop:10,color:D.heroMuted,fontSize:12.5}}>{_adsNum(A.cur.conversas)} WhatsApp · {_adsNum(A.cur.leads)} formulário · {cards.length} contas{W.temPrev?" · contra "+_adsFmtD(W.prev[0])+"–"+_adsFmtD(W.prev[1]):" · sem base pra comparar"}</div>
       </div>
-      <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+      <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
         {[["Leads",_adsNum(A.cur.res),<AdsDeltaDK p={dRes} invert={false} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,W.temPrev?_adsNum(A.prev.res)+" antes":"",serieAg.map(function(d){return {k:d.k,v:d.v};}),_adsNum],
           ["Custo por lead",cpl?_adsBRL(cpl):"—",<AdsDeltaDK p={dCpl} invert={true} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,cplP?"era "+_adsBRL(cplP):"",serieAg.map(function(d){return {k:d.k,v:d.v>0?+(d.gl/d.v).toFixed(2):0};}),_adsBRL],
           ["Investido",_adsBRL(A.cur.gasto),<AdsDeltaDK p={dG} invert={null} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,W.temPrev?_adsBRL(A.prev.gasto)+" antes":"",serieAg.map(function(d){return {k:d.k,v:d.g};}),_adsBRL]
-        ].map(function(k,i){ return <div key={i} style={{background:D.heroGlass,border:"1px solid "+D.heroLine,borderRadius:12,padding:"10px 12px 8px",minWidth:0}}>
-          {Eyebrow(k[0],D.heroMuted)}<div style={{fontSize:24,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.05,margin:"4px 0",fontFeatureSettings:"'tnum'"}}>{k[1]}</div>
+        ].map(function(k,i){ return <div key={i} style={{background:D.heroGlass,border:"1px solid "+D.heroLine,borderRadius:14,padding:"14px 16px 12px",minWidth:0}}>
+          {Eyebrow(k[0],D.heroMuted)}<div style={{fontSize:26,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.05,margin:"6px 0",fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{k[1]}</div>
           <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:D.heroMuted,flexWrap:"wrap"}}>{k[2]}<span>{k[3]}</span></div>
-          <div style={{marginTop:6}}><AdsSparkDK serie={k[4]} n={nDias} cor="#fff" fill={.18} h={24} fmt={k[5]}/></div>
+          <div style={{marginTop:10}}><AdsSparkDK serie={k[4]} n={nDias} cor="#fff" fill={.18} h={28} fmt={k[5]}/></div>
         </div>; })}
       </div>
     </div>
 
     {/* ── coluna esquerda: precisa de você · direita: clientes ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"380px minmax(0,1fr)",gap:14,alignItems:"start"}}>
-      <div style={{background:D.surface,border:"1px solid "+D.line,borderRadius:14}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"12px 14px 8px"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Precisa de você</span><span style={{fontSize:11.5,color:D.muted}}>{vivas.length?nCrit+" crítico"+(nCrit===1?"":"s")+" · por dinheiro em jogo":"tudo visto"}</span></div>
-        <div style={{padding:"0 10px 10px",display:"grid",gap:8}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"400px minmax(0,1fr)",gap:24,alignItems:"start"}}>
+      <div style={{background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"18px 20px 12px"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Precisa de você</span><span style={{fontSize:11.5,color:D.muted}}>{vivas.length?nCrit+" crítico"+(nCrit===1?"":"s")+" · por dinheiro em jogo":"tudo visto"}</span></div>
+        <div style={{padding:"0 14px 14px",display:"grid",gap:12}}>
           {vivas.length===0&&!verOcultos&&<div style={{padding:"20px 16px",color:D.muted,textAlign:"center",fontSize:12}}>Nada pendente. As regras rodam de novo a cada coleta (07:00).</div>}
           {(verOcultos?todas:vivas).slice(0,verOcultos?40:8).map(function(p,i){ const cor=p.nivel==="c"?D.crit:p.nivel==="w"?D.warn:D.ok; const st=AL.mapa[p.chave]; const oculto=!ativo(p);
-            return <div key={p.chave} style={{border:"1px solid "+D.line,borderRadius:11,padding:"10px 11px 9px",display:"grid",gridTemplateColumns:"auto 1fr",gap:9,background:D.surface2,opacity:go?(oculto?.55:1):0,transition:"opacity .4s ease "+(i*50)+"ms"}}>
+            return <div key={p.chave} style={{border:"1px solid "+D.line,borderRadius:14,padding:"14px 16px 12px",display:"grid",gridTemplateColumns:"auto 1fr",gap:12,background:D.surface2,opacity:go?(oculto?.55:1):0,transition:"opacity .4s ease "+(i*50)+"ms"}}>
               <span style={{width:4,borderRadius:4,background:oculto?D.line2:cor}}/>
               <div style={{minWidth:0}}>
                 <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:D.muted,display:"flex",gap:7,alignItems:"center"}}><b style={{color:oculto?D.muted:cor}}>{p.nivel==="c"?"Crítico":p.nivel==="w"?"Conferir":"Boa notícia"}</b><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.cliente.name}</span>{p.money>0&&<span style={{marginLeft:"auto",fontWeight:800,color:D.ink,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{_adsBRL(p.money)} {p.mlabel||"em jogo"}</span>}{st&&!p.money&&<span style={{marginLeft:"auto",whiteSpace:"nowrap"}}>{st.status==="adiado"?"adiado até "+_adsFmtD(st.ate):st.status}</span>}</div>
-                <div style={{fontSize:12.5,fontWeight:800,lineHeight:1.3,marginTop:2,color:D.ink}}>{p.titulo}</div>
-                <div style={{fontSize:11,color:D.ink2,marginTop:3,lineHeight:1.45}}>{p.detalhe}{p.acao?<span style={{color:D.muted}}> → {p.acao}</span>:null}</div>
-                <div style={{display:"flex",gap:2,marginTop:7,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{fontSize:13.5,fontWeight:800,lineHeight:1.3,marginTop:4,color:D.ink}}>{p.titulo}</div>
+                <div style={{fontSize:12,color:D.ink2,marginTop:5,lineHeight:1.5}}>{p.detalhe}{p.acao?<span style={{color:D.muted}}> → {p.acao}</span>:null}</div>
+                <div style={{display:"flex",gap:4,marginTop:11,alignItems:"center",flexWrap:"wrap"}}>
                   <Btn primary onClick={function(){abrir(p);}}>{p.abrir==="visao"?"Abrir conta →":"Abrir campanha →"}</Btn>
                   {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"visto");}}>visto</Btn>}
                   {!oculto&&<Btn onClick={function(){AL.marcar(p.chave,{conta:p.conta,client_id:p.cliente.client_id,titulo:p.titulo},"adiado",3);}}>adiar 3 dias</Btn>}
@@ -59294,11 +59294,11 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
         </div>
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 4px 0",flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Clientes</span><span style={{fontSize:11.5,color:D.muted}}>quem precisa de olhar vem primeiro · clique pra abrir</span>{C.atrasado&&<span style={{fontSize:11,fontWeight:700,color:D.warn,background:D.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)}</span>}<span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11.5,color:D.muted}}>{cards.length} contas · {cards.filter(function(c){return c.selo.k==="c"||c.selo.k==="w";}).length} com aviso</span>{Sel}</span></div>
+      <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 4px 0",flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Clientes</span><span style={{fontSize:11.5,color:D.muted}}>quem precisa de olhar vem primeiro · clique pra abrir</span>{C.atrasado&&<span style={{fontSize:11,fontWeight:700,color:D.warn,background:D.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)}</span>}<span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11.5,color:D.muted}}>{cards.length} contas · {cards.filter(function(c){return c.selo.k==="c"||c.selo.k==="w";}).length} com aviso</span>{Sel}</span></div>
         {cards.length===0&&<div style={{padding:18,fontSize:13,color:D.muted}}>Nenhum cliente com conta Meta vinculada.</div>}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:10,alignContent:"start"}}>{cards.map(Card)}</div>
-        <div style={{color:D.muted,fontSize:11,padding:"0 4px",display:"flex",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:18,alignContent:"start"}}>{cards.map(Card)}</div>
+        <div style={{color:D.muted,fontSize:11.5,padding:"4px 4px 0",display:"flex",gap:16,flexWrap:"wrap"}}>
           <span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band1,verticalAlign:-1,marginRight:4}}/>custo até R$ 15</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band2,verticalAlign:-1,marginRight:4}}/>até R$ 30</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band3,border:"1px solid "+D.line,verticalAlign:-1,marginRight:4}}/>acima</span><span>▏= janela anterior</span>
           {compart.length>0&&<span style={{marginLeft:"auto"}}>{compart.map(function(l){return l.mc.name;}).join(", ")}: rodam na conta de Toledo — os números estão lá</span>}
         </div>
