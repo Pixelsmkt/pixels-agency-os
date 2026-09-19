@@ -47314,7 +47314,7 @@ function _cardPodeSerResp(u){
 
           {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
               Passa bioterUnit pra puxar contatos automaticamente da unidade certa do Playbook. */}
-          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""} sector={sector||""}/>}
+          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""} sector={sector||""} viewUser={user} viewPerms={_blPerms}/>}
 
           {/* CONTATOS — só os contatos do Playbook, da unidade Bioter do card. */}
           {activeTab==="contatos"&&client&&<ContatosView clientId={client} bioterUnit={bioterUnit||""}/>}
@@ -48469,18 +48469,29 @@ function _OVProjeto({clientId}){
   </div>;
 }
 
-function OrientacoesView({clientId, bioterUnit, sector}){
+function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
   const sb=window._sb;
   // Cadeira de quem está olhando (09/09/2026): a aba Orientações do card segue a MESMA
   // separação do Playbook. Designer não vê "Marcar no post", social não vê "Instruções pro
   // designer", etc. Sócios/Hellen/estrategista veem tudo. Mapa: ver PB_CADEIRAS (27_playbooks).
+  /* (19/09/2026) Usa o usuário VISTO, não o logado. O "ver como" do Acessos trocava a tela
+     inteira menos esta aba: ela lia CURRENT_USER direto, então o sócio testando "ver como a
+     Luiza" continuava vendo as instruções pro designer e achava que o filtro não funcionava.
+     Também soma os blocos de TODAS as cadeiras da pessoa (quem faz design E vídeo via os dois),
+     em vez de pegar só a primeira da lista. */
   const _cadeiraCard=(function(){
     try{
-      if(typeof _pbCadeirasDoUsuario!=="function"||typeof CURRENT_USER==="undefined") return null;
-      const cs=_pbCadeirasDoUsuario(CURRENT_USER);
+      if(typeof _pbCadeirasDoUsuario!=="function") return null;
+      const u=viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
+      if(!u) return null;
+      const cs=_pbCadeirasDoUsuario(u, viewPerms||null);
       if(!cs.length) return null;
-      if(cs.some(function(c){return !c.blocos;})) return null; // tem uma cadeira "tudo" → mostra tudo
-      return cs[0];
+      if(cs.some(function(c){return !c.blocos;})) return null; // cadeira "tudo" → mostra tudo
+      if(cs.length===1) return cs[0];
+      const todos=[];
+      cs.forEach(function(c){ (c.blocos||[]).forEach(function(b){ if(todos.indexOf(b)<0) todos.push(b); }); });
+      return {id:cs.map(function(c){return c.id;}).join("+"), label:cs.map(function(c){return c.label;}).join(" + "),
+              icon:cs[0].icon, color:cs[0].color, blocos:todos};
     }catch(_){ return null; }
   })();
   const _vis=function(blocoId){ return !_cadeiraCard || !_cadeiraCard.blocos || _cadeiraCard.blocos.indexOf(blocoId)>=0; };
