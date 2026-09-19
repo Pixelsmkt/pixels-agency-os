@@ -1309,10 +1309,24 @@ function ensureSupervisors(assignees){
 
 /* ─── CURRENT USER (proxy dinâmico) ─────── */
 // Reflete o usuário logado via window._pixelsUser sem criar dependência estática
+/* 19/09/2026 — ANTES este proxy caia em TEAM[0] (o Vinicius, level 1) sempre que
+   o id logado nao estava no array TEAM. Como pxPode() libera tudo pra level 1,
+   qualquer usuario novo — criado pela tela de Time e ainda fora da lista fixa —
+   era tratado como socio. Foi o que abriu o painel de ADM pro perfil Leitor.
+   AGORA: quem nao esta no TEAM usa o objeto que o app publica em
+   window._pixelsUserObj (montado do perfil do banco, com o nivel real). Sem isso,
+   cai num usuario sem acesso (level 9), nunca no socio. */
+const _SEM_ACESSO={id:"_sem_acesso",name:"Sem acesso",role:"—",av:"?",color:"#94a3b8",
+  level:9,status:"offline",dash:"none",canDelete:false,canPixelsIA:false};
 const CURRENT_USER=new Proxy({},{
   get(_,prop){
-    const id=(typeof window!=="undefined"&&window._pixelsUser)||"vinicius";
-    return (TEAM.find(u=>u.id===id)||TEAM[0])[prop];
+    const w=(typeof window!=="undefined")?window:null;
+    const id=(w&&w._pixelsUser)||null;
+    if(!id) return _SEM_ACESSO[prop];
+    const achado=TEAM.find(function(u){return u.id===id;});
+    if(achado) return achado[prop];
+    const doPerfil=(w&&w._pixelsUserObj&&w._pixelsUserObj.id===id)?w._pixelsUserObj:null;
+    return (doPerfil||_SEM_ACESSO)[prop];
   },
   set(_,prop,val){return true;},
 });
