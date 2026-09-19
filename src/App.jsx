@@ -18766,7 +18766,7 @@ function _pxCasGrupoBioter(t){
 }
 /* pxCascataPlanejar(novo,extras) → {moves:[{id,title,de,para,client,unit}], travou:[{semana,alvo}], semana}
    `novo` em camelCase ou snake (o draft do CardModal serve). Não grava nada. */
-async function pxCascataPlanejar(novo,extras){
+async function pxCascataPlanejar(novo,extras,opts){
   const vazio={moves:[],travou:[],lixeira:[],semana:""};
   try{
     const sb=window._sb; if(!sb||!novo) return vazio;
@@ -18818,7 +18818,13 @@ async function pxCascataPlanejar(novo,extras){
       // 1) quem sai da semana do card novo
       const daSemana0=rows.filter(function(x){ return semanaDe(x)===L.iniIso; });
       if(_pxCasConta(daSemana0,alvo).length<=cap) continue;
-      for(const tr of prefs){ t=ultimoDaTrilha(_pxCasConta(daSemana0,alvo),tr); if(t) break; }
+      /* (19/09/2026) `opts.sair` = quem TEM que sair da semana, decidido por quem chamou.
+         A varredura manda o ÚLTIMO card movível da semana (regra do Vinicius: o do fim da
+         fila é que anda). Sem isso, a escolha por trilha podia puxar um card do começo da
+         semana — foi o que aconteceu quando a "Caixinha de perguntas" deixou de ser story. */
+      const _sair=(opts&&opts.sair)?daSemana0.find(function(x){ return String(x.id)===String(opts.sair); }):null;
+      if(_sair&&_pxCasMovivel(_sair,hoje,nn.id)&&_pxCasConta(daSemana0,alvo).indexOf(_sair)>=0) t=_sair;
+      else for(const tr of prefs){ t=ultimoDaTrilha(_pxCasConta(daSemana0,alvo),tr); if(t) break; }
       if(!t){ travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo}); continue; }
       const trilha=_pxCasTrilha(t);
       // 2) o deslocado anda de semana em semana, sempre na mesma trilha
@@ -18867,7 +18873,7 @@ function pxCascataTexto(plano,nomeCliente){
   return s;
 }
 /* pxCascataAplicar(plano, setTasks?) — grava no Supabase, atualiza o state local e registra. */
-async function pxCascataAplicar(plano,setTasks,quem){
+async function pxCascataAplicar(plano,setTasks,quem,motivo){
   try{
     const sb=window._sb; if(!sb||!plano||(!plano.moves.length&&!(plano.lixeira||[]).length)) return 0;
     const agora=new Date();
@@ -18881,7 +18887,7 @@ async function pxCascataAplicar(plano,setTasks,quem){
       const tl=Array.isArray(q.data.timeline)?q.data.timeline:[];
       const r=await sb.from("tasks").update({publish_date:mv.para,deadline:mv.para,
         timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,
-          label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": entrou um card novo na semana"+(quem?(" ("+quem+")"):"")+" e a cadência do cliente empurrou este pra frente"}])
+          label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": "+(motivo||("entrou um card novo na semana"+(quem?(" ("+quem+")"):"")))+" e a cadência do cliente empurrou este pra frente"}])
       }).eq("id",mv.id);
       if(r&&r.error){ console.warn("[cascata aplicar]",mv.id,r.error.message); continue; }
       feitos[mv.id]=mv.para;
@@ -18948,6 +18954,135 @@ async function pxCascataAuto(novos){
     }
     return total;
   }catch(e){ console.warn("[cascata auto]",e); return 0; }
+}
+/* ═══ VARREDURA DE CADÊNCIA (19/09/2026) ════════════════════════════════════════
+   A cascata só rodava NO MOMENTO em que um card novo era criado pelo calendário.
+   Card criado antes de 17/09 (quando a cascata nasceu), card que veio do planejamento
+   automático, dois cards salvos ao mesmo tempo ou data mexida na mão deixavam a semana
+   acima da cadência e NINGUÉM reajustava. Foi assim que a semana 20–26/09 do Climaves
+   ficou com 3 posts (cadência 2) sem ninguém ver — a auditoria do calendário, que
+   apontava isso, tinha sido desligada em 18/09.
+   pxCascataVarrer() varre as próximas semanas, acha TODA semana acima da cadência e roda
+   a cascata sozinha, sem prévia (igual pxCascataAuto). Quem anda é o último card da
+   trilha que está sobrando. Semana que só estoura por card FIXO (comemorativa, feira,
+   collab) fica como está — ali é decisão, não bug. Tudo registrado em
+   claude_plano_execucoes: o botão de emergência desfaz.                              */
+const PX_CASCATA_VARRE_SEMANAS=30;
+async function pxCascataVarrer(){
+  try{
+    const sb=window._sb; if(!sb) return 0;
+    const hoje=_pxApIso(new Date());
+    const L0=_pxApLinha(hoje);
+    const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
+    let total=0;
+    // uma semana por volta: depois de aplicar, relê o banco (a cascata mexeu nas semanas seguintes)
+    for(let volta=0; volta<40; volta++){
+      const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+        .is("deleted_at",null).gte("publish_date",hoje).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
+      if(!r||r.error) break;
+      const porSemana={};
+      (r.data||[]).forEach(function(x){
+        const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
+        const k=_pxApLinha(iso).iniIso;
+        (porSemana[k]=porSemana[k]||[]).push(x);
+      });
+      let achou=null;
+      for(const k of Object.keys(porSemana).sort()){
+        const daSemana=porSemana[k], alvos=[];
+        daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
+        for(const alvo of alvos){
+          const doAlvo=_pxCasConta(daSemana,alvo);
+          if(doAlvo.length<=PX_CASCATA_CAP[alvo]) continue;
+          const porTrilha={};
+          doAlvo.forEach(function(x){ const tr=_pxCasTrilha(x); (porTrilha[tr]=porTrilha[tr]||[]).push(x); });
+          // trilha que sobra: a que tem mais cards; empate → a do card mais pra frente na semana
+          const cand=Object.keys(porTrilha).filter(function(tr){
+            return tr!=="fixa"&&porTrilha[tr].some(function(x){ return _pxCasMovivel(x,hoje,null); });
+          }).sort(function(p,q){
+            if(porTrilha[q].length!==porTrilha[p].length) return porTrilha[q].length-porTrilha[p].length;
+            return String(porTrilha[q][porTrilha[q].length-1].publish_date).localeCompare(String(porTrilha[p][porTrilha[p].length-1].publish_date));
+          });
+          if(!cand.length) continue; // só card fixo estourando: decisão, não bug
+          /* Quem anda é o ÚLTIMO card da semana que PODE andar (data mais pra frente).
+             Comemorativa, feira e collab nunca saem — se o último for um desses, olha o
+             anterior. A âncora é só o ponto de partida do planejador (fica onde está). */
+          const ordenados=doAlvo.slice().sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+          let sair=null;
+          for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
+          if(!sair) continue;
+          const ancora=ordenados.find(function(x){ return String(x.id)!==String(sair.id); });
+          if(!ancora) continue;
+          achou={ancora:ancora,sair:sair,semana:k,alvo:alvo}; break;
+        }
+        if(achou) break;
+      }
+      if(!achou) break;
+      const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id});
+      if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
+      const n=await pxCascataAplicar(plano,null,"varredura de cadência","a semana estava acima da cadência do cliente");
+      if(!n) break;
+      total+=n;
+    }
+    // 2ª passada: dias colados. Cadência certa não basta — segunda e terça é o mesmo erro.
+    try{ total+=await pxCascataEspacar(); }catch(_e){ console.warn("[cascata espacar]",_e); }
+    return total;
+  }catch(e){ console.warn("[cascata varrer]",e); return 0; }
+}
+/* ═══ ESPAÇAMENTO (19/09/2026) ═══════════════════════════════════════════════════
+   Vinicius: "dois posts em dias seguidos não, tem que espaçar sempre que possível,
+   tipo segunda e quinta". A cascata já escolhia dia com folga (_pxCasDiaComFolga)
+   QUANDO movia um card — mas nada olhava os cards que já estavam parados colados.
+   Caso real: Climaves com post em 21/09 e 22/09; a varredura tirou o 3º da semana e
+   deixou os dois colados do mesmo jeito.
+   Aqui: acha par do mesmo cliente/unidade com menos de 2 dias de intervalo e joga o
+   card MOVÍVEL pro melhor dia livre da mesma semana. Nunca mexe em comemorativa,
+   feira, aniversário (fixos) nem em collab — collab é a grade das quartas e vale pras
+   5 unidades. Par que só tem card fixo/collab fica como está: ali não dá pra espaçar
+   sem quebrar outra regra.                                                          */
+const PX_CASCATA_FOLGA_MIN=2; // dias entre um post e outro da mesma unidade
+async function pxCascataEspacar(){
+  try{
+    const sb=window._sb; if(!sb) return 0;
+    const hoje=_pxApIso(new Date());
+    const L0=_pxApLinha(hoje);
+    const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+      .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
+    if(!r||r.error) return 0;
+    const rows=(r.data||[]);
+    const podeAndar=function(t){ return _pxCasMovivel(t,hoje,null)&&_pxCasTrilha(t)!=="collab"; };
+    const moves=[];
+    const porSemana={};
+    rows.forEach(function(x){
+      const iso=String(x.publish_date||"").slice(0,10); if(!iso||iso<hoje) return;
+      const k=_pxApLinha(iso).iniIso; (porSemana[k]=porSemana[k]||[]).push(x);
+    });
+    for(const k of Object.keys(porSemana).sort()){
+      const L=_pxApLinha(k), daSemana=porSemana[k], alvos=[];
+      daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
+      for(const alvo of alvos){
+        const lista=_pxCasConta(daSemana,alvo).slice().sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+        for(let i=1;i<lista.length;i++){
+          const a=lista[i-1], b=lista[i];
+          const da=_pxApData(String(a.publish_date).slice(0,10)), db=_pxApData(String(b.publish_date).slice(0,10));
+          const dif=Math.round((db.getTime()-da.getTime())/86400000);
+          if(dif>=PX_CASCATA_FOLGA_MIN) continue;
+          // anda o de trás; se ele for fixo/collab, tenta o da frente
+          const t=podeAndar(b)?b:(podeAndar(a)?a:null);
+          if(!t) continue;
+          const semEle=rows.filter(function(x){ return String(x.id)!==String(t.id); });
+          const para=_pxCasDiaComFolga(t,L,semEle,hoje);
+          const de=String(t.publish_date).slice(0,10);
+          if(!para||para===de) continue;
+          moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
+          t.publish_date=para; // vale pra conta do próximo par
+          lista.sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+        }
+      }
+    }
+    if(!moves.length) return 0;
+    return await pxCascataAplicar({moves:moves,lixeira:[],travou:[],semana:""},null,"espaçamento","os posts da semana estavam colados (a regra é espaçar, tipo segunda e quinta)");
+  }catch(e){ console.warn("[cascata espacar]",e); return 0; }
 }
 /* pxCascataConfirmar(novo,setTasks,quem) → Promise<true> sempre (o save segue). Prévia + OK. */
 async function pxCascataConfirmar(novo,setTasks,quem){
@@ -20891,6 +21026,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   const contadorProjeto=useMemo(function(){
     return faseProjetos ? _pxContadorProjeto(tasks,faseProjetos) : {};
   },[tasks,faseProjetos]);
+  /* (19/09/2026) VARREDURA DE CADÊNCIA — uma vez por sessão, ao abrir o calendário.
+     A cascata só pegava card novo criado aqui dentro; semana que estourou por outro
+     caminho (planejamento automático, card antigo, data mexida na mão) ficava acima da
+     cadência pra sempre e ninguém era avisado. Agora o calendário conserta sozinho. */
+  useEffect(function(){
+    if(typeof pxCascataVarrer!=="function") return;
+    try{ if(window.__pxVarreuCadencia) return; window.__pxVarreuCadencia=true; }catch(_e){}
+    const _t=setTimeout(function(){ try{ pxCascataVarrer(); }catch(_e){} },2000);
+    return function(){ clearTimeout(_t); };
+  },[]);
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
@@ -43469,6 +43614,16 @@ function _cardPodeSerResp(u){
         somenteStory:!!somenteStory,naoPublica:!!naoPublica,contentType:contentType||null,title:formattedTitle,tags:tags||[]};
       pxCascataConfirmar(_novo,setTasks,user&&user.name).then(function(){ _gravar(); },function(){ _gravar(); });
       return;
+    }
+    /* (19/09/2026, Vinicius) Card que JÁ existia e passa a ocupar o dia — tirou "Somente story"
+       ou "Não publica", ou mudou de data — entra na conta da semana. Se a semana estourar a
+       cadência, a cascata roda sozinha (a varredura relê do banco e empurra a fila; comemorativa
+       não sai do lugar). Antes só card NOVO do calendário disparava a cascata: desmarcar o story
+       deixava a semana com um post a mais e ninguém reajustava. */
+    const _viraFeed=(!somenteStory&&!!(task.somenteStory||task.somente_story))||(!naoPublica&&!!(task.naoPublica||task.nao_publica));
+    const _mudouData=publishDate&&publishDate!==task.publishDate;
+    if(!task._isDraft&&(_viraFeed||_mudouData)&&!somenteStory&&!naoPublica&&typeof pxCascataVarrer==="function"){
+      setTimeout(function(){ try{ pxCascataVarrer(); }catch(_e){} },2500);
     }
     _gravar();
     function _gravar(){
@@ -93053,19 +93208,23 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 _saveList(cur);
               };
               const _addNew = function(){
-                _saveList([...listEdit, {nome:"", whatsapp:"", email:""}]);
+                _saveList([...listEdit, {nome:"", cargo:"", whatsapp:"", email:""}]);
               };
 
+              /* (19/09/2026, Vinicius) CARGO/FUNÇÃO no contato: "deve falar a função, cargo
+                 do colaborador". Sem isso o card só diz "Martins" e ninguém sabe se liga pra
+                 ele pra tratar de arte, de obra ou de pagamento. */
               const FIELDS = [
-                {key:"nome",     label:"Nome",     ph:"Ex: Rodrigo Silva",       icon:"user"},
-                {key:"whatsapp", label:"WhatsApp", ph:"(00) 0 0000-0000",        icon:"phone"},
-                {key:"email",    label:"E-mail",   ph:"contato@cliente.com.br",  icon:"mail"},
+                {key:"nome",     label:"Nome",             ph:"Ex: Rodrigo Silva",        icon:"user"},
+                {key:"cargo",    label:"Cargo / função",   ph:"Ex: Gerente comercial",    icon:"briefcase"},
+                {key:"whatsapp", label:"WhatsApp",         ph:"(00) 0 0000-0000",         icon:"phone"},
+                {key:"email",    label:"E-mail",           ph:"contato@cliente.com.br",   icon:"mail"},
               ];
 
               if(editMode){
                 // Se ainda não tem nenhum contato, mostra 1 card em branco pronto pra preencher.
                 // Quando o usuário digitar, _updateAt cria o item no state.
-                const displayList = listEdit.length > 0 ? listEdit : [{nome:"",whatsapp:"",email:""}];
+                const displayList = listEdit.length > 0 ? listEdit : [{nome:"",cargo:"",whatsapp:"",email:""}];
                 return <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   {displayList.map(function(ct,idx){
                     return <div key={(_currentUnit||"c")+"-"+idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
@@ -93081,8 +93240,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
                         {FIELDS.map(function(f){
-                          const isNome=f.key==="nome";
-                          return <div key={f.key} style={isNome?{gridColumn:isMob?"auto":"span 2"}:{}}>
+                          return <div key={f.key}>
                             <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
                             <input type="text" placeholder={f.ph}
                               value={ct[f.key]||""}
@@ -93110,14 +93268,17 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   const items = FIELDS.filter(function(it){return ct[it.key];});
                   if(items.length===0) return null;
                   return <div key={idx} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:12,padding:"12px 14px"}}>
-                    {ct.nome && <div style={{color:"#134e4a",fontSize:14,fontWeight:800,letterSpacing:-.2,marginBottom:9,display:"flex",alignItems:"center",gap:8}}>
+                    {(ct.nome||ct.cargo) && <div style={{marginBottom:9,display:"flex",alignItems:"center",gap:8}}>
                       <div style={{width:28,height:28,borderRadius:8,background:"#0d9488",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <Ico n="user" size={13}/>
                       </div>
-                      {ct.nome}
+                      <div style={{minWidth:0}}>
+                        {ct.nome && <div style={{color:"#134e4a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{ct.nome}</div>}
+                        {ct.cargo && <div style={{color:"#0d9488",fontSize:11,fontWeight:700,letterSpacing:.1,marginTop:1}}>{ct.cargo}</div>}
+                      </div>
                     </div>}
                     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-                      {items.filter(function(it){return it.key!=="nome";}).map(function(it){
+                      {items.filter(function(it){return it.key!=="nome"&&it.key!=="cargo";}).map(function(it){
                         return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #99f6e480",borderRadius:9,padding:"7px 10px"}}>
                           <div style={{width:26,height:26,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={11} color="#fff"/></div>
                           <div style={{minWidth:0,flex:1}}>
