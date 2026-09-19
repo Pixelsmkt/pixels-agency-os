@@ -48523,7 +48523,18 @@ function OrientacoesView({clientId, bioterUnit, sector}){
         return _mergeSeed((obj && obj[clientId]) || null);
       }catch(_){ return _mergeSeed(null); }
     }
-    setPlaybookData(_readPlaybook());
+    /* (19/09/2026, Vinicius) "o Orientações fica se mexendo sozinho".
+       Era um setInterval de 8s que relia o playbook e chamava setPlaybookData com um
+       OBJETO NOVO toda vez — o React remontava a aba inteira (imagens recarregando,
+       seções pulando) enquanto a pessoa lia. O intervalo saiu: o evento
+       "pixels:playbook-updated" e o "storage" já avisam quando o Playbook muda.
+       E o estado agora só troca quando o conteúdo mudou DE VERDADE. */
+    const _ultimoJson={v:null};
+    const _setSeMudou=function(novo){
+      try{ const j=JSON.stringify(novo||null); if(j===_ultimoJson.v) return; _ultimoJson.v=j; }catch(_){}
+      setPlaybookData(novo);
+    };
+    _setSeMudou(_readPlaybook());
     // Fetch FRESH do Supabase — o cache local pode estar velho ou o playbook
     // ter sido preenchido em outro PC (era só localStorage e os contatos não chegavam)
     let _alive=true;
@@ -48532,7 +48543,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
         if(!window._sb) return;
         const {data,error}=await window._sb.from("playbooks").select("data").eq("client_id",clientId).maybeSingle();
         if(!_alive||error) return;
-        setPlaybookData(_mergeSeed((data&&data.data)||null));
+        _setSeMudou(_mergeSeed((data&&data.data)||null));
         if(!data||!data.data) return;
         try{
           const raw=localStorage.getItem("pixels-playbooks-v1");
@@ -48543,16 +48554,14 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       }catch(_){}
     }
     _fetchPb();
-    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybook());}
-    function _onCustom(){setPlaybookData(_readPlaybook());_fetchPb();}
+    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")_setSeMudou(_readPlaybook());}
+    function _onCustom(){_setSeMudou(_readPlaybook());_fetchPb();}
     window.addEventListener("storage", _onStorage);
     window.addEventListener("pixels:playbook-updated", _onCustom);
-    const _tid = setInterval(_onCustom, 8000);
     return function(){
       _alive=false;
       window.removeEventListener("storage", _onStorage);
       window.removeEventListener("pixels:playbook-updated", _onCustom);
-      clearInterval(_tid);
     };
   },[clientId]);
 
@@ -48684,6 +48693,12 @@ function OrientacoesView({clientId, bioterUnit, sector}){
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {/* (19/09/2026) Deixa explícito que a aba é filtrada por função — quem abre sabe que
+          está vendo a SUA parte, e o sócio sabe que a equipe não vê a mesma tela que ele. */}
+      {_cadeiraCard&&<div style={{display:"inline-flex",alignItems:"center",gap:7,alignSelf:"flex-start",background:(_cadeiraCard.color||"#64748b")+"12",border:"1px solid "+(_cadeiraCard.color||"#64748b")+"33",color:_cadeiraCard.color||"#475569",borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:700}}>
+        <Ico n={_cadeiraCard.icon||"user"} size={12}/>
+        Mostrando só o que é de {_cadeiraCard.label}
+      </div>}
       {/* ═══ Hero do cliente — moderno com logo real ou avatar ═══ */}
       {cl&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:14,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 2px 6px rgba(124,58,237,0.05)"}}>
         <div style={{width:52,height:52,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:6,flexShrink:0,boxShadow:"0 1px 3px rgba(15,23,42,0.06)"}}>
@@ -48929,7 +48944,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ CTA padrão ═══ */}
-      {data.ctaPadrao&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px"}}>
+      {_vis("pb-social")&&data.ctaPadrao&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px"}}>
         <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2"/></svg>
           CTA padrão
@@ -48947,7 +48962,7 @@ function OrientacoesView({clientId, bioterUnit, sector}){
       </div>}
 
       {/* ═══ Links (renomeado — Contatos agora tem aba própria) ═══ */}
-      {_linksItems.length>0&&<div>
+      {_vis("pb-social")&&_linksItems.length>0&&<div>
         <SectionTitle label="Links" sub="Perfis oficiais e recursos externos" icon="link" accent="#7c3aed"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
           {_linksItems.map(function(it){
@@ -92249,11 +92264,19 @@ function _pbBlocoPadrao(cadeiraId, blocoId){
 function _pbCadeiraPadrao(u, cadeiraId){
   if(!u) return false;
   if(u.level===1 || u.id==="ellen") return true;
-  if(cadeiraId==="estrategia") return u.dash==="coordinator"; // estrategista: playbook inteiro
-  if(cadeiraId==="social")     return u.dash==="social";
-  if(cadeiraId==="design")     return u.dash==="designer";
-  if(cadeiraId==="video")      return u.dash==="editor";
-  if(cadeiraId==="midia")      return u.id==="erick" || u.dash==="gestor";
+  /* (19/09/2026) O dash vem de dois lugares e nem sempre com o mesmo nome: o TEAM
+     hardcoded usa "editor"/"designer", e o profiles do Supabase (de onde entram os
+     colaboradores novos, como a Luiza) já gravou "video" e "design". Quem caía fora
+     desse de-para ficava SEM cadeira — e sem cadeira o card mostra TUDO, inclusive o
+     que é de outra função. Por isso o de-para aceita os dois nomes, e o role serve de
+     rede de segurança. */
+  const _d=String(u.dash||"").toLowerCase();
+  const _r=String(u.role||"").toLowerCase();
+  if(cadeiraId==="estrategia") return _d==="coordinator";
+  if(cadeiraId==="social")     return _d==="social"||/social media/.test(_r);
+  if(cadeiraId==="design")     return _d==="designer"||_d==="design"||/design/.test(_r);
+  if(cadeiraId==="video")      return _d==="editor"||_d==="video"||/v[ií]deo/.test(_r);
+  if(cadeiraId==="midia")      return u.id==="erick"||_d==="gestor"||_d==="midia"||/m[ií]dia|tr[áa]fego/.test(_r);
   return false;
 }
 let _PB_CADEIRA_ATUAL = null; // id da cadeira em exibição (null = tudo)
