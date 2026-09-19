@@ -57623,7 +57623,32 @@ function QGBusca({clients,openClient,onCliente,onTop,acoes}){
    ═══════════════════════════════════════════════════════ */
 function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,tasks,onNovoCliente,onAbrirCadastro,openClient,setOpenClient}){
   useQGClientesSync(store,update);
-  const clients=(store.clients||[]).slice().sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+  /* ─── Trava por cliente (19/09/2026) ───
+     A Gestão de mídia mostrava todos os clientes pra qualquer um que abrisse a
+     tela — as chaves verCliente_<id> só valiam na tela de Clientes. Agora valem
+     aqui também, e como este `clients` alimenta a tela inteira (tabela, KPIs,
+     ações), a trava pega tudo de uma vez.
+     Regra: sócio vê tudo; quem tem alguma verCliente_<id> ligada vê só essas
+     (mais as unidades filhas); quem não tem nenhuma configurada segue como antes. */
+  const _qgClientesPermitidos=function(lista){
+    try{
+      const u=currentUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
+      if(!u) return lista;
+      if(Number(u.level)===1) return lista;
+      const perms=(typeof ACCESS_STORE!=="undefined"&&ACCESS_STORE[u.id])||null;
+      if(!perms) return lista;
+      const liberados={};
+      Object.keys(perms).forEach(function(k){
+        const m=/^verCliente_([a-z0-9_]+)$/.exec(k);
+        if(m&&perms[k]===true) liberados[m[1]]=true;
+      });
+      if(!Object.keys(liberados).length) return lista;
+      return lista.filter(function(c){
+        return liberados[c.client_id]===true||(c.parent_client&&liberados[c.parent_client]===true);
+      });
+    }catch(_e){ return lista; }
+  };
+  const clients=_qgClientesPermitidos((store.clients||[]).slice()).sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
   const now=new Date();
   const [periodo,setPeriodo]=useState(now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0"));
   const year=parseInt(periodo.slice(0,4),10), month=parseInt(periodo.slice(5,7),10);
