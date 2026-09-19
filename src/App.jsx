@@ -1386,6 +1386,28 @@ const PX_PERMS_GESTORA_PROJETOS={
 };
 const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{});
 
+/* ═══ ACESSO TEMPORÁRIO — perfil LEITOR (19/09/2026) ═══
+   Um Leitor é um colaborador comum: mesmo card no Time, mesma tela de
+   "gerenciar acesso", mesma árvore de blocos. A diferença é só o ponto de
+   partida (tudo desligado menos ver a Gestão de mídia, sem editar) e a
+   data de validade em profiles.acesso_expira_em.
+   Nasceu do acesso de revisor que a Meta exige na Análise do app.
+   pxLeitorPerms(clientId) liga também as chaves daquele cliente. */
+const LEITOR_PERMS=Object.assign(
+  Object.keys(DEFAULT_PERMS).reduce(function(a,k){a[k]=false;return a;},{}),
+  { verGestaoMidia:true,      // a única tela que ele abre
+    editarGestaoMidia:false,  // e só de leitura
+    blocos:{} }
+);
+function pxLeitorPerms(clientId){
+  const p={...LEITOR_PERMS, verGestaoMidia:true, editarGestaoMidia:false, blocos:{}};
+  if(clientId){
+    p["verCliente_"+clientId]=true;
+    p["verCliente_"+clientId+"_metricas"]=true;
+  }
+  return p;
+}
+
 // Helper: retorna true se o usuário é sócio (level 1).
 // Usado pra GARANTIR que Vinicius e Gustavo sempre têm tudo true,
 // independente do que está em livePerms ou ACCESS_STORE customizado.
@@ -9629,24 +9651,11 @@ const ScoreCircle=({score,label,color,size=80})=>{
 
 /* ─── META AUTH SYSTEM ─────────────────────── */
 
-// ── Facebook SDK Loader ──────────────────────
-const loadFBSDK=(appId)=>new Promise((resolve,reject)=>{
-  const timer=setTimeout(()=>reject(new Error("Facebook SDK timeout")),10000);
-  if(window.FB){resolve(window.FB);return;}
-  window.fbAsyncInit=()=>{
-    window.FB.init({appId,cookie:true,xfbml:false,version:"v19.0"});
-    resolve(window.FB);
-  };
-  const s=document.createElement("script");
-  s.src="https://connect.facebook.net/pt_BR/sdk.js";
-  s.async=true;s.defer=true;
-  s.onerror=()=>reject(new Error("FB SDK failed to load"));
-  document.head.appendChild(s);
-});
-
-// ── Permission scopes ────────────────────────
-const SCOPES_BASIC   ="public_profile,email,pages_show_list,pages_read_engagement,instagram_basic,instagram_manage_insights";
-const SCOPES_ADS     =SCOPES_BASIC+",ads_read,ads_management,business_management,read_insights";
+// Login do Facebook REMOVIDO (19/09/2026)
+// O painel "Conectar conta" era do comeco do app e nunca foi concluido (pedia o
+// App ID na mao). Foi retirado: o SDK do Facebook nao e mais carregado e o login
+// nao e mais chamado. Os dados de anuncios vem da coleta propria (sync-meta-ads),
+// com usuario do sistema, sem login de usuario.
 
 // ── Meta Auth Context ────────────────────────
 const AUTH_STORAGE_KEY="pixels-meta-auth-v1";
@@ -9678,38 +9687,8 @@ function useMetaAuth(){
     setAuth(data);
   };
 
-  const login=async(appId,requestAds=false)=>{
-    setLoading(true);setError("");
-    try{
-      const FB=await loadFBSDK(appId);
-      const scope=requestAds?SCOPES_ADS:SCOPES_BASIC;
-      const result=await new Promise((res,rej)=>{
-        FB.login(r=>r.authResponse?res(r):rej(new Error(r.status||"cancelled")),
-          {scope,return_scopes:true,auth_type:"rerequest"});
-      });
-      const {accessToken,grantedScopes}=result.authResponse;
-      // Fetch user profile
-      const me=await new Promise(res=>FB.api("/me","GET",{fields:"id,name,picture.width(100)"},res));
-      // Exchange for long-lived token (60 days) — needs app secret, so show instructions
-      // For now use short token and note expiry
-      const tokenExpiry=Date.now()+(3600*1000); // 1h short-lived
-      const data={
-        userId:me.id,name:me.name,
-        picture:me.picture?.data?.url,
-        accessToken,
-        tokenExpiry,
-        grantedScopes:grantedScopes||scope,
-        appId,
-        connectedAt:new Date().toISOString(),
-        pages:null,adAccounts:null,igAccounts:null,
-      };
-      await saveAuth(data);
-      // Auto-fetch pages
-      await fetchPages(data,FB);
-    }catch(e){
-      if(e.message!=="cancelled")setError(e.message||"Erro ao conectar");
-    }
-    setLoading(false);
+  const login=async()=>{
+    setError("descontinuada");
   };
 
   const fetchPages=async(authData,FB)=>{
@@ -9753,7 +9732,7 @@ function MetaLoginPanel({onClose}){
 
   const handleFetchPages=async()=>{
     setFetchingPages(true);
-    await fetchPages(null,window.FB);
+    await fetchPages(null,null);
     setFetchingPages(false);
   };
 
@@ -36980,6 +36959,39 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     return out;
   });
 
+  /* ── Acessos temporários (Leitor) — 19/09/2026 ──
+     Guarda por team_id { tipo, expira, ativo } pra desenhar o selo no card
+     e deixar revogar na hora, sem esperar vencer. */
+  const [acessosTemp,setAcessosTemp]=useState({});
+  const recarregarAcessosTemp=React.useCallback(async function(){
+    try{
+      const sb=window._sb; if(!sb) return;
+      const{data:rows}=await sb.from("profiles")
+        .select("team_id,acesso_tipo,acesso_expira_em,acesso_ativo")
+        .not("acesso_tipo","is",null);
+      const m={};
+      (rows||[]).forEach(function(r){ if(r.team_id) m[r.team_id]={tipo:r.acesso_tipo,expira:r.acesso_expira_em,ativo:r.acesso_ativo!==false}; });
+      setAcessosTemp(m);
+    }catch(_e){}
+  },[]);
+  useEffect(function(){ recarregarAcessosTemp(); },[recarregarAcessosTemp]);
+  const revogarAcesso=async function(teamId,nome){
+    try{
+      const sb=window._sb;
+      await sb.from("profiles").update({acesso_ativo:false}).eq("team_id",teamId);
+      setAcessosTemp(function(m){ return {...m,[teamId]:{...(m[teamId]||{}),ativo:false}}; });
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Acesso de "+(nome||teamId)+" revogado.");
+    }catch(_e){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Não deu pra revogar agora."); }
+  };
+  const reativarAcesso=async function(teamId,nome){
+    try{
+      const sb=window._sb;
+      await sb.from("profiles").update({acesso_ativo:true}).eq("team_id",teamId);
+      setAcessosTemp(function(m){ return {...m,[teamId]:{...(m[teamId]||{}),ativo:true}}; });
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Acesso de "+(nome||teamId)+" reativado.");
+    }catch(_e){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Não deu pra reativar agora."); }
+  };
+
   // Carregar perfis do Supabase ao montar (fonte de verdade)
   useEffect(()=>{
     const loadProfiles=async()=>{
@@ -37375,6 +37387,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha nome, email, senha e ID curto (team_id).");
           return;
         }
+        if(novoColab._leitor&&!novoColab._cliente){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escolha qual cliente o leitor vai enxergar.");
+          return;
+        }
         setNovoColabBusy(true);
         try{
           const sb=window._sb;
@@ -37405,7 +37421,23 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             setNovoColabBusy(false);
             return;
           }
-          if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
+          if(typeof pixelsToast!=="undefined")pixelsToast.success(novoColab._leitor?"Acesso temporário criado! Avise pra logar com email/senha.":"Colaborador criado! Avise pra logar com email/senha.");
+          // Leitor: carimba validade e aplica o preset de somente leitura
+          if(novoColab._leitor){
+            try{
+              const _dias=Number(novoColab._dias)||365;
+              const _exp=new Date(); _exp.setDate(_exp.getDate()+_dias);
+              const _perms=(typeof pxLeitorPerms!=="undefined")?pxLeitorPerms(novoColab._cliente):{verGestaoMidia:true};
+              await sb.from("profiles").update({
+                acesso_tipo:"leitor",
+                acesso_expira_em:_exp.toISOString(),
+                acesso_ativo:true,
+                permissions:_perms,
+                primary_client:novoColab._cliente||null,
+              }).eq("team_id",payload.team_id);
+              if(typeof ACCESS_STORE!=="undefined") ACCESS_STORE[payload.team_id]={..._perms};
+            }catch(_e){console.warn("[acessos] leitor:",_e&&_e.message?_e.message:_e);}
+          }
           // Registra a senha no cofre de login (só sócios veem no card do Time)
           try{
             await sb.from("team_login_secrets").upsert({team_id:payload.team_id,senha:payload.password,email:payload.email,updated_by:CURRENT_USER.id,updated_at:new Date().toISOString()},{onConflict:"team_id"});
@@ -37413,7 +37445,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
           }catch(_e){console.warn("[acessos] captura senha login:",_e&&_e.message?_e.message:_e);}
           setNovoColabOpen(false);
           setNovoColabBusy(false);
-          setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:""});
+          setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:"",_leitor:false,_dias:365,_cliente:""});
           // Mescla IMEDIATAMENTE no TEAM (sem precisar refresh)
           try{
             if(typeof TEAM!=="undefined" && !TEAM.find(t=>t.id===payload.team_id)){
@@ -37428,7 +37460,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             }
             if(typeof ACCESS_STORE!=="undefined" && !ACCESS_STORE[payload.team_id]){
               const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,social:(typeof SOCIAL_MEDIA_PERMS!=="undefined"?SOCIAL_MEDIA_PERMS:ACCESS_STORE.ellen),gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
-              ACCESS_STORE[payload.team_id]={...(dashDefaults[payload.dash]||DEFAULT_PERMS)};
+              ACCESS_STORE[payload.team_id]=novoColab._leitor
+                ? {...((typeof pxLeitorPerms!=="undefined")?pxLeitorPerms(novoColab._cliente):DEFAULT_PERMS)}
+                : {...(dashDefaults[payload.dash]||DEFAULT_PERMS)};
             }
             if(data.photo_url){
               const pd={photo:data.photo_url,name:payload.name,role:payload.role};
@@ -37468,8 +37502,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
               </div>
               <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Novo colaborador</div>
-                <div style={{color:"rgba(255,255,255,.78)",fontSize:12,marginTop:2,fontWeight:500}}>Cria login + perfil + foto numa só ação</div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{novoColab._leitor?"Acesso temporário":"Novo colaborador"}</div>
+                <div style={{color:"rgba(255,255,255,.78)",fontSize:12,marginTop:2,fontWeight:500}}>{novoColab._leitor?"Somente leitura, com data pra vencer":"Cria login + perfil + foto numa só ação"}</div>
               </div>
             </div>
             <button onClick={()=>!novoColabBusy&&setNovoColabOpen(false)}
@@ -37493,6 +37527,39 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                 {novoColab.photo_base64&&<button onClick={()=>setNovoColab(p=>({...p,photo_base64:"",photo_mime:""}))} style={{marginLeft:8,background:"transparent",border:"1px solid "+C.b1,borderRadius:8,padding:"7px 12px",fontSize:11,color:C.td,cursor:"pointer"}}>Remover</button>}
               </div>
             </div>
+
+            {/* Leitor: validade + cliente que ele enxerga */}
+            {novoColab._leitor&&<div style={{background:"#0ea5e912",border:"1px solid #0ea5e933",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                <div style={{color:"#0284c7",fontWeight:800,fontSize:12.5,letterSpacing:-.1}}>Acesso somente leitura</div>
+              </div>
+              <div style={{color:C.ts,fontSize:11.5,lineHeight:1.5,marginTop:-4}}>
+                Entra só na Gestão de mídia, sem editar nada. Depois você ajusta em "gerenciar acesso", igual a qualquer colaborador.
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:10}}>
+                <div>
+                  <div style={lbl}>Vence em</div>
+                  <select value={novoColab._dias} onChange={e=>setNovoColab(p=>({...p,_dias:Number(e.target.value)}))} style={inp}>
+                    <option value={30}>30 dias</option>
+                    <option value={90}>90 dias</option>
+                    <option value={180}>180 dias</option>
+                    <option value={365}>12 meses</option>
+                  </select>
+                  <div style={{color:C.td,fontSize:10,marginTop:3}}>
+                    {(function(){const d=new Date();d.setDate(d.getDate()+(Number(novoColab._dias)||365));return "Bloqueia sozinho em "+d.toLocaleDateString("pt-BR");})()}
+                  </div>
+                </div>
+                <div>
+                  <div style={lbl}>Cliente que ele enxerga</div>
+                  <select value={novoColab._cliente} onChange={e=>setNovoColab(p=>({...p,_cliente:e.target.value}))} style={inp}>
+                    <option value="">Nenhum (escolha um)</option>
+                    {(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno"&&String(c.name||"").trim();}).map(function(c){return <option key={c.id} value={c.id}>{c.name||c.id}</option>;})}
+                  </select>
+                  <div style={{color:C.td,fontSize:10,marginTop:3}}>Só as métricas desse cliente aparecem.</div>
+                </div>
+              </div>
+            </div>}
 
             {/* Nome */}
             <div>
@@ -37892,6 +37959,12 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
           </button>}
+          {isMePartner&&<button onClick={()=>{setNovoColab({name:"",email:"",password:"",team_id:"",role:"Leitor",dash:"gestor",color:"#0ea5e9",av:"",level:4,photo_base64:"",photo_mime:"",_leitor:true,_dias:365,_cliente:""});setNovoColabOpen(true);}}
+            title="Cria um acesso somente leitura, com data pra vencer"
+            style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"8px 14px",color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Acesso temporário
+          </button>}
         </div>}
       </div>
 
@@ -37948,6 +38021,19 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
               <div>
                 <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.2,lineHeight:1.25}}>{displayName}</div>
                 <div style={{color:u.color,fontSize:12.5,fontWeight:600,marginTop:3}}>{(collabProfiles[u.id]&&collabProfiles[u.id].funcao)||u.role}</div>
+                {(function(){
+                  const _at=acessosTemp[u.id]; if(!_at||_at.tipo!=="leitor") return null;
+                  const _venc=_at.expira?new Date(_at.expira):null;
+                  const _passou=_venc&&_venc<new Date();
+                  const _off=!_at.ativo||_passou;
+                  const _cor=_off?"#b91c1c":"#0284c7";
+                  return <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:6,background:_cor+"14",border:"1px solid "+_cor+"33",borderRadius:99,padding:"3px 10px"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                    <span style={{color:_cor,fontSize:10.5,fontWeight:800,letterSpacing:.02}}>
+                      {_off?"Leitor · acesso encerrado":("Leitor · vence "+(_venc?_venc.toLocaleDateString("pt-BR"):"—"))}
+                    </span>
+                  </div>;
+                })()}
                 <div title="Email de login" style={{color:C.td,fontSize:11,marginTop:4}}>{(loginSecrets[u.id]&&loginSecrets[u.id].email)||(u.id+"@pixelsmarketing.com.br")}</div>
               </div>
               {isMePartner&&(()=>{
@@ -37973,6 +38059,24 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
                     <button onClick={()=>setResetPwd({open:true,teamId:u.id,nome:displayName,value:"",busy:false})} style={{background:C.a+"15",border:"1px solid "+C.a+"44",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:700,color:C.a,cursor:"pointer",whiteSpace:"nowrap"}}>Definir</button>
                   </>)}
                 </div>;
+              })()}
+              {/* Leitor: revogar / reativar na hora, sem esperar vencer */}
+              {isMePartner&&(function(){
+                const _at=acessosTemp[u.id]; if(!_at||_at.tipo!=="leitor") return null;
+                const _venc=_at.expira?new Date(_at.expira):null;
+                const _passou=_venc&&_venc<new Date();
+                if(_at.ativo&&!_passou){
+                  return <button onClick={()=>revogarAcesso(u.id,displayName)}
+                    title="Corta o acesso agora, sem esperar a data"
+                    style={{background:"#b91c1c10",border:"1px solid #b91c1c33",borderRadius:9,padding:"7px 10px",fontSize:11,fontWeight:800,color:"#b91c1c",cursor:"pointer",marginTop:2,fontFamily:"inherit"}}>
+                    Revogar acesso agora
+                  </button>;
+                }
+                return <button onClick={()=>reativarAcesso(u.id,displayName)}
+                  title={_passou?"Venceu. Reativar não estende a data — ajuste a validade se precisar.":"Reativar o acesso"}
+                  style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 10px",fontSize:11,fontWeight:800,color:C.ts,cursor:"pointer",marginTop:2,fontFamily:"inherit"}}>
+                  Reativar acesso
+                </button>;
               })()}
               {/* Ações — só ícones SVG modernos, sem emojis */}
               <div style={{display:"flex",gap:6,paddingTop:10,borderTop:"1px solid "+C.b1+"66"}}>
