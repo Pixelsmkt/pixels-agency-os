@@ -59198,11 +59198,16 @@ function _adsNotaCalc(m,ref,fam){
   const falta=[];
   if(imp<ADS_NOTA_MIN.imp) falta.push(_adsNum(ADS_NOTA_MIN.imp)+" impressões (tem "+_adsNum(imp)+")");
   if(dias>0&&dias<ADS_NOTA_MIN.dias) falta.push(ADS_NOTA_MIN.dias+" dias rodando (tem "+dias+")");
-  if(temRes&&res<ADS_NOTA_MIN.res) falta.push(ADS_NOTA_MIN.res+" resultados (tem "+_adsNum(res)+")");
   if(falta.length) return {ok:false,falta:falta};
   if(!ref||!(ref.n>=3)) return {ok:false,falta:["pares pra comparar (só "+((ref&&ref.n)||0)+" no grupo)"]};
+  /* 19/09: gastar e NÃO trazer resultado não é "sem base" — é nota baixa, e das importantes.
+     O que define se dá pra julgar é ter tido CHANCE: já gastou pelo menos o que um resultado custa no grupo.
+     Antes eu exigia 3 resultados e isso escondia justamente o criativo que só queima verba. */
+  const teveChance=temRes?(res>0||(ref.custo>0&&gasto>=ref.custo)):true;
+  if(!teveChance) return {ok:false,falta:["gasto pra julgar — "+_adsBRL0(gasto)+" de "+_adsBRLc(ref.custo||0)+" que um resultado custa no grupo"]};
 
   const custo=temRes&&res>0?gasto/res:null;
+  const zerado=temRes&&res===0;                          /* gastou o bastante e não trouxe nada */
   const ctr=imp>0?Number(m.cliques||0)/imp*100:null;
   const cpm=imp>0?gasto/imp*1000:null;
   const ret=(imp>0&&m.p25!==null&&m.p25!==undefined)?Number(m.p25||0)/imp*100:null;
@@ -59216,12 +59221,15 @@ function _adsNotaCalc(m,ref,fam){
        {k:"ret",lbl:"Retenção",peso:20,val:ret,ref:ref.ret,inv:false,fmt:function(v){return _adsPct(v,1);},dica:"chegaram a 1/4 do vídeo"}];
 
   /* perna sem dado sai e o peso dela se redistribui — nunca zera nota de quem não tem vídeo */
-  const vale=cand.filter(function(p){ return p.val!==null&&p.val!==undefined&&p.ref!==null&&p.ref!==undefined&&p.ref>0&&isFinite(p.val); });
+  if(zerado){ const ef=cand[0]; ef.zerado=true; }       /* eficiência entra zerada, não some da conta */
+  const vale=cand.filter(function(p){ return p.zerado||(p.val!==null&&p.val!==undefined&&p.ref!==null&&p.ref!==undefined&&p.ref>0&&isFinite(p.val)); });
   if(!vale.length) return {ok:false,falta:["régua do objetivo (o grupo ainda não tem mediana)"]};
   const somaPeso=vale.reduce(function(t,p){return t+p.peso;},0);
-  const partes=vale.map(function(p){ const x=p.inv?(p.ref/p.val):(p.val/p.ref); const pts=_adsPts(x); return Object.assign({},p,{x:x,pts:pts,pesoReal:p.peso/somaPeso*100}); });
+  const partes=vale.map(function(p){ if(p.zerado) return Object.assign({},p,{x:0,pts:0,pesoReal:p.peso/somaPeso*100,txt:"nenhum "+((fam&&fam.resSing)||"resultado")});
+    const x=p.inv?(p.ref/p.val):(p.val/p.ref); const pts=_adsPts(x); return Object.assign({},p,{x:x,pts:pts,pesoReal:p.peso/somaPeso*100}); });
   const nota=partes.reduce(function(t,p){ return t+p.pts*p.pesoReal/100; },0);
-  return {ok:true,nota:Math.round(nota*10)/10,partes:partes,base:{res:res,dias:dias,imp:imp,gasto:gasto},nRef:ref.n};
+  const curta=temRes&&res>0&&res<ADS_NOTA_MIN.res;       /* tem nota, mas com poucos resultados pra sustentar */
+  return {ok:true,nota:Math.round(nota*10)/10,partes:partes,base:{res:res,dias:dias,imp:imp,gasto:gasto},nRef:ref.n,curta:curta,zerado:zerado};
 }
 
 /* as duas notas de uma entidade (criativo, conjunto ou campanha) */
@@ -59271,7 +59279,7 @@ function AdsNotaPop({pos,conta,carteira,cfgLbl,falta,isMob,onFechar}){
     return <div key={x.k} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:10,alignItems:"center",padding:"7px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
       <div style={{minWidth:0}}>
         <div style={{fontSize:11.5,fontWeight:700,color:ADS.ink2}}>{x.lbl} <span style={{fontWeight:600,color:ADS.muted}}>· peso {Math.round(x.pesoReal)}%</span></div>
-        <div style={{fontSize:10.5,color:ADS.muted,marginTop:1}}>{x.fmt(x.val)} contra {x.fmt(x.ref)} do grupo · <b style={{color:bom?ADS.ok:ADS.crit}}>{_adsX(x.x)}</b></div>
+        <div style={{fontSize:10.5,color:ADS.muted,marginTop:1}}>{x.zerado?<b style={{color:ADS.crit}}>{x.txt} — o grupo faz 1 a cada {x.fmt(x.ref)}</b>:<span>{x.fmt(x.val)} contra {x.fmt(x.ref)} do grupo · <b style={{color:bom?ADS.ok:ADS.crit}}>{_adsX(x.x)}</b></span>}</div>
       </div>
       <b style={Object.assign({fontSize:13,fontWeight:900,color:bom?ADS.ok:ADS.crit},ADS_MONO)}>{_adsNum1(x.pts)}</b>
     </div>; };
@@ -59290,6 +59298,8 @@ function AdsNotaPop({pos,conta,carteira,cfgLbl,falta,isMob,onFechar}){
       </div>}
       {conta&&conta.ok&&carteira&&!carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Sem régua da carteira nesse objetivo no período.</div>}
       {conta&&!conta.ok&&carteira&&carteira.ok&&<div style={{fontSize:11,color:ADS.muted,marginTop:8}}>Comparado com a carteira — a conta ainda não tem pares suficientes.</div>}
+      {p.curta&&<div style={{fontSize:11,color:ADS.warn,marginTop:8,fontWeight:600}}>Base curta: só {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"} — a nota ainda pode virar.</div>}
+      {p.zerado&&<div style={{fontSize:11,color:ADS.crit,marginTop:8,fontWeight:600}}>Gastou {_adsBRL0(p.base.gasto)} e não trouxe nenhum resultado.</div>}
       <div style={{fontSize:10.5,color:ADS.muted,marginTop:8,paddingTop:8,borderTop:"1px solid "+ADS.line}}>Base: {_adsNum(p.base.res)} resultado{p.base.res===1?"":"s"} · {_adsNum(p.base.imp)} impressões{p.base.dias>0?" · "+p.base.dias+" dia"+(p.base.dias>1?"s":"")+" rodando":""}</div>
     </>}
   </div>;
