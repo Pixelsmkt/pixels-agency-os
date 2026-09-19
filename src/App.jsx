@@ -59192,6 +59192,47 @@ function AdsCorteLinha({lbl,pct,val,sub,cor,destaque,i}){
   </div>;
 }
 
+/* ── gráfico de colunas de uma dimensão (19/09): igual ao da aba Público, dentro do painel ── */
+function AdsGraficoDim({q,dim,resLbl}){
+  const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; });
+  if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted,padding:"18px 0"}}>A Meta não devolveu esse corte para este criativo no período.</div>;
+  const tot=rs.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
+  const nome=function(v){ return dim==="genero"?(ADS_GEN_LBL[v]||v):_adsValLbl(dim,v); };
+  const enr=rs.map(function(x){ const g=Number(x.gasto||0), res=Number(x.resultados||0);
+    return {lbl:nome(x.valor),g:g,res:res,cpa:res>0?g/res:null,pct:g/tot*100,
+      ctr:Number(x.impressoes||0)>0?Number(x.cliques||0)/Number(x.impressoes)*100:null}; })
+    .sort(function(a,b){ return b.g-a.g; }).slice(0,8);
+  /* cor pelo custo: quem entrega mais barato fica escuro */
+  const comCpa=enr.filter(function(x){ return x.cpa; }).slice().sort(function(a,b){ return a.cpa-b.cpa; });
+  const melhor=comCpa[0]||null, pior=comCpa[comCpa.length-1]||null;
+  const cor=function(x){ if(!x.cpa) return "#ded6f2"; if(melhor&&x.lbl===melhor.lbl) return "#3b1a86"; if(pior&&comCpa.length>1&&x.lbl===pior.lbl) return "#c9aef5"; return "#8b5cf6"; };
+  const mx=Math.max.apply(null,enr.map(function(x){ return x.pct; }).concat([1]));
+  const curto=function(l){ return String(l).replace(/^(Instagram|Facebook|Messenger|Audience Network) · /,function(m,r){ return {Instagram:"IG ",Facebook:"FB ",Messenger:"MSG ",["Audience Network"]:"AN "}[r]; }); };
+  return <div>
+    {/* os custos ficam numa linha própria: se subissem junto com a barra, cada um pararia numa altura */}
+    <div style={{display:"flex",gap:10,marginBottom:6}}>
+      {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
+        <span style={Object.assign({fontSize:12,fontWeight:800,color:x.cpa?ADS.ink:ADS.muted,whiteSpace:"nowrap"},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</span>
+      </div>; })}
+    </div>
+    <div style={{display:"flex",alignItems:"flex-end",gap:10,height:132,marginBottom:0}}>
+      {enr.map(function(x,i){ const alt=Math.max(5,x.pct/mx*126);
+        return <div key={i} title={x.lbl+" · "+_adsBRL0(x.g)+" · "+Math.round(x.pct)+"% da verba"+(x.res>0?" · "+_adsNum(x.res)+" "+resLbl:"")}
+          style={{flex:1,minWidth:0,height:alt,background:cor(x),borderRadius:"7px 7px 0 0"}}/>; })}
+    </div>
+    <div style={{display:"flex",gap:10,borderTop:"1px solid "+ADS.line,paddingTop:9}}>
+      {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
+        <div style={{fontSize:11,fontWeight:700,color:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.lbl}>{curto(x.lbl)}</div>
+        <div style={{fontSize:10.5,color:ADS.muted,marginTop:2}}>{Math.round(x.pct)}%{x.res>0?" · "+_adsNum(x.res):""}</div>
+      </div>; })}
+    </div>
+    {melhor&&pior&&melhor.lbl!==pior.lbl&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
+      <b>{melhor.lbl}</b> entrega a {_adsBRLc(melhor.cpa)} e leva {Math.round(melhor.pct)}% da verba; <b>{pior.lbl}</b> custa {_adsBRLc(pior.cpa)} ({_adsX(pior.cpa/melhor.cpa)}) e leva {Math.round(pior.pct)}%.
+    </div>}
+    <div style={{fontSize:11,color:ADS.muted,marginTop:8}}>altura = fatia da verba · número em cima = custo por {resLbl||"resultado"} · barra escura = mais barato</div>
+  </div>;
+}
+
 /* ── uma dimensão do público ── */
 function AdsPublicoDim({q,dim,lbl,sub}){
   const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; })
@@ -59296,7 +59337,9 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   const [abaLb,setAbaLb]=useState("resumo");
   const Qa=useAdsQuebraAnuncio(conta&&conta.ad_account_id,a.id,P);
   const isMobLb=typeof window!=="undefined"&&window.innerWidth<820;
-  const ABAS=[["resumo","Resumo"],["publico","Público"],["onde","Onde aparece"],["hora","Horário"],["campanhas","Campanhas"],["texto","Texto"]];
+  const ABAS=[["resumo","Resumo"],["publico","Público"],["hora","Horário"],["campanhas","Campanhas"]];
+  const DIMS_LB=[["idade","Faixa etária"],["genero","Gênero"],["regiao","Região"],["dispositivo","Dispositivo"],["posicionamento","Posicionamento"]];
+  const [dimLb,setDimLb]=useState("idade");
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
@@ -59367,6 +59410,17 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
                     return <div key={j} style={{display:"flex",gap:9,alignItems:"flex-start",fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>
                       <span style={{color:cor,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"•"}</span><span>{d[1]}</span></div>; })}</div>}
             </>}
+            {(cr.titulo||cr.corpo)&&<>
+              <AdsBlocoT t="Texto do anúncio"/>
+              <div style={{fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"14px 16px",lineHeight:1.6}}>
+                {cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:8,fontSize:13}}>{cr.titulo}</b>}
+                <span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"")}</span>
+              </div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:10,fontSize:11.5,color:ADS.muted}}>
+                {cr.cta&&<span>Botão: <b style={{color:ADS.ink2}}>{_adsCta(cr.cta)}</b></span>}
+                {cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}
+              </div>
+            </>}
             {(a.ativosMeta||[]).length>0
               ? <div style={{marginTop:26}}><AdsAtivosPerf ativos={a.ativosMeta} cfg={a.cfg} onVer={function(x){ setAtivoSel(x); }}/></div>
               : <div style={{marginTop:26}}><AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/></div>}
@@ -59374,21 +59428,15 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
 
           {abaLb==="publico"&&<div>
             {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>:<>
-              <AdsBlocoT primeiro t="Faixa etária" s="fatia da verba deste criativo e custo em cada faixa"/>
-              <AdsPublicoDim q={Qa} dim="idade" lbl="Faixa etária"/>
-              <AdsBlocoT t="Gênero"/>
-              <AdsPublicoDim q={Qa} dim="genero" lbl="Gênero"/>
-              <AdsBlocoT t="Região"/>
-              <AdsPublicoDim q={Qa} dim="regiao" lbl="Região"/>
-            </>}
-          </div>}
-
-          {abaLb==="onde"&&<div>
-            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo entrega…</div>:<>
-              <AdsBlocoT primeiro t="Aparelho" s="onde o criativo foi visto"/>
-              <AdsPublicoDim q={Qa} dim="dispositivo" lbl="Aparelho"/>
-              <AdsBlocoT t="Posicionamento" s="feed, reels, stories — onde a Meta entregou"/>
-              <AdsPublicoDim q={Qa} dim="posicionamento" lbl="Posicionamento"/>
+              <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+                {DIMS_LB.map(function(d){ const on=d[0]===dimLb; const tem=(Qa||[]).some(function(x){ return x.dimensao===d[0]&&Number(x.gasto||0)>0; });
+                  return <button key={d[0]} onClick={function(){ setDimLb(d[0]); }} disabled={!tem} style={{border:"1px solid "+(on?ADS.accent:ADS.line),
+                    background:on?ADS.accent+"14":"#fff",color:!tem?"#b9b3c9":(on?ADS.accent:ADS.ink2),borderRadius:99,padding:"6px 12px",
+                    fontSize:12,fontWeight:on?800:600,cursor:tem?"pointer":"default",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{d[1]}</button>; })}
+              </div>
+              <div style={{marginTop:20}}>
+                <AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>
+              </div>
             </>}
           </div>}
 
@@ -59400,20 +59448,6 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
           {abaLb==="campanhas"&&<div>
             <AdsBlocoT primeiro t="Onde este criativo roda" s="a mesma peça em campanhas diferentes"/>
             <AdsOndeRoda a={a} todos={todos} cfg={a.cfg}/>
-          </div>}
-
-          {abaLb==="texto"&&<div>
-            <AdsBlocoT primeiro t="Texto do anúncio"/>
-            {(cr.titulo||cr.corpo)
-              ? <div style={{fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"14px 16px",lineHeight:1.6}}>
-                  {cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:8,fontSize:13}}>{cr.titulo}</b>}
-                  <span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"")}</span>
-                </div>
-              : <div style={{fontSize:12.5,color:ADS.muted}}>Sem texto guardado para este criativo.</div>}
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14,fontSize:11.5,color:ADS.muted}}>
-              {cr.cta&&<span>Botão: <b style={{color:ADS.ink2}}>{_adsCta(cr.cta)}</b></span>}
-              {cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}
-            </div>
           </div>}
 
         </div>
