@@ -57506,7 +57506,32 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
           <div style={{marginTop:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:ADS.muted}}><span>{Math.round(f.pctV)}% da verba</span><span>{Math.round(f.pctR)}% dos leads</span></div><div style={{position:"relative",height:6,borderRadius:99,background:"#efedf5",marginTop:4,overflow:"visible"}}><div style={{width:Math.min(100,f.pctV)+"%",height:"100%",borderRadius:99,background:n==="n"?"#b58ff2":cor,opacity:.9}}/><div title={Math.round(f.pctR)+"% dos leads"} style={{position:"absolute",left:Math.min(100,f.pctR)+"%",top:-3,width:2,height:12,background:ADS.ink,opacity:.55,borderRadius:2}}/></div></div>
         </div>; };
       return <AdsSec t={<span>💰 Onde o dinheiro está</span>} s={<span>por frente, no período · média da conta <b style={{color:ADS.ink2}}>{_adsBRL(media)}</b> por lead{drena.length?<span> · <b style={{color:ADS.crit}}>{Math.round(pctDrena)}% da verba</b> em frentes que drenam</span>:null}{rende.length?<span> · <b style={{color:ADS.ok}}>{Math.round(pctRende)}%</b> em frentes que rendem</span>:null}</span>} right={<AdsBtn small onClick={function(){setFrentesAberto(!frentesAberto);}}>{frentesAberto?"Ver resumo":"Ver tabela ▾"}</AdsBtn>}>
-        {!frentesAberto&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(210px,1fr))",gap:10}}>{frentes.map(Tile)}{marcaCamps.length>0&&<div style={{background:ADS.surface2,border:"1px dashed "+ADS.line2,borderRadius:14,padding:"12px 14px",minWidth:0}}><div style={{fontWeight:800,fontSize:13.5}}>Marca</div><div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{marcaCamps.map(function(c){return c.cfg.curto;}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(" · ")}</div><div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:6}}><span style={Object.assign({fontSize:20,fontWeight:900,letterSpacing:"-.5px"},ADS_MONO)}>{_adsBRL0(marcaGasto)}</span><span style={{fontSize:11,color:ADS.muted}}>{Math.round(marcaGasto/totGeral*100)}% da verba · não se julga por lead</span></div></div>}</div>}
+        {/* resumo (19/09): uma linha por frente — verba × leads na mesma régua, custo e veredito. Sem cards. */}
+        {!frentesAberto&&<AdsCard style={{padding:isMob?"6px 14px 4px":"6px 20px 4px"}}>
+          {(function(){ const fr=frentes.slice().sort(function(a,b){return b.pctV-a.pctV;}); const cols=isMob?"minmax(0,1fr) 88px":"minmax(150px,1fr) minmax(220px,1.6fr) 118px 96px";
+            const rot=function(f){ const n=f.n; return n==="c"?"drena":n==="o"?"rende":n==="w"?"atenção":(f.res===0?"sem resultado":f.res<ADS_MIN_RESULTADOS?"amostra pequena":"na média"); };
+            const Barra=function(pv,pr,cor){ const mx=Math.max(1,Math.max.apply(null,fr.map(function(x){return Math.max(x.pctV,x.pctR);}).concat([marcaCamps.length?marcaGasto/totGeral*100:0]))); const W=function(p){ return Math.max(1.5,p/mx*100)+"%"; };
+              return <div style={{display:"grid",gap:3}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:34,fontSize:10,color:ADS.muted,textAlign:"right",flex:"none"}}>verba</span><span style={{flex:1,height:7,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:W(pv),background:"#b58ff2",borderRadius:99}}/></span><span style={{width:34,fontSize:11,fontWeight:700,color:ADS.ink2,fontFeatureSettings:"'tnum'",flex:"none"}}>{Math.round(pv)}%</span></div>
+                {pr!==null&&<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:34,fontSize:10,color:ADS.muted,textAlign:"right",flex:"none"}}>leads</span><span style={{flex:1,height:7,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:W(pr),background:cor,borderRadius:99}}/></span><span style={{width:34,fontSize:11,fontWeight:700,color:cor,fontFeatureSettings:"'tnum'",flex:"none"}}>{Math.round(pr)}%</span></div>}
+              </div>; };
+            return <div>
+              {!isMob&&<div style={{display:"grid",gridTemplateColumns:cols,gap:16,padding:"10px 0 8px",borderBottom:"1px solid "+ADS.line}}>{Cab("Frente")}{Cab("Parte da verba × parte dos leads")}{Cab("Custo por lead",true)}{Cab("Veredito")}</div>}
+              {fr.map(function(f,i){ const n=f.n; const cor=n==="n"?ADS.ink2:_adsCor(n); const r=media&&f.cpa?f.cpa/media:null;
+                return <div key={f.t} onClick={function(){setFrentesAberto(true);}} style={{display:"grid",gridTemplateColumns:cols,gap:16,alignItems:"center",padding:"11px 0",borderTop:i?"1px solid "+ADS.line:"none",cursor:"pointer"}}>
+                  <div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:13.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.t}</div><div style={{fontSize:11,color:ADS.muted,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.cs.length} campanha{f.cs.length>1?"s":""} · {_adsNum(f.res)} lead{f.res===1?"":"s"}{isMob?" · "+(f.cpa?_adsBRL(f.cpa):"—"):""}</div></div>
+                  {!isMob&&Barra(f.pctV,f.pctR,n==="c"?ADS.crit:n==="o"?ADS.ok:"#4a3f6b")}
+                  {!isMob&&<div style={{textAlign:"right"}}><div style={Object.assign({fontSize:16,fontWeight:900,letterSpacing:"-.3px",color:n==="n"?ADS.ink:cor,whiteSpace:"nowrap"},ADS_MONO)}>{f.cpa?_adsBRL(f.cpa):"—"}</div><div style={{fontSize:11,color:ADS.muted,marginTop:1,whiteSpace:"nowrap"}}>{r?_adsX(r)+" a média":"\u00a0"}</div></div>}
+                  <div style={{textAlign:isMob?"right":"left"}}>{pill(n,rot(f))}</div>
+                </div>; })}
+              {marcaCamps.length>0&&<div style={{display:"grid",gridTemplateColumns:cols,gap:16,alignItems:"center",padding:"11px 0",borderTop:"1px solid "+ADS.line}}>
+                <div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:13.5}}>Marca</div><div style={{fontSize:11,color:ADS.muted,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{marcaCamps.map(function(c){return c.cfg.curto;}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(" · ")} · {_adsBRL0(marcaGasto)}</div></div>
+                {!isMob&&Barra(marcaGasto/totGeral*100,null,ADS.muted)}
+                {!isMob&&<div style={{textAlign:"right",fontSize:11,color:ADS.muted}}>não se julga por lead</div>}
+                <div style={{textAlign:isMob?"right":"left"}}>{pill("n","marca")}</div>
+              </div>}
+            </div>; })()}
+        </AdsCard>}
         {frentesAberto&&<AdsCard style={{padding:"6px 22px 4px"}}>
           {frentes.length===0&&<div style={{padding:"14px 0",fontSize:13,color:ADS.muted}}>Nenhuma campanha de lead com gasto no período.</div>}
           {frentes.length>0&&<div style={{display:"grid",gridTemplateColumns:cols,gap:14,padding:"10px 0 8px",borderBottom:"1px solid "+ADS.line}}>{Cab("Frente")}{Cab("Verba",true)}{Cab("Resultados",true)}{!isMob&&Cab("Custo por resultado",true)}{!isMob&&Cab("Veredito")}</div>}
@@ -57557,7 +57582,7 @@ function _adsMediaPorTipo(camps){ const m={}; camps.forEach(function(c){ if(!c.c
 function QGAdsCampanhas({mc,conta,isMob,onAbrir}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
-  const [fStatus,setFStatus]=useState("todas");
+  const [fStatus,setFStatus]=useState("ativas"); /* 19/09: a tela abre nas ativas; "Todas" continua disponível no chip */
   const [fTipo,setFTipo]=useState("todos");
   if(D.loading||X.loading) return <AdsLoading t="Lendo campanhas…"/>;
   const P=X.P; const cur=X.cur||{campanhas:[]}; const prevC={}; ((X.prev||{}).campanhas||[]).forEach(function(c){ prevC[c.id]=c; });
@@ -58572,12 +58597,26 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   </div>;
 }
 
+/* status atual (online/offline) de cada anúncio: ads_entidades nível anúncio, no snapshot mais recente (19/09) */
+function useAdsStatusAnuncios(accountId,snapshotEm){
+  const [st,setSt]=useState(function(){ const c=window._pxAdsStAn&&window._pxAdsStAn[accountId+"|"+snapshotEm]; return c?{pronto:true,mapa:c}:{pronto:false,mapa:{}}; });
+  useEffect(function(){
+    if(!accountId||!snapshotEm||!window._sb){ return; }
+    const k=accountId+"|"+snapshotEm; const c=window._pxAdsStAn&&window._pxAdsStAn[k]; if(c){ setSt({pronto:true,mapa:c}); return; }
+    let alive=true;
+    window._sb.from("ads_entidades").select("entidade_id,status_efetivo").eq("ad_account_id",accountId).eq("nivel","anuncio").eq("snapshot_em",snapshotEm).limit(2000).then(function(r){ if(!alive) return; const m={}; (r.data||[]).forEach(function(x){ m[x.entidade_id]=x.status_efetivo; }); window._pxAdsStAn=window._pxAdsStAn||{}; window._pxAdsStAn[k]=m; setSt({pronto:!r.error,mapa:m}); });
+    return function(){ alive=false; };
+  },[accountId,snapshotEm]);
+  return st;
+}
 function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const D=useAdsVisaoGeral(conta&&conta.ad_account_id);
   const X=useAdsPeriodoDados(conta&&conta.ad_account_id);
   const todosAn=((X.cur||{}).anuncios||[]).filter(function(a){ return !campId||a.campaign_id===campId; });
   const ids=todosAn.map(function(a){return a.id;});
   const C=useAdsCriativos(conta&&conta.ad_account_id,ids);
+  const ST=useAdsStatusAnuncios(conta&&conta.ad_account_id,D.ent&&D.ent[0]&&D.ent[0].snapshot_em);
+  const [fOn,setFOn]=useState("todos");        // todos | online | offline (19/09)
   const [fam,setFam]=useState(null);          // null = Geral
   const [aberto,setAberto]=useState(null);
   const [verTodos,setVerTodos]=useState(false);
@@ -58587,10 +58626,12 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const tipos=_adsTiposDasCampanhas(D.ent,(X.cur||{}).campanhas);
   const campNome={}; ((X.cur||{}).campanhas||[]).forEach(function(c){ campNome[c.id]=c.nome; });
   /* enriquece cada anúncio: objetivo → família → resultado/custo */
-  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id}); });
+  const enr=todosAn.map(function(a){ const tipo=tipos[a.campaign_id]||_adsClassifica(a.objetivo,[],a.campaign_nome||campNome[a.campaign_id]||a.nome); const t=_adsTipo(tipo); const F=_adsFam(t.fam); const res=F.campo==="resultados"?_adsResDe(a,t):_adsResDe(a,F); const custo=F.campo?_adsDiv(a.gasto,res):null; const online=ST.pronto?(ST.mapa[a.id]==="ACTIVE"):null; return Object.assign({},a,{cr:C.cr[a.id]||{},tipo:tipo,cfg:t,F:F,res:res,custo:custo,campNome:a.campaign_nome||campNome[a.campaign_id]||"",campId:a.campaign_id,online:online}); });
   const fams=ADS_FAMS.filter(function(f){ return enr.some(function(a){return a.F.id===f.id;}); });
   const famAtiva=fam&&fams.find(function(f){return f.id===fam;})||null; // null = Geral
-  const doGrupo=famAtiva?enr.filter(function(a){return a.F.id===famAtiva.id;}):enr.slice();
+  const porStatus=function(a){ return fOn==="todos"||a.online===null||(fOn==="online"?a.online:!a.online); };
+  const doGrupo=(famAtiva?enr.filter(function(a){return a.F.id===famAtiva.id;}):enr.slice()).filter(porStatus);
+  const nOn=enr.filter(function(a){return a.online===true;}).length, nOff=enr.filter(function(a){return a.online===false;}).length;
   /* médias por família (nunca cruza famílias) */
   /* média de referência por TIPO (formulário ≠ WhatsApp ≠ engajamento): um criativo de formulário a R$ 45 não é "2× a média" só porque as conversas custam R$ 8 */
   const mediaTipo={}; ADS_TIPOS.forEach(function(t){ const g=enr.filter(function(a){return a.tipo===t.id;}); if(!g.length) return; const gg=g.reduce(function(s,a){return s+a.gasto;},0), rr=g.reduce(function(s,a){return s+(a.res||0);},0); mediaTipo[t.id]=t.campo?_adsDiv(gg,rr):null; });
@@ -58621,6 +58662,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
         {a.selo&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:a.selo[1]==="g"?"#ffe8a3":"#fecaca",color:a.selo[1]==="g"?"#6b4d00":"#7f1d1d"}}>{a===campeao?"Campeão":a.selo[0]}</span>}
         {!a.selo&&a===campeao&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:"#ffe8a3",color:"#6b4d00"}}>Campeão</span>}
         {famAtiva&&i!==undefined&&<span style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 7px"}}>#{i+1}</span>}
+        {a.online!==null&&<span title={a.online?"anúncio ativo na Meta":"anúncio pausado, encerrado ou excluído"} style={{position:"absolute",top:(famAtiva&&i!==undefined)?38:10,right:10,display:"inline-flex",alignItems:"center",gap:5,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".05em",borderRadius:8,padding:"3px 8px"}}><span style={{width:7,height:7,borderRadius:99,background:a.online?"#4ade80":"#9d97b3"}}/>{a.online?"online":"offline"}</span>}
         <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>{a.semMetrica?<><b style={{fontSize:20,fontWeight:900,letterSpacing:"-.5px"}}>CPM {_adsBRL(a.cpm)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{a.cfg.label}</small></>:a.gasto<=0?<><b style={{fontSize:16,fontWeight:900}}>sem gasto</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{resFmt(a)} {a.F.resLbl} atribuídos</small></>:a.res===0?<><b style={{fontSize:16,fontWeight:900}}>{_adsBRL0(a.gasto)} gastos</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>0 {a.F.resLbl}</small></>:<><b style={{fontSize:22,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(a.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{a.F.custoLbl}</small></>}</div>
       </AdsCapa>
       <div style={{padding:"12px 14px 14px"}}>
@@ -58636,6 +58678,11 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:14}}>
       <AdsChip on={!famAtiva} onClick={function(){setFam(null);setVerTodos(false);}} n={enr.length}>Geral</AdsChip>
       {fams.map(function(f){ return <AdsChip key={f.id} on={famAtiva&&famAtiva.id===f.id} onClick={function(){setFam(f.id);setVerTodos(false);}} n={enr.filter(function(a){return a.F.id===f.id;}).length}>{f.label}</AdsChip>; })}
+      {ST.pronto&&<span style={{display:"inline-flex",gap:6,alignItems:"center",marginLeft:isMob?0:14,paddingLeft:isMob?0:14,borderLeft:isMob?"none":"1px solid "+ADS.line}}>
+        <AdsChip on={fOn==="todos"} onClick={function(){setFOn("todos");setVerTodos(false);}} n={enr.length}>Todos</AdsChip>
+        <AdsChip on={fOn==="online"} onClick={function(){setFOn("online");setVerTodos(false);}} n={nOn}><span style={{display:"inline-block",width:7,height:7,borderRadius:99,background:fOn==="online"?"#fff":ADS.ok,marginRight:6,verticalAlign:1}}/>Online</AdsChip>
+        <AdsChip on={fOn==="offline"} onClick={function(){setFOn("offline");setVerTodos(false);}} n={nOff}><span style={{display:"inline-block",width:7,height:7,borderRadius:99,background:fOn==="offline"?"#fff":ADS.line2,marginRight:6,verticalAlign:1}}/>Offline</AdsChip>
+      </span>}
       <span style={{fontSize:12,color:ADS.muted,marginLeft:isMob?0:"auto"}}>{famAtiva?doGrupo.length+" anúncio"+(doGrupo.length!==1?"s":"")+" · "+_adsBRL0(gastoG)+(famAtiva.campo?" · "+famAtiva.custoLbl+" médio "+_adsBRLc(mediaFam[famAtiva.id]):""):"no Geral cada card mostra a métrica do próprio objetivo · pra eleger campeão, escolha um objetivo"}</span>
     </div>
     {famAtiva&&<div style={{background:ADS.surface2,borderRadius:12,padding:"9px 14px",fontSize:12.5,color:ADS.ink2,marginBottom:18}}><b style={{color:ADS.ink}}>{famAtiva.label}:</b> {famAtiva.campo?<span>aqui o criativo é julgado por <b>{famAtiva.custoLbl}</b> ({famAtiva.desc}) e comparado só com os outros anúncios de {famAtiva.label.toLowerCase()} — nunca com os de outro objetivo.</span>:<span>{famAtiva.desc} — aqui o criativo se lê por CPM, CTR e frequência, não por custo.</span>}</div>}
@@ -59191,6 +59238,8 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   const P=useAdsPainel(); const accounts=useAdsAccounts(); const AL=useAdsAlertasStatus();
   const [verOcultos,setVerOcultos]=useState(false);
   const [nDias,setNDias]=useState(7);
+  const tblRef=useRef(null); const wrapRef=useRef(null); const [tblW,setTblW]=useState(0); const [wrapW,setWrapW]=useState(0);
+  useEffect(function(){ const m=function(){ if(tblRef.current) setTblW(tblRef.current.getBoundingClientRect().width); if(wrapRef.current) setWrapW(wrapRef.current.getBoundingClientRect().width); }; m(); window.addEventListener("resize",m); const id=setInterval(m,800); return function(){ window.removeEventListener("resize",m); clearInterval(id); }; },[]);
   const go=useAdsEntra((P.data?"ok":"no")+"|"+(accounts?accounts.length:0)+"|"+nDias);
   if(P.loading||!accounts) return <AdsLoading t="Lendo as contas…"/>;
   if(!P.data) return <AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13,fontFamily:ADS_FONT}}>Não deu pra ler o painel{P.erro?": "+P.erro:""}.</AdsCard>;
@@ -59221,13 +59270,15 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
 
   /* ── cards de cliente ── */
   /* ── tabela de clientes: uma linha por conta (decisão 19/09: tabela em vez de cards) ── */
-  const COLS=isMob?"1fr auto":"minmax(230px,1.5fr) 92px 104px 210px 116px 100px 48px";
+  const empilhado=!isMob&&wrapW>0&&wrapW<340+760+22; /* coluna de alertas em cima, tabela embaixo */
+  const compacto=!isMob&&tblW>0&&tblW<900; /* sem tendência e sem "abrir" quando falta espaço */
+  const COLS=isMob?"1fr auto":compacto?"minmax(240px,1.5fr) 76px 180px 104px 88px":"minmax(230px,1.5fr) 84px 96px 186px 104px 92px 44px";
   const Th=function(t,r){ return <span style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:D.muted,textAlign:r?"right":"left",whiteSpace:"nowrap"}}>{t}</span>; };
   const Row=function(c,i){ const l=c.l, o=c.o; const cur=o?o.cur:null, prev=o?o.prev:null; const cc=_adsCplDe(cur), cp=W.temPrev?_adsCplDe(prev):null;
     const tipos=c.conta?Object.keys(c.conta.tipos).filter(function(t){return c.conta.tipos[t].gasto>0;}).sort(function(a,b){return c.conta.tipos[b].gasto-c.conta.tipos[a].gasto;}).slice(0,3).map(function(t){return _adsTipo(t).curto;}).join(" · "):"sem campanha ativa";
     const num=function(v,sub,big){ return <div style={{textAlign:"right",minWidth:0}}><div style={{fontSize:big?17:14.5,fontWeight:800,color:D.ink,fontFeatureSettings:"'tnum'",letterSpacing:"-.01em",lineHeight:1.15,whiteSpace:"nowrap"}}>{v}</div>{sub&&<div style={{fontSize:11,color:D.muted,marginTop:3,lineHeight:1.35}}>{sub}</div>}</div>; };
     return <div key={l.mc.client_id} onClick={function(){ try{ window._pxSubDesejada="visao"; }catch(_){ } onOpenClient(l.mc.client_id); }}
-        style={{display:"grid",gridTemplateColumns:COLS,gap:14,alignItems:"center",padding:isMob?"14px 16px":"14px 18px",borderTop:i?"1px solid "+D.line:"none",cursor:"pointer",background:"#fff",opacity:go?1:0,transition:"opacity .4s ease "+(i*40)+"ms"}}
+        style={{display:"grid",gridTemplateColumns:COLS,gap:12,alignItems:"center",padding:isMob?"14px 16px":"14px 18px",borderTop:i?"1px solid "+D.line:"none",cursor:"pointer",background:"#fff",opacity:go?1:0,transition:"opacity .4s ease "+(i*40)+"ms"}}
         onMouseEnter={function(e){e.currentTarget.style.background=D.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
         <span style={{width:9,height:9,borderRadius:99,flex:"none",background:(c.selo.k==="o"||c.selo.k==="p")?"transparent":c.selo.cor,border:(c.selo.k==="o"||c.selo.k==="p")?"1.5px solid "+D.line2:"none"}}/>
@@ -59235,17 +59286,17 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
         <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:D.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.mc.name}</div><div style={{fontSize:11.5,color:D.muted,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tipos}{isMob&&o?" · "+_adsNum(cur.res)+" leads · "+(cc?_adsBRL(cc):"—"):""}</div></div>
       </div>
       {!isMob&&(o?num(_adsNum(cur.res),<span>{cur.leads?_adsNum(cur.leads)+" form · ":""}{_adsNum(cur.conversas)} wpp<br/><AdsDeltaDK p={W.temPrev?_adsVar(cur.res,prev.res):null} invert={false}/></span>,true):num("—","sem gasto"))}
-      {!isMob&&<div>{o?<AdsSparkDK serie={serieDe(c.conta)} n={nDias} h={34} cor={D.accent} title="leads" fmt={_adsNum}/>:null}</div>}
+      {!isMob&&!compacto&&<div>{o?<AdsSparkDK serie={serieDe(c.conta)} n={nDias} h={34} cor={D.accent} title="leads" fmt={_adsNum}/>:null}</div>}
       {!isMob&&<div style={{display:"flex",alignItems:"center",gap:10,justifyContent:"flex-end"}}>{o&&<AdsBullet cur={cc} prev={cp}/>}{num(cc?_adsBRL(cc):"—",o?(cc?<span style={{whiteSpace:"nowrap"}}>{cp?"era "+_adsBRL(cp):"sem base"}<br/><AdsDeltaDK p={cc&&cp?_adsVar(cc,cp):null} invert={true}/></span>:(cur.gasto>0?"sem lead":"")):"")}</div>}
       {!isMob&&num(o?_adsBRL(cur.gasto):"—",o&&W.temPrev&&prev.gasto>=50?<span>{_adsBRL(prev.gasto)+" antes"}<br/><AdsDeltaDK p={_adsVar(cur.gasto,prev.gasto)} invert={null}/></span>:(o&&W.temPrev&&cur.gasto>0?"novo na janela":""))}
       {!isMob&&<div><span style={{background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>{c.selo.t}</span></div>}
-      <span style={{textAlign:"right",fontSize:12,fontWeight:800,color:D.accent,whiteSpace:"nowrap"}}>{isMob?<span style={{background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"3px 9px",fontSize:11}}>{c.selo.t}</span>:"abrir ›"}</span>
+      {(isMob||!compacto)&&<span style={{textAlign:"right",fontSize:12,fontWeight:800,color:D.accent,whiteSpace:"nowrap"}}>{isMob?<span style={{background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"3px 9px",fontSize:11}}>{c.selo.t}</span>:"abrir ›"}</span>}
     </div>; };
-  const Tabela=<div style={{background:"#fff",border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow,overflow:"hidden"}}>
-    {!isMob&&<div style={{display:"grid",gridTemplateColumns:COLS,gap:14,padding:"12px 18px",borderBottom:"1px solid "+D.line,background:D.surface2}}>{Th("Cliente")}{Th("Leads",true)}{Th("Tendência")}{Th("Custo por lead",true)}{Th("Investido",true)}{Th("Situação")}<span/></div>}
+  const Tabela=<div ref={tblRef} style={{background:"#fff",border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow,overflow:"hidden"}}><div style={{overflowX:"auto"}}><div style={{minWidth:isMob?0:(compacto?780:900)}}>
+    {!isMob&&<div style={{display:"grid",gridTemplateColumns:COLS,gap:12,padding:"12px 18px",borderBottom:"1px solid "+D.line,background:D.surface2}}>{Th("Cliente")}{Th("Leads",true)}{!compacto&&Th("Tendência")}{Th("Custo por lead",true)}{Th("Investido",true)}{Th("Situação")}{!compacto&&<span/>}</div>}
     {cards.length===0&&<div style={{padding:18,fontSize:13,color:D.muted}}>Nenhum cliente com conta Meta vinculada.</div>}
     {cards.map(Row)}
-  </div>;
+  </div></div></div>;
 
   /* ── modo "só clientes" (aba Clientes de mídia): cabeçalho + cards, sem faixa nem coluna ── */
   if(soClientes) return <div style={{fontFamily:F,color:D.ink}}>
@@ -59256,32 +59307,32 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   return <div className="px-sens" style={{fontFamily:F,color:D.ink,display:"flex",flexDirection:"column",gap:22}}>
 
     {/* ── faixa: leitura da semana + 3 números ── */}
-    <div style={{position:"relative",overflow:"hidden",borderRadius:16,background:D.hero,color:"#fff",padding:isMob?"20px 18px":"26px 30px 22px",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.2fr) minmax(0,1fr)",gap:isMob?18:36,alignItems:"center",boxShadow:"0 16px 36px -18px rgba(47,26,94,.45)"}}>
+    <div style={{position:"relative",overflow:"hidden",borderRadius:16,background:D.hero,color:"#fff",padding:isMob?"20px 18px":"26px 30px 22px",display:"flex",flexWrap:"wrap",gap:isMob?18:"20px 36px",alignItems:"center",boxShadow:"0 16px 36px -18px rgba(47,26,94,.45)"}}>
       <div style={{position:"absolute",right:"-8%",top:"-60%",width:460,height:460,borderRadius:"50%",background:"radial-gradient(closest-side,rgba(255,255,255,.14),transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",minWidth:0}}>
+      <div style={{position:"relative",minWidth:0,flex:"1 1 420px"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>{Eyebrow("Leitura · "+jan+" · fechada",D.heroMuted)}<span style={{fontSize:11,color:D.heroMuted}}>{C.atrasado?"a coleta de "+_adsFmtD(C.ontemReal)+" ainda não chegou":"coleta "+_adsFmtD(C.hoje)+" 07:00 · hoje fica fora"} · <a onClick={P.reload} style={{color:"#fff",cursor:"pointer",fontWeight:700}}>atualizar</a></span></div>
         <div style={{margin:"10px 0 0",fontFamily:ADS_SERIF,fontWeight:400,fontSize:isMob?20:25,lineHeight:1.3,color:"#fff",maxWidth:640}}>
           <span style={{fontWeight:500}}>{_adsNum(A.cur.res)} leads</span> por {_adsBRL(A.cur.gasto)}{cpl?<span> — <em style={{color:"#e9ddff"}}>{_adsBRL(cpl)} cada</em></span>:null}{dCpl!==null?", "+Math.abs(dCpl)+"% "+(dCpl<0?"mais barato":dCpl>0?"mais caro":"igual")+" que os "+nDias+" dias anteriores":""}{dG!==null?", gastando "+Math.abs(dG)+"% "+(dG<0?"menos":"mais"):""}. {nCrit?<span><span style={{fontWeight:500}}>{nCrit} ponto{nCrit>1?"s":""}</span> pede{nCrit>1?"m":""} ação hoje</span>:"Nada crítico hoje"}{nWarn?", "+nWarn+" pra conferir":""}.
         </div>
         <div style={{marginTop:10,color:D.heroMuted,fontSize:12.5}}>{_adsNum(A.cur.conversas)} WhatsApp · {_adsNum(A.cur.leads)} formulário · {cards.length} contas{W.temPrev?" · contra "+_adsFmtD(W.prev[0])+"–"+_adsFmtD(W.prev[1]):" · sem base pra comparar"}</div>
       </div>
-      <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+      <div style={{position:"relative",flex:"1 1 540px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:12}}>
         {[["Leads",_adsNum(A.cur.res),<AdsDeltaDK p={dRes} invert={false} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,W.temPrev?_adsNum(A.prev.res)+" antes":"",serieAg.map(function(d){return {k:d.k,v:d.v};}),_adsNum],
           ["Custo por lead",cpl?_adsBRL(cpl):"—",<AdsDeltaDK p={dCpl} invert={true} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,cplP?"era "+_adsBRL(cplP):"",serieAg.map(function(d){return {k:d.k,v:d.v>0?+(d.gl/d.v).toFixed(2):0};}),_adsBRL],
           ["Investido",_adsBRL(A.cur.gasto),<AdsDeltaDK p={dG} invert={null} dk={{ok:"#c9f7da",crit:"#ffd1cc",muted:"#fff"}}/>,W.temPrev?_adsBRL(A.prev.gasto)+" antes":"",serieAg.map(function(d){return {k:d.k,v:d.g};}),_adsBRL]
-        ].map(function(k,i){ return <div key={i} style={{background:D.heroGlass,border:"1px solid "+D.heroLine,borderRadius:14,padding:"14px 16px 12px",minWidth:0}}>
-          {Eyebrow(k[0],D.heroMuted)}<div style={{fontSize:26,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.05,margin:"6px 0",fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{k[1]}</div>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:D.heroMuted,flexWrap:"wrap"}}>{k[2]}<span>{k[3]}</span></div>
+        ].map(function(k,i){ return <div key={i} style={{background:D.heroGlass,border:"1px solid "+D.heroLine,borderRadius:14,padding:"14px 16px 12px",minWidth:0,overflow:"hidden"}}>
+          {Eyebrow(k[0],D.heroMuted)}<div style={{fontSize:String(k[1]).length>11?18:String(k[1]).length>8?21:26,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.05,margin:"6px 0",fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k[1]}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:D.heroMuted,flexWrap:"wrap",minWidth:0}}>{k[2]}<span style={{whiteSpace:"nowrap"}}>{k[3]}</span></div>
           <div style={{marginTop:10}}><AdsSparkDK serie={k[4]} n={nDias} cor="#fff" fill={.18} h={28} fmt={k[5]}/></div>
         </div>; })}
       </div>
     </div>
 
     {/* ── coluna esquerda: precisa de você · direita: clientes ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"372px minmax(0,1fr)",gap:22,alignItems:"start"}}>
-      <div style={{background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow}}>
+    <div ref={wrapRef} style={{display:"flex",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
+      <div style={{flex:isMob?"1 1 100%":"1 1 340px",maxWidth:(isMob||empilhado)?"none":420,minWidth:0,background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow}}>
         <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"18px 20px 12px"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Precisa de você</span><span style={{fontSize:11.5,color:D.muted}}>{vivas.length?nCrit+" crítico"+(nCrit===1?"":"s")+" · por dinheiro em jogo":"tudo visto"}</span></div>
-        <div style={{padding:"0 14px 14px",display:"grid",gap:12}}>
+        <div style={{padding:"0 14px 14px",display:"grid",gap:12,gridTemplateColumns:empilhado&&!isMob?"repeat(auto-fill,minmax(320px,1fr))":"1fr"}}>
           {vivas.length===0&&!verOcultos&&<div style={{padding:"20px 16px",color:D.muted,textAlign:"center",fontSize:12}}>Nada pendente. As regras rodam de novo a cada coleta (07:00).</div>}
           {(verOcultos?todas:vivas).slice(0,verOcultos?40:8).map(function(p,i){ const cor=p.nivel==="c"?D.crit:p.nivel==="w"?D.warn:D.ok; const st=AL.mapa[p.chave]; const oculto=!ativo(p);
             return <div key={p.chave} style={{border:"1px solid "+D.line,borderRadius:14,padding:"14px 16px 12px",display:"grid",gridTemplateColumns:"auto 1fr",gap:12,background:D.surface2,opacity:go?(oculto?.55:1):0,transition:"opacity .4s ease "+(i*50)+"ms"}}>
@@ -59303,7 +59354,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
         </div>
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+      <div style={{flex:"1 1 760px",display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
         <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 4px 0",flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Clientes</span><span style={{fontSize:11.5,color:D.muted}}>quem precisa de olhar vem primeiro · clique na linha pra abrir</span>{C.atrasado&&<span style={{fontSize:11,fontWeight:700,color:D.warn,background:D.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)}</span>}<span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11.5,color:D.muted}}>{cards.length} contas · {cards.filter(function(c){return c.selo.k==="c"||c.selo.k==="w";}).length} com aviso</span>{Sel}</span></div>
         {Tabela}
         <div style={{color:D.muted,fontSize:11.5,padding:"4px 4px 0",display:"flex",gap:16,flexWrap:"wrap"}}>
