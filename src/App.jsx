@@ -53671,7 +53671,33 @@ const taskToRow = (t) => ({
 });
 
 // ── Helpers de usuário ────────────────────────────────────────
-const resolveUser = (p) => p?(TEAM.find(u=>u.id===p.team_id||u.name===p.name)||null):null;
+/* resolveUser — 19/09/2026
+   ANTES: quem nao estava no array TEAM caia em CURRENT_USER=TEAM[0], que e o
+   Vinicius (level 1, socio). Como pxPode() libera tudo pra level 1, qualquer
+   login novo entrava como socio e via o sistema inteiro. Foi assim que o perfil
+   Leitor "meta" abriu a tela de ADM.
+   AGORA: perfil que nao esta no TEAM vira um usuario montado a partir do proprio
+   perfil do banco, com o nivel real. Sem nivel, cai em 9 (o mais restrito).
+   Nunca mais TEAM[0]. */
+const resolveUser = (p) => {
+  if(!p) return null;
+  const achado = TEAM.find(u=>u.id===p.team_id||u.name===p.name);
+  if(achado) return achado;
+  const _nome = p.name || p.team_id || "Sem nome";
+  return {
+    id: p.team_id || p.id || "_sem_time",
+    name: _nome,
+    role: p.role || "—",
+    av: (p.av || _nome[0] || "?").toUpperCase(),
+    color: p.color || "#94a3b8",
+    level: Number(p.level) || 9,
+    status: "online",
+    dash: p.dash || "gestor",
+    canDelete: false,
+    canPixelsIA: false,
+    _doPerfil: true,
+  };
+};
 
 // ── LoginScreen ───────────────────────────────────────────────
 function LoginScreen({onLoginCollaborator,onLoginClient}){
@@ -53693,6 +53719,11 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
       const arr=await r.json();
       const profile=Array.isArray(arr)?arr[0]:null;
       if(!profile){setError("Perfil não encontrado.");await _sb.auth.signOut();setLoading(false);return;}
+      /* 19/09/2026 — acesso temporario vencido ou revogado nao entra */
+      if(profile.acesso_ativo===false||(profile.acesso_expira_em&&new Date(profile.acesso_expira_em)<new Date())){
+        setError(profile.acesso_ativo===false?"Este acesso foi encerrado.":"Este acesso venceu.");
+        await _sb.auth.signOut(); setLoading(false); return;
+      }
       ls.set(PROFILE_KEY,profile);
       if(profile.user_type==="client") onLoginClient(profile);
       else onLoginCollaborator(profile);
@@ -54590,6 +54621,20 @@ export default function AgencyOS(){
           const arr=await r.json();
           const profile=Array.isArray(arr)?arr[0]:null;
           if(profile){
+            /* 19/09/2026 — acesso temporario (Leitor): se foi revogado na mao ou
+               passou da validade, nao entra. A checagem e aqui no login porque o
+               cron so desliga uma vez por dia. */
+            const _venceu = profile.acesso_expira_em && new Date(profile.acesso_expira_em) < new Date();
+            const _revogado = profile.acesso_ativo === false;
+            if(_venceu || _revogado){
+              profileLoaded=true;
+              
+              try{ localStorage.removeItem(PROFILE_KEY); }catch(_e){}
+              try{ await _sb.auth.signOut(); }catch(_e){}
+              setCurrentProfile(null); setClientPortal(null); setAuthState("login");
+              try{ if(typeof pixelsToast!=="undefined") pixelsToast.error(_venceu?"Este acesso venceu.":"Este acesso foi encerrado."); }catch(_e){}
+              return;
+            }
             profileLoaded=true;
             ls.set(PROFILE_KEY,profile);
             if(profile.user_type==="client"){setClientPortal(profile);setAuthState("portal");}
@@ -54708,7 +54753,12 @@ export default function AgencyOS(){
         const data=await res.json();
         if(!Array.isArray(data)) return;
         data.forEach(profile=>{
-          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+          /* 19/09/2026 — ANTES: perfil fora do array TEAM era ignorado aqui, entao
+             as permissoes dele nunca chegavam no ACCESS_STORE e cada tela caia no
+             proprio padrao. Somado ao fallback do resolveUser, um colaborador novo
+             entrava vendo tudo. AGORA: quem nao esta no TEAM usa o proprio perfil. */
+          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name)
+                 ||(profile.team_id?{id:profile.team_id,level:Number(profile.level)||9}:null);
           if(!u) return;
           const sp=profile.permissions&&Object.keys(profile.permissions).length>0?profile.permissions:null;
           // Base: DEFAULT_PERMS + ACCESS_STORE hardcoded; Supabase sobrescreve o que foi explicitamente salvo
