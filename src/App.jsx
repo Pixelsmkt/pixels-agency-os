@@ -36985,10 +36985,18 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
     try{
       const sb=window._sb; if(!sb) return;
       const{data:rows}=await sb.from("profiles")
-        .select("team_id,acesso_tipo,acesso_expira_em,acesso_ativo,primary_client")
+        .select("team_id,name,av,role,color,acesso_tipo,acesso_expira_em,acesso_ativo,primary_client")
         .not("acesso_tipo","is",null);
       const m={};
-      (rows||[]).forEach(function(r){ if(r.team_id) m[r.team_id]={tipo:r.acesso_tipo,expira:r.acesso_expira_em,ativo:r.acesso_ativo!==false,cliente:r.primary_client||null}; });
+      (rows||[]).forEach(function(r){
+        if(!r.team_id) return;
+        m[r.team_id]={
+          tipo:r.acesso_tipo, expira:r.acesso_expira_em, ativo:r.acesso_ativo!==false,
+          cliente:r.primary_client||null,
+          nome:r.name||r.team_id, av:(r.av||String(r.name||r.team_id)[0]||"?").toUpperCase(),
+          role:r.role||"Leitor", color:r.color||"#0ea5e9",
+        };
+      });
       setAcessosTemp(m);
     }catch(_e){}
   },[]);
@@ -37326,14 +37334,22 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
      secao propria, logo abaixo, com validade e botao de revogar. */
   const _ehLeitor=function(u){ const a=acessosTemp[u&&u.id]; return !!(a&&a.tipo==="leitor"); };
   const _buscaBate=function(u){
-    return search===""||u.name.toLowerCase().includes(search.toLowerCase())||(u.role||"").toLowerCase().includes(search.toLowerCase());
+    return search===""||String(u.name||"").toLowerCase().includes(search.toLowerCase())||String(u.role||"").toLowerCase().includes(search.toLowerCase());
   };
   const allMembers=TEAM.filter(u=>{
     if(_ehLeitor(u)) return false;
     const matchLevel=filterLevel===0||u.level===filterLevel;
     return _buscaBate(u)&&matchLevel;
   });
-  const leitores=TEAM.filter(function(u){ return _ehLeitor(u)&&_buscaBate(u); });
+  /* A lista de leitores vem do BANCO, nao do array TEAM (19/09/2026).
+     O TEAM e a lista fixa do codigo mais um sincronismo que roda depois; quem foi
+     criado agora ainda nao esta la e sumia do painel. Lendo do banco, aparece na hora. */
+  const leitores=Object.keys(acessosTemp).filter(function(id){
+    return acessosTemp[id]&&acessosTemp[id].tipo==="leitor";
+  }).map(function(id){
+    const a=acessosTemp[id];
+    return {id:id,name:a.nome||id,av:a.av||"?",role:a.role||"Leitor",color:a.color||"#0ea5e9"};
+  }).filter(_buscaBate);
 
   const taskCount=(uid)=>(tasks||[]).filter(t=>t.assignee===uid&&!t.deletedAt).length;
   const doneCount=(uid)=>(tasks||[]).filter(t=>t.assignee===uid&&!t.deletedAt&&t.status==="aprovado").length;
