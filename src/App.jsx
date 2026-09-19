@@ -58943,12 +58943,15 @@ function AdsMur({cols,gap,children}){
    Motivo: o thumbnail_url que a Meta guarda no criativo vem com "p64x64" na URL — é um recorte quadrado de 64px.
    Era por isso que uns criativos apareciam no formato certo (os que tinham image_url em tamanho real) e outros
    saíam embaçados e esticados. O link salvo agora é só rede de segurança, se a função falhar. */
+const ADS_VAGA=9/16;   /* a vaga do criativo é sempre 1080x1920 — a arte se encaixa dentro dela */
 const _adsMai=function(t){ t=String(t||""); return t?t.charAt(0).toUpperCase()+t.slice(1):t; };
 const _adsThumbBase=function(){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb"; };
 const _adsThumbUrl=function(adId){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId); };
 /* capa de UM ativo dentro de um anúncio agrupado (vídeo ou imagem do flexível) */
 const _adsThumbAtivo=function(adId,valor){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId)+"&asset="+encodeURIComponent(valor); };
-function AdsCapa({cr,adId,ativo,h,maxH,radius,children,onClick,dark,fixa}){
+/* razao = a VAGA tem sempre a mesma proporção (9:16 nos cards). A arte entra inteira dentro dela,
+   na proporção original, e o que sobrar fica branco — assim a grade nunca desalinha. */
+function AdsCapa({cr,adId,ativo,h,maxH,razao,radius,children,onClick,dark,fixa}){
   const id=adId||(cr&&cr.ad_id)||null;
   const salvo=(ativo&&ativo.thumb)||(cr&&(cr.image_url||cr.thumbnail_url))||null;
   const dono=ativo&&(ativo.ad||id);
@@ -58960,15 +58963,21 @@ function AdsCapa({cr,adId,ativo,h,maxH,radius,children,onClick,dark,fixa}){
   const video=!!((cr&&cr.video_id)||(ativo&&ativo.video));
   const onErr=function(){ setI(function(v){ return v+1; }); };
   const onLoad=function(e){ const w=e.currentTarget.naturalWidth, hh=e.currentTarget.naturalHeight; if(w>1&&hh>1) setAr(w/hh); };
-  const box=(!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:maxH||560}:{height:h||220};
-  const pS=fixa?Math.max(16,Math.min(46,Math.round((h||220)*0.42))):46;   /* play proporcional à capa */
   const mostra=src&&!falhou;
-  return <div onClick={onClick} style={Object.assign({position:"relative",borderRadius:radius===undefined?14:radius,overflow:"hidden",background:mostra?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)",cursor:onClick?"pointer":"default",flexShrink:0},box)}>
-    {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={onErr} onLoad={onLoad} style={{width:"100%",height:"100%",objectFit:"cover",display:mostra?"block":"none",opacity:.96}}/>}
-    {!mostra&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:ADS.muted}}>sem prévia</div>}
-    {mostra&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.62) 100%)"}}/>}
-    {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:pS,height:pS,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:Math.round(pS*0.33)+"px solid #1b1530",borderTop:Math.round(pS*0.2)+"px solid transparent",borderBottom:Math.round(pS*0.2)+"px solid transparent",marginLeft:Math.round(pS*0.09)}}/></div>}
-    {children}
+  const encaixa=!!razao;                       /* vaga de tamanho fixo (9:16): a arte entra inteira dentro dela */
+  /* a vaga: no modo encaixe ela é sempre do mesmo tamanho; senão acompanha a proporção da própria arte */
+  const vaga=encaixa?{aspectRatio:String(razao),height:"auto"}:((!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:maxH||560}:{height:h||220});
+  /* a arte: dentro da vaga, na proporção original. O que sobrar da vaga fica branco, sem nada em cima. */
+  const arte=(encaixa&&ar)?{position:"relative",aspectRatio:String(ar),width:(ar>=Number(razao))?"100%":"auto",height:(ar>=Number(razao))?"auto":"100%",overflow:"hidden"}:{position:"absolute",inset:0,overflow:"hidden"};
+  const pS=fixa?Math.max(16,Math.min(46,Math.round((h||220)*0.42))):46;   /* play proporcional à capa */
+  return <div onClick={onClick} style={Object.assign({position:"relative",borderRadius:radius===undefined?14:radius,overflow:"hidden",background:encaixa?"#fff":(mostra?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)"),cursor:onClick?"pointer":"default",flexShrink:0,display:"grid",placeItems:"center"},vaga)}>
+    {!mostra&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:ADS.muted,background:encaixa?"linear-gradient(160deg,#f3f1f8,#e7e3f0)":"transparent"}}>sem prévia</div>}
+    <div style={Object.assign({background:mostra?"#1b1530":"transparent"},arte)}>
+      {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={onErr} onLoad={onLoad} style={{width:"100%",height:"100%",objectFit:"cover",display:mostra?"block":"none",opacity:.96}}/>}
+      {mostra&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.62) 100%)"}}/>}
+      {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:pS,height:pS,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:Math.round(pS*0.33)+"px solid #1b1530",borderTop:Math.round(pS*0.2)+"px solid transparent",borderBottom:Math.round(pS*0.2)+"px solid transparent",marginLeft:Math.round(pS*0.09)}}/></div>}
+      {children}
+    </div>
   </div>;
 }
 /* preview em cima da tela: imagem cheia, Reel embutido (player do Facebook) ou capa + abrir na Meta */
@@ -59093,7 +59102,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const campeao=famAtiva?((agCamp&&Number(agCamp.resultados||0)>=ADS_MIN_RESULTADOS&&items.find(function(a){return a.id===agCamp.id;}))||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo&&a.gasto>=50;})||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo;})||null):null;
   const resFmt=function(a){ return _adsNum(a.res); }; /* reconhecimento: res já é "mil alcançados" */
   const Card=function(a,i){ const aberto2=aberto===a.id; return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{background:"#fff",border:"1px solid "+(a===campeao?"#e6c56a":ADS.line),borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s"}} onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)";}}>
-      <AdsCapa cr={a.cr} adId={a.id} h={isMob?200:230} radius={0}>
+      <AdsCapa cr={a.cr} adId={a.id} razao={ADS_VAGA} radius={0}>
         {a.selo&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:a.selo[1]==="g"?"#ffe8a3":"#fecaca",color:a.selo[1]==="g"?"#6b4d00":"#7f1d1d"}}>{a===campeao?"Campeão":a.selo[0]}</span>}
         {!a.selo&&a===campeao&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:"#ffe8a3",color:"#6b4d00"}}>Campeão</span>}
         {famAtiva&&i!==undefined&&<span style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 7px"}}>#{i+1}</span>}
@@ -59125,7 +59134,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 
     {campeao&&<AdsSec t={"Criativo campeão · "+famAtiva.label} s={"melhor "+famAtiva.custoLbl+" com pelo menos "+(famAtiva.id==="reconhecimento"?1:ADS_MIN_RESULTADOS)+" "+famAtiva.resLbl}>
       <div onClick={function(){setAberto(campeao.id);}} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"260px 1fr",gap:22,background:"linear-gradient(135deg,#fffaf0,#fff)",border:"1.5px solid #e6c56a",borderRadius:18,padding:isMob?14:20,cursor:"pointer"}}>
-        <AdsCapa cr={campeao.cr} adId={campeao.id} h={isMob?240:300}><span style={{position:"absolute",top:10,left:10,fontSize:11,fontWeight:800,borderRadius:99,padding:"4px 10px",background:"#ffe8a3",color:"#6b4d00"}}>🏆 Campeão</span><div style={{position:"absolute",bottom:12,left:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}><b style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(campeao.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{famAtiva.custoLbl}</small></div></AdsCapa>
+        <AdsCapa cr={campeao.cr} adId={campeao.id} razao={ADS_VAGA}><span style={{position:"absolute",top:10,left:10,fontSize:11,fontWeight:800,borderRadius:99,padding:"4px 10px",background:"#ffe8a3",color:"#6b4d00"}}>🏆 Campeão</span><div style={{position:"absolute",bottom:12,left:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}><b style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(campeao.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{famAtiva.custoLbl}</small></div></AdsCapa>
         <div style={{minWidth:0}}>
           <AdsEyebrow>{campeao.nome}</AdsEyebrow>
           <div style={{fontSize:isMob?18:22,fontWeight:900,letterSpacing:"-.5px",marginTop:4,lineHeight:1.25}}>{resFmt(campeao)} {famAtiva.resLbl} com {_adsBRL0(campeao.gasto)}{campeao.mediaG&&campeao.mediaG/campeao.custo>=1.15?<span> — <span style={{color:ADS.ok}}>{_adsX(campeao.mediaG/campeao.custo)} melhor</span> que a média do grupo</span>:<span> — na média do grupo</span>}</div>
@@ -59138,9 +59147,9 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 
     <AdsSec t={famAtiva?"Todos os criativos · "+famAtiva.label:"Todos os criativos"} s={famAtiva?"do melhor "+famAtiva.custoLbl+" pro pior · clique pra abrir o vídeo, o diagnóstico e o perfil de público":"do maior gasto pro menor · cada card na métrica do próprio objetivo · clique pra abrir"}>
       {principais.length===0&&<div style={{fontSize:13,color:ADS.muted,marginBottom:12}}>Só anúncios com amostra pequena neste grupo.</div>}
-      <AdsMur cols={isMob?2:4} gap={14}>{principais.map(function(a,i){ return Card(a,i); })}</AdsMur>
+      <div style={{display:"grid",gridTemplateColumns:cols,gap:14}}>{principais.map(function(a,i){ return Card(a,i); })}</div>
       {pequenos.length>0&&!verTodos&&<div style={{textAlign:"center",marginTop:16}}><AdsChip onClick={function(){setVerTodos(true);}}>Ver os outros {pequenos.length} (amostra pequena · menos de R$ 50 gastos)</AdsChip></div>}
-      {verTodos&&pequenos.length>0&&<div style={{marginTop:14,opacity:.85}}><AdsMur cols={isMob?2:4} gap={14}>{pequenos.map(function(a,i){ return Card(a,principais.length+i); })}</AdsMur></div>}
+      {verTodos&&pequenos.length>0&&<div style={{display:"grid",gridTemplateColumns:cols,gap:14,marginTop:14,opacity:.85}}>{pequenos.map(function(a,i){ return Card(a,principais.length+i); })}</div>}
     </AdsSec>
   </AdsWrap>;
 }
