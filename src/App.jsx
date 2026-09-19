@@ -58139,7 +58139,7 @@ function AdsAtivosPerf({ativos,cfg,compacto,onVer,isMob}){ const isMobG=!!isMob;
     <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}><AdsEyebrow>{ativos.length>1?"Agrupados neste anúncio":"Ativo do anúncio"} · {[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+(ni>1?" imagens":" imagem"):null].filter(Boolean).join(" · ")}</AdsEyebrow>{ativos.length>1&&<span style={{fontSize:11,color:ADS.muted}}>a Meta escolhe qual mostrar pra cada pessoa · performance de cada um</span>}</div>
     <div style={{display:"flex",flexDirection:"column",gap:4}}>{ativos.map(function(a,i){ const res=Number(a.resultados||0); const custo=cfg&&cfg.campo?_adsDiv(a.gasto,res):null; const ctr=Number(a.impressoes)>0?Number(a.cliques)/Number(a.impressoes)*100:null; const fatia=Number(a.gasto||0)/tot*100; const r25=Number(a.impressoes)>0&&a.dimensao==="video_asset"?Number(a.p25||0)/Number(a.impressoes)*100:null;
       return <div key={a.dimensao+a.valor} onClick={onVer?function(e){e.stopPropagation();onVer(a);}:undefined} style={{display:"grid",gridTemplateColumns:compacto?(isMobG?"44px minmax(0,1fr) 90px 70px":"44px minmax(0,1.2fr) 100px 76px 112px 60px"):("56px minmax(0,1.4fr) 96px 70px 90px 60px"+(temRet?" 70px":"")),gap:10,alignItems:"center",padding:"6px 8px",borderRadius:10,background:ADS.surface2,cursor:onVer?"pointer":"default",fontSize:12}}>
-        <div style={{width:compacto?44:56,height:compacto?44:56,borderRadius:8,overflow:"hidden",background:"#1b1530",position:"relative",flexShrink:0}}>{a.thumb&&<img src={a.thumb} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}{a.dimensao==="video_asset"&&<span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"6px solid #1b1530",borderTop:"4px solid transparent",borderBottom:"4px solid transparent",marginLeft:1}}/></span>}</div>
+        <div style={{width:compacto?44:56,flexShrink:0}}><AdsCapa fixa h={compacto?44:56} radius={8} ativo={{ad:a.ad_id,valor:a.valor,thumb:a.thumb,video:a.dimensao==="video_asset"}}/></div>
         <div style={{minWidth:0}}><div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome||""}>{nomeCurto(a)}</div><div style={{marginTop:4}}><AdsBarra pct={fatia} h={5} cor="#9F43F6" alt={1}/></div></div>
         <div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>Gasto</div><b style={ADS_MONO}>{_adsBRLc(a.gasto)}</b><span style={{fontSize:10.5,color:ADS.muted}}> · {Math.round(fatia)}%</span></div>
         <div><div style={{fontSize:10,color:ADS.muted,fontWeight:700,textTransform:"uppercase"}}>{cfg&&cfg.campo?cfg.resLbl:"Impr."}</div><b style={ADS_MONO}>{cfg&&cfg.campo?_adsNum(res):_adsNum(a.impressoes)}</b></div>
@@ -58565,21 +58565,85 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
   const orcTxt=orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":" total"):null;
   let evid=null;
   if(s.regra===5){
+    /* ── R5: dois ativos dentro do MESMO anúncio agrupado, lado a lado e comparados de verdade (19/09) ──
+       capa na proporção original do ativo (9:16 fica vertical) + as métricas principais uma embaixo da outra,
+       com o vencedor marcado em cada linha. Tudo somado do ads_breakdowns pela ads_ativos_conta. */
     const m=String(s.chave).match(/^r5:([^:]+):(.+)$/); const adId=m&&m[1], fracoId=m&&m[2];
-    const arr=(ctx.ativos||[]).filter(function(a){return a.ad_id===adId;}); const tot=arr.reduce(function(t,a){return t+Number(a.gasto||0);},0)||1;
-    const comCpa=arr.map(function(a){ const r=Number(a.resultados||0); return Object.assign({},a,{r:r,cpa:r?Number(a.gasto)/r:null}); });
-    const fraco=comCpa.find(function(a){return String(a.valor)===String(fracoId);}); const melhor=comCpa.filter(function(a){return a.r>=2&&a.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
+    const arr=(ctx.ativos||[]).filter(function(a){return a.ad_id===adId;});
+    const tot=arr.reduce(function(t,a){return t+Number(a.gasto||0);},0)||1;
+    const prep=function(a){ const imp=Number(a.impressoes||0), cl=Number(a.cliques||0), r=Number(a.resultados||0), gs=Number(a.gasto||0), vv=Number(a.video_views||0);
+      return Object.assign({},a,{r:r,gs:gs,imp:imp,cl:cl,vv:vv,
+        cpa:r>0?gs/r:null, ctr:imp>0?cl/imp*100:null, cpc:cl>0?gs/cl:null, cpm:imp>0?gs/imp*1000:null,
+        conv:cl>0?r/cl*100:null, vvr:(imp>0&&a.dimensao==="video_asset")?vv/imp*100:null, fatia:gs/tot*100}); };
+    const comCpa=arr.map(prep);
+    const fraco=comCpa.find(function(a){return String(a.valor)===String(fracoId);});
+    const melhor=comCpa.filter(function(a){return a.r>=2&&a.cpa;}).sort(function(a,b){return a.cpa-b.cpa;})[0];
     const nomeAt=function(a){ return String(a.nome||"").replace(/\.(mp4|mov|jpg|jpeg|png)(_\d+_\d+)?$/i,""); };
-    const Ativo=function(a,papel){ if(!a) return null; const cor=papel==="manter"?ADS.ok:ADS.crit; const src=a.thumb||null; return <div style={{background:"#fff",border:"1.5px solid "+cor+"88",borderRadius:14,padding:10,minWidth:0}}>
-      <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,marginBottom:6}}>{papel==="manter"?"✓ Manter — puxa o custo":"✕ Remover — consome sem entregar"}</div>
-      <div style={{display:"grid",gridTemplateColumns:"96px 1fr",gap:10,alignItems:"center"}}>
-        <div style={{position:"relative",height:96,borderRadius:10,overflow:"hidden",background:src?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)"}}>{src&&<img src={src} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:28,height:28,borderRadius:"50%",background:"rgba(255,255,255,.92)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"9px solid #1b1530",borderTop:"6px solid transparent",borderBottom:"6px solid transparent",marginLeft:2}}/></div></div>
-        <div style={{minWidth:0}}><div style={{fontSize:13,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome}>{nomeAt(a)}</div>
-          <div style={{fontSize:12,color:ADS.ink2,marginTop:4}}><b style={ADS_MONO}>{_adsBRL0(a.gasto)}</b> · {Math.round(Number(a.gasto)/tot*100)}% da verba do anúncio</div>
-          <div style={{fontSize:12,color:ADS.ink2,marginTop:2}}><b style={ADS_MONO}>{_adsNum(a.r)}</b> {a.r===1?lbl:(cfg.resLbl||lbl+"s")} · <b style={Object.assign({color:cor},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"sem resultado"}</b>{a.cpa?" cada":""}</div>
-          {a.video_url&&<a href={a.video_url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{fontSize:11,color:ADS.accent,fontWeight:700}}>assistir ›</a>}</div>
-      </div></div>; };
-    evid=<div>{K("Os dois ativos do mesmo anúncio agrupado")}<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>{Ativo(melhor,"manter")}{Ativo(fraco,"remover")}</div>{arr.length>2&&<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>+ {arr.length-2} outro{arr.length>3?"s":""} ativo{arr.length>3?"s":""} no mesmo anúncio, dentro da média.</div>}</div>;
+
+    /* cabeçalho de cada lado: capa no formato original + nome + custo */
+    const Lado=function(a,papel){ if(!a) return null; const cor=papel==="manter"?ADS.ok:ADS.crit;
+      return <div style={{background:"#fff",border:"1.5px solid "+cor+"88",borderRadius:14,padding:12,minWidth:0}}>
+        <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,marginBottom:8}}>{papel==="manter"?"✓ Manter — puxa o custo":"✕ Remover — consome sem entregar"}</div>
+        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+          <div style={{width:isMob?104:124,flexShrink:0}}><AdsCapa ativo={{ad:a.ad_id,valor:a.valor,thumb:a.thumb,video:a.dimensao==="video_asset"}} h={150} maxH={300} radius={10}/></div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,lineHeight:1.3,wordBreak:"break-word"}} title={a.nome}>{nomeAt(a)}</div>
+            <div style={Object.assign({fontSize:22,fontWeight:900,letterSpacing:"-.6px",color:cor,marginTop:6},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"sem "+lbl}</div>
+            <div style={{fontSize:11,color:ADS.muted}}>{a.cpa?"por "+lbl:_adsBRL0(a.gs)+" gastos, nenhum "+lbl}</div>
+            <div style={{marginTop:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,marginBottom:3}}><span>verba do anúncio</span><span>{Math.round(a.fatia)}%</span></div>{Barra(a.fatia,cor)}</div>
+            {a.url&&<a href={"https://www.facebook.com"+a.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{fontSize:11,color:ADS.accent,fontWeight:700,display:"inline-block",marginTop:8}}>assistir ›</a>}
+          </div>
+        </div>
+      </div>; };
+
+    /* linhas de comparação — só métrica que os dois têm de verdade */
+    const LIN=[
+      {k:"cpa",lbl:"Custo por "+lbl,dir:"menor",dica:"gasto ÷ "+(cfg.resLbl||lbl+"s"),fmt:function(v){return v?_adsBRLc(v):"—";}},
+      {k:"r",lbl:_adsMai(cfg.resLbl||lbl+"s"),dir:"maior",dica:"o que cada um trouxe",fmt:function(v){return _adsNum(v);}},
+      {k:"conv",lbl:"Do clique pro "+lbl,dir:"maior",dica:"de cada 100 cliques, quantos viram "+lbl,fmt:function(v){return v===null?"—":_adsPct(v,1);}},
+      {k:"ctr",lbl:"CTR",dir:"maior",dica:"de cada 100 que veem, quantos clicam",fmt:function(v){return v===null?"—":_adsPct(v,2);}},
+      {k:"cpc",lbl:"Custo por clique",dir:"menor",dica:null,fmt:function(v){return v?_adsBRLc(v):"—";}},
+      {k:"cpm",lbl:"CPM",dir:"menor",dica:"custo por mil impressões",fmt:function(v){return v?_adsBRL(v):"—";}},
+      {k:"vvr",lbl:"Assistiram o vídeo",dir:"maior",dica:"de cada 100 que veem, quantos dão play",fmt:function(v){return v===null?"—":_adsPct(v,0);}},
+      {k:"imp",lbl:"Impressões",dir:null,dica:"quanto cada um apareceu",fmt:function(v){return _adsNum(v);}},
+      {k:"gs",lbl:"Gasto",dir:null,dica:null,fmt:function(v){return _adsBRL0(v);}}
+    ].filter(function(L){ const x=melhor?melhor[L.k]:null, y=fraco?fraco[L.k]:null; return (x!==null&&x!==undefined)||(y!==null&&y!==undefined); });
+
+    const Cel=function(L,a,outro){ if(!a) return <div/>;
+      const v=a[L.k], w=outro?outro[L.k]:null;
+      const temDois=v!==null&&v!==undefined&&w!==null&&w!==undefined&&Number(v)>0&&Number(w)>0;
+      const ganha=temDois&&L.dir?(L.dir==="menor"?Number(v)<Number(w):Number(v)>Number(w)):false;
+      /* a barra mostra QUÃO BOM está, não o número cru: em custo, quem gasta menos tem a barra maior */
+      const mx=Math.max(Number(v)||0,Number(w)||0)||1, mn=Math.min(Number(v)||0,Number(w)||0);
+      const pct=(L.dir==="menor"&&Number(v)>0&&mn>0)?(mn/Number(v)*100):((Number(v)||0)/mx*100);
+      const cor=ganha?ADS.ok:ADS.ink2;
+      return <div style={{minWidth:0}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <b style={Object.assign({fontSize:13.5,fontWeight:900,color:cor},ADS_MONO)}>{L.fmt(v)}</b>
+          {ganha&&<span style={{fontSize:9.5,fontWeight:800,color:ADS.ok,letterSpacing:".04em"}}>MELHOR</span>}
+        </div>
+        <div style={{marginTop:4}}>{Barra(pct,ganha?ADS.ok:"#c9bde4")}</div>
+      </div>; };
+
+    /* leitura honesta do caso: às vezes o fraco tem CTR melhor e mesmo assim não converte */
+    const nota=(function(){ if(!melhor||!fraco) return null;
+      if(fraco.ctr!==null&&melhor.ctr!==null&&fraco.ctr>melhor.ctr&&(fraco.conv===null||melhor.conv===null||fraco.conv<melhor.conv))
+        return "\""+nomeAt(fraco)+"\" até chama mais clique (CTR "+_adsPct(fraco.ctr,2)+" contra "+_adsPct(melhor.ctr,2)+"), mas o clique não vira "+lbl+": "+_adsNum(fraco.cl)+" cliques e "+_adsNum(fraco.r)+" "+(fraco.r===1?lbl:(cfg.resLbl||lbl+"s"))+". O problema está depois do clique, não no alcance.";
+      if(fraco.r===0) return "\""+nomeAt(fraco)+"\" levou "+_adsBRL0(fraco.gs)+" ("+Math.round(fraco.fatia)+"% da verba do anúncio) e não trouxe nenhum "+lbl+". Essa verba pode ir toda pro outro.";
+      if(melhor.cpa&&fraco.cpa) return "Cada "+lbl+" por \""+nomeAt(fraco)+"\" custa "+_adsX(fraco.cpa/melhor.cpa)+" o do \""+nomeAt(melhor)+"\". Com a Meta dividindo a entrega entre os dois, a média do anúncio fica pior do que poderia.";
+      return null; })();
+
+    evid=<div>{K("Os dois ativos do mesmo anúncio agrupado")}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>{Lado(melhor,"manter")}{Lado(fraco,"remover")}</div>
+      {melhor&&fraco&&<div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:"4px 14px",marginTop:10}}>
+        {LIN.map(function(L,i){ return <div key={L.k} style={{display:"grid",gridTemplateColumns:isMob?"96px 1fr 1fr":"minmax(120px,1fr) minmax(0,1fr) minmax(0,1fr)",gap:12,alignItems:"center",padding:"10px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+          <div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:700,color:ADS.ink2,lineHeight:1.25}}>{L.lbl}</div>{L.dica&&!isMob&&<div style={{fontSize:10,color:ADS.muted,marginTop:1}}>{L.dica}</div>}</div>
+          {Cel(L,melhor,fraco)}{Cel(L,fraco,melhor)}
+        </div>; })}
+      </div>}
+      {nota&&<p style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.55,margin:"10px 0 0"}}>{nota}</p>}
+      {arr.length>2&&<div style={{fontSize:11,color:ADS.muted,marginTop:6}}>+ {arr.length-2} outro{arr.length>3?"s":""} ativo{arr.length>3?"s":""} no mesmo anúncio, dentro da média.</div>}
+    </div>;
   } else if(s.regra===6||s.regra===9){
     const cjs=(ctx.conjuntos||[]).filter(function(x){return x.campaign_id===c.id&&Number(x.gasto||0)>0;}).map(function(x){ const r=Number(x.res||0); const e=(ctx.ent||[]).find(function(y){return y.nivel==="conjunto"&&y.entidade_id===x.id;})||{}; return Object.assign({},x,{r:r,cpa:_adsDiv(x.gasto,r),e:e}); }).sort(function(a,b){return b.gasto-a.gasto;});
     const soma=cjs.reduce(function(t,x){return t+Number(x.gasto);},0)||1; const val=cjs.filter(function(x){return x.r>=ADS_MIN_RESULTADOS&&x.cpa;}); const melhor=val.slice().sort(function(a,b){return a.cpa-b.cpa;})[0];
@@ -58811,25 +58875,31 @@ function AdsMur({cols,gap,children}){
    Motivo: o thumbnail_url que a Meta guarda no criativo vem com "p64x64" na URL — é um recorte quadrado de 64px.
    Era por isso que uns criativos apareciam no formato certo (os que tinham image_url em tamanho real) e outros
    saíam embaçados e esticados. O link salvo agora é só rede de segurança, se a função falhar. */
-const _adsThumbUrl=function(adId){ const base=(window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co"; return base+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId); };
-function AdsCapa({cr,adId,h,radius,children,onClick,dark,fixa}){
+const _adsMai=function(t){ t=String(t||""); return t?t.charAt(0).toUpperCase()+t.slice(1):t; };
+const _adsThumbBase=function(){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb"; };
+const _adsThumbUrl=function(adId){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId); };
+/* capa de UM ativo dentro de um anúncio agrupado (vídeo ou imagem do flexível) */
+const _adsThumbAtivo=function(adId,valor){ return _adsThumbBase()+"?ad="+encodeURIComponent(adId)+"&asset="+encodeURIComponent(valor); };
+function AdsCapa({cr,adId,ativo,h,maxH,radius,children,onClick,dark,fixa}){
   const id=adId||(cr&&cr.ad_id)||null;
-  const salvo=(cr&&(cr.image_url||cr.thumbnail_url))||null;
-  const cadeia=[id?_adsThumbUrl(id):null,salvo].filter(Boolean);           /* tenta a função; se falhar, o link salvo */
+  const salvo=(ativo&&ativo.thumb)||(cr&&(cr.image_url||cr.thumbnail_url))||null;
+  const dono=ativo&&(ativo.ad||id);
+  const cadeia=(ativo?[(dono&&ativo.valor)?_adsThumbAtivo(dono,ativo.valor):null]:[id?_adsThumbUrl(id):null]).concat([salvo]).filter(Boolean);  /* tenta a função; se falhar, o link salvo */
   const chave=cadeia.join("|");
   const [i,setI]=useState(0); const [ar,setAr]=useState(null);
   useEffect(function(){ setI(0); setAr(null); },[chave]);
   const src=cadeia[i]||null; const falhou=!src;
-  const video=!!(cr&&cr.video_id);
+  const video=!!((cr&&cr.video_id)||(ativo&&ativo.video));
   const onErr=function(){ setI(function(v){ return v+1; }); };
   const onLoad=function(e){ const w=e.currentTarget.naturalWidth, hh=e.currentTarget.naturalHeight; if(w>1&&hh>1) setAr(w/hh); };
-  const box=(!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:560}:{height:h||220};
+  const box=(!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:maxH||560}:{height:h||220};
+  const pS=fixa?Math.max(16,Math.min(46,Math.round((h||220)*0.42))):46;   /* play proporcional à capa */
   const mostra=src&&!falhou;
   return <div onClick={onClick} style={Object.assign({position:"relative",borderRadius:radius===undefined?14:radius,overflow:"hidden",background:mostra?"#1b1530":"linear-gradient(160deg,#e9e5f2,#cfc9dd)",cursor:onClick?"pointer":"default",flexShrink:0},box)}>
     {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={onErr} onLoad={onLoad} style={{width:"100%",height:"100%",objectFit:"cover",display:mostra?"block":"none",opacity:.96}}/>}
     {!mostra&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:ADS.muted}}>sem prévia</div>}
     {mostra&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.62) 100%)"}}/>}
-    {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"15px solid #1b1530",borderTop:"9px solid transparent",borderBottom:"9px solid transparent",marginLeft:4}}/></div>}
+    {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:pS,height:pS,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:Math.round(pS*0.33)+"px solid #1b1530",borderTop:Math.round(pS*0.2)+"px solid transparent",borderBottom:Math.round(pS*0.2)+"px solid transparent",marginLeft:Math.round(pS*0.09)}}/></div>}
     {children}
   </div>;
 }
