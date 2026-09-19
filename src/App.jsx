@@ -58377,48 +58377,50 @@ function QGAdsEstrategia({mc,conta,isMob,canEdit}){
   const leadIds=camps.filter(function(c){return c.fam==="leads"&&Number(c.gasto||0)>0;}).sort(function(a,b){return b.gasto-a.gasto;}).map(function(c){return c.id;});
   const Q=useAdsQuebrasPorCampanha(accountId,X.P,leadIds);
   const [filtro,setFiltro]=useState("pendentes");
+  const [abertoS,setAbertoS]=useState(null);   // recomendação com o "porquê / como fazer" aberto (19/09)
+  const [verRegras,setVerRegras]=useState(false);
   if(D.loading||X.loading||AT.loading||Q.loading) return <AdsLoading t="Montando a estratégia…"/>;
   const P=X.P; const medias=_adsMediaPorTipo(camps); const gastoLeadTotal=camps.filter(function(c){return c.fam==="leads";}).reduce(function(s,c){return s+Number(c.gasto||0);},0);
   const sug=_adsSugestoes({camps:camps,medias:medias,ent:D.ent||[],conjuntos:(X.cur||{}).conjuntos||[],ativos:AT.rows,quebras:Q.por,gastoLeadTotal:gastoLeadTotal});
   const pend=sug.filter(function(s){return !S.st[s.chave];}), feitas=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="feito";}), ign=sug.filter(function(s){return S.st[s.chave]&&S.st[s.chave].status==="ignorado";});
-  const lista=filtro==="pendentes"?pend:filtro==="feitas"?feitas:ign;
+  const lista=(filtro==="pendentes"?pend:filtro==="feitas"?feitas:ign).slice().sort(function(a,b){ return (b.impacto||0)-(a.impacto||0)||(b.prio||0)-(a.prio||0); });
   const impTot=pend.reduce(function(s,x){return s+(x.impacto||0);},0);
-  const porCamp={}; lista.forEach(function(s){ (porCamp[s.c.id]=porCamp[s.c.id]||{c:s.c,itens:[]}).itens.push(s); });
-  const ordem=Object.keys(porCamp).map(function(k){return porCamp[k];}).sort(function(a,b){ return (b.itens[0].prio||0)-(a.itens[0].prio||0); });
+  const nCampPend=Object.keys(pend.reduce(function(m,s){m[s.c.id]=1;return m;},{})).length;
   const semSug=camps.filter(function(c){return Number(c.gasto||0)>0&&!sug.some(function(s){return s.c.id===c.id;});});
   const REG={1:"custo",2:"sem resultado",3:"criativo",4:"destino",5:"ativos agrupados",6:"verba entre conjuntos",7:"fadiga",8:"público",9:"aprendizado",10:"marca",11:"escalar"};
   const corDe=function(r){ return r===11?ADS.ok:(r===2||r===3||r===4)?ADS.crit:ADS.warn; };
+  /* Estratégia (19/09): uma lista de ações, da que mais vale dinheiro pra que menos vale. Título em uma linha; o porquê e o como abrem no clique. */
   return <AdsWrap>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:20}}>
-      <AdsSolido bg={ADS_SOL.escuro} eyebrow="Pendentes" big={pend.length} sub={pend.length?"recomendações pontuais em "+Object.keys(pend.reduce(function(m,s){m[s.c.id]=1;return m;},{})).length+" campanha"+(Object.keys(pend.reduce(function(m,s){m[s.c.id]=1;return m;},{})).length!==1?"s":""):"nada pendente com os dados do período"}/>
-      <AdsSolido bg={ADS_SOL.medio} eyebrow="Dinheiro em jogo" big={impTot>0?_adsBRL0(impTot):"—"} sub="gasto acima do que custaria na média da conta, nas campanhas com sugestão"/>
-      <AdsSolido bg={ADS_SOL.claro} eyebrow="Já tratadas" big={feitas.length+ign.length} sub={feitas.length+" feita"+(feitas.length!==1?"s":"")+" · "+ign.length+" ignorada"+(ign.length!==1?"s":"")}/>
+    <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",marginBottom:14}}>
+      <div style={{fontSize:isMob?16:19,fontWeight:800,letterSpacing:"-.3px",color:ADS.ink}}>{pend.length?<span><b>{pend.length} {pend.length===1?"ação":"ações"}</b> pra fazer{nCampPend?" em "+nCampPend+" campanha"+(nCampPend>1?"s":""):""}{impTot>0?<span> · <b style={{color:ADS.crit}}>{_adsBRL0(impTot)}</b> em jogo</span>:null}</span>:<span>Nada pra fazer com os dados de {_adsFmtD(P.ini)}–{_adsFmtD(P.fim)}</span>}</div>
+      <span style={{fontSize:12,color:ADS.muted}}>dados de {_adsFmtD(P.ini)} – {_adsFmtD(P.fim)} · "em jogo" = o que a campanha gastou acima do que custaria na média da conta</span>
+      <div style={{marginLeft:"auto",display:"flex",gap:6}}>{[["pendentes","Pendentes",pend.length],["feitas","Feitas",feitas.length],["ignoradas","Ignoradas",ign.length]].map(function(o){ return <AdsChip key={o[0]} on={filtro===o[0]} onClick={function(){setFiltro(o[0]);}} n={o[2]}>{o[1]}</AdsChip>; })}</div>
     </div>
-    <AdsSec t="Estratégia por campanha" s={"uma recomendação pontual por ponto encontrado · calculada com os dados de "+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" · da maior verba em jogo pra menor"} right={<div style={{display:"flex",gap:6}}>{[["pendentes","Pendentes",pend.length],["feitas","Feitas",feitas.length],["ignoradas","Ignoradas",ign.length]].map(function(o){ return <AdsChip key={o[0]} on={filtro===o[0]} onClick={function(){setFiltro(o[0]);}} n={o[2]}>{o[1]}</AdsChip>; })}</div>}>
-      {ordem.length===0&&<AdsCard style={{fontSize:13,color:ADS.muted}}>{filtro==="pendentes"?"Nenhuma recomendação pendente com os dados deste período. Amplie o período (30 dias) pra ter mais base.":"Nada aqui."}</AdsCard>}
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {ordem.map(function(g){ const c=g.c; const media=medias[c.tipo]||null; const rel=c.custo&&media?c.custo/media:null;
-          return <AdsCard key={c.id} style={{padding:0,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid "+ADS.line,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-              <span style={{width:8,height:8,borderRadius:"50%",background:c.ativa?ADS.ok:"#c9c5d6"}}/><span style={{fontWeight:900,fontSize:15,letterSpacing:"-.3px"}} title={c.nome}>{_adsNomeCurto(c.nome)}</span><AdsObjTag tipo={c.tipo}/>{(function(){ const m=String(c.nome||"").match(/\[(\d{2}\/\d{2}\/\d{2,4})\]/); return m?<span style={{fontSize:11,color:ADS.muted}}>{m[1]}</span>:null; })()}
-              <span style={{fontSize:12.5,color:ADS.ink2,display:"flex",gap:12,flexWrap:"wrap",marginLeft:isMob?0:8}}><span><b style={ADS_MONO}>{_adsBRLc(c.gasto)}</b> gasto</span>{c.cfg.campo?<span><b style={ADS_MONO}>{_adsNum(c.res)}</b> {c.cfg.resLbl}</span>:<span><b style={ADS_MONO}>{_adsNum(c.alcance)}</b> alcance</span>}{c.cfg.campo?<span><b style={Object.assign({color:rel?(rel>1.5?ADS.crit:rel<0.8?ADS.ok:ADS.ink):ADS.ink},ADS_MONO)}>{c.custo?_adsBRLc(c.custo):"—"}</b> por {c.cfg.resSing}{rel?" · "+_adsX(rel)+" a média do objetivo":""}</span>:<span>CPM <b style={ADS_MONO}>{_adsBRL(c.cpm)}</b></span>}<span>CTR <b style={ADS_MONO}>{_adsPct(c.ctr,2)}</b></span></span>
-              <span style={{marginLeft:"auto"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn></span>
+    {lista.length===0&&<AdsCard style={{fontSize:13,color:ADS.muted}}>{filtro==="pendentes"?"Nenhuma recomendação pendente com os dados deste período. Amplie o período (30 dias) pra ter mais base.":"Nada aqui."}</AdsCard>}
+    {lista.length>0&&<AdsCard style={{padding:0,overflow:"hidden"}}>
+      {lista.map(function(s,i){ const c=s.c; const cor=corDe(s.regra); const stt=S.st[s.chave]; const on=abertoS===s.chave;
+        return <div key={s.chave} style={{borderTop:i?"1px solid "+ADS.line:"none"}}>
+          <div onClick={function(){ setAbertoS(on?null:s.chave); }} style={{display:"grid",gridTemplateColumns:isMob?"auto minmax(0,1fr)":"auto minmax(0,1fr) 110px auto",gap:14,alignItems:"center",padding:isMob?"12px 14px":"13px 18px",cursor:"pointer",background:on?ADS.surface2:"#fff"}}>
+            <span style={{width:26,height:26,borderRadius:8,background:cor+"18",color:cor,fontSize:12,fontWeight:900,display:"grid",placeItems:"center",flex:"none"}}>{i+1}</span>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:14.5,fontWeight:800,letterSpacing:"-.2px",lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:on?"normal":"nowrap"}}>{s.titulo}</div>
+              <div style={{fontSize:11.5,color:ADS.muted,marginTop:3,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><span style={{fontWeight:800,color:cor,textTransform:"uppercase",letterSpacing:".05em",fontSize:10}}>{REG[s.regra]}</span><span>·</span><span style={{fontWeight:700,color:ADS.ink2}}>{_adsNomeCurto(c.nome)}</span><AdsObjTag tipo={c.tipo}/>{stt&&<span>· {stt.status==="feito"?"feita":"ignorada"}{stt.por?" por "+stt.por:""} · {_adsFmtD(String(stt.em).slice(0,10))}</span>}{isMob&&s.impacto>0&&<span>· <b style={{color:ADS.ink2}}>{_adsBRLc(s.impacto)}</b> em jogo</span>}</div>
             </div>
-            {g.itens.map(function(s,i){ const cor=corDe(s.regra); const stt=S.st[s.chave];
-              return <div key={s.chave} style={{padding:"14px 18px",borderTop:i?"1px solid "+ADS.line:"none",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) auto",gap:14,alignItems:"start",borderLeft:"4px solid "+cor}}>
-                <div style={{minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:cor,background:cor+"14",borderRadius:6,padding:"2px 7px"}}>{REG[s.regra]}</span>{s.impacto>0&&<span style={{fontSize:11.5,color:ADS.muted}}><b style={{color:ADS.ink2}}>{_adsBRLc(s.impacto)}</b> em jogo</span>}{stt&&<span style={{fontSize:11,color:ADS.muted}}>{stt.status==="feito"?"feita":"ignorada"}{stt.por?" por "+stt.por:""} · {_adsFmtD(String(stt.em).slice(0,10))}</span>}</div>
-                  <div style={{fontSize:15,fontWeight:800,letterSpacing:"-.2px",marginTop:6,lineHeight:1.3}}>{s.titulo}</div>
-                  <div style={{fontSize:12.5,color:ADS.ink2,marginTop:4,lineHeight:1.5}}>{s.motivo}</div>
-                  <div style={{fontSize:12.5,marginTop:6,lineHeight:1.5}}><b>Como fazer:</b> {s.acao}</div>
-                </div>
-                {canEdit&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}{stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}</div>}
-              </div>; })}
-          </AdsCard>; })}
-      </div>
-      {filtro==="pendentes"&&semSug.length>0&&<div style={{marginTop:14,fontSize:12.5,color:ADS.muted}}>Sem recomendação no período (dentro do esperado ou sem base suficiente): {semSug.map(function(c){return _adsNomeCurto(c.nome);}).join(" · ")}</div>}
-      <div style={{fontSize:12,color:ADS.muted,marginTop:12}}>Regras que geram as recomendações: custo contra a média do mesmo objetivo (1,5× = revisar; 0,7× = escalar), gasto sem resultado, CTR × conversão (criativo × destino), ativo agrupado que consome sem entregar, verba invertida entre conjuntos, frequência acima de 3,5, faixa etária/posicionamento que gasta 20%+ sem resultado, aprendizado limitado. Só dispara com dado real do período; amostra menor que {ADS_MIN_RESULTADOS} resultados não é julgada.</div>
-    </AdsSec>
+            {!isMob&&<div style={{textAlign:"right"}}>{s.impacto>0?<><div style={Object.assign({fontSize:15,fontWeight:900,color:ADS.ink,letterSpacing:"-.3px"},ADS_MONO)}>{_adsBRLc(s.impacto)}</div><div style={{fontSize:10.5,color:ADS.muted}}>em jogo</div></>:<span style={{fontSize:11,color:ADS.muted}}>—</span>}</div>}
+            {!isMob&&<div style={{display:"flex",gap:6,alignItems:"center"}} onClick={function(e){e.stopPropagation();}}>{canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}{canEdit&&stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,null); }}>Reabrir</AdsBtn>}<span style={{fontSize:12,color:ADS.muted,marginLeft:4,transform:on?"rotate(90deg)":"none",display:"inline-block",transition:"transform .15s"}}>›</span></div>}
+          </div>
+          {on&&<div style={{padding:isMob?"0 14px 14px 14px":"0 18px 16px 58px",background:ADS.surface2,display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:16}}>
+            <div><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:4}}>Por quê</div><div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>{s.motivo}</div></div>
+            <div><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:4}}>Como fazer</div><div style={{fontSize:12.5,color:ADS.ink,lineHeight:1.5}}>{s.acao}</div>
+              <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}><AdsBtn small onClick={function(){ _adsAbrirCampanha(c.id); }}>Abrir campanha ›</AdsBtn>{isMob&&canEdit&&!stt&&<AdsBtn small primary onClick={function(){ S.marcar(s.chave,"feito",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Feito</AdsBtn>}{isMob&&canEdit&&!stt&&<AdsBtn small onClick={function(){ S.marcar(s.chave,"ignorado",{campaign_id:c.id,titulo:s.titulo,client_id:conta.client_id}); }}>Ignorar</AdsBtn>}</div></div>
+          </div>}
+        </div>; })}
+    </AdsCard>}
+    <div style={{display:"flex",gap:14,alignItems:"baseline",flexWrap:"wrap",marginTop:12,fontSize:12,color:ADS.muted}}>
+      {filtro==="pendentes"&&semSug.length>0&&<span>Sem recomendação (dentro do esperado ou sem base): {semSug.map(function(c){return _adsNomeCurto(c.nome);}).join(" · ")}</span>}
+      <a onClick={function(){setVerRegras(!verRegras);}} style={{color:ADS.accent,cursor:"pointer",fontWeight:700,marginLeft:"auto"}}>{verRegras?"esconder regras":"como as recomendações são geradas"}</a>
+    </div>
+    {verRegras&&<div style={{fontSize:12,color:ADS.muted,marginTop:8,lineHeight:1.5}}>Custo contra a média do mesmo objetivo (1,5× = revisar; 0,7× = escalar), gasto sem resultado, CTR × conversão (criativo × destino), ativo agrupado que consome sem entregar, verba invertida entre conjuntos, frequência acima de 3,5, faixa etária/posicionamento que gasta 20%+ sem resultado, aprendizado limitado. Só dispara com dado real do período; amostra menor que {ADS_MIN_RESULTADOS} resultados não é julgada.</div>}
   </AdsWrap>;
 }
 
