@@ -58398,7 +58398,7 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta,notaCo
       <button onClick={function(){ rola(1); }} style={{width:32,height:32,borderRadius:9,border:"1px solid "+ADS.line2,background:"#fff",cursor:"pointer",fontSize:16,color:ADS.ink2,display:"grid",placeItems:"center",flexShrink:0,minHeight:0,padding:0}}>›</button>
     </div>; };
   return <div>
-    {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={null} mediaG={mediaCamp} onClose={function(){setAberto(null);}}/>}
+    {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={null} mediaG={mediaCamp} todos={anuncios} onClose={function(){setAberto(null);}}/>}
     <AdsSec t={"Conjuntos de anúncios · "+cjLista.length} s={nAtivos+" ativo"+(nAtivos!==1?"s":"")+(cjLista.length>1?" · clique no nome pra ver o público, o mapa e os anúncios de cada um · ":" · ")+_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)}>
       {cjLista.length===0&&<div style={{fontSize:13,color:ADS.muted}}>A Meta não devolveu conjuntos para esta campanha.</div>}
       {Abas()}
@@ -59153,7 +59153,132 @@ function useAdsPreview(adId,formato){
     return function(){ alive=false; }; },[key]);
   return st;
 }
-function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
+/* ─────────────────────────────────────────────────────────────────────────
+   PAINEL DO CRIATIVO — abas + respiro (19/09/2026)
+   Antes era um bloco só: cinco KPIs espremidos no topo, retenção, diagnóstico,
+   legenda e perfil de público empilhados sem separação. Agora cada assunto tem
+   a sua aba, e dentro dela os blocos respiram.
+   ───────────────────────────────────────────────────────────────────────── */
+const ADS_GEN_LBL={male:"Homens",female:"Mulheres",unknown:"Não informado"};
+
+/* uma leitura do banco serve todas as abas */
+function useAdsQuebraAnuncio(accountId,adId,P){
+  const [q,setQ]=useState(null);
+  useEffect(function(){ let vivo=true; if(!window._sb||!accountId||!adId) return; setQ(null);
+    window._sb.rpc("ads_quebras_por_anuncio",{p_account:accountId,p_ad_id:adId,p_de:P.ini,p_ate:P.fim})
+      .then(function(r){ if(vivo) setQ(r.error?[]:(r.data||[])); })
+      .catch(function(){ if(vivo) setQ([]); });
+    return function(){ vivo=false; }; },[accountId,adId,P.ini,P.fim]);
+  return q;
+}
+
+/* título de bloco, com respiro em cima */
+function AdsBlocoT({t,s,primeiro}){
+  return <div style={{marginTop:primeiro?0:26,marginBottom:10}}>
+    <div style={{fontSize:11,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted}}>{t}</div>
+    {s&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:3,lineHeight:1.4}}>{s}</div>}
+  </div>;
+}
+
+/* barra horizontal de um corte: rótulo à esquerda, barra, número à direita */
+function AdsCorteLinha({lbl,pct,val,sub,cor,destaque,i}){
+  return <div style={{display:"grid",gridTemplateColumns:"minmax(96px,1.1fr) minmax(0,1.5fr) auto",gap:12,alignItems:"center",padding:"9px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+    <div style={{fontSize:12.5,fontWeight:destaque?800:600,color:destaque?ADS.ink:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={lbl}>{lbl}</div>
+    <div><span style={{display:"block",height:8,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:Math.max(2,Math.min(100,pct))+"%",background:cor||"#9F43F6",borderRadius:99}}/></span></div>
+    <div style={{textAlign:"right",minWidth:78}}>
+      <b style={Object.assign({fontSize:13,fontWeight:800,color:ADS.ink},ADS_MONO)}>{val}</b>
+      {sub&&<div style={{fontSize:10.5,color:ADS.muted,marginTop:1,whiteSpace:"nowrap"}}>{sub}</div>}
+    </div>
+  </div>;
+}
+
+/* ── uma dimensão do público ── */
+function AdsPublicoDim({q,dim,lbl,sub}){
+  const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; })
+    .sort(function(a,b){ return Number(b.gasto)-Number(a.gasto); });
+  if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu {lbl.toLowerCase()} para este criativo no período.</div>;
+  const tot=rs.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
+  const nome=function(v){ return dim==="genero"?(ADS_GEN_LBL[v]||v):_adsValLbl(dim,v); };
+  return <div>
+    {rs.slice(0,9).map(function(x,i){
+      const g=Number(x.gasto||0), res=Number(x.resultados||0);
+      const cpa=res>0?g/res:null; const pct=g/tot*100;
+      return <AdsCorteLinha key={x.valor} i={i} lbl={nome(x.valor)} pct={pct}
+        val={Math.round(pct)+"%"} sub={cpa?_adsBRLc(cpa)+" cada":(res>0?_adsNum(res)+" res.":_adsBRL0(g))}
+        cor={i===0?ADS.accent:"#c2a9ef"} destaque={i===0}/>;
+    })}
+    {sub&&<div style={{fontSize:11,color:ADS.muted,marginTop:10,lineHeight:1.45}}>{sub}</div>}
+  </div>;
+}
+
+/* ── horário: 24 colunas, o pico marcado ── */
+function AdsHorario({q}){
+  const rs=(q||[]).filter(function(x){ return x.dimensao==="hora"&&Number(x.gasto||0)>0; });
+  if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Sem quebra por hora para este criativo no período.</div>;
+  const porH={}; rs.forEach(function(x){ const h=parseInt(String(x.valor),10); if(isNaN(h)) return;
+    const o=porH[h]||(porH[h]={g:0,res:0,imp:0,cl:0}); o.g+=Number(x.gasto||0); o.res+=Number(x.resultados||0); o.imp+=Number(x.impressoes||0); o.cl+=Number(x.cliques||0); });
+  const horas=[]; for(let h=0;h<24;h++) horas.push(Object.assign({h:h},porH[h]||{g:0,res:0,imp:0,cl:0}));
+  const temRes=horas.some(function(x){ return x.res>0; });
+  const base=function(x){ return temRes?x.res:x.g; };
+  const mx=Math.max.apply(null,horas.map(base).concat([1]));
+  const pico=horas.slice().sort(function(a,b){ return base(b)-base(a); })[0];
+  const gTot=horas.reduce(function(s,x){ return s+x.g; },0), rTot=horas.reduce(function(s,x){ return s+x.res; },0);
+  return <div>
+    <div style={{display:"flex",alignItems:"flex-end",gap:2,height:132,marginBottom:8}}>
+      {horas.map(function(x){ const v=base(x); const alt=Math.max(2,v/mx*118); const ehPico=x.h===pico.h&&v>0;
+        return <div key={x.h} title={x.h+"h · "+_adsBRL0(x.g)+(x.res>0?" · "+_adsNum(x.res)+" resultado"+(x.res>1?"s":""):"")}
+          style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",minWidth:0}}>
+          <span style={{width:"100%",height:alt,background:ehPico?ADS.accent:(v>0?"#cbb6f0":"#eeecf4"),borderRadius:"4px 4px 0 0"}}/>
+        </div>; })}
+    </div>
+    <div style={{display:"flex",gap:2,fontSize:9.5,color:ADS.muted}}>
+      {horas.map(function(x){ return <div key={x.h} style={{flex:1,textAlign:"center",minWidth:0}}>{x.h%3===0?x.h:""}</div>; })}
+    </div>
+    <div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
+      {temRes
+        ? <span>O pico é às <b>{pico.h}h</b>, com {_adsNum(pico.res)} de {_adsNum(rTot)} {rTot===1?"resultado":"resultados"}.</span>
+        : <span>Maior gasto às <b>{pico.h}h</b> ({_adsBRL0(pico.g)} de {_adsBRL0(gTot)}). Nenhum resultado foi atribuído a uma hora específica neste período.</span>}
+      <span style={{color:ADS.muted}}> Hora do fuso da conta, em bloco de 1 hora — a Meta não dá o minuto.</span>
+    </div>
+  </div>;
+}
+
+/* ── onde o mesmo criativo roda, e onde rende mais ── */
+function AdsOndeRoda({a,todos,cfg}){
+  const chave=function(x){ const c=x.cr||{}; return c.video_id||c.image_url||c.thumbnail_url||x.nome; };
+  const minha=chave(a);
+  const irmaos=(todos||[]).filter(function(x){ return chave(x)===minha&&Number(x.gasto||0)>0; });
+  if(irmaos.length<=1) return <div style={{fontSize:12.5,color:ADS.muted,lineHeight:1.5}}>
+    Este criativo roda em uma campanha só: <b style={{color:ADS.ink2}}>{_adsNomeCurto(a.campNome)||"—"}</b>.
+    <div style={{marginTop:6}}>Quando o mesmo vídeo ou imagem rodar em mais de uma campanha, a comparação aparece aqui.</div>
+  </div>;
+  const enr=irmaos.map(function(x){ const r=Number(x.res||0); return Object.assign({},x,{r:r,cpa:r>0?Number(x.gasto)/r:null}); });
+  const comCpa=enr.filter(function(x){ return x.cpa; }).sort(function(p,q){ return p.cpa-q.cpa; });
+  const melhor=comCpa[0]||null;
+  const tot=enr.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
+  return <div>
+    {enr.sort(function(p,q){ return Number(q.gasto)-Number(p.gasto); }).map(function(x,i){
+      const eh=melhor&&x.id===melhor.id;
+      return <div key={x.id} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:12,alignItems:"center",padding:"11px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:x.id===a.id?ADS.accent:ADS.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.campNome}>
+            {_adsNomeCurto(x.campNome)||"—"}{x.id===a.id?" · você está aqui":""}
+          </div>
+          <div style={{fontSize:11,color:ADS.muted,marginTop:3}}>{_adsBRL0(x.gasto)} · {Math.round(Number(x.gasto)/tot*100)}% da verba deste criativo{eh?" · melhor custo":""}</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <b style={Object.assign({fontSize:14,fontWeight:900,color:eh?ADS.ok:ADS.ink},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</b>
+          <div style={{fontSize:10.5,color:ADS.muted}}>{_adsNum(x.r)} {x.r===1?(cfg.resSing||"resultado"):(cfg.resLbl||"resultados")}</div>
+        </div>
+      </div>; })}
+    {melhor&&comCpa.length>1&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
+      O mesmo criativo rende melhor em <b>{_adsNomeCurto(melhor.campNome)}</b> ({_adsBRLc(melhor.cpa)}) e pior em <b>{_adsNomeCurto(comCpa[comCpa.length-1].campNome)}</b> ({_adsBRLc(comCpa[comCpa.length-1].cpa)}).
+      <span style={{color:ADS.muted}}> Mesma peça, públicos diferentes — o problema pode não ser o criativo.</span>
+    </div>}
+  </div>;
+}
+
+function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
   const cr=a.cr||{}; const reel=cr.video_permalink?("https://www.facebook.com"+(cr.video_permalink.indexOf("/")===0?"":"/")+cr.video_permalink):null;
   const mp4=cr.video_url||null; const img=cr.image_url||cr.thumbnail_url||null;
@@ -59167,6 +59292,11 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
   const atMp4=at?(at.video_url||at.source||at.mp4||null):null;
   const atLink=at&&(at.tipo==="video"||at.dimensao==="video_asset")&&(at.permalink||at.url)?("https://www.facebook.com"+(String(at.permalink||at.url).indexOf("/")===0?"":"/")+(at.permalink||at.url)):null;
   const metaUrl="https://business.facebook.com/adsmanager/manage/ads?act="+conta.ad_account_id+"&selected_ad_ids="+a.id;
+  /* 19/09: um assunto por aba, em vez de tudo empilhado num bloco só */
+  const [abaLb,setAbaLb]=useState("resumo");
+  const Qa=useAdsQuebraAnuncio(conta&&conta.ad_account_id,a.id,P);
+  const isMobLb=typeof window!=="undefined"&&window.innerWidth<820;
+  const ABAS=[["resumo","Resumo"],["publico","Público"],["onde","Onde aparece"],["hora","Horário"],["campanhas","Campanhas"],["texto","Texto"]];
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
@@ -59183,20 +59313,114 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG}){
         {!at&&!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
         {!at&&!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
       </div>
-      <div style={{padding:"22px 24px",minWidth:0}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
-          <div style={{minWidth:0}}><AdsEyebrow>{a.campNome?_adsNomeCurto(a.campNome):"—"} · {a.cfg.label}</AdsEyebrow><div style={{fontSize:19,fontWeight:900,letterSpacing:"-.4px",marginTop:4,lineHeight:1.25}}>{a.nome}</div></div>
+      <div style={{padding:isMobLb?"18px 18px 24px":"24px 26px 28px",minWidth:0,display:"flex",flexDirection:"column"}}>
+
+        {/* ── cabeçalho ── */}
+        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start"}}>
+          <div style={{minWidth:0}}>
+            <AdsEyebrow>{a.campNome?_adsNomeCurto(a.campNome):"—"} · {a.cfg.label}</AdsEyebrow>
+            <div style={{fontSize:20,fontWeight:900,letterSpacing:"-.4px",marginTop:5,lineHeight:1.25,wordBreak:"break-word"}}>{a.nome}</div>
+          </div>
           <button onClick={onClose} style={{border:0,background:ADS.surface2,borderRadius:99,width:32,height:32,cursor:"pointer",fontSize:16,color:ADS.ink2,flexShrink:0,minHeight:0}}>×</button>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:14,marginTop:16}}>
-          {[[a.cfg.custoLbl||"CPM",a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm),a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink],[a.cfg.resLbl||"Alcance",a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance)],["Gasto",_adsBRL0(a.gasto)],["CTR",_adsPct(a.ctr,2)],["Frequência",Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],["vs. média do grupo",mediaG&&a.custo?(mediaG/a.custo>=1.15?_adsX(mediaG/a.custo)+" melhor":a.custo/mediaG>=1.15?_adsX(a.custo/mediaG)+" pior":"na média"):"—",mediaG&&a.custo?(mediaG/a.custo>=1.15?ADS.ok:a.custo/mediaG>=1.15?ADS.crit:ADS.ink):ADS.muted]].map(function(k){ return <div key={k[0]}><AdsEyebrow>{k[0]}</AdsEyebrow><div style={{fontSize:19,fontWeight:800,letterSpacing:"-.4px",marginTop:2,color:k[2]||ADS.ink}}>{k[1]}</div></div>; })}
+
+        {/* ── os números que decidem, com ar entre eles ── */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(124px,1fr))",gap:"18px 20px",marginTop:20,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
+          {(function(){
+            const cels=[];
+            cels.push([a.cfg.custoLbl||"CPM", a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm), a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink]);
+            cels.push([_adsMai(a.cfg.resLbl||"alcance"), a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance), ADS.ink]);
+            cels.push(["Gasto", _adsBRL0(a.gasto), ADS.ink]);
+            cels.push(["CTR", _adsPct(a.ctr,2), ADS.ink]);
+            cels.push(["Frequência", Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1}), ADS.ink]);
+            return cels.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
+              <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{k[0]}</div>
+              <div style={Object.assign({fontSize:20,fontWeight:900,letterSpacing:"-.5px",marginTop:5,color:k[2],whiteSpace:"nowrap"},ADS_MONO)}>{k[1]}</div>
+            </div>; });
+          })()}
         </div>
-        {a.video&&a.r25!==null&&<div style={{marginTop:16}}><AdsEyebrow>Retenção do vídeo</AdsEyebrow><div style={{display:"flex",gap:6,marginTop:6}}>{[["início",100],["25%",a.r25],["50%",a.r50],["75%",a.r75],["fim",a.r100]].map(function(s){ return <div key={s[0]} style={{flex:1,background:"#ecebf2",borderRadius:8,height:38,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",left:0,right:0,bottom:0,height:Math.max(3,Math.min(100,s[1]||0))+"%",background:"#9b6cea",opacity:.85}}/><div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,fontWeight:800,color:"#3d3853"}}>{s[0]}{s[0]!=="início"?" · "+_adsPct(s[1],1):""}</div></div>; })}</div></div>}
-        {!a.semDiag&&<div style={{marginTop:16}}><AdsEyebrow>Diagnóstico</AdsEyebrow>{a.diag.length===0?<div style={{fontSize:12.5,color:ADS.muted,marginTop:6}}>Nada que se destaque.</div>:a.diag.map(function(d,j){ return <div key={j} style={{fontSize:13,color:ADS.ink2,marginTop:6,display:"flex",gap:8,lineHeight:1.4}}><span style={{color:d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.warn,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"i"}</span><span>{d[1]}</span></div>; })}</div>}
-        {(cr.titulo||cr.corpo)&&<div style={{marginTop:16,fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"10px 12px"}}>{cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:4}}>{cr.titulo}</b>}<span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"")}</span><div style={{marginTop:6,fontSize:11,color:ADS.muted,display:"flex",gap:10,flexWrap:"wrap"}}>{cr.cta&&<span>Botão: <b>{_adsCta(cr.cta)}</b></span>}{cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}</div></div>}
-        {(a.ativosMeta||[]).length>0?<AdsAtivosPerf ativos={a.ativosMeta} cfg={a.cfg} onVer={function(x){ setAtivoSel(x); }}/>:<AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/>}
-        <div style={{marginTop:16}}><AdsEyebrow>Perfil de público deste criativo · fatia da verba e custo</AdsEyebrow><div style={{marginTop:8}}><QGAdsPerfilAnuncio accountId={conta.ad_account_id} adId={a.id} periodo={P} mediaCtr={mediaCtr}/></div></div>
-        <div style={{marginTop:16,display:"flex",gap:8,flexWrap:"wrap"}}><a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a></div>
+
+        {/* ── abas ── */}
+        <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",margin:"18px -4px 0",padding:"0 4px 2px",scrollbarWidth:"none"}}>
+          {ABAS.map(function(t){ const on=t[0]===abaLb;
+            return <button key={t[0]} onClick={function(){ setAbaLb(t[0]); }} style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink2,
+              borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{t[1]}</button>; })}
+        </div>
+
+        <div style={{marginTop:22,flex:1,minWidth:0}}>
+
+          {abaLb==="resumo"&&<div>
+            {a.video&&a.r25!==null&&<>
+              <AdsBlocoT primeiro t="Retenção do vídeo" s="quantos seguiram até cada ponto"/>
+              <div style={{display:"flex",gap:7}}>{[["início",100],["25%",a.r25],["50%",a.r50],["75%",a.r75],["fim",a.r100]].map(function(x,i){
+                return <div key={x[0]} style={{flex:1,background:i===0?ADS.accent:ADS.surface2,borderRadius:10,padding:"10px 6px",textAlign:"center",minWidth:0}}>
+                  <div style={{fontSize:11,fontWeight:700,color:i===0?"#fff":ADS.ink2}}>{x[0]}</div>
+                  <div style={Object.assign({fontSize:14,fontWeight:900,marginTop:3,color:i===0?"#fff":ADS.ink},ADS_MONO)}>{i===0?"100%":_adsPct(x[1],1)}</div>
+                </div>; })}</div>
+            </>}
+            {!a.semDiag&&<>
+              <AdsBlocoT t="Diagnóstico" primeiro={!(a.video&&a.r25!==null)}/>
+              {a.diag.length===0
+                ? <div style={{fontSize:12.5,color:ADS.muted}}>Nada que se destaque.</div>
+                : <div style={{display:"flex",flexDirection:"column",gap:8}}>{a.diag.map(function(d,j){
+                    const cor=d[0]==="v"?ADS.ok:d[0]==="x"?ADS.crit:ADS.muted;
+                    return <div key={j} style={{display:"flex",gap:9,alignItems:"flex-start",fontSize:12.5,color:ADS.ink2,lineHeight:1.5}}>
+                      <span style={{color:cor,fontWeight:900,flexShrink:0}}>{d[0]==="v"?"✓":d[0]==="x"?"✕":"•"}</span><span>{d[1]}</span></div>; })}</div>}
+            </>}
+            {(a.ativosMeta||[]).length>0
+              ? <div style={{marginTop:26}}><AdsAtivosPerf ativos={a.ativosMeta} cfg={a.cfg} onVer={function(x){ setAtivoSel(x); }}/></div>
+              : <div style={{marginTop:26}}><AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/></div>}
+          </div>}
+
+          {abaLb==="publico"&&<div>
+            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>:<>
+              <AdsBlocoT primeiro t="Faixa etária" s="fatia da verba deste criativo e custo em cada faixa"/>
+              <AdsPublicoDim q={Qa} dim="idade" lbl="Faixa etária"/>
+              <AdsBlocoT t="Gênero"/>
+              <AdsPublicoDim q={Qa} dim="genero" lbl="Gênero"/>
+              <AdsBlocoT t="Região"/>
+              <AdsPublicoDim q={Qa} dim="regiao" lbl="Região"/>
+            </>}
+          </div>}
+
+          {abaLb==="onde"&&<div>
+            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo entrega…</div>:<>
+              <AdsBlocoT primeiro t="Aparelho" s="onde o criativo foi visto"/>
+              <AdsPublicoDim q={Qa} dim="dispositivo" lbl="Aparelho"/>
+              <AdsBlocoT t="Posicionamento" s="feed, reels, stories — onde a Meta entregou"/>
+              <AdsPublicoDim q={Qa} dim="posicionamento" lbl="Posicionamento"/>
+            </>}
+          </div>}
+
+          {abaLb==="hora"&&<div>
+            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo horários…</div>
+              :<><AdsBlocoT primeiro t="Hora do dia" s="quando este criativo entregou e converteu"/><AdsHorario q={Qa}/></>}
+          </div>}
+
+          {abaLb==="campanhas"&&<div>
+            <AdsBlocoT primeiro t="Onde este criativo roda" s="a mesma peça em campanhas diferentes"/>
+            <AdsOndeRoda a={a} todos={todos} cfg={a.cfg}/>
+          </div>}
+
+          {abaLb==="texto"&&<div>
+            <AdsBlocoT primeiro t="Texto do anúncio"/>
+            {(cr.titulo||cr.corpo)
+              ? <div style={{fontSize:12.5,color:ADS.ink2,background:ADS.surface2,borderRadius:12,padding:"14px 16px",lineHeight:1.6}}>
+                  {cr.titulo&&<b style={{display:"block",color:ADS.ink,marginBottom:8,fontSize:13}}>{cr.titulo}</b>}
+                  <span style={{whiteSpace:"pre-wrap"}}>{String(cr.corpo||"")}</span>
+                </div>
+              : <div style={{fontSize:12.5,color:ADS.muted}}>Sem texto guardado para este criativo.</div>}
+            <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:14,fontSize:11.5,color:ADS.muted}}>
+              {cr.cta&&<span>Botão: <b style={{color:ADS.ink2}}>{_adsCta(cr.cta)}</b></span>}
+              {cr.link_destino&&<span style={{wordBreak:"break-all"}}>→ {cr.link_destino}</span>}
+            </div>
+          </div>}
+
+        </div>
+
+        <div style={{marginTop:26,paddingTop:18,borderTop:"1px solid "+ADS.line,display:"flex",gap:8,flexWrap:"wrap"}}>
+          <a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a>
+        </div>
       </div>
     </div>
     <style>{"@media(max-width:820px){.ads-lightbox{grid-template-columns:1fr!important}}"}</style>
@@ -59511,7 +59735,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 
   const abertoItem=aberto?items.find(function(a){return a.id===aberto;}):null;
   return <AdsWrap>
-    {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={Number(T.ctr)||null} mediaG={abertoItem.mediaG} onClose={function(){setAberto(null);}}/>}
+    {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={Number(T.ctr)||null} mediaG={abertoItem.mediaG} todos={enr} onClose={function(){setAberto(null);}}/>}
     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:14}}>
       <AdsChip on={!famAtiva} onClick={function(){setFam(null);setVerTodos(false);}} n={enr.length}>Geral</AdsChip>
       {fams.map(function(f){ return <AdsChip key={f.id} on={famAtiva&&famAtiva.id===f.id} onClick={function(){setFam(f.id);setVerTodos(false);}} n={enr.filter(function(a){return a.F.id===f.id;}).length}>{f.label}</AdsChip>; })}
