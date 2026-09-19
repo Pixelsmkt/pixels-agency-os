@@ -58187,7 +58187,7 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta}){
   const AdCard=function(a){ const f=_adsFormatoLbl(a.cr); const am=a.ativosMeta||[]; if(am.length>1){ const nv=am.filter(function(x){return x.dimensao==="video_asset";}).length, ni=am.length-nv; f.t="Flexível"; f.cor=ADS.accent; f.s=[nv?nv+" vídeo"+(nv>1?"s":""):null,ni?ni+(ni>1?" imagens":" imagem"):null].filter(Boolean).join(" · ")+" agrupados"; } const capa=Object.assign({},a.cr,{thumbnail_url:a.cr.thumbnail_url||(Array.isArray(a.cr.ativos)&&a.cr.ativos[0]?a.cr.ativos[0].thumb:null)}); const st=_adsStatus(a.status||"UNKNOWN"); const semGasto=a.gasto<=0;
     const titulo=(Array.isArray(a.cr.titulos)&&a.cr.titulos[0])||a.cr.titulo||null; const texto=(Array.isArray(a.cr.textos)&&a.cr.textos[0])||a.cr.corpo||null;
     return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{display:"grid",gridTemplateColumns:isMob?"88px 1fr":"120px 1fr",gap:14,background:"#fff",border:"1px solid "+ADS.line,borderRadius:14,padding:10,cursor:"pointer",opacity:a.status==="ACTIVE"||a.gasto>0?1:.75}} onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 22px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";}}>
-      <AdsCapa cr={capa} h={isMob?88:120} radius={10}/>
+      <AdsCapa cr={capa} adId={a.id} h={isMob?88:120} radius={10}/>
       <div style={{minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}><span style={{width:8,height:8,borderRadius:"50%",background:a.status==="ACTIVE"?ADS.ok:"#c9c5d6",flexShrink:0}}/><span style={{fontWeight:800,fontSize:13.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:isMob?"100%":420}} title={a.nome}>{a.nome}</span><span style={{fontSize:10.5,fontWeight:800,color:f.cor,textTransform:"uppercase",letterSpacing:".06em",border:"1px solid "+f.cor+"55",borderRadius:6,padding:"2px 6px",whiteSpace:"nowrap"}}>{f.t}</span>{f.s&&<span style={{fontSize:11.5,color:ADS.muted,whiteSpace:"nowrap"}}>{f.s}</span>}{a.status&&a.status!=="ACTIVE"&&<span style={{fontSize:11,color:ADS.muted}}>{st[0].toLowerCase()}</span>}{!a.status&&<span style={{fontSize:11,color:ADS.muted}}>fora do snapshot atual</span>}</div>
         {(titulo||texto)&&<div style={{fontSize:12,color:ADS.ink2,marginTop:4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{titulo&&<b style={{color:ADS.ink}}>{titulo} </b>}{texto?String(texto).slice(0,180):""}</div>}
@@ -58556,10 +58556,10 @@ function AdsEstrategiaDetalhe({s,ctx,isMob}){
   const K=function(t){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:ADS.muted,marginBottom:6}}>{t}</div>; };
   const Num=function(lab,val,sub,cor){ return <div style={{background:"#fff",border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{lab}</div><div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:3,color:cor||ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{val}</div>{sub&&<div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{sub}</div>}</div>; };
   const Barra=function(pct,cor){ return <span style={{display:"block",height:7,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><i style={{display:"block",height:"100%",width:Math.max(1.5,Math.min(100,pct))+"%",background:cor,borderRadius:99}}/></span>; };
-  const Capa=function(cr,h){ return <AdsCapa cr={cr} h={h||96} radius={10}/>; };
+  const Capa=function(cr,h,adId){ return <AdsCapa cr={cr} adId={adId} h={h||96} radius={10}/>; };
   /* anúncios da campanha (com capa) — pra ver o que está rodando */
   const ads=(ctx.anuncios||[]).filter(function(a){return a.campaign_id===c.id&&Number(a.gasto||0)>0;}).map(function(a){ const r=_adsResDe(a,cfg); return Object.assign({},a,{r:r,cpa:_adsDiv(a.gasto,r),cr:ctx.cr[a.id]||null}); }).sort(function(a,b){return b.gasto-a.gasto;});
-  const AdsLista=function(destaque){ if(!ads.length) return null; return <div>{K("Anúncios da campanha · do maior gasto pro menor")}<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>{ads.slice(0,6).map(function(a){ const ruim=destaque==="ruim"&&(a.r===0||(media&&a.cpa&&a.cpa>media*1.5)); const bom=destaque==="bom"&&a.cpa&&media&&a.cpa<media*0.8; return <div key={a.id} style={{background:"#fff",border:"1px solid "+(ruim?ADS.crit+"66":bom?ADS.ok+"66":ADS.line),borderRadius:12,padding:8,minWidth:0}}>{Capa(a.cr,86)}<div style={{fontSize:11.5,fontWeight:700,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome}>{a.nome}</div><div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{_adsBRL0(a.gasto)} · {_adsNum(a.r)} {a.r===1?lbl:(cfg.resLbl||lbl+"s")}</div><div style={Object.assign({fontSize:13,fontWeight:900,marginTop:2,color:ruim?ADS.crit:bom?ADS.ok:ADS.ink},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"—"}<span style={{fontSize:10,fontWeight:700,color:ADS.muted}}> /{lbl}</span></div>{ruim&&<div style={{fontSize:10,fontWeight:800,color:ADS.crit,marginTop:3}}>{a.r===0?"SEM RESULTADO":"CARO"}</div>}{bom&&<div style={{fontSize:10,fontWeight:800,color:ADS.ok,marginTop:3}}>PUXA O CUSTO</div>}</div>; })}</div></div>; };
+  const AdsLista=function(destaque){ if(!ads.length) return null; return <div>{K("Anúncios da campanha · do maior gasto pro menor")}<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>{ads.slice(0,6).map(function(a){ const ruim=destaque==="ruim"&&(a.r===0||(media&&a.cpa&&a.cpa>media*1.5)); const bom=destaque==="bom"&&a.cpa&&media&&a.cpa<media*0.8; return <div key={a.id} style={{background:"#fff",border:"1px solid "+(ruim?ADS.crit+"66":bom?ADS.ok+"66":ADS.line),borderRadius:12,padding:8,minWidth:0}}>{Capa(a.cr,86,a.id)}<div style={{fontSize:11.5,fontWeight:700,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={a.nome}>{a.nome}</div><div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{_adsBRL0(a.gasto)} · {_adsNum(a.r)} {a.r===1?lbl:(cfg.resLbl||lbl+"s")}</div><div style={Object.assign({fontSize:13,fontWeight:900,marginTop:2,color:ruim?ADS.crit:bom?ADS.ok:ADS.ink},ADS_MONO)}>{a.cpa?_adsBRLc(a.cpa):"—"}<span style={{fontSize:10,fontWeight:700,color:ADS.muted}}> /{lbl}</span></div>{ruim&&<div style={{fontSize:10,fontWeight:800,color:ADS.crit,marginTop:3}}>{a.r===0?"SEM RESULTADO":"CARO"}</div>}{bom&&<div style={{fontSize:10,fontWeight:800,color:ADS.ok,marginTop:3}}>PUXA O CUSTO</div>}</div>; })}</div></div>; };
   /* verba atual (campanha ou soma dos conjuntos ativos) */
   const orc=(function(){ const e=c.ent||{}; if(Number(e.orcamento)>0) return {v:Number(e.orcamento)/100,tipo:e.tipo_orcamento}; const cj=(ctx.ent||[]).filter(function(x){return x.nivel==="conjunto"&&x.parent_id===c.id&&x.status_efetivo==="ACTIVE"&&Number(x.orcamento)>0;}); if(!cj.length) return null; return {v:cj.reduce(function(t,x){return t+Number(x.orcamento)/100;},0),tipo:cj[0].tipo_orcamento}; })();
   const orcTxt=orc?_adsBRL(orc.v)+(orc.tipo==="diario"?"/dia":" total"):null;
@@ -58781,16 +58781,47 @@ function QGAdsPerfilAnuncio({accountId,adId,periodo,mediaCtr}){
   return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:14}}>{dims.map(function(d){ const rows=q.filter(function(x){return x.dimensao===d[0]&&Number(x.gasto)>0;}).sort(function(a,b){return Number(b.gasto)-Number(a.gasto);}).slice(0,5); if(!rows.length) return null; const tot=rows.reduce(function(s,x){return s+Number(x.gasto);},0)||1;
     return <div key={d[0]}><AdsEyebrow>{d[1]}</AdsEyebrow><div style={{marginTop:6}}>{rows.map(function(x){ const cpa=Number(x.resultados)>0?Number(x.gasto)/Number(x.resultados):null; const ctr=Number(x.impressoes)>0?Number(x.cliques)/Number(x.impressoes)*100:null; const susp=mediaCtr&&ctr!==null&&ctr>mediaCtr*2; const lbl=(typeof _adsValLbl==="function")?_adsValLbl(d[0],x.valor):(GEN[x.valor]||x.valor); return <div key={x.valor} style={{display:"grid",gridTemplateColumns:"1fr 64px",gap:6,alignItems:"center",fontSize:11.5,marginBottom:5}}><div><div style={{display:"flex",justifyContent:"space-between",color:ADS.ink2}}><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{lbl}{susp&&<span title="CTR muito acima da conta" style={{color:ADS.warn,marginLeft:4}}>⚠</span>}</span><span style={{color:ADS.muted}}>{Math.round(Number(x.gasto)/tot*100)}%</span></div><AdsBarra pct={Number(x.gasto)/tot*100} h={5} cor="#b58ff2" alt={1}/></div><span style={Object.assign({textAlign:"right",fontWeight:700,color:cpa?ADS.ink:ADS.muted},ADS_MONO)}>{cpa?_adsBRL(cpa):"—"}</span></div>; })}</div></div>; })}</div>;
 }
+/* mural de cartões de alturas diferentes (19/09).
+   Com a capa na proporção original, um 9:16 e um 16:9 na mesma linha deixariam buraco branco embaixo do menor.
+   Aqui cada cartão ocupa só a própria altura E a ordem do ranking é mantida da esquerda pra direita
+   (coluna de CSS não serve: ela encheria a 1ª coluna inteira antes de ir pra 2ª, e o topo da tela mostraria
+   o 1º, o 26º, o 51º… em vez dos quatro primeiros). */
+function AdsMur({cols,gap,children}){
+  const ref=useRef(null);
+  const itens=React.Children.toArray(children);
+  useEffect(function(){
+    const el=ref.current; if(!el) return;
+    const U=8;
+    /* as linhas têm U px e nenhum espaço entre elas: o próprio "+gap" vira o respiro embaixo do cartão */
+    const medir=function(){ Array.prototype.forEach.call(el.children,function(c){ const filho=c.firstElementChild; const h=(filho||c).getBoundingClientRect().height; if(h>0) c.style.gridRowEnd="span "+Math.max(1,Math.ceil((h+gap)/U)); }); };
+    medir();
+    let ro=null;
+    if(window.ResizeObserver){ ro=new ResizeObserver(medir); Array.prototype.forEach.call(el.children,function(c){ ro.observe(c.firstElementChild||c); }); }
+    window.addEventListener("resize",medir);
+    const t=setTimeout(medir,400);                                   /* capas que chegam depois */
+    return function(){ if(ro) ro.disconnect(); window.removeEventListener("resize",medir); clearTimeout(t); };
+  },[itens.length,cols,gap]);
+  return <div ref={ref} style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:gap,rowGap:0,gridAutoRows:"8px",alignItems:"start"}}>
+    {itens.map(function(c,i){ return <div key={c.key||i} style={{gridRowEnd:"span 30",minWidth:0}}>{c}</div>; })}
+  </div>;
+}
 /* capa do criativo (imagem real; vídeo com play).
-   19/09: (1) se o link salvo expirou (CDN da Meta), cai pra edge function ads-thumb, que busca a miniatura fresca na hora;
-          (2) a capa assume a PROPORÇÃO ORIGINAL do criativo (9:16 fica vertical, 1:1 fica quadrado) — nada de cortar. */
+   19/09 v2 — REGRA ÚNICA PRA TODO CRIATIVO, TODO CLIENTE:
+   a capa vem SEMPRE da função ads-thumb, que busca na Meta a imagem cheia, na proporção original do criativo.
+   Motivo: o thumbnail_url que a Meta guarda no criativo vem com "p64x64" na URL — é um recorte quadrado de 64px.
+   Era por isso que uns criativos apareciam no formato certo (os que tinham image_url em tamanho real) e outros
+   saíam embaçados e esticados. O link salvo agora é só rede de segurança, se a função falhar. */
 const _adsThumbUrl=function(adId){ const base=(window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co"; return base+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId); };
-function AdsCapa({cr,h,radius,children,onClick,dark,fixa}){
-  const inicial=(cr&&(cr.thumbnail_url||cr.image_url))||(cr&&cr.ad_id?_adsThumbUrl(cr.ad_id):null);
-  const [src,setSrc]=useState(inicial); const [ar,setAr]=useState(null); const [falhou,setFalhou]=useState(false);
-  useEffect(function(){ setSrc(inicial); setAr(null); setFalhou(false); },[inicial]);
+function AdsCapa({cr,adId,h,radius,children,onClick,dark,fixa}){
+  const id=adId||(cr&&cr.ad_id)||null;
+  const salvo=(cr&&(cr.image_url||cr.thumbnail_url))||null;
+  const cadeia=[id?_adsThumbUrl(id):null,salvo].filter(Boolean);           /* tenta a função; se falhar, o link salvo */
+  const chave=cadeia.join("|");
+  const [i,setI]=useState(0); const [ar,setAr]=useState(null);
+  useEffect(function(){ setI(0); setAr(null); },[chave]);
+  const src=cadeia[i]||null; const falhou=!src;
   const video=!!(cr&&cr.video_id);
-  const onErr=function(){ if(cr&&cr.ad_id&&src!==_adsThumbUrl(cr.ad_id)){ setSrc(_adsThumbUrl(cr.ad_id)); } else { setFalhou(true); } };
+  const onErr=function(){ setI(function(v){ return v+1; }); };
   const onLoad=function(e){ const w=e.currentTarget.naturalWidth, hh=e.currentTarget.naturalHeight; if(w>1&&hh>1) setAr(w/hh); };
   const box=(!fixa&&ar)?{aspectRatio:String(ar),height:"auto",maxHeight:560}:{height:h||220};
   const mostra=src&&!falhou;
@@ -58924,7 +58955,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
   const campeao=famAtiva?((agCamp&&Number(agCamp.resultados||0)>=ADS_MIN_RESULTADOS&&items.find(function(a){return a.id===agCamp.id;}))||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo&&a.gasto>=50;})||rank.find(function(a){return !a.poucos&&!a.semMetrica&&a.custo;})||null):null;
   const resFmt=function(a){ return _adsNum(a.res); }; /* reconhecimento: res já é "mil alcançados" */
   const Card=function(a,i){ const aberto2=aberto===a.id; return <div key={a.id} onClick={function(){setAberto(a.id);}} style={{background:"#fff",border:"1px solid "+(a===campeao?"#e6c56a":ADS.line),borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s"}} onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)";}} onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)";}}>
-      <AdsCapa cr={a.cr} h={isMob?200:230} radius={0}>
+      <AdsCapa cr={a.cr} adId={a.id} h={isMob?200:230} radius={0}>
         {a.selo&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:a.selo[1]==="g"?"#ffe8a3":"#fecaca",color:a.selo[1]==="g"?"#6b4d00":"#7f1d1d"}}>{a===campeao?"Campeão":a.selo[0]}</span>}
         {!a.selo&&a===campeao&&<span style={{position:"absolute",top:10,left:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:"#ffe8a3",color:"#6b4d00"}}>Campeão</span>}
         {famAtiva&&i!==undefined&&<span style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 7px"}}>#{i+1}</span>}
@@ -58938,6 +58969,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
       </div>
     </div>; };
   const cols=isMob?"1fr 1fr":"repeat(4,1fr)";
+
   const abertoItem=aberto?items.find(function(a){return a.id===aberto;}):null;
   return <AdsWrap>
     {abertoItem&&<AdsLightbox a={abertoItem} conta={conta} P={P} mediaCtr={Number(T.ctr)||null} mediaG={abertoItem.mediaG} onClose={function(){setAberto(null);}}/>}
@@ -58955,7 +58987,7 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 
     {campeao&&<AdsSec t={"Criativo campeão · "+famAtiva.label} s={"melhor "+famAtiva.custoLbl+" com pelo menos "+(famAtiva.id==="reconhecimento"?1:ADS_MIN_RESULTADOS)+" "+famAtiva.resLbl}>
       <div onClick={function(){setAberto(campeao.id);}} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"260px 1fr",gap:22,background:"linear-gradient(135deg,#fffaf0,#fff)",border:"1.5px solid #e6c56a",borderRadius:18,padding:isMob?14:20,cursor:"pointer"}}>
-        <AdsCapa cr={campeao.cr} h={isMob?240:300}><span style={{position:"absolute",top:10,left:10,fontSize:11,fontWeight:800,borderRadius:99,padding:"4px 10px",background:"#ffe8a3",color:"#6b4d00"}}>🏆 Campeão</span><div style={{position:"absolute",bottom:12,left:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}><b style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(campeao.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{famAtiva.custoLbl}</small></div></AdsCapa>
+        <AdsCapa cr={campeao.cr} adId={campeao.id} h={isMob?240:300}><span style={{position:"absolute",top:10,left:10,fontSize:11,fontWeight:800,borderRadius:99,padding:"4px 10px",background:"#ffe8a3",color:"#6b4d00"}}>🏆 Campeão</span><div style={{position:"absolute",bottom:12,left:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}><b style={{fontSize:24,fontWeight:900,letterSpacing:"-.6px"}}>{_adsBRLc(campeao.custo)}</b><br/><small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>{famAtiva.custoLbl}</small></div></AdsCapa>
         <div style={{minWidth:0}}>
           <AdsEyebrow>{campeao.nome}</AdsEyebrow>
           <div style={{fontSize:isMob?18:22,fontWeight:900,letterSpacing:"-.5px",marginTop:4,lineHeight:1.25}}>{resFmt(campeao)} {famAtiva.resLbl} com {_adsBRL0(campeao.gasto)}{campeao.mediaG&&campeao.mediaG/campeao.custo>=1.15?<span> — <span style={{color:ADS.ok}}>{_adsX(campeao.mediaG/campeao.custo)} melhor</span> que a média do grupo</span>:<span> — na média do grupo</span>}</div>
@@ -58968,9 +59000,9 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
 
     <AdsSec t={famAtiva?"Todos os criativos · "+famAtiva.label:"Todos os criativos"} s={famAtiva?"do melhor "+famAtiva.custoLbl+" pro pior · clique pra abrir o vídeo, o diagnóstico e o perfil de público":"do maior gasto pro menor · cada card na métrica do próprio objetivo · clique pra abrir"}>
       {principais.length===0&&<div style={{fontSize:13,color:ADS.muted,marginBottom:12}}>Só anúncios com amostra pequena neste grupo.</div>}
-      <div style={{display:"grid",gridTemplateColumns:cols,gap:14}}>{principais.map(function(a,i){ return Card(a,i); })}</div>
+      <AdsMur cols={isMob?2:4} gap={14}>{principais.map(function(a,i){ return Card(a,i); })}</AdsMur>
       {pequenos.length>0&&!verTodos&&<div style={{textAlign:"center",marginTop:16}}><AdsChip onClick={function(){setVerTodos(true);}}>Ver os outros {pequenos.length} (amostra pequena · menos de R$ 50 gastos)</AdsChip></div>}
-      {verTodos&&pequenos.length>0&&<div style={{display:"grid",gridTemplateColumns:cols,gap:14,marginTop:14,opacity:.85}}>{pequenos.map(function(a,i){ return Card(a,principais.length+i); })}</div>}
+      {verTodos&&pequenos.length>0&&<div style={{marginTop:14,opacity:.85}}><AdsMur cols={isMob?2:4} gap={14}>{pequenos.map(function(a,i){ return Card(a,principais.length+i); })}</AdsMur></div>}
     </AdsSec>
   </AdsWrap>;
 }
