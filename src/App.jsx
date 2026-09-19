@@ -56865,7 +56865,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   // Abas ocultas: existem no código, mas ficam fora do menu até fazerem sentido (não esquecer)
   const SUBS_OCULTAS=[["leads","Leads","conferência de qualidade — depende de o cliente (quem atende) marcar; sem fluxo com o cliente, ninguém preenche"]];
   const [verOcultas,setVerOcultas]=useState(false);
-  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
+  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Estratégia"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
@@ -56895,33 +56895,60 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
           <button onClick={onAbrirCadastro} style={QG_BTN("ghost")}>Cadastro e acessos →</button>
         </div>
       </div>
-      <div style={{height:1,background:QG.borda}}/>
-      <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap",padding:isMob?"12px 14px":"12px 20px",fontSize:13}}>
-        <span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3}}>{QG_MESES[month-1]}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgBRL(c.gasto,2)}</b>{c.orcamento>0&&<span style={{color:QG.txt3}}> de {_qgBRLk(c.orcamento)} · {Math.round(c.usoPct)}%</span>}</span>
-        <span><b style={{fontSize:16,fontFeatureSettings:"'tnum'"}}>{_qgNum(c.leads)}</b><span style={{color:QG.txt3}}> leads{c.cpl?" · "+_qgBRL(c.cpl,2)+" cada":""}</span></span>
-        <span style={{color:QG.txt3}}>meta {m.meta?<b onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"Meta de "+_qgNum(m.meta)+" leads · clique pra editar":undefined} style={{color:m.cor,cursor:canEdit?"pointer":"default"}}>{Math.round(m.pct)}%</b>:<a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,cursor:"pointer"}}>definir</a>}</span>
-        {c.vendas>0&&<span><b style={{fontSize:16,color:QG.verde}}>{_qgNum(c.vendas)}</b><span style={{color:QG.txt3}}> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</span></span>}
-        {c.orcamento>0&&<span style={{flex:1,minWidth:120,maxWidth:260,marginLeft:"auto"}}><QGBar pct={c.usoPct} cor={c.usoPct>=100?QG.verm:QG.roxo} h={6}/></span>}
-      </div>
-      <div style={{background:"#f8f7fb",borderTop:"1px solid "+QG.borda,borderRadius:"0 0 18px 18px",padding:isMob?"9px 14px":"10px 20px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",fontSize:12.5}}>
-        <span style={{fontWeight:700,color:QG.txt2}}>Fechamento da semana</span>
-        <span style={{color:QG.txt3}}>{_qgWeekLabel(s0.start)}</span>
-        {s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}
-        {s0.w&&<span style={{color:QG.txt2}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}
-        {alertas.length>0&&<span style={{display:"flex",gap:6,flexWrap:"wrap"}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</span>}
-        {canEdit&&<button style={Object.assign(QG_BTN("sm"),{marginLeft:"auto"})} onClick={function(){onFechamento(mc.client_id,semanas[0]);}}>{s0.w?"Editar fechamento":"Fechar semana"}</button>}
-      </div>
+      {/* ── Placar do mês (fundo branco): verba × ritmo do mês · leads × meta × mês anterior · semana ── */}
+      {(function(){
+        const hoje=new Date(); const ehMesAtual=hoje.getFullYear()===year&&hoje.getMonth()+1===month; const passado=new Date(year,month-1,1)<hoje&&!ehMesAtual;
+        const diasNoMes=new Date(year,month,0).getDate(); const diaRef=ehMesAtual?Math.max(1,hoje.getDate()-1):(passado?diasNoMes:0);
+        const mesPct=diasNoMes>0?diaRef/diasNoMes*100:0;
+        const projGasto=c.gasto>0&&diaRef>0?c.gasto/diaRef*diasNoMes:0; const projLeads=c.leads>0&&diaRef>0?Math.round(c.leads/diaRef*diasNoMes):0;
+        const esperado=c.orcamento>0?c.orcamento*diaRef/diasNoMes:0; const ritmo=esperado>0?c.gasto/esperado:null;
+        const ritmoTxt=ritmo===null?null:ritmo>1.15?["acima do ritmo · vai estourar",QG.verm]:ritmo<0.8?["abaixo do ritmo · vai sobrar",QG.amar]:["no ritmo",QG.verde];
+        const pm=month===1?{y:year-1,m:12}:{y:year,m:month-1}; const cp=qgCalcCliente(mc,data,pm.y,pm.m,{});
+        const dLeads=cp.leads>0?(c.leads-cp.leads)/cp.leads*100:null; const dCpl=cp.cpl&&c.cpl?(c.cpl-cp.cpl)/cp.cpl*100:null;
+        const Delta=function(d,inv){ if(d===null||!isFinite(d)) return null; const bom=inv?d<=0:d>=0; return <span style={{color:bom?QG.verde:QG.verm,fontWeight:800}}>{d>=0?"▲":"▼"} {Math.abs(Math.round(d))}%</span>; };
+        const Barra=function(pct,marca,cor){ return <div style={{position:"relative",height:7,borderRadius:99,background:"#ecebf2",marginTop:10,overflow:"visible"}}><div style={{width:Math.max(0,Math.min(100,pct||0))+"%",height:"100%",borderRadius:99,background:cor||QG.roxo}}/>{marca!==null&&marca!==undefined&&<div title={"onde o mês está: "+Math.round(marca)+"%"} style={{position:"absolute",left:Math.min(100,marca)+"%",top:-4,width:2,height:15,background:QG.txt,opacity:.7,borderRadius:2}}/>}</div>; };
+        const Eye=function(t){ return <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:QG.txt3}}>{t}</div>; };
+        const grande={fontSize:isMob?24:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"};
+        const sub={fontSize:12.5,color:QG.txt2,lineHeight:1.5,marginTop:6};
+        return <div className="px-sens" style={{background:"#fff",color:QG.txt,borderTop:"1px solid "+QG.borda,borderRadius:"0 0 18px 18px",padding:isMob?"16px 14px":"18px 20px",display:"grid",gridTemplateColumns:isMob?"1fr":"1.1fr 1fr .9fr",gap:isMob?16:24}}>
+          <div style={{minWidth:0}}>
+            {Eye("Verba · "+QG_MESES[month-1])}
+            <div style={grande}>{_qgBRL(c.gasto,2)}{c.orcamento>0&&<span style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> de {_qgBRLk(c.orcamento)}</span>}</div>
+            {c.orcamento>0?<>
+              {Barra(c.usoPct,ehMesAtual?mesPct:null)}
+              <div style={sub}><b style={{color:QG.txt}}>{Math.round(c.usoPct)}% gasto</b>{ehMesAtual&&<span> · mês em <b style={{color:QG.txt}}>{Math.round(mesPct)}%</b></span>}{ritmoTxt&&<span> · <b style={{color:ritmoTxt[1]}}>{ritmoTxt[0]}</b></span>}{ehMesAtual&&projGasto>0&&<span> · fecha em <b style={{color:QG.txt}}>{_qgBRLk(projGasto)}</b></span>}</div>
+            </>:<div style={sub}>{canEdit?<a onClick={function(){ setSub("gestao"); }} style={{color:QG.roxo,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>definir orçamento mensal</a>:"sem orçamento definido"}</div>}
+          </div>
+          <div style={{minWidth:0}}>
+            {Eye("Leads")}
+            <div style={grande}>{_qgNum(c.leads)}{c.cpl?<span style={{fontSize:14,fontWeight:700,color:QG.txt3,letterSpacing:0}}> · {_qgBRL(c.cpl,2)} cada</span>:null}</div>
+            {m.meta?Barra(m.pct,m.fracao*100,m.cor):<div style={{height:7,marginTop:10}}/>}
+            <div style={sub}>{m.meta?<span>meta <a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} title={canEdit?"clique pra editar a meta":undefined} style={{color:QG.txt,textDecoration:canEdit?"underline dotted":"none",cursor:canEdit?"pointer":"default"}}>{_qgNum(m.meta)}</a> · <b style={{color:QG.txt}}>{Math.round(m.pct)}%</b> · <b style={{color:m.cor}}>{m.label.toLowerCase()}</b>{ehMesAtual&&projLeads>0&&<span> · fecha em ~<b style={{color:QG.txt}}>{_qgNum(projLeads)}</b></span>}</span>:<span><a onClick={canEdit?function(){onEditarMeta(mc,m.meta);}:undefined} style={{color:QG.roxo,fontWeight:700,textDecoration:"underline",cursor:"pointer"}}>definir meta mensal</a></span>}
+              {(dLeads!==null||dCpl!==null)&&<div style={{marginTop:2,color:QG.txt3}}>vs. {QG_MESES[pm.m-1].toLowerCase()}: {dLeads!==null&&<span>{Delta(dLeads,false)} leads</span>}{dLeads!==null&&dCpl!==null&&" · "}{dCpl!==null&&<span>custo {Delta(dCpl,true)}</span>}</div>}
+              {c.vendas>0&&<div style={{marginTop:2}}><b style={{color:QG.verde}}>{_qgNum(c.vendas)}</b> vendas{c.receita>0?" · "+_qgBRLk(c.receita):""}{c.roic!==null?" · ROIC "+_qgPct(c.roic):""}</div>}
+            </div>
+          </div>
+          <div style={{minWidth:0,borderLeft:isMob?"none":"1px solid "+QG.borda,paddingLeft:isMob?0:20,borderTop:isMob?"1px solid "+QG.borda:"none",paddingTop:isMob?14:0}}>
+            {Eye("Semana "+_qgWeekLabel(s0.start))}
+            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6,flexWrap:"wrap"}}>{s0.w?<QGPill cor={QG.verde} bg={QG.verdeBg}>fechada</QGPill>:<QGPill cor={QG.amar} bg={QG.amarBg}>pendente</QGPill>}{s0.w&&<span style={{fontSize:13}}><b>{_qgNum(s0.leads)}</b> leads{s0.investimento>0?" · "+_qgBRL(s0.investimento):""}{s0.vendas>0?" · "+s0.vendas+" venda"+(s0.vendas>1?"s":""):""}</span>}</div>
+            {alertas.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{alertas.slice(0,3).map(function(a,i){ const cor=a.nivel==="critico"?QG.verm:a.nivel==="atencao"?QG.amar:QG.txt3; return <span key={i} title={a.detalhe} style={{background:cor+"14",color:cor,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{a.titulo.replace(mc.name,"").replace(/^[\s:]+|[\s:]+$/g,"")||a.titulo}</span>; })}</div>}
+            {canEdit&&<div style={{marginTop:10}}><button onClick={function(){onFechamento(mc.client_id,semanas[0]);}} style={QG_BTN("sm")}>{s0.w?"Editar fechamento":"Fechar semana"}</button></div>}
+          </div>
+        </div>;
+      })()}
     </QGCard>
 
     {/* ── Sub-abas + período ── */}
-    <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:18,padding:"0 12px",display:"flex",gap:2,alignItems:"center",overflowX:"auto",fontFamily:QG_FONT}} className="scroll-x">
-      {SUBS.map(function(t){ const on=subAtiva===t[0]; const oc=SUBS_OCULTAS.find(function(o){return o[0]===t[0];}); return <button key={t[0]} onClick={function(){setSub(t[0]);}} title={oc?"Aba oculta · "+oc[2]:undefined} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?QG.roxo:"transparent"),color:on?QG.roxo:(oc?QG.txt3:QG.txt2),padding:"12px 12px 10px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0,fontStyle:oc?"italic":"normal"}}>{t[1]}{oc&&<span style={{fontSize:9,marginLeft:4,verticalAlign:"top"}}>oculta</span>}</button>; })}
-      {temMeta&&SUBS_OCULTAS.length>0&&<button onClick={function(){ setVerOcultas(!verOcultas); if(verOcultas&&SUBS_OCULTAS.some(function(o){return o[0]===sub;})) setSub("visao"); }} title={SUBS_OCULTAS.map(function(o){return o[1]+": "+o[2];}).join("\n")} style={{background:"none",border:"1px dashed "+QG.borda,borderRadius:99,color:QG.txt3,padding:"3px 9px",marginLeft:6,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0}}>{verOcultas?"esconder ocultas":SUBS_OCULTAS.length+" aba oculta"+(SUBS_OCULTAS.length>1?"s":"")}</button>}
-      {!temMeta&&adsAccounts&&<span style={{marginLeft:"auto",color:QG.txt3,fontSize:11.5,fontWeight:600,paddingRight:6}}>Sem conta Meta vinculada em ads_accounts</span>}
-      {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<span style={{marginLeft:"auto",paddingRight:2,display:"inline-flex",alignItems:"center"}}><QGAdsBarraPeriodo compact/></span>}
+    <div style={{background:"#fff",border:"1px solid "+QG.borda,borderRadius:18,fontFamily:QG_FONT,overflow:"hidden"}}>
+      <div style={{padding:"0 10px 0 14px",minHeight:52,display:"flex",gap:2,alignItems:"center",overflowX:"auto"}} className="scroll-x">
+        {SUBS.map(function(t){ const on=subAtiva===t[0]; const oc=SUBS_OCULTAS.find(function(o){return o[0]===t[0];}); return <button key={t[0]} onClick={function(){setSub(t[0]);}} title={oc?"Aba oculta · "+oc[2]:undefined} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?QG.roxo:"transparent"),color:on?QG.roxo:(oc?QG.txt3:QG.txt2),padding:"17px 13px 15px",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0,fontStyle:oc?"italic":"normal"}}>{t[1]}{oc&&<span style={{fontSize:9,marginLeft:4,verticalAlign:"top"}}>oculta</span>}</button>; })}
+        {temMeta&&SUBS_OCULTAS.length>0&&<button onClick={function(){ setVerOcultas(!verOcultas); if(verOcultas&&SUBS_OCULTAS.some(function(o){return o[0]===sub;})) setSub("visao"); }} title={SUBS_OCULTAS.map(function(o){return o[1]+": "+o[2];}).join("\n")} style={{background:"none",border:"1px dashed "+QG.borda,borderRadius:99,color:QG.txt3,padding:"3px 9px",marginLeft:6,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:QG_FONT,whiteSpace:"nowrap",minHeight:0}}>{verOcultas?"esconder ocultas":"+"+SUBS_OCULTAS.length}</button>}
+        {!temMeta&&adsAccounts&&<span style={{marginLeft:"auto",color:QG.txt3,fontSize:11.5,fontWeight:600,paddingRight:6}}>Sem conta Meta vinculada em ads_accounts</span>}
+      </div>
+      {temMeta&&subAtiva!=="gestao"&&typeof QGAdsBarraPeriodo==="function"&&<div style={{borderTop:"1px solid "+QG.borda,background:"#fbfaff",padding:isMob?"8px 10px":"8px 14px",display:"flex",alignItems:"center",justifyContent:isMob?"flex-start":"flex-end",gap:10,overflowX:"auto"}} className="scroll-x"><span style={{fontSize:11,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:QG.txt3,marginRight:"auto",whiteSpace:"nowrap"}}>Período</span><QGAdsBarraPeriodo compact/></div>}
     </div>
     {subAtiva==="visao"&&temMeta&&typeof QGAdsVisaoGeral==="function"&&<QGAdsVisaoGeral mc={mc} conta={adsConta.conta} compartilhada={adsConta.compartilhada} isMob={isMob} canEdit={canEdit} verbaMensal={Number(mc.investimento_meta)||0}/>}
+    {subAtiva==="estrategia"&&temMeta&&typeof QGAdsEstrategia==="function"&&<QGAdsEstrategia mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="criativos"&&temMeta&&typeof QGAdsCriativos==="function"&&<QGAdsCriativos mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
