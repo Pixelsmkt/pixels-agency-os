@@ -59137,7 +59137,7 @@ function AdsSparkDK({serie,n,w,h,cor,fill,title,fmt}){
   </svg>;
 }
 /* bullet graph do custo por lead: barra = janela atual, traço = janela anterior, faixas até 15 / até 30 / acima (escala 0–60) */
-function AdsBullet({cur,prev,dk}){ const D=dk||ADS_DK; const w=110,h=18,x0=1,W=w-2,SC=60; const X=function(v){ return x0+Math.min(v,SC)/SC*W; };
+function AdsBullet({cur,prev,dk}){ const D=dk||ADS_DK; const w=92,h=18,x0=1,W=w-2,SC=60; const X=function(v){ return x0+Math.min(v,SC)/SC*W; };
   return <svg viewBox={"0 0 "+w+" "+h} style={{display:"block",width:w,height:h}}>
     <rect x={x0} y={3} width={X(15)-x0} height={12} fill={D.band1}/><rect x={X(15)} y={3} width={X(30)-X(15)} height={12} fill={D.band2}/><rect x={X(30)} y={3} width={x0+W-X(30)} height={12} fill={D.band3} stroke={D.line} strokeWidth=".5"/>
     {cur!==null&&cur!==undefined?<rect x={x0} y={7} width={Math.max(2,X(cur)-x0)} height={4} rx="1.5" fill={D.bar}/>:<text x={x0+4} y={12} fontSize="8" fill={D.muted} fontFamily={ADS_FONT}>sem lead</text>}
@@ -59220,28 +59220,37 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
   const Sel=<span style={{display:"inline-flex",background:D.surface2,borderRadius:9,padding:3,gap:1}}>{[[7,"7 dias"],[14,"14 dias"],[30,"30 dias"]].map(function(j){ const on=nDias===j[0]; return <button key={j[0]} onClick={function(){setNDias(j[0]);}} style={{background:on?D.accentBtn:"transparent",color:on?"#fff":D.ink2,border:0,borderRadius:7,padding:"5px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:F,minHeight:0}}>{j[1]}</button>; })}</span>;
 
   /* ── cards de cliente ── */
-  const Card=function(c,i){ const l=c.l, o=c.o; const cur=o?o.cur:null, prev=o?o.prev:null; const cc=_adsCplDe(cur), cp=W.temPrev?_adsCplDe(prev):null;
+  /* ── tabela de clientes: uma linha por conta (decisão 19/09: tabela em vez de cards) ── */
+  const COLS=isMob?"1fr auto":"minmax(230px,1.5fr) 92px 104px 210px 116px 100px 48px";
+  const Th=function(t,r){ return <span style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:D.muted,textAlign:r?"right":"left",whiteSpace:"nowrap"}}>{t}</span>; };
+  const Row=function(c,i){ const l=c.l, o=c.o; const cur=o?o.cur:null, prev=o?o.prev:null; const cc=_adsCplDe(cur), cp=W.temPrev?_adsCplDe(prev):null;
     const tipos=c.conta?Object.keys(c.conta.tipos).filter(function(t){return c.conta.tipos[t].gasto>0;}).sort(function(a,b){return c.conta.tipos[b].gasto-c.conta.tipos[a].gasto;}).slice(0,3).map(function(t){return _adsTipo(t).curto;}).join(" · "):"sem campanha ativa";
-    const M=function(lab,val,sub){ return <div style={{minWidth:0}}>{Eyebrow(lab)}<div style={{fontSize:21,fontWeight:800,letterSpacing:"-.02em",lineHeight:1.1,marginTop:4,color:D.ink,fontFeatureSettings:"'tnum'"}}>{val}</div><div style={{fontSize:11.5,color:D.muted,marginTop:3,lineHeight:1.4}}>{sub}</div></div>; };
-    return <div key={l.mc.client_id} onClick={function(){ try{ window._pxSubDesejada="visao"; }catch(_){ } onOpenClient(l.mc.client_id); }} style={{background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow,padding:"18px 20px 16px",position:"relative",cursor:"pointer",minWidth:0,opacity:go?1:0,transform:go?"none":"translateY(6px)",transition:"opacity .4s ease "+(i*50)+"ms, transform .4s ease "+(i*50)+"ms"}}
-        onMouseEnter={function(e){e.currentTarget.style.borderColor=D.line2;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=D.line;}}>
-      {c.selo.k!=="o"&&c.selo.k!=="p"&&<span style={{position:"absolute",left:0,top:18,bottom:18,width:4,borderRadius:"0 4px 4px 0",background:c.selo.cor}}/>}
-      <div style={{display:"flex",alignItems:"center",gap:12}}>{typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}<div style={{minWidth:0}}><div style={{fontWeight:800,fontSize:15,color:D.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.mc.name}</div><div style={{color:D.muted,fontSize:11.5,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tipos}</div></div><span style={{marginLeft:"auto",background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,whiteSpace:"nowrap",flex:"none"}}>{c.selo.t}</span></div>
-      {o?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginTop:18,alignItems:"start"}}>
-        {M("Leads",_adsNum(cur.res),<span>{cur.leads?_adsNum(cur.leads)+" form · ":""}{_adsNum(cur.conversas)} wpp · <AdsDeltaDK p={W.temPrev?_adsVar(cur.res,prev.res):null} invert={false}/></span>)}
-        {M("Custo por lead",cc?_adsBRL(cc):"—",cc?<span>{cp?"era "+_adsBRL(cp)+" · ":""}<AdsDeltaDK p={cc&&cp?_adsVar(cc,cp):null} invert={true}/></span>:(cur.gasto>0?"sem lead":"sem gasto"))}
-        {M("Investido",_adsBRL(cur.gasto),W.temPrev&&prev.gasto>=50?<span>{_adsBRL(prev.gasto)+" antes · "}<AdsDeltaDK p={_adsVar(cur.gasto,prev.gasto)} invert={null}/></span>:(W.temPrev&&cur.gasto>0?"novo na janela":"—"))}
-      </div>:<div style={{fontSize:12.5,color:D.muted,marginTop:18}}>sem gasto nos últimos {2*nDias} dias</div>}
-      {o&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+D.line,display:"grid",gridTemplateColumns:"1fr auto",gap:16,alignItems:"center"}}>
-        <AdsSparkDK serie={serieDe(c.conta)} n={nDias} h={40} cor={D.accent} title="leads" fmt={_adsNum}/>
-        <div style={{display:"flex",flexDirection:"column",gap:2,alignItems:"flex-end"}}><AdsBullet cur={cc} prev={cp}/><small style={{fontSize:9.5,color:D.muted}}>custo por lead</small></div>
-      </div>}
+    const num=function(v,sub,big){ return <div style={{textAlign:"right",minWidth:0}}><div style={{fontSize:big?17:14.5,fontWeight:800,color:D.ink,fontFeatureSettings:"'tnum'",letterSpacing:"-.01em",lineHeight:1.15,whiteSpace:"nowrap"}}>{v}</div>{sub&&<div style={{fontSize:11,color:D.muted,marginTop:3,lineHeight:1.35}}>{sub}</div>}</div>; };
+    return <div key={l.mc.client_id} onClick={function(){ try{ window._pxSubDesejada="visao"; }catch(_){ } onOpenClient(l.mc.client_id); }}
+        style={{display:"grid",gridTemplateColumns:COLS,gap:14,alignItems:"center",padding:isMob?"14px 16px":"14px 18px",borderTop:i?"1px solid "+D.line:"none",cursor:"pointer",background:"#fff",opacity:go?1:0,transition:"opacity .4s ease "+(i*40)+"ms"}}
+        onMouseEnter={function(e){e.currentTarget.style.background=D.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <span style={{width:9,height:9,borderRadius:99,flex:"none",background:(c.selo.k==="o"||c.selo.k==="p")?"transparent":c.selo.cor,border:(c.selo.k==="o"||c.selo.k==="p")?"1.5px solid "+D.line2:"none"}}/>
+        {typeof ClientLogo==="function"&&<ClientLogo clientId={_qgPortalClientId(l.mc)} size="sm"/>}
+        <div style={{minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:D.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.mc.name}</div><div style={{fontSize:11.5,color:D.muted,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tipos}{isMob&&o?" · "+_adsNum(cur.res)+" leads · "+(cc?_adsBRL(cc):"—"):""}</div></div>
+      </div>
+      {!isMob&&(o?num(_adsNum(cur.res),<span>{cur.leads?_adsNum(cur.leads)+" form · ":""}{_adsNum(cur.conversas)} wpp<br/><AdsDeltaDK p={W.temPrev?_adsVar(cur.res,prev.res):null} invert={false}/></span>,true):num("—","sem gasto"))}
+      {!isMob&&<div>{o?<AdsSparkDK serie={serieDe(c.conta)} n={nDias} h={34} cor={D.accent} title="leads" fmt={_adsNum}/>:null}</div>}
+      {!isMob&&<div style={{display:"flex",alignItems:"center",gap:10,justifyContent:"flex-end"}}>{o&&<AdsBullet cur={cc} prev={cp}/>}{num(cc?_adsBRL(cc):"—",o?(cc?<span style={{whiteSpace:"nowrap"}}>{cp?"era "+_adsBRL(cp):"sem base"}<br/><AdsDeltaDK p={cc&&cp?_adsVar(cc,cp):null} invert={true}/></span>:(cur.gasto>0?"sem lead":"")):"")}</div>}
+      {!isMob&&num(o?_adsBRL(cur.gasto):"—",o&&W.temPrev&&prev.gasto>=50?<span>{_adsBRL(prev.gasto)+" antes"}<br/><AdsDeltaDK p={_adsVar(cur.gasto,prev.gasto)} invert={null}/></span>:(o&&W.temPrev&&cur.gasto>0?"novo na janela":""))}
+      {!isMob&&<div><span style={{background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>{c.selo.t}</span></div>}
+      <span style={{textAlign:"right",fontSize:12,fontWeight:800,color:D.accent,whiteSpace:"nowrap"}}>{isMob?<span style={{background:c.selo.bg,color:c.selo.cor,borderRadius:99,padding:"3px 9px",fontSize:11}}>{c.selo.t}</span>:"abrir ›"}</span>
     </div>; };
+  const Tabela=<div style={{background:"#fff",border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow,overflow:"hidden"}}>
+    {!isMob&&<div style={{display:"grid",gridTemplateColumns:COLS,gap:14,padding:"12px 18px",borderBottom:"1px solid "+D.line,background:D.surface2}}>{Th("Cliente")}{Th("Leads",true)}{Th("Tendência")}{Th("Custo por lead",true)}{Th("Investido",true)}{Th("Situação")}<span/></div>}
+    {cards.length===0&&<div style={{padding:18,fontSize:13,color:D.muted}}>Nenhum cliente com conta Meta vinculada.</div>}
+    {cards.map(Row)}
+  </div>;
 
   /* ── modo "só clientes" (aba Clientes de mídia): cabeçalho + cards, sem faixa nem coluna ── */
   if(soClientes) return <div style={{fontFamily:F,color:D.ink}}>
     <div style={{display:"flex",alignItems:"center",gap:10,margin:"0 2px 10px",flexWrap:"wrap"}}><span style={{fontWeight:800,fontSize:15,color:D.ink}}>Clientes de mídia · {cards.length}</span><span style={{fontSize:12,color:D.muted}}>{jan} · janela fechada</span>{direita}<span style={{marginLeft:"auto"}}>{Sel}</span></div>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(380px,1fr))",gap:16}}>{cards.map(Card)}</div>
+    {Tabela}
   </div>;
 
   return <div className="px-sens" style={{fontFamily:F,color:D.ink,display:"flex",flexDirection:"column",gap:22}}>
@@ -59269,7 +59278,7 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
     </div>
 
     {/* ── coluna esquerda: precisa de você · direita: clientes ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"400px minmax(0,1fr)",gap:24,alignItems:"start"}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"372px minmax(0,1fr)",gap:22,alignItems:"start"}}>
       <div style={{background:D.surface,border:"1px solid "+D.line,borderRadius:18,boxShadow:D.shadow}}>
         <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"18px 20px 12px"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Precisa de você</span><span style={{fontSize:11.5,color:D.muted}}>{vivas.length?nCrit+" crítico"+(nCrit===1?"":"s")+" · por dinheiro em jogo":"tudo visto"}</span></div>
         <div style={{padding:"0 14px 14px",display:"grid",gap:12}}>
@@ -59295,11 +59304,10 @@ function QGAdsPainel({clients,onOpenClient,isMob,soClientes,direita}){
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 4px 0",flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Clientes</span><span style={{fontSize:11.5,color:D.muted}}>quem precisa de olhar vem primeiro · clique pra abrir</span>{C.atrasado&&<span style={{fontSize:11,fontWeight:700,color:D.warn,background:D.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)}</span>}<span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11.5,color:D.muted}}>{cards.length} contas · {cards.filter(function(c){return c.selo.k==="c"||c.selo.k==="w";}).length} com aviso</span>{Sel}</span></div>
-        {cards.length===0&&<div style={{padding:18,fontSize:13,color:D.muted}}>Nenhum cliente com conta Meta vinculada.</div>}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:18,alignContent:"start"}}>{cards.map(Card)}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:8,padding:"6px 4px 0",flexWrap:"wrap"}}><span style={{fontSize:14,fontWeight:800,color:D.ink}}>Clientes</span><span style={{fontSize:11.5,color:D.muted}}>quem precisa de olhar vem primeiro · clique na linha pra abrir</span>{C.atrasado&&<span style={{fontSize:11,fontWeight:700,color:D.warn,background:D.warnSoft,borderRadius:99,padding:"2px 9px"}}>coleta atrasada: último dia completo {_adsFmtD(C.ultimoDiaColetado)}</span>}<span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:11.5,color:D.muted}}>{cards.length} contas · {cards.filter(function(c){return c.selo.k==="c"||c.selo.k==="w";}).length} com aviso</span>{Sel}</span></div>
+        {Tabela}
         <div style={{color:D.muted,fontSize:11.5,padding:"4px 4px 0",display:"flex",gap:16,flexWrap:"wrap"}}>
-          <span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band1,verticalAlign:-1,marginRight:4}}/>custo até R$ 15</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band2,verticalAlign:-1,marginRight:4}}/>até R$ 30</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band3,border:"1px solid "+D.line,verticalAlign:-1,marginRight:4}}/>acima</span><span>▏= janela anterior</span>
+          <span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band1,verticalAlign:-1,marginRight:4}}/>custo até R$ 15</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band2,verticalAlign:-1,marginRight:4}}/>até R$ 30</span><span><i style={{display:"inline-block",width:11,height:7,borderRadius:2,background:D.band3,border:"1px solid "+D.line,verticalAlign:-1,marginRight:4}}/>acima</span><span>▏ traço = janela anterior</span>
           {compart.length>0&&<span style={{marginLeft:"auto"}}>{compart.map(function(l){return l.mc.name;}).join(", ")}: rodam na conta de Toledo — os números estão lá</span>}
         </div>
       </div>
