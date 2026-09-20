@@ -59509,6 +59509,9 @@ function AdsCurvaVideo({v}){
   const curva=(v&&Array.isArray(v.curva))?v.curva.map(function(x){ return Number(x)||0; }):[];
   const [ptr,setPtr]=useState(null);
   const caixaRef=useRef(null);
+  /* 20/09: a linha se desenha da esquerda pra direita quando a aba abre. */
+  const [an,setAn]=useState(false);
+  useEffect(function(){ const t=setTimeout(function(){ setAn(true); },60); return function(){ clearTimeout(t); }; },[]);
   if(curva.length<3) return null;
 
   const W=560,H=170,PB=26,PT=10;
@@ -59554,9 +59557,13 @@ function AdsCurvaVideo({v}){
           <stop offset="0%" stopColor={ADS.accent} stopOpacity=".26"/>
           <stop offset="100%" stopColor={ADS.accent} stopOpacity="0"/>
         </linearGradient></defs>
+        <clipPath id="adsCurvaClip"><rect x="0" y="0" width={W} height={H}
+          style={{transformOrigin:"0px 0px",transform:an?"scaleX(1)":"scaleX(0)",transition:"transform 1.05s cubic-bezier(.22,1,.36,1)"}}/></clipPath>
         {[25,50,75,100].map(function(g){ return <line key={g} x1="0" x2={W} y1={py(g)} y2={py(g)} stroke={ADS.line} strokeWidth="1"/>; })}
-        <path d={area} fill="url(#adsCurvaG)"/>
-        <path d={linha} fill="none" stroke={ADS.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+        <g clipPath="url(#adsCurvaClip)">
+          <path d={area} fill="url(#adsCurvaG)"/>
+          <path d={linha} fill="none" stroke={ADS.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+        </g>
         {q>=8&&ptr===null&&<>
           <line x1={px(iq)} x2={px(iq)} y1={py(curva[iq])} y2={H-PB} stroke={ADS.crit} strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>
           <circle cx={px(iq)} cy={py(curva[iq])} r="3.5" fill={ADS.crit}/>
@@ -59848,7 +59855,49 @@ function AdsCorteLinha({lbl,pct,val,sub,cor,destaque,i}){
 }
 
 /* ── gráfico de colunas de uma dimensão (19/09): igual ao da aba Público, dentro do painel ── */
+/* ── os números num cartão só, com fio de cabelo entre as células ──
+   20/09: eram números soltos no branco (ou caixinhas separadas competindo entre si).
+   Agora um cartão fecha o grupo, o fio separa cada número e o destaque tem barra
+   de cor + fundo degradê. Mesmo desenho no cabeçalho do criativo e nos do vídeo. */
+function AdsNumeros({destaque,itens,cols,isMob}){
+  const lista=(itens||[]).filter(function(x){ return x&&x[1]!==undefined&&x[1]!==null; });
+  const nc=Math.max(1,Math.min(lista.length||1,isMob?2:(cols||(lista.length<=4?lista.length:3))));
+  /* sobra de linha: em vez de buraco branco, o último número estica e fecha a fileira */
+  const resto=lista.length?(lista.length%nc):0;
+  const rot={fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,lineHeight:1.35};
+  return <div style={{border:"1px solid "+ADS.line,borderRadius:16,overflow:"hidden",background:"#fff",boxShadow:"0 1px 2px rgba(15,13,26,.05)"}}>
+    {destaque&&<div style={{display:"flex",alignItems:"flex-end",gap:16,flexWrap:"wrap",
+      padding:isMob?"15px 14px 16px":"17px 19px 18px",background:"linear-gradient(180deg,"+ADS.accentSoft+" 0%,#fff 92%)"}}>
+      <div style={{display:"flex",gap:12,minWidth:0,flex:"1 1 200px",alignItems:"stretch"}}>
+        <div style={{width:3,borderRadius:99,background:destaque.cor||ADS.accent,flexShrink:0,opacity:.85}}/>
+        <div style={{minWidth:0}}>
+          <div style={rot}>{destaque.lbl}</div>
+          <div title={destaque.val} style={Object.assign({fontSize:isMob?25:29,fontWeight:900,letterSpacing:"-.9px",marginTop:4,lineHeight:1.05,
+            color:destaque.cor||ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{destaque.val}</div>
+        </div>
+      </div>
+      {destaque.subLbl&&<div style={{minWidth:0,flex:"0 1 auto",textAlign:isMob?"left":"right"}}>
+        <div style={rot}>{destaque.subLbl}</div>
+        <div title={destaque.subVal} style={Object.assign({fontSize:isMob?18:19,fontWeight:900,letterSpacing:"-.5px",marginTop:4,lineHeight:1.15,
+          color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{destaque.subVal}</div>
+      </div>}
+    </div>}
+    {lista.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat("+nc+",minmax(0,1fr))",gap:1,background:ADS.line,
+      borderTop:destaque?"1px solid "+ADS.line:"none"}}>
+      {lista.map(function(k,i){ const estica=(i===lista.length-1&&resto>0&&resto<nc);
+        return <div key={k[0]} style={{background:"#fff",padding:isMob?"11px 12px 12px":"12px 15px 13px",minWidth:0,gridColumn:estica?("span "+(nc-resto+1)):undefined}}>
+        <div style={Object.assign({},rot,{minHeight:27})}>{k[0]}</div>
+        <div title={String(k[1])} style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:3,
+          color:k[2]||ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{k[1]}</div>
+      </div>; })}
+    </div>}
+  </div>;
+}
+
 function AdsGraficoDim({q,dim,resLbl}){
+  /* 20/09: a barra nasce no chão e cresce — uma depois da outra. */
+  const [an,setAn]=useState(false);
+  useEffect(function(){ setAn(false); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[dim,q]);
   const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; });
   if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted,padding:"18px 0"}}>A Meta não devolveu esse corte para este criativo no período.</div>;
   const tot=rs.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
@@ -59879,7 +59928,8 @@ function AdsGraficoDim({q,dim,resLbl}){
       {enr.map(function(x,i){ const alt=Math.max(5,x.pct/mx*126);
         return <div key={i} style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:"100%"}}>
           <div title={x.lbl+" · "+_adsBRL0(x.g)+" · "+Math.round(x.pct)+"% da verba"+(x.res>0?" · "+_adsNum(x.res)+" "+resLbl:"")}
-            style={{width:"100%",maxWidth:66,height:alt,background:cor(x),borderRadius:"7px 7px 0 0"}}/>
+            style={{width:"100%",maxWidth:66,height:an?alt:0,background:cor(x),borderRadius:"7px 7px 0 0",
+              transition:"height .6s cubic-bezier(.22,1,.36,1) "+(i*55)+"ms"}}/>
         </div>; })}
     </div>
     <div style={{display:"flex",gap:10,borderTop:"1px solid "+ADS.line,paddingTop:9}}>
@@ -59917,6 +59967,8 @@ function AdsPublicoDim({q,dim,lbl,sub}){
 
 /* ── horário: 24 colunas, o pico marcado ── */
 function AdsHorario({q}){
+  const [an,setAn]=useState(false);
+  useEffect(function(){ setAn(false); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[q]);
   const rs=(q||[]).filter(function(x){ return x.dimensao==="hora"&&Number(x.gasto||0)>0; });
   if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Sem quebra por hora para este criativo no período.</div>;
   const porH={}; rs.forEach(function(x){ const h=parseInt(String(x.valor),10); if(isNaN(h)) return;
@@ -59932,7 +59984,8 @@ function AdsHorario({q}){
       {horas.map(function(x){ const v=base(x); const alt=Math.max(2,v/mx*118); const ehPico=x.h===pico.h&&v>0;
         return <div key={x.h} title={x.h+"h · "+_adsBRL0(x.g)+(x.res>0?" · "+_adsNum(x.res)+" resultado"+(x.res>1?"s":""):"")}
           style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",minWidth:0}}>
-          <span style={{width:"100%",height:alt,background:ehPico?ADS.accent:(v>0?"#cbb6f0":"#eeecf4"),borderRadius:"4px 4px 0 0"}}/>
+          <span style={{width:"100%",height:an?alt:0,background:ehPico?ADS.accent:(v>0?"#cbb6f0":"#eeecf4"),borderRadius:"4px 4px 0 0",
+            transition:"height .55s cubic-bezier(.22,1,.36,1) "+(x.h*18)+"ms"}}/>
         </div>; })}
     </div>
     <div style={{display:"flex",gap:2,fontSize:9.5,color:ADS.muted}}>
@@ -60101,26 +60154,9 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
             ["CTR", _adsPct(a.ctr,2)],
             ["Frequência", Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],
           ];
-          const Rot=function(q){ return <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:q.cor||ADS.muted,lineHeight:1.3}}>{q.children}</div>; };
-          return <div style={{marginTop:18,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
-            <div style={{background:ADS.accentSoft,border:"1px solid "+ADS.accent+"2e",borderRadius:14,padding:"13px 16px",
-              display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",minWidth:0}}>
-              <div style={{minWidth:0,flex:"1 1 180px"}}>
-                <Rot cor={ADS.accent}>{custoLbl}</Rot>
-                <div title={custoVal} style={Object.assign({fontSize:26,fontWeight:900,letterSpacing:"-.7px",marginTop:3,color:custoCor,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{custoVal}</div>
-              </div>
-              {!isMobLb&&<div style={{width:1,alignSelf:"stretch",background:ADS.accent+"26",flexShrink:0}}/>}
-              <div style={isMobLb?{minWidth:0,flex:"1 1 100%",borderTop:"1px solid "+ADS.accent+"26",paddingTop:10}:{minWidth:0,flex:"0 1 auto",textAlign:"right"}}>
-                <Rot>Gasto no período</Rot>
-                <div title={_adsBRL0(a.gasto)} style={Object.assign({fontSize:20,fontWeight:900,letterSpacing:"-.5px",marginTop:3,color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{_adsBRL0(a.gasto)}</div>
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:10,marginTop:10}}>
-              {apoio.map(function(k){ return <div key={k[0]} style={{background:ADS.surface2,border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px 11px",minWidth:0}}>
-                <Rot>{k[0]}</Rot>
-                <div title={k[1]} style={Object.assign({fontSize:19,fontWeight:900,letterSpacing:"-.4px",marginTop:4,color:ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{k[1]}</div>
-              </div>; })}
-            </div>
+          return <div style={{marginTop:18}}>
+            <AdsNumeros isMob={isMobLb} itens={apoio}
+              destaque={{lbl:custoLbl,val:custoVal,cor:custoCor,subLbl:"Gasto no período",subVal:_adsBRL0(a.gasto)}}/>
           </div>;
         })()}
 
@@ -60187,7 +60223,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
             })()}
             <AdsBlocoT primeiro t="Curva de retenção" s="quantos ainda estavam assistindo a cada segundo"/>
             <AdsCurvaVideo v={Vd}/>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:"16px 18px",marginTop:24,paddingTop:20,borderTop:"1px solid "+ADS.line}}>
+            <div style={{marginTop:22}}>
               {(function(){
                 const cels=[];
                 if(Vd.tempo_medio!=null) cels.push(["Tempo médio",Number(Vd.tempo_medio).toLocaleString("pt-BR",{maximumFractionDigits:1})+"s"]);
@@ -60196,10 +60232,7 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
                 if(Vd.p100!=null&&Number(Vd.p100)>0) cels.push(["Viram o vídeo inteiro",_adsNum(Vd.p100)]);
                 if(Vd.passaram_30s!=null&&Number(Vd.passaram_30s)>0) cels.push(["Passaram de 30s",_adsNum(Vd.passaram_30s)]);
                 if(Vd.custo_thruplay!=null) cels.push(["Custo por vídeo assistido",_adsBRLc(Vd.custo_thruplay)]);
-                return cels.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
-                  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,lineHeight:1.3}}>{k[0]}</div>
-                  <div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:5,color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{k[1]}</div>
-                </div>; });
+                return <AdsNumeros isMob={isMobLb} itens={cels}/>;
               })()}
             </div>
           </div>}
