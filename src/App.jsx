@@ -59863,7 +59863,12 @@ function AdsGraficoDim({q,dim,resLbl}){
   const cor=function(x){ if(!x.cpa) return "#ded6f2"; if(melhor&&x.lbl===melhor.lbl) return "#3b1a86"; if(pior&&comCpa.length>1&&x.lbl===pior.lbl) return "#c9aef5"; return "#8b5cf6"; };
   const mx=Math.max.apply(null,enr.map(function(x){ return x.pct; }).concat([1]));
   const curto=function(l){ return String(l).replace(/^(Instagram|Facebook|Messenger|Audience Network) · /,function(m,r){ return {Instagram:"IG ",Facebook:"FB ",Messenger:"MSG ",["Audience Network"]:"AN "}[r]; }); };
+  /* 20/09: com flex:1 puro, 2 ou 3 cortes viravam tabuas de 190px de largura.
+     Agora a coluna tem teto (96px) e a barra dentro dela tem teto proprio (66px):
+     com 8 cortes ocupa tudo igual antes, com 3 fica um grafico de verdade. */
+  const larg={maxWidth:enr.length*108};
   return <div>
+    <div style={larg}>
     {/* os custos ficam numa linha própria: se subissem junto com a barra, cada um pararia numa altura */}
     <div style={{display:"flex",gap:10,marginBottom:6}}>
       {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
@@ -59872,14 +59877,17 @@ function AdsGraficoDim({q,dim,resLbl}){
     </div>
     <div style={{display:"flex",alignItems:"flex-end",gap:10,height:132,marginBottom:0}}>
       {enr.map(function(x,i){ const alt=Math.max(5,x.pct/mx*126);
-        return <div key={i} title={x.lbl+" · "+_adsBRL0(x.g)+" · "+Math.round(x.pct)+"% da verba"+(x.res>0?" · "+_adsNum(x.res)+" "+resLbl:"")}
-          style={{flex:1,minWidth:0,height:alt,background:cor(x),borderRadius:"7px 7px 0 0"}}/>; })}
+        return <div key={i} style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:"100%"}}>
+          <div title={x.lbl+" · "+_adsBRL0(x.g)+" · "+Math.round(x.pct)+"% da verba"+(x.res>0?" · "+_adsNum(x.res)+" "+resLbl:"")}
+            style={{width:"100%",maxWidth:66,height:alt,background:cor(x),borderRadius:"7px 7px 0 0"}}/>
+        </div>; })}
     </div>
     <div style={{display:"flex",gap:10,borderTop:"1px solid "+ADS.line,paddingTop:9}}>
       {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
         <div style={{fontSize:11,fontWeight:700,color:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.lbl}>{curto(x.lbl)}</div>
         <div style={{fontSize:10.5,color:ADS.muted,marginTop:2}}>{Math.round(x.pct)}%{x.res>0?" · "+_adsNum(x.res):""}</div>
       </div>; })}
+    </div>
     </div>
     {melhor&&pior&&melhor.lbl!==pior.lbl&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
       <b>{melhor.lbl}</b> entrega a {_adsBRLc(melhor.cpa)} e leva {Math.round(melhor.pct)}% da verba; <b>{pior.lbl}</b> custa {_adsBRLc(pior.cpa)} ({_adsX(pior.cpa/melhor.cpa)}) e leva {Math.round(pior.pct)}%.
@@ -60080,22 +60088,41 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
           <button onClick={onClose} style={{border:0,background:ADS.surface2,borderRadius:99,width:32,height:32,cursor:"pointer",fontSize:16,color:ADS.ink2,flexShrink:0,minHeight:0}}>×</button>
         </div>
 
-        {/* ── os números que decidem, com ar entre eles ── */}
-        {/* 20/09: com minimo de 124px os 5 numeros quebravam em 4 + 1 orfao. */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(96px,1fr))",gap:"16px 14px",marginTop:20,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
-          {(function(){
-            const cels=[];
-            cels.push([a.cfg.custoLbl||"CPM", a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm), a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink]);
-            cels.push([_adsMai(a.cfg.resLbl||"alcance"), a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance), ADS.ink]);
-            cels.push(["Gasto", _adsBRL0(a.gasto), ADS.ink]);
-            cels.push(["CTR", _adsPct(a.ctr,2), ADS.ink]);
-            cels.push(["Frequência", Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1}), ADS.ink]);
-            return cels.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
-              <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted}}>{k[0]}</div>
-              <div style={Object.assign({fontSize:20,fontWeight:900,letterSpacing:"-.5px",marginTop:5,color:k[2],whiteSpace:"nowrap"},ADS_MONO)}>{k[1]}</div>
-            </div>; });
-          })()}
-        </div>
+        {/* ── os números que decidem, cada um na sua caixa ── */}
+        {/* 20/09: eram 5 números soltos, todos do mesmo tamanho, sem borda nenhuma —
+            o olho não sabia onde pousar. Agora: caixa grande = o custo que julga o
+            criativo + a verba que ele comeu (leem-se em par); caixa pequena = apoio. */}
+        {(function(){
+          const custoLbl=a.cfg.custoLbl||"CPM";
+          const custoVal=a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm);
+          const custoCor=a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink;
+          const apoio=[
+            [_adsMai(a.cfg.resLbl||"alcance"), a.cfg.campo?_adsNum(a.res):_adsNum(a.alcance)],
+            ["CTR", _adsPct(a.ctr,2)],
+            ["Frequência", Number(a.frequencia||0).toLocaleString("pt-BR",{maximumFractionDigits:1})],
+          ];
+          const Rot=function(q){ return <div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:q.cor||ADS.muted,lineHeight:1.3}}>{q.children}</div>; };
+          return <div style={{marginTop:18,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
+            <div style={{background:ADS.accentSoft,border:"1px solid "+ADS.accent+"2e",borderRadius:14,padding:"13px 16px",
+              display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",minWidth:0}}>
+              <div style={{minWidth:0,flex:"1 1 180px"}}>
+                <Rot cor={ADS.accent}>{custoLbl}</Rot>
+                <div title={custoVal} style={Object.assign({fontSize:26,fontWeight:900,letterSpacing:"-.7px",marginTop:3,color:custoCor,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{custoVal}</div>
+              </div>
+              {!isMobLb&&<div style={{width:1,alignSelf:"stretch",background:ADS.accent+"26",flexShrink:0}}/>}
+              <div style={isMobLb?{minWidth:0,flex:"1 1 100%",borderTop:"1px solid "+ADS.accent+"26",paddingTop:10}:{minWidth:0,flex:"0 1 auto",textAlign:"right"}}>
+                <Rot>Gasto no período</Rot>
+                <div title={_adsBRL0(a.gasto)} style={Object.assign({fontSize:20,fontWeight:900,letterSpacing:"-.5px",marginTop:3,color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{_adsBRL0(a.gasto)}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:10,marginTop:10}}>
+              {apoio.map(function(k){ return <div key={k[0]} style={{background:ADS.surface2,border:"1px solid "+ADS.line,borderRadius:12,padding:"10px 12px 11px",minWidth:0}}>
+                <Rot>{k[0]}</Rot>
+                <div title={k[1]} style={Object.assign({fontSize:19,fontWeight:900,letterSpacing:"-.4px",marginTop:4,color:ADS.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"},ADS_MONO)}>{k[1]}</div>
+              </div>; })}
+            </div>
+          </div>;
+        })()}
 
         {/* ── abas ── */}
         {/* 20/09: eram 4 abas e viraram 8. Com rolagem lateral a ultima ficava cortada
