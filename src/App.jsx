@@ -1475,7 +1475,21 @@ function pxPode(chave, padrao, ctx){
    OU um bloco novo ({key:"demandas.card.ia.gerar_briefing"}) cujo padrão é `true`
    (= como hoje) ou uma função (u, perms) => bool com a regra fixa que já existia.
    A tela pergunta pxBloco(key, ctx): sócio sempre vê; override manual manda; senão o padrão.
-   REGRA: bloco novo com padrão true NÃO muda nada pra ninguém até alguém desligar à mão. */
+
+   DUAS REGRAS, e elas não brigam — a diferença é se a tela já existia:
+
+   1) MIGRAÇÃO (tela que já estava no ar): o bloco nasce com o padrão que reproduz
+      exatamente a regra que já existia (normalmente true). Ninguém ganha nem perde
+      acesso no dia da troca; só muda de lugar quem decide.
+
+   2) TELA NOVA (Rodrigo, 20/09/2026): nasce FECHADA. Todo bloco com padrao:false.
+      Só os sócios entram — o pxPode devolve true pro nível 1 antes de olhar o
+      padrão. O resto do time começa desligado e é liberado um a um no painel.
+
+   E em qualquer um dos dois casos: menu ou aba nova SEMPRE ganha a entrada aqui no
+   PX_BLOCOS e a linha correspondente em PERM_TABS (09_acessos.jsx), no mesmo
+   commit. Tela que existe e não aparece no painel é tela que ninguém consegue
+   controlar. */
 const _pxAdminCard=(u,p)=>!!(u&&(u.level===1||(p&&p.gerenciarEtiquetas===true)));
 const PX_BLOCOS={
   demandas:{label:"Linha de produção", navIcon:"demandas", color:"#2563eb", grupos:[
@@ -1771,17 +1785,21 @@ PX_BLOCOS.midia={label:"Gestão de mídia", navIcon:"gestaomidia", color:"#9F43F
     {key:"midia.cerebro",      label:"Registrar o que o cliente falou", desc:"O campo de texto do Diagnóstico"},
   ]},
 ]};
+/* TELA NOVA — nasce fechada (regra do Rodrigo, 20/09/2026).
+   Todo bloco aqui tem padrao:false. Sócio (nível 1) entra assim mesmo, porque o
+   pxPode devolve true pra ele antes de olhar o padrão. Todo o resto do time
+   começa desligado e só passa a ver quando alguém ligar em
+   Acessos › Time › gerenciar acesso › Gestão de redes. */
 PX_BLOCOS.social={label:"Gestão de redes", navIcon:"gestaoredes", color:"#E4405F", grupos:[
   {id:"menu", label:"Menu", itens:[
     {key:"social.menu", label:"Acessar Gestão de redes",
-      desc:"Padrão: sócio, quem cuida de social, coordenação e gestor de mídia. Pra liberar pra um designer, é só ligar aqui.",
-      padrao:(u)=>!!(u&&(u.level===1||u.dash==="social"||u.dash==="coordinator"||u.dash==="gestor"||u.id==="ellen"))},
+      desc:"Nasce desligado. Só os sócios veem até você ligar aqui pra alguém.", padrao:false},
   ]},
   {id:"abas", label:"Abas do cliente", itens:[
-    {key:"social.aba.visao",       label:"Visão geral",  desc:"Seguidores, alcance e as duas curvas do período"},
-    {key:"social.aba.publicacoes", label:"Publicações",  desc:"O que cada post entregou"},
-    {key:"social.aba.historico",   label:"Histórico",    desc:"O dia a dia cru"},
-    {key:"social.aba.contas",      label:"Contas",       desc:"Quais perfis coletam e quando foi a última coleta"},
+    {key:"social.aba.visao",       label:"Visão geral",  desc:"Seguidores, alcance e as duas curvas do período", padrao:false},
+    {key:"social.aba.publicacoes", label:"Publicações",  desc:"O que cada post entregou",                        padrao:false},
+    {key:"social.aba.historico",   label:"Histórico",    desc:"O dia a dia cru",                                 padrao:false},
+    {key:"social.aba.contas",      label:"Contas",       desc:"Quais perfis coletam e quando foi a última coleta",padrao:false},
   ]},
 ]};
 PX_BLOCOS.planejamento={label:"Planejamento", navIcon:"planejamento", color:"#0ea5e9", grupos:[
@@ -36171,6 +36189,7 @@ const PERM_TABS=[
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a", tela:"aprovacoes"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706", tela:"clientes"},      // árvore (20/09/2026)
   {id:"midia",        navIcon:"gestaomidia",label:"Gestão de mídia",    color:"#9F43F6", tela:"midia"},         // árvore (20/09/2026)
+  {id:"social",       navIcon:"gestaoredes",label:"Gestão de redes",    color:"#E4405F", tela:"social"},        // árvore (20/09/2026) — nasce toda desligada
   {id:"planejamento", navIcon:"planejamento",label:"Planejamento",      color:"#0ea5e9", tela:"planejamento"},  // árvore (20/09/2026)
   {id:"scripts",      navIcon:"scripts",    label:"Scripts",            color:"#7c3aed", tela:"scripts"},       // árvore (20/09/2026)
   {id:"matriz",       navIcon:"matriz",     label:"Matriz",             color:"#059669", tela:"matriz"},        // árvore (20/09/2026)
