@@ -59897,7 +59897,8 @@ function AdsNumeros({destaque,itens,cols,isMob}){
 function AdsGraficoDim({q,dim,resLbl}){
   /* 20/09: a barra nasce no chão e cresce — uma depois da outra. */
   const [an,setAn]=useState(false);
-  useEffect(function(){ setAn(false); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[dim,q]);
+  const [hov,setHov]=useState(null);
+  useEffect(function(){ setAn(false); setHov(null); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[dim,q]);
   const rs=(q||[]).filter(function(x){ return x.dimensao===dim&&Number(x.gasto||0)>0; });
   if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted,padding:"18px 0"}}>A Meta não devolveu esse corte para este criativo no período.</div>;
   const tot=rs.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
@@ -59916,25 +59917,44 @@ function AdsGraficoDim({q,dim,resLbl}){
      Agora a coluna tem teto (96px) e a barra dentro dela tem teto proprio (66px):
      com 8 cortes ocupa tudo igual antes, com 3 fica um grafico de verdade. */
   const larg={maxWidth:enr.length*108};
+  const H=hov!==null?enr[hov]:null;
+  /* o balão fica do lado OPOSTO da barra apontada — nunca tapa o que você está lendo */
+  const balaoEsq=hov!==null&&((hov+0.5)/enr.length)>0.5;
   return <div>
-    <div style={larg}>
+    <div style={Object.assign({position:"relative"},larg)} onMouseLeave={function(){ setHov(null); }}>
     {/* os custos ficam numa linha própria: se subissem junto com a barra, cada um pararia numa altura */}
     <div style={{display:"flex",gap:10,marginBottom:6}}>
-      {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
-        <span style={Object.assign({fontSize:12,fontWeight:800,color:x.cpa?ADS.ink:ADS.muted,whiteSpace:"nowrap"},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</span>
+      {enr.map(function(x,i){ return <div key={i} onMouseEnter={function(){ setHov(i); }} style={{flex:1,minWidth:0,textAlign:"center"}}>
+        <span style={Object.assign({fontSize:12,fontWeight:800,color:hov!==null&&hov!==i?ADS.muted:(x.cpa?ADS.ink:ADS.muted),whiteSpace:"nowrap",transition:"color .15s"},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</span>
       </div>; })}
     </div>
-    <div style={{display:"flex",alignItems:"flex-end",gap:10,height:132,marginBottom:0}}>
-      {enr.map(function(x,i){ const alt=Math.max(5,x.pct/mx*126);
-        return <div key={i} style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:"100%"}}>
-          <div title={x.lbl+" · "+_adsBRL0(x.g)+" · "+Math.round(x.pct)+"% da verba"+(x.res>0?" · "+_adsNum(x.res)+" "+resLbl:"")}
-            style={{width:"100%",maxWidth:66,height:an?alt:0,background:cor(x),borderRadius:"7px 7px 0 0",
-              transition:"height .6s cubic-bezier(.22,1,.36,1) "+(i*55)+"ms"}}/>
+    <div style={{display:"flex",alignItems:"flex-end",gap:10,height:132,marginBottom:0,position:"relative"}}>
+      {enr.map(function(x,i){ const alt=Math.max(5,x.pct/mx*126); const apag=hov!==null&&hov!==i;
+        return <div key={i} onMouseEnter={function(){ setHov(i); }}
+          onTouchStart={function(){ setHov(i); }}
+          style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:"100%",cursor:"default"}}>
+          <div style={{width:"100%",maxWidth:66,height:an?alt:0,background:cor(x),borderRadius:"7px 7px 0 0",
+            opacity:apag?.32:1,boxShadow:hov===i?"0 4px 14px rgba(115,38,214,.28)":"none",
+            transition:"height .6s cubic-bezier(.22,1,.36,1) "+(i*55)+"ms, opacity .15s, box-shadow .15s"}}/>
         </div>; })}
+      {/* 20/09: o balão que o Rodrigo pediu — passa o mouse e vem tudo o que a Meta devolveu daquele corte */}
+      {H&&<div style={{position:"absolute",top:2,left:balaoEsq?0:"auto",right:balaoEsq?"auto":0,width:176,maxWidth:"100%",
+        background:ADS.tipBg,color:ADS.tipInk,borderRadius:11,padding:"10px 12px",zIndex:6,pointerEvents:"none",
+        boxShadow:"0 10px 26px rgba(15,13,26,.32)"}}>
+        <div style={{fontSize:12,fontWeight:800,lineHeight:1.25,marginBottom:7}}>{H.lbl}</div>
+        {[["Verba",_adsBRL0(H.g)+" · "+Math.round(H.pct)+"%"],
+          [(function(s){ return s.charAt(0).toUpperCase()+s.slice(1); })(resLbl||"resultados"),H.res>0?_adsNum(H.res):"nenhum"],
+          ["Custo",H.cpa?_adsBRLc(H.cpa):"—"],
+          ["CTR",H.ctr!==null?_adsPct(H.ctr,2):"—"]].map(function(l){
+          return <div key={l[0]} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:11,lineHeight:1.7}}>
+            <span style={{opacity:.62,whiteSpace:"nowrap"}}>{l[0]}</span>
+            <span style={Object.assign({fontWeight:800,whiteSpace:"nowrap"},ADS_MONO)}>{l[1]}</span>
+          </div>; })}
+      </div>}
     </div>
     <div style={{display:"flex",gap:10,borderTop:"1px solid "+ADS.line,paddingTop:9}}>
-      {enr.map(function(x,i){ return <div key={i} style={{flex:1,minWidth:0,textAlign:"center"}}>
-        <div style={{fontSize:11,fontWeight:700,color:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={x.lbl}>{curto(x.lbl)}</div>
+      {enr.map(function(x,i){ return <div key={i} onMouseEnter={function(){ setHov(i); }} style={{flex:1,minWidth:0,textAlign:"center"}}>
+        <div style={{fontSize:11,fontWeight:hov===i?800:700,color:hov===i?ADS.accent:ADS.ink2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",transition:"color .15s"}} title={x.lbl}>{curto(x.lbl)}</div>
         <div style={{fontSize:10.5,color:ADS.muted,marginTop:2}}>{Math.round(x.pct)}%{x.res>0?" · "+_adsNum(x.res):""}</div>
       </div>; })}
     </div>
@@ -59942,7 +59962,7 @@ function AdsGraficoDim({q,dim,resLbl}){
     {melhor&&pior&&melhor.lbl!==pior.lbl&&<div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
       <b>{melhor.lbl}</b> entrega a {_adsBRLc(melhor.cpa)} e leva {Math.round(melhor.pct)}% da verba; <b>{pior.lbl}</b> custa {_adsBRLc(pior.cpa)} ({_adsX(pior.cpa/melhor.cpa)}) e leva {Math.round(pior.pct)}%.
     </div>}
-    <div style={{fontSize:11,color:ADS.muted,marginTop:8}}>altura = fatia da verba · número em cima = custo por {resLbl||"resultado"} · barra escura = mais barato</div>
+    <div style={{fontSize:11,color:ADS.muted,marginTop:8}}>altura = fatia da verba · número em cima = custo por {resLbl||"resultado"} · barra escura = mais barato · passe o mouse numa barra pra ver tudo dela</div>
   </div>;
 }
 
@@ -59968,7 +59988,8 @@ function AdsPublicoDim({q,dim,lbl,sub}){
 /* ── horário: 24 colunas, o pico marcado ── */
 function AdsHorario({q}){
   const [an,setAn]=useState(false);
-  useEffect(function(){ setAn(false); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[q]);
+  const [hov,setHov]=useState(null);
+  useEffect(function(){ setAn(false); setHov(null); const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[q]);
   const rs=(q||[]).filter(function(x){ return x.dimensao==="hora"&&Number(x.gasto||0)>0; });
   if(!rs.length) return <div style={{fontSize:12.5,color:ADS.muted}}>Sem quebra por hora para este criativo no período.</div>;
   const porH={}; rs.forEach(function(x){ const h=parseInt(String(x.valor),10); if(isNaN(h)) return;
@@ -59979,17 +60000,35 @@ function AdsHorario({q}){
   const mx=Math.max.apply(null,horas.map(base).concat([1]));
   const pico=horas.slice().sort(function(a,b){ return base(b)-base(a); })[0];
   const gTot=horas.reduce(function(s,x){ return s+x.g; },0), rTot=horas.reduce(function(s,x){ return s+x.res; },0);
+  const Hh=hov!==null?horas[hov]:null;
+  const balaoEsq=hov!==null&&(hov+0.5)/24>0.5;
   return <div>
-    <div style={{display:"flex",alignItems:"flex-end",gap:2,height:132,marginBottom:8}}>
+    <div style={{display:"flex",alignItems:"flex-end",gap:2,height:132,marginBottom:8,position:"relative"}}
+      onMouseLeave={function(){ setHov(null); }}>
       {horas.map(function(x){ const v=base(x); const alt=Math.max(2,v/mx*118); const ehPico=x.h===pico.h&&v>0;
-        return <div key={x.h} title={x.h+"h · "+_adsBRL0(x.g)+(x.res>0?" · "+_adsNum(x.res)+" resultado"+(x.res>1?"s":""):"")}
-          style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",minWidth:0}}>
-          <span style={{width:"100%",height:an?alt:0,background:ehPico?ADS.accent:(v>0?"#cbb6f0":"#eeecf4"),borderRadius:"4px 4px 0 0",
-            transition:"height .55s cubic-bezier(.22,1,.36,1) "+(x.h*18)+"ms"}}/>
+        const apag=hov!==null&&hov!==x.h;
+        return <div key={x.h} onMouseEnter={function(){ setHov(x.h); }} onTouchStart={function(){ setHov(x.h); }}
+          style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"flex-end",alignItems:"center",minWidth:0,cursor:"default"}}>
+          <span style={{width:"100%",height:an?alt:0,background:hov===x.h?ADS.accent:(ehPico?ADS.accent:(v>0?"#cbb6f0":"#eeecf4")),borderRadius:"4px 4px 0 0",
+            opacity:apag?.4:1,transition:"height .55s cubic-bezier(.22,1,.36,1) "+(x.h*18)+"ms, opacity .15s, background .15s"}}/>
         </div>; })}
+      {Hh&&<div style={{position:"absolute",top:2,left:balaoEsq?0:"auto",right:balaoEsq?"auto":0,width:172,maxWidth:"100%",
+        background:ADS.tipBg,color:ADS.tipInk,borderRadius:11,padding:"10px 12px",zIndex:6,pointerEvents:"none",
+        boxShadow:"0 10px 26px rgba(15,13,26,.32)"}}>
+        <div style={{fontSize:12,fontWeight:800,marginBottom:7}}>{Hh.h}h às {Hh.h+1}h</div>
+        {[["Verba",_adsBRL0(Hh.g)],
+          ["Resultados",Hh.res>0?_adsNum(Hh.res):"nenhum"],
+          ["Custo",Hh.res>0?_adsBRLc(Hh.g/Hh.res):"—"],
+          ["Impressões",Hh.imp>0?_adsNum(Hh.imp):"—"],
+          ["CTR",Hh.imp>0?_adsPct(Hh.cl/Hh.imp*100,2):"—"]].map(function(l){
+          return <div key={l[0]} style={{display:"flex",justifyContent:"space-between",gap:10,fontSize:11,lineHeight:1.7}}>
+            <span style={{opacity:.62,whiteSpace:"nowrap"}}>{l[0]}</span>
+            <span style={Object.assign({fontWeight:800,whiteSpace:"nowrap"},ADS_MONO)}>{l[1]}</span>
+          </div>; })}
+      </div>}
     </div>
     <div style={{display:"flex",gap:2,fontSize:9.5,color:ADS.muted}}>
-      {horas.map(function(x){ return <div key={x.h} style={{flex:1,textAlign:"center",minWidth:0}}>{x.h%3===0?x.h:""}</div>; })}
+      {horas.map(function(x){ return <div key={x.h} style={{flex:1,textAlign:"center",minWidth:0,color:hov===x.h?ADS.accent:undefined,fontWeight:hov===x.h?800:undefined}}>{hov===x.h?x.h:(x.h%3===0?x.h:"")}</div>; })}
     </div>
     <div style={{fontSize:12.5,color:ADS.ink2,marginTop:14,lineHeight:1.55}}>
       {temRes
