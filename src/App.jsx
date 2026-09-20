@@ -57143,7 +57143,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   // Abas ocultas: existem no código, mas ficam fora do menu até fazerem sentido (não esquecer)
   const SUBS_OCULTAS=[["leads","Leads","conferência de qualidade — depende de o cliente (quem atende) marcar; sem fluxo com o cliente, ninguém preenche"]];
   const [verOcultas,setVerOcultas]=useState(false);
-  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Estratégia"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
+  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Estratégia"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
@@ -57230,6 +57230,8 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
     {subAtiva==="campanhas"&&temMeta&&typeof QGAdsCampanhasTab==="function"&&<QGAdsCampanhasTab mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit}/>}
     {subAtiva==="criativos"&&temMeta&&typeof QGAdsCriativos==="function"&&<QGAdsCriativos mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
+    {/* 20/09: Diagnóstico — o que a Meta mediu + o que o cliente falou (cérebro da Pixels) */}
+    {subAtiva==="diagnostico"&&temMeta&&typeof QGAdsDiagnostico==="function"&&<QGAdsDiagnostico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="leads"&&temMeta&&typeof QGAdsLeads==="function"&&<QGAdsLeads mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="historico"&&temMeta&&typeof QGAdsHistorico==="function"&&<QGAdsHistorico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="gestao"&&(function(){
@@ -61654,6 +61656,377 @@ function QGAdsHistorico({mc,conta,isMob,campId,embutido}){
         <thead><tr><th style={Object.assign({},TH,{textAlign:"left"})}>Semana</th><th style={TH}>Gasto</th><th style={TH}>Em lead</th><th style={TH}>Leads</th><th style={TH}>Custo por lead</th><th style={TH}>vs. média</th><th style={TH}>CTR</th></tr></thead>
         <tbody>{semanas.slice().reverse().map(function(o){ const n=o.parcial?"n":_adsNivelCusto(o.cpa,mediaCpa,o.res); return <tr key={o.k}><td style={Object.assign({},TD,{textAlign:"left",fontWeight:700,color:ADS.ink,fontFamily:ADS_FONT})}>{o.lbl}{o.parcial&&<span style={{fontSize:10.5,color:ADS.muted,fontWeight:500}}> · {o.k===hojeSem?"em andamento":"parcial"} ({o.dias}d)</span>}</td><td style={TD}>{_adsBRL(o.gasto)}</td><td style={TD}>{_adsBRL(o.gastoLead)}</td><td style={Object.assign({},TD,{fontWeight:800,color:ADS.ink})}>{_adsNum(o.res)}</td><td style={Object.assign({},TD,{fontWeight:800,color:_adsCor(n)})}>{o.cpa?_adsBRL(o.cpa):"—"}</td><td style={Object.assign({},TD,{color:_adsCor(n)})}>{o.cpa&&mediaCpa?_adsX(o.cpa/mediaCpa):"—"}</td><td style={TD}>{_adsPct(o.ctr,2)}</td></tr>; })}</tbody>
       </table></div></AdsCard>
+    </AdsSec>
+  </AdsWrap>;
+}
+
+/* ═══════════════════════════════════════════════════════
+   DIAGNÓSTICO — 20/09/2026
+   Duas verdades lado a lado, nunca fundidas:
+     · o que a META MEDIU  → ads_diag_painel (cortes já julgados por
+       teste z de duas proporções + robustez semana a semana)
+     · o que o CLIENTE FALOU → cerebro_notas (texto cru, nunca apagado)
+       e cerebro_fatos (o que a IA entendeu, conferido por gente)
+   A tela nunca transforma fala em número, nem número em conclusão sem
+   amostra. Quando não dá pra afirmar, ela escreve "indício".
+   ═══════════════════════════════════════════════════════ */
+const ADS_CER_TIPOS={
+  venda:"Venda", qualidade_lead:"Qualidade do lead", publico:"Público", criativo:"Criativo",
+  regiao:"Região", produto:"Produto", horario:"Horário", oferta:"Oferta",
+  operacao:"Operação", concorrencia:"Concorrência", outro:"Outro"};
+const ADS_CER_CANAIS=[["whatsapp","WhatsApp"],["telefone","Telefone"],["reuniao","Reunião"],["presencial","Presencial"],["email","E-mail"]];
+
+/* rótulo humano de um corte, seja qual for a dimensão */
+function _adsCorteLbl(dim,v){
+  const s=String(v||"");
+  if(dim==="idade_genero"){ const p=s.split("|"); return (ADS_GEN_LBL[p[1]]||p[1]||"")+" "+(p[0]||""); }
+  if(dim==="genero") return ADS_GEN_LBL[s]||s;
+  if(dim==="hora") return s+"h";
+  return _adsValLbl(dim,s);
+}
+
+/* ── o que a IA deve devolver ────────────────────────────
+   Prompt curto de propósito: quanto mais regra, mais ela inventa.
+   Manda extrair SÓ o que está escrito e marcar o que não entendeu. */
+const ADS_CER_PROMPT=
+"Você lê o relato de um gestor de tráfego sobre o que o CLIENTE dele falou e transforma em fatos.\n"+
+"Devolva SÓ um JSON, sem texto antes ou depois, neste formato:\n"+
+'{"quem_falou":"nome ou null","periodo_ini":"AAAA-MM-DD ou null","periodo_fim":"AAAA-MM-DD ou null",'+
+'"fatos":[{"tipo":"...","chave":"...","valor":"...","sinal":-1,"numero":null,"unidade_num":null,"trecho":"...","confianca":0.8}],'+
+'"nao_entendi":["..."]}\n\n'+
+"tipo: venda | qualidade_lead | publico | criativo | regiao | produto | horario | oferta | operacao | concorrencia | outro\n"+
+"chave: o assunto em uma ou duas palavras (ex.: \"65+\", \"Caçador\", \"biodigestor\", \"vídeo do produtor\").\n"+
+"valor: o fato em uma frase curta, na terceira pessoa.\n"+
+"sinal: -1 ruim, 0 neutro, 1 bom (do ponto de vista do resultado da campanha).\n"+
+"numero e unidade_num: só quando o relato traz número (unidade_num: vendas, reais, leads ou pct).\n"+
+"trecho: o pedaço EXATO do texto original que sustenta o fato. Nunca invente trecho.\n"+
+"confianca: 0 a 1.\n"+
+"nao_entendi: pedaços do relato que você não conseguiu classificar — é melhor listar do que chutar.\n\n"+
+"REGRAS: não invente nada que não esteja escrito; não deduza idade de quem mandou mensagem; "+
+"se o relato não tiver fato nenhum, devolva a lista de fatos vazia.";
+
+function useAdsCerebro(conta,P){
+  const [st,setSt]=useState({loading:true,d:null,erro:null});
+  const [tick,setTick]=useState(0);
+  const cid=conta&&conta.ad_account_id;
+  useEffect(function(){
+    if(!cid||!P||!window._sb){ setSt({loading:false,d:null,erro:null}); return; }
+    let vivo=true; setSt(function(p){ return Object.assign({},p,{loading:true}); });
+    window._sb.rpc("ads_diag_painel",{p_conta:cid,p_de:P.ini,p_ate:P.fim}).then(function(r){
+      if(!vivo) return;
+      if(r.error){ setSt({loading:false,d:null,erro:r.error.message}); return; }
+      setSt({loading:false,d:r.data||null,erro:null});
+    });
+    return function(){ vivo=false; };
+  },[cid,P&&P.key,tick]);
+  return Object.assign({},st,{recarregar:function(){ setTick(function(x){return x+1;}); }});
+}
+
+/* ── tarja de amostra: o mesmo texto em todo lugar ────── */
+function AdsSeloVeredito({v,isMob}){
+  const M={barato_confiavel:["confirmado",ADS.ok,ADS.okSoft],
+           caro_confiavel:["confirmado",ADS.crit,ADS.critSoft],
+           indicio:["indício",ADS.warn,ADS.warnSoft],
+           amostra_pequena:["amostra pequena",ADS.muted,ADS.surface2]};
+  const m=M[v]||M.indicio;
+  return <span style={{background:m[2],color:m[1],borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,
+    whiteSpace:"nowrap",letterSpacing:".02em"}}>{m[0]}</span>;
+}
+
+/* ── por que este corte custa o que custa ───────────────
+   Custo por resultado = CPC ÷ taxa de conversão. A conta é exata, então a
+   tela pode dizer ONDE dói sem estimar nada: se é o clique (leilão, criativo,
+   público disputado) ou o que acontece DEPOIS do clique (destino, oferta,
+   atendimento). Os dois fatores multiplicados dão exatamente a razão de custo. */
+function _adsPorQue(s){
+  const fc=Number(s.fator_clique), fv=Number(s.fator_conversao);
+  if(!isFinite(fc)||!isFinite(fv)) return null;
+  const caroC=fc>=1.15, baratoC=fc<=0.87, ruimV=fv>=1.15, bomV=fv<=0.87;
+  if(caroC&&ruimV)  return {t:"clique caro e converte pouco",a:"os dois lados estão contra: vale testar criativo novo e revisar o destino.",n:"c"};
+  if(baratoC&&bomV) return {t:"clique barato e converte bem",a:"é onde a verba rende — cabe testar subir.",n:"o"};
+  if(baratoC&&ruimV)return {t:"clique baratíssimo, quase ninguém fecha",a:"chama muita gente errada: o problema está depois do clique (destino, oferta, atendimento).",n:"c"};
+  if(caroC&&bomV)   return {t:"clique caro, mas quem clica fecha",a:"gente certa, tráfego caro: mexa no criativo e no leilão, não no destino.",n:"w"};
+  if(caroC)         return {t:"o clique é o que pesa",a:"criativo ou disputa de leilão — a conversão está em linha.",n:"w"};
+  if(ruimV)         return {t:"o que pesa é a conversão",a:"o clique está normal: o problema mora depois dele.",n:"w"};
+  if(baratoC)       return {t:"o clique sai barato",a:null,n:"o"};
+  if(bomV)          return {t:"converte acima da média",a:null,n:"o"};
+  return {t:"em linha com a conta",a:null,n:"n"};
+}
+
+/* ── uma linha de corte ──────────────────────────────── */
+function AdsLinhaCorte({s,dim,maxGasto,alerta,isMob}){
+  const bom=Number(s.excesso||0)<0;
+  const cor=bom?ADS.ok:ADS.crit;
+  return <div style={{padding:isMob?"11px 12px":"12px 14px",borderBottom:"1px solid "+ADS.line,minWidth:0}}>
+    <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",minWidth:0}}>
+      <span style={{fontSize:13.5,fontWeight:800,color:ADS.ink,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_adsCorteLbl(dim,s.valor)}</span>
+      <AdsSeloVeredito v={s.veredito}/>
+      <span style={{marginLeft:"auto",display:"flex",gap:isMob?10:16,alignItems:"baseline",flexWrap:"wrap"}}>
+        <span style={Object.assign({fontSize:15,fontWeight:900,color:ADS.ink},ADS_MONO)}>{s.custo?_adsBRLc(s.custo):"—"}</span>
+        <span style={Object.assign({fontSize:12.5,fontWeight:800,color:cor,whiteSpace:"nowrap"},ADS_MONO)}>
+          {bom?"economizou ":"pagou a mais "}{_adsBRL0(Math.abs(Number(s.excesso||0)))}</span>
+      </span>
+    </div>
+    <div style={{marginTop:7}}><AdsBarra pct={maxGasto>0?Number(s.gasto)/maxGasto*100:0} h={6} cor={bom?ADS.ok:ADS.accent} alt={.8}/></div>
+    <div style={{display:"flex",gap:isMob?9:14,flexWrap:"wrap",marginTop:6,fontSize:11.5,color:ADS.muted}}>
+      <span>{_adsBRL0(s.gasto)} · <b style={{color:ADS.ink2}}>{s.pct_verba}%</b> da verba</span>
+      <span><b style={{color:ADS.ink2}}>{_adsNum(s.resultados)}</b> resultado{Number(s.resultados)===1?"":"s"}</span>
+      <span>clique vira resultado: <b style={{color:ADS.ink2}}>{_adsPct(s.conversao,2)}</b> <span style={{color:ADS.line2}}>|</span> conta {_adsPct(s.conversao_conta,2)}</span>
+      {s.semanas_com_dado>0&&<span>abaixo da média em <b style={{color:ADS.ink2}}>{s.semanas_abaixo} de {s.semanas_com_dado}</b> semanas</span>}
+      {s.p_valor!==null&&s.p_valor!==undefined&&<span title="probabilidade de essa diferença de conversão ser só sorte">p = {Number(s.p_valor)<0.001?"<0,001":Number(s.p_valor).toLocaleString("pt-BR",{maximumFractionDigits:3})}</span>}
+    </div>
+    {(function(){ const q=_adsPorQue(s); if(!q) return null;
+      return <div style={{marginTop:7,display:"flex",gap:8,alignItems:"baseline",flexWrap:"wrap",fontSize:11.5,lineHeight:1.5}}>
+        <span style={{background:_adsBgCor(q.n),color:_adsCor(q.n),borderRadius:8,padding:"3px 8px",fontWeight:800,whiteSpace:"nowrap"}}>{q.t}</span>
+        <span style={{color:ADS.muted,minWidth:0}}>
+          clique <b style={Object.assign({color:ADS.ink2},ADS_MONO)}>{_adsBRL(s.cpc,3)}</b> ({Number(s.fator_clique).toLocaleString("pt-BR",{maximumFractionDigits:2})}× a conta)
+          {" · "}converte <b style={Object.assign({color:ADS.ink2},ADS_MONO)}>{_adsPct(s.conversao,2)}</b> ({Number(s.fator_conversao)>=1
+            ? Number(s.fator_conversao).toLocaleString("pt-BR",{maximumFractionDigits:2})+"× pior"
+            : (1/Number(s.fator_conversao)).toLocaleString("pt-BR",{maximumFractionDigits:2})+"× melhor"})
+        </span>
+        {q.a&&s.veredito!=="amostra_pequena"&&<span style={{color:ADS.ink2,minWidth:0,flexBasis:"100%"}}>→ {q.a}</span>}
+      </div>; })()}
+    {alerta&&<div style={{marginTop:9,background:ADS.warnSoft,border:"1px solid "+ADS.warn+"33",borderRadius:10,padding:"8px 11px",fontSize:12,color:ADS.ink2,lineHeight:1.5}}>
+      <b style={{color:ADS.warn}}>O cliente falou disso.</b> {alerta.texto}
+      <div style={{fontSize:11,color:ADS.muted,marginTop:3}}>{alerta.quando}</div>
+    </div>}
+  </div>;
+}
+
+function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
+  const {P}=useAdsPeriodo();
+  const C=useAdsCerebro(conta,P);
+  const [dim,setDim]=useState("idade_genero");
+  const [texto,setTexto]=useState("");
+  const [quem,setQuem]=useState("");
+  const [canal,setCanal]=useState("whatsapp");
+  const [quando,setQuando]=useState(function(){ return new Date().toISOString().slice(0,10); });
+  const [salvando,setSalvando]=useState("");
+  const [erro,setErro]=useState("");
+  const [pend,setPend]=useState([]);        /* fatos sugeridos, esperando conferência */
+  const [naoEntendi,setNaoEntendi]=useState([]);
+  const me=(currentUser&&currentUser.id)||(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"";
+
+  if(C.loading) return <AdsLoading t="Lendo o diagnóstico…"/>;
+  if(C.erro) return <AdsWrap><AdsCard style={{background:ADS.critSoft,color:ADS.crit,fontSize:13}}>Erro: {C.erro}</AdsCard></AdsWrap>;
+  const D=C.d||{};
+  const cab=D.conta||{};
+  const cortes=D.cortes||{};
+  const cer=D.cerebro||{};
+  const padroes=(cer.padroes||[]);
+  const DIMS=[["idade_genero","Idade e gênero"],["posicionamento","Onde aparece"],["dispositivo","Aparelho"],["hora","Hora do dia"]];
+  const lista=(cortes[dim]||[]).filter(function(s){ return Number(s.gasto||0)>0; });
+  const maxGasto=lista.reduce(function(m,s){ return Math.max(m,Number(s.gasto||0)); },0);
+  const certo=lista.filter(function(s){ return Number(s.excesso||0)<0 && s.veredito!=="amostra_pequena"; });
+  const errado=lista.filter(function(s){ return Number(s.excesso||0)>0 && s.veredito!=="amostra_pequena"; });
+  const pequenos=lista.filter(function(s){ return s.veredito==="amostra_pequena"; });
+  const somaCerto=certo.reduce(function(a,s){ return a+Number(s.excesso||0); },0);
+  const somaErrado=errado.reduce(function(a,s){ return a+Number(s.excesso||0); },0);
+
+  /* cruzamento: o padrão do cérebro toca este corte? Casa pelo texto, sem adivinhar. */
+  const alertaDe=function(s){
+    const alvo=(String(s.valor||"")+" "+_adsCorteLbl(dim,s.valor)).toLowerCase();
+    const p=padroes.filter(function(x){
+      if(Number(x.sinal)===0) return false;
+      const k=String(x.chave||"").trim().toLowerCase();
+      return k.length>=2 && alvo.indexOf(k)>=0;
+    })[0];
+    if(!p) return null;
+    return {texto:p.chave+" — "+((p.exemplos&&p.exemplos[0]&&p.exemplos[0].valor)||"")+" ("+p.notas+" vez"+(p.notas===1?"":"es")+")",
+            quando:"última vez há "+p.dias_sem_falar+" dia"+(p.dias_sem_falar===1?"":"s")+" · desde "+_adsFmtD(p.primeira)};
+  };
+
+  /* ── guardar a nota e deixar a IA ler ── */
+  const guardar=async function(){
+    const t=String(texto||"").trim();
+    if(!t||!canEdit||salvando) return;
+    setErro(""); setSalvando("gravando");
+    try{
+      const nota={client_id:conta.client_id,unidade:conta.unidade||null,ad_account_id:conta.ad_account_id,
+        texto:t,quem_falou:quem||null,canal:canal,falado_em:quando,escrito_por:me,ia_status:"pendente"};
+      const r=await window._sb.from("cerebro_notas").insert(nota).select().single();
+      if(r.error) throw new Error(r.error.message);
+      const id=r.data.id;
+      setTexto(""); setQuem("");
+      setSalvando("lendo");
+      let j=null,modelo="";
+      try{
+        const resp=await askClaude({model:(typeof PX_IA_MODELO!=="undefined"?PX_IA_MODELO:"claude-sonnet-5"),max_tokens:1600,
+          system:ADS_CER_PROMPT,
+          messages:[{role:"user",content:"Cliente: "+(conta.client_id||"")+(conta.unidade?" ("+conta.unidade+")":"")+
+            "\nData do relato: "+quando+"\n\nRelato:\n"+t}]});
+        modelo=(resp&&resp._modelo_usado)||"";
+        const bruto=((resp&&resp.content)||[]).map(function(b){ return b.text||""; }).join("");
+        const m=bruto.match(/\{[\s\S]*\}/);
+        j=JSON.parse(m?m[0]:bruto);
+      }catch(e){
+        await window._sb.from("cerebro_notas").update({ia_status:"erro",ia_erro:String(e&&e.message||e),ia_em:new Date().toISOString()}).eq("id",id);
+        setErro("A nota foi guardada, mas a IA não conseguiu ler: "+(e&&e.message||e)+". Dá pra mandar ler de novo depois.");
+        setSalvando(""); C.recarregar(); return;
+      }
+      const fatos=(j&&Array.isArray(j.fatos)?j.fatos:[]).filter(function(f){ return f&&f.valor; }).map(function(f){
+        return {nota_id:id,client_id:conta.client_id,unidade:conta.unidade||null,ad_account_id:conta.ad_account_id,
+          falado_em:quando,tipo:(ADS_CER_TIPOS[f.tipo]?f.tipo:"outro"),chave:f.chave||null,valor:String(f.valor).slice(0,400),
+          sinal:(f.sinal===1||f.sinal===-1)?f.sinal:0,
+          numero:(typeof f.numero==="number"&&isFinite(f.numero))?f.numero:null,
+          unidade_num:f.unidade_num||null,trecho:f.trecho?String(f.trecho).slice(0,600):null,
+          confianca:(typeof f.confianca==="number"&&f.confianca>=0&&f.confianca<=1)?f.confianca:null,
+          status:"sugerido"};
+      });
+      if(fatos.length){
+        const g=await window._sb.from("cerebro_fatos").insert(fatos).select();
+        if(g.error) throw new Error(g.error.message);
+        setPend(g.data||[]);
+      }else{ setPend([]); }
+      setNaoEntendi(Array.isArray(j&&j.nao_entendi)?j.nao_entendi:[]);
+      await window._sb.from("cerebro_notas").update({ia_status:"extraido",ia_modelo:modelo,ia_em:new Date().toISOString(),
+        periodo_ini:(j&&j.periodo_ini)||null,periodo_fim:(j&&j.periodo_fim)||null,
+        quem_falou:(quem||(j&&j.quem_falou))||null}).eq("id",id);
+      setSalvando(""); C.recarregar();
+    }catch(e){ setErro(String(e&&e.message||e)); setSalvando(""); }
+  };
+
+  const decidir=async function(f,ok){
+    if(!canEdit) return;
+    const r=await window._sb.from("cerebro_fatos")
+      .update({status:ok?"confirmado":"rejeitado",revisado_por:me,revisado_em:new Date().toISOString()}).eq("id",f.id);
+    if(r.error){ setErro(r.error.message); return; }
+    setPend(function(p){ return p.filter(function(x){ return x.id!==f.id; }); });
+    C.recarregar();
+  };
+
+  const Bloco=function(props){
+    if(!props.itens.length) return null;
+    return <AdsCard style={{padding:0,overflow:"hidden",marginBottom:14}}>
+      <div style={{padding:isMob?"13px 12px":"14px 16px",borderBottom:"1px solid "+ADS.line,display:"flex",
+        alignItems:"baseline",gap:10,flexWrap:"wrap",background:props.bg||"transparent"}}>
+        <span style={{fontSize:13.5,fontWeight:900,color:props.cor}}>{props.t}</span>
+        <span style={{fontSize:12,color:ADS.muted}}>{props.s}</span>
+        {props.soma!==undefined&&<span style={Object.assign({marginLeft:"auto",fontSize:16,fontWeight:900,color:props.cor},ADS_MONO)}>
+          {_adsBRL0(Math.abs(props.soma))}</span>}
+      </div>
+      {props.itens.map(function(s){ return <AdsLinhaCorte key={s.valor} s={s} dim={dim} maxGasto={maxGasto} alerta={alertaDe(s)} isMob={isMob}/>; })}
+    </AdsCard>;
+  };
+
+  return <AdsWrap>
+    {/* ── o que o cliente falou ─────────────────────────── */}
+    <AdsSec t="O que o cliente falou" s="escreva do seu jeito — a IA separa os fatos e você confere. O texto original nunca é apagado.">
+      <AdsCard style={{padding:isMob?"14px":"16px 18px"}}>
+        <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} rows={isMob?5:4}
+          disabled={!canEdit||!!salvando}
+          placeholder={"Ex.: Falei com o "+(conta.client_id==="bioter"?"Cleiton":"cliente")+" hoje. Semana passada veio muita gente só perguntando preço e sumindo. Fecharam 2 biodigestores, um veio daquele vídeo do produtor rural. Reclamou que o pessoal de Caçador não responde."}
+          style={{width:"100%",boxSizing:"border-box",border:"1px solid "+ADS.line,borderRadius:12,padding:"12px 13px",
+            fontSize:13.5,lineHeight:1.55,fontFamily:"inherit",color:ADS.ink,resize:"vertical",outline:"none",background:salvando?ADS.surface2:"#fff"}}/>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginTop:10}}>
+          <input value={quem} onChange={function(e){ setQuem(e.target.value); }} placeholder="quem falou" disabled={!canEdit||!!salvando}
+            style={{border:"1px solid "+ADS.line,borderRadius:10,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",width:isMob?"100%":150,minHeight:0}}/>
+          <select value={canal} onChange={function(e){ setCanal(e.target.value); }} disabled={!canEdit||!!salvando}
+            style={{border:"1px solid "+ADS.line,borderRadius:10,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",background:"#fff",minHeight:0}}>
+            {ADS_CER_CANAIS.map(function(c){ return <option key={c[0]} value={c[0]}>{c[1]}</option>; })}
+          </select>
+          <input type="date" value={quando} onChange={function(e){ setQuando(e.target.value); }} disabled={!canEdit||!!salvando}
+            style={{border:"1px solid "+ADS.line,borderRadius:10,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",minHeight:0}}/>
+          <button onClick={guardar} disabled={!canEdit||!!salvando||!String(texto).trim()}
+            style={{marginLeft:isMob?0:"auto",border:0,borderRadius:11,padding:"9px 16px",fontSize:13,fontWeight:800,fontFamily:"inherit",
+              background:(!canEdit||!!salvando||!String(texto).trim())?ADS.line2:ADS.accent,color:"#fff",
+              cursor:(!canEdit||!!salvando||!String(texto).trim())?"default":"pointer",minHeight:0}}>
+            {salvando==="gravando"?"Guardando…":salvando==="lendo"?"A IA está lendo…":"Guardar e deixar a IA ler"}</button>
+        </div>
+        {!canEdit&&<div style={{fontSize:12,color:ADS.muted,marginTop:8}}>Só quem edita a conta pode registrar.</div>}
+        {erro&&<div style={{marginTop:10,background:ADS.critSoft,color:ADS.crit,borderRadius:10,padding:"9px 12px",fontSize:12.5}}>{erro}</div>}
+      </AdsCard>
+
+      {/* conferência dos fatos que a IA acabou de tirar */}
+      {pend.length>0&&<AdsCard style={{marginTop:12,padding:0,overflow:"hidden",border:"1px solid "+ADS.accent+"3d"}}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid "+ADS.line,background:ADS.accentSoft,fontSize:13,fontWeight:800,color:ADS.accent}}>
+          A IA entendeu isso. Confere?</div>
+        {pend.map(function(f){
+          const cor=f.sinal===1?ADS.ok:f.sinal===-1?ADS.crit:ADS.muted;
+          return <div key={f.id} style={{padding:"12px 16px",borderBottom:"1px solid "+ADS.line,display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+            <div style={{minWidth:0,flex:"1 1 240px"}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{background:ADS.surface2,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800,color:ADS.ink2}}>{ADS_CER_TIPOS[f.tipo]||f.tipo}</span>
+                {f.chave&&<b style={{fontSize:13,color:ADS.ink}}>{f.chave}</b>}
+                <span style={{color:cor,fontWeight:900,fontSize:13}}>{f.sinal===1?"+":f.sinal===-1?"−":"•"}</span>
+                {f.numero!==null&&f.numero!==undefined&&<span style={Object.assign({fontSize:12.5,fontWeight:800,color:ADS.ink2},ADS_MONO)}>
+                  {f.unidade_num==="reais"?_adsBRL0(f.numero):_adsNum(f.numero)}{f.unidade_num&&f.unidade_num!=="reais"?" "+f.unidade_num:""}</span>}
+              </div>
+              <div style={{fontSize:13,color:ADS.ink2,marginTop:4,lineHeight:1.5}}>{f.valor}</div>
+              {f.trecho&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:4,fontStyle:"italic",lineHeight:1.5}}>“{f.trecho}”</div>}
+            </div>
+            <div style={{display:"flex",gap:6,marginLeft:isMob?0:"auto"}}>
+              <button onClick={function(){ decidir(f,true); }} style={{border:"1px solid "+ADS.ok+"55",background:ADS.okSoft,color:ADS.ok,
+                borderRadius:10,padding:"7px 13px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",minHeight:0}}>✓ é isso</button>
+              <button onClick={function(){ decidir(f,false); }} style={{border:"1px solid "+ADS.line,background:"#fff",color:ADS.muted,
+                borderRadius:10,padding:"7px 13px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",minHeight:0}}>✕ não</button>
+            </div>
+          </div>; })}
+        {naoEntendi.length>0&&<div style={{padding:"11px 16px",fontSize:12,color:ADS.muted,lineHeight:1.55}}>
+          <b style={{color:ADS.ink2}}>Ela não entendeu:</b> {naoEntendi.join(" · ")} — preferi deixar de fora a chutar.</div>}
+      </AdsCard>}
+
+      {/* o que se repete */}
+      {padroes.length>0&&<AdsCard style={{marginTop:12,padding:0,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid "+ADS.line,fontSize:13,fontWeight:800,color:ADS.ink}}>
+          O que se repete neste cliente
+          <span style={{fontWeight:500,color:ADS.muted,fontSize:12}}> · só entra o que foi dito em duas conversas ou mais</span></div>
+        {padroes.map(function(p,i){
+          const cor=p.sinal===1?ADS.ok:p.sinal===-1?ADS.crit:ADS.muted;
+          const velho=p.dias_sem_falar>60;
+          return <div key={i} style={{padding:"11px 16px",borderBottom:i===padroes.length-1?"none":"1px solid "+ADS.line,opacity:velho?.55:1}}>
+            <div style={{display:"flex",gap:9,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{width:7,height:7,borderRadius:99,background:cor,flexShrink:0}}/>
+              <b style={{fontSize:13,color:ADS.ink}}>{p.chave}</b>
+              <span style={{background:ADS.surface2,borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,color:ADS.ink2}}>{ADS_CER_TIPOS[p.tipo]||p.tipo}</span>
+              <span style={{fontSize:12,color:ADS.muted}}>{p.notas} conversa{p.notas===1?"":"s"}</span>
+              {p.soma!==null&&p.soma!==undefined&&<span style={Object.assign({fontSize:12,fontWeight:800,color:ADS.ink2},ADS_MONO)}>soma {_adsNum(p.soma)}</span>}
+              <span style={{marginLeft:isMob?0:"auto",fontSize:11.5,color:velho?ADS.warn:ADS.muted}}>
+                {p.dias_sem_falar===0?"falaram hoje":"última vez há "+p.dias_sem_falar+" dia"+(p.dias_sem_falar===1?"":"s")}</span>
+            </div>
+            {p.exemplos&&p.exemplos[0]&&p.exemplos[0].trecho&&
+              <div style={{fontSize:11.5,color:ADS.muted,marginTop:4,fontStyle:"italic"}}>“{p.exemplos[0].trecho}”</div>}
+          </div>; })}
+      </AdsCard>}
+
+      {Number(cer.notas||0)===0&&<AdsCard style={{marginTop:12,background:ADS.surface2,border:"1px dashed "+ADS.line2,fontSize:12.5,color:ADS.ink2,lineHeight:1.6}}>
+        Ninguém registrou nada deste cliente ainda. Sem isso, a tela abaixo é <b>metade da história</b>: a Meta conta
+        quantas conversas começaram, não quantas viraram venda. Um parágrafo por semana já muda a leitura.
+      </AdsCard>}
+    </AdsSec>
+
+    {/* ── o que a Meta mediu ────────────────────────────── */}
+    <AdsSec t="Onde está a verba" s={_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)+" · "+_adsBRL0(cab.gasto)+" na conta"}
+      right={<div style={{display:"inline-flex",background:ADS.surface2,borderRadius:99,padding:3,gap:2,flexWrap:"wrap"}}>
+        {DIMS.map(function(d){ const on=d[0]===dim;
+          return <button key={d[0]} onClick={function(){ setDim(d[0]); }} style={{border:0,background:on?"#fff":"transparent",
+            color:on?ADS.ink:ADS.muted,borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",
+            whiteSpace:"nowrap",fontFamily:"inherit",minHeight:0,boxShadow:on?"0 1px 3px rgba(15,13,26,.13)":"none"}}>{d[1]}</button>; })}
+      </div>}>
+
+      {lista.length===0
+        ? <AdsCard style={{fontSize:12.5,color:ADS.muted}}>A Meta não devolveu esse corte para esta conta no período.</AdsCard>
+        : <>
+          <Bloco t="Verba no lugar certo" s="custa menos que a média e a amostra aguenta a conclusão"
+            cor={ADS.ok} bg={ADS.okSoft} itens={certo} soma={somaCerto}/>
+          <Bloco t="Verba no lugar errado" s="custa mais que a média — isto é o que você pagou a mais"
+            cor={ADS.crit} bg={ADS.critSoft} itens={errado} soma={somaErrado}/>
+          {pequenos.length>0&&<AdsCard style={{padding:0,overflow:"hidden",marginBottom:14}}>
+            <div style={{padding:"13px 16px",borderBottom:"1px solid "+ADS.line,fontSize:13.5,fontWeight:900,color:ADS.muted}}>
+              Ainda não dá pra dizer
+              <span style={{fontWeight:500,fontSize:12}}> · menos de 10 resultados no período — o número existe, a conclusão não</span></div>
+            {pequenos.map(function(s){ return <AdsLinhaCorte key={s.valor} s={s} dim={dim} maxGasto={maxGasto} alerta={alertaDe(s)} isMob={isMob}/>; })}
+          </AdsCard>}
+        </>}
+
+      <AdsCard style={{background:ADS.surface2,border:"none",fontSize:11.5,color:ADS.muted,lineHeight:1.65}}>
+        <b style={{color:ADS.ink2}}>Como a tela julgou.</b> “Pagou a mais” é o gasto do corte menos o que aqueles mesmos
+        resultados custariam no preço médio da conta. <b style={{color:ADS.ink2}}>Confirmado</b> só aparece quando a diferença
+        de conversão passa no teste estatístico (p &lt; 0,05 contra o resto da conta) <i>ou</i> quando o corte repetiu o
+        comportamento em pelo menos 3 de 4 semanas. Abaixo de 10 resultados nada é confirmado.
+        Idade e gênero são <b style={{color:ADS.ink2}}>estimados pela Meta</b>, não declarados. Mover verba não garante o
+        mesmo preço: público pequeno satura — trate como teste, não como promessa.
+      </AdsCard>
     </AdsSec>
   </AdsWrap>;
 }
