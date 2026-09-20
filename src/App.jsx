@@ -59493,42 +59493,103 @@ function useAdsRpcAnuncio(rpc,accountId,adId,P){
   return d;
 }
 
-/* curva de retenção: onde a audiência despenca */
+/* frase de conclusão: o que o dado quer dizer, antes dos números que provam */
+function AdsFrase({texto,detalhe,cor}){
+  if(!texto) return null;
+  return <div style={{marginBottom:20}}>
+    <div style={{fontSize:16.5,fontWeight:800,color:cor||ADS.ink,letterSpacing:"-.2px",lineHeight:1.4,wordBreak:"break-word"}}>{texto}</div>
+    {detalhe&&<div style={{fontSize:12.5,color:ADS.muted,marginTop:6,lineHeight:1.5}}>{detalhe}</div>}
+  </div>;
+}
+
+/* curva de retenção — passa o mouse e ela conta o que aconteceu naquele segundo.
+   Regra: o gráfico nunca é a ÚNICA forma de ler o número; a frase acima e as
+   caixinhas abaixo trazem o mesmo dado sem precisar de mouse. */
 function AdsCurvaVideo({v}){
   const curva=(v&&Array.isArray(v.curva))?v.curva.map(function(x){ return Number(x)||0; }):[];
+  const [ptr,setPtr]=useState(null);
+  const caixaRef=useRef(null);
   if(curva.length<3) return null;
-  const W=560,H=150,PB=22;
+
+  const W=560,H=170,PB=26,PT=10;
   const n=curva.length;
   const px=function(i){ return n<=1?0:(i/(n-1))*W; };
-  const py=function(y){ return H-PB-(Math.max(0,Math.min(100,y))/100)*(H-PB-8); };
+  const py=function(y){ return H-PB-(Math.max(0,Math.min(100,y))/100)*(H-PB-PT); };
   const linha=curva.map(function(y,i){ return (i?"L":"M")+px(i).toFixed(1)+" "+py(y).toFixed(1); }).join(" ");
   const area=linha+" L"+W+" "+(H-PB)+" L0 "+(H-PB)+" Z";
+
   /* a maior queda entre um segundo e o seguinte: é ali que o criativo perde a pessoa */
   let iq=1,q=0;
   for(let i=1;i<n;i++){ const d=curva[i-1]-curva[i]; if(d>q){ q=d; iq=i; } }
   const meio=(function(){ for(let i=0;i<n;i++) if(curva[i]<=50) return i; return null; })();
+
+  /* o ponteiro encosta em qualquer lugar e a gente acha o segundo mais perto */
+  const mover=function(e){
+    const el=caixaRef.current; if(!el) return;
+    const r=el.getBoundingClientRect();
+    const x=(e.clientX!==undefined?e.clientX:0)-r.left;
+    const i=Math.max(0,Math.min(n-1,Math.round((x/Math.max(r.width,1))*(n-1))));
+    setPtr({i:i,esq:(i/(n-1))*100});
+  };
+  const sair=function(){ setPtr(null); };
+  const teclado=function(e){
+    if(e.key!=="ArrowRight"&&e.key!=="ArrowLeft") return;
+    e.preventDefault();
+    const at=ptr?ptr.i:0;
+    const i=Math.max(0,Math.min(n-1,at+(e.key==="ArrowRight"?1:-1)));
+    setPtr({i:i,esq:(i/(n-1))*100});
+  };
+  const sel=ptr?curva[ptr.i]:null;
+  const perdaAte=ptr?Math.round(100-curva[ptr.i]):null;
+
   return <div>
-    <div style={{width:"100%",overflow:"hidden"}}>
-      <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{width:"100%",height:150,display:"block"}}>
+    <div ref={caixaRef} tabIndex={0} onMouseMove={mover} onMouseLeave={sair}
+      onTouchStart={function(e){ if(e.touches&&e.touches[0]) mover(e.touches[0]); }}
+      onTouchMove={function(e){ if(e.touches&&e.touches[0]) mover(e.touches[0]); }}
+      onKeyDown={teclado}
+      style={{position:"relative",width:"100%",overflow:"hidden",cursor:"crosshair",outline:"none",borderRadius:10}}>
+
+      <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{width:"100%",height:170,display:"block"}}>
         <defs><linearGradient id="adsCurvaG" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={ADS.accent} stopOpacity=".28"/>
+          <stop offset="0%" stopColor={ADS.accent} stopOpacity=".26"/>
           <stop offset="100%" stopColor={ADS.accent} stopOpacity="0"/>
         </linearGradient></defs>
-        {[25,50,75].map(function(g){ return <line key={g} x1="0" x2={W} y1={py(g)} y2={py(g)} stroke={ADS.line} strokeWidth="1"/>; })}
+        {[25,50,75,100].map(function(g){ return <line key={g} x1="0" x2={W} y1={py(g)} y2={py(g)} stroke={ADS.line} strokeWidth="1"/>; })}
         <path d={area} fill="url(#adsCurvaG)"/>
-        <path d={linha} fill="none" stroke={ADS.accent} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
-        {q>=8&&<line x1={px(iq)} x2={px(iq)} y1={py(curva[iq])} y2={H-PB} stroke={ADS.crit} strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>}
-        {q>=8&&<circle cx={px(iq)} cy={py(curva[iq])} r="3.5" fill={ADS.crit}/>}
+        <path d={linha} fill="none" stroke={ADS.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+        {q>=8&&ptr===null&&<>
+          <line x1={px(iq)} x2={px(iq)} y1={py(curva[iq])} y2={H-PB} stroke={ADS.crit} strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>
+          <circle cx={px(iq)} cy={py(curva[iq])} r="3.5" fill={ADS.crit}/>
+        </>}
+        {ptr&&<>
+          <line x1={px(ptr.i)} x2={px(ptr.i)} y1={PT} y2={H-PB} stroke={ADS.ink2} strokeWidth="1" vectorEffect="non-scaling-stroke"/>
+          <circle cx={px(ptr.i)} cy={py(curva[ptr.i])} r="4.5" fill="#fff" stroke={ADS.accent} strokeWidth="2.5" vectorEffect="non-scaling-stroke"/>
+        </>}
       </svg>
+
+      {/* eixo do tempo, sempre visível — o número não depende do mouse */}
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,padding:"0 2px",marginTop:-18}}>
+        <span>0s</span><span>{Math.round((n-1)/2)}s</span><span>{(n-1)}s</span>
+      </div>
+
+      {/* o balão foge do ponteiro: se está na esquerda, ele vai pra direita.
+          Senão cobriria justo a queda do começo, que é o que interessa. */}
+      {ptr&&<div style={{position:"absolute",top:6,
+        left:ptr.esq<50?"auto":6, right:ptr.esq<50?6:"auto",
+        width:148,background:"#fff",border:"1px solid "+ADS.line,borderRadius:10,padding:"8px 10px",
+        boxShadow:"0 6px 20px rgba(15,13,26,.14)",pointerEvents:"none",zIndex:3}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <b style={Object.assign({fontSize:17,fontWeight:900,color:ADS.ink},ADS_MONO)}>{Math.round(sel)}%</b>
+          <span style={{fontSize:11,color:ADS.muted}}>ainda assistindo</span>
+        </div>
+        <div style={{fontSize:11,color:ADS.ink2,marginTop:3}}>no segundo <b>{ptr.i}</b></div>
+        {perdaAte>0&&<div style={{fontSize:11,color:ADS.muted,marginTop:2}}>{perdaAte}% já tinham saído</div>}
+      </div>}
     </div>
-    <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,marginTop:-14,marginBottom:14}}>
-      <span>0s</span><span>{(n-1)}s</span>
-    </div>
-    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.55}}>
-      {q>=8
-        ? <>A maior queda é do segundo <b>{iq-1}</b> para o <b>{iq}</b>: perde <b style={{color:ADS.crit}}>{Math.round(q)}%</b> de quem estava assistindo.</>
-        : <>A audiência cai de forma parelha, sem um ponto de abandono claro.</>}
-      {meio!==null&&<span style={{color:ADS.muted}}> Metade já saiu no segundo <b style={{color:ADS.ink2}}>{meio}</b>.</span>}
+
+    <div style={{fontSize:12,color:ADS.muted,marginTop:10,lineHeight:1.5}}>
+      {meio!==null&&<>Metade da audiência já tinha saído no segundo <b style={{color:ADS.ink2}}>{meio}</b>. </>}
+      Passe o mouse no gráfico para ver segundo a segundo.
     </div>
   </div>;
 }
@@ -59942,14 +60003,32 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   const temTextos=!!(Tx&&Tx.length);
   const temConversa=!!(Cv&&Number(Cv.iniciadas||0)>0);
   const isMobLb=typeof window!=="undefined"&&window.innerWidth<820;
+  /* 20/09: eram 9 abas em duas linhas, todas com o mesmo peso. Viraram 5 grupos
+     com sub-navegação dentro — nenhuma informação saiu de lugar nenhum. */
+  const SUB={
+    criativo:  [].concat(temVideo?[["video","Vídeo"]]:[]).concat(temTextos?[["textos","Textos"]]:[]),
+    publico:   [["quemviu","Quem viu"],["hora","Quando"]],
+    resultado: [].concat(temConversa?[["conversa","Conversa"]]:[]).concat(temPessoas?[["pessoas","Pessoas"]]:[]),
+    contexto:  [].concat(temContexto?[["ctx","Configuração"]]:[]).concat([["campanhas","Onde roda"]]),
+  };
   const ABAS=[["resumo","Resumo"]]
-    .concat(temVideo?[["video","Vídeo"]]:[])
+    .concat(SUB.criativo.length?[["criativo","Criativo"]]:[])
     .concat([["publico","Público"]])
-    .concat(temTextos?[["textos","Textos"]]:[])
-    .concat(temConversa?[["conversa","Conversa"]]:[])
-    .concat(temPessoas?[["pessoas","Pessoas"]]:[])
-    .concat([["hora","Horário"],["campanhas","Campanhas"]])
-    .concat(temContexto?[["contexto","Contexto"]]:[]);
+    .concat(SUB.resultado.length?[["resultado","Resultado"]]:[])
+    .concat(SUB.contexto.length?[["contexto","Contexto"]]:[]);
+  const [subLb,setSubLb]=useState({});
+  const subAtual=function(g){ const l=SUB[g]||[]; return subLb[g]||(l[0]&&l[0][0])||""; };
+  const BarraSub=function(props){
+    const lista=SUB[props.g]||[];
+    if(lista.length<2) return null;
+    return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:20}}>
+      {lista.map(function(s){ const on=s[0]===subAtual(props.g);
+        return <button key={s[0]} onClick={function(){ const c=Object.assign({},subLb); c[props.g]=s[0]; setSubLb(c); }}
+          style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent+"14":"#fff",
+            color:on?ADS.accent:ADS.ink2,borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,
+            cursor:"pointer",whiteSpace:"nowrap",minHeight:0,fontFamily:"inherit"}}>{s[1]}</button>; })}
+    </div>;
+  };
   const DIMS_LB=[["idade","Faixa etária"],["genero","Gênero"],["regiao","Região"],["dispositivo","Dispositivo"],["posicionamento","Posicionamento"]];
   const [dimLb,setDimLb]=useState("idade");
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
@@ -60047,21 +60126,19 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
               : <div style={{marginTop:26}}><AdsAtivosGrade cr={cr} sel={ativoSel} onSel={setAtivoSel}/></div>}
           </div>}
 
-          {abaLb==="publico"&&<div>
-            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>:<>
-              <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
-                {DIMS_LB.map(function(d){ const on=d[0]===dimLb; const tem=(Qa||[]).some(function(x){ return x.dimensao===d[0]&&Number(x.gasto||0)>0; });
-                  return <button key={d[0]} onClick={function(){ setDimLb(d[0]); }} disabled={!tem} style={{border:"1px solid "+(on?ADS.accent:ADS.line),
-                    background:on?ADS.accent+"14":"#fff",color:!tem?"#b9b3c9":(on?ADS.accent:ADS.ink2),borderRadius:99,padding:"6px 12px",
-                    fontSize:12,fontWeight:on?800:600,cursor:tem?"pointer":"default",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{d[1]}</button>; })}
-              </div>
-              <div style={{marginTop:20}}>
-                <AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>
-              </div>
-            </>}
-          </div>}
-
-          {abaLb==="video"&&<div>
+          {abaLb==="criativo"&&<div>
+            <BarraSub g="criativo"/>
+            {subAtual("criativo")==="video"&&<div>
+            {(function(){
+              const c=(Vd&&Array.isArray(Vd.curva))?Vd.curva.map(Number):[];
+              if(c.length<3) return null;
+              let iq=1,q=0; for(let i=1;i<c.length;i++){ const d=c[i-1]-c[i]; if(d>q){ q=d; iq=i; } }
+              const tm=Vd.tempo_medio!=null?Number(Vd.tempo_medio):null;
+              const ruim=q>=35||(tm!==null&&tm<=3);
+              return <AdsFrase cor={ruim?ADS.crit:ADS.ink}
+                texto={q>=8?("Perde "+Math.round(q)+"% da audiência entre o segundo "+(iq-1)+" e o "+iq+"."):"A audiência cai de forma parelha, sem ponto de abandono claro."}
+                detalhe={(tm!==null?("Quem assiste fica "+tm+"s em média. "):"")+(ruim?"A abertura não está segurando — é onde mexer primeiro.":"O gancho está funcionando.")}/>;
+            })()}
             <AdsBlocoT primeiro t="Curva de retenção" s="quantos ainda estavam assistindo a cada segundo"/>
             <AdsCurvaVideo v={Vd}/>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:"16px 18px",marginTop:24,paddingTop:20,borderTop:"1px solid "+ADS.line}}>
@@ -60080,28 +60157,75 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
               })()}
             </div>
           </div>}
-
-          {abaLb==="textos"&&<div>
+            {subAtual("criativo")==="textos"&&<div>
+            {(function(){
+              const com=(Tx||[]).map(function(x){ const r=Number(x.resultados||0); return {r:r,cpa:r>0?Number(x.gasto)/r:null}; })
+                .filter(function(x){ return x.cpa; }).sort(function(p,q){ return p.cpa-q.cpa; });
+              if(com.length<2) return <AdsFrase texto="Uma variação de texto só neste anúncio." detalhe="Com duas ou mais, dá pra comparar qual puxa o resultado."/>;
+              const d=com[com.length-1].cpa/com[0].cpa;
+              return <AdsFrase texto={"A melhor variação custa "+_adsBRLc(com[0].cpa)+" e a pior "+_adsBRLc(com[com.length-1].cpa)+"."}
+                detalhe={d>=1.5?("Diferença de "+d.toFixed(1)+"× entre elas — vale pausar a pior."):"As variações estão rendendo parecido."}/>;
+            })()}
             <AdsTextosAsset linhas={Tx} cfg={a.cfg}/>
           </div>}
-
-          {abaLb==="conversa"&&<div>
-            <AdsBlocoT primeiro t="Profundidade da conversa" s="quantas foram pra frente, não só quantas começaram"/>
-            <AdsFunilConversa c={Cv}/>
           </div>}
 
-          {abaLb==="pessoas"&&<div><AdsPessoas p={Ps} cfg={a.cfg}/></div>}
-
-          {abaLb==="contexto"&&<div><AdsContexto c={Cx}/></div>}
-
-          {abaLb==="hora"&&<div>
+          {abaLb==="publico"&&<div>
+            <BarraSub g="publico"/>
+            {subAtual("publico")==="quemviu"&&<div>
+            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>:<>
+              <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
+                {DIMS_LB.map(function(d){ const on=d[0]===dimLb; const tem=(Qa||[]).some(function(x){ return x.dimensao===d[0]&&Number(x.gasto||0)>0; });
+                  return <button key={d[0]} onClick={function(){ setDimLb(d[0]); }} disabled={!tem} style={{border:"1px solid "+(on?ADS.accent:ADS.line),
+                    background:on?ADS.accent+"14":"#fff",color:!tem?"#b9b3c9":(on?ADS.accent:ADS.ink2),borderRadius:99,padding:"6px 12px",
+                    fontSize:12,fontWeight:on?800:600,cursor:tem?"pointer":"default",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{d[1]}</button>; })}
+              </div>
+              <div style={{marginTop:20}}>
+                <AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>
+              </div>
+            </>}
+          </div>}
+            {subAtual("publico")==="hora"&&<div>
             {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo horários…</div>
               :<><AdsBlocoT primeiro t="Hora do dia" s="quando este criativo entregou e converteu"/><AdsHorario q={Qa}/></>}
           </div>}
+          </div>}
 
-          {abaLb==="campanhas"&&<div>
+          {abaLb==="resultado"&&<div>
+            <BarraSub g="resultado"/>
+            {subAtual("resultado")==="conversa"&&<div>
+            {(function(){
+              if(!Cv) return null;
+              const ini=Number(Cv.iniciadas||0), resp=Number(Cv.responderam||0), seg=Number(Cv.chegaram_2a||0);
+              if(!ini) return null;
+              const pr=Math.round(resp/ini*100), ps=Math.round(seg/ini*100);
+              return <AdsFrase cor={pr<50?ADS.crit:ADS.ink}
+                texto={"De "+_adsNum(ini)+" conversas, "+_adsNum(resp)+" tiveram resposta ("+pr+"%)."}
+                detalhe={seg>0?(_adsNum(seg)+" foram além da primeira troca — "+ps+"% do total. É esse número que vira cliente, não o primeiro."):"Nenhuma passou da primeira mensagem."}/>;
+            })()}
+            <AdsBlocoT primeiro t="Profundidade da conversa" s="quantas foram pra frente, não só quantas começaram"/>
+            <AdsFunilConversa c={Cv}/>
+          </div>}
+            {subAtual("resultado")==="pessoas"&&<div>
+              {(function(){
+                if(!Ps) return null;
+                const t=Number(Ps.cliques||0), pe=Number(Ps.cliques_pessoas||0);
+                if(!t||!pe) return null;
+                const rep=t-pe;
+                return <AdsFrase texto={_adsNum(t)+" cliques foram "+_adsNum(pe)+" pessoas."}
+                  detalhe={rep>0?(_adsNum(rep)+" cliques foram repetição da mesma pessoa. O custo por pessoa é "+(Ps.custo_por_pessoa!=null?_adsBRLc(Ps.custo_por_pessoa):"—")+", não o custo por clique."):"Cada clique foi uma pessoa diferente."}/>;
+              })()}
+              <AdsPessoas p={Ps} cfg={a.cfg}/>
+            </div>}
+          </div>}
+
+          {abaLb==="contexto"&&<div>
+            <BarraSub g="contexto"/>
+            {subAtual("contexto")==="ctx"&&<div><AdsContexto c={Cx}/></div>}
+            {subAtual("contexto")==="campanhas"&&<div>
             <AdsBlocoT primeiro t="Onde este criativo roda" s="a mesma peça em campanhas diferentes"/>
             <AdsOndeRoda a={a} todos={todos} cfg={a.cfg}/>
+          </div>}
           </div>}
 
         </div>
