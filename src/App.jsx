@@ -55511,7 +55511,27 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
       case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
-      case "gestaoredes":          return _menuBloco("social.menu",effectivePerms)?(typeof PageGestaoRedes==="function"?<PageGestaoRedes {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} perms={effectivePerms}/>:<NoPerm/>):<NoPerm/>;
+      // Se PageGestaoRedes não existe, o problema NÃO é permissão: é que o
+      // 17d_gestao_social.jsx não entrou na lista do juntar.py e ficou fora do
+      // App.jsx. Mostrar "Sem acesso" aqui mandaria a gente caçar no lugar errado.
+      case "gestaoredes":          return _menuBloco("social.menu",effectivePerms)
+        ? (typeof PageGestaoRedes==="function"
+            ? <PageGestaoRedes {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} perms={effectivePerms}/>
+            : <div style={{maxWidth:620,margin:"48px auto",background:"#fff",border:"1px solid #e5e9f0",borderRadius:18,padding:"26px 28px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+                <div style={{fontSize:16,fontWeight:900,color:"#0f172a",letterSpacing:-.3}}>A tela não foi montada no App.jsx</div>
+                <div style={{fontSize:13,color:"#475569",lineHeight:1.6,marginTop:10}}>
+                  Isso não é falta de permissão — você tem acesso. O que falta é o arquivo
+                  <b style={{color:"#0f172a"}}> 17d_gestao_social.jsx</b> na lista ordenada do
+                  <b style={{color:"#0f172a"}}> juntar.py</b>. Ele não varre a pasta: se o módulo não estiver
+                  escrito na lista, o <span style={{fontFamily:"monospace"}}>validar.js</span> aprova, o deploy sobe, e a tela some sem erro nenhum.
+                </div>
+                <div style={{fontSize:12.5,color:"#475569",lineHeight:1.6,marginTop:12}}>
+                  Correção: colocar <span style={{fontFamily:"monospace"}}>17d_gestao_social.jsx</span> na lista do
+                  <span style={{fontFamily:"monospace"}}> juntar.py</span> (logo depois do <span style={{fontFamily:"monospace"}}>17c_qg_ads.jsx</span>),
+                  rodar o juntar e subir de novo.
+                </div>
+              </div>)
+        : <NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>; // "ver como" fiel (18/09/2026)
       case "analises":
       case "gestao":
