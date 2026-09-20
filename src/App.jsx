@@ -1771,6 +1771,19 @@ PX_BLOCOS.midia={label:"Gestão de mídia", navIcon:"gestaomidia", color:"#9F43F
     {key:"midia.cerebro",      label:"Registrar o que o cliente falou", desc:"O campo de texto do Diagnóstico"},
   ]},
 ]};
+PX_BLOCOS.social={label:"Gestão de redes", navIcon:"gestaoredes", color:"#E4405F", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"social.menu", label:"Acessar Gestão de redes",
+      desc:"Padrão: sócio, quem cuida de social, coordenação e gestor de mídia. Pra liberar pra um designer, é só ligar aqui.",
+      padrao:(u)=>!!(u&&(u.level===1||u.dash==="social"||u.dash==="coordinator"||u.dash==="gestor"||u.id==="ellen"))},
+  ]},
+  {id:"abas", label:"Abas do cliente", itens:[
+    {key:"social.aba.visao",       label:"Visão geral",  desc:"Seguidores, alcance e as duas curvas do período"},
+    {key:"social.aba.publicacoes", label:"Publicações",  desc:"O que cada post entregou"},
+    {key:"social.aba.historico",   label:"Histórico",    desc:"O dia a dia cru"},
+    {key:"social.aba.contas",      label:"Contas",       desc:"Quais perfis coletam e quando foi a última coleta"},
+  ]},
+]};
 PX_BLOCOS.planejamento={label:"Planejamento", navIcon:"planejamento", color:"#0ea5e9", grupos:[
   {id:"menu", label:"Menu", itens:[
     {key:"plan.menu", label:"Acessar Planejamento", desc:"Padrão: sócio, Hellen ou coordenação", padrao:_pxEstrat},
@@ -3460,6 +3473,7 @@ function NavIcon({id,size=18,color}){
   if(id==="aprovacoes_video")      return <svg {...p}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M7 4l2 5M12 4l2 5M17 4l2 5"/><polygon points="10 12 15 14.5 10 17" fill="currentColor" stroke="none"/></svg>;
   if(id==="aprovacoes_internas")   return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="gestaomidia")           return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18"/><path d="M12 3a14 14 0 000 18"/></svg>;
+  if(id==="gestaoredes")           return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"/></svg>;
   if(id==="comercial")             return <svg {...p}><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 6-7"/><circle cx="20" cy="8" r="1.5"/></svg>;
   // ── Submenus Análises ──
   if(id==="analises_producao") return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
@@ -3530,6 +3544,9 @@ const NAV=[
   {id:"clientes",   icon:"◉", label:"Clientes"},
   {id:"demandas_central", icon:"demandas_central", label:"Demandas"},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
+  // 20/09/2026 — o orgânico, irmão do pago. Vizinho de propósito: um é o que
+  // a gente alcança pagando, o outro é o que alcança sem pagar.
+  {id:"gestaoredes",icon:"gestaoredes", label:"Gestão de redes"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
   {id:"scripts",icon:"◇", label:"Scripts"},
   {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
@@ -55370,6 +55387,7 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao":
       case "aprovacoes_video":     return p.verAprovacoes||effectiveUser.id==="ellen";
       case "gestaomidia":          return _menuBloco("midia.menu",p);   // era sócio||dash gestor
+      case "gestaoredes":          return _menuBloco("social.menu",p);  // orgânico — 20/09/2026
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return false; // chat interno desligado por enquanto
       // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
@@ -55474,6 +55492,7 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
       case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
+      case "gestaoredes":          return _menuBloco("social.menu",effectivePerms)?(typeof PageGestaoRedes==="function"?<PageGestaoRedes {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} perms={effectivePerms}/>:<NoPerm/>):<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>; // "ver como" fiel (18/09/2026)
       case "analises":
       case "gestao":
