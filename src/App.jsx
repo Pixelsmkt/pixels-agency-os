@@ -60018,19 +60018,38 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
     .concat(SUB.contexto.length?[["contexto","Contexto"]]:[]);
   const [subLb,setSubLb]=useState({});
   const subAtual=function(g){ const l=SUB[g]||[]; return subLb[g]||(l[0]&&l[0][0])||""; };
+  /* 20/09: eram tres fileiras de botoes iguais empilhados — nada dizia o que era
+     secao e o que era recorte. Agora: aba (sublinhado) > chave (trilho) > lista (menu). */
   const BarraSub=function(props){
     const lista=SUB[props.g]||[];
-    if(lista.length<2) return null;
-    return <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:20}}>
-      {lista.map(function(s){ const on=s[0]===subAtual(props.g);
-        return <button key={s[0]} onClick={function(){ const c=Object.assign({},subLb); c[props.g]=s[0]; setSubLb(c); }}
-          style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent+"14":"#fff",
-            color:on?ADS.accent:ADS.ink2,borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,
-            cursor:"pointer",whiteSpace:"nowrap",minHeight:0,fontFamily:"inherit"}}>{s[1]}</button>; })}
+    if(lista.length<2&&!props.dir) return null;
+    return <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginBottom:20}}>
+      {lista.length>1&&<div style={{display:"inline-flex",background:ADS.surface2,borderRadius:99,padding:3,gap:2,maxWidth:"100%",flexWrap:"wrap"}}>
+        {lista.map(function(s){ const on=s[0]===subAtual(props.g);
+          return <button key={s[0]} onClick={function(){ const c=Object.assign({},subLb); c[props.g]=s[0]; setSubLb(c); }}
+            style={{border:0,background:on?"#fff":"transparent",color:on?ADS.ink:ADS.muted,borderRadius:99,
+              padding:"6px 14px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",whiteSpace:"nowrap",
+              minHeight:0,fontFamily:"inherit",boxShadow:on?"0 1px 3px rgba(15,13,26,.13)":"none",transition:"background .12s"}}>{s[1]}</button>; })}
+      </div>}
+      {props.dir?<div style={{marginLeft:"auto",minWidth:0}}>{props.dir}</div>:null}
     </div>;
   };
   const DIMS_LB=[["idade","Faixa etária"],["genero","Gênero"],["regiao","Região"],["dispositivo","Dispositivo"],["posicionamento","Posicionamento"]];
   const [dimLb,setDimLb]=useState("idade");
+  const temDimLb=function(d){ return (Qa||[]).some(function(x){ return x.dimensao===d&&Number(x.gasto||0)>0; }); };
+  const SelDimLb=<label style={{display:"inline-flex",alignItems:"center",gap:8,fontSize:11.5,fontWeight:800,color:ADS.muted,letterSpacing:".04em",textTransform:"uppercase",minWidth:0}}>
+    <span style={{whiteSpace:"nowrap"}}>Ver por</span>
+    <span style={{position:"relative",display:"inline-flex",alignItems:"center",minWidth:0}}>
+      <select value={dimLb} onChange={function(e){ setDimLb(e.target.value); }}
+        style={{appearance:"none",WebkitAppearance:"none",MozAppearance:"none",border:"1px solid "+ADS.line,background:"#fff",
+          color:ADS.ink,borderRadius:10,padding:"7px 30px 7px 12px",fontSize:12.5,fontWeight:800,fontFamily:"inherit",
+          letterSpacing:"-.2px",textTransform:"none",cursor:"pointer",minHeight:0,maxWidth:"100%",textOverflow:"ellipsis"}}>
+        {DIMS_LB.map(function(d){ const tem=temDimLb(d[0]);
+          return <option key={d[0]} value={d[0]} disabled={!tem}>{tem?d[1]:d[1]+" — sem entrega"}</option>; })}
+      </select>
+      <svg width="9" height="9" viewBox="0 0 10 10" style={{position:"absolute",right:11,pointerEvents:"none"}} fill="none" stroke={ADS.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1.5 3.5 5 7l3.5-3.5"/></svg>
+    </span>
+  </label>;
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
       <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative",
@@ -60081,11 +60100,11 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
         {/* ── abas ── */}
         {/* 20/09: eram 4 abas e viraram 8. Com rolagem lateral a ultima ficava cortada
             na borda — "Ca..." em vez de "Campanhas". Agora quebram linha: nada vaza. */}
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,margin:"18px 0 0"}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:isMobLb?14:22,rowGap:2,margin:"18px 0 0",borderBottom:"1px solid "+ADS.line}}>
           {ABAS.map(function(t){ const on=t[0]===abaLb;
-            return <button key={t[0]} onClick={function(){ setAbaLb(t[0]); }} style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink2,
-              borderRadius:99,padding:"7px 13px",fontSize:12.5,fontWeight:on?800:700,cursor:"pointer",whiteSpace:"nowrap",minHeight:0,fontFamily:"inherit",
-              boxShadow:on?"0 1px 6px "+ADS.accent+"55":"none",transition:"background .12s"}}>{t[1]}</button>; })}
+            return <button key={t[0]} onClick={function(){ setAbaLb(t[0]); }} style={{border:0,borderBottom:"2px solid "+(on?ADS.accent:"transparent"),
+              background:"none",color:on?ADS.accent:ADS.muted,padding:"0 0 9px",margin:"0 0 -1px",fontSize:13.5,fontWeight:on?800:600,
+              letterSpacing:"-.2px",cursor:"pointer",whiteSpace:"nowrap",minHeight:0,fontFamily:"inherit",transition:"color .12s"}}>{t[1]}</button>; })}
         </div>
 
         {/* 20/09: tinha flex:1 e jogava o rodape pro fim da coluna. Em aba curta
@@ -60171,19 +60190,10 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
           </div>}
 
           {abaLb==="publico"&&<div>
-            <BarraSub g="publico"/>
+            <BarraSub g="publico" dir={subAtual("publico")==="quemviu"&&Qa?SelDimLb:null}/>
             {subAtual("publico")==="quemviu"&&<div>
-            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>:<>
-              <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2,scrollbarWidth:"none"}}>
-                {DIMS_LB.map(function(d){ const on=d[0]===dimLb; const tem=(Qa||[]).some(function(x){ return x.dimensao===d[0]&&Number(x.gasto||0)>0; });
-                  return <button key={d[0]} onClick={function(){ setDimLb(d[0]); }} disabled={!tem} style={{border:"1px solid "+(on?ADS.accent:ADS.line),
-                    background:on?ADS.accent+"14":"#fff",color:!tem?"#b9b3c9":(on?ADS.accent:ADS.ink2),borderRadius:99,padding:"6px 12px",
-                    fontSize:12,fontWeight:on?800:600,cursor:tem?"pointer":"default",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{d[1]}</button>; })}
-              </div>
-              <div style={{marginTop:20}}>
-                <AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>
-              </div>
-            </>}
+            {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo público…</div>
+              :<AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>}
           </div>}
             {subAtual("publico")==="hora"&&<div>
             {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo horários…</div>
@@ -60555,9 +60565,9 @@ function QGAdsCriativos({mc,conta,isMob,campId,embutido}){
       <AdsChip on={!famAtiva} onClick={function(){setFam(null);setVerTodos(false);}} n={enr.length}>Geral</AdsChip>
       {fams.map(function(f){ return <AdsChip key={f.id} on={famAtiva&&famAtiva.id===f.id} onClick={function(){setFam(f.id);setVerTodos(false);}} n={enr.filter(function(a){return a.F.id===f.id;}).length}>{f.label}</AdsChip>; })}
       {ST.pronto&&<span style={{display:"inline-flex",gap:6,alignItems:"center",marginLeft:isMob?0:14,paddingLeft:isMob?0:14,borderLeft:isMob?"none":"1px solid "+ADS.line}}>
-        <AdsChip on={fOn==="todos"} onClick={function(){setFOn("todos");setVerTodos(false);}} n={enr.length}>Todos</AdsChip>
         <AdsChip on={fOn==="online"} onClick={function(){setFOn("online");setVerTodos(false);}} n={nOn}><span style={{display:"inline-block",width:7,height:7,borderRadius:99,background:fOn==="online"?"#fff":ADS.ok,marginRight:6,verticalAlign:1}}/>Online</AdsChip>
         <AdsChip on={fOn==="offline"} onClick={function(){setFOn("offline");setVerTodos(false);}} n={nOff}><span style={{display:"inline-block",width:7,height:7,borderRadius:99,background:fOn==="offline"?"#fff":ADS.line2,marginRight:6,verticalAlign:1}}/>Offline</AdsChip>
+        <AdsChip on={fOn==="todos"} onClick={function(){setFOn("todos");setVerTodos(false);}} n={enr.length}>Todos</AdsChip>
       </span>}
       <span style={{fontSize:12,color:ADS.muted,marginLeft:isMob?0:"auto"}}>{famAtiva?doGrupo.length+" anúncio"+(doGrupo.length!==1?"s":"")+" · "+_adsBRL0(gastoG)+(famAtiva.campo?" · "+famAtiva.custoLbl+" médio "+_adsBRLc(mediaFam[famAtiva.id]):""):"no Geral cada card mostra a métrica do próprio objetivo · pra eleger campeão, escolha um objetivo"}</span>
     </div>
@@ -60772,6 +60782,14 @@ function AdsCorteModal({conta,dim,x,campIds,filtroLbl,resNome,resNomePl,isMob,on
    PÚBLICO — RPC ads_quebras_conta (agrega no banco) · filtro por campanha ou objetivo · período global
    ═══════════════════════════════════════════════════════ */
 const ADS_DIM_LBL={idade:"Faixa etária",genero:"Gênero",dispositivo:"Dispositivo",regiao:"Região",posicionamento:"Posicionamento"};
+/* 20/09: cada corte ganhou um ícone que fala do próprio corte — bolo (idade), símbolos (gênero), tela (posicionamento), celular (aparelho), alfinete (região). */
+function _adsIcoDim(d){ const P={width:15,height:15,display:"block",flex:"0 0 auto"};
+  if(d==="idade") return <svg style={P} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2.2" y="6.6" width="11.6" height="7.2" rx="2"/><path d="M2.2 10.1h11.6M8 2.6v4"/><circle cx="8" cy="1.7" r=".9" fill="currentColor" stroke="none"/></svg>;
+  if(d==="genero") return <svg style={P} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="5.6" cy="5.4" r="3"/><path d="M5.6 8.4v5.2M3.4 11.4h4.4"/><circle cx="11.4" cy="12.2" r="3"/><path d="M13.6 10 16.3 7.3M13.2 7.3h3.1v3.1"/></svg>;
+  if(d==="posicionamento") return <svg style={P} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2.4" width="12" height="11.2" rx="2"/><path d="M2 6.2h12M6.6 6.2v7.4"/></svg>;
+  if(d==="dispositivo") return <svg style={P} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="4.4" y="1.6" width="7.2" height="12.8" rx="1.9"/><path d="M7 12.5h2"/></svg>;
+  return <svg style={P} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 14.4s4.9-4.4 4.9-8A4.9 4.9 0 0 0 3.1 6.4c0 3.6 4.9 8 4.9 8z"/><circle cx="8" cy="6.4" r="1.8"/></svg>; }
+
 const ADS_VAL_LBL={male:"Homens",female:"Mulheres",unknown:"Não informado",Unknown:"Não informado",android_smartphone:"Android (celular)",android_tablet:"Android (tablet)",iphone:"iPhone",ipad:"iPad",desktop:"Computador",other:"Outros"};
 function _adsValLbl(dim,v){ if(ADS_VAL_LBL[v]) return ADS_VAL_LBL[v]; if(dim==="posicionamento"){ const m=String(v).match(/^(instagram|facebook|messenger|audience_network|unknown)\/(.+)$/); if(!m) return v; const rede={instagram:"Instagram",facebook:"Facebook",messenger:"Messenger",audience_network:"Audience Network",unknown:"Outro"}[m[1]]; let pos=m[2].replace(/^(instagram|facebook)_/,"").replace(/_/g," "); if(pos==="unknown") pos="não informado"; return rede+" · "+pos; } return v; }
 function useAdsQuebras(accountId,periodo,campIds){
@@ -60964,7 +60982,7 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
               style={{padding:"11px 12px",borderRadius:11,cursor:"pointer",background:on?ADS.accent:"transparent",transition:"background .12s",marginBottom:2}}
               onMouseEnter={function(e){ if(!on) e.currentTarget.style.background=ADS.surface2; }}
               onMouseLeave={function(e){ if(!on) e.currentTarget.style.background="transparent"; }}>
-              <div style={{fontSize:13,fontWeight:800,color:on?"#fff":ADS.ink,letterSpacing:"-.2px"}}>{ADS_DIM_LBL[d]}</div>
+              <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:800,color:on?"#fff":ADS.ink,letterSpacing:"-.2px"}}><span style={{color:on?"rgba(255,255,255,.92)":ADS.accent,display:"flex"}}>{_adsIcoDim(d)}</span><span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ADS_DIM_LBL[d]}</span></div>
               <div style={{fontSize:11,marginTop:3,color:on?"rgba(255,255,255,.78)":ADS.muted,lineHeight:1.4}}>
                 {!temDado?"sem entrega no período":mm?<><div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>melhor: <b style={{color:on?"#fff":ADS.ink2}}>{mm.lbl}</b></div><div style={Object.assign({color:on?"#fff":ADS.ink2,fontWeight:700},ADS_MONO)}>{_adsBRL(mm.cpa)}</div></>:"sem base pra comparar"}
               </div>
