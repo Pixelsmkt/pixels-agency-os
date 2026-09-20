@@ -57143,7 +57143,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   // Abas ocultas: existem no código, mas ficam fora do menu até fazerem sentido (não esquecer)
   const SUBS_OCULTAS=[["leads","Leads","conferência de qualidade — depende de o cliente (quem atende) marcar; sem fluxo com o cliente, ninguém preenche"]];
   const [verOcultas,setVerOcultas]=useState(false);
-  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Estratégia"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
+  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Alertas"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
@@ -58117,7 +58117,7 @@ function QGAdsVisaoGeral({mc,conta,compartilhada,isMob,canEdit,verbaMensal}){
     </div>; })()}
 
     {/* leitura da IA — manchete curta, números com delta, Decidir agora / Deixe rodar */}
-    <AdsSec t="A leitura da IA" s={A?<span>gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima · o detalhe por campanha está na aba <b style={{color:ADS.ink2}}>Estratégia</b></span>:"ainda não gerada pra esta conta"}>
+    <AdsSec t="A leitura da IA" s={A?<span>gerada {_adsFmtHora(A.gerado_em)} · sempre sobre os <b style={{color:ADS.ink2}}>últimos 7 dias</b> ({_adsFmtD(A.periodo_inicio)} a {_adsFmtD(A.periodo_fim)}), independente do período escolhido acima · o detalhe por campanha está na aba <b style={{color:ADS.ink2}}>Alertas</b></span>:"ainda não gerada pra esta conta"}>
       <AdsLeituraIA A={A} conta={conta} camps={camps} media={media} isMob={isMob} canEdit={canEdit} atualizar={atualizar} atualizando={atualizando} msg={msg}/>
     </AdsSec>
 
