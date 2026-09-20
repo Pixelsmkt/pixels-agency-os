@@ -59954,7 +59954,10 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   const [dimLb,setDimLb]=useState("idade");
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
     <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:20,width:"min(1080px,100%)",maxHeight:"92vh",overflow:"auto",display:"grid",gridTemplateColumns:"minmax(0,420px) 1fr",boxShadow:"0 30px 80px rgba(0,0,0,.4)"}} className="ads-lightbox">
-      <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative"}}>
+      <div style={{background:"#0f0d1a",display:"flex",alignItems:"center",justifyContent:"center",minHeight:420,position:"relative",
+        /* 20/09: a barra de formato/ativo ficava POR CIMA do cabecalho do anuncio.
+           Agora ela tem faixa propria no topo e a midia desce o tanto dela. */
+        paddingTop:(at||(!mp4&&prev.src))?46:0}}>
         {at?(atMp4?<video key={atMp4} src={atMp4} poster={at.thumb||undefined} controls autoPlay playsInline preload="metadata" style={{width:"100%",maxHeight:"92vh",display:"block",background:"#000"}}/>:atLink?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(atLink)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
           :(at.url||at.thumb)?<div style={{position:"relative",width:"100%"}}><img src={at.url||at.thumb} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>{(at.tipo==="video"||at.dimensao==="video_asset")&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu o link deste vídeo — só a capa. Veja pela prévia oficial ou no Gerenciador.</div>}</div>
           :<div style={{color:"#fff",fontSize:13}}>sem prévia deste ativo</div>)
@@ -59964,8 +59967,8 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
         :reel?<iframe src={"https://www.facebook.com/plugins/video.php?href="+encodeURIComponent(reel)+"&show_text=false&autoplay=true&mute=false"} style={{width:"100%",height:"min(92vh,740px)",border:0,display:"block"}} allow="autoplay; encrypted-media; picture-in-picture; web-share" allowFullScreen/>
         :img?<img src={img} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"92vh",objectFit:"contain",display:"block"}}/>
         :<div style={{color:"#fff",fontSize:13}}>sem prévia</div>}
-        {at&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}><button onClick={function(){setAtivoSel(null);}} style={{background:"#fff",color:ADS.ink,border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>‹ prévia do anúncio</button><span style={{background:"rgba(0,0,0,.55)",color:"#fff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700}}>{(at.tipo==="video"||at.dimensao==="video_asset")?"vídeo":"imagem"}{typeof ativoSel==="number"?" "+(ativoSel+1)+" de "+ativos.length:(at.nome?" · "+String(at.nome).replace(/\.(mp4|mov|jpg|jpeg|png)$/i,""):"")}</span></div>}
-        {!at&&!mp4&&prev.src&&<div style={{position:"absolute",top:10,left:10,display:"flex",gap:4}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
+        {at&&<div style={{position:"absolute",top:0,left:0,right:0,padding:"9px 10px",background:"#0f0d1a",display:"flex",gap:4,alignItems:"center",zIndex:2}}><button onClick={function(){setAtivoSel(null);}} style={{background:"#fff",color:ADS.ink,border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>‹ prévia do anúncio</button><span style={{background:"rgba(0,0,0,.55)",color:"#fff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700}}>{(at.tipo==="video"||at.dimensao==="video_asset")?"vídeo":"imagem"}{typeof ativoSel==="number"?" "+(ativoSel+1)+" de "+ativos.length:(at.nome?" · "+String(at.nome).replace(/\.(mp4|mov|jpg|jpeg|png)$/i,""):"")}</span></div>}
+        {!at&&!mp4&&prev.src&&<div style={{position:"absolute",top:0,left:0,right:0,padding:"9px 10px",background:"#0f0d1a",display:"flex",gap:4,alignItems:"center",zIndex:2}}>{[["MOBILE_FEED_STANDARD","Feed"],["INSTAGRAM_REELS","Reels"],["INSTAGRAM_STORY","Story"]].map(function(o){ const on=fmt===o[0]; return <button key={o[0]} onClick={function(){setFmt(o[0]);}} style={{background:on?"#fff":"rgba(0,0,0,.55)",color:on?ADS.ink:"#fff",border:0,borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",minHeight:0,fontFamily:ADS_FONT}}>{o[1]}</button>; })}</div>}
         {!at&&!mp4&&!prev.loading&&!prev.src&&prev.erro&&<div style={{position:"absolute",bottom:14,left:14,right:14,background:"rgba(0,0,0,.6)",color:"#fff",borderRadius:10,padding:"9px 12px",fontSize:12}}>A Meta não devolveu a prévia deste anúncio ({prev.erro}). <a href={metaUrl} target="_blank" rel="noreferrer" style={{color:"#c9b6ff",fontWeight:800}}>Abrir no Gerenciador →</a></div>}
       </div>
       <div style={{padding:isMobLb?"18px 18px 24px":"24px 26px 28px",minWidth:0,display:"flex",flexDirection:"column"}}>
@@ -59980,7 +59983,8 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
         </div>
 
         {/* ── os números que decidem, com ar entre eles ── */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(124px,1fr))",gap:"18px 20px",marginTop:20,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
+        {/* 20/09: com minimo de 124px os 5 numeros quebravam em 4 + 1 orfao. */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(96px,1fr))",gap:"16px 14px",marginTop:20,paddingBottom:20,borderBottom:"1px solid "+ADS.line}}>
           {(function(){
             const cels=[];
             cels.push([a.cfg.custoLbl||"CPM", a.cfg.custoLbl?(a.custo?_adsBRLc(a.custo):"—"):_adsBRL(a.cpm), a.cfg.custoLbl?_adsCor(a.nivel):ADS.ink]);
@@ -59996,13 +60000,18 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
         </div>
 
         {/* ── abas ── */}
-        <div className="scroll-x" style={{display:"flex",gap:6,overflowX:"auto",margin:"18px -4px 0",padding:"0 4px 2px",scrollbarWidth:"none"}}>
+        {/* 20/09: eram 4 abas e viraram 8. Com rolagem lateral a ultima ficava cortada
+            na borda — "Ca..." em vez de "Campanhas". Agora quebram linha: nada vaza. */}
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,margin:"18px 0 0"}}>
           {ABAS.map(function(t){ const on=t[0]===abaLb;
             return <button key={t[0]} onClick={function(){ setAbaLb(t[0]); }} style={{border:"1px solid "+(on?ADS.accent:ADS.line),background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink2,
-              borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0,minHeight:0,fontFamily:"inherit"}}>{t[1]}</button>; })}
+              borderRadius:99,padding:"7px 13px",fontSize:12.5,fontWeight:on?800:700,cursor:"pointer",whiteSpace:"nowrap",minHeight:0,fontFamily:"inherit",
+              boxShadow:on?"0 1px 6px "+ADS.accent+"55":"none",transition:"background .12s"}}>{t[1]}</button>; })}
         </div>
 
-        <div style={{marginTop:22,flex:1,minWidth:0}}>
+        {/* 20/09: tinha flex:1 e jogava o rodape pro fim da coluna. Em aba curta
+            sobrava um vazio enorme e o botao ficava orfao. Agora o rodape segue o conteudo. */}
+        <div style={{marginTop:22,minWidth:0}}>
 
           {abaLb==="resumo"&&<div>
             {a.video&&a.r25!==null&&<>
@@ -60097,8 +60106,11 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
 
         </div>
 
-        <div style={{marginTop:26,paddingTop:18,borderTop:"1px solid "+ADS.line,display:"flex",gap:8,flexWrap:"wrap"}}>
-          <a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none"}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a>
+        <div style={{marginTop:26,paddingTop:16,borderTop:"1px solid "+ADS.line,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:11,color:ADS.muted,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {P&&P.ini?("Período: "+String(P.ini).slice(8,10)+"/"+String(P.ini).slice(5,7)+" a "+String(P.fim).slice(8,10)+"/"+String(P.fim).slice(5,7)):""}
+          </span>
+          <a href={metaUrl} target="_blank" rel="noreferrer" style={{textDecoration:"none",flexShrink:0}}><AdsBtn small>Abrir no Gerenciador da Meta ↗</AdsBtn></a>
         </div>
       </div>
     </div>
