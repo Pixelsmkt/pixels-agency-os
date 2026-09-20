@@ -59475,6 +59475,137 @@ function useAdsQuebraAnuncio(accountId,adId,P){
   return q;
 }
 
+/* ── 20/09/2026 · as três leituras novas do criativo ──────────────────────────
+   Vídeo (curva de retenção segundo a segundo), Textos (qual título, qual texto e
+   qual CTA rendem mais dentro do mesmo anúncio) e Conversa (iniciadas → respondidas
+   → 2ª → 3ª → 5ª+). Regra de ouro: métrica sem dado NÃO aparece — a aba some, não
+   vira caixinha zerada. */
+function useAdsRpcAnuncio(rpc,accountId,adId,P){
+  const [d,setD]=useState(null);
+  useEffect(function(){ let vivo=true; if(!window._sb||!accountId||!adId) return; setD(null);
+    window._sb.rpc(rpc,{p_account:accountId,p_ad_id:adId,p_de:P.ini,p_ate:P.fim})
+      .then(function(r){ if(vivo) setD(r.error?false:(r.data==null?false:r.data)); })
+      .catch(function(){ if(vivo) setD(false); });
+    return function(){ vivo=false; }; },[rpc,accountId,adId,P.ini,P.fim]);
+  return d;
+}
+
+/* curva de retenção: onde a audiência despenca */
+function AdsCurvaVideo({v}){
+  const curva=(v&&Array.isArray(v.curva))?v.curva.map(function(x){ return Number(x)||0; }):[];
+  if(curva.length<3) return null;
+  const W=560,H=150,PB=22;
+  const n=curva.length;
+  const px=function(i){ return n<=1?0:(i/(n-1))*W; };
+  const py=function(y){ return H-PB-(Math.max(0,Math.min(100,y))/100)*(H-PB-8); };
+  const linha=curva.map(function(y,i){ return (i?"L":"M")+px(i).toFixed(1)+" "+py(y).toFixed(1); }).join(" ");
+  const area=linha+" L"+W+" "+(H-PB)+" L0 "+(H-PB)+" Z";
+  /* a maior queda entre um segundo e o seguinte: é ali que o criativo perde a pessoa */
+  let iq=1,q=0;
+  for(let i=1;i<n;i++){ const d=curva[i-1]-curva[i]; if(d>q){ q=d; iq=i; } }
+  const meio=(function(){ for(let i=0;i<n;i++) if(curva[i]<=50) return i; return null; })();
+  return <div>
+    <div style={{width:"100%",overflow:"hidden"}}>
+      <svg viewBox={"0 0 "+W+" "+H} preserveAspectRatio="none" style={{width:"100%",height:150,display:"block"}}>
+        <defs><linearGradient id="adsCurvaG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={ADS.accent} stopOpacity=".28"/>
+          <stop offset="100%" stopColor={ADS.accent} stopOpacity="0"/>
+        </linearGradient></defs>
+        {[25,50,75].map(function(g){ return <line key={g} x1="0" x2={W} y1={py(g)} y2={py(g)} stroke={ADS.line} strokeWidth="1"/>; })}
+        <path d={area} fill="url(#adsCurvaG)"/>
+        <path d={linha} fill="none" stroke={ADS.accent} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>
+        {q>=8&&<line x1={px(iq)} x2={px(iq)} y1={py(curva[iq])} y2={H-PB} stroke={ADS.crit} strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke"/>}
+        {q>=8&&<circle cx={px(iq)} cy={py(curva[iq])} r="3.5" fill={ADS.crit}/>}
+      </svg>
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",fontSize:10.5,color:ADS.muted,marginTop:-14,marginBottom:14}}>
+      <span>0s</span><span>{(n-1)}s</span>
+    </div>
+    <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.55}}>
+      {q>=8
+        ? <>A maior queda é do segundo <b>{iq-1}</b> para o <b>{iq}</b>: perde <b style={{color:ADS.crit}}>{Math.round(q)}%</b> de quem estava assistindo.</>
+        : <>A audiência cai de forma parelha, sem um ponto de abandono claro.</>}
+      {meio!==null&&<span style={{color:ADS.muted}}> Metade já saiu no segundo <b style={{color:ADS.ink2}}>{meio}</b>.</span>}
+    </div>
+  </div>;
+}
+
+/* qual variação de texto está puxando o resultado */
+function AdsTextosAsset({linhas,cfg}){
+  const GRUPOS=[["titulo_asset","Títulos"],["texto_asset","Textos"],["cta_asset","Botões"]];
+  const temAlgum=GRUPOS.some(function(g){ return (linhas||[]).some(function(x){ return x.dimensao===g[0]; }); });
+  if(!temAlgum) return null;
+  return <div>{GRUPOS.map(function(g,gi){
+    const itens=(linhas||[]).filter(function(x){ return x.dimensao===g[0]; })
+      .map(function(x){ const r=Number(x.resultados||0); return Object.assign({},x,{r:r,cpa:r>0?Number(x.gasto)/r:null}); })
+      .sort(function(p,q){ return Number(q.gasto)-Number(p.gasto); });
+    if(!itens.length) return null;
+    const comCpa=itens.filter(function(x){ return x.cpa; }).sort(function(p,q){ return p.cpa-q.cpa; });
+    const melhor=comCpa.length>1?comCpa[0]:null;
+    const tot=itens.reduce(function(s,x){ return s+Number(x.gasto||0); },0)||1;
+    return <div key={g[0]}>
+      <AdsBlocoT primeiro={gi===0} t={g[1]} s={itens.length===1?"uma variação só neste anúncio":itens.length+" variações rodando no mesmo anúncio"}/>
+      {itens.map(function(x,i){
+        const eh=melhor&&x.valor===melhor.valor;
+        const txt=String(x.texto||"").trim();
+        const ehId=/^[0-9]{6,}$/.test(txt);
+        return <div key={x.valor} style={{padding:"12px 0",borderTop:i?"1px solid "+ADS.line:"none"}}>
+          <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto",gap:12,alignItems:"flex-start"}}>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:12.5,color:ehId?ADS.muted:ADS.ink,fontWeight:ehId?600:700,lineHeight:1.5,
+                display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",wordBreak:"break-word"}}>
+                {ehId?("Variação "+String.fromCharCode(65+i)):txt||"—"}
+              </div>
+              <div style={{fontSize:11,color:ADS.muted,marginTop:4}}>
+                {_adsBRL0(x.gasto)} · {Math.round(Number(x.gasto)/tot*100)}% da verba{eh?" · melhor custo":""}
+              </div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <b style={Object.assign({fontSize:14,fontWeight:900,color:eh?ADS.ok:ADS.ink},ADS_MONO)}>{x.cpa?_adsBRLc(x.cpa):"—"}</b>
+              <div style={{fontSize:10.5,color:ADS.muted}}>{_adsNum(x.r)} {x.r===1?(cfg.resSing||"resultado"):(cfg.resLbl||"resultados")}</div>
+            </div>
+          </div>
+        </div>; })}
+    </div>; })}
+  </div>;
+}
+
+/* volume é uma coisa, qualidade é outra */
+function AdsFunilConversa({c}){
+  if(!c) return null;
+  const ini=Number(c.iniciadas||0);
+  if(!ini) return null;
+  const passos=[["Iniciaram conversa",ini],["Tiveram resposta",Number(c.responderam||0)],
+    ["Chegaram à 2ª mensagem",Number(c.chegaram_2a||0)],["Chegaram à 3ª",Number(c.chegaram_3a||0)],
+    ["Chegaram à 5ª ou mais",Number(c.chegaram_5a||0)]].filter(function(p,i){ return i===0||p[1]>0; });
+  const bloq=Number(c.bloquearam||0);
+  const gasto=Number(c.gasto||0);
+  return <div>
+    {passos.map(function(p,i){
+      const pct=ini>0?Math.max(2,Math.min(100,p[1]/ini*100)):0;
+      const rel=i===0?null:Math.round(p[1]/ini*100);
+      return <div key={p[0]} style={{marginBottom:i===passos.length-1?0:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",marginBottom:5}}>
+          <span style={{fontSize:12.5,color:ADS.ink2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p[0]}</span>
+          <span style={{flexShrink:0}}>
+            <b style={Object.assign({fontSize:14,fontWeight:900,color:ADS.ink},ADS_MONO)}>{_adsNum(p[1])}</b>
+            {rel!==null&&<span style={{fontSize:11,color:ADS.muted,marginLeft:6}}>{rel}%</span>}
+          </span>
+        </div>
+        <div style={{height:8,borderRadius:99,background:ADS.surface2,overflow:"hidden"}}>
+          <div style={{width:pct+"%",height:"100%",borderRadius:99,background:i===0?ADS.accent:ADS.accent+"99"}}/>
+        </div>
+      </div>; })}
+    <div style={{fontSize:12.5,color:ADS.ink2,marginTop:16,lineHeight:1.55}}>
+      {passos.length>1
+        ? <>De <b>{_adsNum(ini)}</b> conversas, <b>{_adsNum(passos[1][1])}</b> tiveram resposta
+            {gasto>0&&<> — <b>{_adsBRLc(gasto/Math.max(passos[1][1],1))}</b> por conversa respondida</>}.</>
+        : <>A Meta ainda não devolveu a profundidade destas conversas.</>}
+      {bloq>0&&<span style={{color:ADS.muted}}> {bloq} {bloq===1?"pessoa bloqueou":"pessoas bloquearam"}.</span>}
+    </div>
+  </div>;
+}
+
 /* título de bloco, com respiro em cima */
 function AdsBlocoT({t,s,primeiro}){
   return <div style={{marginTop:primeiro?0:26,marginBottom:10}}>
@@ -59639,8 +59770,20 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   /* 19/09: um assunto por aba, em vez de tudo empilhado num bloco só */
   const [abaLb,setAbaLb]=useState("resumo");
   const Qa=useAdsQuebraAnuncio(conta&&conta.ad_account_id,a.id,P);
+  /* 20/09: vídeo, textos e conversa — cada aba só aparece se o dado existir */
+  const Vd=useAdsRpcAnuncio("ads_video_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const Tx=useAdsRpcAnuncio("ads_textos_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const Cv=useAdsRpcAnuncio("ads_conversa_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const temVideo=!!(Vd&&Array.isArray(Vd.curva)&&Vd.curva.length>=3);
+  const temTextos=!!(Tx&&Tx.length);
+  const temConversa=!!(Cv&&Number(Cv.iniciadas||0)>0);
   const isMobLb=typeof window!=="undefined"&&window.innerWidth<820;
-  const ABAS=[["resumo","Resumo"],["publico","Público"],["hora","Horário"],["campanhas","Campanhas"]];
+  const ABAS=[["resumo","Resumo"]]
+    .concat(temVideo?[["video","Vídeo"]]:[])
+    .concat([["publico","Público"]])
+    .concat(temTextos?[["textos","Textos"]]:[])
+    .concat(temConversa?[["conversa","Conversa"]]:[])
+    .concat([["hora","Horário"],["campanhas","Campanhas"]]);
   const DIMS_LB=[["idade","Faixa etária"],["genero","Gênero"],["regiao","Região"],["dispositivo","Dispositivo"],["posicionamento","Posicionamento"]];
   const [dimLb,setDimLb]=useState("idade");
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
@@ -59741,6 +59884,34 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
                 <AdsGraficoDim q={Qa} dim={dimLb} resLbl={(a.cfg.resSing||"resultado")}/>
               </div>
             </>}
+          </div>}
+
+          {abaLb==="video"&&<div>
+            <AdsBlocoT primeiro t="Curva de retenção" s="quantos ainda estavam assistindo a cada segundo"/>
+            <AdsCurvaVideo v={Vd}/>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:"16px 18px",marginTop:24,paddingTop:20,borderTop:"1px solid "+ADS.line}}>
+              {(function(){
+                const cels=[];
+                if(Vd.tempo_medio!=null) cels.push(["Tempo médio",Number(Vd.tempo_medio).toLocaleString("pt-BR",{maximumFractionDigits:1})+"s"]);
+                if(Vd.plays!=null) cels.push(["Reproduções",_adsNum(Vd.plays)]);
+                if(Vd.thruplay!=null&&Number(Vd.thruplay)>0) cels.push(["Assistiram até o fim",_adsNum(Vd.thruplay)]);
+                if(Vd.passaram_30s!=null&&Number(Vd.passaram_30s)>0) cels.push(["Passaram de 30s",_adsNum(Vd.passaram_30s)]);
+                if(Vd.custo_thruplay!=null) cels.push(["Custo por vídeo assistido",_adsBRLc(Vd.custo_thruplay)]);
+                return cels.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
+                  <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,lineHeight:1.3}}>{k[0]}</div>
+                  <div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:5,color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{k[1]}</div>
+                </div>; });
+              })()}
+            </div>
+          </div>}
+
+          {abaLb==="textos"&&<div>
+            <AdsTextosAsset linhas={Tx} cfg={a.cfg}/>
+          </div>}
+
+          {abaLb==="conversa"&&<div>
+            <AdsBlocoT primeiro t="Profundidade da conversa" s="quantas foram pra frente, não só quantas começaram"/>
+            <AdsFunilConversa c={Cv}/>
           </div>}
 
           {abaLb==="hora"&&<div>
