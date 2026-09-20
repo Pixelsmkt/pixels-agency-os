@@ -1480,7 +1480,11 @@ const _pxAdminCard=(u,p)=>!!(u&&(u.level===1||(p&&p.gerenciarEtiquetas===true)))
 const PX_BLOCOS={
   demandas:{label:"Linha de produção", navIcon:"demandas", color:"#2563eb", grupos:[
     {id:"menu", label:"Menu", itens:[
-      {perm:"verDemandas", label:"Acessar Linha de produção", desc:"Sem isso o menu some"},
+      {perm:"verDemandas", label:"Acessar Linha de produção", desc:"A chave do módulo — vale dentro da tela"},
+      {key:"demandas.menu",    label:"Menu na barra lateral", desc:"Padrão: a chave acima ou a Hellen",
+        padrao:(u,p)=>!!(p&&p.verDemandas)||!!(u&&u.id==="ellen")},
+      {key:"demandas.central", label:"Central de demandas",   desc:"Padrão: só sócios",
+        padrao:(u)=>!!(u&&u.level===1)},
     ]},
     {id:"topo", label:"Barra do topo", itens:[
       {key:"demandas.topo.busca",          label:"Busca",                 desc:"Campo de busca por título, cliente ou responsável"},
@@ -1694,12 +1698,131 @@ PX_BLOCOS.enps={label:"ENPS", navIcon:"gestao", color:"#8b5cf6", grupos:[
       padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.id==="hellen"))},
   ]},
 ]};
+/* ═══ 20/09/2026 — as 5 telas que faltavam da varredura de 17/09 ═══
+   Clientes · Gestão de mídia · Planejamento · Scripts · Matriz.
+   Cada item nasce com o PADRÃO = a regra fixa que existe hoje no canSee/renderPage
+   de 17_gestao_midia.jsx. Ninguém ganha nem perde acesso no deploy: o bloco só
+   passa a valer quando um sócio desliga à mão em Acessos › Time › gerenciar acesso.
+   _pxEstrat = a regra "sócio, Hellen ou coordenação" que se repete nessas telas. */
+const _pxEstrat=(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.dash==="coordinator"));
+PX_BLOCOS.clientes={label:"Clientes", navIcon:"clientes", color:"#d97706", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"cli.menu", label:"Acessar Clientes", desc:"Padrão: a chave abaixo, Hellen, coordenação ou sócio",
+      padrao:(u,p)=>!!(p&&p.verClientes)||_pxEstrat(u)},
+    {perm:"verClientes", label:"Chave Clientes", desc:"A chave antiga — continua valendo dentro das telas"},
+  ]},
+  {id:"abas", label:"Abas da ficha do cliente", itens:[
+    {key:"cli.aba.analises",     label:"Dashboard",     desc:""},
+    {key:"cli.aba.planejamento", label:"Planejamento",  desc:""},
+    {key:"cli.aba.marcos",       label:"Demandas",      desc:""},
+    {key:"cli.aba.producao",     label:"Produção",      desc:""},
+    {key:"cli.aba.onboarding",   label:"Onboarding",    desc:""},
+    {key:"cli.aba.ongoing",      label:"Ongoing",       desc:""},
+    {key:"cli.aba.briefing",     label:"Briefing",      desc:""},
+    {key:"cli.aba.metas",        label:"Metas",         desc:""},
+    {key:"cli.aba.parcerias",    label:"Parcerias",     desc:""},
+    {key:"cli.aba.nps",          label:"NPS",           desc:""},
+  ]},
+  {id:"porcliente", label:"Por cliente", itens:function(){
+    /* a mesma lista que o painel montava antes em PERM_GROUPS.clientes */
+    return (typeof CLIENTS!=="undefined"?CLIENTS:[])
+      .filter(function(c){ return c&&String(c.name||"").trim(); })
+      .map(function(c){ return {perm:"verCliente_"+c.id, label:c.name, desc:"Acesso ao cliente "+c.name}; });
+  }},
+  {id:"acoes", label:"Ações", itens:[
+    {key:"cli.novo",       label:"Novo cliente",   desc:""},
+    {perm:"verResumoIA",   label:"Botão Resumo IA",desc:"Gera e mostra o resumo do cliente pela IA"},
+    {perm:"editarBriefing",label:"Editar o Briefing", desc:""},
+    {perm:"editarEvolucao",label:"Editar a Evolução", desc:"Marcos e métricas mensais"},
+  ]},
+]};
+PX_BLOCOS.midia={label:"Gestão de mídia", navIcon:"gestaomidia", color:"#9F43F6", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"midia.menu",   label:"Acessar Gestão de mídia", desc:"Padrão: sócio ou gestor de mídia",
+      padrao:(u)=>!!(u&&(u.level===1||u.dash==="gestor"))},
+    {key:"midia.editar", label:"Editar a gestão de mídia", desc:"Padrão: sócio, gestor de mídia ou Erick",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="erick"||u.dash==="gestor"))},
+    {key:"midia.cadastro.editar", label:"Editar o cadastro antigo do cliente", desc:"Padrão: sócio ou Erick",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="erick"))},
+    {key:"midia.demandas.editar", label:"Editar as demandas de mídia", desc:"Padrão: sócio, gestor de mídia ou Erick",
+      padrao:(u)=>!!(u&&(u.level===1||u.dash==="gestor"||u.id==="erick"))},
+  ]},
+  {id:"topo", label:"Abas do topo", itens:[
+    {key:"midia.top.visao",      label:"Dashboard",   desc:""},
+    {key:"midia.top.clientes",   label:"Clientes",    desc:"A carteira"},
+    {key:"midia.top.demandas",   label:"Demandas",    desc:""},
+    {key:"midia.top.relatorios", label:"Relatórios",  desc:""},
+  ]},
+  {id:"conta", label:"Dentro da conta do cliente", itens:[
+    {key:"midia.qg.visao",       label:"Visão geral",  desc:""},
+    {key:"midia.qg.estrategia",  label:"Alertas",      desc:"As ações que a IA sugere, com a evidência"},
+    {key:"midia.qg.campanhas",   label:"Campanhas",    desc:""},
+    {key:"midia.qg.criativos",   label:"Criativos",    desc:""},
+    {key:"midia.qg.publico",     label:"Público",      desc:""},
+    {key:"midia.qg.diagnostico", label:"Diagnóstico",  desc:"Onde está a verba + o que o cliente falou"},
+    {key:"midia.qg.leads",       label:"Leads",        desc:"Conferência de qualidade do lead"},
+    {key:"midia.qg.historico",   label:"Histórico",    desc:""},
+    {key:"midia.qg.gestao",      label:"Gestão",       desc:"Orçamento, meta e cadastro da conta"},
+  ]},
+  {id:"acoes", label:"Ações", itens:[
+    {key:"midia.novo_cliente", label:"Novo cliente na carteira", desc:"Padrão: só sócios", padrao:(u)=>!!(u&&u.level===1)},
+    {key:"midia.nova_demanda", label:"Nova demanda de mídia",    desc:""},
+    {key:"midia.relatorio",    label:"Relatório geral",          desc:""},
+    {key:"midia.cerebro",      label:"Registrar o que o cliente falou", desc:"O campo de texto do Diagnóstico"},
+  ]},
+]};
+PX_BLOCOS.planejamento={label:"Planejamento", navIcon:"planejamento", color:"#0ea5e9", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"plan.menu", label:"Acessar Planejamento", desc:"Padrão: sócio, Hellen ou coordenação", padrao:_pxEstrat},
+  ]},
+  {id:"abas", label:"Abas", itens:[
+    {key:"plan.aba.dailies",   label:"Dailies",   desc:"Hellen e coordenação não veem dailies — regra de sempre"},
+    {key:"plan.aba.weeklies",  label:"Weeklies",  desc:""},
+    {key:"plan.aba.monthlies", label:"Monthlies", desc:""},
+  ]},
+  {id:"acoes", label:"Ações", itens:[
+    {key:"plan.criar",   label:"Criar e editar registros", desc:""},
+    {key:"plan.excluir", label:"Excluir registros",        desc:""},
+  ]},
+]};
+PX_BLOCOS.scripts={label:"Scripts", navIcon:"scripts", color:"#7c3aed", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"scripts.menu", label:"Acessar Scripts", desc:"Padrão: sócio, Hellen, coordenação ou quem vê Clientes",
+      padrao:(u,p)=>_pxEstrat(u)||!!(p&&p.verClientes)},
+  ]},
+  {id:"blocos", label:"Blocos", itens:[
+    {key:"scripts.onboarding", label:"Scripts de onboarding", desc:""},
+    {key:"scripts.ongoing",    label:"Scripts de ongoing",    desc:""},
+  ]},
+]};
+PX_BLOCOS.matriz={label:"Matriz de Responsabilidades", navIcon:"matriz", color:"#059669", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"matriz.menu", label:"Acessar a Matriz", desc:"Padrão: sócio, Hellen, coordenação ou social media",
+      padrao:(u)=>_pxEstrat(u)||!!(u&&u.dash==="social")},
+  ]},
+  {id:"vistas", label:"Vistas", itens:[
+    {key:"matriz.vista.cadeiras", label:"Cadeiras", desc:""},
+    {key:"matriz.vista.fluxo",    label:"Fluxo",    desc:""},
+  ]},
+  {id:"acoes", label:"Ações", itens:[
+    {key:"matriz.editar", label:"Criar e editar cadeiras", desc:"Padrão: sócio ou Hellen",
+      padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"))},
+  ]},
+]};
+/* 20/09: um grupo pode declarar `itens` como FUNÇÃO (ex.: a lista de clientes,
+   que só existe depois que CLIENTS carrega). Resolver aqui também, senão
+   pxBlocoDef quebra na primeira chamada. */
+function pxGrupoItens(g){
+  if(!g) return [];
+  if(typeof g.itens==="function"){ try{ return g.itens()||[]; }catch(_){ return []; } }
+  return g.itens||[];
+}
 function pxBlocoDef(key){
   const telas=Object.keys(PX_BLOCOS);
   for(let i=0;i<telas.length;i++){
     const gs=PX_BLOCOS[telas[i]].grupos||[];
     for(let g=0;g<gs.length;g++){
-      const it=(gs[g].itens||[]).find(function(x){return x.key===key;});
+      const it=pxGrupoItens(gs[g]).find(function(x){return x.key===key;});
       if(it) return it;
     }
   }
@@ -15624,7 +15747,9 @@ function Sparkline({data, color, width, height}){
   </svg>);
 }
 
-function PageClientes({isMob, tasks}){
+function PageClientes({isMob, tasks, perms, viewUser}){
+  /* 20/09: blocos de Acessos › Time (viewUser respeita o "Visualizar como") */
+  const _blCli=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null),perms:perms}):true; };
   let TASKS = tasks || [];
   const [activeClient,setActiveClient]=useState(null);
   const [activeSection,setActiveSection]=useState("dashboard");
@@ -15702,7 +15827,7 @@ function PageClientes({isMob, tasks}){
     return <MindMapEditor clientId={activeClient.id} onBack={()=>setMindmapActive(false)}/>;
 
   if(activeClient)
-    return <ClienteDetail cl={activeClient} isMob={isMob} tasks={TASKS}
+    return <ClienteDetail cl={activeClient} isMob={isMob} tasks={TASKS} perms={perms} viewUser={viewUser}
       onMindmap={()=>setMindmapActive(true)}
       onTrocarCliente={function(_c){ if(_c && _c.id!==activeClient.id) setActiveClient(_c); }}
       onBack={()=>{setActiveClient(null);setActiveSection("dashboard");}}/>;
@@ -15843,13 +15968,13 @@ function PageClientes({isMob, tasks}){
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>}
         </div>
-        <button onClick={()=>setShowNovo(true)}
+        {_blCli("cli.novo")&&<button onClick={()=>setShowNovo(true)}
           style={{background:"#fff",color:"#0f172a",border:"none",borderRadius:10,padding:"0 18px",height:38,fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",boxSizing:"border-box"}}
           onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";}}
           onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Novo cliente
-        </button>
+        </button>}
       </div>
     </div>
 
@@ -16008,7 +16133,8 @@ function PageClientes({isMob, tasks}){
    Onboarding: mesma fonte, mesma ordem, mesmo texto. A unica coisa que muda por
    cliente e a substituicao dos placeholders ({{cliente}}, {{data_inicio}}...)
    na hora de copiar.                                                       */
-function CScriptsTab({cl, isMob}){
+function CScriptsTab({cl, isMob, bl}){
+  const _b=(typeof bl==="function")?bl:function(){return true;};
   const _cor=(cl&&cl.color)||"#7c3aed";
   // Data de inicio do projeto — alimenta o placeholder {{data_inicio}}
   const [startDate,setStartDate]=useState("");
@@ -16027,8 +16153,8 @@ function CScriptsTab({cl, isMob}){
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Tons fixos (não a cor do cliente), usados só no filete/ícone: Onboarding roxo, Ongoing azul */}
-    {typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#7c3aed"/>}
-    {typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#7c3aed"/>}
+    {_b("scripts.onboarding") && typeof _OnboardingScripts==="function" && <_OnboardingScripts cl={cl} startDate={startDate} accent="#7c3aed"/>}
+    {_b("scripts.ongoing")    && typeof _OngoingScripts==="function"    && <_OngoingScripts    cl={cl} accent="#7c3aed"/>}
   </div>;
 }
 
@@ -16037,7 +16163,9 @@ function CScriptsTab({cl, isMob}){
    então saíram da ficha do cliente e ganharam página própria no menu Estratégia.
    O seletor de cliente aqui só serve pra preencher {{cliente}}, {{data_inicio}}
    e {{setor}} na hora de copiar — o texto é o mesmo pra todo mundo.           */
-function PageScripts({isMob}){
+function PageScripts({isMob, perms, viewUser}){
+  /* 20/09: blocos de Acessos › Time */
+  const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null),perms:perms}):true; };
   const _lista=(typeof CLIENTS!=="undefined"?CLIENTS:[])
     .filter(function(c){return c&&c.status!=="interno"&&c.status!=="encerrado"&&String(c.name||"").trim();})
     .slice().sort(function(a,b){return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"});});
@@ -16070,7 +16198,7 @@ function PageScripts({isMob}){
       </label>
     </div>
     {cl
-      ? <CScriptsTab cl={cl} isMob={isMob}/>
+      ? <CScriptsTab cl={cl} isMob={isMob} bl={_bl}/>
       : <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>Sem clientes ativos cadastrados.</div>}
   </div>;
 }
@@ -17095,7 +17223,9 @@ function _TrocarClienteSeletor({cl, onTrocar, isMob, selUnit, onUnit}){
   </div>;
 }
 
-function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
+function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,viewUser,onTrocarCliente}){
+  /* 20/09: _bl = bloco de Acessos › Time; viewUser respeita o "Visualizar como" */
+  const _blCli=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null),perms:perms}):true; };
   // Unidade Bioter ativa no contexto do detalhe — os chips do topo escolhem.
   // "grupo" = visao consolidada. So faz sentido quando cl.id==="bioter".
   const [selUnitBioter,setSelUnitBioter]=useState("grupo");
@@ -17206,9 +17336,10 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,onTrocarCliente}){
     {id:"metas",         label:"Metas",               ico:"target"},
     {id:"parcerias",     label:"Parcerias",           ico:"users"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
-  ];
+  ].filter(function(t){ return _blCli("cli.aba."+t.id); });   // 20/09: desligável em Acessos › Time
 
-  if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("analises");},0);
+  /* aba desligada: cai na primeira liberada (antes voltava sempre pro Dashboard) */
+  if(TABS.length&&!TABS.find(function(t){return t.id===tab;})){ const _p=TABS[0].id; setTimeout(function(){setTab(_p);},0); }
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
 
@@ -35973,7 +36104,11 @@ const PERM_TABS=[
   {id:"calendario",   navIcon:"demandas",   label:"Calendário de publicações", color:"#0ea5e9", tela:"calendario"},
   {id:"roteiros",     navIcon:"roteiros",   label:"Roteiros",           color:"#db2777", tela:"roteiros"},
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a", tela:"aprovacoes"},
-  {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
+  {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706", tela:"clientes"},      // árvore (20/09/2026)
+  {id:"midia",        navIcon:"gestaomidia",label:"Gestão de mídia",    color:"#9F43F6", tela:"midia"},         // árvore (20/09/2026)
+  {id:"planejamento", navIcon:"planejamento",label:"Planejamento",      color:"#0ea5e9", tela:"planejamento"},  // árvore (20/09/2026)
+  {id:"scripts",      navIcon:"scripts",    label:"Scripts",            color:"#7c3aed", tela:"scripts"},       // árvore (20/09/2026)
+  {id:"matriz",       navIcon:"matriz",     label:"Matriz",             color:"#059669", tela:"matriz"},        // árvore (20/09/2026)
   {id:"playbooks",    navIcon:"playbooks",  label:"Playbooks",          color:"#7c3aed", arvore:true}, // permissões por bloco (17/09/2026)
   {id:"comercial",    navIcon:"comercial",  label:"Comercial",          color:"#0d9488", tela:"comercial"},
   {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
@@ -36230,7 +36365,9 @@ function _telaPermItens(tela,user,perms){
   const b=(perms&&perms.blocos)||{};
   const out=[];
   (def.grupos||[]).forEach(g=>{
-    (g.itens||[]).forEach(i=>{
+    /* 20/09: grupo pode declarar itens como função (ex.: a lista de clientes) */
+    const _itens=(typeof pxGrupoItens==="function")?pxGrupoItens(g):(g.itens||[]);
+    _itens.forEach(i=>{
       if(i.perm){ out.push({...i,grupo:g.id,tipo:"perm",manual:false,on:!!perms[i.perm]}); }
       else if(i.key){
         const padrao=pxBlocoPadrao(i.key,{user,perms});
@@ -51608,7 +51745,11 @@ const _mFmtRelative=iso=>{
 /* ═══════════════════════════════════════════════════════════════
    PAGE GESTÃO DE MÍDIA — lista de clientes + filtros + ações
    ═══════════════════════════════════════════════════════════════ */
-function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
+function PageGestaoMidia({isMob, currentUser, viewUser, perms, tasks, setTasks, onNavTo}){
+  /* 20/09: _vu = quem está sendo VISTO (respeita o "Visualizar como").
+     currentUser continua sendo o logado — é ele que assina o que vai pro banco. */
+  const _vu=viewUser||currentUser;
+  const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_vu,perms:perms}):true; };
   const {store,update,addHistory}=useMediaStore();
   const [openClient,setOpenClient]=useState(null);
   const [showNovoCliente,setShowNovoCliente]=useState(false);
@@ -51622,6 +51763,13 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fMonth,setFMonth]=useState("");
   const [fChip,setFChip]=useState("todos");
   const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
+  /* 20/09: aba do topo desligada em Acessos › Time — cai na primeira liberada.
+     Fica AQUI (e não junto de TABS_TOP) porque abaixo há return antecipado:
+     hook depois de return quebra a regra dos hooks do React. */
+  useEffect(function(){
+    const _ok=["visao","clientes","demandas","relatorios"].filter(function(id){ return _bl("midia.top."+id); });
+    if(_ok.length&&_ok.indexOf(topTab)<0) setTopTab(_ok[0]);
+  },[topTab]);
   /* MODO APRESENTAÇÃO ("olhinho"): borra nomes e números da carteira (classe .px-sens) pra mostrar o sistema a um cliente
      sem expor os outros. Fica lembrado neste navegador. Atalho: Ctrl+Shift+O. Pode ser removido sem efeito colateral. */
   const [privado,setPrivado]=useState(function(){ try{ return localStorage.getItem("px_modo_apresentacao")==="1"; }catch(_){ return false; } });
@@ -51657,10 +51805,10 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda removida.",2000);
   };
 
-  const isSocio=currentUser?.level===1;
-  const canManageClients=isSocio;
+  const isSocio=_vu?.level===1;
+  const canManageClients=_bl("midia.novo_cliente");           // padrão: só sócios
   // Demandas de mídia (novo quadro): sócios + gestor de mídia editam
-  const podeEditarDemandasMidia=isSocio||currentUser?.dash==="gestor"||currentUser?.id==="erick";
+  const podeEditarDemandasMidia=_bl("midia.demandas.editar"); // padrão: sócio, gestor ou Erick
 
   // Mês de referência: usa fMonth se setado, senão mês atual
   const _refDate=fMonth?new Date(fMonth+"-01T00:00:00"):new Date();
@@ -51798,7 +51946,7 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     {id:"clientes",  label:"Clientes",    icon:"users"},
     {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demNovas+demAndamento+demAguardando},
     {id:"relatorios",label:"Relatórios",  icon:"file-text"},
-  ];
+  ].filter(function(t){ return _bl("midia.top."+t.id); });
   const _emCliente=!!openClient&&(topTab==="visao"||topTab==="clientes");
 
   // Helper: renderiza cabeçalho de seção dentro das abas
@@ -51962,7 +52110,7 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
 
     {/* ───── ABA 1 + 3: QG DE MÍDIA / CLIENTES (17b_qg_midia.jsx) ───── */}
     {(topTab==="visao"||topTab==="clientes"||topTab==="relatorios")&&<QGMidiaRoot modo={topTab==="clientes"?"clientes":topTab==="relatorios"?"relatorios":"qg"}
-      store={store} update={update} addHistory={addHistory} isMob={isMob} currentUser={currentUser} tasks={tasks}
+      store={store} update={update} addHistory={addHistory} isMob={isMob} currentUser={currentUser} viewUser={_vu} perms={perms} tasks={tasks}
       openClient={openClient} setOpenClient={setOpenClient}
       onNovoCliente={canManageClients?()=>setShowNovoCliente(true):null}
       onAbrirCadastro={(id)=>setCadastroClient(id)}/>}
@@ -52333,7 +52481,7 @@ function MediaClientPanel({clientData,store,update,addHistory,onBack,isMob,curre
   const [tab,setTab]=useState("dashboard");
   const cl=CLIENTS.find(c=>c.id===clientData.client_id);
   const isSocio=currentUser?.level===1;
-  const canEdit=isSocio||currentUser?.id==="erick";
+  const canEdit=(typeof pxBloco==="function")?pxBloco("midia.cadastro.editar",{user:currentUser}):(isSocio||currentUser?.id==="erick");
 
   const TABS=[
     {id:"dashboard", label:"Dashboard"},
@@ -55142,27 +55290,27 @@ export default function AgencyOS(){
     switch(n.id){
       case "meudash":              return p.verDashboard;
       case "demandas":
-      case "demandas_kanban":      return p.verDemandas||effectiveUser.id==="ellen";
+      case "demandas_kanban":      return _menuBloco("demandas.menu",p); // era verDemandas||ellen — mesmo padrão, agora desligável
       case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return _menuBloco("cal.menu",p); // regra fixa + verCalPub; desligável em Acessos › Time
-      case "demandas_central":     return isSocio; // central de demandas: SO socios (nem visualizar)
+      case "demandas_central":     return _menuBloco("demandas.central",p); // padrão: só sócios
       // HELLEN = GESTORA DE PROJETOS (16/09/2026): Estratégia inteira (Clientes, Scripts, Planejamento,
       // Matriz, Playbooks) + Avaliações, Linha de produção e Calendário — por id E por dash "coordinator".
       case "roteiros":             return _menuBloco("rot.menu",p); // regra fixa por função; desligável em Acessos › Time
-      case "planejamento":         return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator";
-      case "scripts":              return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||!!p.verClientes;
-      case "matriz":               return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social";
+      case "planejamento":         return _menuBloco("plan.menu",p);    // era sócio||ellen||coordinator
+      case "scripts":              return _menuBloco("scripts.menu",p); // era sócio||ellen||coordinator||verClientes
+      case "matriz":               return _menuBloco("matriz.menu",p);  // era sócio||ellen||coordinator||social
       case "playbooks":            return _pbMenuPode(p); // regra fixa + chave verPlaybooks + cadeira ligada à mão; menu.playbooks=false desliga tudo
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":
       case "aprovacoes_video":     return p.verAprovacoes||effectiveUser.id==="ellen";
-      case "gestaomidia":          return isSocio||effectiveUser.dash==="gestor"; // socios + gestor de midia (Erick)
+      case "gestaomidia":          return _menuBloco("midia.menu",p);   // era sócio||dash gestor
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return false; // chat interno desligado por enquanto
       // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
       // e tem acesso de Estrategista). Mesmo padrão de "playbooks" e "planejamento".
-      case "clientes":             return p.verClientes||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||isSocio;
+      case "clientes":             return _menuBloco("cli.menu",p);     // era verClientes||ellen||coordinator||sócio
       case "analises":
       case "ia":
       case "ia_diagnostico":
@@ -55234,14 +55382,16 @@ export default function AgencyOS(){
       const cl=CLIENTS.find(c=>c.id===activeCl);
       if(cl){
         if(mindmapActiveCl) return <MindMapEditor clientId={cl.id} onBack={()=>setMindmapActiveCl(false)}/>;
-        return <ClienteDetail cl={cl} isMob={isMob} tasks={tasks}
+        return <ClienteDetail cl={cl} isMob={isMob} tasks={tasks} perms={effectivePerms} viewUser={effectiveUser}
           onMindmap={()=>setMindmapActiveCl(true)}
           onBack={()=>{setActiveCl(null);setMindmapActiveCl(false);}}/>;
       }
     }
-    const p={isMob,perms:effectivePerms,viewingAs,setViewingAs};
+    /* 20/09: effectiveUser entra aqui — sem ele as telas caíam no CURRENT_USER
+       e o "Visualizar como" não valia dentro da página. */
+    const p={isMob,perms:effectivePerms,viewingAs,setViewingAs,effectiveUser};
     switch(page){
-      case "clientes":              return effectivePerms.verClientes?<PageClientes isMob={isMob} perms={effectivePerms} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "clientes":              return _menuBloco("cli.menu",effectivePerms)?<PageClientes isMob={isMob} perms={effectivePerms} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "meudash":
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
@@ -55250,16 +55400,16 @@ export default function AgencyOS(){
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_central":      return isSocio?<CDemandasCentral isMob={p.isMob}/>:<NoPerm/>;
       case "roteiros":              return _menuBloco("rot.menu",effectivePerms)?<PageRoteiros isMob={isMob} perms={effectivePerms} viewingAs={viewingAs}/>:<NoPerm/>;
-      case "planejamento":          return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator")?<PagePlanejamento {...p}/>:<NoPerm/>;
-      case "scripts":               return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectivePerms.verClientes)?<PageScripts isMob={isMob}/>:<NoPerm/>;
-      case "matriz":                return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="coordinator"||effectiveUser.dash==="social")?<PageMatrizResponsabilidades isMob={isMob}/>:<NoPerm/>;
+      case "planejamento":          return _menuBloco("plan.menu",effectivePerms)?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "scripts":               return _menuBloco("scripts.menu",effectivePerms)?<PageScripts isMob={isMob} perms={effectivePerms} viewUser={effectiveUser}/>:<NoPerm/>;
+      case "matriz":                return _menuBloco("matriz.menu",effectivePerms)?<PageMatrizResponsabilidades isMob={isMob} perms={effectivePerms} viewUser={effectiveUser}/>:<NoPerm/>;
       case "playbooks":             return _pbMenuPode(effectivePerms)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return <NoPerm/>; // chat interno desligado por enquanto (PageChat segue no código)
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
-      case "gestaomidia":          return (isSocio||effectiveUser.dash==="gestor")?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
+      case "gestaomidia":          return _menuBloco("midia.menu",effectivePerms)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>; // "ver como" fiel (18/09/2026)
       case "analises":
       case "gestao":
@@ -57119,7 +57269,8 @@ function QGClienteSeletor({mc,clients,onTrocar,nomeCurto,isMob}){
   </span>;
 }
 
-function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriodo,isMob,canEdit,tasks,onBack,onTrocar,onFechamento,onNovaLinha,onEditLinha,onEditarMeta,onAbrirCadastro,acoes,acoesApi,currentUser}){
+function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriodo,isMob,canEdit,tasks,onBack,onTrocar,onFechamento,onNovaLinha,onEditLinha,onEditarMeta,onAbrirCadastro,acoes,acoesApi,currentUser,viewUser,perms}){
+  const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||currentUser,perms:perms}):true; };
   const c=qgCalcCliente(mc,data,year,month,{});
   const m=qgMeta(mc,data,year,month,c.leads,store);
   const semanas=_qgLastWeeks(2);
@@ -57143,11 +57294,17 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
   // Abas ocultas: existem no código, mas ficam fora do menu até fazerem sentido (não esquecer)
   const SUBS_OCULTAS=[["leads","Leads","conferência de qualidade — depende de o cliente (quem atende) marcar; sem fluxo com o cliente, ninguém preenche"]];
   const [verOcultas,setVerOcultas]=useState(false);
-  const SUBS_TODAS=temMeta?[["visao","Visão geral"],["estrategia","Alertas"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]];
+  const SUBS_TODAS=(temMeta?[["visao","Visão geral"],["estrategia","Alertas"],["campanhas","Campanhas"],["criativos","Criativos"],["publico","Público"],["diagnostico","Diagnóstico"],["leads","Leads"],["historico","Histórico"],["gestao","Gestão"]]:[["gestao","Gestão"]])
+    .filter(function(t){ return _bl("midia.qg."+t[0]); });   // 20/09: desligável em Acessos › Time
   const SUBS=SUBS_TODAS.filter(function(t){ return verOcultas||!SUBS_OCULTAS.some(function(o){return o[0]===t[0];}); });
   const [sub,setSub]=useState(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; return d||"visao"; });
   const subAtiva=temMeta?sub:"gestao";
   useEffect(function(){ const d=window._pxSubDesejada; window._pxSubDesejada=null; setSub(d||"visao"); },[mc.client_id]);
+  /* 20/09: aba desligada em Acessos › Time — cai na primeira liberada em vez de abrir vazio */
+  useEffect(function(){
+    if(!temMeta) return;
+    if(SUBS.length&&!SUBS.some(function(t){return t[0]===sub;})) setSub(SUBS[0][0]);
+  },[SUBS.length,sub,temMeta]);
   useEffect(function(){ const h=function(e){ const d=e&&e.detail||{}; if(d.sub) setSub(d.sub); }; window.addEventListener("pixels:qg-sub",h); return function(){ window.removeEventListener("pixels:qg-sub",h); }; },[]);
   /* barra de contexto: aparece quando o topo sai da tela */
   const [grudada,setGrudada]=useState(false);
@@ -57231,7 +57388,7 @@ function QGCliente({mc,clients,data,store,update,addHistory,year,month,setPeriod
     {subAtiva==="criativos"&&temMeta&&typeof QGAdsCriativos==="function"&&<QGAdsCriativos mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="publico"&&temMeta&&typeof QGAdsPublico==="function"&&<QGAdsPublico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {/* 20/09: Diagnóstico — o que a Meta mediu + o que o cliente falou (cérebro da Pixels) */}
-    {subAtiva==="diagnostico"&&temMeta&&typeof QGAdsDiagnostico==="function"&&<QGAdsDiagnostico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
+    {subAtiva==="diagnostico"&&temMeta&&typeof QGAdsDiagnostico==="function"&&<QGAdsDiagnostico mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit&&_bl("midia.cerebro")} currentUser={currentUser}/>}
     {subAtiva==="leads"&&temMeta&&typeof QGAdsLeads==="function"&&<QGAdsLeads mc={mc} conta={adsConta.conta} isMob={isMob} canEdit={canEdit} currentUser={currentUser}/>}
     {subAtiva==="historico"&&temMeta&&typeof QGAdsHistorico==="function"&&<QGAdsHistorico mc={mc} conta={adsConta.conta} isMob={isMob}/>}
     {subAtiva==="gestao"&&(function(){
@@ -57623,7 +57780,7 @@ function QGBusca({clients,openClient,onCliente,onTop,acoes}){
 /* ═══════════════════════════════════════════════════════
    RAIZ — Dashboard / Clientes / Cliente + modais
    ═══════════════════════════════════════════════════════ */
-function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,tasks,onNovoCliente,onAbrirCadastro,openClient,setOpenClient}){
+function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,viewUser,perms,tasks,onNovoCliente,onAbrirCadastro,openClient,setOpenClient}){
   useQGClientesSync(store,update);
   /* ─── Trava por cliente (19/09/2026) ───
      A Gestão de mídia mostrava todos os clientes pra qualquer um que abrisse a
@@ -57658,8 +57815,11 @@ function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,tasks,onNov
   const acoesApi=useQGAcoes(clients.map(function(c){return c.client_id;}));
   const [linhaModal,setLinhaModal]=useState(null);
   const [fechModal,setFechModal]=useState(null);
-  const isSocio=currentUser&&currentUser.level===1;
-  const canEdit=!!(isSocio||(currentUser&&(currentUser.id==="erick"||currentUser.dash==="gestor")));
+  /* 20/09: _vu = quem está sendo visto ("Visualizar como"); currentUser segue
+     sendo o logado, que é quem assina o que vai pro banco. */
+  const _vu=viewUser||currentUser;
+  const isSocio=_vu&&_vu.level===1;
+  const canEdit=(typeof pxBloco==="function")?pxBloco("midia.editar",{user:_vu,perms:perms}):!!(isSocio||(_vu&&(_vu.id==="erick"||_vu.dash==="gestor")));
   const abrir=function(id){ setOpenClient(id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} };
   const editarMeta=async function(mc,atual){
     if(typeof pixelsPrompt!=="function") return;
@@ -57678,7 +57838,7 @@ function QGMidiaRoot({modo,store,update,addHistory,isMob,currentUser,tasks,onNov
     {linhaModal&&<QGLinhaModal linha={linhaModal.linha} clientId={linhaModal.clientId} clients={clients} data={data} year={year} month={month} currentUser={currentUser} onClose={function(){setLinhaModal(null);}} onSaved={data.reload}/>}
     {fechModal&&<QGFechamentoModal clientId={fechModal.clientId} week={fechModal.week} clients={clients} data={data} currentUser={currentUser} onClose={function(){setFechModal(null);}} onSaved={data.reload}/>}
   </>;
-  const common={clients:clients,data:data,store:store,year:year,month:month,setPeriodo:setPeriodo,isMob:isMob,canEdit:canEdit,onOpenClient:abrir,onEditarMeta:editarMeta,acoes:acoesApi.lista,acoesApi:acoesApi,currentUser:currentUser,
+  const common={clients:clients,data:data,store:store,year:year,month:month,setPeriodo:setPeriodo,isMob:isMob,canEdit:canEdit,onOpenClient:abrir,onEditarMeta:editarMeta,acoes:acoesApi.lista,acoesApi:acoesApi,currentUser:currentUser,viewUser:_vu,perms:perms,
     onNovaLinha:function(cid){ setLinhaModal({linha:null,clientId:cid}); },onEditLinha:function(b){ setLinhaModal({linha:b,clientId:b.client_id}); },
     onFechamento:function(cid,week){ setFechModal({clientId:cid,week:week||_qgLastWeeks(1)[0]}); }};
   if(mc) return <>{modais}<QGCliente {...common} mc={mc} update={update} addHistory={addHistory} tasks={tasks} onBack={function(){setOpenClient(null);}} onTrocar={function(id){setOpenClient(id);}} onAbrirCadastro={function(){onAbrirCadastro(mc.client_id);}}/></>;
@@ -86721,15 +86881,28 @@ function _plInpStyle(){
 // ═══════════════════════════════════════════════════════════════
 //   PagePlanejamento — Estratégia > Planejamento
 // ═══════════════════════════════════════════════════════════════
-function PagePlanejamento({isMob, effectiveUser}){
+function PagePlanejamento({isMob, effectiveUser, perms}){
   const {entries, loading, upsert, remove} = usePlanejamentoEntries();
+  /* 20/09: _u = usuário VISTO ("Visualizar como"). Antes a tela inteira olhava
+     CURRENT_USER e o simular não valia aqui dentro. */
+  const _u = effectiveUser || (typeof CURRENT_USER!=="undefined" ? CURRENT_USER : null);
+  const _bl = function(k){ return (typeof pxBloco==="function") ? pxBloco(k,{user:_u,perms:perms}) : true; };
   // Default tab: Hellen vai pra weeklies (não participa de dailies), sócios começam em dailies
-  const _initialTab = (CURRENT_USER && CURRENT_USER.id === "ellen") ? "weeklies" : "dailies";
+  const _initialTab = (_u && _u.id === "ellen") ? "weeklies" : "dailies";
   const [tab, setTab] = useState(_initialTab); // dailies | weeklies | metas
   const [editing, setEditing] = useState(null); // entry sendo editado/criado
+  /* 20/09: aba desligada em Acessos › Time — cai na primeira liberada.
+     Fica AQUI porque abaixo há return antecipado ("Sem permissão"): hook
+     depois de return quebra a regra dos hooks do React. */
+  useEffect(function(){
+    const _hd = _u && (_u.id==="ellen" || _u.dash==="coordinator");
+    const _ok = ["dailies","weeklies","monthlies"]
+      .filter(function(id){ return (id!=="dailies"||!_hd) && _bl("plan.aba."+id); });
+    if(_ok.length && _ok.indexOf(tab)<0) setTab(_ok[0]);
+  },[tab]);
 
-  const isSocio = CURRENT_USER && CURRENT_USER.level === 1;
-  const canAccess = isSocio || CURRENT_USER.id === "ellen";
+  const isSocio = _u && _u.level === 1;
+  const canAccess = _bl("plan.menu");   // padrão: sócio, Hellen ou coordenação
   if(!canAccess){
     return <div style={{padding:24,fontFamily:PLAN_INTER,color:"#64748b"}}>Sem permissão.</div>;
   }
@@ -86777,6 +86950,7 @@ function PagePlanejamento({isMob, effectiveUser}){
   }
 
   function handleDelete(id){
+    if(!_bl("plan.excluir")) return;   // 20/09: desligável em Acessos › Time
     if(!window.confirm("Excluir este registro?")) return;
     remove(id);
   }
@@ -86807,7 +86981,7 @@ function PagePlanejamento({isMob, effectiveUser}){
     ...(_hideDailies ? [] : [{id:"dailies",   label:"Dailies",   ico:"sunrise", count:dailies.length}]),
     {id:"weeklies",  label:"Weeklies",  ico:"weekly",  count:weeklies.length},
     {id:"monthlies", label:"Monthlies", ico:"target",  count:monthlies.length},
-  ];
+  ].filter(function(t){ return _bl("plan.aba."+t.id); });   // 20/09: desligável em Acessos › Time
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PLAN_INTER}}>
 
@@ -86825,14 +86999,14 @@ function PagePlanejamento({isMob, effectiveUser}){
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={function(){
+        {_bl("plan.criar")&&<button onClick={function(){
           // Se for Hellen e tab for dailies (não devia mas defesa), força weekly
           var _t = tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":(_hideDailies?"weekly":"daily");
           openNew(_t);
         }}
           style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
           <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":(_hideDailies?"weekly":"daily")}
-        </button>
+        </button>}
       </div>
     </div>
 
@@ -101150,14 +101324,20 @@ function _MtzDetalhe({r, canEdit, onEditar, onExcluir, onFechar}){
     </div>
   </div>;
 }
-function PageMatrizResponsabilidades({isMob}){
+function PageMatrizResponsabilidades({isMob, perms, viewUser}){
   const sb=(typeof window!=="undefined")?window._sb:null;
-  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
-  const canEdit=!!(_u&&(_u.level===1||_u.id==="ellen"));
+  /* 20/09: _u = usuário VISTO ("Visualizar como"); antes olhava só o logado. */
+  const _u=viewUser||((typeof CURRENT_USER!=="undefined")?CURRENT_USER:null);
+  const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_u,perms:perms}):true; };
+  const canEdit=_bl("matriz.editar");   // padrão: sócio ou Hellen
   const [cadeiras,setCadeiras]=useState([]);
   const [loading,setLoading]=useState(true);
   const [busca,setBusca]=useState("");
   const [vista,setVista]=useState("cadeiras"); // cadeiras | fluxo
+  useEffect(function(){
+    const _vs=["cadeiras","fluxo"].filter(function(v){ return _bl("matriz.vista."+v); });
+    if(_vs.length&&_vs.indexOf(vista)<0) setVista(_vs[0]);
+  },[vista]);
   const [detalhe,setDetalhe]=useState(null);
   const [form,setForm]=useState(null); // null | {} novo | cadeira
   const _carregar=async function(){
@@ -101248,7 +101428,7 @@ function PageMatrizResponsabilidades({isMob}){
           style={{background:"#fff",border:"1px solid "+(busca?"#0f172a":"#e2e8f0"),borderRadius:11,padding:"0 14px 0 38px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:"100%",height:40,boxSizing:"border-box",fontFamily:_MTZ_FF}}/>
       </div>
       <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"cadeiras",l:"Cadeiras"},{id:"fluxo",l:"Fluxo"}].map(function(v){
+        {[{id:"cadeiras",l:"Cadeiras"},{id:"fluxo",l:"Fluxo"}].filter(function(v){ return _bl("matriz.vista."+v.id); }).map(function(v){
           const _on=vista===v.id;
           return <button key={v.id} type="button" onClick={function(){setVista(v.id);}}
             style={{background:_on?"#fff":"transparent",color:_on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:_on?800:600,cursor:"pointer",fontFamily:_MTZ_FF,boxShadow:_on?"0 1px 3px rgba(15,23,42,.08)":"none",transition:"all .12s"}}>{v.l}</button>;
