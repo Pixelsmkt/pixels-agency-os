@@ -58621,7 +58621,10 @@ function QGAdsEstrutura({conta,campId,P,cfg,tipo,X,ent,E,isMob,mediaConta,notaCo
   const mapa={}; anSnap.forEach(function(a){ mapa[a.entidade_id]={id:a.entidade_id,nome:a.nome,adset_id:a.parent_id,status:a.status_efetivo,m:null}; });
   anPeriodo.forEach(function(a){ const o=mapa[a.id]||(mapa[a.id]={id:a.id,nome:a.nome,adset_id:a.adset_id,status:null,m:null}); o.m=a; if(!o.adset_id) o.adset_id=a.adset_id; if(!o.nome) o.nome=a.nome; });
   const anuncios=Object.keys(mapa).map(function(k){ const o=mapa[k]; const m=o.m||{}; const res=o.m?_adsResDe(m,cfg):0; const gasto=Number(m.gasto||0); const custo=cfg.campo?_adsDiv(gasto,res):null; const cr=C.cr[o.id]||{}; const imp=Number(m.impressoes||0);
-    return Object.assign({},o,{cr:cr,res:res,gasto:gasto,custo:custo,ctr:imp>0?Number(m.cliques||0)/imp*100:null,cpm:imp>0?gasto/imp*1000:null,alcance:Number(m.alcance||0),frequencia:Number(m.alcance||0)>0?imp/Number(m.alcance):null,impressoes:imp,video:!!(cr.video_id||(Array.isArray(cr.ativos)&&cr.ativos.some(function(x){return x.tipo==="video";}))),r25:m.p25!==undefined&&imp>0?Number(m.p25||0)/imp*100:null,r50:m.p50!==undefined&&imp>0?Number(m.p50||0)/imp*100:null,r75:m.p75!==undefined&&imp>0?Number(m.p75||0)/imp*100:null,r100:m.p100!==undefined&&imp>0?Number(m.p100||0)/imp*100:null,ativosMeta:(AT.porAd||{})[o.id]||[],cfg:cfg,tipo:tipo,diag:[],semDiag:true,nivel:"n",campNome:(cur.campanhas||[]).filter(function(c){return c.id===campId;}).map(function(c){return c.nome;})[0]||""}); });
+    /* 20/09: a retencao e sobre REPRODUCOES, nao impressoes. Antes esta linha dividia por
+       impressoes e a aba Video dividia por reproducoes — dois numeros pra mesma pergunta. */
+    const baseV=Number(m.v3||0)||imp;
+    return Object.assign({},o,{cr:cr,res:res,gasto:gasto,custo:custo,ctr:imp>0?Number(m.cliques||0)/imp*100:null,cpm:imp>0?gasto/imp*1000:null,alcance:Number(m.alcance||0),frequencia:Number(m.alcance||0)>0?imp/Number(m.alcance):null,impressoes:imp,video:!!(cr.video_id||(Array.isArray(cr.ativos)&&cr.ativos.some(function(x){return x.tipo==="video";}))),r25:m.p25!==undefined&&baseV>0?Number(m.p25||0)/baseV*100:null,r50:m.p50!==undefined&&baseV>0?Number(m.p50||0)/baseV*100:null,r75:m.p75!==undefined&&baseV>0?Number(m.p75||0)/baseV*100:null,r100:m.p100!==undefined&&baseV>0?Number(m.p100||0)/baseV*100:null,ativosMeta:(AT.porAd||{})[o.id]||[],cfg:cfg,tipo:tipo,diag:[],semDiag:true,nivel:"n",campNome:(cur.campanhas||[]).filter(function(c){return c.id===campId;}).map(function(c){return c.nome;})[0]||""}); });
   const gastoTot=anuncios.reduce(function(s,a){return s+a.gasto;},0); const resTot=anuncios.reduce(function(s,a){return s+a.res;},0); const mediaCamp=cfg.campo?_adsDiv(gastoTot,resTot):null;
   anuncios.forEach(function(a){ a.mediaG=mediaCamp; a.nivel=cfg.campo&&a.res>=ADS_MIN_RESULTADOS?_adsNivelCusto(a.custo,mediaCamp,a.res):"n"; });
   const porConj={}; anuncios.forEach(function(a){ const k=a.adset_id||"_"; (porConj[k]=porConj[k]||[]).push(a); });
@@ -59536,8 +59539,19 @@ function AdsTextosAsset({linhas,cfg}){
   const temAlgum=GRUPOS.some(function(g){ return (linhas||[]).some(function(x){ return x.dimensao===g[0]; }); });
   if(!temAlgum) return null;
   return <div>{GRUPOS.map(function(g,gi){
-    const itens=(linhas||[]).filter(function(x){ return x.dimensao===g[0]; })
-      .map(function(x){ const r=Number(x.resultados||0); return Object.assign({},x,{r:r,cpa:r>0?Number(x.gasto)/r:null}); })
+    /* 20/09: a Meta da um id diferente pro mesmo texto. Agrupa pelo TEXTO,
+       senao a tela mostra "Converse conosco" duas vezes e o gestor nao entende. */
+    const juntos={};
+    (linhas||[]).filter(function(x){ return x.dimensao===g[0]; }).forEach(function(x){
+      const t=String(x.texto||"").trim();
+      const ch=t&&!/^[0-9]{6,}$/.test(t)?t:("id:"+x.valor);
+      if(!juntos[ch]) juntos[ch]={valor:x.valor,texto:x.texto,gasto:0,impressoes:0,cliques:0,resultados:0,quantos:0};
+      const j=juntos[ch];
+      j.gasto+=Number(x.gasto||0); j.impressoes+=Number(x.impressoes||0);
+      j.cliques+=Number(x.cliques||0); j.resultados+=Number(x.resultados||0); j.quantos++;
+    });
+    const itens=Object.keys(juntos).map(function(k){ const x=juntos[k]; const r=Number(x.resultados||0);
+      return Object.assign({},x,{r:r,cpa:r>0?Number(x.gasto)/r:null}); })
       .sort(function(p,q){ return Number(q.gasto)-Number(p.gasto); });
     if(!itens.length) return null;
     const comCpa=itens.filter(function(x){ return x.cpa; }).sort(function(p,q){ return p.cpa-q.cpa; });
@@ -59571,6 +59585,152 @@ function AdsTextosAsset({linhas,cfg}){
 }
 
 /* volume é uma coisa, qualidade é outra */
+
+/* ── 20/09/2026 · Pessoas e Contexto ─────────────────────────────────────────
+   Pessoas: a diferença entre "208 cliques" e "93 pessoas", mais os sinais orgânicos.
+   Contexto: por que o número é esse — janela de atribuição, otimização, e o que o
+   conjunto está fazendo. */
+
+const ADS_ACAO_PT={
+  "link_click":"Cliques no link","post_engagement":"Engajamento","page_engagement":"Engajamento na página",
+  "post_reaction":"Reações","comment":"Comentários","post":"Compartilhamentos","like":"Curtidas na página",
+  "video_view":"Visualizações de vídeo","landing_page_view":"Chegaram na página",
+  "onsite_conversion.messaging_conversation_started_7d":"Conversas iniciadas",
+  "onsite_conversion.messaging_first_reply":"Responderam",
+  "onsite_conversion.total_messaging_connection":"Conexões por mensagem",
+  "onsite_conversion.returning_messaging_connection":"Voltaram a falar",
+  "onsite_conversion.post_save":"Salvamentos","lead":"Leads (Meta)",
+  "onsite_conversion.lead_grouped":"Leads (formulário + mensagem)",
+};
+const _adsAcaoPT=function(k){ return ADS_ACAO_PT[k]||String(k).replace(/^onsite_conversion\./,"").replace(/_/g," "); };
+
+function AdsPessoas({p,cfg}){
+  if(!p) return null;
+  const pares=[["Cliques","cliques","cliques_pessoas"],["Cliques no link","cliques_link","cliques_link_pessoas"],["Saídas da Meta","cliques_saida","cliques_saida_pessoas"]]
+    .map(function(x){ return {rot:x[0],tot:Number(p[x[1]]||0),pes:Number(p[x[2]]||0)}; })
+    .filter(function(x){ return x.tot>0||x.pes>0; });
+  const acoes=p.acoes_pessoas&&typeof p.acoes_pessoas==="object"?Object.keys(p.acoes_pessoas):[];
+  const sinais=[["Salvamentos",p.salvamentos],["Comentários",p.comentarios],["Reações",p.reacoes],
+    ["Compartilhamentos",p.compartilhamentos],["Chegaram na página",p.chegaram_na_pagina]]
+    .filter(function(s){ return Number(s[1]||0)>0; });
+  return <div>
+    {pares.length>0&&<>
+      <AdsBlocoT primeiro t="Cliques x pessoas" s="o mesmo número contado de dois jeitos"/>
+      {pares.map(function(x,i){
+        const rep=x.tot>0&&x.pes>0?x.tot-x.pes:0;
+        const pct=x.tot>0?Math.max(3,Math.min(100,x.pes/x.tot*100)):0;
+        return <div key={x.rot} style={{marginBottom:i===pares.length-1?0:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"baseline",marginBottom:5}}>
+            <span style={{fontSize:12.5,color:ADS.ink2}}>{x.rot}</span>
+            <span style={{flexShrink:0}}>
+              <b style={Object.assign({fontSize:14,fontWeight:900,color:ADS.ink},ADS_MONO)}>{_adsNum(x.pes)}</b>
+              <span style={{fontSize:11,color:ADS.muted,marginLeft:6}}>pessoas de {_adsNum(x.tot)}</span>
+            </span>
+          </div>
+          <div style={{height:8,borderRadius:99,background:ADS.surface2,overflow:"hidden"}}>
+            <div style={{width:pct+"%",height:"100%",borderRadius:99,background:ADS.accent}}/>
+          </div>
+          {rep>0&&<div style={{fontSize:11,color:ADS.muted,marginTop:4}}>{_adsNum(rep)} {rep===1?"clique foi repetição":"cliques foram repetição"} da mesma pessoa</div>}
+        </div>; })}
+    </>}
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(118px,1fr))",gap:"16px 18px",marginTop:pares.length?24:0,paddingTop:pares.length?20:0,borderTop:pares.length?"1px solid "+ADS.line:"none"}}>
+      {(function(){
+        const c=[];
+        if(p.custo_por_pessoa!=null) c.push(["Custo por pessoa",_adsBRLc(p.custo_por_pessoa)]);
+        if(p.ctr_pessoas!=null) c.push(["CTR por pessoa",_adsPct(p.ctr_pessoas,2)]);
+        if(p.cpp!=null) c.push(["Custo por mil pessoas",_adsBRLc(p.cpp)]);
+        if(Number(p.engajamento_post||0)>0) c.push(["Engajamento do post",_adsNum(p.engajamento_post)]);
+        if(p.custo_engajamento!=null) c.push(["Custo por engajamento",_adsBRLc(p.custo_engajamento)]);
+        if(Number(p.gasto_social||0)>0) c.push(["Verba com prova social",_adsBRL0(p.gasto_social)]);
+        return c.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
+          <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:ADS.muted,lineHeight:1.3}}>{k[0]}</div>
+          <div style={Object.assign({fontSize:18,fontWeight:900,letterSpacing:"-.4px",marginTop:5,color:ADS.ink,whiteSpace:"nowrap"},ADS_MONO)}>{k[1]}</div>
+        </div>; });
+      })()}
+    </div>
+
+    {sinais.length>0&&<>
+      <AdsBlocoT t="Sinais do criativo" s="o que a pessoa fez além de clicar"/>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {sinais.map(function(s){ return <div key={s[0]} style={{background:ADS.surface2,borderRadius:10,padding:"9px 13px"}}>
+          <b style={Object.assign({fontSize:14,fontWeight:900,color:ADS.ink},ADS_MONO)}>{_adsNum(s[1])}</b>
+          <span style={{fontSize:11.5,color:ADS.ink2,marginLeft:7}}>{s[0]}</span>
+        </div>; })}
+      </div>
+    </>}
+
+    {acoes.length>0&&<>
+      <AdsBlocoT t="Ações por pessoa" s="quantas pessoas diferentes fizeram cada coisa"/>
+      {acoes.sort(function(a,b){ return Number(p.acoes_pessoas[b])-Number(p.acoes_pessoas[a]); }).map(function(k,i){
+        return <div key={k} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"9px 0",borderTop:i?"1px solid "+ADS.line:"none",fontSize:12.5}}>
+          <span style={{color:ADS.ink2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_adsAcaoPT(k)}</span>
+          <b style={Object.assign({color:ADS.ink,flexShrink:0},ADS_MONO)}>{_adsNum(p.acoes_pessoas[k])}</b>
+        </div>; })}
+    </>}
+  </div>;
+}
+
+const ADS_OTIM_PT={REPLIES:"Respostas",CONVERSATIONS:"Conversas",LEAD_GENERATION:"Geração de leads",
+  LINK_CLICKS:"Cliques no link",REACH:"Alcance",IMPRESSIONS:"Impressões",POST_ENGAGEMENT:"Engajamento",
+  PROFILE_VISIT:"Visitas ao perfil",LANDING_PAGE_VIEWS:"Visitas à página",THRUPLAY:"Vídeo assistido",
+  OFFSITE_CONVERSIONS:"Conversões no site",AD_RECALL_LIFT:"Lembrança de marca",QUALITY_LEAD:"Lead qualificado"};
+const ADS_LANCE_PT={LOWEST_COST_WITHOUT_CAP:"Menor custo, sem limite",LOWEST_COST_WITH_BID_CAP:"Menor custo, com teto de lance",
+  COST_CAP:"Teto de custo",LOWEST_COST_WITH_MIN_ROAS:"Menor custo, com ROAS mínimo"};
+const ADS_EXPANS_PT={detailed_targeting:"interesses",lookalike:"públicos semelhantes",age:"idade",gender:"gênero",geo:"região"};
+
+function AdsContexto({c}){
+  if(!c) return null;
+  const _d=function(s){ if(!s) return null; const p=String(s).slice(0,10).split("-"); return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:String(s); };
+  const exp=Array.isArray(c.expansao_publico)?c.expansao_publico.filter(function(x){ return Number(x&&x.value)>0; }):[];
+  const linhas=[
+    ["Janela de atribuição", c.atribuicao?String(c.atribuicao).replace("1d_view_7d_click","1 dia de visualização + 7 dias de clique").replace("1d_click","1 dia de clique").replace("7d_click","7 dias de clique"):null,
+      "é por isso que o número pode diferir do Gerenciador"],
+    ["A Meta otimizava por", c.otimizacao_dia?(ADS_OTIM_PT[c.otimizacao_dia]||c.otimizacao_dia):null, "no período analisado"],
+    ["Otimização do conjunto", c.otimizacao_conj?(ADS_OTIM_PT[c.otimizacao_conj]||c.otimizacao_conj):null, null],
+    ["Estratégia de lance", c.estrategia_lance?(ADS_LANCE_PT[c.estrategia_lance]||c.estrategia_lance):null, null],
+    ["Orçamento do conjunto", c.orcamento?(_adsBRL0(Number(c.orcamento)/100)+(c.tipo_orcamento==="diario"?" por dia":" no total")):null, null],
+    ["Fase de aprendizado", c.fase_aprendizado?String(c.fase_aprendizado).replace("LEARNING","Aprendendo").replace("SUCCESS","Aprendizado concluído").replace("LIMITED","Aprendizado limitado"):null, null],
+    ["Conjunto", c.conjunto_nome||null, c.conjunto_status?("está "+String(c.conjunto_status).replace("ACTIVE","ativo").replace("PAUSED","pausado")):null],
+    ["Anúncio criado em", _d(c.criado_em), c.dias_no_ar?(c.dias_no_ar+(c.dias_no_ar===1?" dia com verba no período":" dias com verba no período")):null],
+    ["Alterado pela última vez", _d(c.alterado_em), "mudança aqui explica queda de resultado"],
+  ].filter(function(x){ return x[1]; });
+  const rk=[["Qualidade",c.ranking_qualidade],["Engajamento",c.ranking_engajamento],["Conversão",c.ranking_conversao]]
+    .filter(function(x){ return x[1]&&x[1]!=="UNKNOWN"; });
+  return <div>
+    <AdsBlocoT primeiro t="Por que o número é esse" s="o que estava configurado no período"/>
+    {linhas.map(function(x,i){
+      return <div key={x[0]} style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1.15fr)",gap:12,padding:"11px 0",borderTop:i?"1px solid "+ADS.line:"none",alignItems:"baseline"}}>
+        <span style={{fontSize:12,color:ADS.muted}}>{x[0]}</span>
+        <span style={{minWidth:0}}>
+          <b style={{fontSize:12.5,color:ADS.ink,fontWeight:700,wordBreak:"break-word"}}>{x[1]}</b>
+          {x[2]&&<div style={{fontSize:11,color:ADS.muted,marginTop:3,lineHeight:1.4}}>{x[2]}</div>}
+        </span>
+      </div>; })}
+
+    {exp.length>0&&<>
+      <AdsBlocoT t="A Meta ampliou o público sozinha" s="entregou além do que foi segmentado"/>
+      <div style={{fontSize:12.5,color:ADS.ink2,lineHeight:1.55,background:ADS.surface2,borderRadius:12,padding:"13px 15px"}}>
+        Expandiu por <b style={{color:ADS.ink}}>{exp.map(function(x){ return ADS_EXPANS_PT[x.key]||x.key; }).join(", ")}</b>.
+        <span style={{color:ADS.muted}}> Parte do resultado pode ter vindo de fora do público que você escolheu.</span>
+      </div>
+    </>}
+
+    {rk.length>0&&<>
+      <AdsBlocoT t="Como a Meta compara com os concorrentes"/>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {rk.map(function(x){ return <div key={x[0]} style={{background:ADS.surface2,borderRadius:10,padding:"9px 13px",fontSize:12}}>
+          <span style={{color:ADS.muted}}>{x[0]}: </span>
+          <b style={{color:ADS.ink}}>{String(x[1]).replace("ABOVE_AVERAGE","acima da média").replace("AVERAGE","na média").replace("BELOW_AVERAGE_35","abaixo da média").replace("BELOW_AVERAGE_20","bem abaixo da média").replace("BELOW_AVERAGE_10","muito abaixo da média")}</b>
+        </div>; })}
+      </div>
+    </>}
+    {rk.length===0&&<div style={{fontSize:11.5,color:ADS.muted,marginTop:18,lineHeight:1.5}}>
+      A Meta só dá a nota comparativa com 500 impressões ou mais em 7 dias. Este anúncio ainda não chegou lá.
+    </div>}
+  </div>;
+}
+
 function AdsFunilConversa({c}){
   if(!c) return null;
   const ini=Number(c.iniciadas||0);
@@ -59774,6 +59934,10 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
   const Vd=useAdsRpcAnuncio("ads_video_por_anuncio",conta&&conta.ad_account_id,a.id,P);
   const Tx=useAdsRpcAnuncio("ads_textos_por_anuncio",conta&&conta.ad_account_id,a.id,P);
   const Cv=useAdsRpcAnuncio("ads_conversa_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const Ps=useAdsRpcAnuncio("ads_pessoas_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const Cx=useAdsRpcAnuncio("ads_contexto_por_anuncio",conta&&conta.ad_account_id,a.id,P);
+  const temPessoas=!!(Ps&&(Number(Ps.cliques_pessoas||0)>0||Number(Ps.engajamento_post||0)>0));
+  const temContexto=!!(Cx&&(Cx.atribuicao||Cx.otimizacao_dia||Cx.conjunto_nome));
   const temVideo=!!(Vd&&Array.isArray(Vd.curva)&&Vd.curva.length>=3);
   const temTextos=!!(Tx&&Tx.length);
   const temConversa=!!(Cv&&Number(Cv.iniciadas||0)>0);
@@ -59783,7 +59947,9 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
     .concat([["publico","Público"]])
     .concat(temTextos?[["textos","Textos"]]:[])
     .concat(temConversa?[["conversa","Conversa"]]:[])
-    .concat([["hora","Horário"],["campanhas","Campanhas"]]);
+    .concat(temPessoas?[["pessoas","Pessoas"]]:[])
+    .concat([["hora","Horário"],["campanhas","Campanhas"]])
+    .concat(temContexto?[["contexto","Contexto"]]:[]);
   const DIMS_LB=[["idade","Faixa etária"],["genero","Gênero"],["regiao","Região"],["dispositivo","Dispositivo"],["posicionamento","Posicionamento"]];
   const [dimLb,setDimLb]=useState("idade");
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,13,26,.72)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:ADS_FONT}}>
@@ -59894,7 +60060,8 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
                 const cels=[];
                 if(Vd.tempo_medio!=null) cels.push(["Tempo médio",Number(Vd.tempo_medio).toLocaleString("pt-BR",{maximumFractionDigits:1})+"s"]);
                 if(Vd.plays!=null) cels.push(["Reproduções",_adsNum(Vd.plays)]);
-                if(Vd.thruplay!=null&&Number(Vd.thruplay)>0) cels.push(["Assistiram até o fim",_adsNum(Vd.thruplay)]);
+                if(Vd.thruplay!=null&&Number(Vd.thruplay)>0) cels.push(["Passaram de 15s",_adsNum(Vd.thruplay)]);
+                if(Vd.p100!=null&&Number(Vd.p100)>0) cels.push(["Viram o vídeo inteiro",_adsNum(Vd.p100)]);
                 if(Vd.passaram_30s!=null&&Number(Vd.passaram_30s)>0) cels.push(["Passaram de 30s",_adsNum(Vd.passaram_30s)]);
                 if(Vd.custo_thruplay!=null) cels.push(["Custo por vídeo assistido",_adsBRLc(Vd.custo_thruplay)]);
                 return cels.map(function(k){ return <div key={k[0]} style={{minWidth:0}}>
@@ -59913,6 +60080,10 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
             <AdsBlocoT primeiro t="Profundidade da conversa" s="quantas foram pra frente, não só quantas começaram"/>
             <AdsFunilConversa c={Cv}/>
           </div>}
+
+          {abaLb==="pessoas"&&<div><AdsPessoas p={Ps} cfg={a.cfg}/></div>}
+
+          {abaLb==="contexto"&&<div><AdsContexto c={Cx}/></div>}
 
           {abaLb==="hora"&&<div>
             {Qa===null?<div style={{fontSize:12.5,color:ADS.muted}}>Lendo horários…</div>
