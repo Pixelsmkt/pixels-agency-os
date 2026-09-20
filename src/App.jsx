@@ -1812,6 +1812,54 @@ PX_BLOCOS.matriz={label:"Matriz de Responsabilidades", navIcon:"matriz", color:"
 /* 20/09: um grupo pode declarar `itens` como FUNÇÃO (ex.: a lista de clientes,
    que só existe depois que CLIENTS carrega). Resolver aqui também, senão
    pxBlocoDef quebra na primeira chamada. */
+/* ═══ 20/09/2026 — Portal, Gestão e Acessos ═══
+   Fecha a lista da varredura de 17/09. Mesma regra de sempre: o padrão de cada
+   item é a regra fixa que já existia no canSee/renderPage — ninguém ganha nem
+   perde acesso no deploy. */
+const _pxSocio=(u)=>!!(u&&u.level===1);
+PX_BLOCOS.portal={label:"Portal do cliente", navIcon:"portal", color:"#0d9488", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"portal.menu", label:"Acessar o Portal do cliente", desc:"Padrão: a chave abaixo ou sócio",
+      padrao:(u,p)=>!!(p&&p.verPortal)||_pxSocio(u)},
+    {perm:"verPortal", label:"Chave Portal", desc:"A chave antiga — continua valendo dentro da tela"},
+    /* as abas de dentro do portal são por CLIENTE (Acessos › Clientes › Abas do
+       portal), não por colaborador — por isso não aparecem aqui. */
+  ]},
+]};
+PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"gestao.menu", label:"Acessar Gestão", desc:"Padrão: a chave Financeiro ou sócio",
+      padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
+    {perm:"verFinanceiro", label:"Chave Financeiro", desc:"A chave antiga — abre o menu e o Financeiro"},
+  ]},
+  {id:"submenus", label:"Sub-menus", itens:[
+    {key:"gestao.financeiro",    label:"Financeiro / DRE",     desc:"Padrão: chave Financeiro ou sócio",
+      padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
+    {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Padrão: chave Financeiro ou sócio",
+      padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
+    {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.armazenamento", label:"Armazenamento",        desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.portfolio",     label:"Portfólio",            desc:"Padrão: só sócios", padrao:_pxSocio},
+  ]},
+]};
+PX_BLOCOS.acessos={label:"Acessos", navIcon:"acessos", color:"#475569", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"acessos.menu", label:"Acessar Acessos", desc:"Padrão: a chave abaixo ou sócio",
+      padrao:(u,p)=>!!(p&&p.verAcessos)||_pxSocio(u)},
+    {perm:"verAcessos", label:"Chave Acessos", desc:"A chave antiga — continua valendo dentro da tela"},
+  ]},
+  {id:"abas", label:"Abas", itens:[
+    {key:"acessos.aba.clientes",    label:"Clientes",      desc:"Logins do portal e abas de cada cliente"},
+    {key:"acessos.aba.equipe",      label:"Time",          desc:"Colaboradores e o gerenciar acesso"},
+    {key:"acessos.aba.ferramentas", label:"Ferramentas",   desc:""},
+    {key:"acessos.aba.redes",       label:"Redes sociais", desc:""},
+    {key:"acessos.aba.senhas",      label:"Senhas",        desc:"Cofre de senhas — padrão: só Vinicius e Gustavo. Exceção: este é o único item que NÃO segue o \"sócio vê tudo\"",
+      padrao:(u)=>!!(u&&(u.id==="gustavo"||u.id==="vinicius"))},
+    {key:"acessos.aba.storage",     label:"Storage",       desc:""},
+  ]},
+]};
 function pxGrupoItens(g){
   if(!g) return [];
   if(typeof g.itens==="function"){ try{ return g.itens()||[]; }catch(_){ return []; } }
@@ -36112,10 +36160,10 @@ const PERM_TABS=[
   {id:"playbooks",    navIcon:"playbooks",  label:"Playbooks",          color:"#7c3aed", arvore:true}, // permissões por bloco (17/09/2026)
   {id:"comercial",    navIcon:"comercial",  label:"Comercial",          color:"#0d9488", tela:"comercial"},
   {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
-  {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
-  {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
+  {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488", tela:"portal"},     // árvore (20/09/2026)
+  {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626", tela:"gestao"},     // árvore (20/09/2026)
   {id:"enps",         navIcon:"gestao",     label:"ENPS",               color:"#8b5cf6", tela:"enps"},
-  {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
+  {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569", tela:"acessos"},    // árvore (20/09/2026)
   {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
   {id:"notificacoes", navIcon:"notificacoes",label:"Notificações",      color:"#0ea5e9"},
 ];
@@ -37090,7 +37138,10 @@ const LEVEL_STRUCTURE=[
   {l:5,name:"Clientes",    c:C.gr, desc:"Portal de aprovações e acompanhamento das demandas."},
 ];
 
-function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
+function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks,perms,vistoComo}){
+  /* 20/09: _vu = usuário VISTO ("Visualizar como"); _bl = bloco de Acessos › Time */
+  const _vu=vistoComo||((typeof CURRENT_USER!=="undefined")?CURRENT_USER:null);
+  const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_vu,perms:perms}):true; };
   const [viewUser,setViewUser]=useState(null);
   const [viewDash,setViewDash]=useState(null);
   const [editCollab,setEditCollab]=useState(null);
@@ -37100,7 +37151,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
   const isMePartner=CURRENT_USER.level===1; // renomeado pra não conflitar com global isPartner(uid)
-  const _podeSenhas=CURRENT_USER.id==="gustavo"||CURRENT_USER.id==="vinicius"; // cofre de senhas só CEOs
+  /* 20/09 — EXCEÇÃO DELIBERADA: o cofre de senhas NÃO segue o "sócio vê tudo".
+     Se seguisse, o pxPode liberaria pra qualquer level 1 (a Ocsana, por exemplo)
+     e hoje ela não vê. Então: override manual manda nos dois sentidos; sem
+     override, vale a regra fixa de sempre (Vinicius e Gustavo).
+     Mesmo espírito dos "Alertas urgentes" do dashboard. */
+  const _senhasManual=(function(){ try{ const b=(perms&&perms.blocos)||{}; return typeof b["acessos.aba.senhas"]==="boolean"?b["acessos.aba.senhas"]:null; }catch(_){ return null; } })();
+  const _podeSenhas=(_senhasManual!==null)?_senhasManual:!!(_vu&&(_vu.id==="gustavo"||_vu.id==="vinicius"));
   const myPerms=withPartnerOverride({...DEFAULT_PERMS,...(ACCESS_STORE[CURRENT_USER.id]||{})}, CURRENT_USER.id);
   const [collabProfiles,setCollabProfiles]=useState(()=>{
     // Carrega perfis do localStorage como cache inicial
@@ -37225,6 +37282,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   };
 
   const [mainTab,setMainTab]=useState("clientes");
+  /* 20/09: aba desligada em Acessos › Time — cai na primeira liberada.
+     Fica aqui (antes dos returns antecipados) por causa da regra dos hooks. */
+  useEffect(function(){
+    const _ok=MAIN_TABS.map(function(x){return x[0];})
+      .filter(function(id){ return id==="senhas"?_podeSenhas:_bl("acessos.aba."+id); });
+    if(_ok.length&&_ok.indexOf(mainTab)<0) setMainTab(_ok[0]);
+  },[mainTab,_podeSenhas]);
   const [teamRev,setTeamRev]=useState(0);
   useEffect(()=>{
     const onTeamUpdate=()=>setTeamRev(r=>r+1);
@@ -38134,7 +38198,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
       {/* ── MAIN TAB SWITCHER ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:3,background:C.s1,borderRadius:12,padding:3}}>
-          {MAIN_TABS.filter(function(t){return t[0]!=="senhas"||_podeSenhas;}).map(([id,lbl])=>(
+          {MAIN_TABS.filter(function(t){return t[0]==="senhas"?_podeSenhas:_bl("acessos.aba."+t[0]);}).map(([id,lbl])=>(
             <button key={id} onClick={()=>setMainTab(id)}
               style={{background:mainTab===id?"linear-gradient(135deg,"+C.a+","+C.aD+")":"transparent",color:mainTab===id?"#fff":C.ts,border:"none",borderRadius:9,padding:"9px 20px",fontWeight:mainTab===id?700:400,fontSize:13,cursor:"pointer",transition:"all .15s"}}>
               {lbl}
@@ -55325,17 +55389,17 @@ export default function AgencyOS(){
       case "portal_analises":
       case "portal_faturamento":
       case "portal_chat":
-      case "portal_criativos":     return p.verPortal||isSocio;
-      case "gestao":
-      case "gestao_financeiro":    return p.verFinanceiro||isSocio;
-      case "gestao_projecao":      return p.verFinanceiro||isSocio;
-      case "gestao_operacional":   return isSocio;
-      case "gestao_portfolio":     return isSocio;
-      case "gestao_time":          return isSocio;  // Time: só sócios podem ver
-      case "gestao_administrativo": return isSocio;
-      case "gestao_armazenamento": return isSocio;  // Armazenamento: só sócios
+      case "portal_criativos":     return _menuBloco("portal.menu",p);   // era verPortal||sócio
+      case "gestao":               return _menuBloco("gestao.menu",p);           // era verFinanceiro||sócio
+      case "gestao_financeiro":    return _menuBloco("gestao.financeiro",p);     // era verFinanceiro||sócio
+      case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
+      case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
+      case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
+      case "gestao_time":          return _menuBloco("gestao.time",p);           // era só sócio
+      case "gestao_administrativo": return _menuBloco("gestao.administrativo",p);// era só sócio
+      case "gestao_armazenamento": return _menuBloco("gestao.armazenamento",p);  // era só sócio
       case "gestao_enps":          return _menuBloco("enps.menu",p);  // todos veem (filtragem dentro); desligável em Acessos › Time
-      case "acessos":              return p.verAcessos||isSocio;
+      case "acessos":              return _menuBloco("acessos.menu",p);  // era verAcessos||sócio
       case "interno":
       case "interno_calendario":
       case "interno_radar":        return p.verInterno||isSocio;
@@ -55413,17 +55477,17 @@ export default function AgencyOS(){
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={effectiveUser}/>:<NoPerm/>; // "ver como" fiel (18/09/2026)
       case "analises":
       case "gestao":
-      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "gestao_projecao":       return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
-      case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
-      case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
-      case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
-      case "gestao_administrativo": return isSocio?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
-      case "gestao_armazenamento":  return isSocio?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
+      case "gestao_financeiro":     return _menuBloco("gestao.financeiro",effectivePerms)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
+      case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
+      case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
+      case "gestao_time":           return _menuBloco("gestao.time",effectivePerms)?<PageGestaoTime {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} onNavTo={nav}/>:<NoPerm/>;
+      case "gestao_administrativo": return _menuBloco("gestao.administrativo",effectivePerms)?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
+      case "gestao_armazenamento":  return _menuBloco("gestao.armazenamento",effectivePerms)?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_enps":           return _menuBloco("enps.menu",effectivePerms)?<PageGestaoENPS {...p}/>:<NoPerm/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
-      case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} onViewAsClient={_enterClientPreview} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "acessos":               return _menuBloco("acessos.menu",effectivePerms)?<PageAcessos {...p} vistoComo={effectiveUser} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} onViewAsClient={_enterClientPreview} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "portal":
       case "portal_dashboard":
       case "portal_demandas":
@@ -55432,7 +55496,7 @@ export default function AgencyOS(){
       case "portal_analises":
       case "portal_faturamento":
       case "portal_chat":
-      case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "portal_criativos":      return _menuBloco("portal.menu",effectivePerms)?<PagePortalCliente {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_radar":         return (effectivePerms.verInterno||isSocio)?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
