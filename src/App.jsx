@@ -16245,22 +16245,11 @@ function CScriptsTab({cl, isMob, bl}){
 /* ─── PageScripts — Estratégia > Scripts (09/09/2026) ─────────────────────
    Os scripts são globais (team_data 'onboarding_scripts' / 'ongoing_scripts'),
    então saíram da ficha do cliente e ganharam página própria no menu Estratégia.
-   O seletor de cliente aqui só serve pra preencher {{cliente}}, {{data_inicio}}
-   e {{setor}} na hora de copiar — o texto é o mesmo pra todo mundo.           */
+   21/09/2026: o seletor "Copiar como <cliente>" foi removido — os textos
+   são iguais pra todo mundo e não usam mais placeholder de cliente.       */
 function PageScripts({isMob, perms, viewUser}){
   /* 20/09: blocos de Acessos › Time */
   const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null),perms:perms}):true; };
-  const _lista=(typeof CLIENTS!=="undefined"?CLIENTS:[])
-    .filter(function(c){return c&&c.status!=="interno"&&c.status!=="encerrado"&&String(c.name||"").trim();})
-    .slice().sort(function(a,b){return String(a.name||"").localeCompare(String(b.name||""),"pt-BR",{sensitivity:"base"});});
-  const [clId,setClId]=useState(function(){
-    try{ const _s=localStorage.getItem("pixels-scripts-cliente"); if(_s&&_lista.some(function(c){return c.id===_s;})) return _s; }catch(_){}
-    return _lista[0]?_lista[0].id:"";
-  });
-  useEffect(function(){ try{ localStorage.setItem("pixels-scripts-cliente",clId||""); }catch(_){} },[clId]);
-  const cl=_lista.find(function(c){return c.id===clId;})||null;
-  const _cor=(cl&&cl.color)||"#7c3aed";
-  const _logo=cl&&((typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null);
   return <div style={{fontFamily:"'Inter',system-ui,sans-serif",display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#7c3aed,#6d28d9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 20px rgba(124,58,237,.3)",flexShrink:0}}>
@@ -16268,22 +16257,10 @@ function PageScripts({isMob, perms, viewUser}){
       </div>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Scripts</div>
-        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Mensagens padrão de onboarding e ongoing — iguais pra todos os clientes. Escolha o cliente só pra copiar com os dados preenchidos.</div>
+        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Mensagens padrão de onboarding e ongoing — iguais pra todos os clientes.</div>
       </div>
-      <label style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"5px 10px 5px 6px",boxShadow:"0 2px 6px rgba(15,23,42,.04)"}}>
-        <span style={{width:26,height:26,borderRadius:7,background:"#fff",border:"1px solid "+_cor+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-          {_logo?<img src={_logo} alt="" style={{width:"82%",height:"82%",objectFit:"contain"}}/>:<span style={{color:_cor,fontSize:9,fontWeight:900}}>{String((cl&&cl.name)||"?").slice(0,2).toUpperCase()}</span>}
-        </span>
-        <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Copiar como</span>
-        <select value={clId} onChange={function(e){setClId(e.target.value);}}
-          style={{border:"none",background:"transparent",color:"#0f172a",fontSize:12.5,fontWeight:800,outline:"none",cursor:"pointer",fontFamily:"inherit",maxWidth:220}}>
-          {_lista.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
-        </select>
-      </label>
     </div>
-    {cl
-      ? <CScriptsTab cl={cl} isMob={isMob} bl={_bl}/>
-      : <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:14,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>Sem clientes ativos cadastrados.</div>}
+    <CScriptsTab cl={null} isMob={isMob} bl={_bl}/>
   </div>;
 }
 
@@ -82787,7 +82764,7 @@ function _ScriptCard({s, _editing, setEditingId, _updateScript, _deleteScript, _
           onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="transparent";}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>}
-        <button onClick={function(){_copyScript(s);}} type="button" title={"Copia com dados de "+((cl&&cl.name)||"cliente")+" preenchidos automaticamente"}
+        <button onClick={function(){_copyScript(s);}} type="button" title="Copiar o texto do script"
           style={{background:"linear-gradient(135deg,"+_acc+","+_acc+"d9)",color:"#fff",border:"none",borderRadius:10,padding:"8px 15px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",boxShadow:"0 4px 12px "+_acc+"3d"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 8px 18px "+_acc+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 12px "+_acc+"3d";}}>
@@ -82868,7 +82845,7 @@ function _OnboardingScripts({cl, startDate, accent}){
         ta.value = _final; document.body.appendChild(ta); ta.select();
         document.execCommand("copy"); document.body.removeChild(ta);
       }
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado com dados de "+((cl&&cl.name)||"cliente")+"!",2500);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado!",2000);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Tente selecionar manualmente.",4000);
     }
@@ -83017,7 +82994,7 @@ function _OngoingScripts({cl, accent}){
         ta.value = _final; document.body.appendChild(ta); ta.select();
         document.execCommand("copy"); document.body.removeChild(ta);
       }
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado com dados de "+((cl&&cl.name)||"cliente")+"!",2500);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Script copiado!",2000);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Nao consegui copiar. Tente selecionar manualmente.",4000);
     }
@@ -104050,8 +104027,13 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const doCliente=roteiros.filter(function(r){ return r.client_id===clId && (!isBioter || String(r.unidade||"")===String(unit||"")); });
   const visiveis=doCliente.filter(function(r){ return filtro==="todos"||r.status===filtro; }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id)}); });
 
+  /* 21/09/2026 — BUG: o botao "Gerar 5 roteiros" chamava _gerar(null) sem unidade, entao uId
+     caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
+     filtra por bioter_unit) e os roteiros nasciam em Grupo, invisiveis na lista, que e filtrada
+     pela unidade da tela. Sem unitAlvo (botao da aba Roteiros), vale a unidade selecionada. */
   const _gerar=async function(trend,clientAlvo,unitAlvo){
-    const cId=clientAlvo||clId, uId=(cId==="bioter")?(unitAlvo||""):"";
+    const cId=clientAlvo||clId;
+    const uId=(cId==="bioter")?String(((unitAlvo===undefined||unitAlvo===null)?unit:unitAlvo)||""):"";
     if(!cId){ pixelsToast.warning("Escolhe o cliente."); return; }
     const chave=trend?trend.id:"ia";
     setGerando(chave);
