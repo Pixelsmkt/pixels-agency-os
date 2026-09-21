@@ -30400,7 +30400,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const sortStable=(arr)=>[...arr].sort((a,b)=>{
     const pa=_dataOrd(a.publishDate||a.publish_date), pb=_dataOrd(b.publishDate||b.publish_date);
     if(pa&&pb){ if(pa!==pb) return pa<pb?-1:1; }
-    else if(pa!==pb) return pa?-1:1;          // quem tem data vem antes de quem não tem
+    /* 21/09/2026 — SEM DATA DE PUBLICAÇÃO VEM PRIMEIRO (pedido do Rodrigo).
+       Antes ia pro fim da fila (regra de 13/09). Card sem data é justamente o
+       que precisa de decisão — ele tem que abrir a fila, não fechar. */
+    else if(pa!==pb) return pa?1:-1;          // quem NÃO tem data vem primeiro
     if(!pa&&!pb){                              // só sem data de publicação é que a entrega desempata
       const da=_dataOrd(a.deadline), db=_dataOrd(b.deadline);
       if(da&&db){ if(da!==db) return da<db?-1:1; }
