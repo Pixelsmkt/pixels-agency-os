@@ -18865,7 +18865,11 @@ function _pxCasFixo(t){
       só podem ser jogados pra frente vídeos e artes normais". O card
      "Vídeo — 2026: o ano em peças entregues" foi empurrado pra 04/01/2027 pela cascata
      porque não tinha a tag e o id era autoplan-, não autocom-. Agora o título já trava. */
-  return /retrospectiv|balan[çc]o do ano|resumo do ano|o ano em |fim de ano|r[ée]veillon|melhores momentos/i.test(String((t&&t.title)||""));
+  /* Pega também os vídeos de fechamento que o planejamento cria com o ANO no título
+     ("2026 em obras", "2026 nos Campos Gerais", "Un año de obras en Paraguay").
+     Conferido em 21/09 contra o banco: TODO card futuro com ano no título é peça de
+     fim de ano — nenhum card normal traz ano no título. */
+  return /retrospectiv|balan[çc]o do ano|resumo do ano|o ano em |um ano de|un a[ñn]o de|fim de ano|final do ano|r[ée]veillon|melhores momentos|\b(19|20)\d{2}\b/i.test(String((t&&t.title)||""));
 }
 function _pxCasGrupo(t){
   const ct=String((t&&(t.content_type||t.contentType))||"");
