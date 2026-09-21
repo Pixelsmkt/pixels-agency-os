@@ -1798,6 +1798,7 @@ PX_BLOCOS.social={label:"Gestão de redes", navIcon:"gestaoredes", color:"#E4405
   {id:"abas", label:"Abas do cliente", itens:[
     {key:"social.aba.visao",       label:"Visão geral",  desc:"Seguidores, alcance e as duas curvas do período", padrao:false},
     {key:"social.aba.publicacoes", label:"Publicações",  desc:"O que cada post entregou",                        padrao:false},
+    {key:"social.aba.publico",     label:"Público",      desc:"Idade, gênero, cidade e país de quem segue",      padrao:false},
     {key:"social.aba.historico",   label:"Histórico",    desc:"O dia a dia cru",                                 padrao:false},
     {key:"social.aba.contas",      label:"Contas",       desc:"Quais perfis coletam e quando foi a última coleta",padrao:false},
   ]},
@@ -62317,43 +62318,59 @@ function QGAdsDiagnostico({mc,conta,isMob,canEdit,currentUser}){
 // Gestão de redes — o orgânico. Irmã da Gestão de mídia (que é o pago).
 // Estrutura igual: lista de clientes → painel do cliente → abas internas.
 //
-// Fonte: só o que o coletor sync-instagram gravou.
-//   social_daily → uma linha por perfil por dia (alcance, seguidores)
-//   social_posts → uma linha por publicação (alcance, curtidas, salvamentos…)
+// v2 (20/09/2026, noite) — a tela do jeito dos desenhos aprovados:
+//   Visão geral  = 3 sólidos + alcance por dia + 10 números + formato + melhor dia + top 5
+//   Publicações  = todas as publicações com número, capa, filtro e ordenação
+//   Público      = idade, gênero, cidade e país de quem segue (retrato do dia)
+//   Histórico    = tudo que está guardado, mês a mês, com a cobertura da coleta
+//   Contas       = as quatro fontes (Instagram, Facebook, TikTok, YouTube) e o que cada uma entrega
+//
+// Fonte: só o que os coletores gravaram.
+//   social_daily        → uma linha por perfil por dia (alcance, seguidores + 11 totais do dia)
+//   social_posts        → uma linha por publicação
+//   social_demografia   → retrato do público (idade, gênero, cidade, país)
+//   social_fb_posts     → publicações da página do Facebook
+//   social_comentarios  → comentários das publicações
+//   social_stories      → stories que estavam no ar na hora da coleta
 //   client_social_accounts → quais perfis existem e quais têm identificador
 //
 // REGRA DESTA TELA: perfil sem coleta mostra "ainda não coletado", NUNCA zero.
 // Zero é um número; "não coletado" é a ausência dele. Misturar os dois mente.
+// Onde não temos o dado, aparece "—". Nada é estimado.
 //
-// Depende de: 00_clientes_data (CLIENTS, NAV), 17b_qg_midia (QG, QG_FONT, QGCard…)
+// Depende de: 00_clientes_data (CLIENTS, NAV, pxBloco)
 
 /* ─── PALETA E FORMATADORES ──────────────────────────── */
 /* Valores escritos à mão de propósito, iguais aos do QG (17b_qg_midia).
    NÃO trocar por `typeof QG!=="undefined"?QG:...`: `typeof` sobre um const
    que ainda não foi declarado no arquivo montado NÃO devolve "undefined",
-   ele estoura ReferenceError e derruba o app inteiro na carga. Se um dia a
-   ordem do juntar.py mudar, este arquivo continua de pé sozinho. */
+   ele estoura ReferenceError e derruba o app inteiro na carga. */
 const SOC={
-  roxo:"#7c3aed", roxoBg:"#f5f3ff",
-  verde:"#16a34a", verdeBg:"#f0fdf4",
+  roxo:"#7326d6", roxoBg:"#f1e9fd", roxo2:"#a87ae6", roxo3:"#c9aef0",
+  verde:"#12805a", verdeBg:"#e2f5ec",
   verm:"#dc2626", vermBg:"#fef2f2",
-  amar:"#d97706", amarBg:"#fffbeb",
-  cinza:"#94a3b8", cinzaBg:"#f8fafc",
-  borda:"#e5e9f0", txt:"#0f172a", txt2:"#475569", txt3:"#94a3b8",
+  amar:"#b45309", amarBg:"#fef3c7",
+  cinza:"#94a3b8", cinzaBg:"#f3f1f8", chao:"#fbfaff",
+  borda:"#e8e5f0", borda2:"#cfc9dd", txt:"#0f0d1a", txt2:"#3d3853", txt3:"#7b7590",
+  sol1:"#2f1a5e", sol2:"#5a34a3", sol3:"#8a63cf", solSub:"#e9e0fb", solEye:"#d9ccf5",
 };
 const SOC_FONT="'Inter',system-ui,sans-serif";
 
 /* Ganho x perda de seguidores: roxo (ganhou) contra âmbar (perdeu).
    Não é verde/vermelho de propósito — esse par é indistinguível pra quem
-   tem daltonismo vermelho-verde (ΔE 5,0, medido). Roxo×âmbar dá ΔE 34,6.
-   Além da cor, a barra sobe ou desce da linha do zero e o número leva sinal. */
-const SOC_SOBE="#7c3aed";
+   tem daltonismo vermelho-verde (ΔE 5,0, medido). Roxo×âmbar dá ΔE 34,6. */
+const SOC_SOBE="#7326d6";
 const SOC_DESCE="#d97706";
+/* Meses no gráfico de 90 dias: rampa de um tom só, do claro ao escuro.
+   Mês é ordem, não categoria — por isso não é uma cor por mês. */
+const SOC_RAMPA=["#c9aef0","#8a63cf","#5a34a3","#2f1a5e"];
 
 const _socN=function(n){ const v=Number(n); return isFinite(v)?v.toLocaleString("pt-BR"):"—"; };
+const _socN1=function(n){ const v=Number(n); return isFinite(v)?v.toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1}):"—"; };
 const _socSinal=function(n){ const v=Number(n)||0; return (v>0?"+":v<0?"−":"")+_socN(Math.abs(v)); };
 const _socPct=function(n,dec){ const v=Number(n); if(!isFinite(v)) return "—"; return v.toLocaleString("pt-BR",{minimumFractionDigits:dec||0,maximumFractionDigits:dec||0})+"%"; };
 const _socDiv=function(a,b){ const x=Number(a),y=Number(b); return (isFinite(x)&&isFinite(y)&&y>0)?x/y:null; };
+const _socTem=function(v){ return v!==null&&v!==undefined; };
 
 const _socISO=function(d){ return new Date(d).toISOString().slice(0,10); };
 const _socDia=function(iso){ if(!iso) return "—"; const p=String(iso).slice(0,10).split("-"); return p.length<3?String(iso):p[2]+"/"+p[1]; };
@@ -62369,6 +62386,19 @@ const _socRel=function(iso){
   const m=Math.floor(dias/30);
   return "há "+m+(m===1?" mês":" meses");
 };
+/* Hora de Chapecó a partir de um timestamp do banco (que é UTC). */
+const _socHora=function(iso){
+  if(!iso) return "—";
+  /* Data sem hora (ex.: coletado_em da demografia) mostra só o dia. Se passasse
+     pelo new Date() virava meia-noite UTC = 21h do dia anterior em Chapecó. */
+  if(String(iso).length<=10) return _socDiaLongo(iso);
+  const d=new Date(iso); if(isNaN(d.getTime())) return "—";
+  try{ return d.toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).replace(",",""); }
+  catch(_){ return d.toLocaleString("pt-BR"); }
+};
+const SOC_MESES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+const _socMesNome=function(ym){ const m=Number(String(ym).slice(5,7)); const n=SOC_MESES[m-1]||ym; return n.charAt(0).toUpperCase()+n.slice(1); };
+const SOC_DOW=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
 
 const SOC_TIPOS={REELS:"Reels",VIDEO:"Vídeo",CAROUSEL_ALBUM:"Carrossel",IMAGE:"Foto",STORY:"Story"};
 const _socTipo=function(t){ return SOC_TIPOS[String(t||"").toUpperCase()]||(t?String(t):"—"); };
@@ -62381,8 +62411,6 @@ const _socNomeCliente=function(id){
     return (c&&c.name)?c.name:String(id||"—");
   }catch(_){ return String(id||"—"); }
 };
-/* O banco guarda a unidade sem acento e em minúscula (chapeco, gloria_dourados).
-   Na tela a gente escreve o nome como as pessoas falam. */
 const SOC_UNIDADES={
   chapeco:"Chapecó", castro:"Castro", toledo:"Toledo", paraguay:"Paraguai",
   gloria:"Glória de Dourados", gloria_dourados:"Glória de Dourados", uberlandia:"Uberlândia",
@@ -62403,31 +62431,31 @@ const _socRotuloPerfil=function(a){
 };
 
 /* ─── LEITURA DO BANCO ───────────────────────────────── */
-/* Uma leitura só, na entrada da tela: contas + diário da janela + posts da janela.
-   São poucas linhas (11 perfis), então não vale paginar nem cachear por cliente. */
+/* Leitura da página: contas + diário de 2× a janela (pra comparar com o período
+   anterior) + publicações da janela. São poucas linhas (11 perfis). */
+const SOC_DAILY_COLS="client_id,unidade,ig_user_id,username,data,reach,follower_count_delta,total_followers,media_count,views,profile_views,website_clicks,accounts_engaged,total_interactions,likes,comments,saves,shares,replies,profile_links_taps";
+const SOC_POST_COLS="client_id,unidade,ig_user_id,media_id,media_type,media_product_type,permalink,caption,publicado_em,reach,likes,comments,saved,shares,video_views,total_interactions,profile_visits,follows,avg_watch_time,media_url,thumbnail_url";
+
 function useSocDados(dias){
   const [st,setSt]=useState({loading:true,erro:null,contas:[],diario:[],posts:[]});
   useEffect(function(){
     if(!window._sb){ setSt({loading:false,erro:"Sem conexão com o banco.",contas:[],diario:[],posts:[]}); return; }
     let vivo=true;
     setSt(function(p){ return Object.assign({},p,{loading:true,erro:null}); });
-    const corte=new Date(); corte.setDate(corte.getDate()-(Number(dias)||30));
-    const corteISO=_socISO(corte);
+    const n=Number(dias)||30;
+    const corte=new Date(); corte.setDate(corte.getDate()-n);
+    const corte2=new Date(); corte2.setDate(corte2.getDate()-(2*n));
     (async function(){
       try{
         const rc=await window._sb.from("client_social_accounts")
           .select("id,client_id,unidade,handle,network,ig_user_id,page_id")
-          .eq("network","instagram");
+          .in("network",["instagram","facebook","tiktok","youtube"]);
         if(rc.error) throw new Error(rc.error.message);
-        const rd=await window._sb.from("social_daily")
-          .select("client_id,unidade,ig_user_id,username,data,reach,follower_count_delta,total_followers,media_count,raw")
-          .gte("data",corteISO)
-          .order("data",{ascending:true});
+        const rd=await window._sb.from("social_daily").select(SOC_DAILY_COLS)
+          .gte("data",_socISO(corte2)).order("data",{ascending:true});
         if(rd.error) throw new Error(rd.error.message);
-        const rp=await window._sb.from("social_posts")
-          .select("client_id,unidade,ig_user_id,media_id,media_type,permalink,caption,publicado_em,reach,likes,comments,saved,shares,video_views")
-          .gte("publicado_em",corteISO)
-          .order("publicado_em",{ascending:false});
+        const rp=await window._sb.from("social_posts").select(SOC_POST_COLS)
+          .gte("publicado_em",_socISO(corte)).order("publicado_em",{ascending:false});
         if(rp.error) throw new Error(rp.error.message);
         if(vivo) setSt({loading:false,erro:null,contas:rc.data||[],diario:rd.data||[],posts:rp.data||[]});
       }catch(e){
@@ -62439,8 +62467,7 @@ function useSocDados(dias){
   return st;
 }
 
-/* Última coleta de cada perfil — fora da janela, pra saber se um perfil
-   está parado há muito tempo mesmo quando não aparece no período escolhido. */
+/* Última coleta de cada perfil — fora da janela. */
 function useSocUltimaColeta(){
   const [m,setM]=useState(null);
   useEffect(function(){
@@ -62458,34 +62485,77 @@ function useSocUltimaColeta(){
   return m;
 }
 
+/* Leitura do cliente aberto: tudo dele, sem janela.
+   - diário inteiro (o histórico, o mês a mês)
+   - todas as publicações (o "por formato", o top 5, a lista completa)
+   - o retrato mais recente do público
+   - quantas linhas de Facebook, comentários e stories existem
+   - a última rodada do coletor */
+function useSocCliente(clientId){
+  const [st,setSt]=useState({loading:true,erro:null,diario:[],posts:[],demo:[],demoEm:null,fb:null,fbUlt:null,coment:null,stories:null,log:null});
+  useEffect(function(){
+    if(!clientId||!window._sb){ setSt(function(p){ return Object.assign({},p,{loading:false}); }); return; }
+    let vivo=true;
+    setSt(function(p){ return Object.assign({},p,{loading:true,erro:null}); });
+    (async function(){
+      try{
+        const rd=await window._sb.from("social_daily").select(SOC_DAILY_COLS).eq("client_id",clientId).order("data",{ascending:true});
+        if(rd.error) throw new Error(rd.error.message);
+        const rp=await window._sb.from("social_posts").select(SOC_POST_COLS).eq("client_id",clientId).order("publicado_em",{ascending:false});
+        if(rp.error) throw new Error(rp.error.message);
+        const rq=await window._sb.from("social_demografia").select("coletado_em").eq("client_id",clientId).order("coletado_em",{ascending:false}).limit(1);
+        let demo=[], demoEm=null;
+        if(!rq.error&&rq.data&&rq.data[0]){
+          demoEm=rq.data[0].coletado_em;
+          const rr=await window._sb.from("social_demografia").select("unidade,ig_user_id,publico,dimensao,valor,pessoas").eq("client_id",clientId).eq("coletado_em",demoEm);
+          if(!rr.error) demo=rr.data||[];
+        }
+        const rf=await window._sb.from("social_fb_posts").select("publicado_em,coletado_em",{count:"exact"}).eq("client_id",clientId).order("coletado_em",{ascending:false}).limit(1);
+        const rcm=await window._sb.from("social_comentarios").select("id",{count:"exact",head:true}).eq("client_id",clientId);
+        const rs=await window._sb.from("social_stories").select("id",{count:"exact",head:true}).eq("client_id",clientId);
+        const rl=await window._sb.from("social_coleta_log").select("rodou_em,ok,erro").eq("client_id",clientId).order("rodou_em",{ascending:false}).limit(1);
+        if(vivo) setSt({loading:false,erro:null,diario:rd.data||[],posts:rp.data||[],demo:demo,demoEm:demoEm,
+          fb:rf.error?null:(rf.count||0), fbUlt:(!rf.error&&rf.data&&rf.data[0])?rf.data[0].coletado_em:null,
+          coment:rcm.error?null:(rcm.count||0), stories:rs.error?null:(rs.count||0),
+          log:(!rl.error&&rl.data&&rl.data[0])?rl.data[0]:null});
+      }catch(e){
+        if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false,erro:(e&&e.message)||"Falha ao ler o cliente."}); });
+      }
+    })();
+    return function(){ vivo=false; };
+  },[clientId]);
+  return st;
+}
+
 /* ─── PEÇAS VISUAIS ──────────────────────────────────── */
 function SocWrap({children}){
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:SOC_FONT,minWidth:0}}>{children}</div>;
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:SOC_FONT,minWidth:0,fontVariantNumeric:"tabular-nums"}}>{children}</div>;
 }
 function SocCard({titulo,sub,direita,children,pad,style}){
-  return <div style={Object.assign({background:"#fff",border:"1px solid "+SOC.borda,borderRadius:18,minWidth:0,overflow:"hidden"},style||{})}>
-    {(titulo||direita)&&<div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap",padding:"14px 18px 0"}}>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{fontSize:14.5,fontWeight:900,letterSpacing:-.3,color:SOC.txt}}>{titulo}</div>
-        {sub&&<div style={{fontSize:12,color:SOC.txt3,marginTop:3,lineHeight:1.45}}>{sub}</div>}
-      </div>
+  return <div style={Object.assign({background:"#fff",border:"1px solid "+SOC.borda,borderRadius:18,minWidth:0,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)"},style||{})}>
+    {(titulo||direita)&&<div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",padding:"16px 20px 0"}}>
+      {titulo&&<div style={{fontSize:15,fontWeight:800,letterSpacing:-.2,color:SOC.txt}}>{titulo}</div>}
+      {sub&&<div style={{fontSize:12,color:SOC.txt3,lineHeight:1.45,minWidth:0}}>{sub}</div>}
       {direita&&<div style={{marginLeft:"auto",display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>{direita}</div>}
     </div>}
-    <div style={{padding:pad||"14px 18px 18px",minWidth:0}}>{children}</div>
+    <div style={{padding:pad||"12px 20px 18px",minWidth:0}}>{children}</div>
   </div>;
 }
 function SocPill({children,cor,bg,titulo}){
-  return <span title={titulo} style={{background:bg||SOC.cinzaBg,color:cor||SOC.txt2,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5}}>{children}</span>;
+  return <span title={titulo} style={{background:bg||SOC.cinzaBg,color:cor||SOC.txt2,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:5,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis"}}>{children}</span>;
 }
 const SOC_BTN=function(kind){
   const base={border:"1px solid "+SOC.borda,background:"#fff",color:SOC.txt,borderRadius:9,padding:"7px 12px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:SOC_FONT,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap",minHeight:0};
   if(kind==="roxo") return Object.assign(base,{background:SOC.roxo,color:"#fff",border:"1px solid "+SOC.roxo});
-  if(kind==="sm") return Object.assign(base,{padding:"4px 9px",fontSize:11.5});
+  if(kind==="sm") return Object.assign(base,{padding:"5px 10px",fontSize:12});
   if(kind==="ghost") return Object.assign(base,{border:"1px solid transparent",background:"transparent",color:SOC.roxo,padding:"6px 8px"});
   return base;
 };
 function SocCarregando({t}){
   return <div style={{padding:"34px 18px",textAlign:"center",color:SOC.txt3,fontSize:13,fontFamily:SOC_FONT}}>{t||"Lendo…"}</div>;
+}
+function SocEyebrow({children,style}){
+  return <div style={Object.assign({fontSize:10.5,letterSpacing:".1em",textTransform:"uppercase",color:SOC.txt3,fontWeight:800},style||{})}>{children}</div>;
 }
 /* O aviso honesto: sem coleta não é zero. */
 function SocSemColeta({perfil,temId,ultima,compacto}){
@@ -62493,109 +62563,141 @@ function SocSemColeta({perfil,temId,ultima,compacto}){
     ? "Este perfil está cadastrado, mas sem o identificador do Instagram — o coletor não consegue encontrá-lo."
     : (ultima? "A última coleta foi em "+_socDiaLongo(ultima)+" ("+_socRel(ultima)+"). Não há nada dentro do período escolhido."
              : "Este perfil nunca foi coletado. O identificador está cadastrado, então basta rodar a coleta.");
-  return <div style={{border:"1px dashed "+SOC.borda,borderRadius:14,background:SOC.cinzaBg,padding:compacto?"12px 14px":"20px 18px",minWidth:0}}>
+  return <div style={{border:"1px dashed "+SOC.borda2,borderRadius:14,background:SOC.chao,padding:compacto?"12px 14px":"20px 18px",minWidth:0}}>
     <div style={{fontSize:13,fontWeight:900,color:SOC.txt,marginBottom:5}}>Ainda não coletado{perfil?" · "+perfil:""}</div>
     <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55,wordBreak:"break-word"}}>{motivo}</div>
   </div>;
 }
-/* Número grande com rótulo — usado nas fileiras de destaque. */
-function SocNumero({rotulo,valor,detalhe,cor,isMob}){
-  return <div style={{minWidth:0,padding:isMob?"12px 12px":"14px 16px"}}>
-    <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rotulo}</div>
-    <div style={{fontSize:isMob?21:25,fontWeight:900,letterSpacing:-.8,lineHeight:1.1,marginTop:5,color:cor||SOC.txt,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{valor}</div>
-    {detalhe&&<div style={{fontSize:11.5,color:SOC.txt2,marginTop:4,lineHeight:1.4,wordBreak:"break-word"}}>{detalhe}</div>}
+/* Os três sólidos roxos do topo. */
+function SocSolidos({itens,isMob}){
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,minmax(0,1fr))",gap:14,minWidth:0}}>
+    {itens.map(function(it,i){
+      return <div key={i} style={{borderRadius:18,padding:"18px 20px",color:"#fff",minWidth:0,display:"flex",flexDirection:"column",gap:4,background:[SOC.sol1,SOC.sol2,SOC.sol3][i%3]}}>
+        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:SOC.solEye}}>{it.eye}</div>
+        <div style={{fontSize:it.menor?24:30,fontWeight:900,letterSpacing:it.menor?-.6:-1,lineHeight:1.05,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.big}</div>
+        <div style={{fontSize:12.5,color:SOC.solSub,lineHeight:1.45,wordBreak:"break-word"}}>{it.s}</div>
+      </div>;
+    })}
   </div>;
 }
-function SocFileira({itens,isMob}){
-  const n=Math.max(1,Math.min(itens.length||1,isMob?2:4));
-  return <div style={{display:"grid",gridTemplateColumns:"repeat("+n+",minmax(0,1fr))",background:SOC.borda,gap:1,border:"1px solid "+SOC.borda,borderRadius:14,overflow:"hidden",minWidth:0}}>
-    {itens.map(function(it,i){ return <div key={i} style={{background:"#fff",minWidth:0}}>{it}</div>; })}
+/* Fileira de números pequenos (5 por linha no desktop, 2 no celular). */
+function SocNums({itens,isMob}){
+  const n=isMob?2:Math.min(5,itens.length||1);
+  return <div style={{display:"grid",gridTemplateColumns:"repeat("+n+",minmax(0,1fr))",gap:1,background:SOC.borda,border:"1px solid "+SOC.borda,borderRadius:16,overflow:"hidden",minWidth:0}}>
+    {itens.map(function(it,i){
+      return <div key={i} style={{background:"#fff",padding:"14px 14px 15px",minWidth:0}}>
+        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.k}</div>
+        <div style={{fontSize:22,fontWeight:900,letterSpacing:-.7,marginTop:5,lineHeight:1.1,color:it.cor||SOC.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.v}</div>
+        {it.h&&<div style={{fontSize:11.5,color:SOC.txt3,marginTop:3,lineHeight:1.35,wordBreak:"break-word"}}>{it.h}</div>}
+      </div>;
+    })}
   </div>;
 }
+/* Linha de barra horizontal: rótulo · trilho · valor. */
+function SocLinha({rot,pct,val,det,cor,isMob,largRot,largVal}){
+  return <div style={{display:"grid",gridTemplateColumns:(isMob?"110px":(largRot||"176px"))+" minmax(0,1fr) "+(isMob?"96px":(largVal||"124px")),gap:isMob?8:12,alignItems:"center",padding:"7px 0",minWidth:0}}>
+    <span style={{fontSize:12.5,fontWeight:700,color:SOC.txt2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}} title={rot}>{rot}</span>
+    <span style={{display:"block",height:12,borderRadius:99,background:"#efedf5",overflow:"hidden",minWidth:0}}>
+      <span style={{display:"block",height:"100%",borderRadius:99,background:cor||SOC.roxo,width:Math.max(0,Math.min(100,pct))+"%",transition:"width .5s cubic-bezier(.22,1,.36,1)"}}/>
+    </span>
+    <span style={{fontSize:12.5,fontWeight:800,textAlign:"right",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:SOC.txt}}>{val}{det&&<i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600,fontSize:11.5}}> · {det}</i>}</span>
+  </div>;
+}
+function SocLegenda({itens,style}){
+  return <div style={Object.assign({display:"flex",gap:16,flexWrap:"wrap",marginTop:11,fontSize:11.5,color:SOC.txt2,fontWeight:600},style||{})}>
+    {itens.map(function(it,i){ return <span key={i} style={{display:"inline-flex",alignItems:"center",gap:6}}><i style={{width:10,height:10,borderRadius:3,background:it.cor,display:"inline-block"}}/>{it.t}</span>; })}
+  </div>;
+}
+function SocRodape({children}){
+  return <div style={{fontSize:11.5,color:SOC.txt3,marginTop:10,lineHeight:1.5,wordBreak:"break-word"}}>{children}</div>;
+}
+function SocLeitura({titulo,children}){
+  return <div style={{background:SOC.roxoBg,border:"1px solid #e0d2fa",borderRadius:16,padding:"16px 18px",minWidth:0}}>
+    <SocEyebrow style={{color:"#6b3fb8",marginBottom:9}}>{titulo||"O que isso quer dizer"}</SocEyebrow>
+    <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,display:"flex",flexDirection:"column",gap:9,wordBreak:"break-word"}}>{children}</div>
+  </div>;
+}
+function SocAviso({titulo,children}){
+  return <div style={{border:"1px dashed "+SOC.borda2,borderRadius:14,background:SOC.chao,padding:"13px 16px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55,minWidth:0,wordBreak:"break-word"}}>
+    {titulo&&<div style={{fontWeight:800,color:SOC.txt,marginBottom:8}}>{titulo}</div>}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>{children}</div>
+  </div>;
+}
+const _socB=function(t){ return <b style={{color:SOC.txt}}>{t}</b>; };
 
-/* ─── GRÁFICO 1 — ALCANCE POR DIA (uma série, uma cor) ── */
-function SocBarrasAlcance({serie,isMob}){
+/* ─── GRÁFICO — COLUNAS POR DIA ──────────────────────── */
+/* Uma série. `cor` pode ser função(d) pra pintar por mês (rampa). */
+function SocBarras({serie,isMob,alt,cor,rotulo,eixos}){
   const [hov,setHov]=useState(null);
   const [an,setAn]=useState(false);
   useEffect(function(){ const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[]);
-  const comValor=serie.filter(function(d){ return d.v!==null&&d.v!==undefined; });
-  if(!comValor.length) return <div style={{fontSize:12.5,color:SOC.txt3,padding:"18px 0"}}>Sem alcance medido nesse período.</div>;
+  const comValor=serie.filter(function(d){ return _socTem(d.v); });
+  if(!comValor.length) return <div style={{fontSize:12.5,color:SOC.txt3,padding:"18px 0"}}>Sem medição nesse período.</div>;
   const max=Math.max.apply(null,comValor.map(function(d){ return d.v; }));
-  const alt=isMob?120:150;
-  const largMax=isMob?18:26;
-  /* Trava a largura do gráfico pelo número de dias: sem isso, 10 dias viram
-     10 colunas gordas espalhadas na tela inteira. Regra do Rodrigo (19/09). */
-  const largura={maxWidth:serie.length*(isMob?22:34)};
+  const altura=alt||(isMob?120:150);
+  const muitos=serie.length>45;
   const balaoEsq=hov!==null&&((hov+0.5)/serie.length)>0.5;
-  return <div style={Object.assign({position:"relative",minWidth:0},largura)}>
-    <div style={{display:"flex",alignItems:"flex-end",gap:serie.length>40?1:3,height:alt,minWidth:0}}>
+  const ex=eixos||[serie[0],serie[Math.floor(serie.length/2)],serie[serie.length-1]].map(function(d){ return d&&d.dia; });
+  return <div style={{position:"relative",minWidth:0}}>
+    <div style={{display:"flex",alignItems:"flex-end",gap:muitos?1:2,height:altura,minWidth:0}}>
       {serie.map(function(d,i){
-        const h=(d.v===null||d.v===undefined||max<=0)?0:Math.max(2,Math.round(d.v/max*alt));
+        const h=(!_socTem(d.v)||max<=0)?0:Math.max(2,Math.round(d.v/max*altura));
+        const c=typeof cor==="function"?cor(d):(cor||SOC.roxo);
         return <div key={d.dia} onMouseEnter={function(){ setHov(i); }} onMouseLeave={function(){ setHov(null); }}
-          style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:alt,cursor:"default"}}>
-          <div style={{width:"100%",maxWidth:largMax,height:an?h:0,borderRadius:"4px 4px 0 0",
-            background:SOC.roxo,opacity:hov===null||hov===i?1:.35,
-            transition:"height .55s cubic-bezier(.22,1,.36,1) "+Math.min(600,i*22)+"ms, opacity .15s"}}/>
+          style={{flex:1,minWidth:0,display:"flex",justifyContent:"center",alignItems:"flex-end",height:altura,cursor:"default"}}>
+          <div style={{width:"100%",maxWidth:muitos?12:26,height:an?h:0,borderRadius:"4px 4px 0 0",
+            background:c,opacity:hov===null||hov===i?1:.35,
+            transition:"height .55s cubic-bezier(.22,1,.36,1) "+Math.min(600,i*(muitos?6:22))+"ms, opacity .15s"}}/>
         </div>;
       })}
     </div>
-    <div style={{display:"flex",justifyContent:"space-between",marginTop:7,fontSize:10.5,color:SOC.txt3,fontWeight:600}}>
-      <span>{_socDia(serie[0]&&serie[0].dia)}</span>
-      <span>{_socDia(serie[serie.length-1]&&serie[serie.length-1].dia)}</span>
+    <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:7,borderTop:"1px solid "+SOC.borda,fontSize:11,color:SOC.txt3,fontWeight:600}}>
+      {ex.map(function(x,i){ return <span key={i}>{_socDia(x)}</span>; })}
     </div>
     {hov!==null&&serie[hov]&&<div style={{position:"absolute",top:0,left:balaoEsq?undefined:"50%",right:balaoEsq?"50%":undefined,
       transform:balaoEsq?"translateX(-8px)":"translateX(8px)",background:SOC.txt,color:"#fff",borderRadius:10,
       padding:"7px 11px",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",pointerEvents:"none",zIndex:3,
       boxShadow:"0 8px 22px rgba(15,23,42,.22)"}}>
-      {_socDiaLongo(serie[hov].dia)} · {serie[hov].v===null||serie[hov].v===undefined?"sem medição":_socN(serie[hov].v)+" de alcance"}
+      {_socDiaLongo(serie[hov].dia)} · {!_socTem(serie[hov].v)?"sem medição":_socN(serie[hov].v)+(rotulo?" "+rotulo:"")}
     </div>}
   </div>;
 }
 
-/* ─── GRÁFICO 2 — GANHO DE SEGUIDORES (sobe/desce do zero) ── */
+/* ─── GRÁFICO — GANHO DE SEGUIDORES (sobe/desce do zero) ── */
 function SocBarrasSeguidores({serie,isMob}){
   const [hov,setHov]=useState(null);
   const [an,setAn]=useState(false);
   useEffect(function(){ const t=setTimeout(function(){ setAn(true); },40); return function(){ clearTimeout(t); }; },[]);
-  const vals=serie.filter(function(d){ return d.v!==null&&d.v!==undefined; }).map(function(d){ return d.v; });
+  const vals=serie.filter(function(d){ return _socTem(d.v); }).map(function(d){ return d.v; });
   if(!vals.length) return <div style={{fontSize:12.5,color:SOC.txt3,padding:"18px 0"}}>Sem variação de seguidores medida nesse período.</div>;
   const maxAbs=Math.max(1,Math.max.apply(null,vals.map(function(v){ return Math.abs(v); })));
-  /* Só reserva espaço abaixo do zero se existir dia de perda. Sem isso,
-     um perfil que só cresce fica com metade do gráfico em branco. */
   const temPerda=vals.some(function(v){ return v<0; });
   const temGanho=vals.some(function(v){ return v>0; });
   const acima=temGanho?(isMob?76:96):14;
   const abaixo=temPerda?(isMob?76:96):14;
-  const metade=acima;
   const largMax=isMob?18:26;
   const largura={maxWidth:serie.length*(isMob?22:34)};
   const balaoEsq=hov!==null&&((hov+0.5)/serie.length)>0.5;
   return <div style={Object.assign({position:"relative",minWidth:0},largura)}>
     <div style={{position:"relative",height:acima+abaixo,minWidth:0}}>
-      <div style={{position:"absolute",top:metade,left:0,right:0,height:1,background:SOC.borda}}/>
+      <div style={{position:"absolute",top:acima,left:0,right:0,height:1,background:SOC.borda}}/>
       <div style={{display:"flex",alignItems:"stretch",gap:serie.length>40?1:3,height:"100%",position:"relative",minWidth:0}}>
         {serie.map(function(d,i){
-          const v=(d.v===null||d.v===undefined)?null:d.v;
+          const v=_socTem(d.v)?d.v:null;
           const teto=(v!==null&&v<0?abaixo:acima)-6;
           const h=v===null?0:Math.max(v===0?0:2,Math.round(Math.abs(v)/maxAbs*Math.max(4,teto)));
           const sobe=v!==null&&v>=0;
           return <div key={d.dia} onMouseEnter={function(){ setHov(i); }} onMouseLeave={function(){ setHov(null); }}
             style={{flex:1,minWidth:0,position:"relative",cursor:"default"}}>
-            {/* A linha do zero fica a `abaixo` px do fundo. Barra que sobe apoia nela
-                (bottom:abaixo); barra que desce pendura nela (top:acima). */}
-            <div style={{position:"absolute",left:0,right:0,display:"flex",justifyContent:"center",
-              top:sobe?undefined:acima, bottom:sobe?abaixo:undefined}}>
-              <div style={{width:"100%",maxWidth:largMax,height:an?h:0,
-                borderRadius:sobe?"4px 4px 0 0":"0 0 4px 4px",
-                background:sobe?SOC_SOBE:SOC_DESCE,
-                opacity:hov===null||hov===i?1:.35,
+            <div style={{position:"absolute",left:0,right:0,display:"flex",justifyContent:"center",top:sobe?undefined:acima,bottom:sobe?abaixo:undefined}}>
+              <div style={{width:"100%",maxWidth:largMax,height:an?h:0,borderRadius:sobe?"4px 4px 0 0":"0 0 4px 4px",
+                background:sobe?SOC_SOBE:SOC_DESCE,opacity:hov===null||hov===i?1:.35,
                 transition:"height .55s cubic-bezier(.22,1,.36,1) "+Math.min(600,i*22)+"ms, opacity .15s"}}/>
             </div>
           </div>;
         })}
       </div>
     </div>
-    {/* Legenda só quando há as duas cores na tela. Uma série sozinha não precisa de legenda. */}
     <div style={{display:"flex",alignItems:"center",gap:14,marginTop:9,fontSize:11,color:SOC.txt2,fontWeight:600,flexWrap:"wrap"}}>
       {temPerda&&<>
         <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:3,background:SOC_SOBE,display:"inline-block"}}/>ganhou seguidores</span>
@@ -62608,54 +62710,61 @@ function SocBarrasSeguidores({serie,isMob}){
       transform:balaoEsq?"translateX(-8px)":"translateX(8px)",background:SOC.txt,color:"#fff",borderRadius:10,
       padding:"7px 11px",fontSize:11.5,fontWeight:700,whiteSpace:"nowrap",pointerEvents:"none",zIndex:3,
       boxShadow:"0 8px 22px rgba(15,23,42,.22)"}}>
-      {_socDiaLongo(serie[hov].dia)} · {serie[hov].v===null||serie[hov].v===undefined?"sem medição":_socSinal(serie[hov].v)+" seguidores"}
+      {_socDiaLongo(serie[hov].dia)} · {!_socTem(serie[hov].v)?"sem medição":_socSinal(serie[hov].v)+" seguidores"}
     </div>}
   </div>;
 }
 
-/* ─── CÁLCULO — resumo de um conjunto de perfis ───────── */
+/* ─── CÁLCULO — resumo de um conjunto de perfis numa janela ── */
+const SOC_TOTAIS=["views","profile_views","website_clicks","accounts_engaged","total_interactions","likes","comments","saves","shares","replies","profile_links_taps"];
 function _socResumo(diario,posts){
   const porDia={};
   diario.forEach(function(r){
     const d=String(r.data||"").slice(0,10); if(!d) return;
-    const o=porDia[d]||(porDia[d]={dia:d,reach:null,delta:null});
-    if(r.reach!==null&&r.reach!==undefined) o.reach=(o.reach||0)+Number(r.reach);
-    if(r.follower_count_delta!==null&&r.follower_count_delta!==undefined) o.delta=(o.delta||0)+Number(r.follower_count_delta);
+    const o=porDia[d]||(porDia[d]={dia:d,reach:null,delta:null,tot:{}});
+    if(_socTem(r.reach)) o.reach=(o.reach||0)+Number(r.reach);
+    if(_socTem(r.follower_count_delta)) o.delta=(o.delta||0)+Number(r.follower_count_delta);
+    SOC_TOTAIS.forEach(function(k){ if(_socTem(r[k])) o.tot[k]=(o.tot[k]||0)+Number(r[k]); });
   });
   const dias=Object.keys(porDia).sort();
   const serieAlcance=dias.map(function(d){ return {dia:d,v:porDia[d].reach}; });
   const serieSeg=dias.map(function(d){ return {dia:d,v:porDia[d].delta}; });
 
-  /* Seguidores: o coletor só grava o total no dia mais recente de cada perfil.
-     Então somamos o último total conhecido de CADA perfil, não o último dia geral. */
+  /* Seguidores: o coletor só grava o total no dia mais recente de cada perfil. */
   const ultimoPorPerfil={};
   diario.forEach(function(r){
-    if(r.total_followers===null||r.total_followers===undefined) return;
+    if(!_socTem(r.total_followers)) return;
     const k=r.ig_user_id||r.client_id;
     const at=ultimoPorPerfil[k];
     if(!at||String(r.data)>String(at.data)) ultimoPorPerfil[k]=r;
   });
   const perfisComTotal=Object.keys(ultimoPorPerfil);
-  const seguidores=perfisComTotal.length
-    ? perfisComTotal.reduce(function(s,k){ return s+Number(ultimoPorPerfil[k].total_followers||0); },0)
-    : null;
+  const seguidores=perfisComTotal.length?perfisComTotal.reduce(function(s,k){ return s+Number(ultimoPorPerfil[k].total_followers||0); },0):null;
+  const seguidoresEm=perfisComTotal.length?perfisComTotal.map(function(k){ return String(ultimoPorPerfil[k].data); }).sort().pop():null;
 
-  const alcance=serieAlcance.reduce(function(s,d){ return s+(d.v||0); },0);
-  const temAlcance=serieAlcance.some(function(d){ return d.v!==null; });
-  const ganho=serieSeg.reduce(function(s,d){ return s+(d.v||0); },0);
-  const temGanho=serieSeg.some(function(d){ return d.v!==null; });
+  const diasAlc=serieAlcance.filter(function(d){ return _socTem(d.v); });
+  const alcance=diasAlc.reduce(function(s,d){ return s+d.v; },0);
+  const diasSeg=serieSeg.filter(function(d){ return _socTem(d.v); });
+  const ganho=diasSeg.reduce(function(s,d){ return s+d.v; },0);
 
-  const alcancePosts=posts.reduce(function(s,p){ return s+(Number(p.reach)||0); },0);
-  const postsComAlcance=posts.filter(function(p){ return p.reach!==null&&p.reach!==undefined; }).length;
+  const tot={}; const diasTot={};
+  dias.forEach(function(d){ Object.keys(porDia[d].tot).forEach(function(k){ tot[k]=(tot[k]||0)+porDia[d].tot[k]; diasTot[k]=(diasTot[k]||0)+1; }); });
+  const diasComTot=dias.filter(function(d){ return _socTem(porDia[d].tot.views); });
+
+  const comAlc=posts.filter(function(p){ return _socTem(p.reach); });
+  const alcancePosts=comAlc.reduce(function(s,p){ return s+Number(p.reach); },0);
 
   return {
     dias:dias, serieAlcance:serieAlcance, serieSeg:serieSeg,
-    seguidores:seguidores,
-    alcance:temAlcance?alcance:null,
-    ganho:temGanho?ganho:null,
-    nPosts:posts.length,
-    alcanceMedioPost:postsComAlcance?Math.round(alcancePosts/postsComAlcance):null,
-    ultimoDia:dias.length?dias[dias.length-1]:null,
+    seguidores:seguidores, seguidoresEm:seguidoresEm,
+    alcance:diasAlc.length?alcance:null, diasAlcance:diasAlc.length,
+    alcanceMedio:diasAlc.length?alcance/diasAlc.length:null,
+    alcancePico:diasAlc.length?Math.max.apply(null,diasAlc.map(function(d){ return d.v; })):null,
+    ganho:diasSeg.length?ganho:null, diasGanho:diasSeg.length,
+    tot:tot, diasTot:diasComTot.length, totDe:diasComTot[0]||null, totAte:diasComTot[diasComTot.length-1]||null,
+    nPosts:posts.length, nPostsComAlc:comAlc.length,
+    alcanceMedioPost:comAlc.length?Math.round(alcancePosts/comAlc.length):null,
+    ultimoDia:dias.length?dias[dias.length-1]:null, primeiroDia:dias.length?dias[0]:null,
   };
 }
 const _socEngaj=function(p){
@@ -62663,291 +62772,608 @@ const _socEngaj=function(p){
   const r=_socDiv(inter,p.reach);
   return r===null?null:r*100;
 };
+/* Divide o diário em "janela" e "janela anterior" pelo número de dias. */
+function _socJanelas(diario,dias){
+  const n=Number(dias)||30;
+  const hoje=new Date(); const c1=new Date(hoje); c1.setDate(c1.getDate()-(n-1)); const c2=new Date(hoje); c2.setDate(c2.getDate()-(2*n-1));
+  const i1=_socISO(c1), i2=_socISO(c2);
+  return {
+    atual:diario.filter(function(r){ return String(r.data)>=i1; }),
+    anterior:diario.filter(function(r){ return String(r.data)>=i2&&String(r.data)<i1; }),
+  };
+}
+/* Publicações agrupadas por formato — só as que têm alcance medido. */
+function _socPorFormato(posts){
+  const g={};
+  posts.forEach(function(p){
+    if(!_socTem(p.reach)) return;
+    const k=String(p.media_type||"").toUpperCase()||"?";
+    const o=g[k]||(g[k]={tipo:k,n:0,reach:0,lk:0,cm:0,sv:0,sh:0,vv:0});
+    o.n++; o.reach+=Number(p.reach)||0; o.lk+=Number(p.likes)||0; o.cm+=Number(p.comments)||0; o.sv+=Number(p.saved)||0; o.sh+=Number(p.shares)||0; o.vv+=Number(p.video_views)||0;
+  });
+  return Object.keys(g).map(function(k){ return g[k]; }).sort(function(a,b){ return b.n-a.n; });
+}
+function _socPorDow(posts){
+  const g=[0,1,2,3,4,5,6].map(function(i){ return {dow:i,n:0,reach:0}; });
+  posts.forEach(function(p){
+    if(!_socTem(p.reach)||!p.publicado_em) return;
+    const d=new Date(p.publicado_em); if(isNaN(d.getTime())) return;
+    const o=g[d.getDay()]; o.n++; o.reach+=Number(p.reach)||0;
+  });
+  return g.map(function(o){ return Object.assign({},o,{media:o.n?o.reach/o.n:null}); });
+}
 
 /* ─── ABA: VISÃO GERAL ───────────────────────────────── */
-function SocVisaoGeral({resumo,dias,isMob}){
-  if(!resumo.dias.length) return <SocCard titulo="Visão geral"><div style={{fontSize:12.5,color:SOC.txt3}}>Nada coletado dentro do período escolhido.</div></SocCard>;
+function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,dias,isMob,onVerPublicacoes}){
+  const jan=_socJanelas(diarioTudo.length?diarioTudo:diarioJanela,dias);
+  const r=_socResumo(jan.atual,postsTudo.filter(function(p){ return jan.atual.length&&String(p.publicado_em||"").slice(0,10)>=jan.atual[0].data; }));
+  const r0=_socResumo(jan.anterior,[]);
+  if(!r.dias.length) return <SocCard titulo="Visão geral"><div style={{fontSize:12.5,color:SOC.txt3}}>Nada coletado dentro do período escolhido.</div></SocCard>;
+
+  const varAlc=(r.alcanceMedio!==null&&r0.alcanceMedio!==null&&r0.alcanceMedio>0)?(r.alcanceMedio-r0.alcanceMedio)/r0.alcanceMedio*100:null;
+  const seg=r.seguidores; const t=r.tot;
+  const porMil=function(v){ return (seg&&_socTem(v))?_socN1(v/seg*1000):"—"; };
+  const viewsPorPessoa=(_socTem(t.views)&&r.alcance)?_socDiv(t.views,r.alcance):null;
+
+  const fmt=_socPorFormato(postsTudo);
+  const maxMed=fmt.length?Math.max.apply(null,fmt.map(function(f){ return f.reach/f.n; })):0;
+  const maxShMil=fmt.length?Math.max.apply(null,fmt.map(function(f){ return f.reach?f.sh/f.reach*1000:0; })):0;
+  const dow=_socPorDow(postsTudo);
+  const comDow=dow.filter(function(d){ return d.media!==null; });
+  const maxDow=comDow.length?Math.max.apply(null,comDow.map(function(d){ return d.media; })):0;
+  const melhorDow=comDow.length?comDow.reduce(function(a,b){ return b.media>a.media?b:a; }):null;
+  const piorDow=comDow.length?comDow.reduce(function(a,b){ return b.media<a.media?b:a; }):null;
+  const top=postsTudo.filter(function(p){ return _socTem(p.reach); }).slice().sort(function(a,b){ return Number(b.reach)-Number(a.reach); }).slice(0,5);
+  const nComNum=postsTudo.filter(function(p){ return _socTem(p.reach); }).length;
+  const anoMin=(function(){ const a=postsTudo.filter(function(p){ return _socTem(p.reach); }).map(function(p){ return String(p.publicado_em||"").slice(0,4); }).filter(Boolean).sort(); return a[0]||null; })();
+
+  const reels=fmt.find(function(f){ return f.tipo==="REELS"; }), foto=fmt.find(function(f){ return f.tipo==="IMAGE"; });
+  const vezes=(reels&&foto&&foto.reach&&foto.n&&reels.n)?(reels.reach/reels.n)/(foto.reach/foto.n):null;
+  const shReels=(reels&&foto&&reels.reach&&foto.reach&&foto.sh)?(reels.sh/reels.reach)/(foto.sh/foto.reach):null;
+
+  /* Interações concentradas: os 2 melhores dias respondem por quanto do total? */
+  const diasInter=jan.atual.filter(function(x){ return _socTem(x.total_interactions); }).map(function(x){ return {d:x.data,v:Number(x.total_interactions)}; }).sort(function(a,b){ return b.v-a.v; });
+  const top2=diasInter.slice(0,2).reduce(function(s,x){ return s+x.v; },0);
+  const concentracao=(t.total_interactions&&diasInter.length>=3)?top2/t.total_interactions*100:null;
+  const semPerda=r.diasGanho>0&&!r.serieSeg.some(function(d){ return _socTem(d.v)&&d.v<0; });
+
+  const g2={display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:14,alignItems:"start",minWidth:0};
   return <>
-    <SocFileira isMob={isMob} itens={[
-      <SocNumero isMob={isMob} rotulo="Seguidores" valor={resumo.seguidores===null?"não coletado":_socN(resumo.seguidores)}
-        detalhe={resumo.seguidores===null?"o coletor só grava o total no dia da coleta":"retrato do dia "+_socDiaLongo(resumo.ultimoDia)}/>,
-      <SocNumero isMob={isMob} rotulo={"Ganho em "+dias+" dias"} valor={resumo.ganho===null?"não coletado":_socSinal(resumo.ganho)}
-        cor={resumo.ganho===null?undefined:(resumo.ganho>=0?SOC_SOBE:SOC_DESCE)}
-        detalhe={resumo.ganho===null?null:"soma da variação diária"}/>,
-      /* Alcance é "contas diferentes NAQUELE dia". Somar dias conta a mesma pessoa
-         mais de uma vez — por isso o rótulo diz "somado", e não "pessoas alcançadas". */
-      <SocNumero isMob={isMob} rotulo="Alcance somado" valor={resumo.alcance===null?"não coletado":_socN(resumo.alcance)}
-        detalhe={resumo.alcance===null?null:"soma dos dias · quem viu em dois dias conta duas vezes"}/>,
-      <SocNumero isMob={isMob} rotulo="Publicações" valor={_socN(resumo.nPosts)}
-        detalhe={resumo.alcanceMedioPost===null?"nenhuma com alcance medido":_socN(resumo.alcanceMedioPost)+" de alcance em média"}/>,
+    <SocSolidos isMob={isMob} itens={[
+      {eye:"Alcance somado", big:r.alcance===null?"—":_socN(r.alcance),
+       s:r.alcance===null?"sem alcance medido no período":(r.diasAlcance+" dias com número"+(varAlc===null?"":" · "+(varAlc<0?"queda":"alta")+" de "+_socPct(Math.abs(varAlc),1)+" sobre os "+dias+" dias anteriores"))},
+      {eye:"Seguidores", big:seg===null?"—":_socN(seg),
+       s:seg===null?"o coletor só grava o total no dia da coleta":(r.ganho===null?"retrato do dia "+_socDiaLongo(r.seguidoresEm):_socSinal(r.ganho)+" no período · "+_socPct(r.ganho/seg*100,1)+" de crescimento")},
+      {eye:"Views do conteúdo", big:_socTem(t.views)?_socN(t.views):"—",
+       s:_socTem(t.views)?(r.diasTot+" dias com número · "+_socN(Math.round(t.views/Math.max(1,r.diasTot)))+" por dia, em média"):"essa métrica começou a ser coletada em 25/08"},
     ]}/>
-    <SocCard titulo="Alcance por dia" sub="Quantas contas diferentes viram alguma coisa do perfil naquele dia. Passe o mouse para ver o número.">
-      <SocBarrasAlcance serie={resumo.serieAlcance} isMob={isMob}/>
+
+    <SocCard titulo="Alcance por dia" sub="quantas pessoas diferentes viram algo do perfil naquele dia"
+      direita={<>{r.alcancePico!==null&&<SocPill>pico {_socN(r.alcancePico)}</SocPill>}{r.alcanceMedio!==null&&<SocPill>média {_socN(Math.round(r.alcanceMedio))}/dia</SocPill>}</>}>
+      <div style={{maxWidth:r.serieAlcance.length*(isMob?22:34),minWidth:0}}><SocBarras serie={r.serieAlcance} isMob={isMob} rotulo="de alcance"/></div>
+      <SocRodape>{_socB("Não dá pra somar alcance e chamar de “pessoas”.")} Quem viu na segunda e viu de novo na terça conta duas vezes. O número grande lá em cima é a soma dos dias — serve pra comparar período com período, não pra dizer o tamanho do público.</SocRodape>
     </SocCard>
-    <SocCard titulo="Seguidores por dia" sub="Quanto o perfil ganhou ou perdeu em cada dia. A barra sobe quando ganhou e desce quando perdeu.">
-      <SocBarrasSeguidores serie={resumo.serieSeg} isMob={isMob}/>
+
+    <div>
+      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",margin:"0 0 12px"}}>
+        <div style={{fontSize:15,fontWeight:800,letterSpacing:-.2,color:SOC.txt}}>O que aconteceu no perfil</div>
+        <div style={{fontSize:12,color:SOC.txt3}}>{r.diasTot?(r.diasTot+" dias com dado · de "+_socDia(r.totDe)+" a "+_socDia(r.totAte)):"essas 11 métricas começaram a ser coletadas em 25/08/2026"}</div>
+      </div>
+      <SocNums isMob={isMob} itens={[
+        {k:"Visitas ao perfil", v:_socTem(t.profile_views)?_socN(t.profile_views):"—", h:_socTem(t.profile_views)?porMil(t.profile_views)+" a cada mil seguidores":"sem dado no período"},
+        {k:"Contas que engajaram", v:_socTem(t.accounts_engaged)?_socN(t.accounts_engaged):"—", h:(seg&&_socTem(t.accounts_engaged))?_socPct(t.accounts_engaged/seg*100,1)+" de quem segue":"sem dado no período"},
+        {k:"Interações", v:_socTem(t.total_interactions)?_socN(t.total_interactions):"—", h:(t.accounts_engaged&&_socTem(t.total_interactions))?_socN1(t.total_interactions/t.accounts_engaged)+" por conta engajada":"sem dado no período"},
+        {k:"Cliques no site", v:_socTem(t.website_clicks)?_socN(t.website_clicks):"—", h:_socTem(t.website_clicks)?(t.website_clicks?"saíram do perfil pro site":"ninguém clicou"):"sem dado no período"},
+        {k:"Views por pessoa", v:viewsPorPessoa===null?"—":viewsPorPessoa.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}), h:"quantas vezes cada alcançado viu"},
+      ]}/>
+      <div style={{height:14}}/>
+      <SocNums isMob={isMob} itens={[
+        {k:"Curtidas", v:_socTem(t.likes)?_socN(t.likes):"—", h:(t.total_interactions&&_socTem(t.likes))?_socPct(t.likes/t.total_interactions*100)+" de tudo que fizeram":"sem dado no período"},
+        {k:"Comentários", v:_socTem(t.comments)?_socN(t.comments):"—", h:_socTem(t.comments)?porMil(t.comments)+" por mil seguidores":"sem dado no período"},
+        {k:"Salvos", v:_socTem(t.saves)?_socN(t.saves):"—", h:"guardaram pra ver depois"},
+        {k:"Compartilhamentos", v:_socTem(t.shares)?_socN(t.shares):"—", h:_socTem(t.shares)?porMil(t.shares)+" por mil seguidores":"sem dado no período"},
+        {k:"Respostas no direct", v:_socTem(t.replies)?_socN(t.replies):"—", h:"vieram de story"},
+      ]}/>
+    </div>
+
+    <div style={g2}>
+      <SocCard titulo="Por formato" sub={nComNum+" publicações com número"+(anoMin?", de "+anoMin+" pra cá":"")}>
+        {!fmt.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação com alcance medido ainda.</div>}
+        {fmt.map(function(f){ const md=f.reach/f.n; return <SocLinha key={f.tipo} isMob={isMob} rot={_socTipo(f.tipo)+" · "+f.n} pct={maxMed?md/maxMed*100:0} val={_socN(Math.round(md))} det="média" cor={md===maxMed?SOC.roxo:SOC.roxo2}/>; })}
+        {fmt.length>1&&<>
+          <div style={{height:1,background:SOC.borda,margin:"13px 0 11px"}}/>
+          <SocEyebrow style={{marginBottom:6}}>Compartilhamentos a cada mil alcançados</SocEyebrow>
+          {fmt.map(function(f){ const v=f.reach?f.sh/f.reach*1000:0; return <SocLinha key={f.tipo} isMob={isMob} rot={_socTipo(f.tipo)} pct={maxShMil?v/maxShMil*100:0} val={_socN1(v)} det={_socN(f.sh)+" no total"} cor={v===maxShMil?SOC.roxo:SOC.roxo2}/>; })}
+        </>}
+        {vezes!==null&&<SocRodape>{_socB("Reels alcançam "+_socN1(vezes)+"× mais que uma foto")} nesse perfil{shReels!==null?" — e são compartilhados "+_socN1(shReels)+"× mais, proporcionalmente a quem viu.":"."}</SocRodape>}
+      </SocCard>
+      <SocCard titulo="Melhor dia pra postar" sub="alcance médio por dia da semana">
+        {!comDow.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Ainda não há publicações com alcance medido.</div>}
+        {dow.map(function(d){ return <SocLinha key={d.dow} isMob={isMob} largRot="96px" rot={SOC_DOW[d.dow]} pct={(d.media!==null&&maxDow)?d.media/maxDow*100:0} val={d.media===null?"—":_socN(Math.round(d.media))} det={d.n+(d.n===1?" post":" posts")} cor={d.media===maxDow?SOC.roxo:SOC.roxo2}/>; })}
+        {melhorDow&&piorDow&&piorDow.media>0&&<SocRodape>{SOC_DOW[melhorDow.dow]} puxa {_socN1(melhorDow.media/piorDow.media)}× o alcance de {SOC_DOW[piorDow.dow].toLowerCase()}. Com {Math.min.apply(null,comDow.map(function(d){ return d.n; }))} a {Math.max.apply(null,comDow.map(function(d){ return d.n; }))} posts por dia da semana, é indício — não é lei.</SocRodape>}
+      </SocCard>
+    </div>
+
+    <SocCard titulo="As que mais alcançaram" sub="todas as publicações com número, não só as do período"
+      direita={nComNum>5&&<button onClick={onVerPublicacoes} style={SOC_BTN("sm")}>ver as {nComNum} →</button>}>
+      {!top.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação com alcance medido ainda.</div>}
+      {top.map(function(p,i){
+        const cap=String(p.caption||"").replace(/\s+/g," ").trim();
+        return <div key={p.media_id} style={{display:"grid",gridTemplateColumns:isMob?"26px minmax(0,1fr)":"44px minmax(0,1fr) auto",gap:12,alignItems:"center",padding:"11px 0",borderBottom:i<top.length-1?"1px solid #f2f0f7":"none",minWidth:0}}>
+          <span style={{width:26,height:26,borderRadius:9,background:SOC.roxoBg,color:SOC.roxo,fontSize:12,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:12.5,fontWeight:600,color:SOC.txt,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cap||<span style={{color:SOC.txt3,fontStyle:"italic"}}>sem legenda</span>}</div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:2,fontWeight:600}}>{_socTipo(p.media_type)} · {_socDiaLongo(p.publicado_em)}</div>
+          </div>
+          <div style={{display:"flex",gap:14,fontSize:11.5,color:SOC.txt2,fontWeight:700,whiteSpace:"nowrap",flexWrap:"wrap",gridColumn:isMob?"2":undefined}}>
+            <span><b style={{fontWeight:900,color:SOC.txt}}>{_socN(p.reach)}</b> <i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600}}>alcance</i></span>
+            {_socTem(p.video_views)&&<span><b style={{fontWeight:900,color:SOC.txt}}>{_socN(p.video_views)}</b> <i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600}}>views</i></span>}
+            <span><b style={{fontWeight:900,color:SOC.txt}}>{_socN(p.likes)}</b> <i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600}}>curtidas</i></span>
+            <span><b style={{fontWeight:900,color:SOC.txt}}>{_socTem(p.shares)?_socN(p.shares):"—"}</b> <i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600}}>compart.</i></span>
+            <span><b style={{fontWeight:900,color:SOC.txt}}>{_socTem(p.saved)?_socN(p.saved):"—"}</b> <i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600}}>salvos</i></span>
+          </div>
+        </div>;
+      })}
     </SocCard>
+
+    <div style={g2}>
+      <SocLeitura>
+        {varAlc!==null&&<div>O alcance {_socB((varAlc<0?"caiu ":"subiu ")+_socPct(Math.abs(varAlc),1))} em relação aos {dias} dias anteriores — de {_socN(Math.round(r0.alcanceMedio))} para {_socN(Math.round(r.alcanceMedio))} pessoas por dia.</div>}
+        {r.ganho!==null&&seg&&<div>{r.ganho>=0?"Os seguidores ":"Os seguidores "}{_socB(r.ganho>=0?"continuam subindo":"caíram")}: {_socSinal(r.ganho)} no período{semPerda?", sem nenhum dia negativo":""}.{concentracao!==null&&concentracao>=40?" As interações se concentram em poucos dias — os 2 melhores respondem por "+_socPct(concentracao)+" de tudo que aconteceu.":""}</div>}
+        {vezes!==null&&<div>Nesse perfil, {_socB("Reels é o formato que faz o conteúdo sair da base")}: alcança {_socN1(vezes)}× mais que uma foto.</div>}
+        {varAlc===null&&r.ganho===null&&<div>Ainda não há dias suficientes pra comparar com o período anterior. A leitura aparece quando existirem dois períodos inteiros.</div>}
+      </SocLeitura>
+      <SocAviso titulo="De onde vem cada número">
+        <div>{_socB("Alcance e seguidores")} a Meta entrega dia a dia — dá pra montar a série.</div>
+        <div>{_socB("As outras 11 métricas")} (views, visitas, interações, curtidas, comentários, salvos, compartilhamentos, cliques, respostas) a Meta só entrega como <i>total de um período</i>. A gente pede um período de um dia só, um dia de cada vez — por isso elas começam em 25/08/2026, quando essa coleta entrou no ar.</div>
+        <div>{_socB("Nada aqui é estimado.")} Onde não temos o dado, aparece “—”.</div>
+      </SocAviso>
+    </div>
   </>;
 }
 
-/* ─── ABA: PUBLICAÇÕES (o "criativo" do orgânico) ─────── */
+/* ─── ABA: PÚBLICO (retrato de quem segue) ───────────── */
+const SOC_IDADES=["13-17","18-24","25-34","35-44","45-54","55-64","65+"];
+const _socIdadeRot=function(v){ if(v==="65+") return "65 anos ou mais"; const p=String(v).split("-"); return p.length===2?(p[0]+" a "+p[1]+" anos"):String(v); };
+const SOC_GENERO={M:"Homens",F:"Mulheres",U:"Não informado"};
+/* A Meta manda "Lajeado, Rio Grande do Sul". Na tela cabe "Lajeado, RS". */
+const SOC_UF={"Acre":"AC","Alagoas":"AL","Amapá":"AP","Amazonas":"AM","Bahia":"BA","Ceará":"CE","Distrito Federal":"DF","Espírito Santo":"ES","Goiás":"GO","Maranhão":"MA","Mato Grosso":"MT","Mato Grosso do Sul":"MS","Minas Gerais":"MG","Pará":"PA","Paraíba":"PB","Paraná":"PR","Pernambuco":"PE","Piauí":"PI","Rio de Janeiro":"RJ","Rio Grande do Norte":"RN","Rio Grande do Sul":"RS","Rondônia":"RO","Roraima":"RR","Santa Catarina":"SC","São Paulo":"SP","Sergipe":"SE","Tocantins":"TO"};
+const _socCidade=function(v){
+  const s=String(v||"").trim(); const i=s.lastIndexOf(",");
+  if(i<0) return s;
+  const cid=s.slice(0,i).trim(), est=s.slice(i+1).replace(/\(state\)/i,"").trim();
+  return cid+", "+(SOC_UF[est]||est);
+};
+function SocPublico({demo,demoEm,seguidores,isMob}){
+  if(!demo.length) return <SocCard titulo="Público"><SocAviso titulo="Ainda sem retrato do público">
+    <div>A Meta entrega idade, gênero, cidade e país de quem segue — mas só pra contas com pelo menos 100 seguidores, e só se a coleta rodou. Esse perfil ainda não tem nenhum retrato guardado.</div>
+  </SocAviso></SocCard>;
+  const por=function(dim){ const g={}; demo.forEach(function(x){ if(x.dimensao!==dim) return; const k=String(x.valor||"").trim(); g[k]=(g[k]||0)+Number(x.pessoas||0); }); return g; };
+  const idade=por("idade"), genero=por("genero"), cidade=por("cidade"), pais=por("pais");
+  const somaI=Object.keys(idade).reduce(function(s,k){ return s+idade[k]; },0);
+  const somaG=Object.keys(genero).reduce(function(s,k){ return s+genero[k]; },0);
+  const somaC=Object.keys(cidade).reduce(function(s,k){ return s+cidade[k]; },0);
+  const somaP=Object.keys(pais).reduce(function(s,k){ return s+pais[k]; },0);
+  const base=seguidores||somaI||somaG;
+  const idades=SOC_IDADES.filter(function(k){ return _socTem(idade[k]); }).map(function(k){ return {k:k,v:idade[k]}; }).sort(function(a,b){ return b.v-a.v; });
+  const maxI=idades.length?idades[0].v:0;
+  const cidades=Object.keys(cidade).map(function(k){ return {k:_socCidade(k),v:cidade[k]}; }).sort(function(a,b){ return b.v-a.v; });
+  const maxC=cidades.length?cidades[0].v:0;
+  const paises=Object.keys(pais).map(function(k){ return {k:k,v:pais[k]}; }).sort(function(a,b){ return b.v-a.v; });
+  const gM=genero.M||0, gF=genero.F||0, gU=genero.U||0;
+  const domG=gM>=gF?"Homem":"Mulher";
+  const topI=idades[0]; const topC=cidades[0];
+  const meio=["25-34","35-44","45-54"].reduce(function(s,k){ return s+(idade[k]||0); },0);
+  const nomePais=function(c){ try{ return new Intl.DisplayNames(["pt-BR"],{type:"region"}).of(c)||c; }catch(_){ return c; } };
+  const g2={display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:14,alignItems:"start",minWidth:0};
+  const pc=function(v,s){ return s?_socPct(v/s*100,1):"—"; };
+  return <>
+    <SocSolidos isMob={isMob} itens={[
+      {eye:"Quem segue", big:seguidores===null?_socN(base):_socN(seguidores), s:"pessoas acompanhando o perfil hoje"},
+      {eye:"A cara do público", menor:true, big:(somaG&&topI)?(domG+", "+topI.k):"—",
+       s:(somaG&&topI)?(Math.round(Math.max(gM,gF)/somaG*4)+" em cada 4 são "+(domG==="Homem"?"homens":"mulheres")+" · "+pc(topI.v,somaI)+" estão nessa faixa"):"sem dado de gênero ou idade"},
+      {eye:"Onde ele está", menor:true, big:topC?topC.k.split(",")[0]:"—",
+       s:topC?(pc(topC.v,somaC)+" dos seguidores com cidade conhecida · "+cidades.length+" cidades no total"):"sem dado de cidade"},
+    ]}/>
+    <div style={g2}>
+      <SocCard titulo="Idade" sub={_socN(somaI)+" seguidores, "+idades.length+" faixas"}>
+        {idades.map(function(x){ return <SocLinha key={x.k} isMob={isMob} rot={_socIdadeRot(x.k)} pct={maxI?x.v/maxI*100:0} val={pc(x.v,somaI)} det={_socN(x.v)}/>; })}
+        {somaI>0&&<SocRodape>{_socB(_socPct(meio/somaI*100)+" do público tem entre 25 e 54 anos.")}</SocRodape>}
+      </SocCard>
+      <SocCard titulo="Gênero" sub="como o Instagram classifica">
+        {somaG>0?<>
+          <div style={{display:"flex",height:34,borderRadius:10,overflow:"hidden",gap:2,background:"#fff",minWidth:0}}>
+            {[["M",gM,SOC.roxo,"#fff"],["F",gF,SOC.roxo2,"#fff"],["U",gU,"#cbc3dd",SOC.txt2]].map(function(x){
+              const p=x[1]/somaG*100; if(p<=0) return null;
+              return <div key={x[0]} style={{width:p+"%",background:x[2],color:x[3],display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,minWidth:0,overflow:"hidden",whiteSpace:"nowrap"}}>{p>=9?_socPct(p,1):""}</div>;
+            })}
+          </div>
+          <SocLegenda itens={[{cor:SOC.roxo,t:"Homens · "+_socN(gM)},{cor:SOC.roxo2,t:"Mulheres · "+_socN(gF)},{cor:"#cbc3dd",t:"Não informado · "+_socN(gU)}]}/>
+          {gU>0&&<SocRodape>O Instagram não sabe o gênero de {_socN(gU)} contas. Elas entram como “não informado”, não como homens ou mulheres — somar tudo em um lado mudaria a conta.</SocRodape>}
+        </>:<div style={{fontSize:12.5,color:SOC.txt3}}>Sem dado de gênero nesse retrato.</div>}
+      </SocCard>
+    </div>
+    <SocCard titulo="Onde estão" sub={cidades.length+" cidades · mostrando as "+Math.min(10,cidades.length)+" maiores"}
+      direita={paises.slice(0,2).map(function(p){ return <SocPill key={p.k}>{nomePais(p.k)} {pc(p.v,somaP)}</SocPill>; })}>
+      {cidades.slice(0,10).map(function(x,i){ return <SocLinha key={x.k} isMob={isMob} rot={x.k} pct={maxC?x.v/maxC*100:0} val={pc(x.v,somaC)} det={_socN(x.v)} cor={i===0?SOC.roxo:SOC.roxo2}/>; })}
+      {cidades.length>10&&<SocRodape>As outras {cidades.length-10} cidades somam {pc(cidades.slice(10).reduce(function(s,x){ return s+x.v; },0),somaC)}. A Meta só informa cidade de quem ela consegue localizar — por isso a soma das cidades ({_socN(somaC)}) é menor que o total de seguidores.</SocRodape>}
+    </SocCard>
+    <div style={g2}>
+      <SocLeitura>
+        {(somaG&&topI&&topC)&&<div>O público é {_socB((domG==="Homem"?"homem":"mulher")+", entre "+topI.k.replace("-"," e ")+" anos, de "+topC.k.split(",")[0])}. {topC.v/somaC>=0.2?"Não é um público espalhado: "+pc(topC.v,somaC)+" de quem tem cidade conhecida está numa cidade só.":"É um público espalhado: a maior cidade tem só "+pc(topC.v,somaC)+"."}</div>}
+        {somaI>0&&<div>{_socPct(meio/somaI*100)} têm entre 25 e 54 anos — a faixa de quem decide compra.</div>}
+        <div>Isso é {_socB("quem segue")}, não quem foi alcançado. Se o objetivo for crescer fora da região, o orgânico sozinho fala com quem já está por perto.</div>
+      </SocLeitura>
+      <SocAviso titulo="De onde vem esse dado, e o que ele não é">
+        <div>É um {_socB("retrato de "+_socHora(demoEm))}, não uma série. A Meta não guarda o público de ontem. Cada dia que a coleta rodar vira um retrato novo — e aí dá pra ver o público mudando.</div>
+        <div>É de {_socB("quem segue")}. A Meta não entrega o perfil de quem foi <i>alcançado</i> nem de quem <i>engaja</i> nessa conta — a gente pediu, e as duas vieram indisponíveis.</div>
+      </SocAviso>
+    </div>
+  </>;
+}
+
+/* ─── ABA: PUBLICAÇÕES ───────────────────────────────── */
 const SOC_ORDENS=[
   ["alcance","Alcance",function(p){ return Number(p.reach)||0; }],
   ["recente","Mais recente",function(p){ return new Date(p.publicado_em||0).getTime()||0; }],
   ["curtidas","Curtidas",function(p){ return Number(p.likes)||0; }],
   ["salvos","Salvamentos",function(p){ return Number(p.saved)||0; }],
   ["compart","Compartilhamentos",function(p){ return Number(p.shares)||0; }],
+  ["views","Views",function(p){ return Number(p.video_views)||0; }],
   ["engaj","Engajamento",function(p){ const e=_socEngaj(p); return e===null?-1:e; }],
 ];
-function SocPublicacoes({posts,isMob}){
+function SocPublicacoes({posts,dias,isMob}){
   const [ordem,setOrdem]=useState("alcance");
   const [tipo,setTipo]=useState("todos");
+  const [janela,setJanela]=useState("tudo");
+  const [soNum,setSoNum]=useState(true);
   const [aberto,setAberto]=useState(null);
-  if(!posts.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada dentro do período.</div></SocCard>;
+  const [limite,setLimite]=useState(30);
+  if(!posts.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
 
+  const corte=(function(){ const d=new Date(); d.setDate(d.getDate()-(Number(dias)||30)); return _socISO(d); })();
   const tipos=["todos"].concat(Object.keys(posts.reduce(function(a,p){ a[String(p.media_type||"").toUpperCase()]=1; return a; },{})).filter(Boolean));
-  const filtrados=posts.filter(function(p){ return tipo==="todos"||String(p.media_type||"").toUpperCase()===tipo; });
+  const filtrados=posts.filter(function(p){
+    if(tipo!=="todos"&&String(p.media_type||"").toUpperCase()!==tipo) return false;
+    if(janela==="periodo"&&String(p.publicado_em||"").slice(0,10)<corte) return false;
+    if(soNum&&!_socTem(p.reach)) return false;
+    return true;
+  });
   const cmp=(SOC_ORDENS.find(function(o){ return o[0]===ordem; })||SOC_ORDENS[0])[2];
   const lista=filtrados.slice().sort(function(a,b){ return cmp(b)-cmp(a); });
   const alcances=lista.map(function(p){ return Number(p.reach)||0; });
   const maxAlc=alcances.length?Math.max.apply(null,alcances):0;
+  const semNum=posts.filter(function(p){ return !_socTem(p.reach); }).length;
+  const sel={border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:170};
 
   const Cel=function(rot,val){
     return <div style={{minWidth:0}}>
       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap"}}>{rot}</div>
-      <div style={{fontSize:13.5,fontWeight:800,color:SOC.txt,marginTop:2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{val}</div>
+      <div style={{fontSize:13.5,fontWeight:800,color:SOC.txt,marginTop:2,whiteSpace:"nowrap"}}>{val}</div>
     </div>;
   };
 
-  return <SocCard titulo="Publicações" sub={"O que cada post entregou. "+_socN(lista.length)+(lista.length===1?" publicação":" publicações")+" no período."}
+  return <SocCard titulo="Publicações" sub={_socN(lista.length)+(lista.length===1?" publicação":" publicações")+(janela==="periodo"?" no período":" no total")+(soNum&&semNum?" · "+semNum+" sem número ainda, escondidas":"")}
     direita={<>
-      <select value={tipo} onChange={function(e){ setTipo(e.target.value); }}
-        style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:150}}>
+      <select value={janela} onChange={function(e){ setJanela(e.target.value); setLimite(30); }} style={sel}>
+        <option value="periodo">Só do período</option><option value="tudo">Todas</option>
+      </select>
+      <select value={tipo} onChange={function(e){ setTipo(e.target.value); setLimite(30); }} style={sel}>
         {tipos.map(function(t){ return <option key={t} value={t}>{t==="todos"?"Todos os tipos":_socTipo(t)}</option>; })}
       </select>
-      <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }}
-        style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:180}}>
+      <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={sel}>
         {SOC_ORDENS.map(function(o){ return <option key={o[0]} value={o[0]}>{"Ordenar por "+o[1].toLowerCase()}</option>; })}
       </select>
+      <label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
+        <input type="checkbox" checked={soNum} onChange={function(e){ setSoNum(e.target.checked); }}/> só com número
+      </label>
     </>}>
+    {!lista.length&&<div style={{fontSize:12.5,color:SOC.txt3,padding:"8px 0"}}>Nada com esses filtros.</div>}
     <div style={{display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
-      {lista.map(function(p){
+      {lista.slice(0,limite).map(function(p){
         const eng=_socEngaj(p);
         const pct=maxAlc>0?Math.round((Number(p.reach)||0)/maxAlc*100):0;
         const legenda=String(p.caption||"").replace(/\s+/g," ").trim();
         const ehAberto=aberto===p.media_id;
+        const mt=String(p.media_type||"").toUpperCase();
+        const capa=p.thumbnail_url||((mt==="IMAGE"||mt==="CAROUSEL_ALBUM")?p.media_url:null);
         return <div key={p.media_id} style={{border:"1px solid "+SOC.borda,borderRadius:14,overflow:"hidden",minWidth:0,background:"#fff"}}>
-          <div onClick={function(){ setAberto(ehAberto?null:p.media_id); }}
-            style={{padding:isMob?"12px 13px":"13px 16px",cursor:"pointer",minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
-              <SocPill cor={SOC.roxo} bg={SOC.roxoBg}>{_socTipo(p.media_type)}</SocPill>
-              <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:700,whiteSpace:"nowrap"}}>{_socDiaLongo(p.publicado_em)}</span>
-              <span style={{marginLeft:"auto",fontSize:11.5,color:SOC.txt3,fontWeight:700}}>{ehAberto?"fechar":"ver legenda"}</span>
+          <div onClick={function(){ setAberto(ehAberto?null:p.media_id); }} style={{padding:isMob?"12px 13px":"13px 16px",cursor:"pointer",minWidth:0,display:"grid",gridTemplateColumns:capa&&!isMob?"72px minmax(0,1fr)":"minmax(0,1fr)",gap:14}}>
+            {capa&&!isMob&&<div style={{width:72,height:72,borderRadius:10,background:SOC.cinzaBg,overflow:"hidden",flexShrink:0}}>
+              <img src={capa} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={function(e){ e.currentTarget.style.display="none"; }}/>
+            </div>}
+            <div style={{minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
+                <SocPill cor={SOC.roxo} bg={SOC.roxoBg}>{_socTipo(p.media_type)}</SocPill>
+                <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:700,whiteSpace:"nowrap"}}>{_socDiaLongo(p.publicado_em)}</span>
+                {!_socTem(p.reach)&&<SocPill cor={SOC.amar} bg={SOC.amarBg} titulo="O coletor ainda não completou os números desta publicação">sem número ainda</SocPill>}
+                <span style={{marginLeft:"auto",fontSize:11.5,color:SOC.txt3,fontWeight:700}}>{ehAberto?"fechar":"ver legenda"}</span>
+              </div>
+              <div style={{fontSize:13,color:SOC.txt2,marginTop:7,lineHeight:1.5,wordBreak:"break-word",display:"-webkit-box",WebkitLineClamp:ehAberto?99:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                {legenda||<span style={{color:SOC.txt3,fontStyle:"italic"}}>sem legenda</span>}
+              </div>
+              <div style={{height:5,borderRadius:99,background:SOC.cinzaBg,marginTop:11,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",borderRadius:99,background:SOC.roxo}}/></div>
+              <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,minmax(0,1fr))":"repeat(7,minmax(0,1fr))",gap:10,marginTop:11,minWidth:0}}>
+                {Cel("Alcance",_socTem(p.reach)?_socN(p.reach):"—")}
+                {Cel("Views",_socTem(p.video_views)?_socN(p.video_views):"—")}
+                {Cel("Curtidas",_socTem(p.likes)?_socN(p.likes):"—")}
+                {Cel("Comentários",_socTem(p.comments)?_socN(p.comments):"—")}
+                {Cel("Salvos",_socTem(p.saved)?_socN(p.saved):"—")}
+                {Cel("Compart.",_socTem(p.shares)?_socN(p.shares):"—")}
+                {Cel("Engajamento",eng===null?"—":_socPct(eng,1))}
+              </div>
             </div>
-            <div style={{fontSize:13,color:SOC.txt2,marginTop:7,lineHeight:1.5,wordBreak:"break-word",
-              display:"-webkit-box",WebkitLineClamp:ehAberto?99:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-              {legenda||<span style={{color:SOC.txt3,fontStyle:"italic"}}>sem legenda</span>}
-            </div>
-            <div style={{height:5,borderRadius:99,background:SOC.cinzaBg,marginTop:11,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",borderRadius:99,background:SOC.roxo}}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,minmax(0,1fr))":"repeat(6,minmax(0,1fr))",gap:10,marginTop:11,minWidth:0}}>
-              {Cel("Alcance",p.reach===null||p.reach===undefined?"—":_socN(p.reach))}
-              {Cel("Curtidas",_socN(p.likes))}
-              {Cel("Comentários",_socN(p.comments))}
-              {Cel("Salvos",p.saved===null||p.saved===undefined?"—":_socN(p.saved))}
-              {Cel("Compart.",p.shares===null||p.shares===undefined?"—":_socN(p.shares))}
-              {Cel("Engajamento",eng===null?"—":_socPct(eng,1))}
-            </div>
-            {(p.video_views!==null&&p.video_views!==undefined)&&<div style={{fontSize:11.5,color:SOC.txt2,marginTop:9,fontWeight:600}}>{_socN(p.video_views)} visualizações de vídeo</div>}
           </div>
-          {ehAberto&&<div style={{borderTop:"1px solid "+SOC.borda,padding:"11px 16px",background:SOC.cinzaBg,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",minWidth:0}}>
-            {p.permalink
-              ? <a href={p.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none"})}>Abrir no Instagram →</a>
-              : <span style={{fontSize:11.5,color:SOC.txt3}}>sem link guardado</span>}
+          {ehAberto&&<div style={{borderTop:"1px solid "+SOC.borda,padding:"11px 16px",background:SOC.chao,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",minWidth:0}}>
+            {p.permalink?<a href={p.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none"})}>Abrir no Instagram →</a>:<span style={{fontSize:11.5,color:SOC.txt3}}>sem link guardado</span>}
+            {_socTem(p.profile_visits)&&<SocPill>{_socN(p.profile_visits)} visitas ao perfil</SocPill>}
+            {_socTem(p.follows)&&<SocPill>{_socN(p.follows)} seguiram por ela</SocPill>}
+            {_socTem(p.avg_watch_time)&&Number(p.avg_watch_time)>0&&<SocPill>{_socN1(Number(p.avg_watch_time)/1000)}s assistidos em média</SocPill>}
             <span style={{fontSize:11,color:SOC.txt3,wordBreak:"break-all",minWidth:0}}>id {p.media_id}</span>
           </div>}
         </div>;
       })}
     </div>
-    <div style={{fontSize:11.5,color:SOC.txt3,marginTop:13,lineHeight:1.5}}>
-      A capa da publicação ainda não aparece porque a coleta não guarda a imagem — só o link. Dá pra ligar mexendo no coletor.
-    </div>
+    {lista.length>limite&&<div style={{marginTop:12}}><button onClick={function(){ setLimite(limite+30); }} style={SOC_BTN()}>mostrar mais {Math.min(30,lista.length-limite)} de {lista.length-limite}</button></div>}
   </SocCard>;
 }
 
-/* ─── ABA: HISTÓRICO ─────────────────────────────────── */
-function SocHistorico({diario,isMob}){
-  if(!diario.length) return <SocCard titulo="Histórico"><div style={{fontSize:12.5,color:SOC.txt3}}>Nada coletado dentro do período.</div></SocCard>;
+/* ─── ABA: HISTÓRICO (tudo que está guardado) ────────── */
+function SocHistorico({diario,posts,isMob}){
+  const [verDias,setVerDias]=useState(false);
+  if(!diario.length) return <SocCard titulo="Histórico"><div style={{fontSize:12.5,color:SOC.txt3}}>Nada coletado ainda.</div></SocCard>;
+  const r=_socResumo(diario,[]);
+  const meses={};
+  r.serieAlcance.forEach(function(d){ const m=d.dia.slice(0,7); const o=meses[m]||(meses[m]={m:m,dias:0,alc:[],novos:null,diasNovos:0,posts:0,alcPosts:0}); o.dias++; if(_socTem(d.v)) o.alc.push(d.v); });
+  r.serieSeg.forEach(function(d){ const o=meses[d.dia.slice(0,7)]; if(o&&_socTem(d.v)){ o.novos=(o.novos||0)+d.v; o.diasNovos++; } });
+  posts.forEach(function(p){ const m=String(p.publicado_em||"").slice(0,7); const o=meses[m]; if(o){ o.posts++; if(_socTem(p.reach)) o.alcPosts+=Number(p.reach); } });
+  const listaMeses=Object.keys(meses).sort().map(function(k){ const o=meses[k]; const soma=o.alc.reduce(function(s,v){ return s+v; },0);
+    return Object.assign(o,{soma:o.alc.length?soma:null,media:o.alc.length?soma/o.alc.length:null,pico:o.alc.length?Math.max.apply(null,o.alc):null,vale:o.alc.length?Math.min.apply(null,o.alc):null,nAlc:o.alc.length}); });
+  const chaves=listaMeses.map(function(o){ return o.m; });
+  const corMes=function(d){ const i=chaves.indexOf(d.dia.slice(0,7)); const n=chaves.length; return SOC_RAMPA[n<=1?3:Math.min(3,Math.round(i/(n-1)*3))]; };
+  const pico=r.serieAlcance.filter(function(d){ return _socTem(d.v); }).reduce(function(a,b){ return (!a||b.v>a.v)?b:a; },null);
+  const vale=r.serieAlcance.filter(function(d){ return _socTem(d.v); }).reduce(function(a,b){ return (!a||b.v<a.v)?b:a; },null);
+  const cheios=listaMeses.filter(function(o){ return o.nAlc>=20; });
+  const primeiro=cheios[0], ultimo=cheios[cheios.length-1];
+  const varMes=(primeiro&&ultimo&&primeiro!==ultimo&&primeiro.media)?(ultimo.media-primeiro.media)/primeiro.media*100:null;
+  const cob=r.dias.map(function(d){ const temR=r.serieAlcance.find(function(x){ return x.dia===d; }); const temT=diario.some(function(x){ return String(x.data).slice(0,10)===d&&_socTem(x.views); }); const rr=temR&&_socTem(temR.v);
+    return {dia:d,cor:rr&&temT?SOC.roxo:rr?SOC.roxo3:"#e2d6f7",tipo:rr&&temT?"ambos":rr?"so_r":"so_t"}; });
+  const nSoR=cob.filter(function(c){ return c.tipo==="so_r"; }).length, nAmb=cob.filter(function(c){ return c.tipo==="ambos"; }).length, nSoT=cob.filter(function(c){ return c.tipo==="so_t"; }).length;
+  const th={fontSize:10.5,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,fontWeight:800,textAlign:"right",padding:"0 10px 9px",borderBottom:"1px solid "+SOC.borda,whiteSpace:"nowrap"};
+  const td={padding:"9px 10px",borderBottom:"1px solid #f2f0f7",textAlign:"right",whiteSpace:"nowrap",fontWeight:700,fontSize:12.5,color:SOC.txt};
+  const un=function(t){ return <span style={{fontWeight:600,color:SOC.txt3,fontSize:11.5}}>{t}</span>; };
+  const eixos=[0,.25,.5,.75,1].map(function(f){ return r.serieAlcance[Math.min(r.serieAlcance.length-1,Math.round(f*(r.serieAlcance.length-1)))].dia; });
+  const g2={display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:14,alignItems:"start",minWidth:0};
   const linhas=diario.slice().sort(function(a,b){ return String(b.data).localeCompare(String(a.data)); });
-  const th={fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",color:SOC.txt3,textAlign:"left",padding:"9px 12px",whiteSpace:"nowrap",borderBottom:"1px solid "+SOC.borda};
-  const td={fontSize:12.5,color:SOC.txt,padding:"9px 12px",whiteSpace:"nowrap",borderBottom:"1px solid "+SOC.borda,fontFeatureSettings:"'tnum'"};
-  return <SocCard titulo="Histórico" sub="O dia a dia cru, do mais recente para o mais antigo. Uma linha por perfil por dia." pad="0 0 4px">
-    <div style={{overflowX:"auto",minWidth:0}} className="scroll-x">
-      <table style={{borderCollapse:"collapse",width:"100%",minWidth:520}}>
-        <thead><tr>
-          <th style={th}>Dia</th><th style={th}>Perfil</th>
-          <th style={Object.assign({},th,{textAlign:"right"})}>Alcance</th>
-          <th style={Object.assign({},th,{textAlign:"right"})}>Seguidores no dia</th>
-          <th style={Object.assign({},th,{textAlign:"right"})}>Total</th>
-        </tr></thead>
-        <tbody>
-          {linhas.map(function(r,i){
-            const d=r.follower_count_delta;
-            return <tr key={i}>
-              <td style={td}>{_socDiaLongo(r.data)}</td>
-              <td style={Object.assign({},td,{whiteSpace:"normal",wordBreak:"break-word",maxWidth:200})}>{r.username?("@"+r.username):(_socNomeUnidade(r.unidade)||"—")}</td>
-              <td style={Object.assign({},td,{textAlign:"right"})}>{r.reach===null||r.reach===undefined?"—":_socN(r.reach)}</td>
-              <td style={Object.assign({},td,{textAlign:"right",color:(d===null||d===undefined)?SOC.txt3:(Number(d)>=0?SOC_SOBE:SOC_DESCE),fontWeight:800})}>{d===null||d===undefined?"—":_socSinal(d)}</td>
-              <td style={Object.assign({},td,{textAlign:"right"})}>{r.total_followers===null||r.total_followers===undefined?"—":_socN(r.total_followers)}</td>
-            </tr>;
-          })}
-        </tbody>
-      </table>
+  return <>
+    <SocSolidos isMob={isMob} itens={[
+      {eye:"Dias guardados", big:_socN(r.dias.length), s:"de "+_socDia(r.primeiroDia)+" a "+_socDia(r.ultimoDia)+" · "+r.diasAlcance+" deles com alcance registrado"},
+      {eye:"Melhor dia", menor:true, big:pico?_socN(pico.v):"—", s:pico&&vale&&vale.v>0?(_socDia(pico.dia)+" · "+_socN1(pico.v/vale.v)+"× o pior dia ("+_socN(vale.v)+" em "+_socDia(vale.dia)+")"):"—"},
+      {eye:varMes!==null?(_socMesNome(primeiro.m)+" → "+_socMesNome(ultimo.m)):"Meses inteiros", menor:true, big:varMes!==null?_socPct(varMes,1):_socN(cheios.length),
+       s:varMes!==null?("na média diária de alcance: de "+_socN(Math.round(primeiro.media))+" para "+_socN(Math.round(ultimo.media))):"precisa de dois meses com 20+ dias pra comparar"},
+    ]}/>
+    <SocCard titulo={"Os "+r.diasAlcance+" dias inteiros"} sub="alcance por dia, do primeiro ao último que temos"
+      direita={pico&&<SocPill>pico {_socN(pico.v)} · {_socDia(pico.dia)}</SocPill>}>
+      <SocBarras serie={r.serieAlcance} isMob={isMob} alt={isMob?140:190} cor={corMes} rotulo="de alcance" eixos={eixos}/>
+      <SocLegenda itens={listaMeses.map(function(o,i){ return {cor:SOC_RAMPA[listaMeses.length<=1?3:Math.min(3,Math.round(i/(listaMeses.length-1)*3))],t:_socMesNome(o.m)+" · "+o.nAlc+" dias"}; })}/>
+    </SocCard>
+    <SocCard titulo="Mês a mês" sub="cada linha soma só os dias que temos daquele mês" pad="12px 20px 18px">
+      <div style={{overflowX:"auto",minWidth:0}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:640}}>
+        <thead><tr><th style={Object.assign({},th,{textAlign:"left"})}>Mês</th><th style={th}>Dias</th><th style={th}>Alcance somado</th><th style={th}>Média/dia</th><th style={th}>Melhor dia</th><th style={th}>Pior dia</th><th style={th}>Novos seguidores</th><th style={th}>Publicações</th></tr></thead>
+        <tbody>{listaMeses.map(function(o){ return <tr key={o.m}>
+          <td style={Object.assign({},td,{textAlign:"left",color:SOC.txt2})}>{_socMesNome(o.m)}{o.nAlc<28&&<> {un("· parcial")}</>}</td>
+          <td style={td}>{o.nAlc}</td><td style={td}>{o.soma===null?"—":_socN(o.soma)}</td><td style={td}>{o.media===null?"—":_socN(Math.round(o.media))}</td>
+          <td style={td}>{o.pico===null?"—":_socN(o.pico)}</td><td style={td}>{o.vale===null?"—":_socN(o.vale)}</td>
+          <td style={td}>{o.novos===null?<span style={{color:SOC.borda2}}>—</span>:<>{_socSinal(o.novos)} {un("· "+o.diasNovos+" dias")}</>}</td>
+          <td style={td}>{o.posts?<>{o.posts} {un("· "+_socN(o.alcPosts)+" alcance")}</>:<span style={{color:SOC.borda2}}>—</span>}</td>
+        </tr>; })}</tbody>
+      </table></div>
+      <SocRodape>Mês parcial tem menos dias — por isso o “alcance somado” dele é menor. {_socB("Pra comparar mês com mês, use a média por dia.")}</SocRodape>
+    </SocCard>
+    <SocCard titulo="Seguidores por dia" sub="quanto o perfil ganhou ou perdeu em cada dia · a Meta só guarda 30 dias disso">
+      <SocBarrasSeguidores serie={r.serieSeg.filter(function(d){ return _socTem(d.v); })} isMob={isMob}/>
+    </SocCard>
+    <div style={g2}>
+      <SocCard titulo="Cobertura da coleta" sub="o que cada dia tem guardado">
+        <div style={{display:"flex",gap:2,flexWrap:"wrap",marginBottom:12}}>{cob.map(function(c){ return <div key={c.dia} title={_socDiaLongo(c.dia)} style={{width:9,height:24,borderRadius:3,background:c.cor}}/>; })}</div>
+        <SocLegenda style={{marginTop:0}} itens={[{cor:SOC.roxo3,t:"Só alcance e seguidores · "+nSoR+" dias"},{cor:SOC.roxo,t:"Alcance + as 11 métricas · "+nAmb+" dias"},{cor:"#e2d6f7",t:"Só as 11 métricas · "+nSoT+" dias"}]}/>
+        <SocRodape>Os últimos dias podem vir sem alcance porque a Meta fecha o número do dia com atraso — ele entra na próxima coleta.</SocRodape>
+      </SocCard>
+      <SocAviso titulo="Por que guardar isso importa">
+        <div>A Meta {_socB("só devolve 90 dias")} de alcance e {_socB("30 dias")} de seguidores. O que passou disso, ela apaga — e ninguém recupera depois.</div>
+        <div>Os dias mais antigos desta tela {_socB("só existem porque a coleta rodou")}. Por isso ela virou automática, todo dia de madrugada: não é comodidade, é a única forma de ter histórico de mais de três meses.</div>
+        <div>{_socB("Nada aqui é apagado.")} O banco só acrescenta.</div>
+      </SocAviso>
     </div>
-  </SocCard>;
+    <SocCard titulo="Dia a dia cru" sub="uma linha por perfil por dia, do mais recente ao mais antigo" direita={<button onClick={function(){ setVerDias(!verDias); }} style={SOC_BTN("sm")}>{verDias?"esconder":"ver as "+linhas.length+" linhas"}</button>} pad={verDias?"12px 0 4px":"0 0 6px"}>
+      {verDias&&<div style={{overflowX:"auto",minWidth:0}} className="scroll-x"><table style={{borderCollapse:"collapse",width:"100%",minWidth:720}}>
+        <thead><tr><th style={Object.assign({},th,{textAlign:"left",padding:"0 12px 9px"})}>Dia</th><th style={Object.assign({},th,{textAlign:"left"})}>Perfil</th><th style={th}>Alcance</th><th style={th}>Seg. no dia</th><th style={th}>Total</th><th style={th}>Views</th><th style={th}>Visitas</th><th style={th}>Engajaram</th><th style={th}>Interações</th><th style={th}>Cliques</th></tr></thead>
+        <tbody>{linhas.map(function(x,i){ const d=x.follower_count_delta; const c=function(v){ return _socTem(v)?_socN(v):<span style={{color:SOC.borda2}}>—</span>; };
+          return <tr key={i}><td style={Object.assign({},td,{textAlign:"left",padding:"9px 12px"})}>{_socDiaLongo(x.data)}</td>
+            <td style={Object.assign({},td,{textAlign:"left",color:SOC.txt2})}>{x.username?"@"+x.username:(_socNomeUnidade(x.unidade)||"—")}</td>
+            <td style={td}>{c(x.reach)}</td><td style={Object.assign({},td,{color:_socTem(d)?(Number(d)>=0?SOC_SOBE:SOC_DESCE):SOC.borda2})}>{_socTem(d)?_socSinal(d):"—"}</td>
+            <td style={td}>{c(x.total_followers)}</td><td style={td}>{c(x.views)}</td><td style={td}>{c(x.profile_views)}</td><td style={td}>{c(x.accounts_engaged)}</td><td style={td}>{c(x.total_interactions)}</td><td style={td}>{c(x.website_clicks)}</td></tr>; })}</tbody>
+      </table></div>}
+    </SocCard>
+  </>;
 }
 
-/* ─── ABA: CONTAS ────────────────────────────────────── */
-function SocContas({contas,ultimaColeta,posts,isMob}){
-  const th={fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",color:SOC.txt3,textAlign:"left",padding:"9px 12px",whiteSpace:"nowrap",borderBottom:"1px solid "+SOC.borda};
-  const td={fontSize:12.5,color:SOC.txt,padding:"10px 12px",borderBottom:"1px solid "+SOC.borda};
-  const semId=contas.filter(function(a){ return !a.ig_user_id; });
-  return <SocCard titulo="Contas conectadas" sub="Quais perfis o coletor enxerga e quando cada um foi coletado pela última vez. É aqui que se explica um cliente vazio." pad="0 0 4px">
-    <div style={{overflowX:"auto",minWidth:0}} className="scroll-x">
-      <table style={{borderCollapse:"collapse",width:"100%",minWidth:560}}>
-        <thead><tr>
-          <th style={th}>Perfil</th><th style={th}>Identificador</th><th style={th}>Última coleta</th>
-          <th style={Object.assign({},th,{textAlign:"right"})}>Publicações guardadas</th>
-        </tr></thead>
-        <tbody>
-          {contas.map(function(a){
-            const ult=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null;
-            const nPosts=posts.filter(function(p){ return p.ig_user_id===a.ig_user_id; }).length;
-            return <tr key={a.id}>
-              <td style={Object.assign({},td,{wordBreak:"break-word",maxWidth:220})}>
-                <div style={{fontWeight:800}}>{_socNomeUnidade(a.unidade)||_socNomeCliente(a.client_id)}</div>
-                <div style={{fontSize:11.5,color:SOC.txt3,marginTop:2}}>{a.handle?("@"+a.handle):"sem @ cadastrado"}</div>
-              </td>
-              <td style={td}>{a.ig_user_id
-                ? <SocPill cor={SOC.verde} bg={SOC.verdeBg}>cadastrado</SocPill>
-                : <SocPill cor={SOC.amar} bg={SOC.amarBg} titulo="Sem esse número o coletor não encontra o perfil">falta</SocPill>}</td>
-              <td style={td}>{!a.ig_user_id?<span style={{color:SOC.txt3}}>—</span>
-                : ult? <span>{_socDiaLongo(ult)} <span style={{color:SOC.txt3}}>({_socRel(ult)})</span></span>
-                     : <span style={{color:SOC.amar,fontWeight:700}}>nunca coletado</span>}</td>
-              <td style={Object.assign({},td,{textAlign:"right",fontFeatureSettings:"'tnum'"})}>{nPosts?_socN(nPosts):<span style={{color:SOC.txt3}}>—</span>}</td>
-            </tr>;
-          })}
-        </tbody>
-      </table>
+/* ─── ABA: CONTAS (as quatro fontes) ─────────────────── */
+function SocContas({contas,clientId,dados,ultimaColeta,isMob}){
+  const ig=contas.filter(function(a){ return a.network==="instagram"; });
+  const fb=contas.filter(function(a){ return a.network==="facebook"; });
+  const tk=contas.filter(function(a){ return a.network==="tiktok"; });
+  const yt=contas.filter(function(a){ return a.network==="youtube"; });
+  const r=_socResumo(dados.diario,dados.posts);
+  const comNum=dados.posts.filter(function(p){ return _socTem(p.reach); }).length;
+  const diasSeg=dados.diario.filter(function(x){ return _socTem(x.follower_count_delta); }).length;
+  const semId=ig.filter(function(a){ return !a.ig_user_id; });
+  const ult=(function(){ let u=null; ig.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; }); return u; })();
+  const linhasBanco=dados.diario.length+dados.posts.length+dados.demo.length+(dados.coment||0)+(dados.fb||0)+(dados.stories||0);
+
+  const Fonte=function({nome,conta,cor,pill,pillCor,pillBg,ultima,linhas}){
+    return <SocCard titulo={<span style={{display:"inline-flex",alignItems:"center",gap:10}}><span style={{width:10,height:10,borderRadius:3,background:cor,display:"inline-block"}}/>{nome}</span>} sub={conta}
+      direita={<><SocPill cor={pillCor} bg={pillBg}>{pill}</SocPill><SocPill>última coleta {ultima}</SocPill></>} pad="8px 20px 12px">
+      <table style={{width:"100%",borderCollapse:"collapse"}}><tbody>
+        {linhas.map(function(l,i){ return <tr key={i}>
+          <td style={{padding:"9px 10px 9px 0",borderBottom:i<linhas.length-1?"1px solid #f2f0f7":"none",fontSize:12.5,fontWeight:700,color:SOC.txt2,whiteSpace:isMob?"normal":"nowrap",width:isMob?"40%":200,verticalAlign:"top"}}>{l[0]}</td>
+          <td style={{padding:"9px 10px",borderBottom:i<linhas.length-1?"1px solid #f2f0f7":"none",fontSize:14,fontWeight:900,color:l[1]==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap",width:isMob?"20%":110,verticalAlign:"top"}}>{l[1]}</td>
+          <td style={{padding:"9px 0 9px 10px",borderBottom:i<linhas.length-1?"1px solid #f2f0f7":"none",fontSize:12.5,fontWeight:500,color:SOC.txt3,lineHeight:1.45,wordBreak:"break-word",verticalAlign:"top"}}>{l[2]}</td>
+        </tr>; })}
+      </tbody></table>
+    </SocCard>;
+  };
+  return <>
+    <SocSolidos isMob={isMob} itens={[
+      {eye:"Coletado", menor:true, big:dados.log?_socHora(dados.log.rodou_em):(ult?_socDiaLongo(ult):"nunca"), s:dados.log?(dados.log.ok?"última rodada sem erro":"última rodada com erro: "+String(dados.log.erro||"").slice(0,80)):"nenhuma rodada registrada"},
+      {eye:"Linhas guardadas", big:_socN(linhasBanco), s:dados.diario.length+" dias + "+dados.posts.length+" publicações + "+dados.demo.length+" do público + "+_socN(dados.coment||0)+" comentários + "+_socN(dados.fb||0)+" do Facebook + "+_socN(dados.stories||0)+(dados.stories===1?" story":" stories")},
+      {eye:"Próxima coleta", menor:true, big:"amanhã, 03h20", s:"automática, todo dia · 5 rotinas até as 06h55"},
+    ]}/>
+    <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}><div style={{fontSize:15,fontWeight:800,letterSpacing:-.2,color:SOC.txt}}>As quatro fontes</div><div style={{fontSize:12,color:SOC.txt3}}>o que cada uma entrega hoje</div></div>
+    <Fonte nome="Instagram" conta={ig.length?ig.map(_socRotuloPerfil).join(" · "):"nenhum perfil cadastrado"} cor={SOC.roxo}
+      pill={!ig.length?"não cadastrado":semId.length?"falta identificador":ult?"funcionando":"nunca coletado"} pillCor={(!ig.length||semId.length||!ult)?SOC.amar:SOC.verde} pillBg={(!ig.length||semId.length||!ult)?SOC.amarBg:SOC.verdeBg}
+      ultima={ult?_socRel(ult):"—"}
+      linhas={[
+        ["Dias de alcance",_socN(r.diasAlcance),r.diasAlcance?(_socDia(r.primeiroDia)+" a "+_socDia(r.ultimoDia)+" · a Meta só guarda 90"):"a Meta só guarda 90"],
+        ["Dias de seguidores",_socN(diasSeg),"a Meta só guarda 30"],
+        ["As 11 métricas de dia",_socN(r.diasTot),"desde 25/08/2026, quando essa coleta entrou"],
+        ["Publicações",_socN(dados.posts.length),comNum+" já com número"+(dados.posts.length>comNum?" · as outras estão sendo completadas de madrugada":"")],
+        ["Público (demografia)",dados.demo.length?_socN(dados.demo.length)+" linhas":"—",dados.demoEm?("retrato de "+_socHora(dados.demoEm)+" · idade, gênero, cidade e país de quem segue"):"a Meta só entrega pra contas com 100+ seguidores"],
+        ["Comentários",dados.coment===null?"—":_socN(dados.coment),"das publicações coletadas"],
+        ["Stories",dados.stories===null?"—":_socN(dados.stories),"só existe enquanto está no ar, 24h"],
+        semId.length?["Sem identificador",semId.length+"",semId.map(_socRotuloPerfil).join(", ")+" — sem o ig_user_id o coletor não encontra o perfil"]:null,
+      ].filter(Boolean)}/>
+    <Fonte nome="Facebook" conta={fb.length?fb.map(function(a){ return a.handle||_socNomeUnidade(a.unidade)||"página"; }).join(" · "):"página ligada ao Instagram"} cor="#d97706"
+      pill={dados.fb?"metade":"sem coleta"} pillCor={SOC.amar} pillBg={SOC.amarBg} ultima={dados.fbUlt?_socRel(dados.fbUlt):"—"}
+      linhas={[
+        ["Publicações",dados.fb===null?"—":_socN(dados.fb),dados.fb?"o histórico inteiro da página":"nada coletado ainda"],
+        ["Alcance e impressões","—","o token não tem a permissão read_insights"],
+        ["Reações e comentários","—","mesmo motivo"],
+        ["Seguidores da página","—","mesmo motivo"],
+      ]}/>
+    <Fonte nome="TikTok" conta={tk.length?tk.map(function(a){ return a.handle?"@"+a.handle:"conta"; }).join(" · "):"nenhuma conta cadastrada"} cor={SOC.cinza}
+      pill="não conectado" pillCor={SOC.txt2} pillBg={SOC.cinzaBg} ultima="—"
+      linhas={[["Tudo","—","precisa de um app de desenvolvedor do TikTok, separado da Meta"]]}/>
+    <Fonte nome="YouTube" conta={yt.length?yt.map(function(a){ return a.handle||"canal"; }).join(" · "):"nenhum canal cadastrado"} cor={SOC.cinza}
+      pill="não conectado" pillCor={SOC.txt2} pillBg={SOC.cinzaBg} ultima="—"
+      linhas={[["Tudo","—","precisa de um projeto no Google Cloud com a YouTube Data API"]]}/>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,alignItems:"start",minWidth:0}}>
+      <SocCard titulo="As rotinas automáticas" sub="horário de Chapecó">
+        {[["03h20","dias, publicações, público e stories","social-coleta-diaria"],["03h35","as 11 métricas de total do dia","social-totais-diario"],["03h50","comentários das publicações","social-comentarios"],["04h05","páginas e publicações do Facebook","social-facebook"],["01h00 às 06h55, de 5 em 5 min","completa os números das publicações antigas","social-backfill-posts"]].map(function(c,i){
+          return <div key={i} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"170px minmax(0,1fr)",gap:isMob?2:12,padding:"9px 0",borderBottom:i<4?"1px solid #f2f0f7":"none",minWidth:0}}>
+            <div style={{fontSize:12.5,fontWeight:800,color:SOC.txt}}>{c[0]}</div>
+            <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.45,wordBreak:"break-word"}}>{c[1]}<br/><span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600}}>{c[2]}</span></div>
+          </div>; })}
+        <SocRodape>Se uma rodada falhar, ela fica registrada e a próxima tenta de novo. {_socB("Nada é apagado no meio do caminho.")}</SocRodape>
+      </SocCard>
+      <SocAviso titulo="Por que essa aba existe">
+        <div>Toda tela de número tem um lugar onde o número some. Aqui está esse lugar: {_socB("o que a gente tem, de quando, e o que não tem.")} Se um gráfico lá atrás parecer errado, é aqui que se descobre se é o dado que falta ou a leitura que está errada.</div>
+        <div>Nenhum número desta tela é estimado, arredondado pra cima ou completado por conta. {_socB("Onde não temos, aparece “—”.")}</div>
+      </SocAviso>
     </div>
-    {semId.length>0&&<div style={{margin:"12px 18px 14px",border:"1px dashed "+SOC.borda,borderRadius:12,background:SOC.amarBg,padding:"11px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
-      <b style={{color:SOC.txt}}>{semId.length===1?"Um perfil não coleta":semId.length+" perfis não coletam"}</b> por falta do identificador do Instagram: {semId.map(function(a){ return (_socNomeUnidade(a.unidade)||_socNomeCliente(a.client_id)); }).join(", ")}. Enquanto ele não for preenchido, esses perfis ficam de fora — e é por isso que aparecem vazios, não porque não tiveram resultado.
-    </div>}
-  </SocCard>;
+  </>;
 }
 
 /* ─── PAINEL DO CLIENTE ──────────────────────────────── */
-const SOC_ABAS=[["visao","Visão geral"],["publicacoes","Publicações"],["historico","Histórico"],["contas","Contas"]];
+const SOC_ABAS=[["visao","Visão geral"],["publicacoes","Publicações"],["publico","Público"],["historico","Histórico"],["contas","Contas"]];
 function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVoltar,bl}){
   const [aba,setAba]=useState("visao");
   const [perfil,setPerfil]=useState("todos");
   useEffect(function(){ setAba("visao"); setPerfil("todos"); },[clientId]);
+  const C=useSocCliente(clientId);
 
-  /* As abas nascem desligadas (regra de tela nova, 20/09). Se alguém ganhou o
-     menu mas nenhuma aba foi ligada, a tela ficaria em branco e ninguém saberia
-     por quê — então ela diz. */
   const abas=SOC_ABAS.filter(function(t){ return !bl||bl("social.aba."+t[0]); });
   const abaAtiva=abas.some(function(t){ return t[0]===aba; })?aba:(abas[0]&&abas[0][0]);
   const semAba=!abas.length;
 
   const minhasContas=contas.filter(function(a){ return a.client_id===clientId; });
-  const idsPerfil=perfil==="todos"?minhasContas.map(function(a){ return a.ig_user_id; }).filter(Boolean):[perfil];
-  const meuDiario=diario.filter(function(r){ return r.client_id===clientId&&idsPerfil.indexOf(r.ig_user_id)>=0; });
-  const meusPosts=posts.filter(function(p){ return p.client_id===clientId&&idsPerfil.indexOf(p.ig_user_id)>=0; });
-  const resumo=_socResumo(meuDiario,meusPosts);
+  const minhasIg=minhasContas.filter(function(a){ return a.network==="instagram"; });
+  const idsPerfil=perfil==="todos"?minhasIg.map(function(a){ return a.ig_user_id; }).filter(Boolean):[perfil];
+  const filtraPerfil=function(x){ return x.client_id===clientId&&(perfil==="todos"||idsPerfil.indexOf(x.ig_user_id)>=0); };
+  const meuDiarioJan=diario.filter(filtraPerfil);
+  const meuDiarioTudo=C.diario.filter(filtraPerfil);
+  const meusPostsTudo=C.posts.filter(filtraPerfil);
+  const meuDemo=C.demo.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; });
+  const resumo=_socResumo(_socJanelas(meuDiarioJan,dias).atual,[]);
+  const seg=(function(){ const r2=_socResumo(meuDiarioTudo,[]); return r2.seguidores!==null?r2.seguidores:resumo.seguidores; })();
 
-  const contaSel=perfil==="todos"?null:minhasContas.find(function(a){ return a.ig_user_id===perfil; });
-  const vazio=!meuDiario.length&&!meusPosts.length;
-  const ultimaDoCliente=(function(){
-    let u=null;
-    minhasContas.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; });
-    return u;
-  })();
+  const contaSel=perfil==="todos"?null:minhasIg.find(function(a){ return a.ig_user_id===perfil; });
+  const vazio=!meuDiarioJan.length&&!meuDiarioTudo.length&&!meusPostsTudo.length;
+  const ultimaDoCliente=(function(){ let u=null; minhasIg.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; }); return u; })();
+  const handle=minhasIg.length===1&&minhasIg[0].handle?"@"+minhasIg[0].handle:null;
 
   return <SocWrap>
-    <SocCard pad="14px 18px">
+    <SocCard pad="12px 20px">
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",minWidth:0}}>
         <button onClick={onVoltar} style={SOC_BTN("sm")}>← Todos os clientes</button>
         <div style={{fontSize:17,fontWeight:900,letterSpacing:-.4,color:SOC.txt,minWidth:0,wordBreak:"break-word"}}>{_socNomeCliente(clientId)}</div>
-        <SocPill>{minhasContas.length===1?"1 perfil":minhasContas.length+" perfis"}</SocPill>
-        {ultimaDoCliente
-          ? <SocPill cor={SOC.txt2}>coletado {_socRel(ultimaDoCliente)}</SocPill>
-          : <SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>}
-        {minhasContas.length>1&&<select value={perfil} onChange={function(e){ setPerfil(e.target.value); }}
-          style={{marginLeft:"auto",border:"1px solid "+SOC.borda,borderRadius:9,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:230}}>
-          <option value="todos">Todos os perfis somados</option>
-          {minhasContas.filter(function(a){ return a.ig_user_id; }).map(function(a){ return <option key={a.ig_user_id} value={a.ig_user_id}>{_socRotuloPerfil(a)}</option>; })}
-        </select>}
+        {handle?<SocPill>{handle}</SocPill>:<SocPill>{minhasIg.length===1?"1 perfil":minhasIg.length+" perfis"}</SocPill>}
+        {ultimaDoCliente?<SocPill cor={SOC.verde} bg={SOC.verdeBg}>coletado {_socRel(ultimaDoCliente)}</SocPill>:<SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>}
+        <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {seg!==null&&<SocPill>{_socN(seg)} seguidores</SocPill>}
+          {minhasIg.length>1&&<select value={perfil} onChange={function(e){ setPerfil(e.target.value); }}
+            style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 10px",fontSize:12.5,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:230}}>
+            <option value="todos">Todos os perfis somados</option>
+            {minhasIg.filter(function(a){ return a.ig_user_id; }).map(function(a){ return <option key={a.ig_user_id} value={a.ig_user_id}>{_socRotuloPerfil(a)}</option>; })}
+          </select>}
+        </div>
       </div>
     </SocCard>
 
     {semAba&&<SocCard titulo="Nenhuma aba liberada pra você">
-      <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
-        Você tem acesso à Gestão de redes, mas nenhuma das quatro abas foi ligada no seu perfil.
-        Quem resolve isso é um sócio, em <b style={{color:SOC.txt}}>Acessos › Time › gerenciar acesso › Gestão de redes</b>.
-      </div>
+      <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>Você tem acesso à Gestão de redes, mas nenhuma das abas foi ligada no seu perfil. Quem resolve isso é um sócio, em <b style={{color:SOC.txt}}>Acessos › Time › gerenciar acesso › Gestão de redes</b>.</div>
     </SocCard>}
 
     {!semAba&&<div style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:18,overflow:"hidden",minWidth:0}}>
       <div style={{padding:"0 10px 0 14px",minHeight:50,display:"flex",gap:2,alignItems:"center",overflowX:"auto"}} className="scroll-x">
-        {abas.map(function(t){
-          const on=abaAtiva===t[0];
-          return <button key={t[0]} onClick={function(){ setAba(t[0]); }}
-            style={{background:"none",border:"none",borderBottom:"2px solid "+(on?SOC.roxo:"transparent"),color:on?SOC.roxo:SOC.txt2,
-              padding:"16px 13px 14px",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0}}>{t[1]}</button>;
-        })}
+        {abas.map(function(t){ const on=abaAtiva===t[0];
+          return <button key={t[0]} onClick={function(){ setAba(t[0]); }} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?SOC.roxo:"transparent"),color:on?SOC.roxo:SOC.txt2,padding:"16px 13px 14px",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0}}>{t[1]}</button>; })}
       </div>
+      {abaAtiva==="visao"&&<div style={{borderTop:"1px solid "+SOC.borda,background:SOC.chao,padding:"8px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <SocEyebrow style={{marginRight:"auto"}}>Período</SocEyebrow><SocPill cor={SOC.roxo} bg={SOC.roxoBg}>Últimos {dias} dias</SocPill>
+        {resumo.primeiroDia&&<SocPill>{_socDiaLongo(resumo.primeiroDia)} a {_socDiaLongo(resumo.ultimoDia)}</SocPill>}
+      </div>}
+      {abaAtiva==="publico"&&C.demoEm&&<div style={{borderTop:"1px solid "+SOC.borda,background:SOC.chao,padding:"8px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <SocEyebrow style={{marginRight:"auto"}}>Retrato de</SocEyebrow><SocPill>{_socHora(C.demoEm)}</SocPill>
+      </div>}
     </div>}
 
-    {!semAba&&(vazio&&abaAtiva!=="contas"
-      ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null}
-          temId={contaSel?!!contaSel.ig_user_id:minhasContas.some(function(a){ return !!a.ig_user_id; })}
-          ultima={ultimaDoCliente}/></SocCard>
+    {!semAba&&C.loading&&<SocCarregando t="Lendo o histórico do cliente…"/>}
+    {!semAba&&!C.loading&&C.erro&&<SocCard titulo="Não consegui ler o histórico"><div style={{fontSize:12.5,color:SOC.txt2,wordBreak:"break-word"}}>{C.erro}</div></SocCard>}
+    {!semAba&&!C.loading&&!C.erro&&(vazio&&abaAtiva!=="contas"
+      ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
       : <>
-        {abaAtiva==="visao"&&<SocVisaoGeral resumo={resumo} dias={dias} isMob={isMob}/>}
-        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPosts} isMob={isMob}/>}
-        {abaAtiva==="historico"&&<SocHistorico diario={meuDiario} isMob={isMob}/>}
-        {abaAtiva==="contas"&&<SocContas contas={minhasContas} ultimaColeta={ultimaColeta} posts={posts.filter(function(p){ return p.client_id===clientId; })} isMob={isMob}/>}
+        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
+        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} dias={dias} isMob={isMob}/>}
+        {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
+        {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
+        {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} isMob={isMob}/>}
       </>)}
   </SocWrap>;
 }
 
 /* ─── CARD DO CLIENTE NA LISTA ───────────────────────── */
 function SocCardCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onAbrir}){
-  const meuDiario=diario.filter(function(r){ return r.client_id===clientId; });
-  const meusPosts=posts.filter(function(p){ return p.client_id===clientId; });
-  const r=_socResumo(meuDiario,meusPosts);
-  const ult=(function(){
-    let u=null;
-    contas.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; });
-    return u;
-  })();
-  const semId=contas.filter(function(a){ return !a.ig_user_id; }).length;
+  const ig=contas.filter(function(a){ return a.network==="instagram"; });
+  const jan=_socJanelas(diario.filter(function(r){ return r.client_id===clientId; }),dias);
+  const r=_socResumo(jan.atual,posts.filter(function(p){ return p.client_id===clientId; }));
+  const r0=_socResumo(jan.anterior,[]);
+  const varAlc=(r.alcanceMedio!==null&&r0.alcanceMedio)?(r.alcanceMedio-r0.alcanceMedio)/r0.alcanceMedio*100:null;
+  const ult=(function(){ let u=null; ig.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; }); return u; })();
+  const semId=ig.filter(function(a){ return !a.ig_user_id; }).length;
   const nunca=!ult;
-  const M=function(rot,val,cor){
+  const M=function(rot,val,cor,h){
     return <div style={{minWidth:0}}>
       <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rot}</div>
-      <div style={{fontSize:16,fontWeight:900,color:cor||SOC.txt,marginTop:3,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
+      <div style={{fontSize:16,fontWeight:900,color:cor||SOC.txt,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
+      {h&&<div style={{fontSize:10.5,color:SOC.txt3,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</div>}
     </div>;
   };
-  return <div onClick={onAbrir} style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:16,padding:isMob?"14px 15px":"16px 18px",cursor:"pointer",minWidth:0,display:"flex",flexDirection:"column",gap:12}}>
+  return <div onClick={onAbrir} style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:16,padding:isMob?"14px 15px":"16px 18px",cursor:"pointer",minWidth:0,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 1px 2px rgba(15,13,26,.04)"}}>
     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
       <div style={{fontSize:15,fontWeight:900,letterSpacing:-.3,color:SOC.txt,minWidth:0,wordBreak:"break-word"}}>{_socNomeCliente(clientId)}</div>
-      <SocPill>{contas.length===1?"1 perfil":contas.length+" perfis"}</SocPill>
-      {nunca
-        ? <SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>
-        : <SocPill cor={SOC.txt2}>{_socRel(ult)}</SocPill>}
+      <SocPill>{ig.length===1?"1 perfil":ig.length+" perfis"}</SocPill>
+      {nunca?<SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>:<SocPill cor={SOC.txt2}>{_socRel(ult)}</SocPill>}
       {semId>0&&<SocPill cor={SOC.amar} bg={SOC.amarBg} titulo="Perfis sem o identificador do Instagram não são coletados">{semId===1?"1 sem identificador":semId+" sem identificador"}</SocPill>}
     </div>
     {nunca
@@ -62955,7 +63381,7 @@ function SocCardCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,on
       : <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:12,minWidth:0}}>
           {M("Seguidores",r.seguidores===null?"—":_socN(r.seguidores))}
           {M("Ganho",r.ganho===null?"—":_socSinal(r.ganho),r.ganho===null?undefined:(r.ganho>=0?SOC_SOBE:SOC_DESCE))}
-          {M("Alcance "+dias+"d",r.alcance===null?"—":_socN(r.alcance))}
+          {M("Alcance "+dias+"d",r.alcance===null?"—":_socN(r.alcance),undefined,varAlc===null?undefined:(varAlc>=0?"+":"−")+_socPct(Math.abs(varAlc))+" vs anterior")}
           {M("Posts",_socN(r.nPosts))}
         </div>}
   </div>;
@@ -62978,39 +63404,35 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 
   const porCliente={};
   D.contas.forEach(function(a){ (porCliente[a.client_id]=porCliente[a.client_id]||[]).push(a); });
-  const ids=Object.keys(porCliente).sort(function(a,b){ return _socNomeCliente(a).localeCompare(_socNomeCliente(b),"pt-BR",{sensitivity:"base"}); });
+  const ids=Object.keys(porCliente).filter(function(id){ return porCliente[id].some(function(a){ return a.network==="instagram"; }); })
+    .sort(function(a,b){ return _socNomeCliente(a).localeCompare(_socNomeCliente(b),"pt-BR",{sensitivity:"base"}); });
   const termo=busca.trim().toLowerCase();
   const visiveis=termo?ids.filter(function(id){
     if(_socNomeCliente(id).toLowerCase().indexOf(termo)>=0) return true;
     return porCliente[id].some(function(a){ return String(a.handle||"").toLowerCase().indexOf(termo)>=0||String(a.unidade||"").toLowerCase().indexOf(termo)>=0; });
   }):ids;
 
-  const totalPerfis=D.contas.length;
-  const comColeta=ultimaColeta?D.contas.filter(function(a){ return a.ig_user_id&&ultimaColeta[a.ig_user_id]; }).length:null;
+  const igTodas=D.contas.filter(function(a){ return a.network==="instagram"; });
+  const comColeta=ultimaColeta?igTodas.filter(function(a){ return a.ig_user_id&&ultimaColeta[a.ig_user_id]; }).length:null;
 
   if(aberto&&porCliente[aberto]) return <SocCliente clientId={aberto} contas={D.contas} diario={D.diario} posts={D.posts}
     ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} bl={_bl} onVoltar={function(){ setAberto(null); }}/>;
 
   return <SocWrap>
-    <SocCard pad="14px 18px">
+    <SocCard pad="14px 20px">
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",minWidth:0}}>
         <div style={{minWidth:0}}>
           <div style={{fontSize:17,fontWeight:900,letterSpacing:-.4,color:SOC.txt}}>Gestão de redes</div>
           <div style={{fontSize:12,color:SOC.txt3,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>
-            O orgânico do Instagram: o que a gente alcança sem pagar.
-            {comColeta!==null&&<span> {comColeta} de {totalPerfis} perfis já têm coleta.</span>}
+            O orgânico do Instagram: o que a gente alcança sem pagar.{comColeta!==null&&<span> {comColeta} de {igTodas.length} perfis já têm coleta.</span>}
           </div>
         </div>
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar cliente ou @perfil"
             style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"8px 11px",fontSize:12.5,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,width:isMob?"100%":210,maxWidth:"100%",boxSizing:"border-box"}}/>
           <div style={{display:"flex",gap:2,border:"1px solid "+SOC.borda,borderRadius:9,padding:2,background:"#fff"}}>
-            {SOC_JANELAS.map(function(j){
-              const on=dias===j[0];
-              return <button key={j[0]} onClick={function(){ setDias(j[0]); }}
-                style={{border:"none",borderRadius:7,padding:"6px 10px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,minHeight:0,
-                  background:on?SOC.roxo:"transparent",color:on?"#fff":SOC.txt2,whiteSpace:"nowrap"}}>{j[1]}</button>;
-            })}
+            {SOC_JANELAS.map(function(j){ const on=dias===j[0];
+              return <button key={j[0]} onClick={function(){ setDias(j[0]); }} style={{border:"none",borderRadius:7,padding:"6px 10px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,minHeight:0,background:on?SOC.roxo:"transparent",color:on?"#fff":SOC.txt2,whiteSpace:"nowrap"}}>{j[1]}</button>; })}
           </div>
         </div>
       </div>
@@ -63018,15 +63440,10 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 
     {!visiveis.length
       ? <SocCard titulo={termo?"Nenhum cliente com esse nome":"Nenhum perfil cadastrado"}>
-          <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
-            {termo?"Tente outro nome ou @.":"Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui."}
-          </div>
+          <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>{termo?"Tente outro nome ou @.":"Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui."}</div>
         </SocCard>
       : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(310px,1fr))",gap:12,minWidth:0}}>
-          {visiveis.map(function(id){
-            return <SocCardCliente key={id} clientId={id} contas={porCliente[id]} diario={D.diario} posts={D.posts}
-              ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} onAbrir={function(){ setAberto(id); }}/>;
-          })}
+          {visiveis.map(function(id){ return <SocCardCliente key={id} clientId={id} contas={porCliente[id]} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} onAbrir={function(){ setAberto(id); }}/>; })}
         </div>}
   </SocWrap>;
 }
