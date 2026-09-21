@@ -62805,7 +62805,7 @@ function _socPorDow(posts){
 }
 
 /* ─── ABA: VISÃO GERAL ───────────────────────────────── */
-function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,stories,dias,isMob,onVerPublicacoes}){
+function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,stories,pagas,dias,isMob,onVerPublicacoes}){
   const jan=_socJanelas(diarioTudo.length?diarioTudo:diarioJanela,dias);
   const r=_socResumo(jan.atual,postsTudo.filter(function(p){ return jan.atual.length&&String(p.publicado_em||"").slice(0,10)>=jan.atual[0].data; }));
   const r0=_socResumo(jan.anterior,[]);
@@ -62881,6 +62881,7 @@ function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,stories,dias,isMob,onV
       <SocViewsOrigem diario={jan.atual} isMob={isMob}/>
       <SocHorarioPublico diario={diarioTudo.length?diarioTudo:diarioJanela} isMob={isMob}/>
     </div>
+    <SocOrganicoPago pagas={pagas} resumo={r} tot={t} isMob={isMob}/>
     <SocStoriesBloco stories={stories} isMob={isMob}/>
 
     <div style={g2}>
@@ -63012,6 +63013,31 @@ function SocStoriesBloco({stories,isMob}){
       {k:"Retenção", v:(reach&&tem("exits"))?_socPct((1-exits/Math.max(1,reach))*100):"—", h:"não fecharam no meio"},
     ]}/>
     <SocRodape>Story não tem histórico na Meta. Cada dia que a coleta roda, guarda os que estavam no ar — {_socB("daqui a um mês teremos um mês de stories que nem o Instagram tem mais.")}</SocRodape>
+  </SocCard>;
+}
+
+
+/* ─── ORGÂNICO × PAGO — os dois lados do mesmo perfil (21/09) ───────── */
+function SocOrganicoPago({pagas,resumo,tot,isMob}){
+  const ads=(pagas&&pagas.lista)||[];
+  if(pagas&&pagas.loading) return <SocCard titulo="Orgânico × pago"><div style={{fontSize:12.5,color:SOC.txt3}}>Lendo os anúncios…</div></SocCard>;
+  if(!ads.length) return null;
+  const imp=ads.reduce(function(s,p){ return s+(p.impressoes||0); },0);
+  const alc=ads.reduce(function(s,p){ return s+(p.reach||0); },0);
+  const gasto=ads.reduce(function(s,p){ return s+(p.gasto||0); },0);
+  const conv=ads.reduce(function(s,p){ return s+(p.conversas||0)+(p.leads||0)+(p.compras||0); },0);
+  const org=resumo.alcance;
+  const max=Math.max(imp,org||0,1);
+  return <SocCard titulo="Orgânico × pago" sub={ads.length+(ads.length===1?" anúncio usou uma publicação deste perfil":" anúncios usaram publicações deste perfil")}
+    direita={<SocPill cor={SOC_DESCE} bg={SOC.amarBg}>{_socBRL(gasto)} investidos</SocPill>}>
+    <SocLinha isMob={isMob} largRot="150px" largVal="190px" rot="Alcance orgânico" pct={org?org/max*100:0} val={org===null?"—":_socN(org)} det={resumo.diasAlcance+" dias somados"} cor={SOC.roxo}/>
+    <SocLinha isMob={isMob} largRot="150px" largVal="190px" rot="Impressões pagas" pct={imp/max*100} val={_socN(imp)} det={_socN(alc)+" pessoas"} cor={SOC_DESCE}/>
+    <SocLegenda itens={[{cor:SOC.roxo,t:"orgânico · sem pagar"},{cor:SOC_DESCE,t:"anúncio · "+_socBRL(gasto)}]}/>
+    <SocRodape>
+      {_socB("Esses dois números não se somam.")} Alcance orgânico conta gente por dia (quem viu em dois dias conta duas vezes) e impressão de anúncio conta aparições. Boa parte das pessoas está nos dois.
+      {conv>0?" O pago trouxe "+_socN(conv)+" resultados diretos (conversas, leads ou compras) — o orgânico não tem esse tipo de número.":""}
+      {" "}As publicações de anúncio {_socB("não aparecem no feed do perfil")}: foram criadas dentro do Gerenciador. Ver todas na aba Publicações › Só anúncio.
+    </SocRodape>
   </SocCard>;
 }
 
@@ -63151,6 +63177,115 @@ function useSocComentarios(mediaId){
     return function(){ vivo=false; };
   },[mediaId]);
   return st;
+}
+
+/* ─── PUBLICAÇÕES DE ANÚNCIO (21/09/2026) ─────────────────
+   Descoberta de 21/09: o anúncio do cliente costuma usar um "dark post" — uma publicação
+   criada dentro do Gerenciador que NUNCA entra no feed. O /{ig}/media não devolve essas,
+   então elas não existem em social_posts. Prova: dos 71 links de anúncio da Construschorr,
+   ZERO casaram com as 228 publicações orgânicas; e elas somam 1.296.944 impressões.
+   Aqui a gente lê o outro lado do banco (ads_creatives + ads_daily) e mostra as duas
+   origens na mesma tela — cada uma com os números que ela tem, sem misturar. */
+const _socThumbAd=function(adId){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/ads-thumb?ad="+encodeURIComponent(adId); };
+const SOC_CTA={WHATSAPP_MESSAGE:"Chamar no WhatsApp",MESSAGE_PAGE:"Enviar mensagem",LEARN_MORE:"Saiba mais",SIGN_UP:"Cadastre-se",CALL_NOW:"Ligar agora",SHOP_NOW:"Comprar agora",CONTACT_US:"Fale conosco",GET_QUOTE:"Pedir orçamento",SEND_MESSAGE:"Enviar mensagem",APPLY_NOW:"Candidatar-se",BOOK_TRAVEL:"Reservar",SUBSCRIBE:"Assinar",DOWNLOAD:"Baixar",GET_DIRECTIONS:"Como chegar",WATCH_MORE:"Assistir mais"};
+const _socCta=function(c){ const k=String(c||"").toUpperCase(); return SOC_CTA[k]||(c?String(c).replace(/_/g," ").toLowerCase():null); };
+const _socBRL=function(v){ const n=Number(v); return isFinite(n)?n.toLocaleString("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:n>=100?0:2,maximumFractionDigits:n>=100?0:2}):"—"; };
+
+/* Lê as publicações que rodaram como anúncio neste cliente e soma o desempenho de cada uma.
+   Uma publicação pode ter rodado em mais de um anúncio — aqui cada anúncio é uma linha,
+   porque cada um teve seu próprio público, verba e período. */
+function useSocPagas(clientId){
+  const [st,setSt]=useState({loading:!!clientId,lista:[],erro:null});
+  useEffect(function(){
+    if(!clientId||!window._sb){ setSt({loading:false,lista:[],erro:null}); return; }
+    let vivo=true; setSt({loading:true,lista:[],erro:null});
+    (async function(){
+      try{
+        const rc=await window._sb.from("ads_creatives")
+          .select("ad_id,ad_nome,formato,titulo,corpo,cta,link_destino,thumbnail_url,image_url,video_url,video_segundos,post_instagram,ad_account_id")
+          .eq("client_id",clientId).not("post_instagram","is",null).limit(600);
+        if(rc.error) throw new Error(rc.error.message);
+        const cr=rc.data||[];
+        if(!cr.length){ if(vivo) setSt({loading:false,lista:[],erro:null}); return; }
+        const ids=cr.map(function(c){ return c.ad_id; });
+        const linhas=[];
+        for(let i=0;i<ids.length;i+=120){
+          const rd=await window._sb.from("ads_daily")
+            .select("ad_id,data,campaign_nome,adset_nome,objetivo,gasto,impressoes,alcance,cliques,cliques_link,leads,conversas,compras,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,video_tempo_medio,engajamento_post")
+            .eq("nivel","anuncio").in("ad_id",ids.slice(i,i+120)).limit(20000);
+          if(rd.error) throw new Error(rd.error.message);
+          (rd.data||[]).forEach(function(x){ linhas.push(x); });
+        }
+        const por={};
+        linhas.forEach(function(r){
+          const o=por[r.ad_id]||(por[r.ad_id]={n:0,gasto:0,impressoes:0,alcance:0,cliques:0,cliques_link:0,leads:0,conversas:0,compras:0,v3:0,p25:0,p50:0,p75:0,p100:0,thru:0,eng:0,tempo:[],de:null,ate:null,camp:null,conj:null,obj:null});
+          o.n++;
+          ["gasto","impressoes","alcance","cliques","cliques_link","leads","conversas","compras"].forEach(function(k){ o[k]+=Number(r[k])||0; });
+          o.v3+=Number(r.video_3s)||0; o.p25+=Number(r.video_p25)||0; o.p50+=Number(r.video_p50)||0;
+          o.p75+=Number(r.video_p75)||0; o.p100+=Number(r.video_p100)||0; o.thru+=Number(r.video_thruplay)||0;
+          o.eng+=Number(r.engajamento_post)||0;
+          if(_socTem(r.video_tempo_medio)&&Number(r.video_tempo_medio)>0) o.tempo.push(Number(r.video_tempo_medio));
+          const d=String(r.data).slice(0,10);
+          if(!o.de||d<o.de) o.de=d; if(!o.ate||d>o.ate) o.ate=d;
+          if(r.campaign_nome) o.camp=r.campaign_nome; if(r.adset_nome) o.conj=r.adset_nome; if(r.objetivo) o.obj=r.objetivo;
+        });
+        const lista=cr.map(function(c){
+          const a=por[c.ad_id];
+          if(!a||(!a.impressoes&&!a.gasto)) return null;
+          const code=(String(c.post_instagram||"").match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/)||[])[1]||null;
+          return {
+            origem:"anuncio", media_id:"ad:"+c.ad_id, ad_id:c.ad_id, code:code,
+            nome:c.ad_nome, media_type:String(c.formato||"").toLowerCase()==="video"?"AD_VIDEO":"AD_IMAGE",
+            permalink:c.post_instagram, caption:c.corpo||"", titulo:c.titulo||null, cta:c.cta||null,
+            link_destino:c.link_destino||null, thumbnail_url:c.thumbnail_url||c.image_url||null, video_url:c.video_url||null,
+            publicado_em:a.de?a.de+"T12:00:00Z":null, dias:a.n, de:a.de, ate:a.ate,
+            campanha:a.camp, conjunto:a.conj, objetivo:a.obj,
+            gasto:a.gasto, impressoes:a.impressoes, reach:a.alcance,
+            cliques:a.cliques, cliques_link:a.cliques_link,
+            leads:a.leads, conversas:a.conversas, compras:a.compras,
+            interacoes_post:a.eng,
+            v3:a.v3, p25:a.p25, p50:a.p50, p75:a.p75, p100:a.p100, thru:a.thru,
+            tempo_medio:a.tempo.length?a.tempo.reduce(function(s,v){ return s+v; },0)/a.tempo.length:null,
+            video_segundos:c.video_segundos||null,
+          };
+        }).filter(Boolean).sort(function(x,y){ return y.impressoes-x.impressoes; });
+        if(vivo) setSt({loading:false,lista:lista,erro:null});
+      }catch(e){ if(vivo) setSt({loading:false,lista:[],erro:(e&&e.message)||"falha"}); }
+    })();
+    return function(){ vivo=false; };
+  },[clientId]);
+  return st;
+}
+const _socEhAd=function(p){ return !!(p&&p.origem==="anuncio"); };
+const _socFreq=function(p){ return (p.impressoes&&p.reach)?p.impressoes/p.reach:null; };
+const _socCTR=function(p){ return p.impressoes?( (p.cliques_link||p.cliques||0)/p.impressoes*100):null; };
+const _socCPM=function(p){ return p.impressoes?p.gasto/p.impressoes*1000:null; };
+const _socResultado=function(p){
+  if(p.conversas>0) return {n:p.conversas,lbl:"conversas",sing:"conversa"};
+  if(p.leads>0) return {n:p.leads,lbl:"leads",sing:"lead"};
+  if(p.compras>0) return {n:p.compras,lbl:"compras",sing:"compra"};
+  return null;
+};
+/* Capa do anúncio: vem da mesma função ads-thumb do Criativo (imagem cheia, proporção original). */
+function SocCapaAd({post,razao,radius,children,onClick}){
+  const cadeia=[post.ad_id?_socThumbAd(post.ad_id):null,post.thumbnail_url].filter(Boolean);
+  const [i,setI]=useState(0); const [ar,setAr]=useState(null);
+  useEffect(function(){ setI(0); setAr(null); },[post.ad_id]);
+  const src=cadeia[i]||null;
+  const rz=razao||SOC_VAGA;
+  const arte=ar?{position:"relative",aspectRatio:String(ar),width:(ar>=rz)?"100%":"auto",height:(ar>=rz)?"auto":"100%",overflow:"hidden",background:"#1b1530"}:{position:"absolute",inset:0,overflow:"hidden"};
+  const video=post.media_type==="AD_VIDEO";
+  return <div onClick={onClick} style={{position:"relative",borderRadius:radius===undefined?0:radius,overflow:"hidden",background:"#fff",aspectRatio:String(rz),cursor:onClick?"pointer":"default",display:"grid",placeItems:"center",minWidth:0}}>
+    {!src&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:SOC.txt3,background:"linear-gradient(160deg,#f3f1f8,#e7e3f0)"}}>sem prévia</div>}
+    <div style={arte}>
+      {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={function(){ setI(function(v){ return v+1; }); }}
+        onLoad={function(e){ const w=e.currentTarget.naturalWidth,h=e.currentTarget.naturalHeight; if(w>1&&h>1) setAr(w/h); }}
+        style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+      {src&&ar&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 50%,rgba(0,0,0,.62) 100%)"}}/>}
+      {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"15px solid #1b1530",borderTop:"9px solid transparent",borderBottom:"9px solid transparent",marginLeft:4}}/></div>}
+      {children}
+    </div>
+  </div>;
 }
 
 /* ─── LIGHTBOX v2 — a publicação na pegada do Criativo de ADS (21/09) ─────
@@ -63377,11 +63512,184 @@ function SocLightbox({post,todos,demo,seguidores,onClose,isMob}){
   </div>;
 }
 
+/* ─── LIGHTBOX DO ANÚNCIO — mesma pegada do Criativo da Gestão de mídia ── */
+function SocLightboxAd({post,todos,demo,onClose,isMob}){
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
+  const [aba,setAba]=useState("resumo");
+  useEffect(function(){ setAba("resumo"); },[post&&post.ad_id]);
+  const res=_socResultado(post);
+  const custo=res?post.gasto/res.n:null;
+  const ctr=_socCTR(post), cpm=_socCPM(post), freq=_socFreq(post);
+  /* régua: os outros anúncios do mesmo cliente com o mesmo tipo de resultado */
+  const pares=(todos||[]).filter(function(p){ if(p.ad_id===post.ad_id) return false; const r=_socResultado(p); return res?(r&&r.lbl===res.lbl):!_socResultado(p); });
+  const medCusto=_socMediana(pares.map(function(p){ const r=_socResultado(p); return r?p.gasto/r.n:null; }));
+  const medCtr=_socMediana(pares.map(_socCTR)), medCpm=_socMediana(pares.map(_socCPM));
+  const base=post.v3||post.impressoes||0;
+  const curva=[["Início",base,100],["25%",post.p25,base?post.p25/base*100:0],["50%",post.p50,base?post.p50/base*100:0],["75%",post.p75,base?post.p75/base*100:0],["Fim",post.p100,base?post.p100/base*100:0]];
+  const temCurva=post.p25>0||post.p50>0||post.p100>0;
+  const tm=_socTem(post.tempo_medio)&&post.tempo_medio>0?post.tempo_medio:null;
+  const v=function(q){ return _socTem(q)&&q!==0?_socN(q):(q===0?"0":"—"); };
+  const K=function(t){ return <SocEyebrow style={{margin:"14px 0 8px"}}>{t}</SocEyebrow>; };
+  const Num=function(k,val,h){ return <div style={{minWidth:0,overflow:"hidden"}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:19,fontWeight:900,letterSpacing:-.5,marginTop:3,color:val==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
+  const Cel=function(k,val,h){ return <div style={{padding:"12px 14px",minWidth:0,overflow:"hidden"}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:4,color:val==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
+
+  const diag=[];
+  if(custo!==null&&medCusto){ const r=custo/medCusto; if(r<=0.8) diag.push(["v",_socBRL(custo)+" por "+res.sing+" — "+(1/r).toLocaleString("pt-BR",{maximumFractionDigits:1})+"× melhor que os outros anúncios do cliente"]); else if(r>=1.5) diag.push(["x",_socBRL(custo)+" por "+res.sing+" — "+r.toLocaleString("pt-BR",{maximumFractionDigits:1})+"× o custo dos outros"]); }
+  if(!res&&post.gasto>=50) diag.push(["x",_socBRL(post.gasto)+" gastos e nenhuma conversa ou lead atribuído"]);
+  if(ctr!==null){ if(ctr>=1.5) diag.push(["v","CTR "+_socPct(ctr,2)+" — o anúncio convence a clicar"]); else if(ctr<1&&post.gasto>20) diag.push(["x","CTR "+_socPct(ctr,2)+" — poucos clicam"]); }
+  if(temCurva&&base){ const r25=post.p25/base*100; if(r25>=20) diag.push(["v","retenção "+_socPct(r25)+" aos 25% — prende atenção"]); else if(r25<10) diag.push(["x","só "+_socPct(r25,1)+" chegam aos 25% do vídeo — a abertura não segura"]); }
+  if(freq!==null&&freq>3.5) diag.push(["x","frequência "+_socN1(freq)+" — a mesma pessoa viu muitas vezes, é fadiga"]);
+  if(post.reach>0) diag.push(["i","alcançou "+_socN(post.reach)+" pessoas em "+post.dias+(post.dias===1?" dia":" dias")+" de veiculação"]);
+
+  const ic=function(t){ return t==="v"?<span style={{color:SOC.verde,fontWeight:900}}>✓</span>:t==="x"?<span style={{color:SOC.verm,fontWeight:900}}>✗</span>:<span style={{color:SOC.txt3,fontWeight:900}}>•</span>; };
+  const ABAS=[["resumo","Resumo"],["post","Post"],["publico","Público"],["resultado","Resultado"],["contexto","Contexto"]];
+  const Barra=function(rot,val,ref,fmt,inverso){ const pct=(ref&&_socTem(val))?Math.min(100,val/ref*50):0; const bom=inverso?(val<=ref):(val>=ref);
+    return <div style={{display:"grid",gridTemplateColumns:isMob?"84px minmax(0,1fr) 96px":"140px minmax(0,1fr) 150px",gap:10,alignItems:"center",padding:"6px 0",minWidth:0}}>
+      <span style={{fontSize:12,fontWeight:700,color:SOC.txt2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rot}</span>
+      <span style={{position:"relative",display:"block",height:10,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><span style={{display:"block",height:"100%",width:pct+"%",borderRadius:99,background:(_socTem(val)&&ref&&bom)?SOC.roxo:SOC.roxo2}}/><span style={{position:"absolute",left:"50%",top:0,bottom:0,width:2,background:SOC.txt,opacity:.35}}/></span>
+      <span style={{fontSize:12,fontWeight:800,textAlign:"right",whiteSpace:"nowrap",color:SOC.txt,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{_socTem(val)?(fmt?fmt(val):_socN(val)):"—"}<i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600,fontSize:11,display:isMob?"block":"inline"}}>{isMob?"":" · "}méd. {ref===null||ref===undefined?"—":(fmt?fmt(ref):_socN(Math.round(ref)))}</i></span>
+    </div>; };
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,13,26,.72)",zIndex:9999,display:"grid",placeItems:"center",padding:isMob?8:24,fontFamily:SOC_FONT,fontVariantNumeric:"tabular-nums"}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(1120px,100%)",maxHeight:"94vh",overflow:"auto",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,400px) minmax(0,1fr)",boxShadow:"0 30px 80px rgba(0,0,0,.4)",minWidth:0}}>
+      <div style={{background:"#0f0d1a",position:"relative",display:"grid",placeItems:"center",minHeight:isMob?260:420,minWidth:0}}>
+        {post.video_url
+          ? <video key={post.video_url} src={post.video_url} poster={post.thumbnail_url||undefined} controls playsInline preload="metadata" style={{width:"100%",maxHeight:"94vh",display:"block",background:"#000"}}/>
+          : <img src={_socThumbAd(post.ad_id)} alt="" referrerPolicy="no-referrer" onError={function(e){ if(post.thumbnail_url&&e.currentTarget.src!==post.thumbnail_url) e.currentTarget.src=post.thumbnail_url; }} style={{width:"100%",maxHeight:"94vh",objectFit:"contain",display:"block"}}/>}
+        <span style={{position:"absolute",top:12,left:12,background:SOC_DESCE,color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"4px 10px",textTransform:"uppercase",letterSpacing:".06em"}}>Anúncio</span>
+      </div>
+      <div style={{padding:isMob?"14px 14px 18px":"18px 22px 22px",minWidth:0}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,minWidth:0}}>
+          <div style={{minWidth:0,flex:1,overflow:"hidden"}}>
+            <SocEyebrow style={{wordBreak:"break-word"}}>{post.campanha||"Anúncio"}{post.conjunto?" · "+post.conjunto:""}</SocEyebrow>
+            <div style={{fontSize:16,fontWeight:900,letterSpacing:-.3,color:SOC.txt,marginTop:4,lineHeight:1.3,wordBreak:"break-word"}}>{post.nome||"Anúncio"}</div>
+          </div>
+          <button onClick={onClose} style={Object.assign(SOC_BTN("sm"),{flexShrink:0})}>✕</button>
+        </div>
+
+        <div style={{marginTop:14,background:"linear-gradient(135deg,#fff7ed,#fffdf9)",border:"1px solid #f3d9b0",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap",minWidth:0}}>
+          <div style={{minWidth:0}}>
+            <SocEyebrow style={{color:"#8a5a12"}}>{res?("Custo por "+res.sing):"CPM"}</SocEyebrow>
+            <div style={{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,color:SOC_DESCE}}>{res?_socBRL(custo):(cpm!==null?_socBRL(cpm):"—")}</div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:3}}>{res?(_socN(res.n)+" "+res.lbl+(medCusto?" · média "+_socBRL(medCusto):"")):"por mil impressões"}</div>
+          </div>
+          <div style={{marginLeft:"auto",textAlign:"right",minWidth:0}}>
+            <SocEyebrow>Gasto no período</SocEyebrow>
+            <div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:4,color:SOC.txt}}>{_socBRL(post.gasto)}</div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:3}}>{_socDia(post.de)} a {_socDia(post.ate)} · {post.dias}{post.dias===1?" dia":" dias"}</div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:1,background:SOC.borda,border:"1px solid "+SOC.borda,borderRadius:12,overflow:"hidden",marginTop:10}}>
+          <div style={{background:"#fff"}}>{Cel("Impressões",v(post.impressoes),_socN(post.reach)+" pessoas")}</div>
+          <div style={{background:"#fff"}}>{Cel("CTR",ctr===null?"—":_socPct(ctr,2),medCtr!==null?"média "+_socPct(medCtr,2):null)}</div>
+          <div style={{background:"#fff"}}>{Cel("Frequência",freq===null?"—":_socN1(freq),"vezes por pessoa")}</div>
+        </div>
+
+        <div style={{display:"flex",gap:2,borderBottom:"1px solid "+SOC.borda,marginTop:14,overflowX:"auto"}} className="scroll-x">
+          {ABAS.map(function(t){ const on=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); }} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?SOC.roxo:"transparent"),color:on?SOC.roxo:SOC.txt2,padding:"10px 12px 9px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0}}>{t[1]}</button>; })}
+        </div>
+
+        {aba==="resumo"&&<div>
+          {temCurva&&<>
+            {K("Retenção do vídeo · quantos seguiram até cada ponto")}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:6}}>
+              {curva.map(function(c,i){ const on=i===0;
+                return <div key={c[0]} style={{background:on?SOC.roxo:SOC.cinzaBg,color:on?"#fff":SOC.txt,borderRadius:12,padding:"10px 8px",textAlign:"center",minWidth:0}}>
+                  <div style={{fontSize:10,fontWeight:800,letterSpacing:".05em",textTransform:"uppercase",opacity:on?.85:.6}}>{c[0]}</div>
+                  <div style={{fontSize:16,fontWeight:900,marginTop:3}}>{_socPct(c[2],c[2]<10?1:0)}</div>
+                </div>; })}
+            </div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:8,lineHeight:1.45}}>Base: {_socN(base)} reproduções de 3 segundos.{tm?" Tempo médio assistido: "+_socN1(tm)+"s.":""} {_socB("Essa curva só existe em anúncio")} — na publicação orgânica a Meta entrega só o tempo médio.</div>
+          </>}
+          {K("Diagnóstico")}
+          {!diag.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Dentro da média dos outros anúncios do cliente.</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{diag.map(function(d,i){ return <div key={i} style={{display:"flex",gap:8,fontSize:12.5,color:SOC.txt2,lineHeight:1.5}}>{ic(d[0])}<span>{d[1]}</span></div>; })}</div>
+          {K("Texto do anúncio")}
+          <div style={{background:SOC.chao,border:"1px solid "+SOC.borda,borderRadius:12,padding:"12px 14px",minWidth:0}}>
+            {post.titulo&&<div style={{fontSize:12,fontWeight:800,color:SOC.txt,marginBottom:6}}>{post.titulo}</div>}
+            <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:240,overflow:"auto"}}>{post.caption||<i style={{color:SOC.txt3}}>sem texto</i>}</div>
+            {post.cta&&<div style={{marginTop:10,fontSize:11.5,color:SOC.txt3,fontWeight:700}}>Botão: {_socCta(post.cta)}</div>}
+          </div>
+        </div>}
+
+        {aba==="post"&&<div>
+          {K("A publicação do anúncio")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Formato",post.media_type==="AD_VIDEO"?"Vídeo":"Imagem",post.video_segundos?post.video_segundos+"s":null)}
+            {Num("Veiculou",_socDiaLongo(post.de)+" a "+_socDiaLongo(post.ate),post.dias+(post.dias===1?" dia":" dias"))}
+            {Num("Botão",_socCta(post.cta)||"—",post.link_destino?"leva pro destino":null)}
+            {Num("Interações no post",v(post.interacoes_post),"curtidas, comentários e compartilhamentos do anúncio")}
+          </div>
+          {K("Texto completo")}
+          {post.titulo&&<div style={{fontSize:13,fontWeight:800,color:SOC.txt,marginBottom:6}}>{post.titulo}</div>}
+          <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:320,overflow:"auto"}}>{post.caption||<i style={{color:SOC.txt3}}>sem texto</i>}</div>
+          <div style={{marginTop:14,display:"flex",gap:8,flexWrap:"wrap"}}>
+            {post.permalink&&<a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN(),{textDecoration:"none"})}>Ver a publicação →</a>}
+            {post.link_destino&&<a href={post.link_destino} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none"})}>Destino ↗</a>}
+          </div>
+          <SocRodape>Essa publicação {_socB("não aparece no feed do perfil")} — foi criada dentro do Gerenciador só pra rodar como anúncio. Por isso ela não está entre as publicações orgânicas.</SocRodape>
+        </div>}
+
+        {aba==="publico"&&<div>
+          {K("Quem foi alcançado")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(3,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Alcance",v(post.reach),"pessoas diferentes")}
+            {Num("Impressões",v(post.impressoes),"vezes que apareceu")}
+            {Num("Frequência",freq===null?"—":_socN1(freq),"vezes por pessoa")}
+          </div>
+          <div style={{marginTop:14,border:"1px dashed "+SOC.borda2,borderRadius:12,background:SOC.chao,padding:"11px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
+            O detalhe de idade, gênero e cidade de quem viu este anúncio existe, mas mora nas quebras da Gestão de mídia ({_socB("Campanhas › o anúncio › Público")}). Aqui a Gestão de redes mostra só o tamanho da entrega — pra não duplicar a mesma informação em duas telas com contas diferentes.
+          </div>
+          {K("Contra os outros anúncios deste cliente")}
+          {Barra("Alcance",post.reach,_socMediana(pares.map(function(p){ return p.reach; })))}
+          {Barra("Impressões",post.impressoes,_socMediana(pares.map(function(p){ return p.impressoes; })))}
+          {Barra("Frequência",freq,_socMediana(pares.map(_socFreq)),function(q){ return _socN1(q); },true)}
+        </div>}
+
+        {aba==="resultado"&&<div>
+          {K("Todos os números")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:"12px 14px"}}>
+            {Num("Gasto",_socBRL(post.gasto))}{Num("Impressões",v(post.impressoes))}{Num("Alcance",v(post.reach))}{Num("Frequência",freq===null?"—":_socN1(freq))}
+            {Num("Cliques",v(post.cliques))}{Num("Cliques no link",v(post.cliques_link))}{Num("CTR",ctr===null?"—":_socPct(ctr,2))}{Num("CPM",cpm===null?"—":_socBRL(cpm))}
+            {res&&Num(res.lbl.charAt(0).toUpperCase()+res.lbl.slice(1),_socN(res.n))}{res&&Num("Custo por "+res.sing,_socBRL(custo))}
+            {post.thru>0&&Num("ThruPlays",v(post.thru),"15s ou até o fim")}
+            {tm&&Num("Tempo médio",_socN1(tm)+"s","assistido por pessoa")}
+          </div>
+          {K("Contra os outros anúncios deste cliente"+(res?" · mesmo tipo de resultado":""))}
+          {res&&Barra("Custo/"+res.sing,custo,medCusto,function(q){ return _socBRL(q); },true)}
+          {Barra("CTR",ctr,medCtr,function(q){ return _socPct(q,2); })}
+          {Barra("CPM",cpm,medCpm,function(q){ return _socBRL(q); },true)}
+          {Barra("Gasto",post.gasto,_socMediana(pares.map(function(p){ return p.gasto; })),function(q){ return _socBRL(q); })}
+          <SocRodape>A linha do meio é a mediana dos {pares.length} outros anúncios deste cliente{res?" com "+res.lbl:""}. Em custo, CPM e frequência, {_socB("barra curta é bom")}.</SocRodape>
+        </div>}
+
+        {aba==="contexto"&&<div>
+          {K("De onde ele veio")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Campanha",post.campanha||"—")}
+            {Num("Conjunto",post.conjunto||"—")}
+            {Num("Objetivo",post.objetivo?String(post.objetivo).replace(/^OUTCOME_/,"").toLowerCase():"—")}
+            {Num("Dias no ar",_socN(post.dias),_socDiaLongo(post.de)+" a "+_socDiaLongo(post.ate))}
+          </div>
+          <div style={{marginTop:16,border:"1px dashed "+SOC.borda2,borderRadius:12,background:SOC.chao,padding:"12px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
+            <div style={{fontWeight:800,color:SOC.txt,marginBottom:6}}>Por que este anúncio aparece aqui</div>
+            Ele usa uma publicação do Instagram deste cliente. O número dele {_socB("não se soma")} ao das publicações orgânicas: alcance de anúncio e alcance orgânico contam pessoas de jeitos diferentes, e boa parte se sobrepõe. Use os dois lado a lado, não somados.
+          </div>
+          <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+            {post.permalink&&<a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none"})}>Ver publicação ↗</a>}
+            <span style={{fontSize:11,color:SOC.txt3,alignSelf:"center"}}>ad {post.ad_id}</span>
+          </div>
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
 /* ─── ABA: PUBLICAÇÕES — o "Criativo" do orgânico ─────────── */
 const SOC_ORDENS=[
   ["alcance","Alcance",function(p){ return Number(p.reach)||0; }],
-  ["recente","Mais recente",function(p){ return new Date(p.publicado_em||0).getTime()||0; }],
-  ["views","Views",function(p){ return Number(p.video_views)||0; }],
+  ["recente","Mais recente",function(p){ return new Date(p.ate||p.publicado_em||0).getTime()||0; }],
+  ["views","Views",function(p){ return Number(p.video_views)||Number(p.impressoes)||0; }],
   ["curtidas","Curtidas",function(p){ return Number(p.likes)||0; }],
   ["comentarios","Comentários",function(p){ return Number(p.comments)||0; }],
   ["salvos","Salvamentos",function(p){ return Number(p.saved)||0; }],
@@ -63390,33 +63698,41 @@ const SOC_ORDENS=[
   ["engaj","Engajamento",function(p){ const e=_socEngaj(p); return e===null?-1:e; }],
 ];
 const SOC_ORDEM_ROT={alcance:"alcance",recente:"",views:"views",curtidas:"curtidas",comentarios:"comentários",salvos:"salvos",compart:"compart.",seguiram:"seguiram",engaj:"engajamento"};
-function SocPublicacoes({posts,dias,isMob,demo,seguidores}){
+function SocPublicacoes({posts,pagas,dias,isMob,demo,seguidores}){
   const [ordem,setOrdem]=useState("alcance");
   const [tipo,setTipo]=useState("todos");
   const [janela,setJanela]=useState("tudo");
   const [soNum,setSoNum]=useState(true);
+  const [origem,setOrigem]=useState("todas");
   const [aberto,setAberto]=useState(null);
   const [limite,setLimite]=useState(24);
-  if(!posts.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
+  const ads=(pagas&&pagas.lista)||[];
+  if(!posts.length&&!ads.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
 
   const corte=(function(){ const d=new Date(); d.setDate(d.getDate()-(Number(dias)||30)); return _socISO(d); })();
   const tipos=["todos"].concat(Object.keys(posts.reduce(function(a,p){ a[String(p.media_type||"").toUpperCase()]=1; return a; },{})).filter(Boolean));
-  const filtrados=posts.filter(function(p){
+  const orgFiltrados=(origem==="anuncio"?[]:posts).filter(function(p){
     if(tipo!=="todos"&&String(p.media_type||"").toUpperCase()!==tipo) return false;
     if(janela==="periodo"&&String(p.publicado_em||"").slice(0,10)<corte) return false;
     if(soNum&&!_socTem(p.reach)) return false;
     return true;
   });
+  const adsFiltrados=(origem==="organico"?[]:ads).filter(function(p){
+    if(tipo!=="todos") return false;                         /* tipo é do orgânico; anúncio tem formato próprio */
+    if(janela==="periodo"&&String(p.ate||"")<corte) return false;
+    return true;
+  });
+  const filtrados=orgFiltrados.concat(adsFiltrados);
   const cmp=(SOC_ORDENS.find(function(o){ return o[0]===ordem; })||SOC_ORDENS[0])[2];
   const lista=filtrados.slice().sort(function(a,b){ return cmp(b)-cmp(a); });
   const semNum=posts.filter(function(p){ return !_socTem(p.reach); }).length;
-  const comNum=lista.filter(function(p){ return _socTem(p.reach); });
+  const comNum=lista.filter(function(p){ return !_socEhAd(p)&&_socTem(p.reach); });
   const medias={reach:null,likes:null,saved:null,shares:null};
   if(comNum.length){ Object.keys(medias).forEach(function(k){ medias[k]=comNum.reduce(function(s,p){ return s+(Number(p[k])||0); },0)/comNum.length; }); }
   const sel={border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:170};
   const chip=function(on,txt,onClick){ return <button onClick={onClick} style={{border:"1px solid "+(on?SOC.roxo:SOC.borda),background:on?SOC.roxo:"#fff",color:on?"#fff":SOC.txt2,borderRadius:99,padding:"5px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0}}>{txt}</button>; };
   const cols=isMob?2:4;
-  const abertoItem=aberto?lista.find(function(p){ return p.media_id===aberto; })||posts.find(function(p){ return p.media_id===aberto; }):null;
+  const abertoItem=aberto?(lista.find(function(p){ return p.media_id===aberto; })||posts.find(function(p){ return p.media_id===aberto; })||ads.find(function(p){ return p.media_id===aberto; })):null;
   const valorGrande=function(p){
     if(ordem==="engaj"){ const e=_socEngaj(p); return e===null?"—":_socPct(e,1); }
     const o=SOC_ORDENS.find(function(x){ return x[0]===ordem; }); if(!o||ordem==="recente") return _socTem(p.reach)?_socN(p.reach):"—";
@@ -63425,28 +63741,61 @@ function SocPublicacoes({posts,dias,isMob,demo,seguidores}){
   const rotuloGrande=ordem==="recente"?"alcance":SOC_ORDEM_ROT[ordem];
 
   return <>
-    {abertoItem&&<SocLightbox post={abertoItem} todos={posts} demo={demo} seguidores={seguidores} isMob={isMob} onClose={function(){ setAberto(null); }}/>}
+    {abertoItem&&(_socEhAd(abertoItem)
+      ? <SocLightboxAd post={abertoItem} todos={ads} demo={demo} isMob={isMob} onClose={function(){ setAberto(null); }}/>
+      : <SocLightbox post={abertoItem} todos={posts} demo={demo} seguidores={seguidores} isMob={isMob} onClose={function(){ setAberto(null); }}/>)}
     <SocCard pad="12px 20px 14px">
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
-        {chip(janela==="tudo","Todas · "+posts.length,function(){ setJanela("tudo"); setLimite(24); })}
+        {chip(janela==="tudo","Todas · "+(posts.length+ads.length),function(){ setJanela("tudo"); setLimite(24); })}
         {chip(janela==="periodo","Últimos "+dias+" dias",function(){ setJanela("periodo"); setLimite(24); })}
         <span style={{width:1,height:22,background:SOC.borda,margin:"0 4px"}}/>
-        {tipos.map(function(t){ const n=posts.filter(function(p){ return t==="todos"||String(p.media_type||"").toUpperCase()===t; }).length; return <span key={t}>{chip(tipo===t,(t==="todos"?"Todos os tipos":_socTipo(t))+" · "+n,function(){ setTipo(t); setLimite(24); })}</span>; })}
+        {chip(origem==="todas","Orgânico + anúncio",function(){ setOrigem("todas"); setTipo("todos"); setLimite(24); })}
+        {chip(origem==="organico","Só orgânico · "+posts.length,function(){ setOrigem("organico"); setLimite(24); })}
+        {ads.length>0&&chip(origem==="anuncio","Só anúncio · "+ads.length,function(){ setOrigem("anuncio"); setTipo("todos"); setLimite(24); })}
+        <span style={{width:1,height:22,background:SOC.borda,margin:"0 4px"}}/>
+        {origem!=="anuncio"&&tipos.map(function(t){ const n=posts.filter(function(p){ return t==="todos"||String(p.media_type||"").toUpperCase()===t; }).length; return <span key={t}>{chip(tipo===t,(t==="todos"?"Todos os tipos":_socTipo(t))+" · "+n,function(){ setTipo(t); setLimite(24); })}</span>; })}
         <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={Object.assign({},sel,{marginLeft:isMob?0:"auto"})}>
           {SOC_ORDENS.map(function(o){ return <option key={o[0]} value={o[0]}>{"Ordenar por "+o[1].toLowerCase()}</option>; })}
         </select>
-        <label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
+        {origem!=="anuncio"&&<label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
           <input type="checkbox" checked={soNum} onChange={function(e){ setSoNum(e.target.checked); }}/> só com número{semNum?" ("+semNum+" sem)":""}
-        </label>
+        </label>}
       </div>
       <div style={{fontSize:12,color:SOC.txt3,marginTop:10}}>
-        {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{comNum.length&&medias.reach!==null?" · alcance médio "+_socN(Math.round(medias.reach))+" · "+_socN1(medias.likes)+" curtidas, "+_socN1(medias.saved)+" salvos e "+_socN1(medias.shares)+" compartilhamentos por publicação":""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
+        {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{adsFiltrados.length?" · "+adsFiltrados.length+(adsFiltrados.length===1?" de anúncio":" de anúncio"):""}{comNum.length&&medias.reach!==null?" · alcance médio do orgânico "+_socN(Math.round(medias.reach)):""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
+        {pagas&&pagas.loading&&<span style={{color:SOC.roxo}}> · lendo os anúncios…</span>}
       </div>
     </SocCard>
 
     {!lista.length&&<SocCard><div style={{fontSize:12.5,color:SOC.txt3}}>Nada com esses filtros.</div></SocCard>}
     <div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",gap:14,minWidth:0}}>
       {lista.slice(0,limite).map(function(p,i){
+        if(_socEhAd(p)){
+          const res=_socResultado(p); const custo=res?p.gasto/res.n:null; const ctr=_socCTR(p);
+          return <div key={p.media_id} onClick={function(){ setAberto(p.media_id); }} style={{background:"#fff",border:"1px solid #f3d9b0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s",minWidth:0}}
+            onMouseEnter={function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)"; }} onMouseLeave={function(e){ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)"; }}>
+            <SocCapaAd post={p}>
+              <span style={{position:"absolute",top:10,left:10,background:SOC_DESCE,color:"#fff",fontSize:10,fontWeight:800,borderRadius:7,padding:"4px 8px",textTransform:"uppercase",letterSpacing:".06em"}}>Anúncio</span>
+              <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>
+                <b style={{fontSize:22,fontWeight:900,letterSpacing:-.6}}>{_socN(p.impressoes)}</b><br/>
+                <small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>impressões · {_socN(p.reach)} pessoas</small>
+              </div>
+            </SocCapaAd>
+            <div style={{padding:"11px 13px 13px",minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,overflow:"hidden"}}>
+                <span style={{fontSize:10.5,color:SOC_DESCE,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap",flexShrink:0}}>{p.media_type==="AD_VIDEO"?"Vídeo":"Imagem"}</span>
+                <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600,whiteSpace:"nowrap",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {_socDia(p.de)}–{_socDia(p.ate)}</span>
+              </div>
+              <div style={{fontSize:12,color:SOC.txt,marginTop:5,lineHeight:1.4,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nome||"Anúncio"}</div>
+              <div style={{display:"flex",flexWrap:"wrap",columnGap:9,rowGap:2,marginTop:7,fontSize:11.5,color:SOC.txt3}}>
+                <span><b style={{color:SOC.txt2}}>{_socBRL(p.gasto)}</b> gasto</span>
+                {res&&<span><b style={{color:SOC.txt2}}>{_socN(res.n)}</b> {res.lbl}</span>}
+                {custo!==null&&<span><b style={{color:SOC.txt2}}>{_socBRL(custo)}</b>/{res.sing}</span>}
+                {ctr!==null&&<span><b style={{color:SOC.txt2}}>{_socPct(ctr,2)}</b> CTR</span>}
+              </div>
+            </div>
+          </div>;
+        }
         const eng=_socEngaj(p);
         const acima=medias.reach&&_socTem(p.reach)&&Number(p.reach)>=medias.reach*2;
         const abaixo=medias.reach&&_socTem(p.reach)&&Number(p.reach)<=medias.reach*0.4;
@@ -63647,6 +63996,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
   const [perfil,setPerfil]=useState("todos");
   useEffect(function(){ setAba("visao"); setPerfil("todos"); },[clientId]);
   const C=useSocCliente(clientId);
+  const P=useSocPagas(clientId);   /* publicações que rodaram como anúncio (dark posts incluídos) */
 
   const abas=SOC_ABAS.filter(function(t){ return !bl||bl("social.aba."+t[0]); });
   const abaAtiva=abas.some(function(t){ return t[0]===aba; })?aba:(abas[0]&&abas[0][0]);
@@ -63709,8 +64059,8 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
     {!semAba&&!C.loading&&!C.erro&&(vazio&&abaAtiva!=="contas"
       ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
       : <>
-        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
-        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
+        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} pagas={P} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
+        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} pagas={P} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
         {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
         {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
         {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} isMob={isMob}/>}
