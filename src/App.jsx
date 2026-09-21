@@ -63153,30 +63153,86 @@ function useSocComentarios(mediaId){
   return st;
 }
 
-/* Lightbox: a mídia em tamanho real (vídeo TOCA, carrossel PASSA) + todos os números + legenda + comentários. */
-function SocLightbox({post,onClose,isMob}){
+/* ─── LIGHTBOX v2 — a publicação na pegada do Criativo de ADS (21/09) ─────
+   Hero com o número principal · 3 abaixo · abas Resumo / Post / Público / Resultado / Contexto ·
+   diagnóstico com ✓ e ✗ · legenda no fim. TUDO calculado do que a Meta entregou pra ESTA publicação
+   e das outras do mesmo perfil (a "média do perfil" é a mediana das publicações com número). */
+function _socMediana(arr){ const a=arr.filter(function(v){ return _socTem(v)&&isFinite(v); }).slice().sort(function(x,y){ return x-y; }); if(!a.length) return null; const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+function _socRefPerfil(todos,tipo){
+  const g=todos.filter(function(p){ return _socTem(p.reach); });
+  const mesmo=g.filter(function(p){ return String(p.media_type||"").toUpperCase()===tipo; });
+  const base=mesmo.length>=3?mesmo:g;
+  const med=function(k){ return _socMediana(base.map(function(p){ return Number(p[k]); })); };
+  const medEng=_socMediana(base.map(function(p){ return _socEngaj(p); }));
+  return {n:g.length,nMesmo:mesmo.length,usouMesmo:mesmo.length>=3,reach:med("reach"),likes:med("likes"),comments:med("comments"),saved:med("saved"),shares:med("shares"),views:med("video_views"),awt:med("avg_watch_time"),eng:medEng};
+}
+function SocLightbox({post,todos,demo,seguidores,onClose,isMob}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
+  const [aba,setAba]=useState("resumo");
+  const [dur,setDur]=useState(null);
   const filhos=_socFilhos(post);
   const [idx,setIdx]=useState(0);
-  useEffect(function(){ setIdx(0); },[post&&post.media_id]);
+  useEffect(function(){ setIdx(0); setAba("resumo"); setDur(null); },[post&&post.media_id]);
   const C=useSocComentarios(post&&post.media_id);
   const atual=filhos.length?filhos[Math.min(idx,filhos.length-1)]:null;
   const ehVideo=atual?String(atual.media_type||"").toUpperCase()==="VIDEO":_socEhVideo(post);
   const srcVideo=atual?_socMidia(post.media_id,{child:atual.id,video:true}):_socMidia(post.media_id,{video:true});
   const posterVideo=atual?(atual.thumbnail_url||null):(post.thumbnail_url||null);
+  const tipo=String(post.media_type||"").toUpperCase();
+  const R=_socRefPerfil(todos||[],tipo);
   const eng=_socEngaj(post);
   const legenda=String(post.caption||"").trim();
-  const Num=function(k,v,h){ return <div style={{minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:3,color:v==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap"}}>{v}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
-  const v=function(x){ return _socTem(x)?_socN(x):"—"; };
+  const hashtags=(legenda.match(/#[\p{L}\p{N}_]+/gu)||[]);
+  const temNum=_socTem(post.reach);
+  const x=function(a,b){ return (_socTem(a)&&b)?a/b:null; };
+  const vezes=function(v){ return v===null?"—":(v.toLocaleString("pt-BR",{maximumFractionDigits:1})+"×"); };
   const awt=_socTem(post.avg_watch_time)&&Number(post.avg_watch_time)>0?Number(post.avg_watch_time)/1000:null;
   const tot=_socTem(post.video_view_total_time)&&Number(post.video_view_total_time)>0?Number(post.video_view_total_time)/1000:null;
-  const hashtags=(legenda.match(/#[\p{L}\p{N}_]+/gu)||[]);
-  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,13,26,.72)",zIndex:9999,display:"grid",placeItems:"center",padding:isMob?8:24,fontFamily:SOC_FONT}}>
-    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(1120px,100%)",maxHeight:"94vh",overflow:"auto",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,440px) minmax(0,1fr)",boxShadow:"0 30px 80px rgba(0,0,0,.4)",minWidth:0}}>
+  const pctAssistido=(awt!==null&&dur)?Math.min(100,awt/dur*100):null;
+  const rank=(function(){ const g=(todos||[]).filter(function(p){ return _socTem(p.reach); }).slice().sort(function(a,b){ return Number(b.reach)-Number(a.reach); }); const i=g.findIndex(function(p){ return p.media_id===post.media_id; }); return {pos:i>=0?i+1:null,n:g.length}; })();
+  const dt=post.publicado_em?new Date(post.publicado_em):null;
+  const diaSemana=dt&&!isNaN(dt.getTime())?SOC_DOW[dt.getDay()]:null;
+  const hora=dt&&!isNaN(dt.getTime())?dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}):null;
+  const porCem=function(v){ return (_socTem(v)&&post.reach)?_socN1(v/post.reach*100):"—"; };
+  const rel=x(post.reach,R.reach);
+
+  /* ── diagnóstico: só afirma o que o número sustenta ── */
+  const diag=[];
+  if(temNum&&R.reach){ if(rel>=1.5) diag.push(["v","alcance "+vezes(rel)+" a média do perfil — o Instagram entregou essa mais que o normal"]); else if(rel<=0.5) diag.push(["x","alcance "+vezes(rel)+" a média do perfil — ficou dentro de quem já segue"]); }
+  if(eng!==null&&R.eng!==null){ if(eng>=R.eng*1.3) diag.push(["v","engajamento "+_socPct(eng,1)+" — acima da média do perfil ("+_socPct(R.eng,1)+")"]); else if(eng<=R.eng*0.6) diag.push(["x","engajamento "+_socPct(eng,1)+" — abaixo da média do perfil ("+_socPct(R.eng,1)+")"]); }
+  if(_socTem(post.shares)&&R.shares!==null&&post.reach){ const r2=x(post.shares,R.shares); if(r2!==null&&r2>=1.5) diag.push(["v",_socN(post.shares)+" compartilhamentos — "+vezes(r2)+" a média: o conteúdo saiu da base"]); }
+  if(_socTem(post.saved)&&R.saved!==null){ const r3=x(post.saved,R.saved); if(r3!==null&&r3>=1.5&&post.saved>=3) diag.push(["v",_socN(post.saved)+" salvos — as pessoas guardaram pra voltar"]); }
+  if(_socTem(post.comments)&&post.comments>=5) diag.push(["i",_socN(post.comments)+" comentários — vale ler e responder (aba Contexto)"]);
+  if(pctAssistido!==null){ if(pctAssistido>=40) diag.push(["v","assistiram "+_socPct(pctAssistido)+" do vídeo em média — prende atenção"]); else if(pctAssistido<15) diag.push(["x","assistiram só "+_socPct(pctAssistido)+" do vídeo em média ("+_socN1(awt)+"s de "+_socN(Math.round(dur))+"s) — a abertura não segura"]); else diag.push(["i","assistiram "+_socPct(pctAssistido)+" do vídeo em média ("+_socN1(awt)+"s de "+_socN(Math.round(dur))+"s)"]); }
+  if(_socTem(post.follows)&&post.follows>0) diag.push(["v",_socN(post.follows)+(post.follows===1?" pessoa passou a seguir":" pessoas passaram a seguir")+" por causa desta publicação"]);
+  if(_socTem(post.video_views)&&post.reach&&post.video_views/post.reach>=1.5) diag.push(["i",_socN1(post.video_views/post.reach)+" views por pessoa — gente vendo mais de uma vez"]);
+  if(!temNum) diag.push(["i","o coletor ainda não completou os números desta publicação — entram na próxima madrugada"]);
+
+  const ic=function(t){ return t==="v"?<span style={{color:SOC.verde,fontWeight:900}}>✓</span>:t==="x"?<span style={{color:SOC.verm,fontWeight:900}}>✗</span>:<span style={{color:SOC.txt3,fontWeight:900}}>•</span>; };
+  const Cel=function(k,v,h){ return <div style={{padding:"12px 14px",minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".07em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:4,color:v==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap"}}>{v}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
+  const Num=function(k,v,h){ return <div style={{minWidth:0,overflow:"hidden"}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:19,fontWeight:900,letterSpacing:-.5,marginTop:3,color:v==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{v}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
+  const v=function(q){ return _socTem(q)?_socN(q):"—"; };
+  const K=function(t){ return <SocEyebrow style={{margin:"14px 0 8px"}}>{t}</SocEyebrow>; };
+  const Barra=function(rot,val,ref,fmt){ const pct=(ref&&_socTem(val))?Math.min(100,val/ref*50):0; /* 50% = na média */
+    return <div style={{display:"grid",gridTemplateColumns:isMob?"84px minmax(0,1fr) 96px":"140px minmax(0,1fr) 150px",gap:10,alignItems:"center",padding:"6px 0",minWidth:0}}>
+      <span style={{fontSize:12,fontWeight:700,color:SOC.txt2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rot}</span>
+      <span style={{position:"relative",display:"block",height:10,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><span style={{display:"block",height:"100%",width:pct+"%",borderRadius:99,background:(_socTem(val)&&ref&&val>=ref)?SOC.roxo:SOC.roxo2}}/><span style={{position:"absolute",left:"50%",top:0,bottom:0,width:2,background:SOC.txt,opacity:.35}}/></span>
+      <span style={{fontSize:12,fontWeight:800,textAlign:"right",whiteSpace:"nowrap",color:SOC.txt,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{_socTem(val)?(fmt?fmt(val):_socN(val)):"—"}<i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600,fontSize:11,display:isMob?"block":"inline"}}>{isMob?"":" · "}méd. {ref===null||ref===undefined?"—":(fmt?fmt(ref):_socN(Math.round(ref)))}</i></span>
+    </div>; };
+  const ABAS=[["resumo","Resumo"],["post","Post"],["publico","Público"],["resultado","Resultado"],["contexto","Contexto"]];
+
+  /* público da conta (retrato) — resumido */
+  const pub=(function(){ if(!demo||!demo.length) return null; const por=function(dim){ const g={}; demo.forEach(function(q){ if(q.dimensao!==dim) return; const k=String(q.valor||"").trim(); g[k]=(g[k]||0)+Number(q.pessoas||0); }); return g; };
+    const idade=por("idade"), gen=por("genero"), cid=por("cidade"); const sI=Object.keys(idade).reduce(function(s,k){ return s+idade[k]; },0), sG=Object.keys(gen).reduce(function(s,k){ return s+gen[k]; },0), sC=Object.keys(cid).reduce(function(s,k){ return s+cid[k]; },0);
+    const topI=Object.keys(idade).map(function(k){ return {k:k,v:idade[k]}; }).sort(function(a,b){ return b.v-a.v; }).slice(0,3); const topC=Object.keys(cid).map(function(k){ return {k:_socCidade(k),v:cid[k]}; }).sort(function(a,b){ return b.v-a.v; }).slice(0,5);
+    return {topI:topI,sI:sI,gM:gen.M||0,gF:gen.F||0,gU:gen.U||0,sG:sG,topC:topC,sC:sC}; })();
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,13,26,.72)",zIndex:9999,display:"grid",placeItems:"center",padding:isMob?8:24,fontFamily:SOC_FONT,fontVariantNumeric:"tabular-nums"}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(1120px,100%)",maxHeight:"94vh",overflow:"auto",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,400px) minmax(0,1fr)",boxShadow:"0 30px 80px rgba(0,0,0,.4)",minWidth:0}}>
       {/* ── mídia ── */}
       <div style={{background:"#0f0d1a",position:"relative",display:"grid",placeItems:"center",minHeight:isMob?260:420,minWidth:0}}>
         {ehVideo
-          ? <video key={srcVideo} src={srcVideo} poster={posterVideo||undefined} controls autoPlay playsInline preload="metadata" style={{width:"100%",maxHeight:"94vh",display:"block",background:"#000"}}/>
+          ? <video key={srcVideo} src={srcVideo} poster={posterVideo||undefined} controls autoPlay playsInline preload="metadata" onLoadedMetadata={function(e){ const d=e.currentTarget.duration; if(!atual&&isFinite(d)&&d>0) setDur(d); }} style={{width:"100%",maxHeight:"94vh",display:"block",background:"#000"}}/>
           : <img key={atual?atual.id:post.media_id} src={atual?_socMidia(post.media_id,{child:atual.id}):_socMidia(post.media_id)} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"94vh",objectFit:"contain",display:"block"}}/>}
         {filhos.length>1&&<>
           <button onClick={function(){ setIdx((idx-1+filhos.length)%filhos.length); }} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.9)",fontSize:18,fontWeight:900,cursor:"pointer",color:SOC.txt}}>‹</button>
@@ -63185,45 +63241,136 @@ function SocLightbox({post,onClose,isMob}){
           <span style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 8px"}}>{idx+1} / {filhos.length}</span>
         </>}
       </div>
-      {/* ── números ── */}
-      <div style={{padding:isMob?"14px 14px 18px":"18px 22px 22px",minWidth:0,display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <SocPill cor={SOC.roxo} bg={SOC.roxoBg}>{_socTipo(post.media_type)}</SocPill>
-          <span style={{fontSize:12,color:SOC.txt3,fontWeight:700}}>{_socDiaLongo(post.publicado_em)}</span>
-          {filhos.length>1&&<SocPill>{filhos.length} cartões</SocPill>}
-          {post.permalink&&<a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none",marginLeft:"auto"})}>Abrir no Instagram →</a>}
-          <button onClick={onClose} style={Object.assign(SOC_BTN("sm"),{marginLeft:post.permalink?0:"auto"})}>✕</button>
+      {/* ── lado direito ── */}
+      <div style={{padding:isMob?"14px 14px 18px":"18px 22px 22px",minWidth:0,display:"flex",flexDirection:"column",gap:0}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:10,minWidth:0}}>
+          <div style={{minWidth:0,flex:1,overflow:"hidden"}}>
+            <SocEyebrow style={{wordBreak:"break-word"}}>{_socTipo(post.media_type)} · {_socDiaLongo(post.publicado_em)}{hora?" · "+hora:""}{diaSemana?" · "+diaSemana.toLowerCase():""}</SocEyebrow>
+            <div style={{fontSize:16,fontWeight:900,letterSpacing:-.3,color:SOC.txt,marginTop:4,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{legenda.split("\n")[0]||<i style={{color:SOC.txt3,fontWeight:500}}>sem legenda</i>}</div>
+          </div>
+          <button onClick={onClose} style={Object.assign(SOC_BTN("sm"),{flexShrink:0})}>✕</button>
         </div>
-        {!_socTem(post.reach)&&<SocAviso>O coletor ainda não completou os números desta publicação. Eles entram na próxima madrugada.</SocAviso>}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:"12px 14px"}}>
-          {Num("Alcance",v(post.reach),"pessoas diferentes")}
-          {Num("Views",v(post.video_views),_socTem(post.video_views)&&_socTem(post.reach)&&post.reach>0?_socN1(post.video_views/post.reach)+" por pessoa":null)}
-          {Num("Interações",v(post.total_interactions),eng!==null?_socPct(eng,1)+" de engajamento":null)}
-          {Num("Curtidas",v(post.likes))}
-          {Num("Comentários",v(post.comments))}
-          {Num("Salvos",v(post.saved))}
-          {Num("Compartilhamentos",v(post.shares))}
-          {Num("Visitas ao perfil",v(post.profile_visits),"vindas desta publicação")}
-          {Num("Seguiram",v(post.follows),"por causa dela")}
-          {_socEhVideo(post)&&Num("Tempo assistido",awt!==null?_socN1(awt)+"s":"—","média por pessoa")}
-          {post.profile_activity&&typeof post.profile_activity==="object"&&Object.keys(post.profile_activity).length>0&&Num("Ações no perfil",_socN(Object.keys(post.profile_activity).reduce(function(s,k){ return s+(Number(post.profile_activity[k])||0); },0)),Object.keys(post.profile_activity).map(function(k){ return ({bio_link_clicked:"link da bio",call:"ligar",direction:"rota",email:"e-mail",text:"mensagem"})[k]||k; }).join(", "))}
-          {_socEhVideo(post)&&Num("Tempo total",tot!==null?(tot>=3600?_socN1(tot/3600)+"h":tot>=60?_socN(Math.round(tot/60))+"min":_socN(Math.round(tot))+"s"):"—","somando todo mundo")}
+
+        {/* hero */}
+        <div style={{marginTop:14,background:"linear-gradient(135deg,#f6f1ff,#fbfaff)",border:"1px solid #e6dcfa",borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap",minWidth:0}}>
+          <div style={{minWidth:0}}>
+            <SocEyebrow style={{color:"#6b3fb8"}}>Alcance</SocEyebrow>
+            <div style={{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.05,marginTop:4,color:temNum?SOC.roxo:SOC.borda2}}>{temNum?_socN(post.reach):"—"}</div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:3}}>{temNum&&R.reach?(rel>=1?"":"")+vezes(rel)+" a média do perfil ("+_socN(Math.round(R.reach))+")":"pessoas diferentes"}</div>
+          </div>
+          <div style={{marginLeft:"auto",textAlign:"right",minWidth:0}}>
+            <SocEyebrow>Posição no perfil</SocEyebrow>
+            <div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:4,color:SOC.txt}}>{rank.pos?rank.pos+"º de "+rank.n:"—"}</div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:3}}>pelo alcance</div>
+          </div>
         </div>
-        <div>
-          <SocEyebrow style={{marginBottom:6}}>Legenda</SocEyebrow>
-          <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:220,overflow:"auto"}}>{legenda||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
-          {hashtags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{hashtags.slice(0,12).map(function(h,i){ return <SocPill key={i}>{h}</SocPill>; })}</div>}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:1,background:SOC.borda,border:"1px solid "+SOC.borda,borderRadius:12,overflow:"hidden",marginTop:10}}>
+          <div style={{background:"#fff"}}>{Cel("Views",v(post.video_views),(_socTem(post.video_views)&&post.reach)?_socN1(post.video_views/post.reach)+" por pessoa":null)}</div>
+          <div style={{background:"#fff"}}>{Cel("Engajamento",eng===null?"—":_socPct(eng,1),R.eng!==null?"média "+_socPct(R.eng,1):null)}</div>
+          <div style={{background:"#fff"}}>{Cel("Interações",v(post.total_interactions),_socTem(post.total_interactions)?"curtidas + coment. + salvos + compart.":null)}</div>
         </div>
-        <div>
-          <SocEyebrow style={{marginBottom:6}}>Comentários {C.loading?"":"· "+C.lista.length}</SocEyebrow>
+
+        {/* abas */}
+        <div style={{display:"flex",gap:2,borderBottom:"1px solid "+SOC.borda,marginTop:14,overflowX:"auto"}} className="scroll-x">
+          {ABAS.map(function(t){ const on=aba===t[0]; return <button key={t[0]} onClick={function(){ setAba(t[0]); }} style={{background:"none",border:"none",borderBottom:"2px solid "+(on?SOC.roxo:"transparent"),color:on?SOC.roxo:SOC.txt2,padding:"10px 12px 9px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0,borderRadius:0}}>{t[1]}</button>; })}
+        </div>
+
+        {/* ── RESUMO ── */}
+        {aba==="resumo"&&<div>
+          {_socEhVideo(post)&&<>
+            {K("Retenção do vídeo")}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8}}>
+              <div style={{background:SOC.roxo,color:"#fff",borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",opacity:.85}}>Tempo médio</div><div style={{fontSize:18,fontWeight:900,marginTop:3}}>{awt!==null?_socN1(awt)+"s":"—"}</div></div>
+              <div style={{background:SOC.cinzaBg,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3}}>Do vídeo</div><div style={{fontSize:18,fontWeight:900,marginTop:3,color:SOC.txt}}>{pctAssistido!==null?_socPct(pctAssistido):(dur?"—":"lendo…")}</div><div style={{fontSize:10.5,color:SOC.txt3}}>{dur?"de "+_socN(Math.round(dur))+"s":"duração do player"}</div></div>
+              <div style={{background:SOC.cinzaBg,borderRadius:12,padding:"10px 12px",minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3}}>Tempo total</div><div style={{fontSize:18,fontWeight:900,marginTop:3,color:SOC.txt}}>{tot!==null?(tot>=3600?_socN1(tot/3600)+"h":tot>=60?_socN(Math.round(tot/60))+"min":_socN(Math.round(tot))+"s"):"—"}</div><div style={{fontSize:10.5,color:SOC.txt3}}>somando todo mundo</div></div>
+            </div>
+            <div style={{fontSize:11.5,color:SOC.txt3,marginTop:8,lineHeight:1.45}}>A Meta não entrega a curva (25%, 50%, 75%) pra publicação orgânica — só o tempo médio. A porcentagem acima é tempo médio ÷ duração do vídeo.</div>
+          </>}
+          {K("Diagnóstico")}
+          {!diag.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Dentro da média do perfil em tudo — nada que se destaque pra cima nem pra baixo.</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{diag.map(function(d,i){ return <div key={i} style={{display:"flex",gap:8,fontSize:12.5,color:SOC.txt2,lineHeight:1.5}}>{ic(d[0])}<span>{d[1]}</span></div>; })}</div>
+          {K("Legenda")}
+          <div style={{background:SOC.chao,border:"1px solid "+SOC.borda,borderRadius:12,padding:"12px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:220,overflow:"auto"}}>{legenda||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
+        </div>}
+
+        {/* ── POST ── */}
+        {aba==="post"&&<div>
+          {K("A publicação")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Formato",_socTipo(post.media_type),filhos.length?filhos.length+" cartões":null)}
+            {Num("Publicada",_socDiaLongo(post.publicado_em),[diaSemana,hora].filter(Boolean).join(" · ")||null)}
+            {Num("Comentários",v(post.comments),post.is_comment_enabled===false?"comentários desligados":"abertos")}
+            {Num("Legenda",legenda?_socN(legenda.length)+" caracteres":"—",hashtags.length?hashtags.length+" hashtags":"sem hashtag")}
+          </div>
+          {K("Legenda completa")}
+          <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:300,overflow:"auto"}}>{legenda||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
+          {hashtags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{hashtags.map(function(h,i){ return <SocPill key={i}>{h}</SocPill>; })}</div>}
+          {post.permalink&&<div style={{marginTop:14}}><a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN(),{textDecoration:"none"})}>Abrir no Instagram →</a></div>}
+        </div>}
+
+        {/* ── PÚBLICO ── */}
+        {aba==="publico"&&<div>
+          <div style={{marginTop:14,border:"1px dashed "+SOC.borda2,borderRadius:12,background:SOC.chao,padding:"11px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
+            {_socB("A Meta não entrega quem viu ESTA publicação")} — testado em 21/09: nenhuma quebra por idade, cidade ou seguidor/não seguidor existe por post. O que existe é abaixo: o que a publicação fez com o público, e o retrato de quem segue a conta.
+          </div>
+          {K("O que ela fez com o público")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(3,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Alcance",v(post.reach),(seguidores&&_socTem(post.reach))?_socPct(post.reach/seguidores*100)+" da base de seguidores":"pessoas diferentes")}
+            {Num("Seguiram",_socEhVideo(post)?"—":v(post.follows),_socEhVideo(post)?"a Meta não dá isso em Reels":"por causa dela")}
+            {Num("Visitas ao perfil",_socEhVideo(post)?"—":v(post.profile_visits),_socEhVideo(post)?"a Meta não dá isso em Reels":"vindas dela")}
+            {post.profile_activity&&typeof post.profile_activity==="object"&&Object.keys(post.profile_activity).length>0&&Num("Ações no perfil",_socN(Object.keys(post.profile_activity).reduce(function(s,k){ return s+(Number(post.profile_activity[k])||0); },0)),Object.keys(post.profile_activity).map(function(k){ return ({bio_link_clicked:"link da bio",call:"ligar",direction:"rota",email:"e-mail",text:"mensagem"})[k]||k; }).join(", "))}
+          </div>
+          {pub&&<>
+            {K("Quem segue a conta (retrato, não é desta publicação)")}
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:14}}>
+              <div>{pub.topI.map(function(q){ return <SocLinha key={q.k} isMob={isMob} largRot="110px" largVal="70px" rot={_socIdadeRot(q.k)} pct={pub.topI[0].v?q.v/pub.topI[0].v*100:0} val={pub.sI?_socPct(q.v/pub.sI*100):"—"}/>; })}
+                {pub.sG>0&&<div style={{fontSize:11.5,color:SOC.txt2,marginTop:6,fontWeight:600}}>{_socPct(pub.gM/pub.sG*100)} homens · {_socPct(pub.gF/pub.sG*100)} mulheres · {_socPct(pub.gU/pub.sG*100)} não informado</div>}</div>
+              <div>{pub.topC.map(function(q,i){ return <SocLinha key={q.k} isMob={isMob} largRot="130px" largVal="70px" rot={q.k} pct={pub.topC[0].v?q.v/pub.topC[0].v*100:0} val={pub.sC?_socPct(q.v/pub.sC*100):"—"} cor={i===0?SOC.roxo:SOC.roxo2}/>; })}</div>
+            </div>
+          </>}
+        </div>}
+
+        {/* ── RESULTADO ── */}
+        {aba==="resultado"&&<div>
+          {K("Todos os números")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:"12px 14px"}}>
+            {Num("Alcance",v(post.reach))}{Num("Views",v(post.video_views))}{Num("Curtidas",v(post.likes))}{Num("Comentários",v(post.comments))}
+            {Num("Salvos",v(post.saved))}{Num("Compartilhamentos",v(post.shares))}{Num("Interações",v(post.total_interactions))}
+            {!_socEhVideo(post)&&Num("Seguiram",v(post.follows))}{!_socEhVideo(post)&&Num("Visitas ao perfil",v(post.profile_visits))}
+            {_socEhVideo(post)&&Num("Tempo médio",awt!==null?_socN1(awt)+"s":"—")}{_socEhVideo(post)&&Num("Tempo total",tot!==null?_socN(Math.round(tot))+"s":"—")}
+          </div>
+          {K("De cada 100 pessoas alcançadas")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:"12px 14px"}}>
+            {Num("Curtiram",porCem(post.likes))}{Num("Comentaram",porCem(post.comments))}{Num("Salvaram",porCem(post.saved))}{Num("Compartilharam",porCem(post.shares))}
+          </div>
+          {K("Contra a média do perfil"+(R.usouMesmo?" · só "+_socTipo(tipo).toLowerCase():""))}
+          {Barra("Alcance",post.reach,R.reach)}{Barra("Views",post.video_views,R.views)}{Barra("Curtidas",post.likes,R.likes)}{Barra("Comentários",post.comments,R.comments)}{Barra("Salvos",post.saved,R.saved)}{Barra("Compart.",post.shares,R.shares)}
+          {_socEhVideo(post)&&Barra("Tempo assistido",awt!==null?awt:null,R.awt!==null?R.awt/1000:null,function(q){ return _socN1(q)+"s"; })}
+          <div style={{fontSize:11.5,color:SOC.txt3,marginTop:8,lineHeight:1.45}}>A linha do meio é a mediana {R.usouMesmo?"das "+R.nMesmo+" publicações do mesmo formato":"das "+R.n+" publicações com número"} deste perfil. Barra passando do meio = acima da média.</div>
+        </div>}
+
+        {/* ── CONTEXTO ── */}
+        {aba==="contexto"&&<div>
+          {K("Onde ela está no perfil")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(3,minmax(0,1fr))",gap:"12px 14px"}}>
+            {Num("Posição",rank.pos?rank.pos+"º de "+rank.n:"—","pelo alcance, entre as com número")}
+            {Num("Dia e hora",[diaSemana,hora].filter(Boolean).join(", ")||"—","quando foi publicada")}
+            {Num("Formato",_socTipo(post.media_type),R.nMesmo?R.nMesmo+" do mesmo tipo no perfil":null)}
+          </div>
+          {K("Comentários · "+(C.loading?"…":C.lista.length))}
           {C.loading&&<div style={{fontSize:12,color:SOC.txt3}}>Lendo…</div>}
           {!C.loading&&!C.lista.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>{_socTem(post.comments)&&post.comments>0?"A Meta contou "+post.comments+", mas o coletor de comentários ainda não passou por aqui.":"Nenhum comentário guardado."}</div>}
-          {!C.loading&&C.lista.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflow:"auto"}}>
+          {!C.loading&&C.lista.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:320,overflow:"auto"}}>
             {C.lista.map(function(c){ return <div key={c.comment_id} style={{background:SOC.chao,border:"1px solid "+SOC.borda,borderRadius:12,padding:"9px 12px",minWidth:0}}>
               <div style={{fontSize:13,color:SOC.txt,lineHeight:1.5,wordBreak:"break-word"}}>{c.texto}</div>
               <div style={{fontSize:11,color:SOC.txt3,marginTop:4,fontWeight:600}}>@{c.autor} · {_socDiaLongo(c.publicado_em)}{c.likes?" · "+c.likes+(c.likes===1?" curtida":" curtidas"):""}</div>
             </div>; })}
           </div>}
+        </div>}
+
+        <div style={{display:"flex",alignItems:"center",gap:10,marginTop:16,paddingTop:12,borderTop:"1px solid "+SOC.borda,flexWrap:"wrap"}}>
+          <span style={{fontSize:11,color:SOC.txt3}}>id {post.media_id}</span>
+          {post.permalink&&<a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none",marginLeft:"auto"})}>Abrir no Instagram ↗</a>}
         </div>
       </div>
     </div>
@@ -63243,7 +63390,7 @@ const SOC_ORDENS=[
   ["engaj","Engajamento",function(p){ const e=_socEngaj(p); return e===null?-1:e; }],
 ];
 const SOC_ORDEM_ROT={alcance:"alcance",recente:"",views:"views",curtidas:"curtidas",comentarios:"comentários",salvos:"salvos",compart:"compart.",seguiram:"seguiram",engaj:"engajamento"};
-function SocPublicacoes({posts,dias,isMob}){
+function SocPublicacoes({posts,dias,isMob,demo,seguidores}){
   const [ordem,setOrdem]=useState("alcance");
   const [tipo,setTipo]=useState("todos");
   const [janela,setJanela]=useState("tudo");
@@ -63278,7 +63425,7 @@ function SocPublicacoes({posts,dias,isMob}){
   const rotuloGrande=ordem==="recente"?"alcance":SOC_ORDEM_ROT[ordem];
 
   return <>
-    {abertoItem&&<SocLightbox post={abertoItem} isMob={isMob} onClose={function(){ setAberto(null); }}/>}
+    {abertoItem&&<SocLightbox post={abertoItem} todos={posts} demo={demo} seguidores={seguidores} isMob={isMob} onClose={function(){ setAberto(null); }}/>}
     <SocCard pad="12px 20px 14px">
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
         {chip(janela==="tudo","Todas · "+posts.length,function(){ setJanela("tudo"); setLimite(24); })}
@@ -63314,9 +63461,9 @@ function SocPublicacoes({posts,dias,isMob}){
             </div>
           </SocCapa>
           <div style={{padding:"11px 13px 13px",minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-              <span style={{fontSize:10.5,color:SOC.roxo,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>{_socTipo(p.media_type)}</span>
-              <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600,whiteSpace:"nowrap"}}>· {_socDiaLongo(p.publicado_em)}</span>
+            <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,overflow:"hidden"}}>
+              <span style={{fontSize:10.5,color:SOC.roxo,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap",flexShrink:0}}>{_socTipo(p.media_type)}</span>
+              <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600,whiteSpace:"nowrap",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {isMob?_socDia(p.publicado_em):_socDiaLongo(p.publicado_em)}</span>
               {!_socTem(p.reach)&&<span style={{marginLeft:"auto",fontSize:10,color:SOC.amar,fontWeight:800,whiteSpace:"nowrap"}}>sem número</span>}
             </div>
             <div style={{fontSize:12,color:SOC.txt2,marginTop:5,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(p.caption||"").replace(/\s+/g," ").trim()||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
@@ -63563,7 +63710,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
       ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
       : <>
         {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
-        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} dias={dias} isMob={isMob}/>}
+        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
         {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
         {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
         {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} isMob={isMob}/>}
