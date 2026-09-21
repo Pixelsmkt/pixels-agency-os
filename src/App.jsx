@@ -62433,8 +62433,8 @@ const _socRotuloPerfil=function(a){
 /* ─── LEITURA DO BANCO ───────────────────────────────── */
 /* Leitura da página: contas + diário de 2× a janela (pra comparar com o período
    anterior) + publicações da janela. São poucas linhas (11 perfis). */
-const SOC_DAILY_COLS="client_id,unidade,ig_user_id,username,data,reach,follower_count_delta,total_followers,media_count,views,profile_views,website_clicks,accounts_engaged,total_interactions,likes,comments,saves,shares,replies,profile_links_taps";
-const SOC_POST_COLS="client_id,unidade,ig_user_id,media_id,media_type,media_product_type,permalink,caption,publicado_em,reach,likes,comments,saved,shares,video_views,total_interactions,profile_visits,follows,avg_watch_time,media_url,thumbnail_url";
+const SOC_DAILY_COLS="client_id,unidade,ig_user_id,username,data,reach,follower_count_delta,total_followers,media_count,views,profile_views,website_clicks,accounts_engaged,total_interactions,likes,comments,saves,shares,replies,profile_links_taps,links_taps,views_por_tipo,online_followers";
+const SOC_POST_COLS="client_id,unidade,ig_user_id,media_id,media_type,media_product_type,permalink,caption,publicado_em,reach,likes,comments,saved,shares,video_views,total_interactions,profile_visits,follows,avg_watch_time,video_view_total_time,media_url,thumbnail_url,children";
 
 function useSocDados(dias){
   const [st,setSt]=useState({loading:true,erro:null,contas:[],diario:[],posts:[]});
@@ -62444,7 +62444,7 @@ function useSocDados(dias){
     setSt(function(p){ return Object.assign({},p,{loading:true,erro:null}); });
     const n=Number(dias)||30;
     const corte=new Date(); corte.setDate(corte.getDate()-n);
-    const corte2=new Date(); corte2.setDate(corte2.getDate()-(2*n));
+    const corte2=new Date(); corte2.setDate(corte2.getDate()-Math.max(2*n,92));
     (async function(){
       try{
         const rc=await window._sb.from("client_social_accounts")
@@ -62492,7 +62492,7 @@ function useSocUltimaColeta(){
    - quantas linhas de Facebook, comentários e stories existem
    - a última rodada do coletor */
 function useSocCliente(clientId){
-  const [st,setSt]=useState({loading:true,erro:null,diario:[],posts:[],demo:[],demoEm:null,fb:null,fbUlt:null,coment:null,stories:null,log:null});
+  const [st,setSt]=useState({loading:true,erro:null,diario:[],posts:[],demo:[],demoEm:null,fb:null,fbUlt:null,coment:null,stories:null,storiesLista:[],log:null});
   useEffect(function(){
     if(!clientId||!window._sb){ setSt(function(p){ return Object.assign({},p,{loading:false}); }); return; }
     let vivo=true;
@@ -62512,11 +62512,11 @@ function useSocCliente(clientId){
         }
         const rf=await window._sb.from("social_fb_posts").select("publicado_em,coletado_em",{count:"exact"}).eq("client_id",clientId).order("coletado_em",{ascending:false}).limit(1);
         const rcm=await window._sb.from("social_comentarios").select("id",{count:"exact",head:true}).eq("client_id",clientId);
-        const rs=await window._sb.from("social_stories").select("id",{count:"exact",head:true}).eq("client_id",clientId);
+        const rs=await window._sb.from("social_stories").select("media_id,ig_user_id,media_type,publicado_em,reach,replies,views,shares,total_interactions,follows,profile_visits,taps_forward,taps_back,exits",{count:"exact"}).eq("client_id",clientId).order("publicado_em",{ascending:false}).limit(500);
         const rl=await window._sb.from("social_coleta_log").select("rodou_em,ok,erro").eq("client_id",clientId).order("rodou_em",{ascending:false}).limit(1);
         if(vivo) setSt({loading:false,erro:null,diario:rd.data||[],posts:rp.data||[],demo:demo,demoEm:demoEm,
           fb:rf.error?null:(rf.count||0), fbUlt:(!rf.error&&rf.data&&rf.data[0])?rf.data[0].coletado_em:null,
-          coment:rcm.error?null:(rcm.count||0), stories:rs.error?null:(rs.count||0),
+          coment:rcm.error?null:(rcm.count||0), stories:rs.error?null:(rs.count||0), storiesLista:rs.error?[]:(rs.data||[]),
           log:(!rl.error&&rl.data&&rl.data[0])?rl.data[0]:null});
       }catch(e){
         if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false,erro:(e&&e.message)||"Falha ao ler o cliente."}); });
@@ -62529,7 +62529,8 @@ function useSocCliente(clientId){
 
 /* ─── PEÇAS VISUAIS ──────────────────────────────────── */
 function SocWrap({children}){
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:SOC_FONT,minWidth:0,fontVariantNumeric:"tabular-nums"}}>{children}</div>;
+  /* mesma largura do QG de mídia: num monitor largo a tela não vira uma tira de cards espremidos */
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:SOC_FONT,minWidth:0,fontVariantNumeric:"tabular-nums",maxWidth:1240,margin:"0 auto"}}>{children}</div>;
 }
 function SocCard({titulo,sub,direita,children,pad,style}){
   return <div style={Object.assign({background:"#fff",border:"1px solid "+SOC.borda,borderRadius:18,minWidth:0,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)"},style||{})}>
@@ -62804,7 +62805,7 @@ function _socPorDow(posts){
 }
 
 /* ─── ABA: VISÃO GERAL ───────────────────────────────── */
-function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,dias,isMob,onVerPublicacoes}){
+function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,stories,dias,isMob,onVerPublicacoes}){
   const jan=_socJanelas(diarioTudo.length?diarioTudo:diarioJanela,dias);
   const r=_socResumo(jan.atual,postsTudo.filter(function(p){ return jan.atual.length&&String(p.publicado_em||"").slice(0,10)>=jan.atual[0].data; }));
   const r0=_socResumo(jan.anterior,[]);
@@ -62845,7 +62846,7 @@ function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,dias,isMob,onVerPublic
       {eye:"Seguidores", big:seg===null?"—":_socN(seg),
        s:seg===null?"o coletor só grava o total no dia da coleta":(r.ganho===null?"retrato do dia "+_socDiaLongo(r.seguidoresEm):_socSinal(r.ganho)+" no período · "+_socPct(r.ganho/seg*100,1)+" de crescimento")},
       {eye:"Views do conteúdo", big:_socTem(t.views)?_socN(t.views):"—",
-       s:_socTem(t.views)?(r.diasTot+" dias com número · "+_socN(Math.round(t.views/Math.max(1,r.diasTot)))+" por dia, em média"):"essa métrica começou a ser coletada em 25/08"},
+       s:_socTem(t.views)?((function(){ const vv=_socViewsPorTipo(jan.atual); return vv.dias&&vv.tot?(_socPct(vv.ads/vv.tot*100)+" vieram de anúncio · "+_socN(vv.organico)+" orgânicas em "+vv.dias+" dias com a quebra"):(r.diasTot+" dias com número · "+_socN(Math.round(t.views/Math.max(1,r.diasTot)))+" por dia, em média"); })()):"essa métrica começou a ser coletada em 25/08"},
     ]}/>
 
     <SocCard titulo="Alcance por dia" sub="quantas pessoas diferentes viram algo do perfil naquele dia"
@@ -62875,6 +62876,12 @@ function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,dias,isMob,onVerPublic
         {k:"Respostas no direct", v:_socTem(t.replies)?_socN(t.replies):"—", h:"vieram de story"},
       ]}/>
     </div>
+
+    <div style={g2}>
+      <SocViewsOrigem diario={jan.atual} isMob={isMob}/>
+      <SocHorarioPublico diario={diarioTudo.length?diarioTudo:diarioJanela} isMob={isMob}/>
+    </div>
+    <SocStoriesBloco stories={stories} isMob={isMob}/>
 
     <div style={g2}>
       <SocCard titulo="Por formato" sub={nComNum+" publicações com número"+(anoMin?", de "+anoMin+" pra cá":"")}>
@@ -62930,6 +62937,82 @@ function SocVisaoGeral({diarioJanela,diarioTudo,postsTudo,dias,isMob,onVerPublic
       </SocAviso>
     </div>
   </>;
+}
+
+/* ─── BLOCOS NOVOS DA VISÃO GERAL (20/09, noite): views por origem, horário do público, stories ── */
+/* De onde vêm as views: a Meta quebra por tipo (post, reel, story, anúncio). É aqui que se vê
+   quanto do "views do conteúdo" é orgânico e quanto é anúncio pago passando pelo mesmo perfil. */
+const SOC_TIPO_VIEW={POST:"Publicações",REEL:"Reels",STORY:"Stories",AD:"Anúncios",CAROUSEL_CONTAINER:"Carrosséis"};
+function _socViewsPorTipo(diario){
+  const soma={}; let dias=0;
+  diario.forEach(function(r){ const o=r.views_por_tipo; if(!o||typeof o!=="object") return; dias++; Object.keys(o).forEach(function(k){ soma[k]=(soma[k]||0)+(Number(o[k])||0); }); });
+  const lista=Object.keys(soma).map(function(k){ return {k:k,rot:SOC_TIPO_VIEW[k]||k,v:soma[k]}; }).sort(function(a,b){ return b.v-a.v; });
+  const tot=lista.reduce(function(s,x){ return s+x.v; },0);
+  const ads=soma.AD||0;
+  return {lista:lista,tot:tot,dias:dias,ads:ads,organico:tot-ads};
+}
+function SocViewsOrigem({diario,isMob}){
+  const v=_socViewsPorTipo(diario);
+  if(!v.dias) return null;
+  const max=v.lista.length?v.lista[0].v:0;
+  return <SocCard titulo="De onde vêm as views" sub={v.dias+" dias com a quebra · a Meta separa por tipo de mídia"}>
+    {v.lista.map(function(x){ return <SocLinha key={x.k} isMob={isMob} rot={x.rot} pct={max?x.v/max*100:0} val={_socN(x.v)} det={v.tot?_socPct(x.v/v.tot*100):null} cor={x.k==="AD"?SOC_DESCE:SOC.roxo}/>; })}
+    {v.ads>0&&<SocRodape>{_socB(_socPct(v.ads/v.tot*100)+" das views vieram de anúncio")}, não de conteúdo orgânico. O orgânico sozinho ({_socN(v.organico)} views) é o que esse perfil consegue sem pagar. É esse número que se compara mês a mês.</SocRodape>}
+    {v.ads===0&&<SocRodape>Nenhuma view de anúncio no período — tudo aqui é orgânico.</SocRodape>}
+  </SocCard>;
+}
+/* Que horas o público está online: a Meta entrega um retrato por hora (em UTC). Convertido pra Chapecó. */
+function SocHorarioPublico({diario,isMob}){
+  const comHora=diario.filter(function(r){ return r.online_followers&&typeof r.online_followers==="object"; }).sort(function(a,b){ return String(b.data).localeCompare(String(a.data)); });
+  if(!comHora.length) return null;
+  const o=comHora[0].online_followers;
+  /* A Meta documenta as horas como UTC, mas o retrato real (pico 8h, 15h–16h, vale 23h–1h) só faz
+     sentido como hora local — em UTC o pico cairia às 5h da manhã. Enquanto não conferirmos no app
+     do Instagram ("horários mais ativos"), a tela mostra as horas COMO A META ENTREGA, sem deslocar. */
+  const horas=[]; for(let h=0;h<24;h++){ horas.push({h:h,v:Number(o[String(h)])||0}); }
+  const max=Math.max.apply(null,horas.map(function(x){ return x.v; }));
+  const pico=horas.reduce(function(a,b){ return b.v>a.v?b:a; });
+  const top3=horas.slice().sort(function(a,b){ return b.v-a.v; }).slice(0,3).map(function(x){ return x.h; }).sort(function(a,b){ return a-b; });
+  const serie=horas.map(function(x){ return {dia:String(x.h).padStart(2,"0")+"h",v:x.v}; });
+  return <SocCard titulo="Que horas o público está online" sub={"retrato de "+_socDiaLongo(comHora[0].data)+" · seguidores online por hora, na hora que a Meta entrega"}
+    direita={<SocPill cor={SOC.roxo} bg={SOC.roxoBg}>pico às {String(pico.h).padStart(2,"0")}h · {_socN(pico.v)}</SocPill>}>
+    <div style={{display:"flex",alignItems:"flex-end",gap:2,height:isMob?100:130,minWidth:0}}>
+      {horas.map(function(x){ const alt=max?Math.max(2,Math.round(x.v/max*(isMob?100:130))):0; const on=top3.indexOf(x.h)>=0;
+        return <div key={x.h} title={String(x.h).padStart(2,"0")+"h · "+_socN(x.v)+" online"} style={{flex:1,minWidth:0,display:"flex",alignItems:"flex-end",height:"100%"}}><div style={{width:"100%",height:alt,borderRadius:"3px 3px 0 0",background:on?SOC.roxo:SOC.roxo3}}/></div>; })}
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",marginTop:7,paddingTop:6,borderTop:"1px solid "+SOC.borda,fontSize:11,color:SOC.txt3,fontWeight:600}}><span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span></div>
+    <SocRodape>As três melhores horas pra publicar: {_socB(top3.map(function(h){ return String(h).padStart(2,"0")+"h"; }).join(", "))}. É quando mais gente que segue o perfil está com o Instagram aberto. {_socB("Confira uma vez no app do Instagram")} (Insights › Público › Horários mais ativos) se as horas batem — a Meta diz que entrega em UTC, mas o desenho parece hora local.</SocRodape>
+  </SocCard>;
+}
+/* Stories: o que foi guardado. Só existe o que estava no ar na hora da coleta. */
+function SocStoriesBloco({stories,isMob}){
+  if(!stories||!stories.length) return <SocCard titulo="Stories" sub="nenhum guardado ainda">
+    <div style={{fontSize:12.5,color:SOC.txt3,lineHeight:1.55}}>Story só existe enquanto está no ar (24h). A coleta das 03h20 guarda os que estiverem no ar naquela hora — cada dia que ela roda, o arquivo cresce.</div>
+  </SocCard>;
+  const s=function(k){ return stories.reduce(function(a,x){ return a+(Number(x[k])||0); },0); };
+  const tem=function(k){ return stories.some(function(x){ return _socTem(x[k]); }); };
+  const n=stories.length;
+  const reach=s("reach"), views=s("views"), fwd=s("taps_forward"), back=s("taps_back"), exits=s("exits"), rep=s("replies"), sh=s("shares"), fol=s("follows"), pv=s("profile_visits");
+  const nav=fwd+back+exits;
+  const ult=stories.slice().sort(function(a,b){ return String(b.publicado_em).localeCompare(String(a.publicado_em)); });
+  return <SocCard titulo="Stories" sub={n+(n===1?" story guardado":" stories guardados")+" · de "+_socDiaLongo(ult[ult.length-1].publicado_em)+" a "+_socDiaLongo(ult[0].publicado_em)}>
+    <SocNums isMob={isMob} itens={[
+      {k:"Alcance", v:tem("reach")?_socN(reach):"—", h:n>1?_socN(Math.round(reach/n))+" por story":"pessoas diferentes"},
+      {k:"Views", v:tem("views")?_socN(views):"—", h:reach?_socN1(views/reach)+" por pessoa":"quantas vezes foi visto"},
+      {k:"Avançaram", v:tem("taps_forward")?_socN(fwd):"—", h:nav?_socPct(fwd/nav*100)+" das ações":"pularam pro próximo"},
+      {k:"Voltaram", v:tem("taps_back")?_socN(back):"—", h:"quiseram rever"},
+      {k:"Saíram", v:tem("exits")?_socN(exits):"—", h:nav?_socPct(exits/nav*100)+" das ações":"fecharam o story"},
+    ]}/>
+    <div style={{height:14}}/>
+    <SocNums isMob={isMob} itens={[
+      {k:"Respostas", v:tem("replies")?_socN(rep):"—", h:"mandaram direct"},
+      {k:"Compartilhamentos", v:tem("shares")?_socN(sh):"—", h:"enviaram pra alguém"},
+      {k:"Visitas ao perfil", v:tem("profile_visits")?_socN(pv):"—", h:"vindas de story"},
+      {k:"Seguiram", v:tem("follows")?_socN(fol):"—", h:"por causa de um story"},
+      {k:"Retenção", v:(reach&&tem("exits"))?_socPct((1-exits/Math.max(1,reach))*100):"—", h:"não fecharam no meio"},
+    ]}/>
+    <SocRodape>Story não tem histórico na Meta. Cada dia que a coleta roda, guarda os que estavam no ar — {_socB("daqui a um mês teremos um mês de stories que nem o Instagram tem mais.")}</SocRodape>
+  </SocCard>;
 }
 
 /* ─── ABA: PÚBLICO (retrato de quem segue) ───────────── */
@@ -63012,23 +63095,161 @@ function SocPublico({demo,demoEm,seguidores,isMob}){
   </>;
 }
 
-/* ─── ABA: PUBLICAÇÕES ───────────────────────────────── */
+/* ─── MÍDIA DA PUBLICAÇÃO (foto, carrossel, vídeo) ───────── */
+/* O link que a Meta guarda no banco vence em ~2 dias. A capa e o vídeo vêm SEMPRE da função
+   social-midia, que pergunta pra Meta o link fresco na hora (cache de 12h). Igual ao ads-thumb
+   do Criativo. O link guardado é só rede de segurança se a função falhar. */
+const _socMidiaBase=function(){ return ((window._sb&&window._sb.supabaseUrl)||"https://jffvoojcskwumnphsedq.supabase.co")+"/functions/v1/social-midia"; };
+const _socMidia=function(mediaId,opt){
+  opt=opt||{};
+  let u=_socMidiaBase()+"?media="+encodeURIComponent(mediaId);
+  if(opt.child) u+="&child="+encodeURIComponent(opt.child);
+  if(opt.video) u+="&q=video";
+  if(opt.story) u+="&tipo=story";
+  return u;
+};
+const SOC_VAGA=4/5;   /* a vaga do card é sempre 4:5 (o feed do Instagram) — reels 9:16 e quadrados 1:1 entram inteiros dentro dela */
+const _socEhVideo=function(p){ const t=String((p&&p.media_type)||"").toUpperCase(); return t==="REELS"||t==="VIDEO"; };
+const _socEhCarrossel=function(p){ return String((p&&p.media_type)||"").toUpperCase()==="CAROUSEL_ALBUM"; };
+const _socFilhos=function(p){ return (p&&Array.isArray(p.children))?p.children.filter(function(c){ return c&&c.id; }):[]; };
+
+/* Capa: a vaga tem proporção fixa; a arte entra inteira dentro dela, na proporção original, e o que
+   sobra fica branco — assim a grade nunca desalinha. Tenta a função; se falhar, o link guardado. */
+function SocCapa({post,razao,radius,children,onClick,story,child}){
+  const guardado=child?(child.thumbnail_url||child.media_url||null):(_socEhVideo(post)?(post.thumbnail_url||null):(post.media_url||null));
+  const cadeia=[post&&post.media_id?_socMidia(post.media_id,{child:child&&child.id,story:story}):null,guardado].filter(Boolean);
+  const chave=cadeia.join("|");
+  const [i,setI]=useState(0); const [ar,setAr]=useState(null);
+  useEffect(function(){ setI(0); setAr(null); },[chave]);
+  const src=cadeia[i]||null;
+  const video=child?String(child.media_type||"").toUpperCase()==="VIDEO":_socEhVideo(post);
+  const filhos=_socFilhos(post);
+  const rz=razao||SOC_VAGA;
+  const arte=ar?{position:"relative",aspectRatio:String(ar),width:(ar>=rz)?"100%":"auto",height:(ar>=rz)?"auto":"100%",overflow:"hidden",background:"#1b1530"}:{position:"absolute",inset:0,overflow:"hidden"};
+  return <div onClick={onClick} style={{position:"relative",borderRadius:radius===undefined?0:radius,overflow:"hidden",background:"#fff",aspectRatio:String(rz),cursor:onClick?"pointer":"default",display:"grid",placeItems:"center",minWidth:0}}>
+    {!src&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",fontSize:11,color:SOC.txt3,background:"linear-gradient(160deg,#f3f1f8,#e7e3f0)"}}>sem prévia</div>}
+    <div style={arte}>
+      {src&&<img src={src} alt="" referrerPolicy="no-referrer" loading="lazy" onError={function(){ setI(function(v){ return v+1; }); }}
+        onLoad={function(e){ const w=e.currentTarget.naturalWidth,h=e.currentTarget.naturalHeight; if(w>1&&h>1) setAr(w/h); }}
+        style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>}
+      {src&&ar&&<div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0) 50%,rgba(0,0,0,.62) 100%)"}}/>}
+      {video&&<div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:46,height:46,borderRadius:"50%",background:"rgba(255,255,255,.92)",boxShadow:"0 8px 24px rgba(0,0,0,.35)",display:"grid",placeItems:"center"}}><span style={{borderLeft:"15px solid #1b1530",borderTop:"9px solid transparent",borderBottom:"9px solid transparent",marginLeft:4}}/></div>}
+      {!child&&filhos.length>1&&<span title={filhos.length+" cartões"} style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 8px"}}>⧉ {filhos.length}</span>}
+      {children}
+    </div>
+  </div>;
+}
+
+/* Comentários de UMA publicação — só quando ela abre. */
+function useSocComentarios(mediaId){
+  const [st,setSt]=useState({loading:!!mediaId,lista:[]});
+  useEffect(function(){
+    if(!mediaId||!window._sb){ setSt({loading:false,lista:[]}); return; }
+    let vivo=true; setSt({loading:true,lista:[]});
+    window._sb.from("social_comentarios").select("comment_id,texto,autor,publicado_em,likes").eq("media_id",mediaId).order("publicado_em",{ascending:false}).limit(200)
+      .then(function(r){ if(vivo) setSt({loading:false,lista:r.data||[]}); });
+    return function(){ vivo=false; };
+  },[mediaId]);
+  return st;
+}
+
+/* Lightbox: a mídia em tamanho real (vídeo TOCA, carrossel PASSA) + todos os números + legenda + comentários. */
+function SocLightbox({post,onClose,isMob}){
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
+  const filhos=_socFilhos(post);
+  const [idx,setIdx]=useState(0);
+  useEffect(function(){ setIdx(0); },[post&&post.media_id]);
+  const C=useSocComentarios(post&&post.media_id);
+  const atual=filhos.length?filhos[Math.min(idx,filhos.length-1)]:null;
+  const ehVideo=atual?String(atual.media_type||"").toUpperCase()==="VIDEO":_socEhVideo(post);
+  const srcVideo=atual?_socMidia(post.media_id,{child:atual.id,video:true}):_socMidia(post.media_id,{video:true});
+  const posterVideo=atual?(atual.thumbnail_url||null):(post.thumbnail_url||null);
+  const eng=_socEngaj(post);
+  const legenda=String(post.caption||"").trim();
+  const Num=function(k,v,h){ return <div style={{minWidth:0}}><div style={{fontSize:10,fontWeight:800,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k}</div><div style={{fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:3,color:v==="—"?SOC.borda2:SOC.txt,whiteSpace:"nowrap"}}>{v}</div>{h&&<div style={{fontSize:11,color:SOC.txt3,marginTop:2,lineHeight:1.35}}>{h}</div>}</div>; };
+  const v=function(x){ return _socTem(x)?_socN(x):"—"; };
+  const awt=_socTem(post.avg_watch_time)&&Number(post.avg_watch_time)>0?Number(post.avg_watch_time)/1000:null;
+  const tot=_socTem(post.video_view_total_time)&&Number(post.video_view_total_time)>0?Number(post.video_view_total_time)/1000:null;
+  const hashtags=(legenda.match(/#[\p{L}\p{N}_]+/gu)||[]);
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,13,26,.72)",zIndex:9999,display:"grid",placeItems:"center",padding:isMob?8:24,fontFamily:SOC_FONT}}>
+    <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:20,width:"min(1120px,100%)",maxHeight:"94vh",overflow:"auto",display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,440px) minmax(0,1fr)",boxShadow:"0 30px 80px rgba(0,0,0,.4)",minWidth:0}}>
+      {/* ── mídia ── */}
+      <div style={{background:"#0f0d1a",position:"relative",display:"grid",placeItems:"center",minHeight:isMob?260:420,minWidth:0}}>
+        {ehVideo
+          ? <video key={srcVideo} src={srcVideo} poster={posterVideo||undefined} controls autoPlay playsInline preload="metadata" style={{width:"100%",maxHeight:"94vh",display:"block",background:"#000"}}/>
+          : <img key={atual?atual.id:post.media_id} src={atual?_socMidia(post.media_id,{child:atual.id}):_socMidia(post.media_id)} alt="" referrerPolicy="no-referrer" style={{width:"100%",maxHeight:"94vh",objectFit:"contain",display:"block"}}/>}
+        {filhos.length>1&&<>
+          <button onClick={function(){ setIdx((idx-1+filhos.length)%filhos.length); }} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.9)",fontSize:18,fontWeight:900,cursor:"pointer",color:SOC.txt}}>‹</button>
+          <button onClick={function(){ setIdx((idx+1)%filhos.length); }} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",width:38,height:38,borderRadius:"50%",border:"none",background:"rgba(255,255,255,.9)",fontSize:18,fontWeight:900,cursor:"pointer",color:SOC.txt}}>›</button>
+          <div style={{position:"absolute",bottom:12,left:0,right:0,display:"flex",justifyContent:"center",gap:6}}>{filhos.map(function(f,i){ return <span key={f.id} onClick={function(){ setIdx(i); }} style={{width:i===idx?18:7,height:7,borderRadius:99,background:i===idx?"#fff":"rgba(255,255,255,.5)",cursor:"pointer",transition:"width .15s"}}/>; })}</div>
+          <span style={{position:"absolute",top:10,right:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 8px"}}>{idx+1} / {filhos.length}</span>
+        </>}
+      </div>
+      {/* ── números ── */}
+      <div style={{padding:isMob?"14px 14px 18px":"18px 22px 22px",minWidth:0,display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <SocPill cor={SOC.roxo} bg={SOC.roxoBg}>{_socTipo(post.media_type)}</SocPill>
+          <span style={{fontSize:12,color:SOC.txt3,fontWeight:700}}>{_socDiaLongo(post.publicado_em)}</span>
+          {filhos.length>1&&<SocPill>{filhos.length} cartões</SocPill>}
+          {post.permalink&&<a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none",marginLeft:"auto"})}>Abrir no Instagram →</a>}
+          <button onClick={onClose} style={Object.assign(SOC_BTN("sm"),{marginLeft:post.permalink?0:"auto"})}>✕</button>
+        </div>
+        {!_socTem(post.reach)&&<SocAviso>O coletor ainda não completou os números desta publicação. Eles entram na próxima madrugada.</SocAviso>}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,minmax(0,1fr))":"repeat(4,minmax(0,1fr))",gap:"12px 14px"}}>
+          {Num("Alcance",v(post.reach),"pessoas diferentes")}
+          {Num("Views",v(post.video_views),_socTem(post.video_views)&&_socTem(post.reach)&&post.reach>0?_socN1(post.video_views/post.reach)+" por pessoa":null)}
+          {Num("Interações",v(post.total_interactions),eng!==null?_socPct(eng,1)+" de engajamento":null)}
+          {Num("Curtidas",v(post.likes))}
+          {Num("Comentários",v(post.comments))}
+          {Num("Salvos",v(post.saved))}
+          {Num("Compartilhamentos",v(post.shares))}
+          {Num("Visitas ao perfil",v(post.profile_visits),"vindas desta publicação")}
+          {Num("Seguiram",v(post.follows),"por causa dela")}
+          {_socEhVideo(post)&&Num("Tempo assistido",awt!==null?_socN1(awt)+"s":"—","média por pessoa")}
+          {post.profile_activity&&typeof post.profile_activity==="object"&&Object.keys(post.profile_activity).length>0&&Num("Ações no perfil",_socN(Object.keys(post.profile_activity).reduce(function(s,k){ return s+(Number(post.profile_activity[k])||0); },0)),Object.keys(post.profile_activity).map(function(k){ return ({bio_link_clicked:"link da bio",call:"ligar",direction:"rota",email:"e-mail",text:"mensagem"})[k]||k; }).join(", "))}
+          {_socEhVideo(post)&&Num("Tempo total",tot!==null?(tot>=3600?_socN1(tot/3600)+"h":tot>=60?_socN(Math.round(tot/60))+"min":_socN(Math.round(tot))+"s"):"—","somando todo mundo")}
+        </div>
+        <div>
+          <SocEyebrow style={{marginBottom:6}}>Legenda</SocEyebrow>
+          <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:220,overflow:"auto"}}>{legenda||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
+          {hashtags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>{hashtags.slice(0,12).map(function(h,i){ return <SocPill key={i}>{h}</SocPill>; })}</div>}
+        </div>
+        <div>
+          <SocEyebrow style={{marginBottom:6}}>Comentários {C.loading?"":"· "+C.lista.length}</SocEyebrow>
+          {C.loading&&<div style={{fontSize:12,color:SOC.txt3}}>Lendo…</div>}
+          {!C.loading&&!C.lista.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>{_socTem(post.comments)&&post.comments>0?"A Meta contou "+post.comments+", mas o coletor de comentários ainda não passou por aqui.":"Nenhum comentário guardado."}</div>}
+          {!C.loading&&C.lista.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:260,overflow:"auto"}}>
+            {C.lista.map(function(c){ return <div key={c.comment_id} style={{background:SOC.chao,border:"1px solid "+SOC.borda,borderRadius:12,padding:"9px 12px",minWidth:0}}>
+              <div style={{fontSize:13,color:SOC.txt,lineHeight:1.5,wordBreak:"break-word"}}>{c.texto}</div>
+              <div style={{fontSize:11,color:SOC.txt3,marginTop:4,fontWeight:600}}>@{c.autor} · {_socDiaLongo(c.publicado_em)}{c.likes?" · "+c.likes+(c.likes===1?" curtida":" curtidas"):""}</div>
+            </div>; })}
+          </div>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── ABA: PUBLICAÇÕES — o "Criativo" do orgânico ─────────── */
 const SOC_ORDENS=[
   ["alcance","Alcance",function(p){ return Number(p.reach)||0; }],
   ["recente","Mais recente",function(p){ return new Date(p.publicado_em||0).getTime()||0; }],
+  ["views","Views",function(p){ return Number(p.video_views)||0; }],
   ["curtidas","Curtidas",function(p){ return Number(p.likes)||0; }],
+  ["comentarios","Comentários",function(p){ return Number(p.comments)||0; }],
   ["salvos","Salvamentos",function(p){ return Number(p.saved)||0; }],
   ["compart","Compartilhamentos",function(p){ return Number(p.shares)||0; }],
-  ["views","Views",function(p){ return Number(p.video_views)||0; }],
+  ["seguiram","Seguidores ganhos",function(p){ return Number(p.follows)||0; }],
   ["engaj","Engajamento",function(p){ const e=_socEngaj(p); return e===null?-1:e; }],
 ];
+const SOC_ORDEM_ROT={alcance:"alcance",recente:"",views:"views",curtidas:"curtidas",comentarios:"comentários",salvos:"salvos",compart:"compart.",seguiram:"seguiram",engaj:"engajamento"};
 function SocPublicacoes({posts,dias,isMob}){
   const [ordem,setOrdem]=useState("alcance");
   const [tipo,setTipo]=useState("todos");
   const [janela,setJanela]=useState("tudo");
   const [soNum,setSoNum]=useState(true);
   const [aberto,setAberto]=useState(null);
-  const [limite,setLimite]=useState(30);
+  const [limite,setLimite]=useState(24);
   if(!posts.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
 
   const corte=(function(){ const d=new Date(); d.setDate(d.getDate()-(Number(dias)||30)); return _socISO(d); })();
@@ -63041,81 +63262,79 @@ function SocPublicacoes({posts,dias,isMob}){
   });
   const cmp=(SOC_ORDENS.find(function(o){ return o[0]===ordem; })||SOC_ORDENS[0])[2];
   const lista=filtrados.slice().sort(function(a,b){ return cmp(b)-cmp(a); });
-  const alcances=lista.map(function(p){ return Number(p.reach)||0; });
-  const maxAlc=alcances.length?Math.max.apply(null,alcances):0;
   const semNum=posts.filter(function(p){ return !_socTem(p.reach); }).length;
+  const comNum=lista.filter(function(p){ return _socTem(p.reach); });
+  const medias={reach:null,likes:null,saved:null,shares:null};
+  if(comNum.length){ Object.keys(medias).forEach(function(k){ medias[k]=comNum.reduce(function(s,p){ return s+(Number(p[k])||0); },0)/comNum.length; }); }
   const sel={border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:170};
-
-  const Cel=function(rot,val){
-    return <div style={{minWidth:0}}>
-      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap"}}>{rot}</div>
-      <div style={{fontSize:13.5,fontWeight:800,color:SOC.txt,marginTop:2,whiteSpace:"nowrap"}}>{val}</div>
-    </div>;
+  const chip=function(on,txt,onClick){ return <button onClick={onClick} style={{border:"1px solid "+(on?SOC.roxo:SOC.borda),background:on?SOC.roxo:"#fff",color:on?"#fff":SOC.txt2,borderRadius:99,padding:"5px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0}}>{txt}</button>; };
+  const cols=isMob?2:4;
+  const abertoItem=aberto?lista.find(function(p){ return p.media_id===aberto; })||posts.find(function(p){ return p.media_id===aberto; }):null;
+  const valorGrande=function(p){
+    if(ordem==="engaj"){ const e=_socEngaj(p); return e===null?"—":_socPct(e,1); }
+    const o=SOC_ORDENS.find(function(x){ return x[0]===ordem; }); if(!o||ordem==="recente") return _socTem(p.reach)?_socN(p.reach):"—";
+    const v=o[2](p); return v>0||_socTem(p[ordem==="alcance"?"reach":ordem==="views"?"video_views":ordem==="curtidas"?"likes":ordem==="comentarios"?"comments":ordem==="salvos"?"saved":ordem==="compart"?"shares":"follows"])?_socN(v):"—";
   };
+  const rotuloGrande=ordem==="recente"?"alcance":SOC_ORDEM_ROT[ordem];
 
-  return <SocCard titulo="Publicações" sub={_socN(lista.length)+(lista.length===1?" publicação":" publicações")+(janela==="periodo"?" no período":" no total")+(soNum&&semNum?" · "+semNum+" sem número ainda, escondidas":"")}
-    direita={<>
-      <select value={janela} onChange={function(e){ setJanela(e.target.value); setLimite(30); }} style={sel}>
-        <option value="periodo">Só do período</option><option value="tudo">Todas</option>
-      </select>
-      <select value={tipo} onChange={function(e){ setTipo(e.target.value); setLimite(30); }} style={sel}>
-        {tipos.map(function(t){ return <option key={t} value={t}>{t==="todos"?"Todos os tipos":_socTipo(t)}</option>; })}
-      </select>
-      <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={sel}>
-        {SOC_ORDENS.map(function(o){ return <option key={o[0]} value={o[0]}>{"Ordenar por "+o[1].toLowerCase()}</option>; })}
-      </select>
-      <label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
-        <input type="checkbox" checked={soNum} onChange={function(e){ setSoNum(e.target.checked); }}/> só com número
-      </label>
-    </>}>
-    {!lista.length&&<div style={{fontSize:12.5,color:SOC.txt3,padding:"8px 0"}}>Nada com esses filtros.</div>}
-    <div style={{display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
-      {lista.slice(0,limite).map(function(p){
+  return <>
+    {abertoItem&&<SocLightbox post={abertoItem} isMob={isMob} onClose={function(){ setAberto(null); }}/>}
+    <SocCard pad="12px 20px 14px">
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
+        {chip(janela==="tudo","Todas · "+posts.length,function(){ setJanela("tudo"); setLimite(24); })}
+        {chip(janela==="periodo","Últimos "+dias+" dias",function(){ setJanela("periodo"); setLimite(24); })}
+        <span style={{width:1,height:22,background:SOC.borda,margin:"0 4px"}}/>
+        {tipos.map(function(t){ const n=posts.filter(function(p){ return t==="todos"||String(p.media_type||"").toUpperCase()===t; }).length; return <span key={t}>{chip(tipo===t,(t==="todos"?"Todos os tipos":_socTipo(t))+" · "+n,function(){ setTipo(t); setLimite(24); })}</span>; })}
+        <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={Object.assign({},sel,{marginLeft:isMob?0:"auto"})}>
+          {SOC_ORDENS.map(function(o){ return <option key={o[0]} value={o[0]}>{"Ordenar por "+o[1].toLowerCase()}</option>; })}
+        </select>
+        <label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
+          <input type="checkbox" checked={soNum} onChange={function(e){ setSoNum(e.target.checked); }}/> só com número{semNum?" ("+semNum+" sem)":""}
+        </label>
+      </div>
+      <div style={{fontSize:12,color:SOC.txt3,marginTop:10}}>
+        {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{comNum.length&&medias.reach!==null?" · alcance médio "+_socN(Math.round(medias.reach))+" · "+_socN1(medias.likes)+" curtidas, "+_socN1(medias.saved)+" salvos e "+_socN1(medias.shares)+" compartilhamentos por publicação":""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
+      </div>
+    </SocCard>
+
+    {!lista.length&&<SocCard><div style={{fontSize:12.5,color:SOC.txt3}}>Nada com esses filtros.</div></SocCard>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",gap:14,minWidth:0}}>
+      {lista.slice(0,limite).map(function(p,i){
         const eng=_socEngaj(p);
-        const pct=maxAlc>0?Math.round((Number(p.reach)||0)/maxAlc*100):0;
-        const legenda=String(p.caption||"").replace(/\s+/g," ").trim();
-        const ehAberto=aberto===p.media_id;
-        const mt=String(p.media_type||"").toUpperCase();
-        const capa=p.thumbnail_url||((mt==="IMAGE"||mt==="CAROUSEL_ALBUM")?p.media_url:null);
-        return <div key={p.media_id} style={{border:"1px solid "+SOC.borda,borderRadius:14,overflow:"hidden",minWidth:0,background:"#fff"}}>
-          <div onClick={function(){ setAberto(ehAberto?null:p.media_id); }} style={{padding:isMob?"12px 13px":"13px 16px",cursor:"pointer",minWidth:0,display:"grid",gridTemplateColumns:capa&&!isMob?"72px minmax(0,1fr)":"minmax(0,1fr)",gap:14}}>
-            {capa&&!isMob&&<div style={{width:72,height:72,borderRadius:10,background:SOC.cinzaBg,overflow:"hidden",flexShrink:0}}>
-              <img src={capa} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={function(e){ e.currentTarget.style.display="none"; }}/>
-            </div>}
-            <div style={{minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
-                <SocPill cor={SOC.roxo} bg={SOC.roxoBg}>{_socTipo(p.media_type)}</SocPill>
-                <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:700,whiteSpace:"nowrap"}}>{_socDiaLongo(p.publicado_em)}</span>
-                {!_socTem(p.reach)&&<SocPill cor={SOC.amar} bg={SOC.amarBg} titulo="O coletor ainda não completou os números desta publicação">sem número ainda</SocPill>}
-                <span style={{marginLeft:"auto",fontSize:11.5,color:SOC.txt3,fontWeight:700}}>{ehAberto?"fechar":"ver legenda"}</span>
-              </div>
-              <div style={{fontSize:13,color:SOC.txt2,marginTop:7,lineHeight:1.5,wordBreak:"break-word",display:"-webkit-box",WebkitLineClamp:ehAberto?99:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-                {legenda||<span style={{color:SOC.txt3,fontStyle:"italic"}}>sem legenda</span>}
-              </div>
-              <div style={{height:5,borderRadius:99,background:SOC.cinzaBg,marginTop:11,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",borderRadius:99,background:SOC.roxo}}/></div>
-              <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,minmax(0,1fr))":"repeat(7,minmax(0,1fr))",gap:10,marginTop:11,minWidth:0}}>
-                {Cel("Alcance",_socTem(p.reach)?_socN(p.reach):"—")}
-                {Cel("Views",_socTem(p.video_views)?_socN(p.video_views):"—")}
-                {Cel("Curtidas",_socTem(p.likes)?_socN(p.likes):"—")}
-                {Cel("Comentários",_socTem(p.comments)?_socN(p.comments):"—")}
-                {Cel("Salvos",_socTem(p.saved)?_socN(p.saved):"—")}
-                {Cel("Compart.",_socTem(p.shares)?_socN(p.shares):"—")}
-                {Cel("Engajamento",eng===null?"—":_socPct(eng,1))}
-              </div>
+        const acima=medias.reach&&_socTem(p.reach)&&Number(p.reach)>=medias.reach*2;
+        const abaixo=medias.reach&&_socTem(p.reach)&&Number(p.reach)<=medias.reach*0.4;
+        return <div key={p.media_id} onClick={function(){ setAberto(p.media_id); }} style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s",minWidth:0}}
+          onMouseEnter={function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)"; }} onMouseLeave={function(e){ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)"; }}>
+          <SocCapa post={p}>
+            {ordem!=="recente"&&<span style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 7px"}}>#{i+1}</span>}
+            {(acima||abaixo)&&<span style={{position:"absolute",top:10,left:ordem!=="recente"?46:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:acima?"#ffe8a3":"#fecaca",color:acima?"#6b4d00":"#7f1d1d"}}>{acima?"2× a média":"Abaixo da média"}</span>}
+            <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>
+              <b style={{fontSize:22,fontWeight:900,letterSpacing:-.6}}>{valorGrande(p)}</b><br/>
+              <small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>{rotuloGrande}</small>
+            </div>
+          </SocCapa>
+          <div style={{padding:"11px 13px 13px",minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+              <span style={{fontSize:10.5,color:SOC.roxo,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap"}}>{_socTipo(p.media_type)}</span>
+              <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600,whiteSpace:"nowrap"}}>· {_socDiaLongo(p.publicado_em)}</span>
+              {!_socTem(p.reach)&&<span style={{marginLeft:"auto",fontSize:10,color:SOC.amar,fontWeight:800,whiteSpace:"nowrap"}}>sem número</span>}
+            </div>
+            <div style={{fontSize:12,color:SOC.txt2,marginTop:5,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(p.caption||"").replace(/\s+/g," ").trim()||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
+            <div style={{display:"flex",flexWrap:"wrap",columnGap:9,rowGap:2,marginTop:7,fontSize:11.5,color:SOC.txt3}}>
+              {ordem!=="alcance"&&ordem!=="recente"&&<span><b style={{color:SOC.txt2}}>{_socTem(p.reach)?_socN(p.reach):"—"}</b> alc.</span>}
+              {_socTem(p.video_views)&&ordem!=="views"&&<span><b style={{color:SOC.txt2}}>{_socN(p.video_views)}</b> views</span>}
+              <span><b style={{color:SOC.txt2}}>{_socTem(p.likes)?_socN(p.likes):"—"}</b> ♥</span>
+              <span><b style={{color:SOC.txt2}}>{_socTem(p.comments)?_socN(p.comments):"—"}</b> com.</span>
+              <span><b style={{color:SOC.txt2}}>{_socTem(p.saved)?_socN(p.saved):"—"}</b> salvos</span>
+              <span><b style={{color:SOC.txt2}}>{_socTem(p.shares)?_socN(p.shares):"—"}</b> compart.</span>
+              {eng!==null&&<span><b style={{color:SOC.txt2}}>{_socPct(eng,1)}</b> eng.</span>}
             </div>
           </div>
-          {ehAberto&&<div style={{borderTop:"1px solid "+SOC.borda,padding:"11px 16px",background:SOC.chao,display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",minWidth:0}}>
-            {p.permalink?<a href={p.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN("sm"),{textDecoration:"none"})}>Abrir no Instagram →</a>:<span style={{fontSize:11.5,color:SOC.txt3}}>sem link guardado</span>}
-            {_socTem(p.profile_visits)&&<SocPill>{_socN(p.profile_visits)} visitas ao perfil</SocPill>}
-            {_socTem(p.follows)&&<SocPill>{_socN(p.follows)} seguiram por ela</SocPill>}
-            {_socTem(p.avg_watch_time)&&Number(p.avg_watch_time)>0&&<SocPill>{_socN1(Number(p.avg_watch_time)/1000)}s assistidos em média</SocPill>}
-            <span style={{fontSize:11,color:SOC.txt3,wordBreak:"break-all",minWidth:0}}>id {p.media_id}</span>
-          </div>}
         </div>;
       })}
     </div>
-    {lista.length>limite&&<div style={{marginTop:12}}><button onClick={function(){ setLimite(limite+30); }} style={SOC_BTN()}>mostrar mais {Math.min(30,lista.length-limite)} de {lista.length-limite}</button></div>}
-  </SocCard>;
+    {lista.length>limite&&<div><button onClick={function(){ setLimite(limite+24); }} style={SOC_BTN()}>mostrar mais {Math.min(24,lista.length-limite)} de {lista.length-limite}</button></div>}
+  </>;
 }
 
 /* ─── ABA: HISTÓRICO (tudo que está guardado) ────────── */
@@ -63343,7 +63562,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
     {!semAba&&!C.loading&&!C.erro&&(vazio&&abaAtiva!=="contas"
       ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
       : <>
-        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
+        {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
         {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} dias={dias} isMob={isMob}/>}
         {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
         {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
@@ -63352,39 +63571,115 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
   </SocWrap>;
 }
 
-/* ─── CARD DO CLIENTE NA LISTA ───────────────────────── */
-function SocCardCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onAbrir}){
+/* ─── INVENTÁRIO DA AGÊNCIA — o que existe no banco, por perfil ── */
+/* Só ids e contagens (colunas leves), pra montar a tabela da entrada sem puxar legenda nem número. */
+function useSocInventario(){
+  const [st,setSt]=useState({loading:true,posts:{},comNum:{},coment:{},fb:{},demo:{},stories:{},log:null});
+  useEffect(function(){
+    if(!window._sb){ setSt(function(p){ return Object.assign({},p,{loading:false}); }); return; }
+    let vivo=true;
+    const chave=function(r){ return r.client_id+"|"+(r.unidade||""); };
+    const conta=function(rows,filtro){ const o={}; (rows||[]).forEach(function(r){ if(filtro&&!filtro(r)) return; const k=chave(r); o[k]=(o[k]||0)+1; }); return o; };
+    (async function(){
+      try{
+        const rp=await window._sb.from("social_posts").select("client_id,unidade,reach").limit(20000);
+        const rc=await window._sb.from("social_comentarios").select("client_id,unidade").limit(20000);
+        const rf=await window._sb.from("social_fb_posts").select("client_id,unidade").limit(20000);
+        const rd=await window._sb.from("social_demografia").select("client_id,unidade,coletado_em").limit(20000);
+        const rs=await window._sb.from("social_stories").select("client_id,unidade").limit(5000);
+        const rl=await window._sb.from("social_coleta_log").select("rodou_em,ok").order("rodou_em",{ascending:false}).limit(1);
+        /* demografia: só o retrato mais recente de cada perfil */
+        const ultDemo={}; (rd.data||[]).forEach(function(r){ const k=chave(r); if(!ultDemo[k]||String(r.coletado_em)>ultDemo[k]) ultDemo[k]=String(r.coletado_em); });
+        if(vivo) setSt({loading:false,
+          posts:conta(rp.data), comNum:conta(rp.data,function(r){ return _socTem(r.reach); }),
+          coment:conta(rc.data), fb:conta(rf.data),
+          demo:conta(rd.data,function(r){ return String(r.coletado_em)===ultDemo[chave(r)]; }),
+          stories:conta(rs.data), log:(rl.data&&rl.data[0])||null});
+      }catch(_){ if(vivo) setSt(function(p){ return Object.assign({},p,{loading:false}); }); }
+    })();
+    return function(){ vivo=false; };
+  },[]);
+  return st;
+}
+
+/* ─── PAINEL DE ENTRADA — a agência inteira ───────────── */
+function SocPainelAgencia({contas,diario,posts,ultimaColeta,inv,dias,isMob,busca,onAbrir}){
   const ig=contas.filter(function(a){ return a.network==="instagram"; });
-  const jan=_socJanelas(diario.filter(function(r){ return r.client_id===clientId; }),dias);
-  const r=_socResumo(jan.atual,posts.filter(function(p){ return p.client_id===clientId; }));
-  const r0=_socResumo(jan.anterior,[]);
-  const varAlc=(r.alcanceMedio!==null&&r0.alcanceMedio)?(r.alcanceMedio-r0.alcanceMedio)/r0.alcanceMedio*100:null;
-  const ult=(function(){ let u=null; ig.forEach(function(a){ const x=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null; if(x&&(!u||String(x)>String(u))) u=x; }); return u; })();
-  const semId=ig.filter(function(a){ return !a.ig_user_id; }).length;
-  const nunca=!ult;
-  const M=function(rot,val,cor,h){
-    return <div style={{minWidth:0}}>
-      <div style={{fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",color:SOC.txt3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{rot}</div>
-      <div style={{fontSize:16,fontWeight:900,color:cor||SOC.txt,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{val}</div>
-      {h&&<div style={{fontSize:10.5,color:SOC.txt3,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</div>}
-    </div>;
-  };
-  return <div onClick={onAbrir} style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:16,padding:isMob?"14px 15px":"16px 18px",cursor:"pointer",minWidth:0,display:"flex",flexDirection:"column",gap:12,boxShadow:"0 1px 2px rgba(15,13,26,.04)"}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
-      <div style={{fontSize:15,fontWeight:900,letterSpacing:-.3,color:SOC.txt,minWidth:0,wordBreak:"break-word"}}>{_socNomeCliente(clientId)}</div>
-      <SocPill>{ig.length===1?"1 perfil":ig.length+" perfis"}</SocPill>
-      {nunca?<SocPill cor={SOC.amar} bg={SOC.amarBg}>nunca coletado</SocPill>:<SocPill cor={SOC.txt2}>{_socRel(ult)}</SocPill>}
-      {semId>0&&<SocPill cor={SOC.amar} bg={SOC.amarBg} titulo="Perfis sem o identificador do Instagram não são coletados">{semId===1?"1 sem identificador":semId+" sem identificador"}</SocPill>}
+  const chave=function(a){ return a.client_id+"|"+(a.unidade||""); };
+  const termo=String(busca||"").trim().toLowerCase();
+  const linhas=ig.map(function(a){
+    const meu=diario.filter(function(r){ return r.client_id===a.client_id&&(r.ig_user_id===a.ig_user_id||(!a.ig_user_id&&(r.unidade||"")===(a.unidade||""))); });
+    const jan=_socJanelas(meu,dias);
+    const r=_socResumo(jan.atual,[]); const r0=_socResumo(jan.anterior,[]);
+    const rTudo=_socResumo(meu,[]);
+    const varAlc=(r.alcanceMedio!==null&&r0.alcanceMedio)?(r.alcanceMedio-r0.alcanceMedio)/r0.alcanceMedio*100:null;
+    const k=chave(a);
+    const ult=(ultimaColeta&&a.ig_user_id)?ultimaColeta[a.ig_user_id]:null;
+    const nP=inv.posts[k]||0, nN=inv.comNum[k]||0;
+    let estado=["","—"];
+    if(!a.ig_user_id) estado=["wr","sem identificador"];
+    else if(!ult) estado=["wr","nunca coletado"];
+    else if(!nP) estado=["wr","publicações faltando"];
+    else if(nN<nP*0.3) estado=["","completando números"];
+    else estado=["ok","completo"];
+    return {a:a,k:k,nome:_socNomeCliente(a.client_id),un:_socNomeUnidade(a.unidade),seg:rTudo.seguidores,r30:r.alcance,varAlc:varAlc,dias:rTudo.dias.length,nP:nP,nN:nN,demo:inv.demo[k]||0,coment:inv.coment[k]||0,fb:inv.fb[k]||0,st:inv.stories[k]||0,ult:ult,estado:estado,ehNossa:a.client_id==="pixels"};
+  }).filter(function(l){ return !termo||l.nome.toLowerCase().indexOf(termo)>=0||String(l.a.handle||"").toLowerCase().indexOf(termo)>=0||l.un.toLowerCase().indexOf(termo)>=0; })
+    .sort(function(x,y){ return (y.seg||0)-(x.seg||0); });
+  const deCliente=linhas.filter(function(l){ return !l.ehNossa; });
+  const totSeg=deCliente.reduce(function(s,l){ return s+(l.seg||0); },0);
+  const totR=deCliente.reduce(function(s,l){ return s+(l.r30||0); },0);
+  const nClientes=Object.keys(deCliente.reduce(function(o,l){ o[l.a.client_id]=1; return o; },{})).length;
+  const totLinhas=Object.keys(inv.posts).reduce(function(s,k){ return s+inv.posts[k]; },0)+Object.keys(inv.coment).reduce(function(s,k){ return s+inv.coment[k]; },0)+Object.keys(inv.fb).reduce(function(s,k){ return s+inv.fb[k]; },0)+Object.keys(inv.demo).reduce(function(s,k){ return s+inv.demo[k]; },0)+Object.keys(inv.stories).reduce(function(s,k){ return s+inv.stories[k]; },0);
+  const rank=deCliente.filter(function(l){ return l.r30; }).slice().sort(function(x,y){ return y.r30-x.r30; });
+  const maxR=rank.length?rank[0].r30:0;
+  const melhorX=rank.filter(function(l){ return l.seg; }).slice().sort(function(x,y){ return (y.r30/y.seg)-(x.r30/x.seg); })[0];
+  const piorX=rank.filter(function(l){ return l.seg; }).slice().sort(function(x,y){ return (x.r30/x.seg)-(y.r30/y.seg); })[0];
+  const faltando=linhas.filter(function(l){ return l.estado[0]==="wr"; });
+  const th={fontSize:10.5,letterSpacing:".06em",textTransform:"uppercase",color:SOC.txt3,fontWeight:800,textAlign:"right",padding:"0 10px 9px",borderBottom:"1px solid "+SOC.borda,whiteSpace:"nowrap"};
+  const td={padding:"9px 10px",borderBottom:"1px solid #f2f0f7",textAlign:"right",whiteSpace:"nowrap",fontWeight:700,fontSize:12.5,color:SOC.txt};
+  const z=<span style={{color:SOC.borda2,fontWeight:600}}>—</span>;
+  const un=function(t){ return <span style={{fontWeight:600,color:SOC.txt3,fontSize:11.5}}>{t}</span>; };
+  const g2={display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:14,alignItems:"start",minWidth:0};
+  return <>
+    <SocSolidos isMob={isMob} itens={[
+      {eye:"Seguidores somados", big:_socN(totSeg), s:deCliente.length+" perfis de "+nClientes+" clientes · fora a conta da própria Pixels"},
+      {eye:"Alcance somado · "+dias+" dias", big:_socN(totR), s:"soma dos dias de todos os perfis — serve pra comparar, não é “pessoas”"},
+      {eye:"Guardado no banco", big:inv.loading?"…":_socN(totLinhas+diario.length), s:inv.loading?"contando…":(_socN(diario.length)+" dias + "+_socN(Object.keys(inv.posts).reduce(function(s,k){ return s+inv.posts[k]; },0))+" publicações + "+_socN(Object.keys(inv.demo).reduce(function(s,k){ return s+inv.demo[k]; },0))+" do público + "+_socN(Object.keys(inv.fb).reduce(function(s,k){ return s+inv.fb[k]; },0))+" do Facebook + "+_socN(Object.keys(inv.coment).reduce(function(s,k){ return s+inv.coment[k]; },0))+" comentários")},
+    ]}/>
+    <SocCard titulo="Todos os perfis" sub="clique pra abrir o cliente" direita={<SocPill cor={SOC.roxo} bg={SOC.roxoBg}>ordenado por seguidores</SocPill>} pad="12px 20px 14px">
+      <div style={{overflowX:"auto",minWidth:0}} className="scroll-x"><table style={{width:"100%",borderCollapse:"collapse",minWidth:860}}>
+        <thead><tr><th style={Object.assign({},th,{textAlign:"left"})}>Cliente</th><th style={th}>Seguidores</th><th style={th}>Alcance {dias}d</th><th style={th}>Dias</th><th style={th}>Publicações</th><th style={th}>Público</th><th style={th}>Comentários</th><th style={th}>Facebook</th><th style={Object.assign({},th,{textAlign:"left"})}>Estado</th></tr></thead>
+        <tbody>{linhas.map(function(l){ return <tr key={l.k} onClick={function(){ onAbrir(l.a.client_id); }} style={{cursor:"pointer"}} onMouseEnter={function(e){ e.currentTarget.style.background=SOC.chao; }} onMouseLeave={function(e){ e.currentTarget.style.background=""; }}>
+          <td style={Object.assign({},td,{textAlign:"left",color:SOC.txt,fontWeight:800})}>{l.nome}{l.un?<> {un("· "+l.un)}</>:null}{l.ehNossa?<> {un("· nossa conta")}</>:null}</td>
+          <td style={td}>{l.seg===null?z:_socN(l.seg)}</td>
+          <td style={td}>{l.r30===null?z:<>{_socN(l.r30)}{l.varAlc!==null?<> {un((l.varAlc>=0?"+":"−")+_socPct(Math.abs(l.varAlc)))}</>:null}</>}</td>
+          <td style={td}>{l.dias||z}</td>
+          <td style={td}>{l.nP?<>{_socN(l.nP)} {un("· "+l.nN+" c/ número")}</>:z}</td>
+          <td style={td}>{l.demo?_socN(l.demo):z}</td>
+          <td style={td}>{l.coment?_socN(l.coment):z}</td>
+          <td style={td}>{l.fb?_socN(l.fb):z}</td>
+          <td style={Object.assign({},td,{textAlign:"left"})}><SocPill cor={l.estado[0]==="ok"?SOC.verde:l.estado[0]==="wr"?SOC.amar:SOC.txt2} bg={l.estado[0]==="ok"?SOC.verdeBg:l.estado[0]==="wr"?SOC.amarBg:SOC.cinzaBg}>{l.estado[1]}</SocPill></td>
+        </tr>; })}</tbody>
+      </table></div>
+      {linhas.some(function(l){ return l.ehNossa; })&&<SocRodape>A conta da {_socB("Pixels")} entrou junto porque o token enxerga ela também. Serve de controle: se ela parar de coletar, o problema é do token, não do cliente.</SocRodape>}
+    </SocCard>
+    <div style={g2}>
+      <SocCard titulo="Quem mais alcança" sub={"alcance somado nos últimos "+dias+" dias"}>
+        {!rank.length&&<div style={{fontSize:12.5,color:SOC.txt3}}>Sem alcance medido no período.</div>}
+        {rank.map(function(l,i){ return <SocLinha key={l.k} isMob={isMob} largRot="150px" largVal="152px" rot={l.nome+(l.un?" · "+l.un:"")} pct={maxR?l.r30/maxR*100:0} val={_socN(l.r30)} det={l.seg?_socN(Math.round(l.r30/l.seg))+"× a base":null} cor={i===0?SOC.roxo:SOC.roxo2}/>; })}
+        {melhorX&&piorX&&melhorX!==piorX&&<SocRodape>{_socB(melhorX.nome+(melhorX.un?" "+melhorX.un:"")+" alcança "+_socN(Math.round(melhorX.r30/melhorX.seg))+"× o próprio número de seguidores")} em {dias} dias, com {_socN(melhorX.seg)} seguidores. {piorX.nome}{piorX.un?" "+piorX.un:""}, com {_socN(piorX.seg)}, alcança {_socN(Math.round(piorX.r30/piorX.seg))}×. Não é o tamanho da base que manda — é o quanto o conteúdo sai dela.</SocRodape>}
+      </SocCard>
+      <SocCard titulo="O que ainda falta" sub="perfis fora da coleta e fontes paradas">
+        {faltando.map(function(l){ return <div key={l.k} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"150px minmax(0,1fr)",gap:isMob?2:12,padding:"8px 0",borderBottom:"1px solid #f2f0f7",minWidth:0}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:SOC.txt,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.nome}{l.un?" · "+l.un:""}</div>
+          <div style={{fontSize:12.5,color:SOC.txt3,lineHeight:1.45,wordBreak:"break-word"}}>{!l.a.ig_user_id?"sem ig_user_id cadastrado — o coletor não encontra o perfil":!l.ult?"identificador ok, mas a coleta nunca rodou pra ele":"o coletor ainda não trouxe as publicações"}</div>
+        </div>; })}
+        {[["TikTok",contas.filter(function(a){ return a.network==="tiktok"; }).length+" conta(s) · precisa de app próprio, fora da Meta"],["YouTube",contas.filter(function(a){ return a.network==="youtube"; }).length+" canal(is) · precisa de projeto no Google Cloud"],["Facebook · números","as publicações já vieram; alcance e reações dependem da permissão read_insights"]].map(function(x,i){ return <div key={i} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"150px minmax(0,1fr)",gap:isMob?2:12,padding:"8px 0",borderBottom:i<2?"1px solid #f2f0f7":"none",minWidth:0}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:SOC.txt}}>{x[0]}</div><div style={{fontSize:12.5,color:SOC.txt3,lineHeight:1.45,wordBreak:"break-word"}}>{x[1]}</div></div>; })}
+        <SocRodape>Nenhum desses é problema de código. {_socB("Todos dependem de um acesso ou de um cadastro.")}</SocRodape>
+      </SocCard>
     </div>
-    {nunca
-      ? <div style={{fontSize:12.5,color:SOC.txt3,lineHeight:1.5}}>Sem nenhuma coleta até agora. Os números aparecem assim que a coleta rodar para este cliente.</div>
-      : <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:12,minWidth:0}}>
-          {M("Seguidores",r.seguidores===null?"—":_socN(r.seguidores))}
-          {M("Ganho",r.ganho===null?"—":_socSinal(r.ganho),r.ganho===null?undefined:(r.ganho>=0?SOC_SOBE:SOC_DESCE))}
-          {M("Alcance "+dias+"d",r.alcance===null?"—":_socN(r.alcance),undefined,varAlc===null?undefined:(varAlc>=0?"+":"−")+_socPct(Math.abs(varAlc))+" vs anterior")}
-          {M("Posts",_socN(r.nPosts))}
-        </div>}
-  </div>;
+  </>;
 }
 
 /* ─── PÁGINA ─────────────────────────────────────────── */
@@ -63395,6 +63690,7 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
   const [aberto,setAberto]=useState(null);
   const D=useSocDados(dias);
   const ultimaColeta=useSocUltimaColeta();
+  const inv=useSocInventario();
 
   const _vu=viewUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null);
   const _bl=function(k){ return (typeof pxBloco==="function")?pxBloco(k,{user:_vu,perms:perms}):true; };
@@ -63404,32 +63700,23 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
 
   const porCliente={};
   D.contas.forEach(function(a){ (porCliente[a.client_id]=porCliente[a.client_id]||[]).push(a); });
-  const ids=Object.keys(porCliente).filter(function(id){ return porCliente[id].some(function(a){ return a.network==="instagram"; }); })
-    .sort(function(a,b){ return _socNomeCliente(a).localeCompare(_socNomeCliente(b),"pt-BR",{sensitivity:"base"}); });
-  const termo=busca.trim().toLowerCase();
-  const visiveis=termo?ids.filter(function(id){
-    if(_socNomeCliente(id).toLowerCase().indexOf(termo)>=0) return true;
-    return porCliente[id].some(function(a){ return String(a.handle||"").toLowerCase().indexOf(termo)>=0||String(a.unidade||"").toLowerCase().indexOf(termo)>=0; });
-  }):ids;
-
   const igTodas=D.contas.filter(function(a){ return a.network==="instagram"; });
+  const nClientes=Object.keys(igTodas.reduce(function(o,a){ o[a.client_id]=1; return o; },{})).length;
   const comColeta=ultimaColeta?igTodas.filter(function(a){ return a.ig_user_id&&ultimaColeta[a.ig_user_id]; }).length:null;
 
   if(aberto&&porCliente[aberto]) return <SocCliente clientId={aberto} contas={D.contas} diario={D.diario} posts={D.posts}
     ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} bl={_bl} onVoltar={function(){ setAberto(null); }}/>;
 
   return <SocWrap>
-    <SocCard pad="14px 20px">
+    <SocCard pad="12px 20px">
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",minWidth:0}}>
-        <div style={{minWidth:0}}>
-          <div style={{fontSize:17,fontWeight:900,letterSpacing:-.4,color:SOC.txt}}>Gestão de redes</div>
-          <div style={{fontSize:12,color:SOC.txt3,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>
-            O orgânico do Instagram: o que a gente alcança sem pagar.{comColeta!==null&&<span> {comColeta} de {igTodas.length} perfis já têm coleta.</span>}
-          </div>
-        </div>
+        <div style={{fontSize:17,fontWeight:900,letterSpacing:-.4,color:SOC.txt}}>Gestão de redes</div>
+        <SocPill>{igTodas.length} perfis · {nClientes} clientes</SocPill>
+        {inv.log&&inv.log.rodou_em&&<SocPill cor={inv.log.ok?SOC.verde:SOC.amar} bg={inv.log.ok?SOC.verdeBg:SOC.amarBg}>coletado {_socHora(inv.log.rodou_em)}</SocPill>}
+        {comColeta!==null&&<SocPill>{comColeta} de {igTodas.length} perfis com coleta</SocPill>}
         <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Buscar cliente ou @perfil"
-            style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"8px 11px",fontSize:12.5,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,width:isMob?"100%":210,maxWidth:"100%",boxSizing:"border-box"}}/>
+            style={{border:"1px solid "+SOC.borda,borderRadius:9,padding:"7px 11px",fontSize:12.5,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,width:isMob?"100%":210,maxWidth:"100%",boxSizing:"border-box"}}/>
           <div style={{display:"flex",gap:2,border:"1px solid "+SOC.borda,borderRadius:9,padding:2,background:"#fff"}}>
             {SOC_JANELAS.map(function(j){ const on=dias===j[0];
               return <button key={j[0]} onClick={function(){ setDias(j[0]); }} style={{border:"none",borderRadius:7,padding:"6px 10px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:SOC_FONT,minHeight:0,background:on?SOC.roxo:"transparent",color:on?"#fff":SOC.txt2,whiteSpace:"nowrap"}}>{j[1]}</button>; })}
@@ -63437,14 +63724,9 @@ function PageGestaoRedes({isMob,currentUser,viewUser,perms}){
         </div>
       </div>
     </SocCard>
-
-    {!visiveis.length
-      ? <SocCard titulo={termo?"Nenhum cliente com esse nome":"Nenhum perfil cadastrado"}>
-          <div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>{termo?"Tente outro nome ou @.":"Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui."}</div>
-        </SocCard>
-      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(310px,1fr))",gap:12,minWidth:0}}>
-          {visiveis.map(function(id){ return <SocCardCliente key={id} clientId={id} contas={porCliente[id]} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} dias={dias} isMob={isMob} onAbrir={function(){ setAberto(id); }}/>; })}
-        </div>}
+    {!igTodas.length
+      ? <SocCard titulo="Nenhum perfil cadastrado"><div style={{fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>Os perfis ficam em Acessos › Time › Redes sociais. Cadastre um perfil de Instagram com o identificador para ele aparecer aqui.</div></SocCard>
+      : <SocPainelAgencia contas={D.contas} diario={D.diario} posts={D.posts} ultimaColeta={ultimaColeta} inv={inv} dias={dias} isMob={isMob} busca={busca} onAbrir={function(id){ setAberto(id); }}/>}
   </SocWrap>;
 }
 
