@@ -18939,8 +18939,25 @@ function _pxCasTrilhaAlvo(novo){
 /* Dia com folga na semana L pro card t: mesmo dia da semana da data antiga; senão o dia útil
    mais perto. Exige não ter post da unidade no dia; prefere ≥2 dias de distância dos outros
    posts da unidade (olhando também os vizinhos da semana anterior/seguinte). */
+/* ═══ ESPAÇAMENTO DEPENDE DA CADÊNCIA (21/09/2026, Rodrigo) ══════════════════════
+   "quando é 2 na semana é segunda e quinta, ou terça e sexta.. assim por diante.. pra ter
+    espaçamento".
+   A folga mínima era FIXA em 2 dias, então segunda + quarta passava batido — foi exatamente
+   assim que a Arabutã ficou com 05/10 (seg) e 07/10 (qua). Com 2 posts em 7 dias o intervalo
+   certo é 3 dias; com 3 posts, 2 dias. Fórmula: floor(7 / cadência), no mínimo 2.
+     cadência 1 → 4 (não existe par, o teto só evita colar na semana vizinha)
+     cadência 2 → 3   (seg+qui, ter+sex, qua+sáb)
+     cadência 3 → 2                                                                        */
+function _pxCasFolgaMinCap(cap){ return Math.max(2, Math.min(4, Math.floor(7/(Number(cap)||2)))); }
+function _pxCasFolgaMinAlvo(alvo){ return _pxCasFolgaMinCap(PX_CASCATA_CAP[alvo]); }
+function _pxCasFolgaMinDe(t){
+  const as=_pxColAlvos(t).filter(function(a){ return !!PX_CASCATA_CAP[a]; });
+  if(!as.length) return 2;
+  return Math.max.apply(null, as.map(_pxCasFolgaMinAlvo));   // unidade mais exigente manda
+}
 function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   const de=String(t.publish_date||"").slice(0,10);
+  const _folga=_pxCasFolgaMinDe(t);
   const dow=(typeof dowPref==="number")?dowPref:_pxApData(de).getDay();
   const alvos=_pxColAlvos(t);
   const ocup=[];
@@ -18978,7 +18995,7 @@ function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   // Paraguay não entra no collab: o post próprio de conteúdo dele faz o papel do collab e
   // prefere a QUARTA (assim fica equilibrado com a Foto de obra/Short do outro dia). 17/09.
   const pyQuarta=(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo")||_pxCasTrilha(t)==="collab";
-  const score=function(iso,i){ return (dist(iso)>=2?0:100)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+i*0.01; };
+  const score=function(iso,i){ return (dist(iso)>=_folga?0:100)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+i*0.01; };
   return cand.map(function(iso,i){return {iso:iso,s:score(iso,i)};}).sort(function(a,b){return a.s-b.s;})[0].iso;
 }
 function _pxCasGrupoBioter(t){
@@ -19263,7 +19280,7 @@ async function pxCascataVarrer(){
    feira, aniversário (fixos) nem em collab — collab é a grade das quartas e vale pras
    5 unidades. Par que só tem card fixo/collab fica como está: ali não dá pra espaçar
    sem quebrar outra regra.                                                          */
-const PX_CASCATA_FOLGA_MIN=2; // dias entre um post e outro da mesma unidade
+const PX_CASCATA_FOLGA_MIN=2; // piso absoluto; o valor real vem de _pxCasFolgaMinAlvo (pela cadência)
 async function pxCascataEspacar(){
   try{
     const sb=window._sb; if(!sb) return 0;
@@ -19290,7 +19307,7 @@ async function pxCascataEspacar(){
           const a=lista[i-1], b=lista[i];
           const da=_pxApData(String(a.publish_date).slice(0,10)), db=_pxApData(String(b.publish_date).slice(0,10));
           const dif=Math.round((db.getTime()-da.getTime())/86400000);
-          if(dif>=PX_CASCATA_FOLGA_MIN) continue;
+          if(dif>=_pxCasFolgaMinAlvo(alvo)) continue;   // 21/09: 2/semana exige 3 dias, 3/semana exige 2
           /* 21/09/2026 — EMPATE NO MESMO DIA: ANDA O CARD MAIS ANTIGO.
              O Gustavo marcou 24/09 na Avaliação de copys e o espaçamento puxou
              ESSE card pra 22/09. Quem acabou de marcar a data na mão é quem manda;
