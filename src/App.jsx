@@ -1649,7 +1649,7 @@ PX_BLOCOS.roteiros={label:"Roteiros", navIcon:"roteiros", color:"#db2777", grupo
     {key:"rot.aba.ideias",   label:"Ideias pro cliente", desc:"O que a Pixels mandou pro portal e as respostas"},
   ]},
   {id:"roteiros", label:"Roteiros › botões", itens:[
-    {key:"rot.roteiros.gerar",        label:"Gerar 5 roteiros",  desc:"IA, por cliente/unidade"},
+    {key:"rot.roteiros.gerar",        label:"Gerar roteiros",    desc:"IA: os 5 do botão e o Roteiro específico"},
     {key:"rot.roteiros.copiar_todos", label:"Copiar todos",      desc:"Pro WhatsApp, em ordem"},
     {key:"rot.roteiros.excluir",      label:"Excluir roteiro",   desc:"Lixeirinha em cada roteiro"},
   ]},
@@ -103857,14 +103857,27 @@ async function pxGerarRoteiros(opts){
   if(recus.length){ u+="RECUSADAS E O MOTIVO (não repetir o erro):\n"; recus.slice(0,4).forEach(function(r){ if(r.feedback) u+="- "+(r.titulo||"")+": "+r.feedback+"\n"; }); u+="\n"; }
   const _pf=Object.keys(produtosFeitos).filter(Boolean);
   if(_pf.length){ u+="PRODUTOS QUE JÁ TÊM ROTEIRO (quantos) — dê preferência aos que ainda não têm ou têm menos:\n"; _pf.sort(function(a,b){return produtosFeitos[b]-produtosFeitos[a];}).slice(0,30).forEach(function(k){ u+="- "+k+" ("+produtosFeitos[k]+")\n"; }); u+="\n"; }
-  if(jaFeitos.length){ u+="⛔ ASSUNTOS QUE JÁ TÊM ROTEIRO (NÃO repita nem chegue perto):\n"; jaFeitos.slice(0,40).forEach(function(a){ u+="- "+a+"\n"; }); u+="\n"; }
+  if(jaFeitos.length){
+    u+=pedido?("ASSUNTOS QUE JÁ TÊM ROTEIRO (o PEDIDO abaixo manda; se ele bater com algum destes, escreva por um ÂNGULO diferente do que já existe):\n")
+             :("⛔ ASSUNTOS QUE JÁ TÊM ROTEIRO (NÃO repita nem chegue perto):\n");
+    jaFeitos.slice(0,40).forEach(function(a){ u+="- "+a+"\n"; }); u+="\n";
+  }
   if(trend){
     u+="TREND DO MOMENTO (a social media explicou):\n"+"Título: "+(trend.titulo||"")+"\n"+"Do que se trata: "+(trend.descricao||"")+"\n\n";
     u+="TAREFA: escreva "+quantos+" IDEIAS DE ROTEIRO que adaptem ESSA TREND pra "+clienteNome+" — cada uma encaixa a trend num assunto diferente do negócio do cliente (produto, rotina, bastidor, dúvida do cliente, resultado). A trend é o formato/gancho; o conteúdo é da marca. Nunca invente que a marca fez algo que não fez.\n";
+  }else if(pedido){
+    u+="PEDIDO DA AGÊNCIA (é ISTO que manda — acima do rodízio de produtos e da regra de assunto inédito):\n"+pedido+"\n\n";
+    u+="TAREFA: escreva "+quantos+" ROTEIRO"+(quantos>1?"S":"")+" atendendo EXATAMENTE esse pedido pra "+clienteNome+". "+
+       "Se o pedido nomeia um produto, um assunto ou um ângulo, é sobre isso que "+(quantos>1?"os roteiros falam":"o roteiro fala")+". "+
+       (quantos>1?"Sendo mais de um, cada roteiro entra por um ÂNGULO diferente dentro do que foi pedido (dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega) — nunca o mesmo texto com outras palavras. ":"")+
+       "O que o pedido não disser, você completa com o playbook, o briefing do cliente e o foco do mês. Nunca invente número, cidade, prazo, garantia nem depoimento.\n";
   }else{
     u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
   }
-  if(_temProdutos){
+  if(_temProdutos&&pedido){
+    u+="PRODUTO: marque cada roteiro com o produto ou serviço da lista acima que ele trata (se o pedido não cita nenhum, use o que mais se aproxima). O pedido pode pedir vários roteiros do MESMO produto — nesse caso, cada um por um ângulo diferente.\n\n";
+  }
+  if(_temProdutos&&!pedido){
     u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize 🟣, depois 🟢; 🟡 só de vez em quando; 🔴 NUNCA. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
     u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
   }
@@ -103988,6 +104001,8 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const [gerando,setGerando]=useState("");   // "" | "ia" | trendId
   const [filtro,setFiltro]=useState("todos"); // todos | sugestao | enviado
   const [trendForm,setTrendForm]=useState(null);
+  // 21/09/2026: "Roteiro especifico" — briefing livre + quantos (1 a 5)
+  const [pedidoForm,setPedidoForm]=useState(null); // {texto,quantos}
   // IDEIAS DA PIXELS (17/09/2026): trends/referências que o cliente aprova no portal
   const [ideias,setIdeias]=useState([]);
   const [ideiaForm,setIdeiaForm]=useState(null); // {titulo,descricao,link,trend_id,alvos:[{client,unit}]}
@@ -104031,22 +104046,25 @@ function PageRoteiros({isMob, perms, viewingAs}){
      caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
      filtra por bioter_unit) e os roteiros nasciam em Grupo, invisiveis na lista, que e filtrada
      pela unidade da tela. Sem unitAlvo (botao da aba Roteiros), vale a unidade selecionada. */
-  const _gerar=async function(trend,clientAlvo,unitAlvo){
+  const _gerar=async function(trend,clientAlvo,unitAlvo,pedidoTxt,quantosPedido){
+    const _ped=String(pedidoTxt||"").trim();
+    const _qtd=Math.max(1,Math.min(5,Number(quantosPedido)||5));
     const cId=clientAlvo||clId;
     const uId=(cId==="bioter")?String(((unitAlvo===undefined||unitAlvo===null)?unit:unitAlvo)||""):"";
     if(!cId){ pixelsToast.warning("Escolhe o cliente."); return; }
-    const chave=trend?trend.id:"ia";
+    const chave=trend?trend.id:(_ped?"pedido":"ia");
     setGerando(chave);
     try{
       const ja=roteiros.filter(function(r){return r.client_id===cId&&String(r.unidade||"")===uId;}).map(function(r){return r.assunto;}).filter(Boolean);
       const pf={}; roteiros.forEach(function(r){ if(r.client_id===cId&&String(r.unidade||"")===uId&&r.produto){ pf[r.produto]=(pf[r.produto]||0)+1; } });
-      const lista=await pxGerarRoteiros({produtosFeitos:pf,client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,quantos:5});
+      const lista=await pxGerarRoteiros({produtosFeitos:pf,client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,pedido:_ped,quantos:_qtd});
       const lote=Date.now().toString(36);
       const rows=lista.map(function(r){ return {client_id:cId,unidade:uId,origem:trend?"trend":"ia",trend_id:trend?trend.id:null,lote:lote,assunto:r.assunto,produto:r.produto||null,abertura:r.abertura,desenvolvimento:r.desenvolvimento,fechamento:r.fechamento,status:"sugestao",visivel_portal:false,created_by:(_u&&_u.name)||""}; });
       const ins=await sb.from("roteiros_video").insert(rows).select("*");
       if(ins.error) throw ins.error;
       setRoteiros(function(p){ return (ins.data||[]).concat(p); });
-      pixelsToast.success(lista.length+" roteiros prontos pra "+_nomeCl(cId,uId)+".",3000);
+      pixelsToast.success(lista.length+(lista.length===1?" roteiro pronto":" roteiros prontos")+" pra "+_nomeCl(cId,uId)+".",3000);
+      if(_ped) setPedidoForm(null);
       if(trend){ setAba("roteiros"); setClId(cId); if(cId==="bioter") setUnit(uId); }
     }catch(e){ pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
     setGerando("");
@@ -104167,11 +104185,43 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
         </button>}
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:1});}}
+          style={{background:"#fff",color:_cor,border:"1px solid "+_cor+"55",borderRadius:12,padding:"12px 16px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Roteiro específico
+        </button>}
         {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
         </button>}
         </div>
       </div>
+      {pedidoForm&&<div style={{background:"#fff",border:"1px solid "+_cor+"3d",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:13,boxShadow:"0 8px 24px rgba(15,23,42,.06)"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Roteiro específico pra {_nomeCl(clId,isBioter?unit:"")}</div>
+        <div>
+          <div style={_lbl}>Do que você quer o roteiro</div>
+          <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={5} autoFocus
+            placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
+            style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, o que o cliente falou e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
+        </div>
+        <div>
+          <div style={_lbl}>Quantos roteiros</div>
+          <div style={{display:"flex",gap:7}}>
+            {[1,2,3,4,5].map(function(n){ const on=(pedidoForm.quantos||1)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:n}));}}
+              style={{minWidth:44,background:on?_cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?_cor:"#e2e8f0"),borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
+          </div>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
+          <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#475569",fontWeight:600,fontSize:13,cursor:gerando?"default":"pointer",fontFamily:_RT_FF}}>Cancelar</button>
+          {(function(){ const _q=pedidoForm.quantos||1, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
+            return <button type="button" disabled={_off} onClick={function(){ _gerar(null,clId,isBioter?unit:"",pedidoForm.texto,_q); }} style={_btnGerar("",true,_off,_cor)}>
+              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> Gerar {_q} roteiro{_q>1?"s":""}</>}
+            </button>; })()}
+        </div>
+      </div>}
+      {gerando==="pedido"&&<div style={{background:_cor+"0d",border:"1px dashed "+_cor+"66",borderRadius:14,padding:"14px 18px",color:"#475569",fontSize:12.5,lineHeight:1.6}}>
+        Escrevendo com o seu pedido, em cima do playbook e do briefing de <b>{_nomeCl(clId,isBioter?unit:"")}</b>… Leva uns 30 a 60 segundos.
+      </div>}
       {gerando==="ia"&&<div style={{background:_cor+"0d",border:"1px dashed "+_cor+"66",borderRadius:14,padding:"14px 18px",color:"#475569",fontSize:12.5,lineHeight:1.6}}>
         Lendo o playbook, o foco do mês, as regras aprendidas e os vídeos já aprovados de <b>{_nomeCl(clId,unit)}</b>… Os 5 roteiros vão sair sobre 5 assuntos diferentes dos {doCliente.length} que já existem aqui. Leva uns 30 a 60 segundos.
       </div>}
