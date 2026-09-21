@@ -18859,7 +18859,13 @@ function _pxCasFixo(t){
   const tags=Array.isArray(t&&t.tags)?t.tags:[];
   if(tags.some(function(x){ return /^data comemorativa$/i.test(String(x||"").trim()); })) return true;
   // rede de segurança: aniversário da marca criado à mão sem a tag ("Arte de 29 anos/años")
-  return /anivers[áa]rio|aniversario|cumplea|seguidor|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""));
+  if(/anivers[áa]rio|aniversario|cumplea|seguidor|\b\d{1,3}\s+(anos|años)\b/i.test(String((t&&t.title)||""))) return true;
+  /* 21/09/2026 (Rodrigo) — RETROSPECTIVA DE ANO CONTA COMO DATA COMEMORATIVA.
+     "retrospectiva de ano conta como data comemorativa, não pode ser jogado pra frente..
+      só podem ser jogados pra frente vídeos e artes normais". O card
+     "Vídeo — 2026: o ano em peças entregues" foi empurrado pra 04/01/2027 pela cascata
+     porque não tinha a tag e o id era autoplan-, não autocom-. Agora o título já trava. */
+  return /retrospectiv|balan[çc]o do ano|resumo do ano|o ano em |fim de ano|r[ée]veillon|melhores momentos/i.test(String((t&&t.title)||""));
 }
 function _pxCasGrupo(t){
   const ct=String((t&&(t.content_type||t.contentType))||"");
@@ -19254,7 +19260,7 @@ async function pxCascataEspacar(){
     const hoje=_pxApIso(new Date());
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return 0;
     const rows=(r.data||[]);
@@ -19275,13 +19281,23 @@ async function pxCascataEspacar(){
           const da=_pxApData(String(a.publish_date).slice(0,10)), db=_pxApData(String(b.publish_date).slice(0,10));
           const dif=Math.round((db.getTime()-da.getTime())/86400000);
           if(dif>=PX_CASCATA_FOLGA_MIN) continue;
+          /* 21/09/2026 — EMPATE NO MESMO DIA: ANDA O CARD MAIS ANTIGO.
+             O Gustavo marcou 24/09 na Avaliação de copys e o espaçamento puxou
+             ESSE card pra 22/09. Quem acabou de marcar a data na mão é quem manda;
+             quem tem que andar é o card que já estava no dia. */
+          let pri=b, sec=a;
+          if(dif===0){
+            const _ua=String(a.updated_at||""), _ub=String(b.updated_at||"");
+            if(_ua&&_ub&&_ua<_ub){ pri=a; sec=b; }
+          }
           // anda o de trás; se ele for fixo/collab, tenta o da frente
-          const t=podeAndar(b)?b:(podeAndar(a)?a:null);
+          const t=podeAndar(pri)?pri:(podeAndar(sec)?sec:null);
           if(!t) continue;
           const semEle=rows.filter(function(x){ return String(x.id)!==String(t.id); });
           const para=_pxCasDiaComFolga(t,L,semEle,hoje);
           const de=String(t.publish_date).slice(0,10);
-          if(!para||para===de) continue;
+          /* 21/09/2026 — espaçamento NUNCA puxa card pra trás. Cascata é arrasto pra frente. */
+          if(!para||para===de||para<de) continue;
           moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
           t.publish_date=para; // vale pra conta do próximo par
           lista.sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
@@ -30927,6 +30943,17 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     }));
     if(typeof pixelsToast!=="undefined")pixelsToast.success(oQue+": "+(paraTxt||"em branco")+".");
     if(fechar!==false)setMetaAberto(null);
+    /* 21/09/2026 — MEXEU NA DATA DE PUBLICAÇÃO AQUI → A CASCATA RODA.
+       Rodrigo: "coloquei a data como quinta 24 pela Avaliação de copys, vc deveria ter
+       arrastado a do Cleo Marcos Verdi pra dia 28 e assim sucessivamente". Até hoje a
+       cascata só rodava no CardModal do calendário; data mexida por aqui não empurrava
+       ninguém. pxCascataConfirmar mostra a prévia e só aplica com OK — data comemorativa
+       (trilha fixa) nunca sai do lugar e a cadência do cliente é respeitada. */
+    if(patch&&Object.prototype.hasOwnProperty.call(patch,"publishDate")&&patch.publishDate
+       &&typeof pxCascataConfirmar==="function"){
+      try{ pxCascataConfirmar(Object.assign({},task,patch),setTasks,actor); }
+      catch(_e){ console.warn("[cascata avaliacao]",_e); }
+    }
   };
 
   // ── PUBLICATION ACTIONS ──
