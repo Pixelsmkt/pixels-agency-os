@@ -18532,8 +18532,14 @@ function pxAutoLimparDoEvento(prefixo, eventId, manter, descsEvento){
       const now=new Date().toISOString();
       return sb.from("tasks").update({deleted_at:now}).in("id",ids).then(function(r2){
         if(r2&&r2.error) return 0;
-        // a semana perdeu um post → o Claude repõe conforme a cadência do cliente
-        if(typeof pxAutoplanRepor==="function") pxAutoplanRepor(rem);
+        /* a semana perdeu um post. 21/09/2026 (Rodrigo): PRIMEIRO tenta puxar pra trás um
+           post real que está mais pra frente; só o que sobrar de vaga é que vira rascunho
+           novo do Claude (pxAutoplanRepor confere a cadência de novo e não faz nada se a
+           semana já encheu com o card puxado). */
+        const _repor=function(){ if(typeof pxAutoplanRepor==="function") pxAutoplanRepor(rem); };
+        if(typeof pxCascataPuxar==="function"){
+          Promise.resolve(pxCascataPuxar(rem)).then(_repor,_repor);
+        } else _repor();
         return ids.length;
       });
     });
@@ -19091,7 +19097,7 @@ function pxCascataTexto(plano,nomeCliente){
   return s;
 }
 /* pxCascataAplicar(plano, setTasks?) — grava no Supabase, atualiza o state local e registra. */
-async function pxCascataAplicar(plano,setTasks,quem,motivo){
+async function pxCascataAplicar(plano,setTasks,quem,motivo,opts){
   try{
     const sb=window._sb; if(!sb||!plano||(!plano.moves.length&&!(plano.lixeira||[]).length)) return 0;
     const agora=new Date();
@@ -19105,7 +19111,7 @@ async function pxCascataAplicar(plano,setTasks,quem,motivo){
       const tl=Array.isArray(q.data.timeline)?q.data.timeline:[];
       const r=await sb.from("tasks").update({publish_date:mv.para,deadline:mv.para,
         timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,
-          label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": "+(motivo||("entrou um card novo na semana"+(quem?(" ("+quem+")"):"")))+" e a cadência do cliente empurrou este pra frente"}])
+          label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": "+(motivo||("entrou um card novo na semana"+(quem?(" ("+quem+")"):"")))+((opts&&typeof opts.sufixo==="string")?opts.sufixo:" e a cadência do cliente empurrou este pra frente")}])
       }).eq("id",mv.id);
       if(r&&r.error){ console.warn("[cascata aplicar]",mv.id,r.error.message); continue; }
       feitos[mv.id]=mv.para;
@@ -19126,8 +19132,8 @@ async function pxCascataAplicar(plano,setTasks,quem,motivo){
     if(ok&&typeof setTasks==="function"){
       setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
     }
-    if(ok||lixo.length) _pxApRegistrar("Cascata: card novo numa semana cheia empurrou os outros pra frente"+(lixo.length?" ("+lixo.length+" pra lixeira: fim de contrato)":""),[],alterados);
-    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo.",6000);
+    if(ok||lixo.length) _pxApRegistrar((opts&&opts.registro)||("Cascata: card novo numa semana cheia empurrou os outros pra frente"+(lixo.length?" ("+lixo.length+" pra lixeira: fim de contrato)":"")),[],alterados);
+    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info((opts&&opts.toast)?opts.toast(ok):(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo."),6000);
     return ok;
   }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
 }
@@ -19311,6 +19317,81 @@ async function pxCascataEspacar(){
     if(!moves.length) return 0;
     return await pxCascataAplicar({moves:moves,lixeira:[],travou:[],semana:""},null,"espaçamento","os posts da semana estavam colados (a regra é espaçar, tipo segunda e quinta)");
   }catch(e){ console.warn("[cascata espacar]",e); return 0; }
+}
+/* ═══ CASCATA PRA TRÁS (21/09/2026, Rodrigo) ══════════════════════════════════════
+   "por acaso não tiver em tal ano (que seja removido do planejamento) reorganiza de volta
+    com outros cards que estão mais pra frente.. tipo o que é feito arrastando pra frente
+    mas arrasta pra trás".
+   Card automático saiu do calendário (feira tirada do Planejamento, cliente desmarcado,
+   comemorativa apagada) → a semana ficou ABAIXO da cadência. Em vez de o Claude inventar
+   um rascunho novo pra tapar o buraco (pxAutoplanRepor), o próximo post real da fila é
+   TRAZIDO pra essa vaga, e o buraco que ele deixa puxa o seguinte — o espelho exato do
+   dominó pra frente.
+   O que NUNCA é puxado: data fixa (comemorativa, aniversário, retrospectiva), collab
+   (é a grade das quartas nas 5 unidades), card publicado/reprovado/pausado e card de hoje
+   ou do passado. E nada cai a menos de PX_CASCATA_PUXA_MIN_DIAS de hoje — antecipar post
+   pra semana que vem sem ninguém pedir é pior do que deixar a semana com uma vaga.      */
+const PX_CASCATA_PUXA_MIN_DIAS=7;   // nada é antecipado pra dentro dos próximos 7 dias
+const PX_CASCATA_PUXA_MAX=40;       // teto de segurança por rodada
+async function pxCascataPuxar(removidos){
+  try{
+    const sb=window._sb; if(!sb) return 0;
+    const _h=new Date(); const hoje=_pxApIso(_h);
+    const piso=_pxApIso(new Date(_h.getFullYear(),_h.getMonth(),_h.getDate()+PX_CASCATA_PUXA_MIN_DIAS));
+
+    /* semanas que perderam post, por alvo (cliente ou bioter:unidade) */
+    const buracos={};
+    (Array.isArray(removidos)?removidos:[]).forEach(function(t){
+      const iso=String((t&&(t.publish_date||t.publishDate))||"").slice(0,10);
+      if(!iso||iso<=hoje) return;
+      if(t.somente_story||t.somenteStory) return;      // story não ocupa vaga na cadência
+      _pxColAlvos(t).forEach(function(a){
+        if(!PX_CASCATA_CAP[a]) return;
+        const L=_pxApLinha(iso);
+        buracos[a+"|"+L.iniIso]={alvo:a,L:L};
+      });
+    });
+    const fila=Object.keys(buracos).map(function(k){ return buracos[k]; });
+    if(!fila.length) return 0;
+
+    const L0=_pxApLinha(hoje);
+    const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,from_drive")
+      .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
+    if(!r||r.error) return 0;
+    const rows=(r.data||[]);
+    const daSemana=function(L){ return rows.filter(function(x){ const d=String(x.publish_date||"").slice(0,10); return d>=L.iniIso&&d<=L.fimIso; }); };
+
+    const moves=[]; let guard=0;
+    while(fila.length&&moves.length<PX_CASCATA_PUXA_MAX&&guard++<PX_CASCATA_VARRE_SEMANAS*6){
+      const v=fila.shift(); const alvo=v.alvo, L=v.L;
+      const cap=PX_CASCATA_CAP[alvo]||0; if(!cap) continue;
+      if(_pxCasConta(daSemana(L),alvo).length>=cap) continue;     // a semana já está na cadência
+      const cand=rows.filter(function(x){
+        if(_pxColAlvos(x).indexOf(alvo)<0) return false;
+        if(String(x.publish_date||"").slice(0,10)<=L.fimIso) return false;   // tem que estar DEPOIS
+        if(!_pxCasMovivel(x,hoje,null)) return false;                        // fixo/publicado não anda
+        if(_pxCasTrilha(x)==="collab") return false;
+        return true;
+      }).sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+      if(!cand.length) continue;
+      const t=cand[0];
+      const de=String(t.publish_date||"").slice(0,10);
+      const semanaVelha=_pxApLinha(de);
+      const para=_pxCasDiaComFolga(t,L,rows.filter(function(x){ return String(x.id)!==String(t.id); }),hoje);
+      if(!para||para>=de||para<piso) continue;                    // só pra trás, e nunca colado no hoje
+      moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
+      t.publish_date=para;                                        // vale pras próximas iterações
+      fila.push({alvo:alvo,L:L});                                 // a vaga pode ter sobrado
+      fila.push({alvo:alvo,L:semanaVelha});                       // e onde ele estava abriu buraco
+    }
+    if(!moves.length) return 0;
+    return await pxCascataAplicar({moves:moves,lixeira:[],travou:[],semana:""},null,"cascata pra trás",
+      "abriu vaga na semana porque um card saiu do Planejamento",
+      {sufixo:" e o próximo post da fila foi trazido pra essa vaga",
+       registro:"Cascata pra trás: card removido abriu vaga e a fila foi puxada",
+       toast:function(n){ return n+" card"+(n>1?"s":"")+(n>1?" voltaram":" voltou")+" uma vaga na fila: abriu espaço no calendário."; }});
+  }catch(e){ console.warn("[cascata puxar]",e); return 0; }
 }
 /* pxCascataConfirmar(novo,setTasks,quem) → Promise<true> sempre (o save segue). Prévia + OK. */
 async function pxCascataConfirmar(novo,setTasks,quem){
@@ -19539,6 +19620,11 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   // Auto-set cor ao trocar categoria (a não ser que usuário já mexeu na cor)
   function setCategoryAndColor(catId){
     setCategory(catId);
+    /* 21/09/2026 (Rodrigo) — FEIRA JÁ NASCE ANUAL. "tem que nascer automaticamente ano a ano..
+       inclusive com aquela arte só story 15 dias antes... de convite". Só no card NOVO e só se
+       ninguém escolheu recorrência ainda — evento antigo que está sendo editado não muda
+       sozinho, e o botão "Não repete" continua ali pra desligar. */
+    if(!isEdit&&(catId==="feira"||catId==="presenca_feira")&&!recurrence) setRecurrence("yearly");
     if(catId==="assinatura"){setColor("#16a34a");return;}
     if(catId==="operacional"){setColor("#7c3aed");return;}
     if(catId==="gestao_midia"){setColor("#2563eb");return;}
@@ -19807,11 +19893,16 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <_MarcoDateField value={endDate} min={date} onChange={function(v){setEndDate(v);}} accent="#7c3aed"/>
         {endDate&&endDate>date&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>Evento aparecerá em todos os dias do intervalo ({Math.floor((new Date(endDate+"T12:00")-new Date(date+"T12:00"))/86400000)+1} dias).</div>}
       </div>}
-      {/* Recorrência (escondida quando evento é multi-dia) */}
-      {!endDate && <div style={{marginBottom:14}}>
+      {/* Recorrência — 21/09/2026 (Rodrigo): feira multi-dia TAMBÉM repete. Evento com data
+         fim só aceita "Não repete" ou "Anual" — semanal/quinzenal/mensal num intervalo de
+         5 dias vira sobreposição. */}
+      <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
-          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+          {((endDate&&endDate>date)
+            ? [{id:"",label:"Não repete"},{id:"yearly",label:"Todo ano"}]
+            : [{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}]
+           ).map(function(opt){
             const sel=recurrence===opt.id||(opt.id==="yearly"&&(recurrence==="yearly_nth"||recurrence==="yearly_easter"));
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id); if(!opt.id) setRecurrenceUntil("");}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
@@ -19819,8 +19910,11 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             </button>;
           })}
         </div>
-        {/* Data de término da recorrência — só aparece quando repete */}
-        {(recurrence==="yearly"||recurrence==="yearly_nth"||recurrence==="yearly_easter")&&date&&typeof pxNthLabel==="function"&&(function(){
+        {/* Data de término da recorrência — só aparece quando repete.
+            21/09/2026: evento MULTI-DIA não abre as variações "2º domingo de…" / "pela Páscoa" —
+            ali o anual é sempre nas mesmas datas, senão o intervalo de 5 dias teria que ser
+            recalculado por regra móvel e o calendário não desenha isso. */}
+        {(recurrence==="yearly"||recurrence==="yearly_nth"||recurrence==="yearly_easter")&&date&&!(endDate&&endDate>date)&&typeof pxNthLabel==="function"&&(function(){
           // Anual: repete no mesmo dia (13/09), no mesmo dia da semana (2º domingo de setembro)
           // ou atrelado à Páscoa (Carnaval, Sexta-feira Santa, Corpus Christi)? A 3ª opção só
           // aparece se a data cai a até 70 dias da Páscoa daquele ano.
@@ -19852,7 +19946,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             {recurrenceUntil ? "Repete até "+(function(){const _p=recurrenceUntil.split("-");return _p.length===3?(_p[2]+"/"+_p[1]+"/"+_p[0]):recurrenceUntil;})() : "Deixe vazio pra repetir indefinidamente"}
           </span>
         </div>}
-      </div>}
+      </div>
       {/* Categoria */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
@@ -20211,6 +20305,18 @@ function PageCalendarioInterno({isMob}){
       }
       if(ev.recurrence==="yearly"){
         if(_pastEnd) return false;
+        /* 21/09/2026 — feira anual é multi-dia: aparece em TODOS os dias do intervalo, todo ano.
+           O laço de -1 a +1 cobre intervalo que atravessa 31/12. */
+        if(ev.end_date&&ev.end_date>ev.date){
+          const _dur=Math.round((new Date(ev.end_date+"T12:00")-new Date(ev.date+"T12:00"))/86400000);
+          const _cur=new Date(dIso+"T12:00");
+          for(let _k=-1;_k<=1;_k++){
+            const _a=new Date(dateObj.getFullYear()+_k,Number(ev.date.slice(5,7))-1,Number(ev.date.slice(8,10)),12,0,0);
+            const _b=new Date(_a); _b.setDate(_a.getDate()+_dur);
+            if(_cur>=_a&&_cur<=_b) return true;
+          }
+          return false;
+        }
         // Bidirecional: aparece em TODO ano no mesmo mes/dia, incluindo anos ANTES do evento original.
         // Ex: criar 15/11/2027 c/ recorrencia anual -> aparece 15/11/2026, 15/11/2025, etc.
         // (Datas comemorativas sao "todo ano" independente de quando cadastradas.)
@@ -91761,6 +91867,21 @@ function pxEventoSlots(ev){
   return out;
 }
 
+/* 21/09/2026 (Rodrigo) — slots de UMA ocorrência da recorrência. Desloca date/end_date
+   pro ano daquela ocorrência mantendo a DURAÇÃO (feira de 5 dias continua com 5 dias). */
+function pxEventoSlotsEm(ev,iso){
+  const _d=String(iso||"").slice(0,10);
+  if(!ev||!_d||_d===String(ev.date).slice(0,10)) return pxEventoSlots(ev);
+  const _p=function(x){const a=String(x).split("-");return new Date(+a[0],+a[1]-1,+a[2]);};
+  const _f=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  const ev2=Object.assign({},ev,{date:_d});
+  if(ev.end_date&&ev.end_date>ev.date){
+    const dur=Math.round((_p(ev.end_date)-_p(ev.date))/86400000);
+    const f=_p(_d); f.setDate(f.getDate()+dur);
+    ev2.end_date=_f(f);
+  }
+  return pxEventoSlots(ev2);
+}
 /* Briefings que ESTE evento geraria hoje, em HTML. A limpeza usa isso pra saber se
    alguém mexeu no briefing do card: briefing igual ao gerado = card intocado. */
 function pxEventoDescsEsperadas(ev){
@@ -91797,19 +91918,33 @@ async function pxGerarCardsEventos(opts){
   const cand=[];
   r.data.forEach(function(ev){
     if(!ev||!ev.date) return;
-    if(ev.date<startISO||ev.date>endISO) return;
     let ids=ev.client_ids;
     if(typeof ids==="string"){ try{ ids=JSON.parse(ids); }catch(_){ ids=[]; } }
     if((!ids||!ids.length)&&ev.client_id) ids=[ev.client_id];
     if(!ids||!ids.length) return;
     const targets=pxEventoTargets(ids,ativos);
     if(!targets.length) return;
-    const slots=pxEventoSlots(ev);
-    targets.forEach(function(t){
-      slots.forEach(function(sl){
-        if(sl.date<startISO) return;
-        const id=("autoev-"+ev.id+"-"+sl.slot+"-"+t.client+(t.unit?"-"+t.unit:"")).replace(/[^a-zA-Z0-9_-]/g,"");
-        cand.push({id:id, ev:ev, alvo:t, sl:sl});
+    /* 21/09/2026 (Rodrigo) — FEIRA ANUAL NASCE SOZINHA TODO ANO, com o convite de 15 dias antes.
+       Antes só a data cadastrada virava card: ev.date fora da janela de 365 dias = evento ignorado.
+       Agora a recorrência é expandida igual à da data comemorativa (pxAutoComExpandir) e cada
+       ocorrência gera convite (somente story) + abertura + fechamento.
+       O id da PRIMEIRA ocorrência continua o antigo — se mudasse, os cards que já existem
+       nasceriam de novo duplicados. Da segunda em diante entra a data da ocorrência, e o slot
+       segue sendo a 1ª parte do id (a limpeza do evento lê split("-")[0]). */
+    const _1a=String(ev.date).slice(0,10);
+    const ocorrencias=(typeof pxAutoComExpandir==="function")
+      ? pxAutoComExpandir(ev,startISO,endISO)
+      : ((_1a>=startISO&&_1a<=endISO)?[_1a]:[]);
+    if(!ocorrencias.length) return;
+    ocorrencias.forEach(function(oIso){
+      const slots=pxEventoSlotsEm(ev,oIso);
+      const suf=(oIso===_1a)?"":("-"+oIso);
+      targets.forEach(function(t){
+        slots.forEach(function(sl){
+          if(sl.date<startISO) return;
+          const id=("autoev-"+ev.id+"-"+sl.slot+suf+"-"+t.client+(t.unit?"-"+t.unit:"")).replace(/[^a-zA-Z0-9_-]/g,"");
+          cand.push({id:id, ev:ev, alvo:t, sl:sl});
+        });
       });
     });
   });
@@ -91823,9 +91958,18 @@ async function pxGerarCardsEventos(opts){
   cand.forEach(function(c){
     const t=_porId[c.id]; if(!t||t.deletedAt) return;
     if(String(t.publishDate||"")===c.sl.date) return;
-    const intocado=String(t.createdBy||"")==="Automático" && t.status==="rascunhos"
-                   && !(t.files&&t.files.length) && !String(t.caption||"").trim();
-    if(intocado) _remarcar.push({id:c.id, date:c.sl.date, de:String(t.publishDate||"")});
+    /* 21/09/2026 (Rodrigo) — "se eu ajustar no planejamento automaticamente reorganize os
+       cards já criados". Antes só card TOTALMENTE em branco seguia a data nova: bastava o
+       Claude ter escrito a legenda (o que ele faz sozinho) pra o card da feira ficar preso
+       na data velha. Copy e arte continuam valendo — é a MESMA feira, só mudou de dia.
+       Não segue: card já publicado, e card cuja data de publicação alguém mexeu na mão. */
+    const _naMao=(Array.isArray(t.timeline)?t.timeline:[]).some(function(e){
+      const u=String((e&&e.user)||"");
+      return e && e.type==="edit" && u && u!=="Automático" && u!=="Claude"
+             && /data de publica/i.test(String(e.label||""));
+    });
+    const segue=String(t.createdBy||"")==="Automático" && String(t.status||"")!=="publicado" && !_naMao;
+    if(segue) _remarcar.push({id:c.id, date:c.sl.date, de:String(t.publishDate||"")});
   });
 
   if(faltam.length){
