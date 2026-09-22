@@ -99616,6 +99616,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const [arrastando,setArrastando]=useState(false);
   const [editId,setEditId]=useState(null);
   const [rascunho,setRascunho]=useState("");
+  const [abertos,setAbertos]=useState({});   // ficha expandida por material
   const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
   const _inp={border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box"};
   const carregar=async function(){
@@ -99828,7 +99829,34 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                 </div>
               </div>
             : (String(m.ficha||"").trim()
-                ? <div style={{marginTop:8,background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",color:"#334155",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.ficha}</div>
+                ? (function(){
+                    /* (22/09/2026, Rodrigo) "não precisa ficar alargadão assim né kkk, coloca um
+                       limite com um botão expandir." Ficha de briefing inteiro dá 11 mil
+                       caracteres e empurrava o resto do Playbook pra baixo. Fica dobrada em ~190px
+                       com o texto sumindo num degradê; ficha curta nem ganha botão. */
+                    const _ficha=String(m.ficha||"").trim();
+                    const _aberto=!!abertos[m.id];
+                    const _longa=_ficha.length>520;
+                    const _linhas=_ficha.split("\n").filter(function(l){return l.trim();}).length;
+                    return <div style={{marginTop:8}}>
+                      <div style={{position:"relative",background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",color:"#334155",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",
+                        maxHeight:(_longa&&!_aberto)?190:"none",overflow:(_longa&&!_aberto)?"hidden":"visible"}}>
+                        {_ficha}
+                        {_longa&&!_aberto&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:58,borderRadius:"0 0 10px 10px",
+                          background:"linear-gradient(180deg, rgba(248,250,252,0) 0%, #f8fafc 78%)",pointerEvents:"none"}}/>}
+                      </div>
+                      {_longa&&<button type="button"
+                        onClick={function(){ setAbertos(function(p){ const n=Object.assign({},p); if(n[m.id]) delete n[m.id]; else n[m.id]=true; return n; }); }}
+                        style={{marginTop:6,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:99,padding:"5px 13px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0d9488";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_BORDER;}}>
+                        <span style={{display:"inline-flex",transform:_aberto?"rotate(180deg)":"none",transition:"transform .15s"}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </span>
+                        {_aberto?"Recolher ficha":("Expandir ficha · "+_linhas+" linhas")}
+                      </button>}
+                    </div>;
+                  })()
                 : (isAdmin?<div style={{marginTop:8,color:"#94a3b8",fontSize:11.5}}>Sem ficha — clique no lápis pra escrever à mão, ou suba o arquivo de novo pra IA ler.</div>:null))}
         </div>;
       })}
