@@ -4291,6 +4291,19 @@ function pxCtxRegrasTxt(regras){
    primeiro do mesmo cliente/unidade (tom + estrutura), completando com outras marcas
    (só estrutura). Paraguay só aprende com Paraguay. A régua de estilo é a mesma no banco
    (claude_estilo_card) e aqui (pxEstiloCard). */
+/* (22/09/2026, Rodrigo) Card de SHORT: vídeo curto que a Hellen pega pronto no Drive do
+   cliente e sobe como está. NÃO passa por edição — por isso o editor nunca entra sozinho
+   num card desses. Conta como short o tipo video_short, o card vindo do Drive, o id
+   "short-…" e o título começando com "Short". Mesma régua do alerta "sem produtor"
+   (03_clientes2) e do contador de material. */
+function pxEhShort(t){
+  if(!t) return false;
+  const ct=String(t.contentType||t.content_type||t.tipo||"").toLowerCase();
+  if(ct==="video_short"||ct==="short") return true;
+  if(t.fromDrive||t.from_drive) return true;
+  if(/^short-/i.test(String(t.id||""))) return true;
+  return /^\s*shorts?\b/i.test(String(t.title||""));
+}
 function pxEstiloCard(task){
   const id=String((task&&task.id)||""), ti=String((task&&task.title)||""), ct=String((task&&(task.contentType||task.content_type))||"").toLowerCase();
   const tags=Array.isArray(task&&task.tags)?task.tags:[];
@@ -6130,6 +6143,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="refresh")   return <svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
   if(n==="folder")    return <svg {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
   if(n==="filter")    return <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+  if(n==="music")     return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
   if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
   if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
   if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
@@ -7353,6 +7367,56 @@ function pxEscurecerCor(hex,f){
     return s.length<2?("0"+s):s;
   }
   return "#"+_c(0)+_c(2)+_c(4);
+}
+
+/* Linha de interruptor de "Como esta peça sai" (Somente story, Adicionar música,
+   Não publica nas redes). Mora aqui porque roda em DOIS lugares: o painel do cartão
+   (10_radar_entrega) e a barra do topo da Avaliação de copys (06_aprovacoes).
+   Um componente só: as linhas ficam iguais e mudam juntas. */
+function PxSwitchLinha({on,onToggle,disabled,icone,corIcone,fundoIcone,label,hint,title,primeiro}){
+  return <div title={title||""} onClick={function(){ if(!disabled&&onToggle) onToggle(); }}
+    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:primeiro?"none":"1px solid #f1f5f9",cursor:disabled?"default":"pointer",transition:"background .12s",background:"transparent",opacity:disabled?.7:1}}
+    onMouseEnter={function(e){ if(!disabled) e.currentTarget.style.background="#fafafa"; }}
+    onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
+    <span style={{width:26,height:26,borderRadius:8,background:on?fundoIcone:"#f1f5f9",color:on?corIcone:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>{icone}</span>
+    <span style={{minWidth:0,flex:1}}>
+      <span style={{display:"block",fontSize:12.5,fontWeight:650,color:on?"#0f172a":"#475569",letterSpacing:-.15,lineHeight:1.25}}>{label}</span>
+      {hint&&<span style={{display:"block",fontSize:10.5,color:"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.35}}>{hint}</span>}
+    </span>
+    <span aria-hidden="true" style={{width:34,height:20,borderRadius:99,background:on?"#7c3aed":"#e2e8f0",flexShrink:0,position:"relative",transition:"background .16s"}}>
+      <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+    </span>
+  </div>;
+}
+
+/* "Como esta peça sai" — as três linhas com os mesmos rótulos, tooltips e ícones no
+   cartão (10_radar_entrega) e na barra do topo da Avaliação de copys (06_aprovacoes).
+   O texto mora num lugar só: as duas telas nunca discordam. Quem chama diz o que está
+   ligado e o que fazer no clique. */
+function PxComoSaiLinhas({story,musica,naoPublica,folder,disabled,onStory,onMusica,onNaoPublica}){
+  const _naoPub=naoPublica||folder;
+  return <>
+    <PxSwitchLinha primeiro on={story} disabled={disabled}
+      onToggle={onStory}
+      label="Somente story" hint="Sem arte de feed"
+      title="Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda."
+      corIcone="#d97706" fundoIcone="#fef3c7"
+      icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>}/>
+    <PxSwitchLinha on={musica} disabled={disabled}
+      onToggle={onMusica}
+      label="Adicionar música" hint="A social media põe o áudio"
+      title="A peça sai com música: quem publica adiciona o áudio na hora de postar."
+      corIcone="#db2777" fundoIcone="#fce7f3"
+      icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>}/>
+    <PxSwitchLinha on={_naoPub} disabled={disabled||folder}
+      onToggle={onNaoPublica}
+      label="Não publica nas redes"
+      hint={folder?"Folder é sempre assim":"Fora dos calendários e da cota"}
+      title={folder?"Folder é material impresso: nunca entra no calendário."
+                   :"Convite, material de feira, peça interna. Some dos calendários, sai da cota do mês e não ocupa o dia no planejamento."}
+      corIcone="#475569" fundoIcone="#e2e8f0"
+      icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>}/>
+  </>;
 }
 
 // ======= 01_dashboard.jsx =======
@@ -22581,6 +22645,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
+                            {/* (22/09/2026) Chip de música: quem publica bate o olho no calendário e
+                                já sabe que a peça leva áudio, sem abrir o cartão. */}
+                            {!!t.musica&&<span title="Com música — a social media adiciona o áudio ao publicar"
+                              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#db2777",color:"#fff",border:"1px solid rgba(255,255,255,0.20)",boxSizing:"border-box",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>
+                            </span>}
                             {(function(){
                               // Contador do projeto: 3/8 = 3º conteúdo do mês 1 do Starter (8 previstos)
                               const _ct=contadorProjeto[t.id];
@@ -31058,6 +31128,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       try{ pxCascataConfirmar(Object.assign({},task,patch),setTasks,actor); }
       catch(_e){ console.warn("[cascata avaliacao]",_e); }
     }
+    /* (22/09/2026) DESMARCOU "Somente story" ou "Não publica" POR AQUI → o card passa a
+       ocupar o dia. Mesma regra que o cartão já seguia desde 19/09: a varredura relê do
+       banco e empurra a fila se a semana estourar a cadência (comemorativa não sai do lugar). */
+    const _viraFeed=(patch&&Object.prototype.hasOwnProperty.call(patch,"somenteStory")&&!patch.somenteStory&&!!(task.somenteStory||task.somente_story))
+                  ||(patch&&Object.prototype.hasOwnProperty.call(patch,"naoPublica")&&!patch.naoPublica&&!!(task.naoPublica||task.nao_publica));
+    if(_viraFeed&&typeof pxCascataVarrer==="function"){
+      setTimeout(function(){ try{ pxCascataVarrer(); }catch(_e){ console.warn("[cascata varrer avaliacao]",_e); } },2500);
+    }
   };
 
   // ── PUBLICATION ACTIONS ──
@@ -32366,11 +32444,36 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 try{ if(typeof el.showPicker==="function"){ el.showPicker(); return; } }catch(e){ console.warn("[meta] showPicker falhou:",e&&e.message); }
                 try{ el.focus(); el.click(); }catch(e){ console.warn("[meta] focus/click falhou:",e&&e.message); }
               };
+              /* (22/09/2026, Rodrigo) O bloco "Como esta peça sai" inteiro na barra: quem
+                 avalia a copy marca story, música e "não publica" sem abrir o cartão, e quem
+                 só lê (social media) enxerga na hora se a peça leva áudio. */
+              const _story=!!(current.somenteStory||current.somente_story);
+              const _folder=ct==="folder";
+              const _naoPubReal=!!(current.naoPublica||current.nao_publica);
+              const _naoPub=_naoPubReal||_folder;
+              const _mus=!!current.musica;
+              const _saidaVal=(_naoPub?"Não publica":(_story?"Somente story":"Feed"))+(_mus?" · com música":"");
+              /* A tag "Somente story"/"Não publica" é espelho do campo — mesma regra do
+                 cartão (10_radar_entrega): mexeu no interruptor, a tag acompanha. Música
+                 não vira tag: ela aparece pelo próprio campo. */
+              const _salvarSaida=(campo,valor,nome)=>{
+                const patch={}; patch[campo]=valor;
+                if(campo!=="musica"){
+                  const _st=campo==="somenteStory"?valor:_story;
+                  const _np=campo==="naoPublica"?valor:_naoPubReal;
+                  let _tg=(Array.isArray(current.tags)?current.tags:[]).filter(x=>String(x)!=="Somente story"&&String(x)!=="Não publica");
+                  if(_st)_tg=_tg.concat(["Somente story"]);
+                  if(_np)_tg=_tg.concat(["Não publica"]);
+                  patch.tags=_tg;
+                }
+                salvarMetaCard(current,patch,nome,valor?"não":"sim",valor?"sim":"não",false);
+              };
               const linhas=[
                 {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
                 {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
                 {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316"},
                 {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
+                {key:"saida",icon:_mus?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
               ].filter(l=>podeEditar||l.val);
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
@@ -32385,7 +32488,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   const aqui=aberto===l.key;
                   const clicar=()=>{
                     if(!podeEditar)return;
-                    if(l.key==="ct"){ setMetaAberto(aqui?null:{id:current.id,campo:"ct"}); return; }
+                    if(l.key==="ct"||l.key==="saida"){ setMetaAberto(aqui?null:{id:current.id,campo:l.key}); return; }
                     setMetaAberto(null);
                     abrirSeletor(ID(l.key));
                   };
@@ -32415,7 +32518,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             style={{background:"#f1f4f8",color:pubT?"#334155":"#a5adba",borderRadius:7,padding:"2px 7px",fontSize:isMob?11:11.5,fontWeight:800,letterSpacing:-.1,flexShrink:0,cursor:podeEditar?"pointer":"default",outline:"none"}}>{pubT||"hora"}</span>)}
                         </span>
                       </span>
-                      {podeEditar&&<Ico n={l.key==="ct"?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
+                      {podeEditar&&<Ico n={(l.key==="ct"||l.key==="saida")?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
                       {/* Inputs nativos invisíveis: são eles que abrem calendário, relógio e mês. */}
                       {podeEditar&&l.key==="pub"&&(<>
                         <input id={ID("pub")} type="date" value={pubD||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
@@ -32443,6 +32546,15 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                           {sel&&<Ico n="check" size={13} color="#7c3aed"/>}
                         </button>;
                       })}
+                    </div>)}
+
+                    {/* Como esta peça sai — os MESMOS interruptores do cartão (PxComoSaiLinhas).
+                        Salva no clique e o painel fica aberto pra marcar mais de um. */}
+                    {aqui&&l.key==="saida"&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:15,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:4,minWidth:292,maxWidth:"min(340px, calc(100vw - 48px))",boxSizing:"border-box",overflow:"hidden"}}>
+                      <PxComoSaiLinhas story={_story} musica={_mus} naoPublica={_naoPubReal} folder={_folder} disabled={!podeEditar}
+                        onStory={()=>_salvarSaida("somenteStory",!_story,"somente story")}
+                        onMusica={()=>_salvarSaida("musica",!_mus,"adicionar música")}
+                        onNaoPublica={()=>_salvarSaida("naoPublica",!_naoPubReal,"não publica nas redes")}/>
                     </div>)}
                   </div>);
                 })}
@@ -43425,24 +43537,6 @@ function PxBotaoIA({label,hint,title,onClick}){
   </div>;
 }
 
-/* Linha de interruptor do painel do cartão (Somente story, Não publica nas redes).
-   Um componente só: os dois ficam iguais e mudam juntos. */
-function PxSwitchLinha({on,onToggle,disabled,icone,corIcone,fundoIcone,label,hint,title,primeiro}){
-  return <div title={title||""} onClick={function(){ if(!disabled&&onToggle) onToggle(); }}
-    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:primeiro?"none":"1px solid #f1f5f9",cursor:disabled?"default":"pointer",transition:"background .12s",background:"transparent",opacity:disabled?.7:1}}
-    onMouseEnter={function(e){ if(!disabled) e.currentTarget.style.background="#fafafa"; }}
-    onMouseLeave={function(e){ e.currentTarget.style.background="transparent"; }}>
-    <span style={{width:26,height:26,borderRadius:8,background:on?fundoIcone:"#f1f5f9",color:on?corIcone:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>{icone}</span>
-    <span style={{minWidth:0,flex:1}}>
-      <span style={{display:"block",fontSize:12.5,fontWeight:650,color:on?"#0f172a":"#475569",letterSpacing:-.15,lineHeight:1.25}}>{label}</span>
-      {hint&&<span style={{display:"block",fontSize:10.5,color:"#94a3b8",marginTop:1,fontWeight:500,lineHeight:1.35}}>{hint}</span>}
-    </span>
-    <span aria-hidden="true" style={{width:34,height:20,borderRadius:99,background:on?"#7c3aed":"#e2e8f0",flexShrink:0,position:"relative",transition:"background .16s"}}>
-      <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
-    </span>
-  </div>;
-}
-
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // ═══ Detecção de viewport mobile ═══
   const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
@@ -43637,6 +43731,17 @@ function _cardPodeSerResp(u){
   // (14/09/2026) Nao publica nas redes: convite, material de feira, peca interna.
   // Vale pra qualquer tipo de conteudo. O tipo "folder" ja tinha esse efeito embutido.
   const [naoPublica,setNaoPublica]=useState(!!(task.naoPublica||task.nao_publica));
+  // (22/09/2026, Rodrigo) Adicionar música: a peça publica com áudio e quem posta
+  // precisa saber disso batendo o olho. É só sim/não — qual música se combina no card.
+  const [musica,setMusica]=useState(!!(task.musica));
+  /* (22/09/2026, Rodrigo) "Vídeo short não precisa de edição, não precisa ter o editor
+     marcado." O app marcava o Guilherme sozinho sempre que alguém escolhia um tipo de
+     vídeo — foi assim que ele entrou nos dois Shorts da Bioter Toledo quando a Hellen
+     trocou o tipo pra "Corte de vídeo" (21/09). Em card de short, ninguém entra sozinho:
+     quem precisar de editor marca à mão. */
+  const _ehShortCard=function(_tipoNovo){
+    return (typeof pxEhShort==="function") && pxEhShort({title:title||task.title,contentType:(_tipoNovo||task.contentType),tipo:task.tipo,fromDrive:task.fromDrive,id:task.id});
+  };
   const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
   const _refMonthHidRef=useRef(null); // ref do input month — SEMPRE no topo (hook não pode ser condicional)
   // Deadline com auto-correção EAGER (no useState initializer, sem side effect)
@@ -43870,6 +43975,7 @@ function _cardPodeSerResp(u){
       setContentType(task.contentType||"");
       setSomenteStory(!!(task.somenteStory||task.somente_story));
       setNaoPublica(!!(task.naoPublica||task.nao_publica));
+      setMusica(!!(task.musica));
       setReferenceMonth(task.referenceMonth||"");
       // Recalcula deadline corrigido pro novo card + reset baseline
       const _newDeadline = _computeInitialDeadline(task);
@@ -44191,6 +44297,7 @@ function _cardPodeSerResp(u){
     if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
     if(!!somenteStory!==!!(task.somenteStory||task.somente_story))changed.push(somenteStory?"marcado como somente story":"desmarcado somente story");
     if(!!naoPublica!==!!(task.naoPublica||task.nao_publica))changed.push(naoPublica?"marcado como não publica nas redes":"desmarcado não publica nas redes");
+    if(!!musica!==!!(task.musica))changed.push(musica?"marcado para publicar com música":"desmarcado publicar com música");
     if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
@@ -44280,7 +44387,7 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,musica:!!musica,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -45599,6 +45706,8 @@ function _cardPodeSerResp(u){
               // Vira vídeo de verdade: o roteiro SUBSTITUI o briefing, o tipo de conteúdo
               // passa a ser Vídeo e o editor entra como responsável (mesma regra do seletor
               // de tipo). Pedido do Vinicius em 13/09/2026 — antes o botão só gerava o texto.
+              // AQUI o editor entra mesmo em card de short (ao contrário do seletor de tipo):
+              // clicar neste botão é dizer "isto deixou de ser um short e vira vídeo produzido".
               const novo=_pxRoteiroParaHtml(roteiroSt.texto);
               setDesc(novo);
               try{ if(descRef.current) descRef.current.innerHTML=novo; }catch(_){}
@@ -45873,7 +45982,7 @@ function _cardPodeSerResp(u){
                 setDesc(_v.briefing);
                 try{ if(descRef.current) descRef.current.innerHTML=_v.briefing; }catch(_){}
                 if(canEditContentType) setContentType(_v.tipo);
-                if(_v.ehVideo){ try{ setAssignees(function(p){ return p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]); }); }catch(_){} }
+                if(_v.ehVideo&&!_ehShortCard(_v.tipo)){ try{ setAssignees(function(p){ return p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]); }); }catch(_){} }
                 if(_v.legenda){
                   const _h=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml(_v.legenda):("<p>"+_v.legenda.replace(/\n/g,"</p><p>")+"</p>");
                   setCaption(_h);
@@ -48555,7 +48664,7 @@ function _cardPodeSerResp(u){
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 const _canPick=canEdit&&canEditContentType;
-                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":opt.id;setContentType(_newType);if(_newType==="video"||_newType==="corte"||_newType==="video_complexo"||_newType==="video_feira"){setAssignees(p=>p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]));}}} disabled={!_canPick}
+                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":opt.id;setContentType(_newType);if((_newType==="video"||_newType==="corte"||_newType==="video_complexo"||_newType==="video_feira")&&!_ehShortCard(_newType)){setAssignees(p=>p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]));}}} disabled={!_canPick}
                   style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:"6px 3px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:_canPick?"pointer":"not-allowed",fontSize:9.5,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.15,textAlign:"center",height:54,boxSizing:"border-box",opacity:_canPick?1:.7}}>
                   <Ico n={opt.icon} size={14}/>
                   <span style={{wordBreak:"break-word"}}>{opt.label}</span>
@@ -48564,27 +48673,18 @@ function _cardPodeSerResp(u){
             </div>
           </div>
 
-          {/* ── Como esta peça sai ── story / não publica ── */}
+          {/* ── Como esta peça sai ── story / música / não publica ──
+               As três linhas moram em PxComoSaiLinhas (00b_preview_util) porque a barra
+               do topo da Avaliação de copys mostra exatamente o mesmo bloco. */}
           {(function(){
             const _folder=contentType==="folder";
-            const _naoPub=naoPublica||_folder;
             return <div>
               <label style={LB}><span style={LB_DOT}/> Como esta peça sai</label>
               <div style={{border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",background:"#fff"}}>
-                <PxSwitchLinha primeiro on={somenteStory} disabled={!canEdit}
-                  onToggle={function(){ setSomenteStory(!somenteStory); }}
-                  label="Somente story" hint="Sem arte de feed"
-                  title="Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda."
-                  corIcone="#d97706" fundoIcone="#fef3c7"
-                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>}/>
-                <PxSwitchLinha on={_naoPub} disabled={!canEdit||_folder}
-                  onToggle={function(){ setNaoPublica(!naoPublica); }}
-                  label="Não publica nas redes"
-                  hint={_folder?"Folder é sempre assim":"Fora dos calendários e da cota"}
-                  title={_folder?"Folder é material impresso: nunca entra no calendário."
-                                :"Convite, material de feira, peça interna. Some dos calendários, sai da cota do mês e não ocupa o dia no planejamento."}
-                  corIcone="#475569" fundoIcone="#e2e8f0"
-                  icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M4 3l16 18"/></svg>}/>
+                <PxComoSaiLinhas story={somenteStory} musica={musica} naoPublica={naoPublica} folder={_folder} disabled={!canEdit}
+                  onStory={function(){ setSomenteStory(!somenteStory); }}
+                  onMusica={function(){ setMusica(!musica); }}
+                  onNaoPublica={function(){ setNaoPublica(!naoPublica); }}/>
               </div>
             </div>;
           })()}
@@ -54099,6 +54199,7 @@ const rowToTask = (r) => ({
   position:     r.position     ?? null,
   somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
   naoPublica:   !!r.nao_publica,     // convite/impresso/interno: fora de TODO calendário e do planejador
+  musica:       !!r.musica,          // publica com áudio: a social media adiciona a música
   copyVersoes:  Array.isArray(r.copy_versoes) ? r.copy_versoes : [],   // histórico de versões da copy (nova abordagem / refazer)
   traducaoPt:   (r.traducao_pt && typeof r.traducao_pt==="object") ? r.traducao_pt : null,   // tradução pt-BR da copy do Paraguay (guardada, não retraduz)
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
@@ -54158,6 +54259,7 @@ const taskToRow = (t) => ({
   position:       t.position     ?? null,
   somente_story:  !!t.somenteStory,
   nao_publica:    !!t.naoPublica,
+  musica:         !!t.musica,
   copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
   /* NUNCA apagar tradução já gravada: se o objeto em memória não trouxer o campo
      (veio de algum caminho que montou a task sem ele), aceita o alias snake_case.
@@ -103818,7 +103920,7 @@ async function pxGerarRoteiros(opts){
   const trend=(opts&&opts.trend)||null;
   const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
   const produtosFeitos=(opts&&opts.produtosFeitos)||{}; // {produto: quantos roteiros já tem}
-  const quantos=Math.max(1,Math.min(5,(opts&&opts.quantos)||5));
+  const quantos=Math.max(1,Math.min(10,(opts&&opts.quantos)||5));   // (22/09/2026) teto passou de 5 pra 10
   if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const py=unit==="paraguay";
   const fake={id:"roteiros-"+client, client:client, bioterUnit:unit, title:"Roteiro de vídeo", contentType:"video", tags:[]};
@@ -103889,7 +103991,9 @@ async function pxGerarRoteiros(opts){
   u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
   for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (o nome curto do produto/serviço da lista, em português, 1 a 5 palavras)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
 
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:4200,system:sys,messages:[{role:"user",content:u}]});
+  /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
+     estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"");
   const blocos=txt.split(/===\s*ROTEIRO\s*\d+\s*===/i).map(function(b){return b.trim();}).filter(Boolean);
@@ -104048,7 +104152,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
      pela unidade da tela. Sem unitAlvo (botao da aba Roteiros), vale a unidade selecionada. */
   const _gerar=async function(trend,clientAlvo,unitAlvo,pedidoTxt,quantosPedido){
     const _ped=String(pedidoTxt||"").trim();
-    const _qtd=Math.max(1,Math.min(5,Number(quantosPedido)||5));
+    const _qtd=Math.max(1,Math.min(10,Number(quantosPedido)||5));
     const cId=clientAlvo||clId;
     const uId=(cId==="bioter")?String(((unitAlvo===undefined||unitAlvo===null)?unit:unitAlvo)||""):"";
     if(!cId){ pixelsToast.warning("Escolhe o cliente."); return; }
@@ -104206,8 +104310,8 @@ function PageRoteiros({isMob, perms, viewingAs}){
         </div>
         <div>
           <div style={_lbl}>Quantos roteiros</div>
-          <div style={{display:"flex",gap:7}}>
-            {[1,2,3,4,5].map(function(n){ const on=(pedidoForm.quantos||1)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:n}));}}
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {[1,2,3,4,5,6,7,8,9,10].map(function(n){ const on=(pedidoForm.quantos||1)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:n}));}}
               style={{minWidth:44,background:on?_cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?_cor:"#e2e8f0"),borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
           </div>
         </div>
