@@ -103999,13 +103999,39 @@ function _rtTexto(r,semCabecalho){
   return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
     "*"+L.a+"*\n"+_rtParagrafos(r.abertura)+"\n\n*"+L.d+"*\n"+_rtParagrafos(r.desenvolvimento)+"\n\n*"+L.f+"*\n"+_rtParagrafos(r.fechamento);
 }
-/* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026): todos os roteiros da tela numa mensagem só,
-   na ordem em que aparecem, título em negrito e numerado, separador entre um e outro. */
+/* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; AGRUPADO POR PRODUTO em 22/09/2026, a
+   pedido do Rodrigo: "quando eu vou em copiar todos, quero que seja organizado pro whats,
+   separado pelas tags de produtos ali").
+   Uma mensagem só, em blocos — um por tag de produto, na ordem em que os produtos aparecem
+   na tela. Cabeçalho do bloco com a contagem, numeração CORRIDA (1..n) pra bater com o
+   número do botão, e separador leve entre os roteiros do mesmo produto.
+   Roteiro sem tag cai num bloco "Outros" no fim. Se NENHUM tiver tag, sai a lista simples
+   de antes — sem cabeçalho de produto pra não inventar seção. */
 function _rtTextoTodos(lista,nome){
-  const n=lista.length;
-  let out="🎬 *Roteiros de vídeo — "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar_";
-  lista.forEach(function(r,i){
-    out+="\n\n━━━━━━━━━━━━━━\n\n*"+(i+1)+". "+String(r.assunto||"Roteiro").toUpperCase()+"*\n\n"+_rtTexto(r,true);
+  const n=(lista||[]).length;
+  const grupos=[], idx={};
+  (lista||[]).forEach(function(r){
+    const prod=String((r&&r.produto)||"").trim();
+    const k=prod?("p:"+prod.toLowerCase()):"__sem__";
+    if(idx[k]===undefined){ idx[k]=grupos.length; grupos.push({produto:prod,itens:[]}); }
+    grupos[idx[k]].itens.push(r);
+  });
+  grupos.sort(function(a,b){ return (a.produto?0:1)-(b.produto?0:1); });   // "Outros" por último
+  const nProd=grupos.filter(function(g){ return !!g.produto; }).length;
+  const porProduto=nProd>0;
+  let out="🎬 *Roteiros de vídeo — "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar"+
+          (nProd>1?(" · "+nProd+" produtos"):"")+"_";
+  let i=0;
+  grupos.forEach(function(g){
+    if(porProduto){
+      const q=g.itens.length;
+      out+="\n\n━━━━━━━━━━━━━━\n📦 *"+String(g.produto||"Outros").toUpperCase()+"* · _"+q+(q===1?" roteiro":" roteiros")+"_\n━━━━━━━━━━━━━━";
+    }
+    g.itens.forEach(function(r,j){
+      i++;
+      out+=(porProduto?(j===0?"\n\n":"\n\n──────────\n\n"):"\n\n━━━━━━━━━━━━━━\n\n")
+        +"*"+i+". "+String(r.assunto||"Roteiro").toUpperCase()+"*\n\n"+_rtTexto(r,true);
+    });
   });
   return out;
 }
@@ -104022,6 +104048,11 @@ async function pxGerarRoteiros(opts){
   const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
   const produtosFeitos=(opts&&opts.produtosFeitos)||{}; // {produto: quantos roteiros já tem}
   const quantos=Math.max(1,Math.min(10,(opts&&opts.quantos)||5));   // (22/09/2026) teto passou de 5 pra 10
+  /* (22/09/2026) BUG "pedido is not defined": o Roteiro específico (21/09) manda `opts.pedido`,
+     o prompt usa `pedido` em 5 lugares — e a variável nunca foi declarada. Estourava
+     ReferenceError já no bloco de "assuntos que já têm roteiro", ou seja, em QUALQUER geração
+     de cliente que já tivesse roteiro, não só no pedido. */
+  const pedido=String((opts&&opts.pedido)||"").trim();
   if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const py=unit==="paraguay";
   const fake={id:"roteiros-"+client, client:client, bioterUnit:unit, title:"Roteiro de vídeo", contentType:"video", tags:[]};
@@ -104095,6 +104126,14 @@ async function pxGerarRoteiros(opts){
   /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
      estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
   const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
+  const out=_rtParseResposta(data);
+  if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
+  return out.slice(0,quantos);
+}
+
+/* Lê os blocos ===ROTEIRO n=== da resposta da IA. Um lugar só: o gerador e o AJUSTE
+   pedem o mesmo formato, então não pode existir um segundo parser. */
+function _rtParseResposta(data){
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"");
   const blocos=txt.split(/===\s*ROTEIRO\s*\d+\s*===/i).map(function(b){return b.trim();}).filter(Boolean);
@@ -104108,8 +104147,54 @@ async function pxGerarRoteiros(opts){
       fechamento:pega("FECHAMENTO|CIERRE","NUNCA_ACHA_ISSO_AQUI")};
     if(r.abertura&&r.desenvolvimento&&r.fechamento) out.push(r);
   });
+  return out;
+}
+
+/* ── AJUSTAR UM ROTEIRO (22/09/2026, Rodrigo) ─────────────────────────────────────
+   "deve ter um botão de ajustar copy, tal qual lá na avaliação de copys, aí dá pra ser
+    ajustado algo que não gostou sem ter que reescrever outro, porque pode ter ficado bom,
+    só precisa de alguns ajustes."
+   A IA recebe o roteiro INTEIRO + o que a agência pediu e devolve O MESMO roteiro com o
+   ajuste feito. O que não foi criticado volta igual — não é "gerar outro". */
+async function pxAjustarRoteiro(r,feedback){
+  const fb=String(feedback||"").trim();
+  if(!fb) throw new Error("Escreve o que você quer mudar.");
+  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const client=String((r&&r.client_id)||""), unit=String((r&&r.unidade)||"");
+  const py=unit==="paraguay";
+  const fake={id:"roteiros-"+client,client:client,bioterUnit:unit,title:(r&&r.assunto)||"Roteiro de vídeo",contentType:"video",tags:[]};
+  let ctx=null; try{ if(typeof pxContextoCopy==="function") ctx=await pxContextoCopy(client,unit,fake); }
+  catch(e){ console.warn("[ajustar roteiro] contexto falhou:",e&&e.message); }
+  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[];
+
+  const sys="Você escreve roteiros de vídeo pra empresas do agronegócio e da construção no Brasil, na voz de cada marca. "+
+    "O roteiro é a FALA que o dono ou o técnico da empresa vai gravar olhando pra câmera. "+
+    "Agora você NÃO está criando um roteiro novo: está AJUSTANDO um que já existe, atendendo o pedido da agência. "+
+    (py?"ESCREVA AS FALAS EM ESPANHOL (é a unidade do Paraguai); os rótulos ficam em português.":"Escreva em português do Brasil.")+
+    " Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
+
+  let u="CLIENTE: "+String((r&&r.cliente_nome)||client)+(unit?(" — unidade "+unit):"")+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
+  u+="ROTEIRO ATUAL (é ESTE que você vai ajustar):\n";
+  u+="ASSUNTO: "+String((r&&r.assunto)||"")+"\n";
+  if(r&&r.produto) u+="PRODUTO: "+String(r.produto)+"\n";
+  u+="ABERTURA:\n"+String((r&&r.abertura)||"")+"\n\nDESENVOLVIMENTO:\n"+String((r&&r.desenvolvimento)||"")+"\n\nFECHAMENTO:\n"+String((r&&r.fechamento)||"")+"\n\n";
+  u+="O QUE A AGÊNCIA PEDIU PRA AJUSTAR:\n"+fb+"\n\n";
+  u+="TAREFA: devolva o MESMO roteiro com esse ajuste feito. MANTENHA tudo que não foi criticado — o assunto, o produto, a ordem das ideias e as frases que já estão boas. "+
+     "Não reescreva do zero, não troque de tema e nunca invente número, cidade, prazo, garantia nem depoimento. "+
+     "Se o pedido fala só de uma parte (a abertura, por exemplo), as outras voltam praticamente iguais.\n";
+  u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
+  u+="- PARÁGRAFOS: parágrafos CURTOS, uma ideia por parágrafo, com uma linha em branco entre eles.\n";
+  u+="- TAMANHO: 170 a 200 palavras NO TOTAL.\n\n";
+  u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, em português)\n"+
+     ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
+
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:2400,system:sys,messages:[{role:"user",content:u}]});
+  const out=_rtParseResposta(data);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  return out.slice(0,quantos);
+  return out[0];
 }
 
 /* Ícone diferente em cada roteiro (16/09/2026): os 1-2-3 das seções confundiam; o que
@@ -104131,8 +104216,12 @@ const _RT_ICONES=[
 function _rtIcone(id){ let h=0; const t=String(id||""); for(let i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return _RT_ICONES[h%_RT_ICONES.length]; }
 
 /* ── CARD DE UM ROTEIRO (agência e portal usam o mesmo) ── */
-function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
+function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob}){
   const [aberto,setAberto]=useState(true);
+  /* (22/09/2026, Rodrigo) Ajustar o roteiro sem reescrever outro: `ajuste` é o texto do
+     pedido (null = painel fechado). Quem sabe falar com a IA é a página — aqui só coleta. */
+  const [ajuste,setAjuste]=useState(null);
+  const [ajustando,setAjustando]=useState(false);
   const py=String(r.unidade||"")==="paraguay";
   const L=py?["Apertura","Desarrollo","Cierre"]:["Abertura","Desenvolvimento","Fechamento"];
   const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]];
@@ -104148,6 +104237,9 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
           {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.2,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.produto}</span>}
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
+          {Array.isArray(r.ajustes)&&r.ajustes.length>0&&<span title={"Último ajuste pedido: "+String((r.ajustes[r.ajustes.length-1]||{}).feedback||"")}
+            style={{background:"#fffbeb",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
+            Ajustado{r.ajustes.length>1?(" "+r.ajustes.length+"x"):""}</span>}
         </div>
         <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~90 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
@@ -104164,14 +104256,47 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, isMob}){
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           {r.status==="enviado"?"Enviado":"Enviar"}
         </button>}
-        {agencia&&onExcluir&&<button type="button" title="Excluir" onClick={onExcluir} style={{background:"none",border:"none",color:"#e2b3b3",cursor:"pointer",padding:5,display:"inline-flex",borderRadius:7}}
-          onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#e2b3b3";}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
+        {agencia&&onAjustar&&<button type="button" title="Diz o que não ficou bom — a IA ajusta ESTE roteiro e mantém o resto"
+          onClick={function(){ setAjuste(ajuste===null?"":null); }} style={_pill(ajuste!==null,"#d97706")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21l9-9"/><path d="M15 3.5V1.5M15 10.5V8.5M11 6h2M19 6h2M17.6 8.4L19 9.8M17.6 3.6L19 2.2M12.4 3.6L11 2.2"/></svg>
+          Ajustar
+        </button>}
+        {/* (22/09/2026) O excluir era um ícone #e2b3b3 sem fundo: "quase não dá pra ver".
+            Agora é pílula vermelha vazada, do mesmo tamanho das outras, e enche no hover. */}
+        {agencia&&onExcluir&&<button type="button" title="Excluir este roteiro" onClick={onExcluir}
+          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+          Excluir
+        </button>}
         <span style={{flex:1}}/>
         <button type="button" onClick={function(){setAberto(!aberto);}} title={aberto?"Recolher":"Abrir"} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,display:"inline-flex"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
     </div>
+    {ajuste!==null&&<div style={{margin:"0 12px 11px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"10px 11px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{color:"#92400e",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>O que ajustar neste roteiro</div>
+      <textarea value={ajuste} onChange={function(e){setAjuste(e.target.value);}} rows={3} autoFocus disabled={ajustando}
+        placeholder="Ex.: a abertura está técnica demais, fala como o produtor fala. O resto pode ficar igual."
+        style={{width:"100%",boxSizing:"border-box",border:"1px solid #fcd34d",borderRadius:9,padding:"8px 9px",fontSize:12,lineHeight:1.5,fontFamily:_RT_FF,color:"#0f172a",resize:"vertical",outline:"none",background:"#fff"}}/>
+      <div style={{display:"flex",gap:7,justifyContent:"flex-end",alignItems:"center"}}>
+        <button type="button" disabled={ajustando} onClick={function(){setAjuste(null);}}
+          style={{background:"transparent",border:"none",color:"#92400e",fontSize:11.5,fontWeight:700,cursor:ajustando?"default":"pointer",fontFamily:_RT_FF,padding:"6px 8px"}}>Cancelar</button>
+        <button type="button" disabled={ajustando||!String(ajuste||"").trim()}
+          onClick={function(){
+            const _fb=String(ajuste||"").trim(); if(!_fb||!onAjustar) return;
+            setAjustando(true);
+            Promise.resolve(onAjustar(_fb))
+              .then(function(){ setAjuste(null); })
+              .catch(function(){})                      // o erro já vira toast na página
+              .then(function(){ setAjustando(false); });
+          }}
+          style={{background:(ajustando||!String(ajuste||"").trim())?"#e2e8f0":"#d97706",color:(ajustando||!String(ajuste||"").trim())?"#94a3b8":"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:(ajustando||!String(ajuste||"").trim())?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:6}}>
+          {ajustando?"Ajustando…":"Ajustar roteiro"}
+        </button>
+      </div>
+    </div>}
     {aberto&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:7}}>
       {partes.map(function(p,i){
         return <div key={p[0]} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
@@ -104317,6 +104442,22 @@ function PageRoteiros({isMob, perms, viewingAs}){
     const up=await sb.from("roteiros_video").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",r.id);
     if(up.error){ pixelsToast.error("Não salvou: "+up.error.message); _carregar(); }
   };
+  /* (22/09/2026, Rodrigo) AJUSTAR o roteiro em vez de gerar outro. A IA recebe o roteiro
+     inteiro + o pedido e devolve o MESMO roteiro corrigido; o produto original é mantido
+     (é ele que agrupa o "Copiar todos"). O feedback fica guardado em `ajustes`. */
+  const _ajustar=async function(r,texto){
+    const fb=String(texto||"").trim(); if(!fb||!sb) return;
+    try{
+      const novo=await pxAjustarRoteiro(Object.assign({},r,{cliente_nome:_nomeCl(r.client_id,r.unidade)}),fb);
+      const hist=(Array.isArray(r.ajustes)?r.ajustes:[]).concat([{feedback:fb,at:new Date().toISOString(),por:(_u&&_u.name)||""}]);
+      await _patch(r,{assunto:novo.assunto||r.assunto,produto:r.produto||novo.produto||null,
+        abertura:novo.abertura,desenvolvimento:novo.desenvolvimento,fechamento:novo.fechamento,ajustes:hist});
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Roteiro ajustado.",2500);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra ajustar: "+((e&&e.message)||e),6000);
+      throw e;
+    }
+  };
   const _excluir=async function(r){
     const ok=(typeof pixelsConfirm==="function")?await pixelsConfirm({title:"Excluir roteiro?",message:'"'+(r.assunto||"Roteiro")+'" sai da lista e do portal.',confirmLabel:"Excluir",danger:true}):window.confirm("Excluir?");
     if(!ok) return;
@@ -104384,7 +104525,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
           {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
         </div>
-        {_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela, em ordem, formatados pro WhatsApp"
+        {_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela numa mensagem só, agrupados pela tag de produto e formatados pro WhatsApp"
           onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
           style={{background:"#fff",color:visiveis.length?"#16a34a":"#94a3b8",border:"1px solid "+(visiveis.length?"#86efac":"#e2e8f0"),borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:800,cursor:visiveis.length?"pointer":"default",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
@@ -104439,6 +104580,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
         {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
+          onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined}
           onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
     </>}
@@ -104498,7 +104640,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
               return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
-                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
+                <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
           </div></div>}
         </div>;
       })}
