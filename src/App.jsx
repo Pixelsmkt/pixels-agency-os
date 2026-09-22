@@ -4506,6 +4506,14 @@ function pxCtxMateriaisTxt(ctx){
   let u="MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo, briefing que a própria empresa "+
         "passou — é fato conferido, pode usar como verdade; ainda assim, escreva com as suas "+
         "palavras, não copie trecho):\n";
+  /* (22/09/2026, Rodrigo) Material do Grupo vale pro Paraguay também, "traduz pra espanhol".
+     A ficha fica em português (é uma só pra todas as unidades); a peça do Paraguay sai em
+     espanhol, então o aviso é pra traduzir os FATOS e não o texto — e usar o nome em espanhol
+     do produto quando o Playbook tiver um. */
+  if(String((ctx&&ctx._unit)||"")==="paraguay")
+    u+="(As fichas abaixo estão em português. A peça é do Paraguay, em espanhol: use os fatos "+
+       "traduzidos, nunca o texto em português — e chame o produto pelo nome em espanhol que o "+
+       "Playbook dá, quando houver.)\n";
   let gasto=0, entraram=0;
   for(const m of arr){
     const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) continue;
@@ -4632,6 +4640,9 @@ async function pxContextoCopy(client, unit, task){
       p_year:d.getFullYear(), p_month:d.getMonth()+1,
       p_estilo:task?pxEstiloCard(task):null });
     if(error) return null;
+    // A unidade vai junto: quem monta o bloco de materiais precisa saber se a peça é do
+    // Paraguay (ficha em português, copy em espanhol).
+    if(data&&typeof data==="object") data._unit=String(unit||"");
     return data||null;
   }catch(_){ return null; }
 }
@@ -19345,19 +19356,18 @@ const PX_CASCATA_FIM_CONTRATO={acreforte:"2026-10-30",construesclem:"2026-11-18"
 // VetService: comemorativa fica à parte (não conta na cadência) — regra do planejamento de 11/09.
 const PX_CASCATA_COMEM_NAO_CONTA=["vetservice"];
 const PX_CASCATA_HORIZONTE_SEMANAS=30;
-/* ── FREIO DE MÃO (22/09/2026, Rodrigo) ──────────────────────────────────────────────
-   Mudar UM card ("Itamar Vicente" de Chapecó pra collab) fez a varredura mover 48 cards —
-   17 deles já em produção — porque collab conta nas CINCO unidades e nenhuma tinha folga:
-   cada fila andou até janeiro, uma atrás da outra.
+/* ── SEM FREIO (22/09/2026, Rodrigo) ─────────────────────────────────────────────────
+   Existiu por duas horas um "freio de mão": se a varredura fosse mover mais de 10 cards,
+   parava e mostrava um aviso azul. Nasceu do incidente do Itamar (48 cards) — e nasceu
+   errado. O que estava errado naquele incidente era o app CRIAR card sozinho (consertado
+   na varredura de semana curta) e a mensagem mentirosa de "comemorativa saiu da semana".
+   O dominó em si é a cascata fazendo o trabalho dela: fila cheia, entrou um, todos andam.
 
-   A cascata foi feita pra deslocar uma fila curta, não pra reescrever o calendário. Daqui
-   pra frente ela soma o que já moveu na rodada e, se o próximo empurrão passar deste teto,
-   ela PARA ANTES de aplicar e avisa — em vez de arrastar tudo. Parar entre uma fila e outra
-   é seguro: cada fila é aplicada inteira ou não é aplicada.
-
-   Quando o freio puxa, é sinal de que não existe folga nenhuma no período — isso é decisão
-   de planejamento, não coisa pra um reajuste automático resolver sozinho. */
-const PX_CASCATA_VARRE_MAX_MOVES=10;
+   "é pra você ajustar automaticamente." Então ajusta. Semana de 20/09 com duas collabs
+   e os Shorts: Foto de obra de Chapecó e Eta de Castro saem do dia 26 e a fila anda até
+   onde tiver que andar. O aviso de "N cards andaram" (com logo e título) já conta o que
+   aconteceu; a timeline de cada card também. Nada de parar no meio e pedir pra pessoa
+   olhar painel. */
 function _pxCasFixo(t){
   const id=String((t&&t.id)||"");
   if(id.indexOf("autocom-")===0||id.indexOf("autoev-")===0) return true;
@@ -19860,14 +19870,6 @@ async function pxCascataVarrer(protegerId){
       if(!achou) break;
       const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id});
       if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
-      if(total+plano.moves.length>PX_CASCATA_VARRE_MAX_MOVES){
-        console.warn("[cascata varrer] freio de mão:",total,"+",plano.moves.length,"> ",PX_CASCATA_VARRE_MAX_MOVES);
-        if(typeof pixelsToast!=="undefined") pixelsToast.info(
-          "Parei o reajuste automático: pra acertar a semana de "+_pxCasBr(achou.semana)+" seria preciso mover "+
-          (total+plano.moves.length)+" cards, um empurrando o outro até "+
-          _pxCasBr(String(plano.moves[plano.moves.length-1].para))+". Não existe folga no período — dá uma olhada no painel de auditoria do calendário.",11000);
-        break;
-      }
       const n=await pxCascataAplicar(plano,null,"varredura de cadência","a semana estava acima da cadência do cliente");
       if(!n) break;
       total+=n;
@@ -98369,8 +98371,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Estrutura: {chapeco:{telefone,whatsapp,...}, toledo:{...}, ...}
   const [editContatosByUnit,setEditContatosByUnit] = useState(data.contatos_by_unit||{});
   // Tab de unidade ativa (Bioter only) — controla qual unidade está sendo visualizada/editada
-  const _firstUnitId = (typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS[0])?BIOTER_UNITS[0].id:"";
-  const [_unitTab,setUnitTab] = useState(_firstUnitId);
+  /* (22/09/2026, Rodrigo) "deve ter um item Grupo Bioter — os materiais subidos no grupo valem
+     pra todas as unidades (inclusive Paraguay, traduzindo); os subidos numa unidade valem só
+     pra ela." O banco já filtrava assim (unidade '' = todas), mas o seletor nunca deixava
+     escolher '' — todo material nascia preso à unidade que estava ativa. Agora `""` é o
+     Grupo, é o primeiro botão e é o padrão: subir sem escolher nada vale pra todas. */
+  const [_unitTab,setUnitTab] = useState("");
   // Filtro independente pra aba Produtos (nao compartilha com Contatos)
   const _unitTabProd=_unitTab, setUnitTabProd=setUnitTab; // UNIFICADO: um seletor de unidade no topo governa Contatos e Produtos
   // Lightbox pra ver imagem de produto expandida (sem abrir nova aba)
@@ -98680,17 +98686,21 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",position:"sticky",top:54,zIndex:4,boxShadow:"0 2px 10px rgba(15,23,42,.05)"}}>
         <span style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Unidade</span>
         <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
-          {BIOTER_UNITS.map(function(u){
+          {[{id:"",label:"Grupo Bioter",pickerLabel:"Grupo Bioter",grupo:true}].concat(BIOTER_UNITS).map(function(u){
             const active=_unitTab===u.id;
-            return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
+            return <button key={u.id||"grupo"} type="button" onClick={function(){setUnitTab(u.id);}}
+              title={u.grupo?"Vale pra todas as unidades — inclusive Paraguay, traduzido":("Só "+(u.pickerLabel||u.label))}
               style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 13px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
               onMouseEnter={function(e){if(!active)e.currentTarget.style.background="rgba(15,23,42,.06)";}}
               onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
+              {u.grupo&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:5,verticalAlign:"-1px"}}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
               {u.pickerLabel||u.label}
             </button>;
           })}
         </div>
-        <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>Contatos e Produtos abaixo mostram só essa unidade</span>
+        <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>
+          {_unitTab?"Contatos, Produtos, Materiais e Feedbacks abaixo são só desta unidade":"Grupo: o que entrar aqui vale pra todas as unidades — Paraguay recebe traduzido"}
+        </span>
       </div>}
 
       {/* ══════════ GRID 2 COLUNAS ══════════ */}
@@ -98732,8 +98742,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             {_isBioter && typeof BIOTER_UNITS!=="undefined" && (function(){
               const _u=BIOTER_UNITS.find(function(x){return x.id===_unitTab;});
               return <div style={{marginBottom:14,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_u&&(_u.pickerLabel||_u.label))||_unitTab}</span>
-                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>unidade ativa — troque no seletor fixo do topo</span>
+                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_u&&(_u.pickerLabel||_u.label))||(_unitTab||"Grupo Bioter")}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unitTab?"unidade ativa — troque no seletor fixo do topo":"contatos gerais do grupo — escolha uma unidade no topo pra ver os dela"}</span>
               </div>;
             })()}
             {(function(){
@@ -98927,18 +98937,19 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
             {(function(){
               // Bioter: marcações são POR UNIDADE (segue o seletor do topo) — igual aos Contatos.
-              const _mk=_isBioter
+              // Grupo (_unitTab vazio) usa a lista geral — a mesma dos clientes sem unidade.
+              const _mk=(_isBioter&&_unitTab)
                 ? (Array.isArray((data.marcacoes_by_unit||{})[_unitTab])?data.marcacoes_by_unit[_unitTab]:[])
                 : (Array.isArray(data.marcacoes)?data.marcacoes:[]);
               const _upd=function(lista){
-                if(_isBioter) onUpdate({marcacoes_by_unit: Object.assign({},data.marcacoes_by_unit||{},{[_unitTab]:lista})});
+                if(_isBioter&&_unitTab) onUpdate({marcacoes_by_unit: Object.assign({},data.marcacoes_by_unit||{},{[_unitTab]:lista})});
                 else onUpdate({marcacoes:lista});
               };
               const _uAtual=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(function(x){return x.id===_unitTab;}):null;
               const _fmtAt=function(a){var v=String(a||"").trim();if(!v)return "";return "@"+v.replace(/^@+/,"");};
               const _chipUnidade=_isBioter?<div style={{marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_uAtual&&(_uAtual.pickerLabel||_uAtual.label))||_unitTab}</span>
-                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>@ desta unidade — troque no seletor do topo</span>
+                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_uAtual&&(_uAtual.pickerLabel||_uAtual.label))||(_unitTab||"Grupo Bioter")}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unitTab?"@ desta unidade — troque no seletor do topo":"@ do grupo — escolha uma unidade no topo pra ver os dela"}</span>
               </div>:null;
               if(!editMode){
                 const _vis=_mk.filter(function(m){return m&&(m.arroba||m.nome);});
@@ -99723,7 +99734,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       pixelsToast.success(guardados.length+" materiais no Playbook. Confira as fichas antes de confiar nelas.",5000);
   };
   const _uniLabel=function(u){
-    if(!u) return "Todas as unidades";
+    if(!u) return "Grupo Bioter · todas as unidades";
     if(typeof BIOTER_UNITS==="undefined") return u;
     const x=BIOTER_UNITS.find(function(b){return b.id===u;});
     return x?(x.pickerLabel||x.label):u;
@@ -99764,7 +99775,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         {subindo ? (subindo.slice(0,52)+"…") : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha{isBioter?(" · entra na unidade "+_uniLabel(unitTab)+", que você troca no seletor do topo"):""} · acima de 8 MB o arquivo fica guardado sem ficha
+        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · acima de 8 MB o arquivo fica guardado sem ficha
       </span>
       <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
@@ -99783,7 +99794,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             <div style={{flex:1,minWidth:180}}>
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                 <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{m.titulo||m.arquivo_nome||"Material"}</span>
-                {m.unidade && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(m.unidade)}</span>}
+                {isBioter && <span title={m.unidade?"Só esta unidade lê":"Todas as unidades leem (Paraguay traduzido)"} style={{background:m.unidade?"#f1f5f9":"#ecfdf5",color:m.unidade?"#475569":"#047857",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{m.unidade?_uniLabel(m.unidade):"Grupo · todas"}</span>}
                 <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
               </div>
               <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:3}}>
