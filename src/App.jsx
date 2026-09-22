@@ -7393,8 +7393,13 @@ function PxSwitchLinha({on,onToggle,disabled,icone,corIcone,fundoIcone,label,hin
    cartão (10_radar_entrega) e na barra do topo da Avaliação de copys (06_aprovacoes).
    O texto mora num lugar só: as duas telas nunca discordam. Quem chama diz o que está
    ligado e o que fazer no clique. */
-function PxComoSaiLinhas({story,musica,naoPublica,folder,disabled,onStory,onMusica,onNaoPublica}){
+function PxComoSaiLinhas({story,musicaModo,naoPublica,folder,disabled,onStory,onMusica,onNaoPublica}){
   const _naoPub=naoPublica||folder;
+  /* (22/09/2026, Rodrigo) Música tem DOIS jeitos e o editor precisa saber qual:
+     "so"    = tira o áudio do vídeo e põe a trilha no lugar;
+     "baixo" = entra a música e o áudio original continua, baixinho, por trás.
+     São excludentes: ligar um desliga o outro (onMusica recebe o modo, "" desliga). */
+  const _mSo=String(musicaModo||"")==="so", _mBaixo=String(musicaModo||"")==="baixo";
   return <>
     <PxSwitchLinha primeiro on={story} disabled={disabled}
       onToggle={onStory}
@@ -7402,12 +7407,18 @@ function PxComoSaiLinhas({story,musica,naoPublica,folder,disabled,onStory,onMusi
       title="Vai pro story, sem arte de feed. Leva a tag no calendário, não ocupa o dia no planejamento e a IA não escreve legenda."
       corIcone="#d97706" fundoIcone="#fef3c7"
       icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>}/>
-    <PxSwitchLinha on={musica} disabled={disabled}
-      onToggle={onMusica}
-      label="Adicionar música" hint="A social media põe o áudio"
-      title="A peça sai com música: quem publica adiciona o áudio na hora de postar."
+    <PxSwitchLinha on={_mSo} disabled={disabled}
+      onToggle={function(){ if(onMusica) onMusica(_mSo?"":"so"); }}
+      label="Só a música" hint="Tira o áudio do vídeo"
+      title="Troca o áudio original pela música: o vídeo publica só com a trilha."
       corIcone="#db2777" fundoIcone="#fce7f3"
       icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>}/>
+    <PxSwitchLinha on={_mBaixo} disabled={disabled}
+      onToggle={function(){ if(onMusica) onMusica(_mBaixo?"":"baixo"); }}
+      label="Música + áudio baixo" hint="Mantém o som do vídeo baixinho"
+      title="Entra música por cima e o áudio original do vídeo continua, baixinho, por trás."
+      corIcone="#db2777" fundoIcone="#fce7f3"
+      icone={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9.2h3.4L12 5.2v13.6l-4.6-4H4z" fill="currentColor" stroke="none"/><path d="M4 9.2h3.4L12 5.2v13.6l-4.6-4H4z"/><path d="M15.4 10a3.4 3.4 0 0 1 0 4"/></svg>}/>
     <PxSwitchLinha on={_naoPub} disabled={disabled||folder}
       onToggle={onNaoPublica}
       label="Não publica nas redes"
@@ -22646,11 +22657,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               SOMENTE STORY
                             </span>}
                             {/* (22/09/2026) Chip de música: quem publica bate o olho no calendário e
-                                já sabe que a peça leva áudio, sem abrir o cartão. */}
-                            {!!t.musica&&<span title="Com música — a social media adiciona o áudio ao publicar"
-                              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#db2777",color:"#fff",border:"1px solid rgba(255,255,255,0.20)",boxSizing:"border-box",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>
-                            </span>}
+                                já sabe que a peça leva trilha — e QUAL dos dois jeitos. */}
+                            {(function(){
+                              const _mm=String(t.musicaModo||t.musica_modo||(t.musica?"so":"")||"");
+                              if(!_mm) return null;
+                              const _baixo=_mm==="baixo";
+                              return <span title={_baixo?"Música + áudio baixo — a música entra e o som do vídeo fica baixinho por trás":"Só a música — o áudio do vídeo sai e entra a trilha"}
+                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#db2777",color:"#fff",border:"1px solid rgba(255,255,255,0.20)",boxSizing:"border-box",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+                                {_baixo
+                                  ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9.2h3.4L12 5.2v13.6l-4.6-4H4z" fill="currentColor" stroke="none"/><path d="M15.4 10a3.4 3.4 0 0 1 0 4"/></svg>
+                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>}
+                              </span>;
+                            })()}
                             {(function(){
                               // Contador do projeto: 3/8 = 3º conteúdo do mês 1 do Starter (8 previstos)
                               const _ct=contadorProjeto[t.id];
@@ -32451,8 +32469,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const _folder=ct==="folder";
               const _naoPubReal=!!(current.naoPublica||current.nao_publica);
               const _naoPub=_naoPubReal||_folder;
-              const _mus=!!current.musica;
-              const _saidaVal=(_naoPub?"Não publica":(_story?"Somente story":"Feed"))+(_mus?" · com música":"");
+              const _musModo=String(current.musicaModo||current.musica_modo||(current.musica?"so":"")||"");
+              const _saidaVal=(_naoPub?"Não publica":(_story?"Somente story":"Feed"))+(_musModo==="so"?" · só música":(_musModo==="baixo"?" · música + áudio":""));
               /* A tag "Somente story"/"Não publica" é espelho do campo — mesma regra do
                  cartão (10_radar_entrega): mexeu no interruptor, a tag acompanha. Música
                  não vira tag: ela aparece pelo próprio campo. */
@@ -32468,12 +32486,19 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 }
                 salvarMetaCard(current,patch,nome,valor?"não":"sim",valor?"sim":"não",false);
               };
+              /* Música é um campo de TRÊS valores ("", "so", "baixo"), não um liga/desliga:
+                 marcar um jeito desmarca o outro. Grava o modo e o booleano junto, porque
+                 o chip do calendário e esta barra leem `musica` pra saber se tem trilha. */
+              const _nomeMus=(m)=>m==="so"?"só a música":(m==="baixo"?"música + áudio baixo":"sem música");
+              const _salvarMusica=(m)=>{
+                salvarMetaCard(current,{musicaModo:m||"",musica:!!m},"música",_nomeMus(_musModo),_nomeMus(m),false);
+              };
               const linhas=[
                 {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
                 {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
                 {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316"},
                 {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
-                {key:"saida",icon:_mus?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
+                {key:"saida",icon:_musModo?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
               ].filter(l=>podeEditar||l.val);
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
@@ -32551,9 +32576,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     {/* Como esta peça sai — os MESMOS interruptores do cartão (PxComoSaiLinhas).
                         Salva no clique e o painel fica aberto pra marcar mais de um. */}
                     {aqui&&l.key==="saida"&&(<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 7px)",left:0,zIndex:62,background:"#fff",border:"1px solid #e9ecf3",borderRadius:15,boxShadow:"0 16px 38px rgba(15,23,42,.18)",padding:4,minWidth:292,maxWidth:"min(340px, calc(100vw - 48px))",boxSizing:"border-box",overflow:"hidden"}}>
-                      <PxComoSaiLinhas story={_story} musica={_mus} naoPublica={_naoPubReal} folder={_folder} disabled={!podeEditar}
+                      <PxComoSaiLinhas story={_story} musicaModo={_musModo} naoPublica={_naoPubReal} folder={_folder} disabled={!podeEditar}
                         onStory={()=>_salvarSaida("somenteStory",!_story,"somente story")}
-                        onMusica={()=>_salvarSaida("musica",!_mus,"adicionar música")}
+                        onMusica={(m)=>_salvarMusica(m)}
                         onNaoPublica={()=>_salvarSaida("naoPublica",!_naoPubReal,"não publica nas redes")}/>
                     </div>)}
                   </div>);
@@ -43731,9 +43756,11 @@ function _cardPodeSerResp(u){
   // (14/09/2026) Nao publica nas redes: convite, material de feira, peca interna.
   // Vale pra qualquer tipo de conteudo. O tipo "folder" ja tinha esse efeito embutido.
   const [naoPublica,setNaoPublica]=useState(!!(task.naoPublica||task.nao_publica));
-  // (22/09/2026, Rodrigo) Adicionar música: a peça publica com áudio e quem posta
-  // precisa saber disso batendo o olho. É só sim/não — qual música se combina no card.
-  const [musica,setMusica]=useState(!!(task.musica));
+  /* (22/09/2026, Rodrigo) Música: dois jeitos, e o editor precisa saber qual.
+     "" = sem música · "so" = tira o áudio do vídeo e põe a trilha · "baixo" = música por
+     cima com o áudio original baixinho. Qual música é, se combina no card. */
+  const _pxModoMus=function(t){ return String((t&&(t.musicaModo||t.musica_modo))||((t&&t.musica)?"so":"")||""); };
+  const [musicaModo,setMusicaModo]=useState(_pxModoMus(task));
   /* (22/09/2026, Rodrigo) "Vídeo short não precisa de edição, não precisa ter o editor
      marcado." O app marcava o Guilherme sozinho sempre que alguém escolhia um tipo de
      vídeo — foi assim que ele entrou nos dois Shorts da Bioter Toledo quando a Hellen
@@ -43975,7 +44002,7 @@ function _cardPodeSerResp(u){
       setContentType(task.contentType||"");
       setSomenteStory(!!(task.somenteStory||task.somente_story));
       setNaoPublica(!!(task.naoPublica||task.nao_publica));
-      setMusica(!!(task.musica));
+      setMusicaModo(_pxModoMus(task));
       setReferenceMonth(task.referenceMonth||"");
       // Recalcula deadline corrigido pro novo card + reset baseline
       const _newDeadline = _computeInitialDeadline(task);
@@ -44297,7 +44324,7 @@ function _cardPodeSerResp(u){
     if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
     if(!!somenteStory!==!!(task.somenteStory||task.somente_story))changed.push(somenteStory?"marcado como somente story":"desmarcado somente story");
     if(!!naoPublica!==!!(task.naoPublica||task.nao_publica))changed.push(naoPublica?"marcado como não publica nas redes":"desmarcado não publica nas redes");
-    if(!!musica!==!!(task.musica))changed.push(musica?"marcado para publicar com música":"desmarcado publicar com música");
+    if(musicaModo!==_pxModoMus(task))changed.push(musicaModo==="so"?"marcado como só a música":(musicaModo==="baixo"?"marcado como música + áudio baixo":"tirada a música"));
     if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
@@ -44387,7 +44414,7 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,musica:!!musica,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -48681,9 +48708,9 @@ function _cardPodeSerResp(u){
             return <div>
               <label style={LB}><span style={LB_DOT}/> Como esta peça sai</label>
               <div style={{border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",background:"#fff"}}>
-                <PxComoSaiLinhas story={somenteStory} musica={musica} naoPublica={naoPublica} folder={_folder} disabled={!canEdit}
+                <PxComoSaiLinhas story={somenteStory} musicaModo={musicaModo} naoPublica={naoPublica} folder={_folder} disabled={!canEdit}
                   onStory={function(){ setSomenteStory(!somenteStory); }}
-                  onMusica={function(){ setMusica(!musica); }}
+                  onMusica={function(_m){ setMusicaModo(_m||""); }}
                   onNaoPublica={function(){ setNaoPublica(!naoPublica); }}/>
               </div>
             </div>;
@@ -54199,7 +54226,8 @@ const rowToTask = (r) => ({
   position:     r.position     ?? null,
   somenteStory: !!r.somente_story,   // card de story: tag no calendário e fora da cota 8/4/4
   naoPublica:   !!r.nao_publica,     // convite/impresso/interno: fora de TODO calendário e do planejador
-  musica:       !!r.musica,          // publica com áudio: a social media adiciona a música
+  musica:       !!r.musica,          // publica com música: a social media põe a trilha
+  musicaModo:   r.musica_modo || (r.musica?"so":""),   // "so" = troca o áudio · "baixo" = música + áudio original baixinho
   copyVersoes:  Array.isArray(r.copy_versoes) ? r.copy_versoes : [],   // histórico de versões da copy (nova abordagem / refazer)
   traducaoPt:   (r.traducao_pt && typeof r.traducao_pt==="object") ? r.traducao_pt : null,   // tradução pt-BR da copy do Paraguay (guardada, não retraduz)
   // ── Origem (portal cliente vs interno) + tipo da solicitação ──
@@ -54260,6 +54288,7 @@ const taskToRow = (t) => ({
   somente_story:  !!t.somenteStory,
   nao_publica:    !!t.naoPublica,
   musica:         !!t.musica,
+  musica_modo:    (t.musicaModo||t.musica_modo||null) || (t.musica?"so":null),
   copy_versoes:   Array.isArray(t.copyVersoes) ? t.copyVersoes : [],
   /* NUNCA apagar tradução já gravada: se o objeto em memória não trouxer o campo
      (veio de algum caminho que montou a task sem ele), aceita o alias snake_case.
