@@ -19503,19 +19503,27 @@ function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   const _folga=_pxCasFolgaMinDe(t);
   const dow=(typeof dowPref==="number")?dowPref:_pxApData(de).getDay();
   const alvos=_pxColAlvos(t);
-  const ocup=[];
+  /* (22/09/2026, Rodrigo) "Vinicius criou esse no dia 23, deveria ter arrastado essa Interação
+     no mínimo pra sábado né? lembra que tínhamos alinhado o espaçamento dentro das semanas."
+     A folga era medida contra QUALQUER post de 3 dias antes a 2 dias depois da semana. A
+     Climaves tinha post na segunda 28; o sábado 26 ficava a 2 dias dele, "sem folga", e o
+     Interação ficou colado no 23. A regra é espaçar DENTRO da semana: `ocup` é só a semana;
+     o vizinho da semana ao lado (`vizinho`) só proíbe dia COLADO (véspera/dia seguinte). */
+  const ocup=[], vizinho=[];
   rows.forEach(function(x){
     if(x.deleted_at||String(x.id)===String(t.id)) return;
     if(x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return;
     if(!_pxColAlvos(x).some(function(a){return alvos.indexOf(a)>=0;})) return;
     const d=String(x.publish_date||"").slice(0,10);
-    if(d>=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()-3))&&d<=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+9))) ocup.push(d);
+    if(d>=L.iniIso&&d<=L.fimIso) ocup.push(d);
+    else if(d>=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()-3))&&d<=_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()+9))) vizinho.push(d);
   });
   const ordem=[dow];
   for(let k=1;k<=6;k++){ [dow-k,dow+k].forEach(function(dd){ if(dd>=0&&dd<=6&&ordem.indexOf(dd)<0) ordem.push(dd); }); }
   const uteis=ordem.filter(function(dd){return dd>=1&&dd<=5;}), fds=ordem.filter(function(dd){return dd===0||dd===6;});
+  const colado=function(iso){ const tt=_pxApData(iso).getTime(); return vizinho.some(function(o){ return Math.abs(tt-_pxApData(o).getTime())/86400000<=1; }); };
   const cand=uteis.concat(fds).map(function(dd){ const d=new Date(L.ini); d.setDate(L.ini.getDate()+dd); return _pxApIso(d); })
-    .filter(function(iso){ return iso>hoje&&ocup.indexOf(iso)<0; });
+    .filter(function(iso){ return iso>hoje&&ocup.indexOf(iso)<0&&!colado(iso); });
   if(!cand.length) return null;
   const dist=function(iso){ if(!ocup.length) return 9; const tt=_pxApData(iso).getTime(); return Math.min.apply(null,ocup.map(function(o){return Math.abs(tt-_pxApData(o).getTime())/86400000;})); };
   /* REGRA DO VINICIUS (17/09): posts próprios das três PRINCIPAIS (Chapecó, Castro, Toledo) caem
@@ -19538,7 +19546,14 @@ function _pxCasDiaComFolga(t,L,rows,hoje,dowPref){
   // Paraguay não entra no collab: o post próprio de conteúdo dele faz o papel do collab e
   // prefere a QUARTA (assim fica equilibrado com a Foto de obra/Short do outro dia). 17/09.
   const pyQuarta=(_pxApUnits(t).indexOf("paraguay")>=0&&_pxCasTrilha(t)==="conteudo")||_pxCasTrilha(t)==="collab";
-  const score=function(iso,i){ return (dist(iso)>=_folga?0:100)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+i*0.01; };
+  /* Sem dia que alcance a folga, fica o MAIS LONGE dos outros posts — antes o desempate era a
+     ordem da lista, e "o mais perto do dia original" ganhava de "o mais espaçado". */
+  /* Cliente com dia fixo (PX_AUTOPLAN_DIA: VetService e Pixels = quarta) só sai da quarta se
+     ganhar pelo menos 2 dias de folga — 40 de pena contra 30 por dia de folga. Sem isso o
+     espaçamento tirava a Silagem da quarta 18/11 pra quinta por um dia de distância da
+     Proclamação de domingo. */
+  const _pref=(typeof PX_AUTOPLAN_DIA!=="undefined"&&PX_AUTOPLAN_DIA[String(t.client)])||null;
+  const score=function(iso,i){ const dd=dist(iso); return (dd>=_folga?0:(_folga-dd)*30)+(irmas[iso]?0:10)+(outras[iso]?5:0)+((pyQuarta&&_pxApData(iso).getDay()!==3)?3:0)+((_pref&&_pref.indexOf(_pxApData(iso).getDay())<0)?40:0)+i*0.01; };
   return cand.map(function(iso,i){return {iso:iso,s:score(iso,i)};}).sort(function(a,b){return a.s-b.s;})[0].iso;
 }
 function _pxCasGrupoBioter(t){
@@ -19604,7 +19619,18 @@ async function pxCascataPlanejar(novo,extras,opts){
       let L=L0, guard=0, t=null;
       // 1) quem sai da semana do card novo
       const daSemana0=rows.filter(function(x){ return semanaDe(x)===L.iniIso; });
-      if(_pxCasConta(daSemana0,alvo).length<=cap) continue;
+      /* (22/09/2026, Rodrigo) "passei o Daniel Ferla (collab) pra 30/09 e você não arrastou o
+         outro collab pra outra semana." A semana ficou com DOIS collabs e a cascata não fez
+         nada — porque tudo aqui era guiado pela cadência, e com 3 posts a semana "cabia".
+         Collab tem regra própria: É UM POR SEMANA, a grade das quartas. `opts.forcarCollab`
+         diz que a semana 0 tem collab sobrando e a conta de cadência não manda. Os outros
+         alvos da mesma rodada já vão achar a semana com um collab só (rows é mutado) e pulam. */
+      const _forcarCollab=!!(opts&&opts.forcarCollab);
+      if(_forcarCollab){
+        // conta TODOS os collabs movíveis da semana, inclusive a âncora (ela é um deles —
+        // excluí-la aqui deixava a conta em 1 e o planejador desistia sem mover nada)
+        if(daSemana0.filter(function(x){ return _pxCasTrilha(x)==="collab"&&_pxCasMovivel(x,hoje,null); }).length<=1) continue;
+      } else if(_pxCasConta(daSemana0,alvo).length<=cap) continue;
       /* (19/09/2026) `opts.sair` = quem TEM que sair da semana, decidido por quem chamou.
          A varredura manda o ÚLTIMO card movível da semana (regra do Vinicius: o do fim da
          fila é que anda). Sem isso, a escolha por trilha podia puxar um card do começo da
@@ -19624,6 +19650,31 @@ async function pxCascataPlanejar(novo,extras,opts){
           t=null; break;
         }
         const rowsProx=rows.filter(function(x){ return semanaDe(x)===prox.iniIso; });
+        /* Trilha collab: a vaga é "semana sem collab", não "semana abaixo da cadência". Se a
+           semana seguinte já tem um collab movível, ele é quem cede o dia (a quarta) e anda —
+           a fila das quartas. Comemorativa collab não conta como ocupante: ela é extra e nunca
+           sai do lugar. A cadência das unidades é acertada depois, pela varredura normal. */
+        if(trilha==="collab"){
+          /* Quem ocupa a semana na fila de collabs: QUALQUER collab que vai pro feed — inclusive
+             comemorativa collab (Pecuária, Natal, feira). Ela também toma o dia das cinco
+             unidades. Semana só com comemorativa collab está ocupada e não pode ceder (fixa
+             nunca anda) → pula. Semana com collab movível → ele cede a quarta e anda. Semana
+             sem collab nenhum → vaga, de preferência na quarta. */
+          const feedCollabs=rowsProx.filter(function(x){
+            return _pxApEhCollab(x)&&!x.deleted_at&&x.status!=="reprovado"&&x.status!=="pausado"&&!_pxNaoEhPublicacao(x);
+          });
+          const collabsProx=feedCollabs.filter(function(x){ return _pxCasTrilha(x)==="collab"&&_pxCasMovivel(x,hoje,nn.id); });
+          if(!feedCollabs.length){
+            const para=_pxCasDiaComFolga(t,prox,rows,hoje,3);       // quarta, se der
+            if(para){ registra(t,para); t=null; break; }
+          }
+          const saiC=ultimoDaTrilha(collabsProx,"collab");
+          if(saiC){
+            const diaC=String(saiC.publish_date).slice(0,10);
+            if(diaC>hoje){ registra(t,diaC); t=saiC; L=prox; continue; }
+          }
+          L=prox; continue;
+        }
         const contProx=_pxCasConta(rowsProx,alvo);
         if(contProx.length<cap){
           // tem vaga: dia com folga e acabou a cadeia
@@ -19800,7 +19851,7 @@ async function pxCascataVarrer(protegerId){
          passava como certa — o Dia do Gaúcho de domingo (20), que fechava o terceiro, era
          invisível. Aí só o espaçamento rodava e empurrava o Short pro sábado, mantendo 3
          posts na mesma semana. Mover continua valendo só pra card futuro (_pxCasMovivel). */
-      const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+      const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at")
         .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
       if(!r||r.error) break;
       const porSemana={};
@@ -19813,6 +19864,25 @@ async function pxCascataVarrer(protegerId){
       for(const k of Object.keys(porSemana).sort()){
         const daSemana=porSemana[k], alvos=[];
         daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
+        /* ── COLLAB É UM POR SEMANA (22/09/2026, Rodrigo) ───────────────────────────────
+           Antes disto a varredura só olhava cadência. Dois collabs numa semana com 3 posts
+           por unidade "cabiam" e ficavam — o Daniel Ferla e o "Uma solução" no MESMO dia
+           30/09, e nada se mexeu. Agora a semana com collab sobrando é resolvida antes de
+           qualquer conta: fica o mais recente (o que a pessoa acabou de posicionar; se ela
+           estiver mexendo agora, ele está protegido de qualquer jeito) e o mais antigo anda
+           pra semana seguinte, pela fila das quartas. */
+        const _cols=daSemana.filter(function(x){ return String(x.client)==="bioter"&&_pxCasTrilha(x)==="collab"&&_pxCasMovivel(x,hoje,null); });
+        const _colsTodos=daSemana.filter(function(x){ return String(x.client)==="bioter"&&_pxCasTrilha(x)==="collab"; });
+        if(_colsTodos.length>1&&_cols.length>=1){
+          // sai o de data mais tarde; empate de data → o menos recentemente mexido (o outro é o que chegou)
+          const ord=_cols.slice().sort(function(p,q){
+            const d=String(p.publish_date).localeCompare(String(q.publish_date)); if(d) return d;
+            return String(q.updated_at||"").localeCompare(String(p.updated_at||""));
+          });
+          const sairC=ord[ord.length-1];
+          const ancoraC=_colsTodos.find(function(x){ return String(x.id)!==String(sairC.id); });
+          if(sairC&&ancoraC){ achou={ancora:ancoraC,sair:sairC,semana:k,alvo:"collab",forcarCollab:true}; break; }
+        }
         for(const alvo of alvos){
           const doAlvo=_pxCasConta(daSemana,alvo);
           if(doAlvo.length<=PX_CASCATA_CAP[alvo]) continue;
@@ -19849,12 +19919,7 @@ async function pxCascataVarrer(protegerId){
              protegido (_PX_CAS_PROTEGIDO), então quem cede é o que já estava lá. E a âncora
              passa a ser o outro collab — isso faz o planejador resolver as cinco unidades numa
              passada só, em vez de uma volta por unidade. */
-          const _collabs=ordenados.filter(function(x){ return _pxCasTrilha(x)==="collab"; });
-          if(_collabs.length>1){
-            for(let i=_collabs.length-1;i>=0;i--){ if(_pxCasMovivel(_collabs[i],hoje,null)){ sair=_collabs[i]; break; } }
-            if(sair) ancora=_collabs.find(function(x){ return String(x.id)!==String(sair.id); })||null;
-            if(!ancora) sair=null;   // sem o outro collab de âncora, cai na regra de sempre
-          }
+          // (collab sobrando na semana já foi tratado acima, antes da conta de cadência)
           if(!sair) for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
           if(!sair) continue;
           /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
@@ -19868,9 +19933,10 @@ async function pxCascataVarrer(protegerId){
         if(achou) break;
       }
       if(!achou) break;
-      const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id});
+      const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id,forcarCollab:!!achou.forcarCollab});
       if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
-      const n=await pxCascataAplicar(plano,null,"varredura de cadência","a semana estava acima da cadência do cliente");
+      const n=await pxCascataAplicar(plano,null,achou.forcarCollab?"dois collabs na semana":"varredura de cadência",
+        achou.forcarCollab?"a semana ficou com dois collabs e collab é um por semana — este andou pela fila das quartas":"a semana estava acima da cadência do cliente");
       if(!n) break;
       total+=n;
     }
@@ -20007,7 +20073,10 @@ async function pxCascataEspacar(){
       const L=_pxApLinha(k), daSemana=porSemana[k], alvos=[];
       daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
       for(const alvo of alvos){
-        const lista=_pxCasConta(daSemana,alvo).slice().sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+        /* Espaçamento olha TUDO que vai pro feed — inclusive a comemorativa "brinde" da
+           VetService, que sai da conta de cadência mas ocupa o dia do mesmo jeito. Com a conta
+           de cadência aqui, Pecuária 14/10 + "Seu lote mudou" 15/10 nem viravam par. */
+        const lista=_pxColConta(daSemana,alvo).slice().sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
         for(let i=1;i<lista.length;i++){
           const a=lista[i-1], b=lista[i];
           const da=_pxApData(String(a.publish_date).slice(0,10)), db=_pxApData(String(b.publish_date).slice(0,10));
@@ -20070,7 +20139,7 @@ async function pxCascataPuxar(removidos){
       _pxColAlvos(t).forEach(function(a){
         if(!PX_CASCATA_CAP[a]) return;
         const L=_pxApLinha(iso);
-        buracos[a+"|"+L.iniIso]={alvo:a,L:L};
+        buracos[a+"|"+L.iniIso]={alvo:a,L:L,trilha:(String(t.id||"").indexOf("vaga-")===0?"":_pxCasTrilha(t))};
       });
     });
     const fila=Object.keys(buracos).map(function(k){ return buracos[k]; });
@@ -20094,6 +20163,11 @@ async function pxCascataPuxar(removidos){
         if(String(x.publish_date||"").slice(0,10)<=L.fimIso) return false;   // tem que estar DEPOIS
         if(!_pxCasMovivel(x,hoje,null)) return false;                        // fixo/publicado não anda
         if(_pxCasTrilha(x)==="collab") return false;
+        /* (22/09/2026) Foto de obra e Short são a grade das segundas, EM GRUPO (as três
+           principais juntas, as três filiais juntas). Puxar um deles sozinho pra trás quebra o
+           grupo e deixa duas Fotos na mesma semana — foi o que o teste mostrou em dezembro.
+           Só volta material se o que saiu da semana era material (a vaga sabe a trilha). */
+        if(_pxCasTrilha(x)==="material"&&v.trilha!=="material") return false;
         return true;
       }).sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
       if(!cand.length) continue;
@@ -20104,8 +20178,8 @@ async function pxCascataPuxar(removidos){
       if(!para||para>=de||para<piso) continue;                    // só pra trás, e nunca colado no hoje
       moves.push({id:t.id,title:t.title||"",de:de,para:para,client:t.client,unit:t.bioter_unit||""});
       t.publish_date=para;                                        // vale pras próximas iterações
-      fila.push({alvo:alvo,L:L});                                 // a vaga pode ter sobrado
-      fila.push({alvo:alvo,L:semanaVelha});                       // e onde ele estava abriu buraco
+      fila.push({alvo:alvo,L:L,trilha:v.trilha});                 // a vaga pode ter sobrado
+      fila.push({alvo:alvo,L:semanaVelha,trilha:_pxCasTrilha(t)}); // e onde ele estava abriu buraco
     }
     if(!moves.length) return 0;
     return await pxCascataAplicar({moves:moves,lixeira:[],travou:[],semana:""},null,"cascata pra trás",
@@ -22727,6 +22801,73 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   },[tasks,calMonth,filterClient,filterBioterUnit]);
   const _auditPorDia=React.useMemo(function(){ const o={}; _audit.forEach(function(x){ (o[x.dia]=o[x.dia]||[]).push(x); }); return o; },[_audit]);
   const [auditAberta,setAuditAberta]=useState(false);
+  /* ══ CELULAR (22/09/2026) ═════════════════════════════════════════════════
+     A grade de 7 colunas nao cabe em 390px: cada dia fica com ~50px e o nome do
+     cliente sai cortado. No celular o mes vira UMA SEMANA POR VEZ, com as mesmas
+     setas < > do kanban, e os 7 dias um embaixo do outro.
+     A semana comeca na SEGUNDA, igual a contagem que o Dashboard e os sprints ja
+     usam ("Semana 38"), pra o numero bater. No computador a grade continua
+     comecando no domingo, exatamente como e hoje.                              */
+  const _cpSegundaDe=function(d){
+    const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    const dn=(x.getDay()+6)%7;           /* 0=segunda ... 6=domingo */
+    x.setDate(x.getDate()-dn);
+    return x;
+  };
+  /* Mesma conta do Dashboard (_dgWeekKey): numero ISO da semana no ano. */
+  const _cpNumSemana=function(d){
+    const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+    const dn=(t.getUTCDay()+6)%7;
+    t.setUTCDate(t.getUTCDate()-dn+3);
+    const ft=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+    return 1+Math.round(((t-ft)/86400000-3)/7);
+  };
+  /* Semana aberta: a de hoje quando o mes visto e o mes de hoje; senao a 1a do mes. */
+  const _cpSemanaPadrao=function(m){
+    const hoje=new Date();
+    if(m.getFullYear()===hoje.getFullYear()&&m.getMonth()===hoje.getMonth()) return _cpSegundaDe(hoje);
+    return _cpSegundaDe(new Date(m.getFullYear(),m.getMonth(),1));
+  };
+  const [_cpSemIni,_setCpSemIni]=useState(function(){ return _cpSemanaPadrao(new Date()); });
+  /* Trocou de mes no seletor de cima -> a semana pula pra esse mes. */
+  const _cpMesVisto=calMonth.getFullYear()+"-"+calMonth.getMonth();
+  const _cpMesRef=useRef(_cpMesVisto);
+  useEffect(function(){
+    if(_cpMesRef.current!==_cpMesVisto){
+      _cpMesRef.current=_cpMesVisto;
+      _setCpSemIni(_cpSemanaPadrao(calMonth));
+    }
+  },[_cpMesVisto]);
+  const _cpAndarSemana=function(n){
+    const x=new Date(_cpSemIni.getFullYear(),_cpSemIni.getMonth(),_cpSemIni.getDate()+n*7);
+    _setCpSemIni(x);
+    /* Se a semana saiu do mes que esta em cima, o seletor de mes acompanha. */
+    const meio=new Date(x.getFullYear(),x.getMonth(),x.getDate()+3);
+    if(meio.getMonth()!==calMonth.getMonth()||meio.getFullYear()!==calMonth.getFullYear()){
+      _cpMesRef.current=meio.getFullYear()+"-"+meio.getMonth();
+      setCalMonth(new Date(meio.getFullYear(),meio.getMonth(),1));
+    }
+  };
+  /* Os 7 dias da semana aberta (segunda -> domingo). */
+  const _cpDiasDaSemana=function(){
+    const out=[];
+    for(let i=0;i<7;i++) out.push(new Date(_cpSemIni.getFullYear(),_cpSemIni.getMonth(),_cpSemIni.getDate()+i));
+    return out;
+  };
+  const _cpRotuloSemana=function(){
+    const a=_cpSemIni, b=new Date(a.getFullYear(),a.getMonth(),a.getDate()+6);
+    const _m=function(d){ return MONTHS[d.getMonth()].toLowerCase(); };
+    return (a.getMonth()===b.getMonth())
+      ? (a.getDate()+" a "+b.getDate()+" de "+_m(a))
+      : (a.getDate()+" de "+_m(a)+" a "+b.getDate()+" de "+_m(b));
+  };
+  /* Legenda de status + filtro de cliente: fechados por padrao no celular. */
+  const [_cpFiltrosAbertos,_setCpFiltrosAbertos]=useState(false);
+  const _cpEsconde=(isMob&&!_cpFiltrosAbertos);
+  const _cpPainel=function(base){
+    if(!isMob) return base;
+    return Object.assign({},base,{background:"#fff",border:"1px solid #c4b5fd",borderRadius:12,padding:"11px 12px"});
+  };
 
   // Contador total do mês para badges
   const tasksThisMonth=agendados.filter(t=>{
@@ -22747,7 +22888,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         </div>
         <span style={{flex:1}}/>
         {/* Seletor de mês — reposto aqui depois de remover o widget de progresso */}
-        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big/>
+        {/* Celular: o seletor grande tem 380px e nao cabe em 390 — usa o compacto */}
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS} big={!isMob}/>
       </div>
 
       {/* Modal: preview da sugestão de datas — cards existentes */}
@@ -22794,18 +22936,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                       <span style={{color:"#92400e",fontSize:12,fontWeight:600}}>{ms.length} slot{ms.length!==1?"s":""} sem card no fluxo {totalClients>1?"(em "+totalClients+" clientes)":""}</span>
                     </div>
-                    <span style={{color:"#b45309",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{showMissingSlots?"Ocultar ▲":"Ver detalhes ▼"}</span>
+                    <span style={{color:"#b45309",fontSize:pxFonte(11,isMob),fontWeight:600,whiteSpace:"nowrap"}}>{showMissingSlots?"Ocultar ▲":"Ver detalhes ▼"}</span>
                   </div>
                   {showMissingSlots&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #fde68a",display:"flex",flexDirection:"column",gap:6}}>
                     {Object.entries(agg).map(function(arr){
                       const cliName=arr[0], tipos=arr[1];
                       const partes=Object.entries(tipos).map(function(t){return t[1]+" "+(SLOT_LABEL[t[0]]||t[0]);}).join(" + ");
-                      return <div key={cliName} style={{display:"flex",alignItems:"baseline",gap:8,fontSize:11.5,color:"#78350f"}}>
+                      return <div key={cliName} style={{display:"flex",alignItems:"baseline",gap:8,fontSize:pxFonte(11.5,isMob),color:"#78350f"}}>
                         <span style={{fontWeight:700,minWidth:120}}>{cliName}</span>
                         <span style={{color:"#92400e"}}>{partes}</span>
                       </div>;
                     })}
-                    <div style={{marginTop:6,fontSize:10.5,color:"#92400e",fontStyle:"italic"}}>
+                    <div style={{marginTop:6,fontSize:pxFonte(10.5,isMob),color:"#92400e",fontStyle:"italic"}}>
                       Pra preencher esses slots, crie cards desses tipos no Fluxo de demandas e rode "Gerar plano" de novo.
                     </div>
                   </div>}
@@ -22823,7 +22965,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                     <span style={{width:9,height:9,borderRadius:"50%",background:clColor,flexShrink:0,boxShadow:"0 0 0 3px "+clColor+"22"}}/>
                     <span style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{data.name}</span>
                     <span style={{flex:1}}/>
-                    <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{data.items.length} card{data.items.length!==1?"s":""}</span>
+                    <span style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),fontWeight:600,fontFeatureSettings:"'tnum'"}}>{data.items.length} card{data.items.length!==1?"s":""}</span>
                   </div>
                   {/* Rows */}
                   <div style={{display:"flex",flexDirection:"column"}}>
@@ -22837,19 +22979,19 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                         style={{display:"grid",gridTemplateColumns:"58px 1fr auto",gap:14,padding:"9px 10px",borderRadius:8,alignItems:"center",transition:"background .12s"}}>
                         <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
                           <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.1}}>{dInfo.day} {dInfo.mon}</span>
-                          <span style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:500}}>{dInfo.wd}</span>
+                          <span style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),marginTop:1,fontWeight:500}}>{dInfo.wd}</span>
                         </div>
                         <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
                           <span style={{width:6,height:6,borderRadius:"50%",background:tipoColor,flexShrink:0}}/>
                           <span style={{color:"#0f172a",fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.cardTitle||"(sem título)"}</span>
                         </div>
-                        <span style={{color:tipoColor,fontSize:11,fontWeight:600,whiteSpace:"nowrap",letterSpacing:.1}}>{tipoLabel}</span>
+                        <span style={{color:tipoColor,fontSize:pxFonte(11,isMob),fontWeight:600,whiteSpace:"nowrap",letterSpacing:.1}}>{tipoLabel}</span>
                       </div>;
                     })}
                   </div>
                 </div>;
               })}
-              <div style={{background:"#f8fafc",borderLeft:"3px solid #cbd5e1",borderRadius:"0 8px 8px 0",padding:"10px 14px",color:"#475569",fontSize:11.5,marginBottom:18,marginTop:8,lineHeight:1.5}}>
+              <div style={{background:"#f8fafc",borderLeft:"3px solid #cbd5e1",borderRadius:"0 8px 8px 0",padding:"10px 14px",color:"#475569",fontSize:pxFonte(11.5,isMob),marginBottom:18,marginTop:8,lineHeight:1.5}}>
                 Considera apenas cards em <strong style={{color:"#0f172a"}}>demanda · execução · ajustes · concluído p/ avaliação · aprovado</strong> e <strong style={{color:"#0f172a"}}>sem data de publicação</strong>. A estrategista pode editar qualquer data depois clicando no card.
               </div>
               <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
@@ -22863,50 +23005,59 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         </div>;
       })()}
 
+      {/* Celular: legenda e filtro de cliente ficam guardados num botao so */}
+      {isMob&&!_cpFiltrosAbertos&&<button type="button" onClick={function(){_setCpFiltrosAbertos(true);}}
+        style={{width:"100%",height:40,borderRadius:11,background:"#fff",border:"1px solid "+(filterClient!=="todos"?"#c4b5fd":"#e2e8f0"),
+                display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 13px",cursor:"pointer",
+                fontFamily:"'Inter',system-ui,sans-serif",fontSize:13.5,fontWeight:700,color:"#0f172a"}}>
+        <span>Status e cliente{filterClient!=="todos"?" (filtrado)":""}</span>
+        <span style={{color:"#64748b",fontSize:12.5,fontWeight:600}}>legenda · filtro ›</span>
+      </button>}
+
       {/* ── Legenda dos status — badges identicos aos dos cards ── */}
-      <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
+      <div style={_cpPainel({display:_cpEsconde?"none":"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"})}>
+        <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#06b6d4",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Em produção</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Em produção</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#ec4899",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Agendar</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Agendar</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#7c3aed",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Publicado</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Publicado</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#3b82f6",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Collab</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Collab</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#eab308",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="10" height="10" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#fff"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#fff"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#fff"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#fff"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#fff"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#fff"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Vídeo do Drive</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Vídeo do Drive</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#dc2626",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Reprovada</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Reprovada</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#dc2626",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Pausada</span>
+          <span style={{color:"#475569",fontSize:pxFonte(11.5,isMob),fontWeight:500}}>Pausada</span>
         </div>
       </div>
 
@@ -22915,12 +23066,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
              segue existindo e é usado no dash (mode="produzir"). Pra reativar, é só descomentar. ── */}
 
       {/* ── Filtro de cliente ── */}
-      {_bl("filtro.cliente")&&<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Cliente</span>
+      {_bl("filtro.cliente")&&<div style={_cpPainel({display:_cpEsconde?"none":"flex",gap:6,flexWrap:"wrap",alignItems:"center"})}>
+        <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Cliente</span>
 
         {/* Chip "Todos" */}
         <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
-          style={{background:filterClient==="todos"?"#0f172a":"#fff",color:filterClient==="todos"?"#fff":"#0f172a",border:"1px solid "+(filterClient==="todos"?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:filterClient==="todos"?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}>
+          style={{background:filterClient==="todos"?"#0f172a":"#fff",color:filterClient==="todos"?"#fff":"#0f172a",border:"1px solid "+(filterClient==="todos"?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:pxFonte(11.5,isMob),fontWeight:filterClient==="todos"?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}>
           Todos
         </button>
 
@@ -22928,16 +23079,23 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>{
           const active=filterClient===cl.id;
           return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
-            style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",whiteSpace:"nowrap"}}>
+            style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:pxFonte(11.5,isMob),fontWeight:active?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",whiteSpace:"nowrap"}}>
             {cl.name}
           </button>;
         })}
       </div>}
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
+      {/* Celular: fecha a legenda e o filtro */}
+      {isMob&&_cpFiltrosAbertos&&<button type="button" onClick={function(){_setCpFiltrosAbertos(false);}}
+        style={{width:"100%",height:38,borderRadius:10,background:"#0f172a",color:"#fff",border:"none",
+                fontSize:13.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        Pronto
+      </button>}
+
       {_bl("filtro.cliente")&&filterClient==="bioter"&&(
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"12px 16px",background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
-          <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Unidade</span>
+        <div style={{display:_cpEsconde?"none":"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"12px 16px",background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
+          <span style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Unidade</span>
           <button onClick={()=>setFilterBioterUnit("todos")}
             style={{background:filterBioterUnit==="todos"?"#0f172a":"#f8fafc",color:filterBioterUnit==="todos"?"#fff":"#475569",border:`1px solid ${filterBioterUnit==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>
             Todas
@@ -23019,11 +23177,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             style={{flex:"0 0 auto",background:on?"#f8fafc":"#fff",border:"1px solid "+(on?color:"#e2e8f0"),borderRadius:12,padding:"9px 14px 9px 10px",display:"inline-flex",alignItems:"center",gap:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"border-color .15s"}}>
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:8,background:color,color:"#fff",flexShrink:0}}>{iconSvg}</span>
             <span style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
-              <span style={{fontSize:10.5,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
+              <span style={{fontSize:pxFonte(10.5,isMob),color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
               <span style={{display:"inline-flex",alignItems:"baseline",gap:8,marginTop:2,whiteSpace:"nowrap"}}>
                 <span style={{fontSize:19,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
-                <span style={{fontSize:11.5,fontWeight:600,color:"#16a34a"}}>com material</span>
-                <span style={{fontSize:11.5,fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
+                <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:600,color:"#16a34a"}}>com material</span>
+                <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
               </span>
             </span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -23039,7 +23197,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <span style={{fontSize:12,fontWeight:800,color:"#0f172a"}}>{matAberto==="foto"?"Fotos de obra":"Vídeos short"} com material ({com.length})</span>
-              <span style={{fontSize:11,color:"#94a3b8"}}>· não aprovados, todos os meses · clique pra abrir o card</span>
+              <span style={{fontSize:pxFonte(11,isMob),color:"#94a3b8"}}>· não aprovados, todos os meses · clique pra abrir o card</span>
               <span style={{flex:1}}/>
               <button type="button" onClick={function(){setMatAberto(null);}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit"}}>Fechar</button>
             </div>
@@ -23049,19 +23207,19 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                   <div style={{position:"relative",height:92,background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center"}}>
                     {th&&(th.player?<video src={th.url} preload="metadata" muted playsInline style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<img src={th.url} alt="" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}}/>)}
                     {th&&th.video&&<span style={{position:"absolute",width:24,height:24,borderRadius:"50%",background:"rgba(255,255,255,.9)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="10" height="10" viewBox="0 0 24 24" fill="#0f172a"><polygon points="6 3 20 12 6 21 6 3"/></svg></span>}
-                    <span style={{position:"absolute",top:5,left:5,background:"rgba(15,23,42,.75)",color:"#fff",borderRadius:6,padding:"1px 6px",fontSize:10,fontWeight:700}}>{_dt(t)}</span>
+                    <span style={{position:"absolute",top:5,left:5,background:"rgba(15,23,42,.75)",color:"#fff",borderRadius:6,padding:"1px 6px",fontSize:pxFonte(10,isMob),fontWeight:700}}>{_dt(t)}</span>
                   </div>
                   <div style={{padding:"5px 7px"}}>
-                    <div style={{fontSize:11,fontWeight:700,color:"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title||"Sem título"}</div>
-                    <div style={{fontSize:10,color:"#94a3b8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_nomeCl(t)}</div>
+                    <div style={{fontSize:pxFonte(11,isMob),fontWeight:700,color:"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title||"Sem título"}</div>
+                    <div style={{fontSize:pxFonte(10,isMob),color:"#94a3b8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_nomeCl(t)}</div>
                   </div>
                 </div>; })}
             </div>:<div style={{fontSize:12,color:"#94a3b8"}}>Nenhum ainda.</div>}
             {sem.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
-              <span style={{fontSize:11.5,fontWeight:800,color:"#dc2626"}}>Faltam material ({sem.length})</span>
+              <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:800,color:"#dc2626"}}>Faltam material ({sem.length})</span>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {sem.map(function(t){ return <button key={t.id} type="button" onClick={function(){setOpenCard(t);}} title={t.title}
-                  style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                  style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:99,padding:"3px 10px",fontSize:pxFonte(11,isMob),fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
                   {_dt(t)} · {_nomeCl(t)}</button>; })}
               </div>
             </div>}
@@ -23071,7 +23229,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           return <div style={{flex:"1 1 140px",minWidth:140,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
             <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,minWidth:0}}>
-              <span style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
+              <span style={{fontSize:pxFonte(11,isMob),color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
               <span style={{fontSize:22,fontWeight:800,color:"#0f172a",marginTop:2}}>{value}</span>
             </div>
           </div>;
@@ -23105,7 +23263,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
            handleGeneratePlan segue no arquivo, sem nada chamando. */}
         {lastApplySnapshot&&_bl("acoes.desfazer")&&<button onClick={handleUndoApply}
           title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
-          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:pxFonte(11.5,isMob),fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
           Desfazer última sugestão
         </button>}
@@ -23125,14 +23283,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             </span>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontSize:13,fontWeight:800,color:nMov?"#991b1b":"#334155"}}>{_audit.length} ponto{_audit.length>1?"s":""} fora da regra em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
-              <div style={{fontSize:11,color:"#64748b",fontWeight:500,marginTop:1}}>{nMov} com card que dá pra mover · {nFix} só entre comemorativas/collabs (decisão, não bug) · o calendário só avisa, não mexe</div>
+              <div style={{fontSize:pxFonte(11,isMob),color:"#64748b",fontWeight:500,marginTop:1}}>{nMov} com card que dá pra mover · {nFix} só entre comemorativas/collabs (decisão, não bug) · o calendário só avisa, não mexe</div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:auditAberta?"rotate(180deg)":"none",transition:"transform .15s"}}><path d="M6 9l6 6 6-6"/></svg>
           </div>
           {auditAberta&&<div style={{marginTop:10,display:"grid",gap:4}}>
             {_audit.map(function(x,i){
-              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:11.5,color:x.nivel==="movivel"?"#7f1d1d":"#475569",fontWeight:500,lineHeight:1.45}}>
-                <span style={{flexShrink:0,marginTop:1,padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",background:x.nivel==="movivel"?"#fee2e2":"#e2e8f0",color:x.nivel==="movivel"?"#b91c1c":"#475569"}}>
+              return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:pxFonte(11.5,isMob),color:x.nivel==="movivel"?"#7f1d1d":"#475569",fontWeight:500,lineHeight:1.45}}>
+                <span style={{flexShrink:0,marginTop:1,padding:"1px 6px",borderRadius:5,fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.4,textTransform:"uppercase",background:x.nivel==="movivel"?"#fee2e2":"#e2e8f0",color:x.nivel==="movivel"?"#b91c1c":"#475569"}}>
                   {({mesmo_dia:"mesmo dia",seguidos:"dias seguidos",acima:"acima da cadência",grupo:"grupo Bioter"})[x.tipo]||x.tipo}
                 </span>
                 <span>{x.texto}</span>
@@ -23143,17 +23301,34 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       })()}
 
       {/* ── Grade do calendário ── */}
-      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
-        {/* Cabeçalho dos dias da semana */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
+      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:isMob?"visible":"hidden"}}>
+        {/* Celular: no lugar do cabecalho Dom..Sab, a barra da semana com as setas.
+            Ela gruda no topo, entao as setas continuam na mao quando voce desce. */}
+        {isMob
+          ? <div style={{display:"flex",alignItems:"center",gap:6,padding:6,background:"#0f172a",color:"#fff",
+              borderRadius:"15px 15px 0 0",position:"sticky",top:0,zIndex:6}}>
+              <button type="button" onClick={function(){_cpAndarSemana(-1);}} title="Semana anterior"
+                style={{width:38,height:38,flexShrink:0,borderRadius:10,border:"none",background:"rgba(255,255,255,0.18)",
+                        color:"#fff",fontSize:23,fontWeight:800,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",
+                        justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",WebkitTapHighlightColor:"transparent"}}>‹</button>
+              <div style={{flex:1,minWidth:0,textAlign:"center",lineHeight:1.2}}>
+                <div style={{fontSize:14,fontWeight:800}}>Semana {_cpNumSemana(_cpSemIni)}</div>
+                <div style={{fontSize:12,fontWeight:600,opacity:.75,marginTop:1}}>{_cpRotuloSemana()}</div>
+              </div>
+              <button type="button" onClick={function(){_cpAndarSemana(1);}} title="Próxima semana"
+                style={{width:38,height:38,flexShrink:0,borderRadius:10,border:"none",background:"rgba(255,255,255,0.18)",
+                        color:"#fff",fontSize:23,fontWeight:800,lineHeight:1,cursor:"pointer",display:"flex",alignItems:"center",
+                        justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",WebkitTapHighlightColor:"transparent"}}>›</button>
+            </div>
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
           {WEEKDAYS.map(d=>(
             <div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>
           ))}
-        </div>
+        </div>}
 
         {/* Células dos dias */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-          {calDays().map((day,i)=>{
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(7,1fr)"}}>
+          {(isMob?_cpDiasDaSemana():calDays()).map((day,i)=>{
             const dayTasks=day?tasksByDay(day):[];
             const isToday=day&&day.toDateString()===new Date().toDateString();
             const hasTasks=dayTasks.length>0;
@@ -23172,8 +23347,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                 onMouseEnter={function(e){if(_canCreateFromCal&&day){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="1";g.style.transform="scale(1)";}}}}
                 onMouseLeave={function(e){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="0";g.style.transform="scale(0.98)";}}}
                 style={{
-                minHeight:isMob?220:380,
-                borderRight:`1px solid ${C.b1}`,
+                /* Celular: o dia cresce com o conteudo (uma rolagem so) e ocupa a largura */
+                minHeight:isMob?0:380,
+                borderRight:isMob?"none":`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"10px 8px 8px",
                 background:isDropTarget?"#f5f3ff":(isToday?"linear-gradient(165deg,#efe2ff 0%,#f7f0ff 45%,#fbf7ff 100%)":hasTasks?C.bl+"06":"transparent"),
@@ -23183,18 +23359,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                 transition:"background .2s, outline .15s",
                 display:"flex",
                 flexDirection:"column",
-                overflow:"hidden",
+                overflow:isMob?"visible":"hidden",
                 cursor:_canCreateFromCal&&day?"pointer":"default",
                 position:"relative",
               }}>
                 {day&&(<>
                   {/* Número do dia — hoje: uma pílula única roxa "9 · HOJE" (número + rótulo juntos) */}
-                  <div style={{display:"flex",alignItems:"center",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:isMob?8:undefined,marginBottom:6}}>
+                    {/* Celular: na lista, o dia da semana vem junto do numero */}
+                    {isMob&&<span style={{color:isToday?"#7c3aed":"#94a3b8",fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{WEEKDAYS[day.getDay()]}</span>}
                     {isToday
                       ? <div style={{display:"inline-flex",alignItems:"center",height:28,padding:"0 11px 0 10px",borderRadius:999,background:"linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%)",color:"#fff",boxShadow:"0 6px 16px -4px rgba(109,40,217,.55), inset 0 1px 0 rgba(255,255,255,.22)",fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1,gap:7}}>
                           <span style={{fontSize:14,fontWeight:900,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{day.getDate()}</span>
                           <span style={{width:1,height:12,background:"rgba(255,255,255,.35)"}}/>
-                          <span style={{fontSize:10,fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",opacity:.95}}>Hoje</span>
+                          <span style={{fontSize:pxFonte(10,isMob),fontWeight:800,letterSpacing:1.2,textTransform:"uppercase",opacity:.95}}>Hoje</span>
                         </div>
                       : <div style={{color:C.ts,fontWeight:600,fontSize:13,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{day.getDate()}</div>}
                     {(function(){
@@ -23202,7 +23380,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                       const av=_auditPorDia[fmtDay(day)]||[]; if(!av.length) return null;
                       const mov=av.some(function(x){return x.nivel==="movivel";});
                       return <span onClick={function(e){ e.stopPropagation(); setAuditAberta(true); }} title={av.map(function(x){return x.texto;}).join("\n")}
-                        style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:3,height:18,padding:"0 6px",borderRadius:999,background:mov?"#dc2626":"#94a3b8",color:"#fff",fontSize:9.5,fontWeight:800,cursor:"pointer",boxShadow:"0 1px 2px rgba(0,0,0,.18)"}}>
+                        style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:3,height:18,padding:"0 6px",borderRadius:999,background:mov?"#dc2626":"#94a3b8",color:"#fff",fontSize:pxFonte(9.5,isMob),fontWeight:800,cursor:"pointer",boxShadow:"0 1px 2px rgba(0,0,0,.18)"}}>
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
                         {av.length}
                       </span>;
@@ -23216,11 +23394,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                     return evs.map(function(ev){
                       const cl=CLIENTS.find(function(x){return x.id===ev.clientId;});
                       return <div key={ev.id} onClick={function(e){e.stopPropagation();}} title={(cl?cl.name+" — ":"")+ev.title+(ev.description?"\n\n"+ev.description:"")+"\n\nEnviado em "+(new Date(ev.createdAt||"").toLocaleDateString("pt-BR")||"?")}
-                        style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0,position:"relative"}}>
+                        style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"5px 7px",fontSize:pxFonte(10.5,isMob),fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0,position:"relative"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
-                          <div style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",opacity:.85,lineHeight:1.1}}>{cl?cl.name:"Cliente"} · do cliente</div>
-                          <div style={{fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,marginTop:1}}>{ev.title}</div>
+                          <div style={{fontSize:pxFonte(8,isMob),fontWeight:800,letterSpacing:.4,textTransform:"uppercase",opacity:.85,lineHeight:1.1}}>{cl?cl.name:"Cliente"} · do cliente</div>
+                          <div style={{fontSize:pxFonte(10.5,isMob),fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,marginTop:1}}>{ev.title}</div>
                         </div>
                         <button onClick={function(e){e.stopPropagation();deleteClientEvent(ev);}} title="Apagar este evento"
                           style={{background:"rgba(120,53,15,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"#78350f",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0,transition:"background .12s"}}
@@ -23234,12 +23412,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
 
                   {/* Ghost card — wireframe que aparece no hover, posicionado APÓS os cards reais */}
                   {_canCreateFromCal&&<div data-ghost-card aria-hidden="true"
-                    style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
+                    style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     <span>Nova publicação</span>
                   </div>}
                   {/* Cards do dia */}
-                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden",position:"relative",zIndex:1}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:isMob?"visible":"auto",overflowX:isMob?"visible":"hidden",position:"relative",zIndex:1}}>
                     {dayTasks.map(function(t){
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
@@ -23314,17 +23492,17 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:4,padding:"1px 4px",height:15,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)"}}>
                                 {hasLogo
                                   ? <img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:11,maxWidth:48,objectFit:"contain",display:"block"}}/>
-                                  : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:8.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
+                                  : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:pxFonte(8.5,isMob),letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
                                 }
                               </div>
-                              {unit&&<span title={unit.label} style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:700,lineHeight:1.4,flexShrink:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMob?42:72}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[unit.id]||unit.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>}
-                              {isCollabCard&&<span title="Collab — publicação em comum entre unidades" style={{display:"inline-flex",alignItems:"center",gap:3,background:"#3b82f6",color:"#fff",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:700,lineHeight:1.4,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>
+                              {unit&&<span title={unit.label} style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:4,padding:"1px 5px",fontSize:pxFonte(9,isMob),fontWeight:700,lineHeight:1.4,flexShrink:1,minWidth:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:isMob?42:72}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[unit.id]||unit.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>}
+                              {isCollabCard&&<span title="Collab — publicação em comum entre unidades" style={{display:"inline-flex",alignItems:"center",gap:3,background:"#3b82f6",color:"#fff",borderRadius:4,padding:"1px 5px",fontSize:pxFonte(9,isMob),fontWeight:700,lineHeight:1.4,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>
                                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                 Collab
                               </span>}
                             </div>
                             {(t.somenteStory||t.somente_story)&&<span title="Só post de story — sem arte pra produzir"
-                              style={{display:"inline-flex",alignItems:"center",gap:4,height:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:pxEscurecerCor(cardColor,.42),color:"#fff",border:"1px solid rgba(255,255,255,0.18)",fontSize:9,fontWeight:800,letterSpacing:.5,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+                              style={{display:"inline-flex",alignItems:"center",gap:4,height:20,boxSizing:"border-box",padding:"0 7px",borderRadius:6,background:pxEscurecerCor(cardColor,.42),color:"#fff",border:"1px solid rgba(255,255,255,0.18)",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,lineHeight:1,flexShrink:0,whiteSpace:"nowrap",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
@@ -23354,7 +23532,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               const _ttl=_ct.pos+"º conteúdo do mês "+_ct.mes+" do projeto"
                                 +(_ct.cota?(" ("+_ct.cota+" previstos no plano"+(_ct.preset?" "+_ct.preset.charAt(0).toUpperCase()+_ct.preset.slice(1):"")+")"):"")
                                 +(_estourou?" — passou da cota do mês":"");
-                              return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:9.5,fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
+                              return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:pxFonte(9.5,isMob),fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
                             })()}
                             {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {(function(){
@@ -23398,12 +23576,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                     style={{width:20,height:20,borderRadius:"50%",overflow:"hidden",background:u.color||"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:i===0?0:-5,position:"relative",zIndex:_visible.length-i,flexShrink:0}}>
                                     {typeof UserAvatar!=="undefined"
                                       ? <UserAvatar user={u} size={20} border={false}/>
-                                      : <span style={{color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.2}}>{(u.name||"?").slice(0,1).toUpperCase()}</span>
+                                      : <span style={{color:"#fff",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.2}}>{(u.name||"?").slice(0,1).toUpperCase()}</span>
                                     }
                                   </div>;
                                 })}
                                 {_extra>0 && <div title={_resps.slice(_showMax).map(function(u){return u.name;}).join(", ")}
-                                  style={{width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,0.45)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:-5,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.1,flexShrink:0}}>+{_extra}</div>}
+                                  style={{width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,0.45)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:-5,color:"#fff",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.1,flexShrink:0}}>+{_extra}</div>}
                               </div>;
                             })()}
                           </div>
@@ -25074,6 +25252,19 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Picker de coluna ao clicar em "+ Nova" — usuário escolhe Rascunhos/Copys/Demanda
   const [newColPicker,setNewColPicker]=useState(null); // null | {extraProps}
   const [viewMode,setViewMode]=useState("cartao");
+  /* CELULAR (22/09/2026) — no celular aparece UMA coluna por vez, com as setas < >
+     na propria barra colorida da coluna. Kanban igual ao do computador; muda so
+     quantas colunas cabem na tela. _pdColIdx guarda qual coluna esta aberta. */
+  const [_pdColIdx,_setPdColIdx]=useState(function(){
+    try{ const n=parseInt(localStorage.getItem("pixels-kanban-col-mob"),10); return (isFinite(n)&&n>=0)?n:0; }catch(e){ return 0; }
+  });
+  const _pdIrPraCol=function(n){
+    _setPdColIdx(n);
+    try{ localStorage.setItem("pixels-kanban-col-mob", String(n)); }catch(e){}
+  };
+  /* Filtros no celular: fechados por padrao (setores + pessoas + uma logo por
+     cliente empurravam o primeiro card pra fora da tela). */
+  const [_pdFiltrosAbertos,_setPdFiltrosAbertos]=useState(false);
   // Guarda a última view não-lixeira pra restaurar quando desligar o toggle
   const _prevViewRef = useRef("cartao");
   function _toggleTrash(){
@@ -25561,6 +25752,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const visibleCols=isAdmin
     ?cols
     :cols.filter(col=>COL_PERM[col.id]===true||COL_PERM[col.id]===undefined);
+  /* Celular: nunca deixa o indice passar do fim (quem ve menos colunas tem lista menor). */
+  const _pdColSeg=Math.min(Math.max(0,_pdColIdx),Math.max(0,visibleCols.length-1));
 
   // ─── DRILL-DOWN: contagens de cada tag DENTRO do contexto atual (visible) ──
   // Pra cada tag (adminTag ou item de tags[]), conta quantos cards visíveis a contêm.
@@ -25765,7 +25958,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.08)";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
               <div style={{color:opt.color,fontWeight:700,fontSize:13,letterSpacing:-.1}}>{opt.label}</div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{opt.desc}</div>
+              <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),fontWeight:500}}>{opt.desc}</div>
             </button>
           )}
         </div>
@@ -25793,7 +25986,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <div style={{color:C.ts,fontSize:12,marginBottom:20}}>Esta ação é irreversível. Os cartões da coluna devem estar vazios.</div>
 
         <div style={{textAlign:"left",marginBottom:12}}>
-          <label style={{color:C.ts,fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>PIN de administrador</label>
+          <label style={{color:C.ts,fontSize:pxFonte(11,isMob),fontWeight:600,display:"block",marginBottom:4}}>PIN de administrador</label>
           <input
             type="password"
             maxLength={4}
@@ -25859,14 +26052,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             {trash.length} na lixeira
           </div>
         </div>
-        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{display:"flex",gap:10,flexWrap:isMob?"nowrap":"wrap",alignItems:"center",width:isMob?"100%":undefined}}>
           {/* SEARCH input — pesquisar cards por título (altura 40 pra simetria com outros) */}
-          {_bl("topo.busca")&&<div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+          {_bl("topo.busca")&&<div style={{position:"relative",display:"inline-flex",alignItems:"center",flex:isMob?1:undefined,minWidth:isMob?0:undefined}}>
             <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </span>
             <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
-              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"0 36px 0 36px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:260,height:40,boxSizing:"border-box",transition:"border-color .15s",fontFamily:"inherit"}}/>
+              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"0 36px 0 36px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:isMob?"100%":260,height:40,boxSizing:"border-box",transition:"border-color .15s",fontFamily:"inherit"}}/>
             {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
               style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
               onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
@@ -25878,13 +26071,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             style={{background:viewMode==="trash"?"#fee2e2":"#fff",color:viewMode==="trash"?"#dc2626":"#0f172a",border:`1px solid ${viewMode==="trash"?"#fecaca":"#e2e8f0"}`,borderRadius:11,padding:"0 16px",height:40,fontSize:13,fontWeight:viewMode==="trash"?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
             onMouseEnter={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}}
             onMouseLeave={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
-            <Ico n="trash" size={15}/> Lixeira
+            <Ico n="trash" size={15}/>{isMob?null:" Lixeira"}
           </button>}
           {myPerms.criarDemanda&&<button onClick={()=>addNewTask("demanda")}
             style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:11,padding:"0 18px",height:40,fontSize:13,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 12px rgba(15,23,42,0.18)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
             onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.25)";}}
             onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.18)";}}>
-            <Ico n="plus" size={15}/> Nova
+            <Ico n="plus" size={15}/>{isMob?null:" Nova"}
           </button>}
         </div>
       </div>
@@ -25911,7 +26104,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {id:"texto",    label:"Copywriting"},
         ];
 
-        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        /* Celular: fechado, vira um botao "Filtros". Aberto, e a MESMA barra de hoje
+           dentro de um painel branco, com um "Pronto" no fim. No computador: igual. */
+        const _pdTemFiltro=(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos");
+        if(isMob&&!_pdFiltrosAbertos) return <button type="button" onClick={function(){_setPdFiltrosAbertos(true);}}
+          style={{width:"100%",height:40,borderRadius:11,background:"#fff",border:"1px solid "+(_pdTemFiltro?"#c4b5fd":"#e2e8f0"),
+                  display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 13px",cursor:"pointer",
+                  fontFamily:"'Inter',system-ui,sans-serif",fontSize:13.5,fontWeight:700,color:"#0f172a"}}>
+          <span>Filtros{_pdTemFiltro?" (ativos)":""}</span>
+          <span style={{color:"#64748b",fontSize:12.5,fontWeight:600}}>setor · pessoa · cliente ›</span>
+        </button>;
+        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif",
+          background:isMob?"#fff":undefined,border:isMob?"1px solid #c4b5fd":undefined,borderRadius:isMob?12:undefined,padding:isMob?"11px 12px":undefined}}>
           {/* ── SETOR — botões diretos, um clique ── */}
           {myPerms.filtroSetor&&SETORES.map(s=>{
             const _on=filterSector===s.id;
@@ -25963,7 +26167,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   onMouseLeave={e=>{if(!_on){e.currentTarget.style.opacity=(filterClient==="todos")?"1":".45";e.currentTarget.style.borderColor="#e2e8f0";}}}>
                   {_src
                     ?<img src={_src} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
-                    :<span style={{color:_cor,fontWeight:900,fontSize:8.5}}>{cl.abbr||"?"}</span>}
+                    :<span style={{color:_cor,fontWeight:900,fontSize:pxFonte(8.5,isMob)}}>{cl.abbr||"?"}</span>}
                 </button>;
               })}
             </>;
@@ -25971,14 +26175,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{color:C.td,fontSize:10,fontWeight:700}}>📍</span>
+            <span style={{color:C.td,fontSize:pxFonte(10,isMob),fontWeight:700}}>📍</span>
             {[{id:"todos",label:"Todas"},
               ...BIOTER_UNITS.map(u=>({id:u.id,label:u.label.split("/")[0],color:u.color}))
             ].map(u=>(
               <button key={u.id} onClick={()=>setFilterBioterUnit(u.id)}
                 style={{background:filterBioterUnit===u.id?(u.color||CLIENTS.find(c=>c.id==="bioter")?.color||C.a):C.b1,
                   color:filterBioterUnit===u.id?"#fff":C.ts,
-                  border:"none",borderRadius:99,padding:"4px 11px",fontSize:10,fontWeight:700,cursor:"pointer",
+                  border:"none",borderRadius:99,padding:"4px 11px",fontSize:pxFonte(10,isMob),fontWeight:700,cursor:"pointer",
                   transition:"all .15s",whiteSpace:"nowrap"}}>
                 {u.label}
               </button>
@@ -25988,10 +26192,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {/* Limpar filtros */}
           {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos")&&
             <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTags([]);}}
-              style={{background:"none",border:"none",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
+              style={{background:"none",border:"none",color:C.rd,fontSize:pxFonte(11,isMob),fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
               × Limpar filtros
             </button>
           }
+
+          {/* Celular: fecha o painel de filtros */}
+          {isMob&&<button type="button" onClick={function(){_setPdFiltrosAbertos(false);}}
+            style={{width:"100%",height:38,borderRadius:10,background:"#0f172a",color:"#fff",border:"none",
+                    fontSize:13.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",marginTop:2}}>
+            Pronto
+          </button>}
 
         </div>;
       })()}
@@ -26013,8 +26224,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         {/* Progresso do mês (produzir) — REMOVIDO a pedido pra ganhar espaço na linha de produção. Componente ProgressoDoMes segue existindo; descomente pra reativar. */}
         {false&&(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(280px,320px))`,gap:14,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
-          {visibleCols.map(col=>{
+        {/* Celular: o MESMO quadro, com 1 coluna na largura da tela. overflowX vira
+           visible pra barra da coluna poder grudar no topo enquanto voce desce. */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":`repeat(${visibleCols.length},minmax(280px,320px))`,gap:14,overflowX:isMob?"visible":"auto",justifyContent:"safe center",background:"#1e293b",padding:isMob?"10px":"16px",borderRadius:14,alignItems:"flex-start"}}>
+          {/* Pontinhos — em qual das colunas voce esta (so no celular) */}
+          {isMob&&visibleCols.length>1&&<div style={{gridColumn:"1/-1",display:"flex",gap:4,justifyContent:"center",paddingBottom:2}}>
+            {visibleCols.map(function(c,i){
+              return <span key={c.id} style={{width:i===_pdColSeg?16:6,height:6,borderRadius:i===_pdColSeg?3:"50%",background:i===_pdColSeg?"#fff":"#475569",transition:"all .15s"}}/>;
+            })}
+          </div>}
+          {(isMob?visibleCols.filter(function(_c,_i){return _i===_pdColSeg;}):visibleCols).map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
           // Override por coluna: se colSortMode[col.id] existir, sobrescreve sortMode global.
@@ -26066,29 +26285,42 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             style={{
               background:isDraggingOver?"#9ca3af":"#d1d5db",
               borderRadius:12,padding:"5px 5px 6px",
-              maxHeight:"calc(100vh - 240px)",
+              /* Celular: sem altura travada e sem rolagem propria — a coluna cresce
+                 pra baixo e quem rola e a tela. Acaba o "travou, nao desce". */
+              maxHeight:isMob?undefined:"calc(100vh - 240px)",
               minHeight:120,
-              overflow:"hidden",
+              overflow:isMob?"visible":"hidden",
               transition:"background .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
-            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+            <div style={{padding:isMob?"6px":"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:isMob?6:undefined,background:col.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px",
+              /* Celular: a barra gruda no topo, entao as setas continuam na mao
+                 mesmo quando voce ja desceu ate o ultimo card. */
+              position:isMob?"sticky":undefined,top:isMob?0:undefined,zIndex:isMob?6:undefined}}>
+              {/* Seta ‹ — volta uma coluna (so no celular) */}
+              {isMob&&<button type="button" disabled={_pdColSeg<=0}
+                onClick={function(e){e.stopPropagation(); if(_pdColSeg>0) _pdIrPraCol(_pdColSeg-1);}}
+                title="Coluna anterior"
+                style={{width:38,height:38,flexShrink:0,borderRadius:10,border:"none",background:"rgba(255,255,255,0.22)",
+                        color:"#fff",fontSize:24,fontWeight:800,lineHeight:1,cursor:_pdColSeg<=0?"default":"pointer",
+                        opacity:_pdColSeg<=0?.35:1,display:"flex",alignItems:"center",justifyContent:"center",
+                        fontFamily:"'Inter',system-ui,sans-serif",WebkitTapHighlightColor:"transparent"}}>‹</button>}
+              <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:isMob?1:undefined,justifyContent:isMob?"center":undefined}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
                       onKeyDown={e=>{if(e.key==="Enter")saveColName(col.id);if(e.key==="Escape")setEditingColId(null);}}
                       onBlur={()=>saveColName(col.id)} autoFocus
-                      style={{background:"rgba(255,255,255,0.22)",border:"1px solid rgba(255,255,255,0.45)",borderRadius:6,padding:"3px 8px",color:"#fff",fontSize:11,fontWeight:600,outline:"none",width:120}}/>
+                      style={{background:"rgba(255,255,255,0.22)",border:"1px solid rgba(255,255,255,0.45)",borderRadius:6,padding:"3px 8px",color:"#fff",fontSize:pxFonte(11,isMob),fontWeight:600,outline:"none",width:120}}/>
                   : <span
                       onDoubleClick={()=>{if(canNewCol){setEditingColId(col.id);setEditingColLabel(col.label);}}}
                       title={canNewCol?"Duplo clique para renomear":""}
-                      style={{color:"#fff",fontWeight:600,fontSize:12,cursor:canNewCol?"text":"default",letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      style={{color:"#fff",fontWeight:600,fontSize:isMob?14:12,cursor:canNewCol?"text":"default",letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {col.label}
                     </span>
                 }
-                <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
+                <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:pxFonte(10,isMob),fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:pxFonte(9,isMob),fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center",position:"relative"}}>
                 {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
@@ -26126,7 +26358,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   return <>
                     <div onMouseDown={e=>{ if(e.target===e.currentTarget) setColMenuOpen(null); }} style={{position:"fixed",inset:0,zIndex:998}}/>
                     <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,minWidth:280,background:"#fff",borderRadius:14,boxShadow:"0 18px 40px rgba(15,23,42,0.16), 0 3px 10px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04)",padding:8,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                      <div style={{padding:"4px 10px 8px 10px",color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{padding:"4px 10px 8px 10px",color:"#64748b",fontSize:pxFonte(10.5,isMob),fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
                         Ordenar coluna
                       </div>
@@ -26145,7 +26377,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:1,minWidth:0,flex:1}}>
                               <span style={{fontSize:13,fontWeight:active?700:600,color:active?o.color:"#0f172a",letterSpacing:-.1,lineHeight:1.2}}>{o.label}</span>
-                              <span style={{fontSize:11,color:"#94a3b8",fontWeight:500,lineHeight:1.2}}>{o.hint}</span>
+                              <span style={{fontSize:pxFonte(11,isMob),color:"#94a3b8",fontWeight:500,lineHeight:1.2}}>{o.hint}</span>
                             </div>
                             {active&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={o.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
                           </button>;
@@ -26155,10 +26387,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   </>;
                 })()}
               </div>
+              {/* Seta › — vai pra proxima coluna (so no celular) */}
+              {isMob&&<button type="button" disabled={_pdColSeg>=visibleCols.length-1}
+                onClick={function(e){e.stopPropagation(); if(_pdColSeg<visibleCols.length-1) _pdIrPraCol(_pdColSeg+1);}}
+                title="Proxima coluna"
+                style={{width:38,height:38,flexShrink:0,borderRadius:10,border:"none",background:"rgba(255,255,255,0.22)",
+                        color:"#fff",fontSize:24,fontWeight:800,lineHeight:1,cursor:_pdColSeg>=visibleCols.length-1?"default":"pointer",
+                        opacity:_pdColSeg>=visibleCols.length-1?.35:1,display:"flex",alignItems:"center",justifyContent:"center",
+                        fontFamily:"'Inter',system-ui,sans-serif",WebkitTapHighlightColor:"transparent"}}>›</button>}
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div className="pixels-kanban-scroll" style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4}}>
+            <div className="pixels-kanban-scroll" style={{display:"flex",flexDirection:"column",gap:7,overflowY:isMob?"visible":"auto",flex:1,paddingLeft:4,paddingRight:4}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -26283,7 +26523,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
-                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                           {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
@@ -26306,7 +26546,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const mn=monthNames[parseInt(parts[1],10)-1];
                       const yy=parts[0].slice(-2);
                       if(!mn)return null;
-                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
+                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg>
                         {mn}/{yy}
                       </span>;
@@ -26352,7 +26592,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"1px 5px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
                             <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:12,maxWidth:50,objectFit:"contain",display:"block"}}/>
                           </div>
-                          :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
+                          :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:pxFonte(9,isMob),fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
                         {/* Siglas das unidades Bioter — GRUPO/BR pra agrupamentos, ou siglas individuais */}
                         {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
@@ -26360,17 +26600,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           if(!ids.length)return null;
                           return ids.map(uid=>{
                             if(uid==="grupo"){
-                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
+                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
                             }
                             if(uid==="brasil"){
-                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
+                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
                             }
                             const u=BIOTER_UNITS.find(x=>x.id===uid);
                             if(!u)return null;
-                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
+                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
                           });
                         })()}
-                        {days!==null&&["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(t.status)===-1&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
+                        {days!==null&&["avaliacao","aprovado","aprovacao_final","agendado","publicado","pausado","reprovado"].indexOf(t.status)===-1&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:pxFonte(10,isMob),whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
                           <Ico n="alarmClock" size={11}/>
                           {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
@@ -26381,7 +26621,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           const d=new Date(t.publishDate+"T12:00:00");
                           const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
                           const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
-                          return <span title={"Publicação: "+titleFmt} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                          return <span title={"Publicação: "+titleFmt} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"2px 6px",fontSize:pxFonte(9,isMob),fontWeight:700,whiteSpace:"nowrap"}}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                             {fmt}
                           </span>;
@@ -26391,7 +26631,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {allAssignees.slice(0,3).map((au,idx)=>(
                             <UserAvatar key={au.id} user={au} size={19} style={{marginLeft:idx===0?0:-6,zIndex:allAssignees.length-idx}}/>
                           ))}
-                          {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:19,height:19,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8,border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
+                          {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:19,height:19,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:pxFonte(8,isMob),border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
                         </div>}
                         {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} title="Excluir" style={{background:"none",border:"none",color:"transparent",cursor:"pointer",fontSize:13,padding:"0 2px",marginLeft:2}} onMouseEnter={e=>e.currentTarget.style.color="#cbd5e1"} onMouseLeave={e=>e.currentTarget.style.color="transparent"}>×</button>}
                       </div>
@@ -26403,7 +26643,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               {/* Add card dentro da coluna — disponível em Rascunhos e Copys */}
               {canCreate&&(col.id==="demanda"||col.id==="rascunhos")&&<button
                 onClick={()=>addNewTask(col.id)}
-                style={{background:"none",border:"1px dashed transparent",borderRadius:8,padding:"7px 0",color:"transparent",cursor:"pointer",fontSize:11,marginTop:2,textAlign:"left",paddingLeft:8,transition:"all .15s"}}
+                style={{background:"none",border:"1px dashed transparent",borderRadius:8,padding:"7px 0",color:"transparent",cursor:"pointer",fontSize:pxFonte(11,isMob),marginTop:2,textAlign:"left",paddingLeft:8,transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.b2;e.currentTarget.style.color=C.td;}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor="transparent";e.currentTarget.style.color="transparent";}}>
                 + Adicionar
@@ -26443,7 +26683,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               </div>
               <div style={{minWidth:0}}>
                 <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Lixeira</div>
-                <div style={{color:"#64748b",fontSize:11.5,marginTop:2,lineHeight:1.5}}>Cartões excluídos ficam aqui por <strong style={{color:"#991b1b"}}>30 dias</strong> antes de sumirem. Use o botão pra restaurar.</div>
+                <div style={{color:"#64748b",fontSize:pxFonte(11.5,isMob),marginTop:2,lineHeight:1.5}}>Cartões excluídos ficam aqui por <strong style={{color:"#991b1b"}}>30 dias</strong> antes de sumirem. Use o botão pra restaurar.</div>
               </div>
             </div>
             <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
@@ -26459,7 +26699,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </div>
           </div>
 
-          {trashVisibleAll.length>0&&<div style={{color:"#64748b",fontSize:11.5,fontWeight:600,paddingLeft:4}}>
+          {trashVisibleAll.length>0&&<div style={{color:"#64748b",fontSize:pxFonte(11.5,isMob),fontWeight:600,paddingLeft:4}}>
             {_q
               ?`${trashVisible.length} resultado${trashVisible.length===1?"":"s"} pra "${trashSearch}" · ${trashVisibleAll.length} total na lixeira`
               :`${trashVisibleAll.length} cartão${trashVisibleAll.length===1?"":"s"} na lixeira`}
@@ -26476,7 +26716,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             : trashVisible.length===0
               ? <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:32,textAlign:"center"}}>
                   <div style={{color:"#64748b",fontSize:13,fontWeight:600}}>Nenhum resultado pra "{trashSearch}"</div>
-                  <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Tenta outro termo ou limpa a busca</div>
+                  <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:4}}>Tenta outro termo ou limpa a busca</div>
                 </div>
               : <div style={{display:"flex",flexDirection:"column",gap:8}}>
                   {trashVisible.map(t=>{
@@ -26493,7 +26733,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         </div>}
                         <div style={{minWidth:0,flex:1}}>
                           <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
-                          <div style={{color:"#64748b",fontSize:11.5,marginTop:3,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                          <div style={{color:"#64748b",fontSize:pxFonte(11.5,isMob),marginTop:3,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                             {cl&&<span style={{fontWeight:600}}>{cl.name}</span>}
                             {u&&<><span style={{color:"#cbd5e1"}}>·</span><span>{u.name}</span></>}
                             {days!==null&&<><span style={{color:"#cbd5e1"}}>·</span>
@@ -45079,7 +45319,16 @@ function _cardPodeSerResp(u){
     if(task._isDraft && typeof pxCascataConfirmar==="function" && publishDate && !somenteStory && !naoPublica){
       const _novo={id:task.id,client:client,bioterUnit:client==="bioter"?bioterUnit:null,publishDate:publishDate,status:task.status||"rascunhos",
         somenteStory:!!somenteStory,naoPublica:!!naoPublica,contentType:contentType||null,title:formattedTitle,tags:tags||[]};
-      pxCascataConfirmar(_novo,setTasks,user&&user.name).then(function(){ _gravar(); },function(){ _gravar(); });
+      /* (22/09/2026, Rodrigo) "Vinicius criou esse no dia 23, deveria ter arrastado essa
+         Interação no mínimo pra sábado né? lembra que tínhamos alinhado o espaçamento dentro
+         das semanas." O confirmar só olhava CADÊNCIA: a semana da Climaves ficou em 2 (cabia)
+         e ninguém olhou que o card novo caiu colado no que já estava lá. Depois de gravar, a
+         varredura roda com o card novo protegido — quem se afasta é o que já estava. */
+      const _depois=function(){
+        _gravar();
+        setTimeout(function(){ try{ if(typeof pxCascataVarrer==="function") pxCascataVarrer(task.id); }catch(_e){} },2500);
+      };
+      pxCascataConfirmar(_novo,setTasks,user&&user.name).then(_depois,_depois);
       return;
     }
     /* (19/09/2026, Vinicius) Card que JÁ existia e passa a ocupar o dia — tirou "Somente story"
