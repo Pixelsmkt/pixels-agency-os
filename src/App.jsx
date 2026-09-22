@@ -19068,7 +19068,10 @@ async function pxCascataPlanejar(novo,extras,opts){
     const hoje=_pxApIso(new Date());
     const iso=String(novo.publishDate||novo.publish_date||"").slice(0,10);
     // Card de HOJE conta ("o cliente manda postar algo urgente e é hoje") — só data passada não.
-    if(!iso||iso<hoje) return vazio;
+    /* (22/09/2026) Exceção: a varredura passa `opts.sair` e a âncora pode ser um post já
+       publicado da semana. Ali a data serve só pra achar a semana e o alvo — não é um card
+       sendo colocado —, então data passada vale. */
+    if(!iso||(iso<hoje&&!(opts&&opts.sair))) return vazio;
     const nn={id:novo.id,client:novo.client,bioter_unit:novo.bioterUnit||novo.bioter_unit||"",publish_date:iso,
       status:novo.status||"rascunhos",somente_story:!!(novo.somenteStory||novo.somente_story),
       nao_publica:!!(novo.naoPublica||novo.nao_publica),content_type:novo.contentType||novo.content_type||null,
@@ -19272,8 +19275,17 @@ async function pxCascataVarrer(){
     let total=0;
     // uma semana por volta: depois de aplicar, relê o banco (a cascata mexeu nas semanas seguintes)
     for(let volta=0; volta<40; volta++){
+      /* (22/09/2026, Rodrigo) LÊ A SEMANA INTEIRA, NÃO DE HOJE PRA FRENTE.
+         "foi criado um card de uberlândia hoje dia 22, então fechou os 2 posts da semana
+          porque já tinha o collab do Dia do Gaúcho… você deveria ter jogado o short pra
+          outra semana e ir fazendo a cascata."
+         O que já foi PUBLICADO na semana ocupou a vaga do mesmo jeito. Lendo só a partir
+         de hoje, a Uberlândia aparecia com 2 posts (22 e 23) numa cadência de 2 e a semana
+         passava como certa — o Dia do Gaúcho de domingo (20), que fechava o terceiro, era
+         invisível. Aí só o espaçamento rodava e empurrava o Short pro sábado, mantendo 3
+         posts na mesma semana. Mover continua valendo só pra card futuro (_pxCasMovivel). */
       const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
-        .is("deleted_at",null).gte("publish_date",hoje).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
+        .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
       if(!r||r.error) break;
       const porSemana={};
       (r.data||[]).forEach(function(x){
@@ -19305,7 +19317,11 @@ async function pxCascataVarrer(){
           let sair=null;
           for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
           if(!sair) continue;
-          const ancora=ordenados.find(function(x){ return String(x.id)!==String(sair.id); });
+          /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
+             passada, então prefere um card de hoje em diante. O post já publicado na semana
+             CONTA na cadência, mas não serve de âncora. */
+          const ancora=ordenados.find(function(x){ return String(x.id)!==String(sair.id)&&String(x.publish_date||"").slice(0,10)>=hoje; })
+                     ||ordenados.find(function(x){ return String(x.id)!==String(sair.id); });
           if(!ancora) continue;
           achou={ancora:ancora,sair:sair,semana:k,alvo:alvo}; break;
         }
@@ -19349,7 +19365,10 @@ async function pxCascataEspacar(){
     const moves=[];
     const porSemana={};
     rows.forEach(function(x){
-      const iso=String(x.publish_date||"").slice(0,10); if(!iso||iso<hoje) return;
+      /* (22/09/2026) O post já publicado nesta semana entra na conta do espaçamento: quem
+         postou domingo e tem outro na terça está colado do mesmo jeito. Ele nunca é o que
+         anda — `podeAndar` (_pxCasMovivel) só deixa mexer em card de amanhã em diante. */
+      const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
       const k=_pxApLinha(iso).iniIso; (porSemana[k]=porSemana[k]||[]).push(x);
     });
     for(const k of Object.keys(porSemana).sort()){
