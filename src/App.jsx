@@ -11,6 +11,184 @@ import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 // Usado nos gridTemplateColumns dos módulos que não recebem isMob por prop.
 function _pxMob(){ try{ return window.innerWidth<768; }catch(e){ return false; } }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FASE 0 DO MOBILE (22/09/2026) — as 4 peças do padrão
+   ───────────────────────────────────────────────────────────────────────────
+   REGRA DO RODRIGO: "é só para você ajustar a navegação e visualização do
+   mobile; não é para excluir, mexer ou criar nada fora isso."
+
+   Por isso TUDO aqui é ADIÇÃO PURA e tem a mesma promessa:
+   no COMPUTADOR devolve exatamente o valor de hoje, sem tocar em nada.
+   Só dentro do celular é que muda alguma coisa.
+
+   O _pxMob() acima continua existindo e funcionando igual — nada foi apagado.
+
+   As 4 peças:
+     1. usePxMob()                    → o detector de celular, agora reativo
+     2. pxSe(computador, celular)     → escolhe um valor ou o outro
+     3. pxCols(desktop, celular)      → a grade de colunas (o que mais quebra)
+     4. pxFonte(n)                    → piso de fonte legível no celular
+     + PxTabelaMob                    → tabela que no celular vira lista de cartões
+
+   POR QUE ISSO EXISTE (medido em 22/09, nos 44 módulos):
+     • 659 gridTemplateColumns, 214 deles sem NENHUM ajuste de celular
+       → é o que faz a tela vazar pro lado
+     • 2.044 fontSize de 9 a 10,5px → ilegível num celular
+     • 26 <table> de verdade → viram uma faixa que rola pro lado
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* A régua. 768px é a mesma que o _pxMob() e o isMob do AgencyOS já usavam —
+   não inventei número novo, só juntei os três que existiam (768, 760, 820). */
+const PX_MOBILE_MAX = 768;
+/* Abaixo disso, no celular, não dá pra ler. Acima disso eu não mexo. */
+const PX_FONTE_MIN  = 12;
+
+/* ─── 1. usePxMob() — o detector reativo ───────────────────────────────────
+   O _pxMob() lê a largura na hora do render e acerta 99% das vezes — mas se a
+   pessoa GIRA o celular (390px → 844px), o React não tem motivo pra redesenhar
+   e a tela fica com o layout errado até alguém tocar em alguma coisa.
+   Este hook escuta o resize e a rotação, e aí a tela acompanha.
+   Uso:  const mob = usePxMob();
+   Quem já recebe isMob por prop não precisa dele — continua usando a prop.     */
+function usePxMob(){
+  const [mob, setMob] = React.useState(function(){
+    try { return window.innerWidth < PX_MOBILE_MAX; } catch(e){ return false; }
+  });
+  React.useEffect(function(){
+    let ultimo = mob;
+    const ver = function(){
+      let agora = false;
+      try { agora = window.innerWidth < PX_MOBILE_MAX; } catch(e){ agora = false; }
+      /* só redesenha quando CRUZA a régua — resize de 390 pra 391 não é notícia */
+      if (agora !== ultimo) { ultimo = agora; setMob(agora); }
+    };
+    window.addEventListener("resize", ver);
+    window.addEventListener("orientationchange", ver);
+    ver();
+    return function(){
+      window.removeEventListener("resize", ver);
+      window.removeEventListener("orientationchange", ver);
+    };
+  }, []);
+  return mob;
+}
+
+/* ─── 2. pxSe(computador, celular) — escolhe um valor ou o outro ───────────
+   O jeito curto de escrever "no computador é assim, no celular é assado".
+   O 3º parâmetro é opcional: se o componente já tem isMob por prop, passa ele
+   (aí é reativo de graça); se não passar, cai no _pxMob() de sempre.
+   Uso:  padding: pxSe("16px 20px", "12px 14px")
+         padding: pxSe("16px 20px", "12px 14px", isMob)                        */
+function pxSe(noComputador, noCelular, mob){
+  const m = (mob === undefined || mob === null) ? _pxMob() : !!mob;
+  return m ? noCelular : noComputador;
+}
+
+/* ─── 3. pxCols(desktop, celular) — a grade ────────────────────────────────
+   É o defeito nº 1 do app no celular: uma grade de 4, 5, 6 colunas fixas não
+   cabe em 390px e empurra a tela pro lado.
+   No COMPUTADOR devolve a mesma string de hoje, caractere por caractere.
+   No celular, se você não disser nada, vira "1fr" (tudo empilhado).
+   Uso:  gridTemplateColumns: pxCols("repeat(4,1fr)")
+         gridTemplateColumns: pxCols("200px 1fr 120px", "1fr")
+         gridTemplateColumns: pxCols("1fr 1fr 1fr", "1fr 1fr", isMob)          */
+function pxCols(desktop, celular, mob){
+  const m = (mob === undefined || mob === null) ? _pxMob() : !!mob;
+  if (!m) return desktop;
+  return (celular === undefined || celular === null) ? "1fr" : celular;
+}
+
+/* ─── 4. pxFonte(n) — piso de fonte no celular ─────────────────────────────
+   São 2.044 fontSize de 9 a 10,5px no app. No monitor, com o olho a 60cm,
+   passa. No celular vira borrão. Esta função levanta SÓ o que está abaixo de
+   12px, e SÓ no celular. Fonte de 13, 14, 20px sai igualzinha entrou.
+   Uso:  fontSize: pxFonte(10)      →  10 no computador, 12 no celular
+         fontSize: pxFonte(14)      →  14 nos dois (não mexe)                  */
+function pxFonte(n, mob){
+  const v = Number(n);
+  if (!isFinite(v)) return n;
+  const m = (mob === undefined || mob === null) ? _pxMob() : !!mob;
+  if (!m) return v;
+  return v < PX_FONTE_MIN ? PX_FONTE_MIN : v;
+}
+
+/* ─── PxTabelaMob — a tabela que no celular vira lista de cartões ──────────
+   A tabela de hoje NÃO É TOCADA: ela continua sendo desenhada exatamente como
+   é, e vai dentro deste componente como filho. No computador, isto aqui é
+   invisível — devolve o filho e pronto. Só no celular é que, em vez da tabela,
+   ele desenha um cartão por linha.
+
+   Uso:
+     <PxTabelaMob
+       linhas={clientes}
+       titulo={function(l){ return l.nome; }}
+       campos={[
+         {t:"Investimento", v:function(l){ return _brl(l.gasto); }},
+         {t:"Leads",        v:function(l){ return l.leads; }},
+         {t:"Custo/lead",   v:function(l){ return _brl(l.cpl); }},
+       ]}
+       aoClicar={function(l){ abrir(l); }}
+     >
+       <table> ...a tabela de hoje, sem mudar nada... </table>
+     </PxTabelaMob>
+
+   Regras:
+     • no computador: devolve children, byte por byte igual ao de hoje
+     • no celular: um cartão por linha — título em cima, os campos embaixo
+     • campo que devolve vazio/null some do cartão (não vira "—" à toa)
+     • nada de overflowX: rolar a tabela pro lado não é solução, é esconder
+       o problema — o dedo não acha a coluna da direita.                       */
+function PxTabelaMob({ linhas, titulo, campos, aoClicar, chave, vazio, mob, children }){
+  const auto = usePxMob();
+  const m = (mob === undefined || mob === null) ? auto : !!mob;
+  if (!m) return children || null;
+
+  const lista = Array.isArray(linhas) ? linhas : [];
+  if (!lista.length) {
+    return <div style={{padding:"18px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:600}}>
+      {vazio || "Nada por aqui."}
+    </div>;
+  }
+  const cps = (campos || []).filter(Boolean);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {lista.map(function(l, i){
+      const k = chave ? chave(l, i) : (l && (l.id || l.key)) || i;
+      const tit = titulo ? titulo(l, i) : "";
+      const valores = cps.map(function(c){
+        let v = null;
+        try { v = (typeof c.v === "function") ? c.v(l, i) : l[c.v]; } catch(e){ v = null; }
+        return { t: c.t, v: v };
+      }).filter(function(x){ return x.v !== null && x.v !== undefined && x.v !== ""; });
+
+      return <div key={k}
+        onClick={aoClicar ? function(){ aoClicar(l, i); } : undefined}
+        style={{background:"#fff",border:"1px solid #e9edf3",borderRadius:12,padding:"12px 13px",
+                display:"flex",flexDirection:"column",gap:9,
+                cursor:aoClicar?"pointer":"default",
+                WebkitTapHighlightColor:"transparent"}}>
+        {tit ? <div style={{fontWeight:800,fontSize:13.5,color:"#0f172a",lineHeight:1.3,
+                            overflow:"hidden",textOverflow:"ellipsis"}}>{tit}</div> : null}
+        {valores.length ? <div style={{display:"grid",
+                gridTemplateColumns:valores.length >= 3 ? "1fr 1fr 1fr" : (valores.length === 2 ? "1fr 1fr" : "1fr"),
+                gap:"9px 10px"}}>
+          {valores.map(function(x, j){
+            return <div key={j} style={{minWidth:0}}>
+              <div style={{fontSize:PX_FONTE_MIN - 1,fontWeight:700,color:"#94a3b8",letterSpacing:".03em",
+                           textTransform:"uppercase",marginBottom:2,
+                           whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.t}</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#0f172a",
+                           whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.v}</div>
+            </div>;
+          })}
+        </div> : null}
+      </div>;
+    })}
+  </div>;
+}
+/* ═══════════════════ fim da Fase 0 do mobile ═══════════════════════════════ */
+
+
 // Depende de: 00_globals.jsx
 // Usado por: 01_dashboard, 02_clientes, 03_clientes2 e outros
 
