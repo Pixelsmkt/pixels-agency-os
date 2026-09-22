@@ -156,9 +156,11 @@ function PxTabelaMob({ linhas, titulo, campos, aoClicar, chave, vazio, mob, chil
       const k = chave ? chave(l, i) : (l && (l.id || l.key)) || i;
       const tit = titulo ? titulo(l, i) : "";
       const valores = cps.map(function(c){
-        let v = null;
+        let v = null, cor = null;
         try { v = (typeof c.v === "function") ? c.v(l, i) : l[c.v]; } catch(e){ v = null; }
-        return { t: c.t, v: v };
+        /* campo.cor: mesma cor que a tabela do computador usa (verde/amarelo/vermelho) */
+        try { cor = (typeof c.cor === "function") ? c.cor(l, i) : (c.cor || null); } catch(e){ cor = null; }
+        return { t: c.t, v: v, cor: cor };
       }).filter(function(x){ return x.v !== null && x.v !== undefined && x.v !== ""; });
 
       return <div key={k}
@@ -177,7 +179,7 @@ function PxTabelaMob({ linhas, titulo, campos, aoClicar, chave, vazio, mob, chil
               <div style={{fontSize:PX_FONTE_MIN - 1,fontWeight:700,color:"#94a3b8",letterSpacing:".03em",
                            textTransform:"uppercase",marginBottom:2,
                            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.t}</div>
-              <div style={{fontSize:13,fontWeight:700,color:"#0f172a",
+              <div style={{fontSize:13,fontWeight:700,color:x.cor||"#0f172a",
                            whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{x.v}</div>
             </div>;
           })}
@@ -3287,9 +3289,11 @@ function _showNovidade(o){
   const container=_ensureToastContainer();
   if(!container){console.log("[novidade]",o.titulo,o.sub);return;}
   const toast=document.createElement("div");
+  /* (22/09/2026) `fundo`/`sombra` são opcionais: o aviso de alerta continua vermelho, mas a
+     cascata (que é informação, não problema) usa o roxo da marca. */
   Object.assign(toast.style,{
-    background:"#dc2626",color:"#fff",padding:"11px 14px 11px 11px",borderRadius:"14px",
-    boxShadow:"0 12px 40px rgba(220,38,38,0.35)",fontSize:"13px",
+    background:o.fundo||"#dc2626",color:"#fff",padding:"11px 14px 11px 11px",borderRadius:"14px",
+    boxShadow:"0 12px 40px "+(o.sombra||"rgba(220,38,38,0.35)"),fontSize:"13px",
     display:"flex",alignItems:"center",gap:"11px",pointerEvents:"auto",cursor:"pointer",
     fontFamily:"'Inter',system-ui,sans-serif",transform:"translateX(110%)",opacity:"0",
     transition:"all .3s cubic-bezier(.22,1,.36,1)",minWidth:"280px",maxWidth:"360px",
@@ -3309,6 +3313,7 @@ function _showNovidade(o){
   Object.assign(x.style,{background:"transparent",border:"none",color:"rgba(255,255,255,.75)",fontSize:"18px",cursor:"pointer",padding:"0 2px",lineHeight:"1",flexShrink:0});
   x.onclick=function(e){e.stopPropagation();_dismissToast(toast);};
   toast.appendChild(logo); toast.appendChild(txt); toast.appendChild(x);
+  if(o.tooltip) toast.title=String(o.tooltip);   // o motivo inteiro, que não cabe no subtítulo
   toast.onclick=function(){ try{ if(typeof o.onClick==="function") o.onClick(); }catch(_){} _dismissToast(toast); };
   container.appendChild(toast);
   requestAnimationFrame(function(){toast.style.transform="translateX(0)";toast.style.opacity="1";});
@@ -4213,6 +4218,29 @@ const PX_ROTEIRO_FALA_REGRAS=
   "- Não invente número, prazo, garantia nem dado técnico que não esteja no card.\n";
 const PX_ROTEIRO_SIMPLES_FORMATO=
   "• ROTEIRO (vídeo simples — 15 a 30s)\nCena 1 — o que aparece\nCena 2 — o que aparece\nCena 3 — o que aparece\n(sem fala, sem marcação de tempo)\n";
+/* ── VÍDEO NARRADO — BRIEFING PRO EDITOR (22/09/2026, Rodrigo) ────────────────────
+   "em Briefings pro editor de vídeo, a narração deve aparecer em sequência corrida pra
+    ficar fácil dele copiar e colar.. e negrito entre as cenas."
+
+   Antes a IA intercalava "Narração:" com instrução de imagem, então o editor tinha que
+   catar pedaço por pedaço pra jogar no gerador de voz. Agora a narração é UM texto só,
+   quebrado apenas pelo nome da cena (que sai em negrito), e TUDO que é imagem, take,
+   corte ou trilha desce pra uma seção própria no fim. */
+const PX_ROTEIRO_NARRACAO_FORMATO=
+  "• ROTEIRO (vídeo narrado — 60s)\n"+
+  "Cena 1 — Abertura\n(a narração, só o texto que a voz fala)\n\n"+
+  "Cena 2 — Desenvolvimento\n(a narração, continuando a de cima)\n\n"+
+  "Cena 3 — Fechamento\n(a narração que fecha e assina)\n\n"+
+  "• IMAGENS\n- Cena 1: o que aparece na tela\n- Cena 2: o que aparece na tela\n- Cena 3: o que aparece na tela\n";
+const PX_ROTEIRO_NARRACAO_REGRAS=
+  "REGRAS DO VÍDEO NARRADO (o briefing é pro EDITOR, e a narração vai num gerador de voz):\n"+
+  "- A NARRAÇÃO VEM CORRIDA: embaixo do nome da cena vem SÓ o texto que a voz fala. É um discurso\n"+
+  "  contínuo — o editor seleciona da primeira à última cena, copia e cola de uma vez.\n"+
+  "- PROIBIDO no meio da narração: o rótulo \"Narração:\", aspas, instrução de imagem, de take, de\n"+
+  "  corte, de trilha, de ritmo ou marcação de tempo. Isso TUDO vai na seção • IMAGENS, no fim.\n"+
+  "- O nome da cena é só \"Cena 1 — Abertura\", \"Cena 2 — Desenvolvimento\", \"Cena 3 — Fechamento\".\n"+
+  "- 60 segundos narrados: de 110 a 140 palavras NO TOTAL, somando as três cenas.\n"+
+  "- Frases completas, na voz da empresa. Não invente número, prazo, garantia nem dado técnico.\n";
 
 function _pxFrasesDaArte(briefTxt){
   const t=String(briefTxt||"")
@@ -4424,6 +4452,29 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
    Editada no Playbook, bloco "Feedbacks" (27_playbooks.jsx) — que desde 22/09/2026
    guarda também o feedback da própria equipe, não só o que o cliente falou.
    Um lugar só monta os dois blocos: mudou aqui, muda nos 4 geradores. */
+/* ── MATERIAIS OFICIAIS DO CLIENTE (22/09/2026, Rodrigo) ──────────────────────────
+   "preciso subir os arquivos (materiais da Bioter, folders e manuais dos produtos) pra que
+    a nossa IA leia e esteja congruente nas criações de copys."
+
+   O arquivo NÃO entra no prompt — manual tem dezenas de milhares de palavras e o teto é de
+   alguns milhares de tokens. O que entra é a FICHA: os fatos que a IA extraiu do material
+   UMA vez, no upload, e que a equipe revisa no Playbook › Materiais do cliente.
+
+   Peso: material é FATO CONFERIDO (veio do cliente), então vale mais que memória de reunião
+   — mas continua não sendo texto pra copiar. */
+function pxCtxMateriaisTxt(ctx){
+  const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
+  if(!arr.length) return "";
+  let u="MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo que a própria empresa passou — "+
+        "é fato conferido, pode usar como verdade; ainda assim, escreva com as suas palavras, "+
+        "não copie trecho):\n";
+  arr.slice(0,12).forEach(function(m){
+    const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) return;
+    u+="--- "+String((m&&m.titulo)||"Material")+(m&&m.tipo?(" ("+m.tipo+")"):"")+
+       (m&&m.unidade?(" — unidade "+m.unidade):"")+"\n"+ficha.slice(0,1800)+"\n";
+  });
+  return u+"\n";
+}
 function pxCtxRegrasTxt(regras){
   const arr=Array.isArray(regras)?regras:[];
   const _ehMem=function(r){ return String((r&&r.tipo)||"").toLowerCase().indexOf("memoria")===0; };
@@ -4558,6 +4609,85 @@ const _PX_BRIEF_PROD_CAMPOS=[
   ["foco_campanha","Foco de campanha",700],["campanha_atual","Campanha atual",500],
   ["diferenciais","Diferenciais",600],["beneficios","Benefícios",700],
   ["dores_resolvidas","Dores que resolve",500],["sazonalidade","Sazonalidade",400]];
+/* ── LISTA OFICIAL DE PRODUTOS (22/09/2026, Rodrigo) ──────────────────────────────
+   "as tags no Roteiros estão erradas, tá puxando errado os produtos? É Estação de
+    Tratamento de Água (ETA).. é Cisterna de estrutura.. não Cisterna metálica"
+
+   O briefing do portal é PROSA ("Estações de Tratamento de Água — ETA — sistemas para…"),
+   então a IA escrevia a tag com as palavras dela: "ETA", "Cisterna Metálica", "Cisterna
+   Inflada Bioter" — três jeitos pro mesmo produto e nenhum igual ao cadastro. Pior: a lista
+   do playbook ia pro prompt como `_pxCtxTxt(pb.produtos)`, que despeja o OBJETO inteiro
+   (inclusive as URLs das fotos) e ainda cortado em 900 caracteres — lixo, não lista.
+
+   Agora existe UMA lista oficial: os produtos cadastrados no Playbook, com os apelidos
+   (nomesPt, nome em espanhol, o que está entre parênteses). É ela que vai pro prompt e é
+   contra ela que a resposta da IA é conferida. Produto que não bate com o cadastro não
+   vira tag — melhor sem tag do que com nome inventado. */
+function pxProdutosOficiais(ctx,unit){
+  const arr=(ctx&&ctx.playbook&&Array.isArray(ctx.playbook.produtos))?ctx.playbook.produtos:[];
+  const u=String(unit||"").trim();
+  const out=[];
+  arr.forEach(function(pr){
+    const nome=String((pr&&(pr.nome||pr.nomePrincipalPt))||"").trim(); if(!nome) return;
+    const uni=Array.isArray(pr&&pr.unidades)?pr.unidades:[];
+    const daUnidade=(!u||!uni.length||uni.indexOf(u)>=0);
+    const aliases=[];
+    [pr.nome,pr.nomePrincipalPt,pr.nomePrincipalEs,pr.nomesPt].forEach(function(x){
+      String(x||"").split(/[,;\/]/).forEach(function(a){ a=String(a||"").trim(); if(a) aliases.push(a); });
+      // o que está entre parênteses costuma ser a sigla: "Estação de Tratamento de Água (ETA)"
+      const m=String(x||"").match(/\(([^)]{2,30})\)/g);
+      if(m) m.forEach(function(g){ const s=g.replace(/[()]/g,"").trim(); if(s) aliases.push(s); });
+    });
+    const ordem=(pr.ordemPorUnidade&&u&&typeof pr.ordemPorUnidade[u]==="number")?pr.ordemPorUnidade[u]:999;
+    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem});
+  });
+  out.sort(function(a,b){ if(a.daUnidade!==b.daUnidade) return a.daUnidade?-1:1; return a.ordem-b.ordem; });
+  return out;
+}
+function _pxProdNorm(s){
+  return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g," ").trim();
+}
+const _PX_PROD_PARADAS=["de","da","do","das","dos","e","em","para","pra","com","a","o","as","os","um","uma","the"];
+function _pxProdToks(s){
+  return _pxProdNorm(s).split(" ").filter(function(w){ return w.length>2&&_PX_PROD_PARADAS.indexOf(w)<0; });
+}
+/* Nome OFICIAL mais próximo do que a IA escreveu — ou "" quando não dá pra ter certeza.
+   Tag de produto nunca é texto livre: ou é o cadastro, ou não tem tag. */
+/* Duas palavras são a mesma quando uma é prefixo da outra ou as 5 primeiras letras batem —
+   "estação"/"estações" viram estacao/estacoes e divergem na 6ª letra, então prefixo sozinho
+   não resolve plural em português. */
+function _pxProdIgual(a,w){
+  if(a===w) return true;
+  if(a.indexOf(w)===0||w.indexOf(a)===0) return true;
+  return a.length>=5&&w.length>=5&&a.slice(0,5)===w.slice(0,5);
+}
+function pxProdutoOficial(txt,lista){
+  const alvo=_pxProdToks(txt);
+  if(!alvo.length||!Array.isArray(lista)||!lista.length) return "";
+  const tn=_pxProdNorm(txt);
+  let melhor="", melhorS=0;
+  lista.forEach(function(pr){
+    [pr.nome].concat(pr.aliases||[]).forEach(function(c){
+      const cn=_pxProdNorm(c); if(!cn) return;
+      let s=0;
+      /* Nome igualzinho ganha de qualquer parecença (vale 1.5): "lagoa de dejetos" é apelido
+         da Lagoa de estabilização E aparece dentro do apelido do Biodigestor. */
+      if(cn===tn) s=1.5;                                 // igualzinho (pega a sigla: "ETA")
+      else{
+        const ct=_pxProdToks(c); if(!ct.length) return;
+        let hit=0;
+        ct.forEach(function(w){ if(alvo.some(function(a){ return _pxProdIgual(a,w); })) hit++; });
+        /* Uma palavra em comum não é parecença — "Cisterna metálica" x "Cisterna inflada"
+           são produtos diferentes. De duas pra cima, vale a melhor cobertura dos dois lados:
+           assim "Planta de biogás" acha o nome comprido e "Cisterna Inflada Bioter" acha o curto. */
+        s=(hit>=2)?Math.max(hit/alvo.length,hit/ct.length):0;
+      }
+      if(s>melhorS){ melhorS=s; melhor=pr.nome; }
+    });
+  });
+  return melhorS>=0.6?melhor:"";
+}
 function pxBriefingProdutosTxt(ctx,limite){
   const bp=(ctx&&ctx.briefing_produtos)||{};
   if(!bp||typeof bp!=="object") return "";
@@ -4601,8 +4731,16 @@ function _pxTextoParaHtml(txt){
       out=out.slice(0,-4)+"<br>"+l+"</p>"; continue;
     }
     // rótulos do briefing (• Título, • Texto na arte, • Roteiro) vão em negrito
-    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|Pin no mapa|Pin en el mapa|Frase na arte|Frase en el arte|O que precisamos)/i.test(l)){
+    if(/^[•\-]\s*(T[íi]tulo|Texto na arte|Texto en el arte|Roteiro|Gui[óo]n|Pin no mapa|Pin en el mapa|Frase na arte|Frase en el arte|O que precisamos|Imagens|Im[áa]genes)/i.test(l)){
       out+="<p><strong>"+l.replace(/^[-]\s*/,"• ")+"</strong></p>";
+    }
+    /* (22/09/2026, Rodrigo) "negrito entre as cenas": o nome da cena (e da lâmina/página do
+       carrossel) é o que separa um bloco do outro — em negrito o editor bate o olho e sabe
+       onde começa e termina cada pedaço da narração. */
+    /* o "- Cena 1: ..." da lista de IMAGENS é item de lista, não cabeçalho: por isso o
+       traço fica DE FORA do prefixo aceito aqui. */
+    else if(/^[•]?\s*(Cena|Escena|L[âa]mina|L[áa]mina|P[áa]gina)\s*\d+\s*[—–:-]\s*\S/i.test(l)){
+      out+="<p><strong>"+l.replace(/^[•]\s*/,"")+"</strong></p>";
     } else out+="<p>"+l+"</p>";
   }
   return out;
@@ -4710,6 +4848,7 @@ async function pxReescreverCopy(opts){
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
+  u+=pxCtxMateriaisTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,3);i++){
@@ -5040,6 +5179,7 @@ async function pxGerarLegendas(opts){
     u+="CHAMADAS APROVADAS: "+_pxCtxTxt(pb.chamadas_aprovadas)+"\n\n";
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
+  u+=pxCtxMateriaisTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,2);i++){
@@ -5271,6 +5411,7 @@ async function pxGerarBriefing(opts){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length)
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
+  u+=pxCtxMateriaisTxt(ctx);
   { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
     const f=foco[0]; const partes=[];
@@ -5294,6 +5435,11 @@ async function pxGerarBriefing(opts){
   }
   u+="FORMATO DO BRIEFING, conforme o tipo que você escolher:\n";
   u+="- qualquer tipo de vídeo (corte, video_feira, video, video_complexo) → roteiro de FALA pro cliente gravar, neste formato:\n"+PX_ROTEIRO_FALA_FORMATO+PX_ROTEIRO_FALA_REGRAS+"  (só se o pedido disser \"vídeo simples\"/sem fala: "+PX_ROTEIRO_SIMPLES_FORMATO.replace(/\n/g," ")+")\n";
+  /* (22/09/2026) Vídeo NARRADO é outra coisa: quem fala é uma locução (voz de IA ou gravada) e
+     quem recebe o briefing é o EDITOR, montando em cima de takes que já existem. */
+  u+="- MAS se o pedido fala em NARRAÇÃO, locução, voz de IA, ou em montar o vídeo com takes que já\n"+
+     "  existem (o cliente não vai gravar falando), use ESTE formato no lugar do roteiro de fala:\n"+
+     PX_ROTEIRO_NARRACAO_FORMATO+PX_ROTEIRO_NARRACAO_REGRAS;
   u+="- design que não é carrossel (foto, arte, folder) → seção \"• TÍTULO\" (a headline que vai na peça, em caixa alta) e seção \"• TEXTO NA ARTE\".\n";
   u+="  ⚠️ O TEXTO NA ARTE NÃO PODE REPETIR O TÍTULO. O título já está na peça; repetir faz o colaborador ler a mesma coisa duas vezes. Comece direto pelo apoio: 2 frases que desenvolvem a ideia, linha em branco, fecho — 260 a 480 caracteres.\n";
   u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\", a 5 é o CTA.\n";
@@ -7937,7 +8083,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       </span>
       <span style={{lineHeight:1.2}}>
-        <span style={{display:"block",color:"#c2410c",fontSize:9,fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Visualizando como</span>
+        <span style={{display:"block",color:"#c2410c",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.7,textTransform:"uppercase"}}>Visualizando como</span>
         <span style={{display:"block",color:"#7c2d12",fontSize:13.5,fontWeight:800,letterSpacing:-.25}}>{user.name}</span>
       </span>
     </div>}
@@ -7956,17 +8102,17 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {myMainPrio&&<span style={{background:myMainPrio.bg,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:9,fontWeight:600,letterSpacing:.5}}>
+                {myMainPrio&&<span style={{background:myMainPrio.bg,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:pxFonte(9,isMob),fontWeight:600,letterSpacing:.5}}>
                   {myMainPrio.level===0?"ALTERAÇÃO":myMainPrio.level===1?"ATRASADO":myMainPrio.level===2?"URGENTE":"NO PRAZO"}
                 </span>}
-                <span style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Minha próxima demanda</span>
+                <span style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Minha próxima demanda</span>
               </div>
-              {myMainCl&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:700}}>{myMainCl.abbr}</span>}
+              {myMainCl&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:5,padding:"2px 8px",fontSize:pxFonte(10,isMob),fontWeight:700}}>{myMainCl.abbr}</span>}
             </div>
             <div style={{color:"#0f172a",fontWeight:700,fontSize:18,lineHeight:1.3,letterSpacing:-.3}}>{myMain.title}</div>
             {myMain.desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6}}>{myMain.desc.replace(/<[^>]*>/g,"").slice(0,120)}{myMain.desc.length>120?"...":""}</div>}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"0.5px solid #f1f5f9",marginTop:"auto"}}>
-              <span style={{color:myMainPrio?.bg||"#16a34a",fontSize:11,fontWeight:700}}>
+              <span style={{color:myMainPrio?.bg||"#16a34a",fontSize:pxFonte(11,isMob),fontWeight:700}}>
                 {myMainPrio?.icon&&myMainPrio.icon+" "}{myMainPrio?.label||"No prazo"}
               </span>
               <span style={{color:"#2563eb",fontSize:12,fontWeight:600}}>Abrir →</span>
@@ -7978,7 +8124,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {myNext.length===0&&<div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"18px",textAlign:"center"}}>
             <div style={{fontSize:24,marginBottom:6}}>🎉</div>
-            <div style={{color:"#64748b",fontSize:11,fontWeight:600}}>Só a principal por enquanto</div>
+            <div style={{color:"#64748b",fontSize:pxFonte(11,isMob),fontWeight:600}}>Só a principal por enquanto</div>
           </div>}
           {myNext.map(t=>{
             const prio=typeof getDemandPriority==="function"?getDemandPriority(t):{bg:"#94a3b8",label:"",icon:""};
@@ -7990,22 +8136,22 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e5e7eb";}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{color:"#0f172a",fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{cl?.abbr||(t.status?.startsWith("interno_")?"Interna":"—")}</div>
+                <div style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),marginTop:2}}>{cl?.abbr||(t.status?.startsWith("interno_")?"Interna":"—")}</div>
               </div>
-              <span style={{color:prio.bg,fontWeight:700,fontSize:10,flexShrink:0}}>
+              <span style={{color:prio.bg,fontWeight:700,fontSize:pxFonte(10,isMob),flexShrink:0}}>
                 {prio.level<=1?prio.label:dl===null?"—":dl===0?"Hoje":dl+"d"}
               </span>
             </div>;
           })}
           {/* Mini totais */}
-          <div style={{display:"grid",gridTemplateColumns:_pxMob()?"1fr":"1fr 1fr",gap:6,marginTop:2}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:6,marginTop:2}}>
             <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
               <div style={{color:"#0f172a",fontWeight:600,fontSize:16}}>{myTasks.length}</div>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Minhas</div>
+              <div style={{color:"#94a3b8",fontSize:pxFonte(9,isMob),fontWeight:600,textTransform:"uppercase"}}>Minhas</div>
             </div>
             <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
               <div style={{color:"#dc2626",fontWeight:600,fontSize:16}}>{myTasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length}</div>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Atrasadas</div>
+              <div style={{color:"#94a3b8",fontSize:pxFonte(9,isMob),fontWeight:600,textTransform:"uppercase"}}>Atrasadas</div>
             </div>
           </div>
         </div>
@@ -8021,9 +8167,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         {id:"metas",label:isMob?"Metas":"Metas"},
       ].map(t=>(
         <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{
-          flex:isMob?"0 0 auto":1,
+          /* celular: as 4 abas dividem a largura e cabem sem rolar pro lado */
+          flex:1,minWidth:isMob?0:undefined,
           background:activeTab===t.id?"#a140ff":"transparent",
-          border:"none",borderRadius:8,padding:isMob?"8px 14px":"10px 18px",
+          border:"none",borderRadius:8,padding:isMob?"8px 6px":"10px 18px",
           fontSize:isMob?12:13,fontWeight:activeTab===t.id?700:500,
           color:activeTab===t.id?"#fff":"#64748b",cursor:"pointer",
           boxShadow:activeTab===t.id?"0 4px 14px rgba(161,64,255,0.35)":"none",
@@ -8031,7 +8178,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           display:"flex",alignItems:"center",justifyContent:"center",gap:7,
         }}>
           {t.label}
-          {t.badge>0&&<span style={{background:activeTab===t.id?"rgba(255,255,255,0.25)":"#a140ff",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:600,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
+          {t.badge>0&&<span style={{background:activeTab===t.id?"rgba(255,255,255,0.25)":"#a140ff",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:600,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
         </button>
       ))}
     </div>
@@ -8039,7 +8186,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ TAB ALERTA — Brief do Dia ═══ */}
     {activeTab==="alerta"&&(
       <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 18px"}}>
-        <div style={{color:"#a140ff",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Brief do dia</div>
+        <div style={{color:"#a140ff",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Brief do dia</div>
         {briefParts.length===0?(
           <div style={{color:"#0f172a",fontSize:14,lineHeight:1.7}}>
             <span style={{fontSize:18,marginRight:6}}>✨</span>
@@ -8059,35 +8206,35 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <div style={{background:pagAtras.length>0?"#fef2f2":"#fff",border:`0.5px solid ${pagAtras.length>0?"#fecaca":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:pagAtras.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pagamentos atrasados</div>
+              <div style={{color:pagAtras.length>0?"#991b1b":"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pagamentos atrasados</div>
               <div style={{color:pagAtras.length>0?"#dc2626":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
             </div>
             {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={[1,0,1,2,1,pagAtras.length||0]} color={pagAtras.length>0?"#dc2626":"#cbd5e1"}/>}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             {pagAtras.length>0&&<div style={{width:6,height:6,borderRadius:"50%",background:"#dc2626"}}/>}
-            <span style={{color:"#94a3b8",fontSize:10}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</span>
+            <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob)}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</span>
           </div>
         </div>
         <div style={{background:atrasadas.length>0?"#fef2f2":"#fff",border:`0.5px solid ${atrasadas.length>0?"#fecaca":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Demandas atrasadas</div>
+              <div style={{color:atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Demandas atrasadas</div>
               <div style={{color:atrasadas.length>0?"#dc2626":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{atrasadas.length}</div>
             </div>
             {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={last6AgencyCompletions.map((v,i)=>i===5?atrasadas.length:Math.max(1,v-1))} color={atrasadas.length>0?"#dc2626":"#cbd5e1"}/>}
           </div>
-          <span style={{color:"#94a3b8",fontSize:10}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</span>
+          <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob)}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</span>
         </div>
         <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#fff",border:`0.5px solid ${pubAtrasadas.length>0?"#fed7aa":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:pubAtrasadas.length>0?"#9a3412":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pub. vencidas</div>
+              <div style={{color:pubAtrasadas.length>0?"#9a3412":"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pub. vencidas</div>
               <div style={{color:pubAtrasadas.length>0?"#ea580c":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{pubAtrasadas.length}</div>
             </div>
             {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={[0,1,0,2,1,pubAtrasadas.length]} color={pubAtrasadas.length>0?"#ea580c":"#cbd5e1"}/>}
           </div>
-          <span style={{color:"#94a3b8",fontSize:10}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</span>
+          <span style={{color:"#94a3b8",fontSize:pxFonte(10,isMob)}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</span>
         </div>
       </div>
     )}
@@ -8156,7 +8303,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       const mainLabel=mainItem.icon==="💸"?"Pagamento atrasado":mainItem.icon==="🔥"?"Demanda atrasada":mainItem.icon==="📤"?"Publicação vencida":mainItem.icon==="⚠"?"Cliente em risco":mainItem.icon==="📝"?"Copy aguardando":mainItem.icon==="🎨"?"Arte aguardando":mainItem.icon==="🔒"?"Demanda interna":"Atenção";
       return (<div style={{maxWidth:860,margin:"0 auto",width:"100%"}}>
         <div style={{padding:"0 4px 8px"}}>
-          <div style={{fontSize:10,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.6}}>O que precisa de você agora</div>
+          <div style={{fontSize:pxFonte(10,isMob),color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.6}}>O que precisa de você agora</div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 250px",gap:12}}>
           {/* CARTÃO GRANDE — alerta #1 */}
@@ -8178,17 +8325,17 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{
                   background:mainColor+"18",color:mainColor,
-                  fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:4,
+                  fontSize:pxFonte(9,isMob),fontWeight:600,padding:"3px 9px",borderRadius:4,
                   textTransform:"uppercase",letterSpacing:.4
                 }}>{mainItem.icon} {mainLabel}</span>
-                <span style={{fontSize:10,color:"#94a3b8"}}>#1 alerta</span>
+                <span style={{fontSize:pxFonte(10,isMob),color:"#94a3b8"}}>#1 alerta</span>
               </div>
-              <span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{items.length} {items.length===1?"item":"itens"}</span>
+              <span style={{fontSize:pxFonte(11,isMob),color:"#94a3b8",fontWeight:500}}>{items.length} {items.length===1?"item":"itens"}</span>
             </div>
             <div style={{color:"#0f172a",fontWeight:600,fontSize:18,lineHeight:1.3,marginBottom:8}}>{mainItem.title}</div>
             <div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>{mainItem.sub}</div>
             {mainItem.onClick&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",paddingTop:12,borderTop:"0.5px solid #f1f5f9",marginTop:"auto"}}>
-              <span style={{background:"#a140ff",color:"#fff",fontSize:11,fontWeight:500,padding:"6px 14px",borderRadius:6}}>Abrir →</span>
+              <span style={{background:"#a140ff",color:"#fff",fontSize:pxFonte(11,isMob),fontWeight:500,padding:"6px 14px",borderRadius:6}}>Abrir →</span>
             </div>}
           </div>
 
@@ -8209,13 +8356,13 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
                 onMouseEnter={e=>{if(it.onClick)e.currentTarget.style.transform="translateX(2px)";}}
                 onMouseLeave={e=>e.currentTarget.style.transform=""}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                  <span style={{fontSize:9,color:sideColor,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{it.icon} #{i+2}</span>
+                  <span style={{fontSize:pxFonte(9,isMob),color:sideColor,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{it.icon} #{i+2}</span>
                 </div>
-                <div style={{fontSize:11,color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
-                <div style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.sub}</div>
+                <div style={{fontSize:pxFonte(11,isMob),color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
+                <div style={{fontSize:pxFonte(9,isMob),color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.sub}</div>
               </div>;
             })}
-            {items.length>5&&<div style={{textAlign:"center",padding:6,fontSize:10,color:"#94a3b8"}}>+ {items.length-5} {items.length-5===1?"alerta":"alertas"}</div>}
+            {items.length>5&&<div style={{textAlign:"center",padding:6,fontSize:pxFonte(10,isMob),color:"#94a3b8"}}>+ {items.length-5} {items.length-5===1?"alerta":"alertas"}</div>}
           </div>
         </div>
       </div>);
@@ -8225,24 +8372,24 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {activeTab==="demandas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em produção</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em produção</div>
           <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emProducao}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>cards ativos</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>cards ativos</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em avaliação</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em avaliação</div>
           <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emAvaliacao}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>aguardando aprovação</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>aguardando aprovação</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Aprovadas</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Aprovadas</div>
           <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{aprovadasTotal}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>prontas p/ agendar</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>prontas p/ agendar</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Publicadas</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Publicadas</div>
           <div style={{color:"#a140ff",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{publicadasMes}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>este mês</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>este mês</div>
         </div>
       </div>
     )}
@@ -8252,7 +8399,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Carga por pessoa</div>
-          <div style={{color:"#64748b",fontSize:11}}>{ativas.length} demandas ativas distribuídas</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(11,isMob)}}>{ativas.length} demandas ativas distribuídas</div>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {cargaPorPessoa.map(c=>{
@@ -8263,7 +8410,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                   <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{c.user.name}</span>
-                  <span style={{color:overload?"#dc2626":"#64748b",fontSize:11,fontWeight:overload?600:500}}>{c.count}</span>
+                  <span style={{color:overload?"#dc2626":"#64748b",fontSize:pxFonte(11,isMob),fontWeight:overload?600:500}}>{c.count}</span>
                 </div>
                 <div style={{height:6,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
                   <div style={{width:pct+"%",height:"100%",background:overload?"#dc2626":c.user.color,borderRadius:99,transition:"width .4s ease"}}/>
@@ -8283,13 +8430,13 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       <div style={{padding:"14px 18px 10px",borderBottom:"0.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Pipeline de Demandas</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{active.length} demandas na operação</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(11,isMob),marginTop:2}}>{active.length} demandas na operação</div>
         </div>
       </div>
       <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
         {pipeline.map(p=>(
           <div key={p.status} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderTop:"3px solid #a140ff",borderRadius:8,padding:"12px 6px",textAlign:"center"}}>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{p.label}</div>
+            <div style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{p.label}</div>
             <div style={{color:"#a140ff",fontWeight:600,fontSize:26,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
           </div>
         ))}
@@ -8303,7 +8450,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Velocity · 4 últimas semanas</div>
-            <div style={{color:"#64748b",fontSize:11}}>{velocityTrend} média {velocityAvg}/sem</div>
+            <div style={{color:"#64748b",fontSize:pxFonte(11,isMob)}}>{velocityTrend} média {velocityAvg}/sem</div>
           </div>
           <svg viewBox="0 0 280 90" style={{width:"100%",height:90}}>
             {velocity.map((v,i)=>{
@@ -8331,7 +8478,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               <span style={{fontSize:14}}>⚠</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{g.label}</div>
-                <div style={{color:"#94a3b8",fontSize:11}}>{g.stuck} {g.stuck===1?"card parado":"cards parados"} há 4+ dias</div>
+                <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob)}}>{g.stuck} {g.stuck===1?"card parado":"cards parados"} há 4+ dias</div>
               </div>
               <div style={{width:8,height:8,borderRadius:"50%",background:g.color}}/>
             </div>
@@ -8344,24 +8491,24 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {activeTab==="metricas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Spend total · mês</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Spend total · mês</div>
           <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{f$(spendTotal)}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google somados</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>Meta + Google somados</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>ROAS médio</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>ROAS médio</div>
           <div style={{color:Number(avgRoas)>=4?"#16a34a":Number(avgRoas)>=2?"#eab308":"#dc2626",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{avgRoas}×</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>{clientesAtivos} clientes ativos</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>{clientesAtivos} clientes ativos</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Leads gerados</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Leads gerados</div>
           <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{totalLeads.toLocaleString("pt-BR")}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google · mês</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>Meta + Google · mês</div>
         </div>
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Followers totais</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Followers totais</div>
           <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{(followersTotal/1000).toFixed(1)}k</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>todas as redes</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:4}}>todas as redes</div>
         </div>
       </div>
     )}
@@ -8372,7 +8519,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
           <div style={{padding:"14px 16px 10px",borderBottom:"0.5px solid #f1f5f9"}}>
             <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Top 5 ROAS</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>maior retorno por real investido</div>
+            <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:2}}>maior retorno por real investido</div>
           </div>
           <div style={{padding:"10px 14px"}}>
             {top5Roas.length===0?<div style={{padding:"16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Sem dados de ROAS ainda</div>:top5Roas.map((cl,i)=>(
@@ -8389,7 +8536,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
           <div style={{padding:"14px 16px 10px",borderBottom:"0.5px solid #f1f5f9"}}>
             <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Atenção · ROAS &lt; 2×</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>revisar campanhas</div>
+            <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:2}}>revisar campanhas</div>
           </div>
           <div style={{padding:"10px 12px"}}>
             {bottomRoas.length===0?(
@@ -8402,7 +8549,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
                 <ClientLogo clientId={cl.id} size="xs"/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{cl.name}</div>
-                  <div style={{color:"#94a3b8",fontSize:10}}>revisar campanhas</div>
+                  <div style={{color:"#94a3b8",fontSize:pxFonte(10,isMob)}}>revisar campanhas</div>
                 </div>
                 <div style={{color:"#dc2626",fontWeight:600,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
               </div>
@@ -8417,18 +8564,37 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {activeTab==="metricas"&&<div style={{background:C.card,borderRadius:12,border:`0.5px solid ${C.b1}`,overflow:"hidden"}}>
       <div style={{padding:"14px 18px",borderBottom:`0.5px solid ${C.b1}`}}>
         <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Panorama dos clientes</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>visão completa da carteira</div>
+        <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:2}}>visão completa da carteira</div>
       </div>
+      {/* Celular: a tabela de 6 colunas (~470px) nao cabe em 390px e rolava pro lado.
+         Vira um cartao por cliente. No computador o PxTabelaMob e invisivel:
+         devolve exatamente a <table> abaixo, sem tocar em nada. */}
+      <PxTabelaMob mob={isMob} linhas={CLIENTS}
+        chave={function(cl){ return cl.id; }}
+        titulo={function(cl){ return cl.name; }}
+        campos={[
+          {t:"MRR",   v:function(cl){ return f$(cl.contract); }, cor:"#16a34a"},
+          {t:"Saude", v:function(cl){ return (cl.health||0)+"%"; },
+                      cor:function(cl){ return cl.health>=80?"#16a34a":cl.health>=60?"#eab308":"#dc2626"; }},
+          {t:"ROAS",  v:function(cl){ return ((cl.meta&&cl.meta.roas)||0).toFixed(1)+"x"; },
+                      cor:function(cl){ const r=(cl.meta&&cl.meta.roas)||0; return r>=4?"#16a34a":r>=2?"#eab308":"#dc2626"; }},
+          {t:"NPS",   v:function(cl){ return cl.nps||0; },
+                      cor:function(cl){ const n=cl.nps||0; return n>=80?"#16a34a":n>=60?"#eab308":"#dc2626"; }},
+          {t:"Pagamento", v:function(cl){ const st=(cl.payment&&cl.payment.status)||"pendente";
+                      return st==="pago"?"Pago":st==="atrasado"?"Atrasado":"Pendente"; },
+                      cor:function(cl){ const st=(cl.payment&&cl.payment.status)||"pendente";
+                      return st==="pago"?"#16a34a":st==="atrasado"?"#dc2626":"#eab308"; }},
+        ]}>
       <div style={{overflow:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead>
             <tr style={{background:"#f8fafc"}}>
-              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Cliente</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>MRR</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Saúde</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>ROAS</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>NPS</th>
-              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Pag.</th>
+              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Cliente</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>MRR</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Saúde</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>ROAS</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>NPS</th>
+              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:pxFonte(10,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Pag.</th>
             </tr>
           </thead>
           <tbody>
@@ -8445,14 +8611,14 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
                 </td>
                 <td style={{padding:"10px 8px",textAlign:"center",color:"#16a34a",fontWeight:600}}>{f$(cl.contract)}</td>
                 <td style={{padding:"10px 8px",textAlign:"center"}}>
-                  <span style={{background:healthColor,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600}}>
+                  <span style={{background:healthColor,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:pxFonte(11,isMob),fontWeight:600}}>
                     {cl.health}%
                   </span>
                 </td>
                 <td style={{padding:"10px 8px",textAlign:"center",color:roasColor,fontWeight:600}}>{(cl.meta?.roas||0).toFixed(1)}x</td>
                 <td style={{padding:"10px 8px",textAlign:"center",color:npsColor,fontWeight:600}}>{cl.nps||0}</td>
                 <td style={{padding:"10px 14px",textAlign:"center"}}>
-                  <span style={{background:pagColor,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>
+                  <span style={{background:pagColor,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:pxFonte(9,isMob),fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>
                     {pagStatus==="pago"?"Pago":pagStatus==="atrasado"?"Atras":"Pend"}
                   </span>
                 </td>
@@ -8461,6 +8627,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </tbody>
         </table>
       </div>
+      </PxTabelaMob>
     </div>}
 
 
@@ -8499,9 +8666,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       ];
       const Card=({label,atual,meta,pct,sub,color})=>(
         <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px"}}>
-          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(10,isMob),fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
           <div style={{color:"#0f172a",fontSize:isMob?16:18,fontWeight:600,letterSpacing:-.3,marginTop:4}}>{atual}</div>
-          <div style={{color:"#94a3b8",fontSize:11,margin:"4px 0 6px"}}>{sub}</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),margin:"4px 0 6px"}}>{sub}</div>
           <div style={{height:5,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
             <div style={{width:pct+"%",height:"100%",background:color,borderRadius:99,transition:"width .5s ease"}}/>
           </div>
@@ -8520,7 +8687,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Receita · 12 meses</div>
-          <div style={{color:"#64748b",fontSize:11}}>placeholder · conectar histórico real depois</div>
+          <div style={{color:"#64748b",fontSize:pxFonte(11,isMob)}}>placeholder · conectar histórico real depois</div>
         </div>
         <svg viewBox="0 0 600 130" style={{width:"100%",height:130}}>
           <line x1="0" y1="105" x2="600" y2="105" stroke="#e5e7eb" strokeWidth="0.5"/>
@@ -8614,13 +8781,13 @@ function _EscopoCargoCard({escopo, uid, isMob}){
       </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Seu escopo — {escopo.cargo}</div>
-        <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>O que é seu e o que segue com as outras cadeiras do time</div>
+        <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),marginTop:1,fontWeight:600}}>O que é seu e o que segue com as outras cadeiras do time</div>
       </div>
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:aberto?"rotate(180deg)":"none",transition:"transform .15s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
     </div>
     {aberto&&<div style={{padding:"4px 18px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"1.25fr 1fr",gap:16}}>
       <div>
-        <div style={{color:"#16a34a",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Faz parte do seu dia a dia</div>
+        <div style={{color:"#16a34a",fontSize:pxFonte(10,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Faz parte do seu dia a dia</div>
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
           {escopo.faz.map(function(t,i){
             return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -8631,7 +8798,7 @@ function _EscopoCargoCard({escopo, uid, isMob}){
         </div>
       </div>
       <div>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Fora do escopo — segue com o time</div>
+        <div style={{color:"#94a3b8",fontSize:pxFonte(10,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",margin:"8px 0 8px"}}>Fora do escopo — segue com o time</div>
         <div style={{display:"flex",flexDirection:"column",gap:7}}>
           {escopo.fora.map(function(t,i){
             return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -8760,7 +8927,7 @@ function PxAprovacoesClienteCard({tasks, isMob, userId}){
         </svg>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",color: temNovo?"#6ee7b7":"#94a3b8"}}>
+        <div style={{fontSize:pxFonte(10.5,isMob),fontWeight:800,letterSpacing:.9,textTransform:"uppercase",color: temNovo?"#6ee7b7":"#94a3b8"}}>
           Portal do cliente
         </div>
         <div style={{fontSize:isMob?15.5:18,fontWeight:800,letterSpacing:-.4,color: temNovo?"#fff":"#0f172a",marginTop:2,lineHeight:1.2}}>
@@ -8813,17 +8980,17 @@ function PxAprovacoesClienteCard({tasks, isMob, userId}){
             <div style={{fontSize:12.5,fontWeight:700,color: temNovo?"#fff":"#0f172a",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               {e.title}
             </div>
-            <div style={{fontSize:11,fontWeight:500,marginTop:2,color: temNovo?"rgba(255,255,255,0.62)":"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            <div style={{fontSize:pxFonte(11,isMob),fontWeight:500,marginTop:2,color: temNovo?"rgba(255,255,255,0.62)":"#64748b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
               {_nome}{e.quemNome?" · "+e.quemNome:""} {e.aprovado?"aprovou":"pediu ajuste"} · {_pxAprovQuando(e.atIso)}
             </div>
           </div>
-          {_novo && <span style={{flexShrink:0,fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",
+          {_novo && <span style={{flexShrink:0,fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",
             background: temNovo?"rgba(52,211,153,0.18)":"#ecfdf5", color:"#34d399", borderRadius:99, padding:"3px 8px"}}>Novo</span>}
         </div>;
       })}
       {eventos.length>lista.length && <button type="button" onClick={function(){setAberto(!aberto);}}
         style={{alignSelf:"flex-start",background:"transparent",border:"none",padding:"4px 2px",cursor:"pointer",fontFamily:"inherit",
-          fontSize:11.5,fontWeight:700,color: temNovo?"rgba(255,255,255,0.7)":"#64748b"}}>
+          fontSize:pxFonte(11.5,isMob),fontWeight:700,color: temNovo?"rgba(255,255,255,0.7)":"#64748b"}}>
         {aberto ? "Mostrar menos" : "Ver histórico ("+eventos.length+")"}
       </button>}
     </div>
@@ -8950,7 +9117,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
       {/* Nome + cargo + data */}
       <div style={{position:"relative",zIndex:1,flex:1,minWidth:0}}>
-        <div style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{greeting} · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
+        <div style={{color:"rgba(255,255,255,0.85)",fontSize:pxFonte(11,isMob),fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{greeting} · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
         <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.6,lineHeight:1.1}}>{displayName}</div>
         <div style={{color:"rgba(255,255,255,0.78)",fontSize:13,fontWeight:500,marginTop:4}}>{displayRole}</div>
       </div>
@@ -8964,11 +9131,11 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
             <span style={{color:"rgba(255,255,255,0.55)",fontSize:13}}>/</span>
             <span style={{color:"#fff",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{emAberto}</span>
           </div>
-          <div style={{color:"rgba(255,255,255,0.7)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
+          <div style={{color:"rgba(255,255,255,0.7)",fontSize:pxFonte(9.5,isMob),fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
         </div>}
         {lateMes.length>0&&<div style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 4px 12px rgba(220,38,38,0.35)"}}>
           <span style={{fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{lateMes.length}</span>
-          <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,opacity:.95}}>Atrasadas</div>
+          <div style={{fontSize:pxFonte(9.5,isMob),fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,opacity:.95}}>Atrasadas</div>
         </div>}
         <button onClick={()=>onNotif&&onNotif()} title="Notificações"
           style={{background:unread>0?"#a140ff":"rgba(255,255,255,0.2)",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,boxShadow:unread>0?"0 4px 12px rgba(161,64,255,0.35)":"none"}}>
@@ -19385,7 +19552,32 @@ async function pxCascataAplicar(plano,setTasks,quem,motivo,opts){
       setTasks(function(prev){ return (prev||[]).map(function(t){ const p=feitos[String(t.id)]; return p?Object.assign({},t,{publishDate:p,publish_date:p,deadline:p}):t; }); });
     }
     if(ok||lixo.length) _pxApRegistrar((opts&&opts.registro)||("Cascata: card novo numa semana cheia empurrou os outros pra frente"+(lixo.length?" ("+lixo.length+" pra lixeira: fim de contrato)":"")),[],alterados);
-    if(ok&&typeof pixelsToast!=="undefined") pixelsToast.info((opts&&opts.toast)?opts.toast(ok):(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo."),6000);
+    /* (22/09/2026, Rodrigo) "quando mostra notificação de um card foi arrastado pra dar lugar,
+       tem que aparecer o título do card junto e a logo do cliente."
+       Antes era um toast de texto: "3 cards andaram uma vaga na fila" — e ninguém sabia QUAIS.
+       Agora usa o toast de novidade, que já sabe desenhar logo do cliente + título + subtítulo.
+       O motivo inteiro (que não cabe na linha do subtítulo) vai no tooltip. */
+    if(ok&&typeof pixelsToast!=="undefined"){
+      if(opts&&opts.toast){ pixelsToast.info(opts.toast(ok),6000); }
+      else if(typeof pixelsToast.novidade==="function"){
+        const _m0=(plano.moves||[]).find(function(m){ return feitos[String(m.id)]; })||(plano.moves||[])[0]||null;
+        const _cid=String((_m0&&_m0.client)||"");
+        const _cl=(typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){ return c.id===_cid; }):null;
+        const _logo=(typeof CLIENT_LOGOS!=="undefined")?(CLIENT_LOGOS[_cid]||""):"";
+        const _resto=ok-1;
+        pixelsToast.novidade({
+          logo:_logo, cliente:(_cl&&(_cl.abbr||_cl.name))||_cid||"?", cor:(_cl&&_cl.color)||"#7c3aed",
+          icone:"\u2192", fundo:"#7c3aed", sombra:"rgba(124,58,237,0.35)",
+          titulo:String((_m0&&_m0.title)||"Card sem título").slice(0,58),
+          sub:(_m0?(_pxCasBr(_m0.de)+" \u2192 "+_pxCasBr(_m0.para)):"")+
+              (_resto>0?(" \u00b7 +"+_resto+" card"+(_resto>1?"s":"")+" na fila"):"")+
+              (lixo.length?(" \u00b7 "+lixo.length+" pra lixeira"):""),
+          tooltip:(motivo||"a fila andou pra dar lugar ao card novo")+(quem?(" \u2014 "+quem):""),
+          duration:7000
+        });
+      }
+      else pixelsToast.info(ok+" card"+(ok>1?"s":"")+(ok>1?" andaram":" andou")+" uma vaga na fila pra dar lugar ao card novo.",6000);
+    }
     return ok;
   }catch(e){ console.warn("[cascata aplicar]",e); return 0; }
 }
@@ -19512,11 +19704,91 @@ async function pxCascataVarrer(){
       if(!n) break;
       total+=n;
     }
-    // 2ª passada: dias colados. Cadência certa não basta — segunda e terça é o mesmo erro.
+    /* 2ª passada (22/09/2026): semana ABAIXO da cadência. Antes só existia a conta de quem
+       passou do teto; semana com post faltando ficava assim pra sempre. */
+    try{ total+=await pxCascataVarrerCurtas(); }catch(_e){ console.warn("[cascata curtas]",_e); }
+    // 3ª passada: dias colados. Cadência certa não basta — segunda e terça é o mesmo erro.
     try{ total+=await pxCascataEspacar(); }catch(_e){ console.warn("[cascata espacar]",_e); }
     return total;
   }catch(e){ console.warn("[cascata varrer]",e); return 0; }
 }
+/* ═══ VARREDURA DE SEMANA CURTA (22/09/2026, Rodrigo) ══════════════════════════════
+   "não pode acontecer isso" — a Bioter Glória ficou com 1 post na semana de 06/12 porque o
+   collab daquela semana ("ETA - Rodrigo", 09/12) andou pra 16/12 e NINGUÉM repôs a vaga.
+
+   O app só sabia olhar semana ACIMA da cadência. A cascata pra trás (pxCascataPuxar) já
+   existia, mas era chamada num lugar só: quando um card automático é APAGADO. Card que
+   simplesmente ANDA pra frente deixava um buraco que ninguém via.
+
+   Aqui é o espelho da varredura de cadência: acha semana ABAIXO da cadência, monta um
+   "buraco" por vaga e roda a MESMA dupla de sempre — primeiro puxa um post real que está
+   mais pra frente (pxCascataPuxar), e só a vaga que sobrar vira rascunho novo do Claude
+   (pxAutoplanRepor). Não é um terceiro caminho de escrita.
+
+   As travas, pra isso nunca sair inventando calendário:
+   - a semana CORRENTE não é mexida (já está rolando) e nada é reposto dentro dos próximos
+     PX_CASCATA_PUXA_MIN_DIAS dias — antecipar post pra semana que vem é pior que a vaga;
+   - só alvo que o PLANEJAMENTO AUTOMÁTICO alcançou: o horizonte de cada alvo é a última
+     semana em que ele tem card `autoplan-`. Depois disso o calendário não está planejado e
+     a varredura não inventa nada (é o que segura 2027 inteiro);
+   - semana em que o alvo não tem NENHUM post é semana não planejada, não é buraco;
+   - teto de vagas por rodada, pra uma bagunça de dados não virar uma enxurrada de cards. */
+const PX_CASCATA_CURTAS_MAX=12;
+async function pxCascataVarrerCurtas(){
+  try{
+    const sb=window._sb; if(!sb) return 0;
+    const _h=new Date(); const hoje=_pxApIso(_h);
+    const L0=_pxApLinha(hoje);
+    const piso=_pxApIso(new Date(_h.getFullYear(),_h.getMonth(),_h.getDate()+PX_CASCATA_PUXA_MIN_DIAS));
+    const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+      .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
+    if(!r||r.error) return 0;
+    const rows=(r.data||[]);
+    /* horizonte por alvo = última semana que o planejamento automático alcançou */
+    const horizonte={};
+    rows.forEach(function(x){
+      if(String(x.id||"").indexOf("autoplan-")!==0) return;
+      const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
+      const k=_pxApLinha(iso).iniIso;
+      _pxColAlvos(x).forEach(function(a){ if(!PX_CASCATA_CAP[a]) return; if(!horizonte[a]||k>horizonte[a]) horizonte[a]=k; });
+    });
+    if(!Object.keys(horizonte).length) return 0;
+    const porSemana={};
+    rows.forEach(function(x){
+      const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
+      const k=_pxApLinha(iso).iniIso; (porSemana[k]=porSemana[k]||[]).push(x);
+    });
+    const buracos=[];
+    for(const k of Object.keys(porSemana).sort()){
+      if(k<=L0.iniIso) continue;                       // semana corrente fica como está
+      const L=_pxApLinha(k);
+      if(L.fimIso<piso) continue;                      // perto demais de hoje
+      const daSemana=porSemana[k], alvos=[];
+      daSemana.forEach(function(x){ _pxColAlvos(x).forEach(function(a){ if(PX_CASCATA_CAP[a]&&alvos.indexOf(a)<0) alvos.push(a); }); });
+      for(const alvo of alvos){
+        if(!horizonte[alvo]||k>horizonte[alvo]) continue;   // fora do que foi planejado
+        const cap=PX_CASCATA_CAP[alvo], n=_pxCasConta(daSemana,alvo).length;
+        if(n<=0||n>=cap) continue;                     // 0 = semana não planejada pra esse alvo
+        const cli=String(alvo).split(":")[0], uni=alvo.indexOf("bioter:")===0?alvo.slice(7):"";
+        const meio=new Date(L.ini); meio.setDate(L.ini.getDate()+3);
+        for(let i=n;i<cap&&buracos.length<PX_CASCATA_CURTAS_MAX;i++){
+          buracos.push({id:"vaga-"+alvo+"-"+k+"-"+i,client:cli,bioter_unit:uni,publish_date:_pxApIso(meio),
+            status:"rascunhos",somente_story:false,nao_publica:false,content_type:null,title:"",tags:[]});
+        }
+      }
+      if(buracos.length>=PX_CASCATA_CURTAS_MAX) break;
+    }
+    if(!buracos.length) return 0;
+    let total=0;
+    /* mesma ordem do caminho que já existia: puxa primeiro, repõe depois (o repor confere a
+       cadência de novo e não faz nada se a semana já encheu com o card puxado). */
+    try{ total+=(await pxCascataPuxar(buracos))||0; }catch(e){ console.warn("[curtas puxar]",e); }
+    try{ if(typeof pxAutoplanRepor==="function") total+=(await pxAutoplanRepor(buracos))||0; }catch(e){ console.warn("[curtas repor]",e); }
+    return total;
+  }catch(e){ console.warn("[cascata curtas]",e); return 0; }
+}
+
 /* ═══ ESPAÇAMENTO (19/09/2026) ═══════════════════════════════════════════════════
    Vinicius: "dois posts em dias seguidos não, tem que espaçar sempre que possível,
    tipo segunda e quinta". A cascata já escolhia dia com folga (_pxCasDiaComFolga)
@@ -37129,10 +37401,13 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
             <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>{tabInfo.label||"Permissões"}</div>
             <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:1}}>Clique num item pra ligar ou desligar</div>
           </div>
-          {!isPartnerUser&&<button onClick={()=>_setTabAll(true)} style={_miniBtn}
+          {/* (22/09/2026) Confirmação: "Desligar tudo" escreve dezenas de chaves de uma vez e
+              não tem desfazer — foi assim que a Luiza ficou sem o menu Playbooks (169 bloqueios
+              gravados de uma tacada). Ligar tudo também confirma, pelo mesmo motivo. */}
+          {!isPartnerUser&&<button onClick={()=>{ Promise.resolve((typeof pixelsConfirm==="function")?pixelsConfirm("Ligar TODAS as permissões de \""+(tabInfo.label||"esta tela")+"\" pra "+(user&&user.name||"este colaborador")+"?"):true).then(function(ok){ if(ok) _setTabAll(true); }); }} style={_miniBtn}
             onMouseEnter={e=>{e.currentTarget.style.borderColor="#86efac";e.currentTarget.style.color="#16a34a";}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>Ligar tudo</button>}
-          {!isPartnerUser&&<button onClick={()=>_setTabAll(false)} style={_miniBtn}
+          {!isPartnerUser&&<button onClick={()=>{ Promise.resolve((typeof pixelsConfirm==="function")?pixelsConfirm("Desligar TODAS as permissões de \""+(tabInfo.label||"esta tela")+"\" pra "+(user&&user.name||"este colaborador")+"? Isso fecha a tela inteira pra ele, inclusive o menu.",{danger:true}):true).then(function(ok){ if(ok) _setTabAll(false); }); }} style={_miniBtn}
             onMouseEnter={e=>{e.currentTarget.style.borderColor="#fecaca";e.currentTarget.style.color="#dc2626";}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>Desligar tudo</button>}
           <button onClick={onClose} title="Fechar"
@@ -43717,6 +43992,7 @@ async function pxRoteiro60(task, clienteNome){
       if(_pb.chamadas_proibidas&&_pb.chamadas_proibidas.length&&typeof _pxCtxTxt==="function")
         _ctxTxt+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(_pb.chamadas_proibidas)+"\n\n";
       if(typeof pxCtxRegrasTxt==="function") _ctxTxt+=pxCtxRegrasTxt((_ctx&&_ctx.regras)||[]);
+      if(typeof pxCtxMateriaisTxt==="function") _ctxTxt+=pxCtxMateriaisTxt(_ctx);
     }
   }catch(_){ _ctxTxt=""; }
   const usr="Cliente: "+(clienteNome||"—")+"\n"+
@@ -97127,6 +97403,7 @@ const PB_BLOCOS = [
   {id:"pb-sobre",               label:"Sobre a empresa"},
   {id:"pb-briefing-auto",       label:"Dados do Briefing"},
   {id:"pb-memoria",             label:"Feedbacks"},
+  {id:"pb-materiais",           label:"Materiais do cliente"},
   {id:"pb-contatos",            label:"Contatos"},
   {id:"pb-time",                label:"Equipe do cliente"},
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
@@ -98065,6 +98342,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
           {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
           <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
+
+          {/* Materiais do cliente — folder/manual/catálogo que viram ficha de fatos no cérebro */}
+          <_PbMateriais clientId={cl.id} clienteNome={cl.name||cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
 
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
             {_isBioter && typeof BIOTER_UNITS!=="undefined" && (function(){
@@ -99269,6 +99549,248 @@ function _pbMemEtq(tipo){
   const k=String(tipo||"").split(":")[1]||"";
   return PB_MEM_ETIQUETAS.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"};
 }
+/* ═══ MATERIAIS DO CLIENTE (22/09/2026, Rodrigo) ═══════════════════════════════════
+   "preciso subir os arquivos (materiais da Bioter, folders e manuais dos produtos) pra que
+    a nossa IA leia e esteja congruente nas criações de copys — tanto em roteiros quanto nas
+    próprias copys do calendário."
+
+   O arquivo vai pro storage e a IA lê UMA vez, no upload, virando uma FICHA de fatos curta.
+   É a ficha que entra no cérebro (toda copy, briefing e roteiro daquele cliente), nunca o
+   manual inteiro — um manual tem dezenas de milhares de palavras e o prompt tem teto.
+   A equipe revisa a ficha aqui e pode desligar o material do cérebro sem apagar o arquivo.
+
+   Mora na cadeira ESTRATÉGIA (que enxerga todos os blocos) — decisão do Rodrigo. */
+const PB_MAT_TIPOS=[
+  {id:"folder",   label:"Folder"},
+  {id:"manual",   label:"Manual"},
+  {id:"catalogo", label:"Catálogo"},
+  {id:"tabela",   label:"Tabela técnica"},
+  {id:"outro",    label:"Outro"},
+];
+const PB_MAT_MAX_LEITURA=8*1024*1024;   // acima disso o arquivo é guardado, mas a IA não lê
+function _pbMatTipoLabel(id){ const x=PB_MAT_TIPOS.find(function(t){return t.id===id;}); return x?x.label:"Material"; }
+function _pbMatTamanho(n){
+  const b=Number(n)||0; if(!b) return "";
+  return b<1024*1024?(Math.round(b/1024)+" KB"):((b/1048576).toFixed(1).replace(".",",")+" MB");
+}
+function _pbMatBase64(file){
+  return new Promise(function(ok,err){
+    const fr=new FileReader();
+    fr.onload=function(){ const s=String(fr.result||""); const i=s.indexOf(","); ok(i>=0?s.slice(i+1):s); };
+    fr.onerror=function(){ err(new Error("Não consegui ler o arquivo.")); };
+    fr.readAsDataURL(file);
+  });
+}
+/* A IA lê o PDF (ou a imagem) e devolve a ficha de fatos. Vai pelo askClaude porque é a
+   Anthropic que lê documento nativo — o ask-claude é proxy transparente da API. */
+async function pxFichaDoMaterial(file, titulo, clienteNome, tipo){
+  if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const mime=String((file&&file.type)||"").toLowerCase();
+  const ehPdf=mime.indexOf("pdf")>=0;
+  const ehImg=mime.indexOf("image/")===0;
+  if(!ehPdf&&!ehImg) throw new Error("Por enquanto a IA lê PDF e imagem. Outros formatos ficam guardados, sem ficha.");
+  if(file.size>PB_MAT_MAX_LEITURA) throw new Error("Arquivo grande demais pra leitura ("+_pbMatTamanho(file.size)+"). Guardei assim mesmo — se quiser a ficha, suba uma versão mais leve.");
+  const b64=await _pbMatBase64(file);
+  const sys="Você lê material oficial de empresa (folder, manual, catálogo, tabela técnica) e extrai FATOS "+
+    "pra uma equipe de marketing escrever com precisão. NUNCA invente: o que o material não diz, você não escreve. "+
+    "Responda em texto puro, sem markdown, sem comentário antes nem depois.";
+  const pedido="Este é um material oficial de "+(clienteNome||"um cliente")+" — "+_pbMatTipoLabel(tipo)+
+    (titulo?(' intitulado "'+titulo+'"'):"")+".\n\n"+
+    "Extraia a FICHA deste material, no máximo 180 palavras, exatamente neste formato:\n"+
+    "O QUE É: (uma frase)\n"+
+    "PRA QUEM / QUANDO USAR:\n"+
+    "COMO FUNCIONA: (2 a 4 linhas, o essencial)\n"+
+    "NÚMEROS E ESPECIFICAÇÕES: (só os que estão escritos — capacidade, medidas, prazos, garantia)\n"+
+    "TERMOS OFICIAIS: (o nome exato do produto e dos componentes, como a empresa escreve)\n"+
+    "CUIDADOS: (o que o material manda evitar dizer ou prometer)\n\n"+
+    "Seção que o material não cobre: escreva — e siga pra próxima.";
+  const bloco=ehPdf
+    ? {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
+    : {type:"image",source:{type:"base64",media_type:(mime||"image/png"),data:b64}};
+  const data=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
+    max_tokens:900,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
+  const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
+  return txt.replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
+}
+
+function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
+  const [itens,setItens]=useState(null);
+  const [erro,setErro]=useState("");
+  const [subindo,setSubindo]=useState("");        // nome do arquivo em andamento
+  const [tipo,setTipo]=useState("folder");
+  const [editId,setEditId]=useState(null);
+  const [rascunho,setRascunho]=useState("");
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const _inp={border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box"};
+  const carregar=async function(){
+    try{
+      const sb=window._sb; if(!sb||!clientId){ setItens([]); return; }
+      const {data,error}=await sb.from("claude_materiais").select("*")
+        .eq("client_id",clientId).order("created_at",{ascending:false});
+      if(error) throw error;
+      setItens(data||[]); setErro("");
+    }catch(e){ setErro((e&&e.message)||String(e)); setItens([]); }
+  };
+  useEffect(function(){ carregar(); },[clientId]);
+  const _patch=async function(m,patch){
+    const sb=window._sb; if(!sb) return;
+    setItens(function(p){ return (p||[]).map(function(x){ return x.id===m.id?Object.assign({},x,patch):x; }); });
+    const {error}=await sb.from("claude_materiais").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",m.id);
+    if(error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+error.message); carregar(); }
+  };
+  const _apagar=async function(m){
+    if(typeof pixelsConfirm==="function"){
+      const ok=await pixelsConfirm('Apagar "'+(m.titulo||"este material")+'"? O arquivo sai do Playbook e a ficha sai do cérebro.',{danger:true});
+      if(!ok) return;
+    }
+    const sb=window._sb; if(!sb) return;
+    const {error}=await sb.from("claude_materiais").delete().eq("id",m.id);
+    if(error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não apagou: "+error.message); return; }
+    setItens(function(p){ return (p||[]).filter(function(x){ return x.id!==m.id; }); });
+  };
+  /* Lê (ou relê) o material. Guarda o arquivo primeiro: ficha é o bônus, o arquivo é o que
+     não pode se perder. */
+  const _lerArquivo=async function(m,file){
+    await _patch(m,{ficha_status:"lendo"});
+    try{
+      const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.tipo);
+      await _patch(m,{ficha:ficha,ficha_status:"pronta"});
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Ficha pronta — confira antes de confiar nela.",4000);
+    }catch(e){
+      await _patch(m,{ficha_status:"erro"});
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra ler: "+((e&&e.message)||e),7000);
+    }
+  };
+  const _subir=async function(files){
+    const sb=window._sb; if(!sb||!files||!files.length) return;
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      setSubindo(file.name);
+      try{
+        const ext=(String(file.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
+        const rnd=Math.random().toString(36).slice(2,9);
+        const path="playbook-materiais/"+clientId+"/"+Date.now()+"-"+rnd+"."+ext;
+        const {error:upErr}=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
+        if(upErr) throw upErr;
+        const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
+        const row={client_id:clientId,unidade:isBioter?String(unitTab||""):"",
+          titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),tipo:tipo,
+          arquivo_url:(pub&&pub.publicUrl)||"",arquivo_nome:file.name,arquivo_tipo:file.type||"",
+          arquivo_tamanho:file.size||0,ficha:"",ficha_status:"pendente",ativo:true,
+          created_by:(_u&&_u.name)||""};
+        const ins=await sb.from("claude_materiais").insert(row).select("*").single();
+        if(ins.error) throw ins.error;
+        const novo=ins.data;
+        setItens(function(p){ return [novo].concat(p||[]); });
+        await _lerArquivo(novo,file);
+      }catch(e){
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+file.name+": "+((e&&e.message)||e),7000);
+      }
+    }
+    setSubindo("");
+  };
+  const _uniLabel=function(u){
+    if(!u) return "Todas as unidades";
+    if(typeof BIOTER_UNITS==="undefined") return u;
+    const x=BIOTER_UNITS.find(function(b){return b.id===u;});
+    return x?(x.pickerLabel||x.label):u;
+  };
+  const _ativos=(itens||[]).filter(function(x){ return x.ativo&&String(x.ficha||"").trim(); }).length;
+  const _STATUS={pendente:{t:"sem ficha",c:"#94a3b8",b:"#f1f5f9"},lendo:{t:"lendo…",c:"#b45309",b:"#fffbeb"},
+                 pronta:{t:"ficha pronta",c:"#047857",b:"#ecfdf5"},manual:{t:"ficha escrita à mão",c:"#047857",b:"#ecfdf5"},
+                 erro:{t:"não deu pra ler",c:"#b91c1c",b:"#fef2f2"}};
+  return <PlaybookBlock id="pb-materiais" title="Materiais do cliente"
+    subtitle="Folder, manual, catálogo — a IA lê uma vez e guarda os fatos; é isso que entra em toda copy, briefing e roteiro deste cliente"
+    icon="fileText" color="#0d9488">
+
+    {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler os materiais: {erro}</div>}
+
+    {isAdmin && <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER,borderRadius:14,padding:14,marginBottom:16,display:"flex",flexWrap:"wrap",alignItems:"center",gap:10}}>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",flex:"1 1 240px"}}>
+        {PB_MAT_TIPOS.map(function(x){
+          const on=tipo===x.id;
+          return <button key={x.id} type="button" onClick={function(){setTipo(x.id);}}
+            style={{background:on?"#0d9488":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0d9488":PB_BORDER),borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{x.label}</button>;
+        })}
+      </div>
+      <label style={{background:subindo?"#cbd5e1":"#0d9488",color:"#fff",borderRadius:10,padding:"9px 15px",fontSize:12.5,fontWeight:700,cursor:subindo?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0}}>
+        <Ico n="upload" size={14} color="#fff"/>{subindo?("Subindo "+subindo.slice(0,18)+"…"):"Subir material"}
+        <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
+          onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
+      </label>
+      <div style={{color:"#94a3b8",fontSize:11,flexBasis:"100%",lineHeight:1.5}}>
+        PDF e imagem a IA lê e vira ficha{isBioter?(" · o material entra na unidade "+_uniLabel(unitTab)+" (troque no seletor do topo)"):""} · acima de 8 MB o arquivo fica guardado sem ficha
+      </div>
+    </div>}
+
+    {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
+    {itens!==null && itens.length===0 && typeof _PbEmpty==="function" &&
+      <_PbEmpty icon="fileText" text="Nenhum material ainda."
+        sub={isAdmin?"Sobe o folder, o manual ou o catálogo que o cliente mandou — a IA passa a escrever sabendo o que está lá dentro.":""}/>}
+
+    {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {itens.map(function(m){
+        const st=_STATUS[String(m.ficha_status||"pendente")]||_STATUS.pendente;
+        const on=!!m.ativo&&!!String(m.ficha||"").trim();
+        return <div key={m.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.75}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:180}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{m.titulo||m.arquivo_nome||"Material"}</span>
+                <span style={{background:"#0d948814",color:"#0d9488",border:"1px solid #0d948844",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{_pbMatTipoLabel(m.tipo)}</span>
+                {m.unidade && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(m.unidade)}</span>}
+                <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:3}}>
+                {m.arquivo_nome||""}{m.arquivo_tamanho?(" · "+_pbMatTamanho(m.arquivo_tamanho)):""}{m.created_by?(" · "+m.created_by):""}
+              </div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer"
+                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"6px 11px",color:"#0f172a",fontSize:11.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6}}>
+                <Ico n="eye" size={12} color="#64748b"/>Abrir</a>}
+              {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"}
+                onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
+                style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex"}}>
+                <span style={{width:34,height:20,borderRadius:99,background:on?"#0d9488":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+                  <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+                </span>
+              </button>}
+              {isAdmin && <button type="button" title="Editar a ficha à mão"
+                onClick={function(){ setEditId(editId===m.id?null:m.id); setRascunho(String(m.ficha||"")); }}
+                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}><Ico n="edit" size={14}/></button>}
+              {isAdmin && <button type="button" title="Apagar este material"
+                onClick={function(){ _apagar(m); }}
+                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
+                onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}><Ico n="trash" size={14}/></button>}
+            </div>
+          </div>
+
+          {editId===m.id
+            ? <div style={{marginTop:9,display:"flex",flexDirection:"column",gap:8}}>
+                <_PbAutoTextarea value={rascunho} onChange={function(e){setRascunho(e.target.value);}} rows={6}
+                  placeholder="A ficha que a IA lê junto com o resto do cérebro. Escreva fatos, não texto de propaganda."
+                  style={Object.assign({},_inp,{lineHeight:1.55,minHeight:120,overflow:"hidden",resize:"none"})}/>
+                <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                  <button type="button" onClick={function(){setEditId(null);}}
+                    style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"8px 15px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                  <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }}
+                    style={{background:"#0d9488",border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar ficha</button>
+                </div>
+              </div>
+            : (String(m.ficha||"").trim()
+                ? <div style={{marginTop:8,background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",color:"#334155",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{m.ficha}</div>
+                : (isAdmin?<div style={{marginTop:8,color:"#94a3b8",fontSize:11.5}}>Sem ficha — clique no lápis pra escrever à mão, ou suba o arquivo de novo pra IA ler.</div>:null))}
+        </div>;
+      })}
+      <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
+        {_ativos} de {itens.length} material{itens.length===1?"":"is"} indo pro cérebro. O interruptor tira do prompt sem apagar o arquivo.
+      </div>
+    </div>}
+  </PlaybookBlock>;
+}
+
 function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   const [itens,setItens]=useState(null);
   const [erro,setErro]=useState("");
@@ -104177,14 +104699,16 @@ function _rtTexto(r,semCabecalho){
   return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
     "*"+L.a+"*\n"+_rtParagrafos(r.abertura)+"\n\n*"+L.d+"*\n"+_rtParagrafos(r.desenvolvimento)+"\n\n*"+L.f+"*\n"+_rtParagrafos(r.fechamento);
 }
-/* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; AGRUPADO POR PRODUTO em 22/09/2026, a
-   pedido do Rodrigo: "quando eu vou em copiar todos, quero que seja organizado pro whats,
-   separado pelas tags de produtos ali").
-   Uma mensagem só, em blocos — um por tag de produto, na ordem em que os produtos aparecem
-   na tela. Cabeçalho do bloco com a contagem, numeração CORRIDA (1..n) pra bater com o
-   número do botão, e separador leve entre os roteiros do mesmo produto.
-   Roteiro sem tag cai num bloco "Outros" no fim. Se NENHUM tiver tag, sai a lista simples
-   de antes — sem cabeçalho de produto pra não inventar seção. */
+/* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; por produto em 22/09/2026, a pedido do
+   Rodrigo: "quero que seja organizado pro whats, separado pelas tags de produtos ali").
+
+   (22/09/2026) "melhora essa formatação pro whats, tá esquisito com essas caixas": as linhas
+   ━━━ e ────  viravam um risco pesado no balão do WhatsApp e pareciam caixa. Saíram todas.
+   O que separa agora é o que o WhatsApp entende bem: NEGRITO e linha em branco.
+
+   Bloco por produto, na ordem em que os produtos aparecem na tela, numeração CORRIDA (1..n)
+   pra bater com o número do botão. Roteiro sem tag cai em "Outros", no fim. Se NENHUM tiver
+   tag, sai a lista simples — sem cabeçalho de produto, pra não inventar seção. */
 function _rtTextoTodos(lista,nome){
   const n=(lista||[]).length;
   const grupos=[], idx={};
@@ -104195,20 +104719,14 @@ function _rtTextoTodos(lista,nome){
     grupos[idx[k]].itens.push(r);
   });
   grupos.sort(function(a,b){ return (a.produto?0:1)-(b.produto?0:1); });   // "Outros" por último
-  const nProd=grupos.filter(function(g){ return !!g.produto; }).length;
-  const porProduto=nProd>0;
-  let out="🎬 *Roteiros de vídeo — "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar"+
-          (nProd>1?(" · "+nProd+" produtos"):"")+"_";
+  const porProduto=grupos.some(function(g){ return !!g.produto; });
+  let out="\ud83c\udfac *Roteiros de v\u00eddeo \u2014 "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar_";
   let i=0;
   grupos.forEach(function(g){
-    if(porProduto){
-      const q=g.itens.length;
-      out+="\n\n━━━━━━━━━━━━━━\n📦 *"+String(g.produto||"Outros").toUpperCase()+"* · _"+q+(q===1?" roteiro":" roteiros")+"_\n━━━━━━━━━━━━━━";
-    }
-    g.itens.forEach(function(r,j){
+    if(porProduto) out+="\n\n\ud83d\udce6 *"+String(g.produto||"Outros").toUpperCase()+"*";
+    g.itens.forEach(function(r){
       i++;
-      out+=(porProduto?(j===0?"\n\n":"\n\n──────────\n\n"):"\n\n━━━━━━━━━━━━━━\n\n")
-        +"*"+i+". "+String(r.assunto||"Roteiro").toUpperCase()+"*\n\n"+_rtTexto(r,true);
+      out+="\n\n*"+i+". "+String(r.assunto||"Roteiro")+"*\n\n"+_rtTexto(r,true);
     });
   });
   return out;
@@ -104251,10 +104769,19 @@ async function pxGerarRoteiros(opts){
   // PRODUTOS (17/09/2026): o briefing do portal é a fonte principal; o playbook complementa.
   const _bpTxt=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,4200):"";
   if(_bpTxt) u+=_bpTxt;
-  if(pb.produtos&&pb.produtos.length) u+="PRODUTOS NO PLAYBOOK (complemento): "+_pxCtxTxt(pb.produtos).slice(0,900)+"\n\n";
-  const _temProdutos=!!_bpTxt||!!(pb.produtos&&pb.produtos.length);
+  /* (22/09/2026) A tag de produto sai da LISTA OFICIAL do playbook, não das palavras que a
+     IA inventa lendo a prosa do briefing. Antes isto era `_pxCtxTxt(pb.produtos)` cortado em
+     900 caracteres — o objeto inteiro, com as URLs das fotos. */
+  const _prodOf=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[];
+  if(_prodOf.length){
+    u+="LISTA OFICIAL DE PRODUTOS (é daqui que sai a tag do roteiro — copie o nome EXATAMENTE como está escrito):\n";
+    _prodOf.forEach(function(pr){ u+="- "+pr.nome+(pr.daUnidade?"":" (não é desta unidade — só use se o roteiro for mesmo sobre isso)")+"\n"; });
+    u+="\n";
+  }
+  const _temProdutos=!!_bpTxt||_prodOf.length>0;
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
+  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
     foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
@@ -104299,14 +104826,19 @@ async function pxGerarRoteiros(opts){
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
   u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
-  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (o nome curto do produto/serviço da lista, em português, 1 a 5 palavras)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
+  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
 
   /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
      estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
   const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
   const out=_rtParseResposta(data);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  return out.slice(0,quantos);
+  const lista=out.slice(0,quantos);
+  /* A tag só existe se bater com o cadastro. Nome que a IA inventou não vira etiqueta. */
+  if(_prodOf.length&&typeof pxProdutoOficial==="function"){
+    lista.forEach(function(r){ r.produto=pxProdutoOficial(r.produto,_prodOf)||""; });
+  }
+  return lista;
 }
 
 /* Lê os blocos ===ROTEIRO n=== da resposta da IA. Um lugar só: o gerador e o AJUSTE
@@ -104355,6 +104887,7 @@ async function pxAjustarRoteiro(r,feedback){
   if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
+  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
   u+="ROTEIRO ATUAL (é ESTE que você vai ajustar):\n";
   u+="ASSUNTO: "+String((r&&r.assunto)||"")+"\n";
   if(r&&r.produto) u+="PRODUTO: "+String(r.produto)+"\n";
@@ -104372,7 +104905,12 @@ async function pxAjustarRoteiro(r,feedback){
   const data=await askIA({model:PX_IA_MODELO,max_tokens:2400,system:sys,messages:[{role:"user",content:u}]});
   const out=_rtParseResposta(data);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  return out[0];
+  const _novo=out[0];
+  if(typeof pxProdutosOficiais==="function"&&typeof pxProdutoOficial==="function"){
+    const _lst=pxProdutosOficiais(ctx,unit);
+    if(_lst.length) _novo.produto=pxProdutoOficial(_novo.produto,_lst)||"";
+  }
+  return _novo;
 }
 
 /* Ícone diferente em cada roteiro (16/09/2026): os 1-2-3 das seções confundiam; o que
