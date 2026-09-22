@@ -4243,7 +4243,8 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
                  não gosta. ORIENTA o rumo, não vira lei — um comentário solto de
                  reunião não pode engessar a copy inteira.
 
-   Editada no Playbook, bloco "O que o cliente falou" (27_playbooks.jsx).
+   Editada no Playbook, bloco "Feedbacks" (27_playbooks.jsx) — que desde 22/09/2026
+   guarda também o feedback da própria equipe, não só o que o cliente falou.
    Um lugar só monta os dois blocos: mudou aqui, muda nos 4 geradores. */
 function pxCtxRegrasTxt(regras){
   const arr=Array.isArray(regras)?regras:[];
@@ -4257,8 +4258,9 @@ function pxCtxRegrasTxt(regras){
     u+="\n";
   }
   if(mem.length){
-    u+="O QUE O CLIENTE FALOU (contexto da conta, anotado em reunião — respeite o espírito disso: "+
-       "é o rumo que o cliente quer, não é regra literal nem texto pra copiar):\n";
+    u+="FEEDBACKS DESTA CONTA (o que o cliente falou em reunião e o que a equipe da agência "+
+       "observou — respeite o espírito disso: é o rumo que se quer pra marca, não é regra "+
+       "literal nem texto pra copiar):\n";
     for(let i=0;i<mem.length;i++){
       const m=mem[i];
       const _e=String(m.tipo||"").split(":")[1]||"contexto";
@@ -22656,17 +22658,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M8.8 5.6h3.1" strokeWidth="1.8" opacity=".55"/><path d="M13.3 5.6h1.9" strokeWidth="1.8" opacity=".55"/><path d="M10.6 11.4l4 2.3-4 2.3z" fill="currentColor" stroke="none"/></svg>
                               SOMENTE STORY
                             </span>}
-                            {/* (22/09/2026) Chip de música: quem publica bate o olho no calendário e
-                                já sabe que a peça leva trilha — e QUAL dos dois jeitos. */}
+                            {/* (22/09/2026) Selo de música: quem publica bate o olho no calendário e
+                                já sabe que a peça leva trilha — e QUAL dos dois jeitos.
+                                Mesmo desenho do selo do robô (PxSeloClaude): chip BRANCO com o ícone
+                                na cor do card. Rosa saía igual ao status "Agendar" e confundia, e a
+                                22px o desenho finalmente se lê (Rodrigo, 22/09). */}
                             {(function(){
                               const _mm=String(t.musicaModo||t.musica_modo||(t.musica?"so":"")||"");
                               if(!_mm) return null;
                               const _baixo=_mm==="baixo";
                               return <span title={_baixo?"Música + áudio baixo — a música entra e o som do vídeo fica baixinho por trás":"Só a música — o áudio do vídeo sai e entra a trilha"}
-                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#db2777",color:"#fff",border:"1px solid rgba(255,255,255,0.20)",boxSizing:"border-box",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:6,background:"#fff",color:cardColor,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                                 {_baixo
-                                  ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9.2h3.4L12 5.2v13.6l-4.6-4H4z" fill="currentColor" stroke="none"/><path d="M15.4 10a3.4 3.4 0 0 1 0 4"/></svg>
-                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5.2l10-2v12.6"/><circle cx="6.2" cy="18" r="2.8"/><circle cx="16.2" cy="15.8" r="2.8"/></svg>}
+                                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3.4 9h3.7L12 4.4v15.2L7.1 15H3.4z" fill="currentColor" stroke="none"/><path d="M15.8 9.7a3.5 3.5 0 0 1 0 4.6"/></svg>
+                                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17.4V4.5l10.4-2.1v12.4"/><circle cx="6.1" cy="17.7" r="3" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.1" r="3" fill="currentColor" stroke="none"/></svg>}
                               </span>;
                             })()}
                             {(function(){
@@ -30664,9 +30669,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   const _PX_TIPOS_VALIDOS=["arte","carrossel","foto","folder","video","video_complexo","video_feira","video_short","corte"];
   const _faltasParaAprovar=(task)=>{
     const f=[];
+    /* (22/09/2026, Rodrigo) SHORT não passa por edição nem por design: a Hellen pega o vídeo
+       pronto no Drive do cliente e sobe. Exigir freelancer nele travava a aprovação por uma
+       regra que não existe pra esse tipo de card. Mesma régua do alerta "sem produtor" da
+       Linha de produção e do editor que não entra sozinho no cartão (pxEhShort). */
+    const _short=(typeof pxEhShort==="function")&&pxEhShort(task);
     const ids=Array.isArray(task.assignees)&&task.assignees.length?task.assignees:(task.assignee?[task.assignee]:[]);
     const temFreela=ids.some(uid=>{const u=(TEAM||[]).find(x=>x.id===uid);return u&&(u.dash==="designer"||u.dash==="editor"||u.dash==="video");});
-    if(!temFreela) f.push("freelancer (designer ou editor de vídeo)");
+    if(!temFreela&&!_short) f.push("freelancer (designer ou editor de vídeo)");
     const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
     if(_PX_TIPOS_VALIDOS.indexOf(ct)<0) f.push("tipo de conteúdo");
     if(!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
@@ -43498,7 +43508,7 @@ async function pxRoteiro60(task, clienteNome){
           :"Este card NÃO é data comemorativa: é conteúdo. O vídeo explica ou mostra o assunto do card e termina convidando quem assiste a falar com a empresa. ")+
     (py?"ESCREVA TUDO EM ESPANHOL (é a unidade do Paraguai), menos os rótulos das cenas.":"Escreva em português do Brasil.");
   /* (18/09/2026) Mesmo cérebro dos outros geradores: tom de voz, chamadas proibidas,
-     regras obrigatórias e "O que o cliente falou" (Playbook › Memória do cliente).
+     regras obrigatórias e os "Feedbacks" do Playbook (do cliente e da equipe).
      Falhou a RPC? Segue sem contexto — melhor um roteiro simples que botão travado. */
   let _ctxTxt="";
   try{
@@ -49633,15 +49643,24 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
       {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
       {_vis("pb-marcacoes")&&_pbMarcacoes.length>0&&<div>
         <SectionTitle label="Marcar no post (@)" sub="Perfis pra marcar na publicação — clique pra copiar o @" icon="tag" accent="#0284c7"/>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {/* (22/09/2026, Rodrigo) Era uma nuvem de pílulas em negrito: com 14 perfis virava um
+            bloco azul só e a social media perdia gente no meio. Agora é LISTA VERTICAL — uma
+            linha por perfil, sem negrito, o @ à esquerda e o nome/cargo à direita. */}
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,overflow:"hidden"}}>
           {_pbMarcacoes.map(function(m,i){
             const _a=String(m.arroba||"").trim()?("@"+String(m.arroba).trim().replace(/^@+/,"")):"";
             const _copyVal=_a||m.nome||"";
+            const _feito=copiedHex===_copyVal;
             return <button key={i} type="button" title="Clique pra copiar o @"
               onClick={function(){copyHex(_copyVal);}}
-              style={{display:"inline-flex",alignItems:"center",gap:8,background:"#fff",border:"1px solid "+(copiedHex===_copyVal?"#5eead4":"#bae6fd"),borderRadius:99,padding:"7px 13px",cursor:"copy",fontFamily:"inherit"}}>
-              <span style={{color:copiedHex===_copyVal?"#0d9488":"#0284c7",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>{copiedHex===_copyVal?"Copiado ✓":(_a||"—")}</span>
-              {m.nome&&copiedHex!==_copyVal?<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>· {m.nome}</span>:null}
+              onMouseEnter={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"#f8fafc"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"transparent"; }}
+              style={{display:"flex",alignItems:"center",gap:10,width:"100%",boxSizing:"border-box",textAlign:"left",
+                background:_feito?"#f0fdfa":"transparent",border:"none",borderTop:i===0?"none":"1px solid #f1f5f9",
+                padding:"9px 12px",cursor:"copy",fontFamily:"inherit",transition:"background .12s"}}>
+              <span style={{color:_feito?"#0d9488":"#0284c7",fontSize:12.5,fontWeight:600,letterSpacing:-.1,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_feito?"Copiado ✓":(_a||"—")}</span>
+              {m.nome&&!_feito?<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,flexShrink:0,maxWidth:"46%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</span>:null}
+              <Ico n="copy" size={11} color={_feito?"#0d9488":"#cbd5e1"}/>
             </button>;
           })}
         </div>
@@ -51944,8 +51963,8 @@ const MEDIA_CLIENTS_SEED_V2=[
   {client_id:"bioter_uberlandia",parent_client:"bioter", bioter_unit:"uberlandia", name:"Bioter Uberlândia",           plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
   {client_id:"bioter_paraguay",  parent_client:"bioter", bioter_unit:"paraguay",   name:"Bioter Paraguay / Obligado",  plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
   // ─ Demais clientes ─
-  {client_id:"construschorr",    parent_client:"construschorr", name:"Construschorr",          plataforma:"meta_google", investimento_mensal:2400, investimento_meta:1400, investimento_google:1000, status:"em_estruturacao"},
-  {client_id:"arabuta",          parent_client:"arabuta",       name:"Arabutã Pré-Moldados",   plataforma:"meta_google", investimento_mensal:1700, investimento_meta:700,  investimento_google:1000, status:"em_estruturacao"},
+  {client_id:"construschorr",    parent_client:"construschorr", name:"Construschorr",          plataforma:"meta",        investimento_mensal:1400, investimento_meta:1400, investimento_google:0,    status:"em_estruturacao"},
+  {client_id:"arabuta",          parent_client:"arabuta",       name:"Arabutã Pré-Moldados",   plataforma:"meta",        investimento_mensal:700,  investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
   {client_id:"vetservice",       parent_client:"vetservice",    name:"VetService",             plataforma:"meta",        investimento_mensal:750,  investimento_meta:750,  investimento_google:0,    status:"em_estruturacao"},
 ];
 
@@ -56780,13 +56799,15 @@ function useQGClientesSync(store,update){
       // clientes locais que não existem no banco → sobem (migração automática)
       const faltam=local.filter(function(c){ return !byId[c.client_id]; }).map(_row);
       if(faltam.length) window._sb.from("media_clients").upsert(faltam,{onConflict:"client_id"}).then(function(x){ if(x.error) console.warn("[qg clientes] seed:",x.error.message); });
-      // estado final = banco + locais que faltavam. Banco vence, EXCETO quando o campo
-      // no banco está vazio/zerado e o local tem valor (linhas antigas do media_clients
-      // ficaram com investimento 0 enquanto o seed local tinha os valores reais).
+      // estado final = banco + locais que faltavam. BANCO VENCE SEMPRE.
+      // (22/09/2026, varredura) Antes, verba ZERADA no banco era trocada pelo valor do seed do
+      // navegador — e o seed ainda dizia "Google 1000" pra Arabutã e Construschorr, que não
+      // rodam Google. Zerar no banco não adiantava: o app reescrevia 1000 na hora. Agora só
+      // um campo que NÃO EXISTE no banco (null) pega o valor local, e verba nunca.
       const merged=rows.map(function(x){
         const l=local.find(function(c){return c.client_id===x.client_id;})||{};
         const out=Object.assign({},l,x);
-        COLS.forEach(function(k){ const db=x[k]; const vazio=db===null||db===undefined||db===""||Number(db)===0&&/^investimento/.test(k); if(vazio&&l[k]!==undefined&&l[k]!==null&&l[k]!==""&&!(Number(l[k])===0&&/^investimento/.test(k))) out[k]=l[k]; });
+        COLS.forEach(function(k){ if(/^investimento/.test(k)) return; const db=x[k]; const vazio=db===null||db===undefined; if(vazio&&l[k]!==undefined&&l[k]!==null&&l[k]!=="") out[k]=l[k]; });
         return out;
       }).concat(local.filter(function(c){ return !byId[c.client_id]; }));
       // assinatura = o que está NO BANCO; se o merge ficou diferente, o efeito abaixo grava
@@ -63521,6 +63542,33 @@ function useSocPagas(clientId){
   },[clientId]);
   return st;
 }
+/* ═══ POST IMPULSIONADO (21/09/2026, Rodrigo) ══════════════════════════════════════
+   "eu quero os dados dos posts da rede social que foram impulsionados... e se possível
+    qual foi o custo para fazer o patrocínio naquele vídeo."
+   Quem faz o casamento é a view social_posts_impulsionados, no banco. Ele é pelo TEXTO da
+   publicação, não pelo link: conferido em 21/09 contra os 1.112 links de anúncio de todos
+   os clientes, NENHUM bate com post do feed — a Meta cria uma mídia própria pra cada
+   anúncio. O anúncio "Construschorr - Institucional" aponta pra DVY84SLjOCB e o post do
+   feed é DVY7iy3gO4u: dois objetos criados com minutos de diferença, mesmo vídeo e mesmo
+   texto. Devolve um mapa media_id → números do anúncio.                                 */
+function useSocImpulsionados(clientId){
+  const [st,setSt]=useState({loading:!!clientId,mapa:{},erro:null});
+  useEffect(function(){
+    if(!clientId||!window._sb){ setSt({loading:false,mapa:{},erro:null}); return; }
+    let vivo=true; setSt({loading:true,mapa:{},erro:null});
+    window._sb.from("social_posts_impulsionados")
+      .select("media_id,unidade,anuncios,ad_nome,gasto,impressoes,alcance,cliques,cliques_link,conversas,leads,video_3s,video_p25,video_p50,video_p75,video_p100,video_thruplay,de,ate,tem_numeros")
+      .eq("client_id",clientId).limit(800)
+      .then(function(r){
+        if(!vivo) return;
+        if(r&&r.error){ setSt({loading:false,mapa:{},erro:r.error.message}); return; }
+        const m={}; ((r&&r.data)||[]).forEach(function(x){ m[String(x.media_id)]=x; });
+        setSt({loading:false,mapa:m,erro:null});
+      },function(e){ if(vivo) setSt({loading:false,mapa:{},erro:String((e&&e.message)||e)}); });
+    return function(){ vivo=false; };
+  },[clientId]);
+  return st;
+}
 const _socEhAd=function(p){ return !!(p&&p.origem==="anuncio"); };
 const _socFreq=function(p){ return (p.impressoes&&p.reach)?p.impressoes/p.reach:null; };
 const _socCTR=function(p){ return p.impressoes?( (p.cliques_link||p.cliques||0)/p.impressoes*100):null; };
@@ -63566,7 +63614,7 @@ function _socRefPerfil(todos,tipo){
   const medEng=_socMediana(base.map(function(p){ return _socEngaj(p); }));
   return {n:g.length,nMesmo:mesmo.length,usouMesmo:mesmo.length>=3,reach:med("reach"),likes:med("likes"),comments:med("comments"),saved:med("saved"),shares:med("shares"),views:med("video_views"),awt:med("avg_watch_time"),eng:medEng};
 }
-function SocLightbox({post,todos,demo,seguidores,onClose,isMob}){
+function SocLightbox({post,todos,demo,seguidores,imp,onClose,isMob}){
   useEffect(function(){ const f=function(e){ if(e.key==="Escape") onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[]);
   const [aba,setAba]=useState("resumo");
   const [dur,setDur]=useState(null);
@@ -63619,7 +63667,7 @@ function SocLightbox({post,todos,demo,seguidores,onClose,isMob}){
       <span style={{position:"relative",display:"block",height:10,borderRadius:99,background:"#efedf5",overflow:"hidden"}}><span style={{display:"block",height:"100%",width:pct+"%",borderRadius:99,background:(_socTem(val)&&ref&&val>=ref)?SOC.roxo:SOC.roxo2}}/><span style={{position:"absolute",left:"50%",top:0,bottom:0,width:2,background:SOC.txt,opacity:.35}}/></span>
       <span style={{fontSize:12,fontWeight:800,textAlign:"right",whiteSpace:"nowrap",color:SOC.txt,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{_socTem(val)?(fmt?fmt(val):_socN(val)):"—"}<i style={{fontStyle:"normal",color:SOC.txt3,fontWeight:600,fontSize:11,display:isMob?"block":"inline"}}>{isMob?"":" · "}méd. {ref===null||ref===undefined?"—":(fmt?fmt(ref):_socN(Math.round(ref)))}</i></span>
     </div>; };
-  const ABAS=[["resumo","Resumo"],["post","Post"],["publico","Público"],["resultado","Resultado"],["contexto","Contexto"]];
+  const ABAS=[["resumo","Resumo"],["post","Post"]].concat(imp?[["anuncio","Anúncio"]]:[]).concat([["publico","Público"],["resultado","Resultado"],["contexto","Contexto"]]);
 
   /* público da conta (retrato) — resumido */
   const pub=(function(){ if(!demo||!demo.length) return null; const por=function(dim){ const g={}; demo.forEach(function(q){ if(q.dimensao!==dim) return; const k=String(q.valor||"").trim(); g[k]=(g[k]||0)+Number(q.pessoas||0); }); return g; };
@@ -63706,6 +63754,31 @@ function SocLightbox({post,todos,demo,seguidores,onClose,isMob}){
           <div style={{fontSize:13,color:SOC.txt2,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",maxHeight:300,overflow:"auto"}}>{legenda||<i style={{color:SOC.txt3}}>sem legenda</i>}</div>
           {hashtags.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>{hashtags.map(function(h,i){ return <SocPill key={i}>{h}</SocPill>; })}</div>}
           {post.permalink&&<div style={{marginTop:14}}><a href={post.permalink} target="_blank" rel="noreferrer" style={Object.assign(SOC_BTN(),{textDecoration:"none"})}>Abrir no Instagram →</a></div>}
+        </div>}
+
+        {/* ── ANÚNCIO: esse post também rodou como anúncio ── */}
+        {aba==="anuncio"&&imp&&<div>
+          {K("Quanto custou impulsionar")}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"10px 14px"}}>
+            {Num("Investido",Number(imp.gasto)>0?_socBRL(imp.gasto):"—",Number(imp.anuncios||0)+(Number(imp.anuncios||0)===1?" anúncio":" anúncios"))}
+            {Num("No ar",imp.de?(_socDia(imp.de)+" – "+_socDia(imp.ate)):"—",imp.tem_numeros?null:"fora dos dias já coletados")}
+            {Num("Impressões",v(imp.impressoes),Number(imp.alcance)>0?_socN(imp.alcance)+" pessoas":null)}
+            {Num("Cliques",v(imp.cliques),Number(imp.cliques_link)>0?_socN(imp.cliques_link)+" no link":null)}
+            {Num("Conversas",v(imp.conversas),(Number(imp.gasto)>0&&Number(imp.conversas)>0)?_socBRL(Number(imp.gasto)/Number(imp.conversas))+" por conversa":null)}
+            {Num("Custo por mil impressões",(Number(imp.gasto)>0&&Number(imp.impressoes)>0)?_socBRL(Number(imp.gasto)/Number(imp.impressoes)*1000):"—",null)}
+          </div>
+          {Number(imp.video_3s)>0&&<>
+            {K("Quem ficou até o fim — no anúncio")}
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,minmax(0,1fr))",gap:"10px 14px"}}>
+              {Num("Começou a ver",v(imp.video_3s),"passou de 3 segundos")}
+              {Num("Chegou na metade",_socPct(Number(imp.video_p50)/Number(imp.video_3s)*100,0),_socN(imp.video_p50)+" pessoas")}
+              {Num("Foi até o fim",_socPct(Number(imp.video_p100)/Number(imp.video_3s)*100,0),_socN(imp.video_p100)+" pessoas")}
+              {Num("ThruPlay",v(imp.video_thruplay),null)}
+            </div>
+          </>}
+          <div style={{marginTop:14,border:"1px dashed "+SOC.borda2,borderRadius:12,background:SOC.chao,padding:"11px 14px",fontSize:12.5,color:SOC.txt2,lineHeight:1.55}}>
+            Esses números são do <b>anúncio</b>, não deste post do feed. No Gerenciador a Meta cria uma mídia própria pra cada anúncio — aqui o casamento é pelo <b>texto da publicação</b>, que é o mesmo. Por isso o alcance orgânico das outras abas e o alcance pago desta <b>não devem ser somados</b>: são duas peças diferentes.
+          </div>
         </div>}
 
         {/* ── PÚBLICO ── */}
@@ -63963,7 +64036,7 @@ const SOC_ORDENS=[
   ["engaj","Engajamento",function(p){ const e=_socEngaj(p); return e===null?-1:e; }],
 ];
 const SOC_ORDEM_ROT={alcance:"alcance",recente:"",views:"views",curtidas:"curtidas",comentarios:"comentários",salvos:"salvos",compart:"compart.",seguiram:"seguiram",engaj:"engajamento"};
-function SocPublicacoes({posts,pagas,dias,isMob,demo,seguidores}){
+function SocPublicacoes({posts,boost,dias,isMob,demo,seguidores}){
   const [ordem,setOrdem]=useState("alcance");
   const [tipo,setTipo]=useState("todos");
   const [janela,setJanela]=useState("tudo");
@@ -63971,33 +64044,35 @@ function SocPublicacoes({posts,pagas,dias,isMob,demo,seguidores}){
   const [origem,setOrigem]=useState("todas");
   const [aberto,setAberto]=useState(null);
   const [limite,setLimite]=useState(24);
-  const ads=(pagas&&pagas.lista)||[];
-  if(!posts.length&&!ads.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
+  /* 21/09/2026 (Rodrigo): "só pode aparecer posts ali". Os criativos de anúncio saíram da
+     lista — o que entra é o POST do feed, e quando ele também rodou como anúncio os números
+     do anúncio (e a verba) aparecem no selo da capa e na aba Anúncio do post. */
+  const B=(boost&&boost.mapa)||{};
+  const _imp=function(p){ return (p&&B[String(p.media_id)])||null; };
+  const nImp=posts.filter(function(p){ return !!_imp(p); }).length;
+  const gastoTotal=posts.reduce(function(a,p){ const im=_imp(p); return a+(im?Number(im.gasto)||0:0); },0);
+  if(!posts.length) return <SocCard titulo="Publicações"><div style={{fontSize:12.5,color:SOC.txt3}}>Nenhuma publicação coletada.</div></SocCard>;
 
   const corte=(function(){ const d=new Date(); d.setDate(d.getDate()-(Number(dias)||30)); return _socISO(d); })();
   const tipos=["todos"].concat(Object.keys(posts.reduce(function(a,p){ a[String(p.media_type||"").toUpperCase()]=1; return a; },{})).filter(Boolean));
-  const orgFiltrados=(origem==="anuncio"?[]:posts).filter(function(p){
+  const filtrados=posts.filter(function(p){
+    if(origem==="impulsionado"&&!_imp(p)) return false;
+    if(origem==="organico"&&_imp(p)) return false;
     if(tipo!=="todos"&&String(p.media_type||"").toUpperCase()!==tipo) return false;
     if(janela==="periodo"&&String(p.publicado_em||"").slice(0,10)<corte) return false;
     if(soNum&&!_socTem(p.reach)) return false;
     return true;
   });
-  const adsFiltrados=(origem==="organico"?[]:ads).filter(function(p){
-    if(tipo!=="todos") return false;                         /* tipo é do orgânico; anúncio tem formato próprio */
-    if(janela==="periodo"&&String(p.ate||"")<corte) return false;
-    return true;
-  });
-  const filtrados=orgFiltrados.concat(adsFiltrados);
   const cmp=(SOC_ORDENS.find(function(o){ return o[0]===ordem; })||SOC_ORDENS[0])[2];
   const lista=filtrados.slice().sort(function(a,b){ return cmp(b)-cmp(a); });
   const semNum=posts.filter(function(p){ return !_socTem(p.reach); }).length;
-  const comNum=lista.filter(function(p){ return !_socEhAd(p)&&_socTem(p.reach); });
+  const comNum=lista.filter(function(p){ return _socTem(p.reach); });
   const medias={reach:null,likes:null,saved:null,shares:null};
   if(comNum.length){ Object.keys(medias).forEach(function(k){ medias[k]=comNum.reduce(function(s,p){ return s+(Number(p[k])||0); },0)/comNum.length; }); }
   const sel={border:"1px solid "+SOC.borda,borderRadius:9,padding:"6px 9px",fontSize:12,fontWeight:700,color:SOC.txt,background:"#fff",fontFamily:SOC_FONT,maxWidth:170};
   const chip=function(on,txt,onClick){ return <button onClick={onClick} style={{border:"1px solid "+(on?SOC.roxo:SOC.borda),background:on?SOC.roxo:"#fff",color:on?"#fff":SOC.txt2,borderRadius:99,padding:"5px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:SOC_FONT,whiteSpace:"nowrap",minHeight:0}}>{txt}</button>; };
   const cols=isMob?2:4;
-  const abertoItem=aberto?(lista.find(function(p){ return p.media_id===aberto; })||posts.find(function(p){ return p.media_id===aberto; })||ads.find(function(p){ return p.media_id===aberto; })):null;
+  const abertoItem=aberto?(lista.find(function(p){ return p.media_id===aberto; })||posts.find(function(p){ return p.media_id===aberto; })):null;
   const valorGrande=function(p){
     if(ordem==="engaj"){ const e=_socEngaj(p); return e===null?"—":_socPct(e,1); }
     const o=SOC_ORDENS.find(function(x){ return x[0]===ordem; }); if(!o||ordem==="recente") return _socTem(p.reach)?_socN(p.reach):"—";
@@ -64006,68 +64081,42 @@ function SocPublicacoes({posts,pagas,dias,isMob,demo,seguidores}){
   const rotuloGrande=ordem==="recente"?"alcance":SOC_ORDEM_ROT[ordem];
 
   return <>
-    {abertoItem&&(_socEhAd(abertoItem)
-      ? <SocLightboxAd post={abertoItem} todos={ads} demo={demo} isMob={isMob} onClose={function(){ setAberto(null); }}/>
-      : <SocLightbox post={abertoItem} todos={posts} demo={demo} seguidores={seguidores} isMob={isMob} onClose={function(){ setAberto(null); }}/>)}
+    {abertoItem&&<SocLightbox post={abertoItem} todos={posts} demo={demo} seguidores={seguidores} imp={_imp(abertoItem)} isMob={isMob} onClose={function(){ setAberto(null); }}/>}
     <SocCard pad="12px 20px 14px">
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",minWidth:0}}>
-        {chip(janela==="tudo","Todas · "+(posts.length+ads.length),function(){ setJanela("tudo"); setLimite(24); })}
+        {chip(janela==="tudo","Todas · "+posts.length,function(){ setJanela("tudo"); setLimite(24); })}
         {chip(janela==="periodo","Últimos "+dias+" dias",function(){ setJanela("periodo"); setLimite(24); })}
         <span style={{width:1,height:22,background:SOC.borda,margin:"0 4px"}}/>
-        {chip(origem==="todas","Orgânico + anúncio",function(){ setOrigem("todas"); setTipo("todos"); setLimite(24); })}
-        {chip(origem==="organico","Só orgânico · "+posts.length,function(){ setOrigem("organico"); setLimite(24); })}
-        {ads.length>0&&chip(origem==="anuncio","Só anúncio · "+ads.length,function(){ setOrigem("anuncio"); setTipo("todos"); setLimite(24); })}
+        {chip(origem==="todas","Todas as publicações",function(){ setOrigem("todas"); setLimite(24); })}
+        {nImp>0&&chip(origem==="impulsionado","Impulsionadas · "+nImp,function(){ setOrigem("impulsionado"); setLimite(24); })}
+        {nImp>0&&chip(origem==="organico","Sem impulsionamento · "+(posts.length-nImp),function(){ setOrigem("organico"); setLimite(24); })}
         <span style={{width:1,height:22,background:SOC.borda,margin:"0 4px"}}/>
-        {origem!=="anuncio"&&tipos.map(function(t){ const n=posts.filter(function(p){ return t==="todos"||String(p.media_type||"").toUpperCase()===t; }).length; return <span key={t}>{chip(tipo===t,(t==="todos"?"Todos os tipos":_socTipo(t))+" · "+n,function(){ setTipo(t); setLimite(24); })}</span>; })}
+        {tipos.map(function(t){ const n=posts.filter(function(p){ return t==="todos"||String(p.media_type||"").toUpperCase()===t; }).length; return <span key={t}>{chip(tipo===t,(t==="todos"?"Todos os tipos":_socTipo(t))+" · "+n,function(){ setTipo(t); setLimite(24); })}</span>; })}
         <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={Object.assign({},sel,{marginLeft:isMob?0:"auto"})}>
           {SOC_ORDENS.map(function(o){ return <option key={o[0]} value={o[0]}>{"Ordenar por "+o[1].toLowerCase()}</option>; })}
         </select>
-        {origem!=="anuncio"&&<label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
+        {<label style={{fontSize:11.5,fontWeight:700,color:SOC.txt2,display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",whiteSpace:"nowrap"}}>
           <input type="checkbox" checked={soNum} onChange={function(e){ setSoNum(e.target.checked); }}/> só com número{semNum?" ("+semNum+" sem)":""}
         </label>}
       </div>
       <div style={{fontSize:12,color:SOC.txt3,marginTop:10}}>
-        {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{adsFiltrados.length?" · "+adsFiltrados.length+(adsFiltrados.length===1?" de anúncio":" de anúncio"):""}{comNum.length&&medias.reach!==null?" · alcance médio do orgânico "+_socN(Math.round(medias.reach)):""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
-        {pagas&&pagas.loading&&<span style={{color:SOC.roxo}}> · lendo os anúncios…</span>}
+        {_socN(lista.length)} {lista.length===1?"publicação":"publicações"}{nImp?" · "+nImp+(nImp===1?" impulsionada":" impulsionadas")+(gastoTotal>0?" ("+_socBRL(gastoTotal)+" em mídia)":""):""}{comNum.length&&medias.reach!==null?" · alcance médio "+_socN(Math.round(medias.reach)):""}. Clique na capa pra ver a mídia em tamanho real, com o vídeo tocando e o carrossel passando.
+        {boost&&boost.loading&&<span style={{color:SOC.roxo}}> · vendo quais foram impulsionadas…</span>}
       </div>
     </SocCard>
 
     {!lista.length&&<SocCard><div style={{fontSize:12.5,color:SOC.txt3}}>Nada com esses filtros.</div></SocCard>}
     <div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",gap:14,minWidth:0}}>
       {lista.slice(0,limite).map(function(p,i){
-        if(_socEhAd(p)){
-          const res=_socResultado(p); const custo=res?p.gasto/res.n:null; const ctr=_socCTR(p);
-          return <div key={p.media_id} onClick={function(){ setAberto(p.media_id); }} style={{background:"#fff",border:"1px solid #f3d9b0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s",minWidth:0}}
-            onMouseEnter={function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)"; }} onMouseLeave={function(e){ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)"; }}>
-            <SocCapaAd post={p}>
-              <span style={{position:"absolute",top:10,left:10,background:SOC_DESCE,color:"#fff",fontSize:10,fontWeight:800,borderRadius:7,padding:"4px 8px",textTransform:"uppercase",letterSpacing:".06em"}}>Anúncio</span>
-              <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>
-                <b style={{fontSize:22,fontWeight:900,letterSpacing:-.6}}>{_socN(p.impressoes)}</b><br/>
-                <small style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",opacity:.9}}>impressões · {_socN(p.reach)} pessoas</small>
-              </div>
-            </SocCapaAd>
-            <div style={{padding:"11px 13px 13px",minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,overflow:"hidden"}}>
-                <span style={{fontSize:10.5,color:SOC_DESCE,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",whiteSpace:"nowrap",flexShrink:0}}>{p.media_type==="AD_VIDEO"?"Vídeo":"Imagem"}</span>
-                <span style={{fontSize:11.5,color:SOC.txt3,fontWeight:600,whiteSpace:"nowrap",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {_socDia(p.de)}–{_socDia(p.ate)}</span>
-              </div>
-              <div style={{fontSize:12,color:SOC.txt,marginTop:5,lineHeight:1.4,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.nome||"Anúncio"}</div>
-              <div style={{display:"flex",flexWrap:"wrap",columnGap:9,rowGap:2,marginTop:7,fontSize:11.5,color:SOC.txt3}}>
-                <span><b style={{color:SOC.txt2}}>{_socBRL(p.gasto)}</b> gasto</span>
-                {res&&<span><b style={{color:SOC.txt2}}>{_socN(res.n)}</b> {res.lbl}</span>}
-                {custo!==null&&<span><b style={{color:SOC.txt2}}>{_socBRL(custo)}</b>/{res.sing}</span>}
-                {ctr!==null&&<span><b style={{color:SOC.txt2}}>{_socPct(ctr,2)}</b> CTR</span>}
-              </div>
-            </div>
-          </div>;
-        }
         const eng=_socEngaj(p);
+        const im=_imp(p);
         const acima=medias.reach&&_socTem(p.reach)&&Number(p.reach)>=medias.reach*2;
         const abaixo=medias.reach&&_socTem(p.reach)&&Number(p.reach)<=medias.reach*0.4;
         return <div key={p.media_id} onClick={function(){ setAberto(p.media_id); }} style={{background:"#fff",border:"1px solid "+SOC.borda,borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,13,26,.04)",cursor:"pointer",transition:"transform .15s, box-shadow .15s",minWidth:0}}
           onMouseEnter={function(e){ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 10px 24px rgba(15,13,26,.1)"; }} onMouseLeave={function(e){ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,13,26,.04)"; }}>
           <SocCapa post={p}>
             {ordem!=="recente"&&<span style={{position:"absolute",top:10,left:10,background:"rgba(0,0,0,.55)",color:"#fff",fontSize:11,fontWeight:800,borderRadius:8,padding:"3px 7px"}}>#{i+1}</span>}
+            {im&&<span style={{position:"absolute",top:10,right:10,background:SOC_DESCE,color:"#fff",fontSize:10,fontWeight:800,borderRadius:7,padding:"4px 8px",textTransform:"uppercase",letterSpacing:".06em",maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{Number(im.gasto)>0?("Impulsionado · "+_socBRL(im.gasto)):"Impulsionado"}</span>}
             {(acima||abaixo)&&<span style={{position:"absolute",top:10,left:ordem!=="recente"?46:10,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".06em",borderRadius:7,padding:"4px 8px",background:acima?"#ffe8a3":"#fecaca",color:acima?"#6b4d00":"#7f1d1d"}}>{acima?"2× a média":"Abaixo da média"}</span>}
             <div style={{position:"absolute",bottom:10,left:12,right:12,color:"#fff",textShadow:"0 2px 8px rgba(0,0,0,.5)"}}>
               <b style={{fontSize:22,fontWeight:900,letterSpacing:-.6}}>{valorGrande(p)}</b><br/>
@@ -64261,7 +64310,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
   const [perfil,setPerfil]=useState("todos");
   useEffect(function(){ setAba("visao"); setPerfil("todos"); },[clientId]);
   const C=useSocCliente(clientId);
-  const P=useSocPagas(clientId);   /* publicações que rodaram como anúncio (dark posts incluídos) */
+  const IMP=useSocImpulsionados(clientId);   /* quais posts do feed também rodaram como anúncio, e quanto custou */
 
   const abas=SOC_ABAS.filter(function(t){ return !bl||bl("social.aba."+t[0]); });
   const abaAtiva=abas.some(function(t){ return t[0]===aba; })?aba:(abas[0]&&abas[0][0]);
@@ -64325,7 +64374,7 @@ function SocCliente({clientId,contas,diario,posts,ultimaColeta,dias,isMob,onVolt
       ? <SocCard titulo={null}><SocSemColeta perfil={contaSel?_socRotuloPerfil(contaSel):null} temId={contaSel?!!contaSel.ig_user_id:minhasIg.some(function(a){ return !!a.ig_user_id; })} ultima={ultimaDoCliente}/></SocCard>
       : <>
         {abaAtiva==="visao"&&<SocVisaoGeral diarioJanela={meuDiarioJan} diarioTudo={meuDiarioTudo} postsTudo={meusPostsTudo} stories={C.storiesLista.filter(function(x){ return perfil==="todos"||x.ig_user_id===perfil; })} pagas={P} dias={dias} isMob={isMob} onVerPublicacoes={function(){ setAba("publicacoes"); }}/>}
-        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} pagas={P} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
+        {abaAtiva==="publicacoes"&&<SocPublicacoes posts={meusPostsTudo} boost={IMP} dias={dias} isMob={isMob} demo={meuDemo} seguidores={seg}/>}
         {abaAtiva==="publico"&&<SocPublico demo={meuDemo} demoEm={C.demoEm} seguidores={seg} isMob={isMob}/>}
         {abaAtiva==="historico"&&<SocHistorico diario={meuDiarioTudo} posts={meusPostsTudo} isMob={isMob}/>}
         {abaAtiva==="contas"&&<SocContas contas={minhasContas} clientId={clientId} dados={C} ultimaColeta={ultimaColeta} isMob={isMob}/>}
@@ -96880,7 +96929,7 @@ const PB_CADEIRAS = [
 const PB_BLOCOS = [
   {id:"pb-sobre",               label:"Sobre a empresa"},
   {id:"pb-briefing-auto",       label:"Dados do Briefing"},
-  {id:"pb-memoria",             label:"O que o cliente falou"},
+  {id:"pb-memoria",             label:"Feedbacks"},
   {id:"pb-contatos",            label:"Contatos"},
   {id:"pb-time",                label:"Equipe do cliente"},
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
@@ -97668,7 +97717,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const SECTIONS = [
     {id:"pb-sobre",        label:"Sobre",        icon:"building"},
     {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
-    {id:"pb-memoria",      label:"O cliente falou", icon:"message"},
+    {id:"pb-memoria",      label:"Feedbacks",    icon:"message"},
     {id:"pb-designer",     label:"Designer",     icon:"image"},
     {id:"pb-equipe",       label:"Orientações",  icon:"sparkles"},
     {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
@@ -97817,7 +97866,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Dados do Briefing — auto, read-only, copiável */}
           <_PbBriefingAuto clientId={cl.id}/>
 
-          {/* O que o cliente falou — contexto de reunião que alimenta a IA (18/09/2026) */}
+          {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
           <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
 
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
@@ -98991,8 +99040,10 @@ const PB_MEM_ETIQUETAS = [
   {id:"publico",   label:"Público",   cor:"#0d9488", dica:"quem ele quer alcançar"},
   {id:"evitar",    label:"Evitar",    cor:"#dc2626", dica:"o que ele não quer ver"},
 ];
-/* Canais de onde vem a anotação — vira a tag da Origem. "Outro" abre campo livre. */
-const PB_MEM_CANAIS = ["Reunião","WhatsApp","Conversa presencial","Outro"];
+/* Canais de onde vem o feedback — vira a tag da Origem. "Outro" abre campo livre.
+   (22/09/2026) "Interno" entrou porque o bloco deixou de ser só do cliente: sócio e
+   equipe também registram feedback aqui. */
+const PB_MEM_CANAIS = ["Reunião","WhatsApp","Conversa presencial","Interno","Outro"];
 function _pbHojeIso(){
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -99116,20 +99167,22 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     return _x?(_x.pickerLabel||_x.label):u;
   };
   const _ativas=(itens||[]).filter(function(x){return x.ativa;}).length;
-  return <PlaybookBlock id="pb-memoria" title="O que o cliente falou"
-    subtitle="Contexto de reunião e conversa — entra automático em toda copy, briefing e roteiro deste cliente"
+  /* (22/09/2026, Rodrigo) Era "O que o cliente falou". Virou "Feedbacks" porque não é só
+     do cliente: sócio e equipe também anotam aqui o que a IA tem que saber desta conta. */
+  return <PlaybookBlock id="pb-memoria" title="Feedbacks"
+    subtitle="O que o cliente falou e o que a equipe observou — entra automático em toda copy, briefing e roteiro deste cliente"
     icon="message" color={PB_PURPLE_DK}>
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler as anotações: {erro}</div>}
 
     {isAdmin && !abrir && <button type="button" onClick={function(){_abrirForm();}}
       style={{background:PB_PURPLE_DK,border:"none",borderRadius:10,padding:"9px 15px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,marginBottom:(itens&&itens.length)?14:0}}>
-      <Ico n="plus" size={14} color="#fff"/>Nova anotação
+      <Ico n="plus" size={14} color="#fff"/>Novo feedback
     </button>}
 
     {isAdmin && abrir && <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER,borderRadius:14,padding:14,marginBottom:16,display:"flex",flexDirection:"column",gap:10}}>
       <div>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>O que o cliente falou</div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>O feedback</div>
         {/* Cresce sozinho conforme digita — anotação de reunião é texto comprido (18/09/2026) */}
         <_PbAutoTextarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2}
           placeholder="Ex.: comedouro Plasson deve ser abordado pelo manejo e pela fase do suíno, não pelo preço."
@@ -99163,10 +99216,10 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
           {canal==="Outro" && <input value={origem} onChange={function(e){setOrigem(e.target.value);}}
             placeholder="De onde veio? (ex.: e-mail, visita na fábrica)" style={Object.assign({},_inp,{marginTop:7})}/>}
         </div>
-        {/* Quem DO CLIENTE falou — fica só aqui na tela, não vai pro prompt (18/09/2026) */}
+        {/* Quem deu o feedback (cliente, sócio, equipe) — fica só aqui na tela, não vai pro prompt */}
         <div style={{flex:"1 1 200px",minWidth:0}}>
-          <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Quem falou <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· do lado do cliente</span></div>
-          <input value={disse} onChange={function(e){setDisse(e.target.value);}} placeholder="Ex.: Gustavo Schorr" style={_inp}/>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Quem falou <span style={{fontWeight:600,textTransform:"none",letterSpacing:0,color:"#94a3b8"}}>· do cliente ou da equipe</span></div>
+          <input value={disse} onChange={function(e){setDisse(e.target.value);}} placeholder="Ex.: Gustavo Schorr, Vinicius" style={_inp}/>
         </div>
         {isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{flex:"1 1 200px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Vale pra</div>
@@ -99187,8 +99240,8 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
 
     {itens!==null && itens.length===0 && typeof _PbEmpty==="function" &&
-      <_PbEmpty icon="message" text="Nada anotado ainda."
-        sub={isAdmin?"O que o cliente falar em reunião sobre produto, ângulo ou linguagem entra aqui — e a IA passa a escrever sabendo disso.":""}/>}
+      <_PbEmpty icon="message" text="Nenhum feedback ainda."
+        sub={isAdmin?"Feedback sobre produto, ângulo ou linguagem — do cliente em reunião ou da própria equipe — entra aqui, e a IA passa a escrever sabendo disso.":""}/>}
 
     {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
       {itens.map(function(it){
@@ -99202,7 +99255,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:7}}>
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
-                {it.disse_quem && <span title="Quem falou, do lado do cliente" style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="users" size={10} color="#1d4ed8"/>{it.disse_quem}</span>}
+                {it.disse_quem && <span title="Quem deu o feedback" style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="users" size={10} color="#1d4ed8"/>{it.disse_quem}</span>}
                 {it.origem && <span style={{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{it.origem}</span>}
                 {!on && <span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>fora do cérebro</span>}
               </div>
@@ -99229,7 +99282,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         </div>;
       })}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-        {_ativas} de {itens.length} anotaç{itens.length===1?"ão":"ões"} indo pro cérebro. O interruptor tira do prompt sem apagar.
+        {_ativas} de {itens.length} feedback{itens.length===1?"":"s"} indo pro cérebro. O interruptor tira do prompt sem apagar.
       </div>
     </div>}
   </PlaybookBlock>;
@@ -104335,7 +104388,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={5} autoFocus
             placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
             style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/>
-          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, o que o cliente falou e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
+          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
         <div>
           <div style={_lbl}>Quantos roteiros</div>
