@@ -4488,20 +4488,34 @@ function pxCtxProdutosFbTxt(ctx){
   });
   return u+"\n";
 }
+/* (22/09/2026) O tipo saiu da tela e sai do prompt junto: era etiqueta escolhida à mão antes
+   do upload e a IA já vê sozinha o que o material é. Sem isso o cérebro lia "(outro)" do lado
+   do título de todo material novo.
+
+   E o corte de 1.800 caracteres por material foi embora. Era o SEGUNDO estrangulamento do
+   mesmo material: a ficha já vinha limitada a 180 palavras e ainda apanhava aqui. Agora cada
+   ficha entra até 12.000 caracteres e o bloco inteiro respeita um orçamento de 24.000 — quando
+   estoura, para de acrescentar material em vez de cortar todos pela metade. 12.000 é o tamanho
+   de uma ficha de briefing inteiro (o da VetService deu 11.7k); manual grande cabe porque a
+   ficha dele já sai condensada na leitura. */
+const PX_CTX_MAT_POR_MATERIAL=12000;
+const PX_CTX_MAT_ORCAMENTO=24000;
 function pxCtxMateriaisTxt(ctx){
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
   if(!arr.length) return "";
-  let u="MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo que a própria empresa passou — "+
-        "é fato conferido, pode usar como verdade; ainda assim, escreva com as suas palavras, "+
-        "não copie trecho):\n";
-  arr.slice(0,12).forEach(function(m){
-    const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) return;
-    /* (22/09/2026) O tipo saiu da tela e sai do prompt junto: era etiqueta escolhida à mão
-       antes do upload e a IA já vê sozinha o que o material é. Sem isso o cérebro lia
-       "(outro)" do lado do título de todo material novo. */
+  let u="MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo, briefing que a própria empresa "+
+        "passou — é fato conferido, pode usar como verdade; ainda assim, escreva com as suas "+
+        "palavras, não copie trecho):\n";
+  let gasto=0, entraram=0;
+  for(const m of arr){
+    const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) continue;
+    if(gasto>=PX_CTX_MAT_ORCAMENTO) break;
+    const corpo=ficha.slice(0,PX_CTX_MAT_POR_MATERIAL);
     u+="--- "+String((m&&m.titulo)||"Material")+
-       (m&&m.unidade?(" — unidade "+m.unidade):"")+"\n"+ficha.slice(0,1800)+"\n";
-  });
+       (m&&m.unidade?(" — unidade "+m.unidade):"")+"\n"+corpo+"\n";
+    gasto+=corpo.length; entraram++;
+  }
+  if(!entraram) return "";
   return u+"\n";
 }
 function pxCtxRegrasTxt(regras){
@@ -99033,8 +99047,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 })}
               </div>
             </div>}
-            {editMode
-              ? (function(){
+            {/* (22/09/2026, Rodrigo) "cadê a porra da ficha técnica que eu pedi de cada produto?
+                continuou a mesma merda que estava antes."
+                Estava certo, e o motivo é feio: eu tinha construído a ficha no ramo de LEITURA
+                deste bloco — e `editMode` nasce `true` e nunca volta pra false (edição inline,
+                decisão antiga). Ou seja: o ramo de leitura nunca renderiza. Construí a feature
+                num pedaço de tela que ninguém enxerga.
+                O ramo de leitura foi apagado (era código morto de verdade) e a ficha — cabeçalho,
+                campos com etiqueta e o rodapé de aprendizado por produto — vive aqui, no card que
+                todo mundo vê. */}
+            {(function(){
                   // Filtro por unidade ativo? Se sim, mostra apenas produtos daquela unidade + habilita drag
                   const _editUnitFilter = _isBioter && _unitTabProd;
                   let _visibleEdit;
@@ -99081,7 +99103,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         _dragProdRef.current={unitId:null,srcIdx:-1};
                         setDropIdx(-1);
                       }:undefined}
-                      style={{background:"#fff",border:"1px solid "+(_isDragging?PB_PURPLE:"#e2e8f0"),borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"opacity .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)",opacity:_isDragging?0.35:1}}>
+                      /* contentVisibility: com 9 produtos e 37 fotos, o navegador montava tudo de
+                         uma vez e a aba travava ao abrir o bloco (Rodrigo, 22/09). Assim ele só
+                         desenha o card quando ele chega perto da tela; containIntrinsicSize
+                         reserva a altura pra barra de rolagem não pular. */
+                      style={{background:"#fff",border:"1px solid "+(_isDragging?PB_PURPLE:"#e2e8f0"),borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"opacity .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)",opacity:_isDragging?0.35:1,contentVisibility:"auto",containIntrinsicSize:"520px"}}>
                     {/* Header — draggable APENAS aqui pra nao conflitar com inputs internos */}
                     {_editUnitFilter ? <div
                       draggable={true}
@@ -99102,7 +99128,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       <div style={{display:"inline-flex",alignItems:"center",gap:10,fontSize:13,fontWeight:800,letterSpacing:-.1,minWidth:0,flex:1}}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{opacity:.9,flexShrink:0}}><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>
                         <span style={{background:"rgba(255,255,255,0.22)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>Posição {filteredIdx+1}</span>
-                        <span style={{fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
+                        <span style={{minWidth:0,display:"flex",flexDirection:"column"}}>
+                          <span style={{opacity:.72,fontSize:8.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica</span>
+                          <span style={{fontWeight:800,fontSize:14.5,letterSpacing:-.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,lineHeight:1.25}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
+                        </span>
                         {!(typeof _pxMob==="function"&&_pxMob())&&<span style={{opacity:.7,fontWeight:600,fontSize:11,letterSpacing:.1,flexShrink:0}}>· arraste pra reordenar</span>}
                       </div>
                       {/* Mobile: setas ▲▼ no lugar do arraste */}
@@ -99120,19 +99149,25 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
                         <Ico n="trash" size={14}/>
                       </button>
-                    </div> : <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0 8px"}}>
+                    </div> : <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"11px 14px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff"}}>
+                      <span style={{minWidth:0,display:"flex",flexDirection:"column",flex:1}}>
+                        <span style={{opacity:.72,fontSize:8.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica</span>
+                        <span style={{fontWeight:800,fontSize:14.5,letterSpacing:-.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,lineHeight:1.25}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
+                      </span>
                       <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
-                        style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#cbd5e1";}}>
+                        style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",cursor:"pointer",padding:"6px 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:8,flexShrink:0,transition:"background .12s"}}
+                        onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
                         <Ico n="trash" size={14}/>
                       </button>
                     </div>}
-                    <div style={{display:"flex",flexDirection:"column",gap:14,padding:_editUnitFilter?"14px 16px 16px 16px":"4px 16px 16px 16px"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 16px 16px 16px"}}>
                       {/* Galeria grandona de imagens do produto */}
                       {(function(){
                         const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
-                        return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        return <div>
+                          <div style={_PB_FICHA_ROT}>Fotos</div>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {_urls.map(function(_url,_ii){
                             return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
                               <img src={_url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
@@ -99147,22 +99182,24 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                             <Ico n="image" size={22} color="currentColor"/>
                             <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
                           </button>
+                          </div>
                         </div>;
                       })()}
                       {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
                       {(function(){
                         const _showEsEdit = _isBioter && _unitTabProd === "paraguay";
-                        return <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
+                        return <div><div style={_PB_FICHA_ROT}>Como se chama</div>
+                          <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
                           <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
                             <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
                               <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
                               Português
                             </div>
-                            <input type="text" placeholder="Nome principal (PT)" value={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomePrincipalPt:e.target.value, nome:e.target.value});}}
+                            <_PbCampoFicha placeholder="Nome principal (PT)" valor={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalPt:x, nome:x});}}
                               style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                            <input type="text" placeholder="Outros nomes (ex: Fossa, Biofábrica)" value={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomesPt:e.target.value});}}
+                            <_PbCampoFicha placeholder="Outros nomes (ex: Fossa, Biofábrica)" valor={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomesPt:x});}}
                               style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
                           </div>
                           {_showEsEdit && <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
@@ -99170,21 +99207,25 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                               <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
                               Español
                             </div>
-                            <input type="text" placeholder="Nombre principal (ES)" value={prod.nomePrincipalEs||""}
-                              onChange={function(e){_produtoUpd(pi,{nomePrincipalEs:e.target.value});}}
+                            <_PbCampoFicha placeholder="Nombre principal (ES)" valor={prod.nomePrincipalEs||""}
+                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalEs:x});}}
                               style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                            <input type="text" placeholder="Otros nombres (ej: Estanque, Laguna)" value={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
-                              onChange={function(e){_produtoUpd(pi,{nomesEs:e.target.value});}}
+                            <_PbCampoFicha placeholder="Otros nombres (ej: Estanque, Laguna)" valor={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomesEs:x});}}
                               style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
                           </div>}
+                          </div>
                         </div>;
                       })()}
-                      <_PbAutoTextarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
-                        onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
-                        rows={2}
-                        style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                      <div>
+                        <div style={_PB_FICHA_ROT}>O que é</div>
+                        <_PbCampoFicha textarea placeholder="Em duas linhas: o que é, pra quem serve e o que ele resolve." valor={prod.descricao||""}
+                          onCommit={function(x){_produtoUpd(pi,{descricao:x});}}
+                          rows={2}
+                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                      </div>
                       {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
-                        <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:7}}>Unidades onde se aplica</div>
+                        <div style={_PB_FICHA_ROT}>Unidades onde se aplica</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                           {BIOTER_UNITS.map(function(u){
                             const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
@@ -99196,6 +99237,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>
                       </div>}
                     </div>
+                    {/* Rodapé da ficha: o que a agência já aprendeu sobre ESTE produto. */}
+                    <_PbProdFb clientId={cl.id} produto={prod.nomePrincipalPt||prod.nome||""}
+                      unidade={_editUnitFilter?_unitTabProd:""} isAdmin={isAdmin}/>
                   </div>
                   </React.Fragment>;})}
                   <button onClick={_produtoAdd}
@@ -99205,99 +99249,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     <Ico n="plus" size={14}/> Adicionar produto
                   </button>
                 </div>;
-                })()
-              : (function(){
-                  // Sort por ordemPorUnidade quando filtro ativo
-                  const _allProds = Array.isArray(data.produtos)?data.produtos:[];
-                  const _filtered = (_isBioter && _unitTabProd)
-                    ? _allProds.filter(function(p){
-                        const u = Array.isArray(p.unidades)?p.unidades:[];
-                        return u.length===0 || u.indexOf(_unitTabProd)>=0;
-                      }).map(function(p,idx){
-                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+idx;
-                        return {p:p, ord:_ord};
-                      }).sort(function(a,b){return a.ord-b.ord;}).map(function(x){return x.p;})
-                    : _allProds;
-                  return _filtered.length>0
-                    ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {_filtered.map(function(prod,pi){
-                        const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
-                        const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
-                        const _hasFilter = _isBioter && _unitTabProd;
-                        const _viewUrls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
-                        // Parse defensivo dos apelidos — aceita string com vírgula OU array (legado)
-                        const _parseNomes=function(x){
-                          if(Array.isArray(x)) return x.filter(function(s){return s && String(s).trim();}).map(function(s){return String(s).trim();});
-                          if(typeof x==="string") return x.split(",").map(function(s){return s.trim();}).filter(Boolean);
-                          return [];
-                        };
-                        const _nomePt=prod.nomePrincipalPt||prod.nome||"";
-                        const _nomeEs=prod.nomePrincipalEs||"";
-                        const _outrosPt=_parseNomes(prod.nomesPt);
-                        const _outrosEs=_parseNomes(prod.nomesEs);
-                        // Espanhol só aparece quando a aba selecionada é Paraguay
-                        const _showEs = _isBioter && _unitTabProd==="paraguay";
-                        const _hasEs = _showEs && (_nomeEs||_outrosEs.length>0);
-                        const _rot={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:4};
-                        return <div key={pi} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.04)",transition:"box-shadow .15s, border-color .15s"}}
-                          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,.07)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";}}>
-
-                          {/* Cabeçalho da ficha — nome grande, apelidos logo abaixo, unidades à direita */}
-                          <div style={{display:"flex",alignItems:"flex-start",gap:11,padding:"13px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,#fcfcfd 0%,#ffffff 100%)"}}>
-                            <span style={{width:3,alignSelf:"stretch",minHeight:36,borderRadius:99,background:"#f59e0b",flexShrink:0}}/>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{color:"#b45309",fontSize:9,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",marginBottom:3}}>Ficha técnica</div>
-                              <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.35,lineHeight:1.2,wordBreak:"break-word"}}>{_nomePt||"(sem nome)"}</div>
-                              {_outrosPt.length>0 && <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>também chamado de {_outrosPt.join(" · ")}</div>}
-                            </div>
-                            {!_hasFilter && _isBioter && (unitObjs.length>0||unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"46%",flexShrink:0}}>
-                              {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap"}}>{u.pickerLabel||u.label}</span>;})}
-                              {unitsList.length===0 && <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase",whiteSpace:"nowrap"}}>Todas as unidades</span>}
-                            </div>}
-                          </div>
-
-                          {/* Corpo da ficha — foto grande + os campos, cada um com sua etiqueta */}
-                          <div style={{display:"flex",gap:16,alignItems:"flex-start",padding:16,flexWrap:"wrap"}}>
-                            {_viewUrls.length>0
-                              ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-                                  <img src={_viewUrls[0]} alt={_nomePt||""} referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
-                                  {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
-                                    {_viewUrls.slice(1,5).map(function(_u,_ii){
-                                      return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
-                                    })}
-                                    {_viewUrls.length>5 && <div onClick={function(){setProdLightbox({urls:_viewUrls, idx:5});}} style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800,cursor:"zoom-in"}}>+{_viewUrls.length-5}</div>}
-                                  </div>}
-                                </div>
-                              : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
-                            }
-                            <div style={{flex:1,minWidth:210,display:"flex",flexDirection:"column",gap:12}}>
-                              {_hasEs && <div>
-                                <div style={Object.assign({},_rot,{color:"#9a3412",display:"inline-flex",alignItems:"center",gap:5})}>
-                                  <svg width="14" height="10" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                                  Nome em espanhol
-                                </div>
-                                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.15,lineHeight:1.3,fontStyle:"italic"}}>{_nomeEs||"—"}</div>
-                                {_outrosEs.length>0 && <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:2,lineHeight:1.4,fontStyle:"italic"}}>{_outrosEs.join(" · ")}</div>}
-                              </div>}
-                              <div>
-                                <div style={_rot}>O que é</div>
-                                {prod.descricao
-                                  ? <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,wordBreak:"break-word"}}>{prod.descricao}</div>
-                                  : <div style={{color:"#cbd5e1",fontSize:12.5,fontStyle:"italic"}}>Sem descrição ainda — entra pelo Editar.</div>}
-                              </div>
-                              {_hasFilter && unitsList.length===0 && <div style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>Vale pra todas as unidades.</div>}
-                            </div>
-                          </div>
-
-                          {/* Rodapé da ficha — o que a agência já aprendeu sobre ESTE produto */}
-                          <_PbProdFb clientId={cl.id} produto={_nomePt} unidade={_hasFilter?_unitTabProd:""} isAdmin={isAdmin}/>
-                        </div>;
-                      })}
-                    </div>
-                    : <_PbEmpty icon="package" text={_isBioter?"Nenhum produto cadastrado pra esta unidade.":"Nenhum produto cadastrado."} sub={isAdmin?"Use o botão abaixo pra adicionar.":""}/>;
-                })()
-            }
+            })()}
                     </PlaybookBlock>
 
           {/* Exemplos de chamadas (aprovadas + proibidas) */}
@@ -99606,25 +99558,52 @@ async function pxFichaDoMaterial(file, titulo, clienteNome){
   if(!ehPdf&&!ehImg) throw new Error("Por enquanto a IA lê PDF e imagem. Outros formatos ficam guardados, sem ficha.");
   if(file.size>PB_MAT_MAX_LEITURA) throw new Error("Arquivo grande demais pra leitura ("+_pbMatTamanho(file.size)+"). Guardei assim mesmo — se quiser a ficha, suba uma versão mais leve.");
   const b64=await _pbMatBase64(file);
-  const sys="Você lê material oficial de empresa (folder, manual, catálogo, tabela técnica) e extrai FATOS "+
-    "pra uma equipe de marketing escrever com precisão. NUNCA invente: o que o material não diz, você não escreve. "+
+  const sys="Você lê material oficial de empresa (folder, manual, catálogo, tabela técnica, briefing) e "+
+    "destila TUDO que serve pra uma equipe de marketing escrever com precisão — fatos, números, ângulos, "+
+    "frases, tom e limites. NUNCA invente: o que o material não diz, você não escreve. Também não jogue "+
+    "fora o que ele diz: informação perdida aqui é informação que a equipe não vai ter. "+
     "Responda em texto puro, sem markdown, sem comentário antes nem depois.";
+  /* (22/09/2026, Rodrigo) "você fez essa ficha, sendo que o arquivo tem muito mais coisas."
+     Estava certo. O teto era 180 PALAVRAS, fixo. O briefing da VetService tem 2.258 — a ficha
+     jogava fora 92% do arquivo, e junto foram os seis ângulos de comunicação, as frases
+     prontas, o tom de voz, o público e a lista do que NÃO dizer. Justamente o que a equipe
+     usa pra escrever.
+
+     O teto de 180 nasceu pensando em manual de dezenas de milhares de palavras. Errei ao
+     aplicar o mesmo teto pra tudo: a ficha tem que ACOMPANHAR o material. Material curto sai
+     quase inteiro; só o material realmente longo é resumido. E as seções deixaram de ser seis
+     fixas — o material manda. */
   const pedido="Este é um material oficial de "+(clienteNome||"um cliente")+
-    (titulo?(' — "'+titulo+'"'):"")+". Pode ser folder, manual, catálogo ou tabela técnica — "+
-    "olhe o arquivo e trate pelo que ele é.\n\n"+
-    "Extraia a FICHA deste material, no máximo 180 palavras, exatamente neste formato:\n"+
-    "O QUE É: (uma frase)\n"+
-    "PRA QUEM / QUANDO USAR:\n"+
-    "COMO FUNCIONA: (2 a 4 linhas, o essencial)\n"+
-    "NÚMEROS E ESPECIFICAÇÕES: (só os que estão escritos — capacidade, medidas, prazos, garantia)\n"+
-    "TERMOS OFICIAIS: (o nome exato do produto e dos componentes, como a empresa escreve)\n"+
-    "CUIDADOS: (o que o material manda evitar dizer ou prometer)\n\n"+
-    "Seção que o material não cobre: escreva — e siga pra próxima.";
+    (titulo?(' — "'+titulo+'"'):"")+". Pode ser folder, manual, catálogo, tabela técnica ou "+
+    "briefing — olhe o arquivo e trate pelo que ele é.\n\n"+
+    "Extraia a FICHA: tudo que uma equipe de marketing usaria pra escrever sobre isso sem "+
+    "precisar abrir o arquivo de novo.\n\n"+
+    "TAMANHO — a ficha acompanha o material. Material curto: a ficha sai quase do tamanho "+
+    "dele. Material longo: você condensa, mas nunca passa de 1.800 palavras. Isto NÃO é "+
+    "resumo executivo; é o material destilado em fatos aproveitáveis.\n\n"+
+    "Use as seções abaixo e PULE a que o material não tiver:\n"+
+    "O QUE É\n"+
+    "PRA QUEM / QUANDO USAR\n"+
+    "COMO FUNCIONA\n"+
+    "DIFERENCIAIS (o que só este produto/serviço faz)\n"+
+    "NÚMEROS E ESPECIFICAÇÕES (capacidade, medidas, prazos, garantia, prova social)\n"+
+    "TERMOS OFICIAIS (nome exato do produto e dos componentes, como a empresa escreve)\n"+
+    "ÂNGULOS DE COMUNICAÇÃO (cada ângulo que o material sugere, com o formato sugerido)\n"+
+    "FRASES DO MATERIAL (copie entre aspas as frases prontas/chamadas que ele já traz)\n"+
+    "PÚBLICO E TOM\n"+
+    "O QUE NÃO DIZER\n"+
+    "OUTRAS COISAS QUE O MATERIAL TRAZ (o que não coube acima e a equipe usaria)\n"+
+    "NÃO COBERTO (o que a equipe perguntaria e o material não responde)\n\n"+
+    "REGRAS: não invente nada — o que o material não diz, você não escreve. Copie número, "+
+    "nome e frase EXATAMENTE como estão. Se o material traz uma lista, mantenha a lista "+
+    "INTEIRA, nunca uma amostra. Prefira perder elegância a perder informação.";
   const bloco=ehPdf
     ? {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
     : {type:"image",source:{type:"base64",media_type:(mime||"image/png"),data:b64}};
+  /* 900 tokens davam ~600 palavras e cortavam a ficha no meio. O teto de 1.800 palavras do
+     pedido cabe em ~5.000 tokens com folga. */
   const data=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
-    max_tokens:900,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
+    max_tokens:5000,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
   const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
   return txt.replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
@@ -99678,11 +99657,39 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra ler: "+((e&&e.message)||e),7000);
     }
   };
+  /* (22/09/2026) Material que já está no Playbook tem só a URL, não o arquivo. Pra refazer a
+     ficha — depois de a regra de tamanho mudar, por exemplo — baixa de volta do storage e
+     manda pra IA do mesmo jeito. Sem isso, ficha velha só se conserta apagando e subindo de
+     novo, e aí o material perde o histórico. */
+  const _relerDoUrl=async function(m){
+    if(!m||!m.arquivo_url) return;
+    try{
+      await _patch(m,{ficha_status:"lendo"});
+      const resp=await fetch(m.arquivo_url);
+      if(!resp.ok) throw new Error("não consegui baixar o arquivo ("+resp.status+")");
+      const blob=await resp.blob();
+      const file=new File([blob],m.arquivo_nome||"material",{type:m.arquivo_tipo||blob.type||""});
+      await _lerArquivo(m,file);
+    }catch(e){
+      await _patch(m,{ficha_status:"erro"});
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra reler: "+((e&&e.message)||e),7000);
+    }
+  };
+  /* (22/09/2026, Rodrigo) "da Bioter tem vários catálogos, vou poder subi-los todos de uma
+     vez ou você vai ficar bugando?"
+     Vai, e agora na ordem certa. Antes era subir-ler, subir-ler: se a leitura de um PDF
+     grande travasse ou a pessoa fechasse a aba no meio, os arquivos seguintes nem tinham
+     sido guardados. Agora GUARDA TODOS primeiro — a parte que não pode falhar — e só depois
+     lê um por um. Leitura que falha deixa o material marcado "não deu pra ler" e o botão de
+     reler conserta; arquivo perdido não tem conserto. */
   const _subir=async function(files){
     const sb=window._sb; if(!sb||!files||!files.length) return;
-    for(let i=0;i<files.length;i++){
-      const file=files[i];
-      setSubindo(file.name);
+    const lista=Array.prototype.slice.call(files);
+    const _passo=function(i,n,verbo,nome){ return (n>1?("("+(i+1)+"/"+n+") "):"")+verbo+" "+nome; };
+    const guardados=[];
+    for(let i=0;i<lista.length;i++){
+      const file=lista[i];
+      setSubindo(_passo(i,lista.length,"guardando",file.name));
       try{
         const ext=(String(file.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
         const rnd=Math.random().toString(36).slice(2,9);
@@ -99699,12 +99706,20 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         if(ins.error) throw ins.error;
         const novo=ins.data;
         setItens(function(p){ return [novo].concat(p||[]); });
-        await _lerArquivo(novo,file);
+        guardados.push({novo:novo,file:file});
       }catch(e){
         if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+file.name+": "+((e&&e.message)||e),7000);
       }
     }
+    // 2ª volta: agora que está tudo guardado, a IA lê um por um.
+    for(let i=0;i<guardados.length;i++){
+      const g=guardados[i];
+      setSubindo(_passo(i,guardados.length,"lendo",g.file.name));
+      try{ await _lerArquivo(g.novo,g.file); }catch(_e){}
+    }
     setSubindo("");
+    if(guardados.length>1&&typeof pixelsToast!=="undefined")
+      pixelsToast.success(guardados.length+" materiais no Playbook. Confira as fichas antes de confiar nelas.",5000);
   };
   const _uniLabel=function(u){
     if(!u) return "Todas as unidades";
@@ -99745,10 +99760,10 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         <Ico n="upload" size={17} color="currentColor"/>
       </span>
       <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>
-        {subindo ? ("Subindo "+subindo.slice(0,28)+"…") : (arrastando ? "Solta aqui" : "Arraste o arquivo aqui, ou clique pra escolher")}
+        {subindo ? (subindo.slice(0,52)+"…") : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        PDF e imagem a IA lê e vira ficha{isBioter?(" · entra na unidade "+_uniLabel(unitTab)+", que você troca no seletor do topo"):""} · acima de 8 MB o arquivo fica guardado sem ficha
+        Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha{isBioter?(" · entra na unidade "+_uniLabel(unitTab)+", que você troca no seletor do topo"):""} · acima de 8 MB o arquivo fica guardado sem ficha
       </span>
       <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
@@ -99785,6 +99800,11 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                   <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
                 </span>
               </button>}
+              {isAdmin && m.arquivo_url && <button type="button" title="Ler o arquivo de novo e refazer a ficha"
+                disabled={String(m.ficha_status||"")==="lendo"}
+                onClick={function(){ _relerDoUrl(m); }}
+                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}
+                onMouseEnter={function(ev){ev.currentTarget.style.color="#0d9488";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#94a3b8";}}><Ico n="refresh" size={14}/></button>}
               {isAdmin && <button type="button" title="Editar a ficha à mão"
                 onClick={function(){ setEditId(editId===m.id?null:m.id); setRascunho(String(m.ficha||"")); }}
                 style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}><Ico n="edit" size={14}/></button>}
@@ -99892,6 +99912,48 @@ async function pxProdFbRenomear(clientId, de, para){
     if(typeof pixelsToast!=="undefined") pixelsToast.success(alvos.length+" feedback"+(alvos.length===1?"":"s")+" seguiram pro novo nome do produto.",3200);
   }catch(e){ console.warn("[prodfb rename]",e); }
 }
+/* ═══ CAMPO QUE NÃO TRAVA A LISTA (22/09/2026, Rodrigo) ═════════════════════════════
+   "sempre que passa aqui pelos serviços/produtos fica travando, tem que dar um jeito de
+    otimizar essas fichas técnicas."
+
+   Cada tecla digitada num campo de produto chamava _produtoUpd → setEditProdutos → re-render
+   de TODAS as fichas (9 produtos, 37 fotos) e ainda um JSON.stringify da lista inteira no
+   autosave. Digitar um nome de produto custava nove fichas redesenhadas por letra.
+
+   Aqui o campo guarda o valor LOCALMENTE e só sobe pro estado quando a pessoa para de digitar
+   (500 ms) ou sai do campo. O autosave continua igual — ele só passa a ser acordado uma vez
+   por palavra, em vez de uma vez por letra.
+
+   `ultimo` guarda o que já subiu: é o que impede o valor do pai (ainda atrasado) de apagar o
+   que está sendo digitado, e ao mesmo tempo deixa o campo se atualizar quando o produto muda
+   de lugar na lista. */
+function _PbCampoFicha({valor, onCommit, textarea, ...resto}){
+  const _norm=function(x){ return (x===undefined||x===null)?"":String(x); };
+  const [v,setV]=useState(function(){ return _norm(valor); });
+  const timer=useRef(null);
+  const ultimo=useRef(_norm(valor));
+  useEffect(function(){
+    const novo=_norm(valor);
+    if(novo!==ultimo.current){ ultimo.current=novo; setV(novo); }
+  },[valor]);
+  useEffect(function(){ return function(){ if(timer.current) clearTimeout(timer.current); }; },[]);
+  const _mandar=function(x){ ultimo.current=x; if(typeof onCommit==="function") onCommit(x); };
+  const _mudou=function(e){
+    const x=e.target.value;
+    setV(x);
+    if(timer.current) clearTimeout(timer.current);
+    timer.current=setTimeout(function(){ timer.current=null; _mandar(x); },500);
+  };
+  const _sair=function(){
+    if(timer.current){ clearTimeout(timer.current); timer.current=null; }
+    if(v!==ultimo.current) _mandar(v);
+  };
+  return textarea
+    ? <_PbAutoTextarea {...resto} value={v} onChange={_mudou} onBlur={_sair}/>
+    : <input type="text" {...resto} value={v} onChange={_mudou} onBlur={_sair}/>;
+}
+/* Etiqueta das seções da ficha técnica do produto — mesma em todas, pra ler como ficha. */
+const _PB_FICHA_ROT={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6};
 function _PbProdFb({clientId, produto, unidade, isAdmin}){
   const [,_tick]=useState(0);
   const [abrir,setAbrir]=useState(false);
