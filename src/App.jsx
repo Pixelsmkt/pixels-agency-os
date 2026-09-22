@@ -4462,6 +4462,32 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
 
    Peso: material é FATO CONFERIDO (veio do cliente), então vale mais que memória de reunião
    — mas continua não sendo texto pra copiar. */
+/* ── O QUE JÁ APRENDEMOS SOBRE CADA PRODUTO (22/09/2026, Rodrigo) ────────────────
+   "nos produtos e serviços… que a gente vá salvando feedbacks também, tal qual ocorre em
+    feedbacks, aí além do resumo de cada produto nós vamos passando feedbacks de cada produto
+    e assim conseguimos ir aumentando o seu aprendizado."
+
+   Feedback de produto é diferente de feedback de conta: ele fala de COMO falar daquele
+   produto (o nome que o cliente usa, o que não pode prometer, o ângulo que funciona).
+   Por isso entra agrupado por produto, logo depois dos materiais. */
+function pxCtxProdutosFbTxt(ctx){
+  const arr=(ctx&&Array.isArray(ctx.produto_feedbacks))?ctx.produto_feedbacks:[];
+  if(!arr.length) return "";
+  const por={}, ordem=[];
+  arr.forEach(function(f){
+    const k=String((f&&f.produto)||"").trim(); const v=String((f&&f.feedback)||"").trim();
+    if(!k||!v) return;
+    if(!por[k]){ por[k]=[]; ordem.push(k); }
+    if(por[k].length<6) por[k].push(v);
+  });
+  if(!ordem.length) return "";
+  let u="O QUE A AGÊNCIA JÁ APRENDEU SOBRE CADA PRODUTO (vale mais que o texto do briefing — "+
+        "é correção de quem já escreveu e ouviu o cliente):\n";
+  ordem.slice(0,12).forEach(function(k){
+    u+="- "+k+": "+por[k].join(" · ")+"\n";
+  });
+  return u+"\n";
+}
 function pxCtxMateriaisTxt(ctx){
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
   if(!arr.length) return "";
@@ -4849,6 +4875,7 @@ async function pxReescreverCopy(opts){
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxProdutosFbTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,3);i++){
@@ -5180,6 +5207,7 @@ async function pxGerarLegendas(opts){
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxProdutosFbTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
     for(let i=0;i<Math.min(foco.length,2);i++){
@@ -5412,6 +5440,7 @@ async function pxGerarBriefing(opts){
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxProdutosFbTxt(ctx);
   { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
     const f=foco[0]; const partes=[];
@@ -18855,6 +18884,47 @@ function CalendarGrid({WEEKDAYS, days, renderDay, compact}){
   );
 }
 
+
+/* ─── Calendário interno no CELULAR — lista por dia (22/09/2026) ───────────────
+   Só é usado no Meu Dashboard dos sócios, no celular (PageCalendarioInterno com
+   listaMobile). A grade de 7 colunas não cabe em 390px ("Dail" cortado).
+   Cada dia usa o MESMO renderDay da grade: mesmos eventos, mesmos toques.
+   Mês atual: começa em hoje. Dias sem nada ficam de fora.
+   "Mostrar todos os dias" traz de volta os passados e os vazios.            */
+function _CalListaMob({WEEKDAYS, days, renderDay, temAlgo}){
+  const [todos,setTodos]=useState(false);
+  const hoje=new Date(); hoje.setHours(0,0,0,0);
+  const lista=[];
+  (days||[]).forEach(function(d,i){ if(d) lista.push({d:d,i:i}); });
+  const mesAtual=lista.length>0&&lista[0].d.getFullYear()===hoje.getFullYear()&&lista[0].d.getMonth()===hoje.getMonth();
+  const visiveis=lista.filter(function(x){
+    if(todos)return true;
+    if(x.d.toDateString()===hoje.toDateString())return true;
+    if(mesAtual&&x.d<hoje)return false;
+    let tem=true;
+    try{ tem=temAlgo?!!temAlgo(x.d):true; }catch(e){ tem=true; }
+    return tem;
+  });
+  const ocultos=lista.length-visiveis.length;
+  return <div style={{display:"flex",flexDirection:"column",gap:8,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {visiveis.length===0&&<div style={{padding:"18px 14px",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:600,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12}}>Nenhum evento neste mês.</div>}
+    {visiveis.map(function(x){
+      const ehHoje=x.d.toDateString()===hoje.toDateString();
+      return <div key={x.i} style={{display:"flex",gap:10,alignItems:"stretch",background:"#fff",border:"1px solid "+(ehHoje?"#c4b5fd":"#e2e8f0"),borderRadius:12,padding:"10px 10px 10px 6px"}}>
+        <div style={{width:40,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",paddingTop:2}}>
+          <div style={{color:ehHoje?"#7c3aed":"#94a3b8",fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{WEEKDAYS[x.d.getDay()]}</div>
+          <div style={{marginTop:3,minWidth:30,height:30,borderRadius:9,background:ehHoje?"#7c3aed":"transparent",color:ehHoje?"#fff":"#0f172a",fontSize:17,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFeatureSettings:"'tnum'"}}>{x.d.getDate()}</div>
+        </div>
+        <div style={{flex:1,minWidth:0}}>{renderDay(x.d,x.i)}</div>
+      </div>;
+    })}
+    {(ocultos>0||todos)&&<button type="button" onClick={function(){setTodos(!todos);}}
+      style={{alignSelf:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:"8px 16px",fontSize:13,fontWeight:700,color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
+      {todos?"Mostrar menos":"Mostrar todos os dias (+"+ocultos+")"}
+    </button>}
+  </div>;
+}
+
 /* ─── Calendário INTERNO — eventos próprios ─────────────────────────
    Mesmo padrão visual do Calendário de publicações, mas mostra eventos
    internos: aniversários da equipe e dos clientes (contatos), datas
@@ -19281,8 +19351,22 @@ function _pxCasGrupo(t){
   if(ct==="video_short"||(t&&(t.fromDrive||t.from_drive))) return true;
   return /foto de obra|\bshort\b/i.test(String((t&&t.title)||""));
 }
+/* ═══ "NÃO MEXE NESTE" DA VARREDURA (22/09/2026, Rodrigo) ═══════════════════════════
+   "vou ajustar uma data de publicação aqui por dentro do card, vai fazer o ajuste certo no
+    calendário?"
+
+   Vai — mas faltava uma trava. A varredura escolhe pra sair o ÚLTIMO card movível da
+   semana, e esse podia ser justamente o card que a pessoa acabou de posicionar à mão: ele
+   saía e voltava pra semana seguinte, desfazendo a escolha dela sem avisar. Card NOVO já
+   era protegido (pelo novoId do pxCascataPlanejar); mudar a data de um card que já existia
+   não tinha proteção nenhuma.
+
+   Aqui o id fica guardado durante a varredura inteira — as três passadas e tudo que elas
+   chamam — em vez de ser empurrado por meia dúzia de assinaturas. Sempre zerado no fim. */
+let _PX_CAS_PROTEGIDO=null;
 function _pxCasMovivel(t,hoje,novoId){
   if(!t||String(t.id)===String(novoId)) return false;
+  if(_PX_CAS_PROTEGIDO&&String(t.id)===String(_PX_CAS_PROTEGIDO)) return false;
   if(t.deleted_at) return false;
   const st=String(t.status||"");
   if(st==="publicado"||st==="reprovado"||st==="pausado") return false;
@@ -19295,12 +19379,32 @@ function _pxCasMovivel(t,hoje,novoId){
   if(_pxCasFixo(t)) return false;
   return true;
 }
-function _pxCasConta(rows,alvo){
-  const cli=String(alvo).split(":")[0];
-  return _pxColConta(rows,alvo).filter(function(t){
-    if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(cli)>=0&&_pxCasFixo(t)) return false;
-    return true;
+/* ── BRINDE É UM (22/09/2026, Rodrigo) ──────────────────────────────────────────────
+   "criei um card da VetService e arrastou o 'Seu lote mudou' pra semana em que já tinha
+    2 posts no feed. Por que isso?"
+
+   A regra de 11/09 diz que na VetService a comemorativa fica À PARTE da cadência de
+   1/semana — "a equipe decide se vira post de brinde ou só story". Só que ela valia pra
+   TODA comemorativa da semana, e a semana de 11–17/10 tinha DUAS no feed: Pecuária (14) e
+   Agricultura (17). Com as duas invisíveis, a semana foi lida como vazia e a cascata
+   encaixou o card lá — três posts no feed num cliente que publica um por semana.
+
+   Brinde é UM. A primeira comemorativa de feed da semana continua à parte; da segunda em
+   diante ela É o post que aparece no feed e conta como tal. Comemorativa "Somente story"
+   nunca conta — isso já sai antes, no _pxNaoEhPublicacao, pra todo mundo.
+
+   Recebe a semana inteira (todos os callers passam uma linha do calendário). */
+function _pxCasBrindeFora(lista,cli){
+  if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(String(cli||""))<0) return lista||[];
+  const ord=(lista||[]).slice().sort(function(a,b){
+    return String((a&&a.publish_date)||"").localeCompare(String((b&&b.publish_date)||""));
   });
+  const fora={};
+  for(const t of ord){ if(_pxCasFixo(t)){ fora[String(t.id)]=true; break; } }
+  return (lista||[]).filter(function(t){ return !fora[String(t&&t.id)]; });
+}
+function _pxCasConta(rows,alvo){
+  return _pxCasBrindeFora(_pxColConta(rows,alvo), String(alvo).split(":")[0]);
 }
 function _pxCasBr(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):""; }
 /* ── TRILHAS (17/09/2026, 2ª versão) ─────────────────────────────────────────────
@@ -19636,7 +19740,9 @@ async function pxCascataAuto(novos){
    collab) fica como está — ali é decisão, não bug. Tudo registrado em
    claude_plano_execucoes: o botão de emergência desfaz.                              */
 const PX_CASCATA_VARRE_SEMANAS=30;
-async function pxCascataVarrer(){
+async function pxCascataVarrer(protegerId){
+  const _protAntes=_PX_CAS_PROTEGIDO;
+  _PX_CAS_PROTEGIDO=protegerId?String(protegerId):null;
   try{
     const sb=window._sb; if(!sb) return 0;
     const hoje=_pxApIso(new Date());
@@ -19711,6 +19817,7 @@ async function pxCascataVarrer(){
     try{ total+=await pxCascataEspacar(); }catch(_e){ console.warn("[cascata espacar]",_e); }
     return total;
   }catch(e){ console.warn("[cascata varrer]",e); return 0; }
+  finally{ _PX_CAS_PROTEGIDO=_protAntes; }
 }
 /* ═══ VARREDURA DE SEMANA CURTA (22/09/2026, Rodrigo) ══════════════════════════════
    "não pode acontecer isso" — a Bioter Glória ficou com 1 post na semana de 06/12 porque o
@@ -20004,11 +20111,11 @@ function pxAuditoriaCalendario(tasks, iniIso, fimIso){
       const cap=PX_CASCATA_CAP[a]; if(!cap) return;
       const porSemana={};
       lista.forEach(function(t){
-        if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(cli)>=0&&_pxCasFixo(t)) return;
         const w=_pxApLinha(t.publish_date).iniIso; (porSemana[w]=porSemana[w]||[]).push(t);
       });
       Object.keys(porSemana).forEach(function(w){
-        const g=porSemana[w]; if(g.length<=cap) return;
+        // Mesma conta da cascata: só a 1ª comemorativa de feed da semana é brinde.
+        const g=_pxCasBrindeFora(porSemana[w],cli); if(g.length<=cap) return;
         out.push({tipo:"acima",dia:w,semanaIni:w,alvo:a,rotulo:rot(a),ids:g.map(function(x){return x.id;}),
           nivel:g.every(fixoOuCollab)?"fixo":"movivel",
           texto:rot(a)+" · semana de "+br(w)+": "+g.length+" posts (cadência "+cap+") — "+g.map(function(x){return br(x.publish_date).slice(0,2)+" "+x.title.slice(0,16);}).join(" | ")});
@@ -20748,7 +20855,10 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   </div>;
 }
 
-function PageCalendarioInterno({isMob}){
+function PageCalendarioInterno({isMob, listaMobile}){
+  // Celular + Meu Dashboard dos sócios (listaMobile): filtros numa linha e o mês em lista por dia.
+  // Em qualquer outro lugar, e no computador, _lista é false e nada muda.
+  const _lista=!!(isMob&&listaMobile);
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"|"marcos"
   const [marcosByClient,setMarcosByClient]=useState({}); // {clientId:[...marcos]}
@@ -21268,6 +21378,20 @@ function PageCalendarioInterno({isMob}){
     </div>;
   }
 
+  // Celular do Meu Dashboard: lista. Resto: a grade de sempre.
+  const CalGradeOuLista=_lista?_CalListaMob:CalendarGrid;
+  // O dia tem algo? Mesmas 3 fontes que o renderDay desenha: eventos/marcos, eventos da equipe, rituais.
+  const _diaTemAlgo=function(date){
+    try{
+      if(eventsByDay(date).length>0)return true;
+      if(_eventsOnDay(date).length>0)return true;
+      if(typeof getRituaisDoMes==="function"){
+        const _iso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+        if(getRituaisDoMes(date.getFullYear(),date.getMonth()).some(function(r){return r.date===_iso;}))return true;
+      }
+      return false;
+    }catch(e){ return true; }
+  };
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <MarcoDetailModal/>
@@ -21285,7 +21409,7 @@ function PageCalendarioInterno({isMob}){
 
       {/* Filtros tipo de evento */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6,flexWrap:_lista?"nowrap":"wrap",overflowX:_lista?"auto":undefined,width:_lista?"100%":undefined,minWidth:_lista?0:undefined,paddingBottom:_lista?4:undefined,WebkitOverflowScrolling:_lista?"touch":undefined}}>
           {[
             {id:"todos",       label:"Todos",                                          icoColor:"#64748b"},
             {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#0d9488", icoType:"cake"},
@@ -21302,7 +21426,7 @@ function PageCalendarioInterno({isMob}){
           ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
-              style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"7px 13px",fontSize:12,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:7,letterSpacing:-.1}}>
+              style={{flexShrink:_lista?0:undefined,whiteSpace:_lista?"nowrap":undefined,background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"7px 13px",fontSize:12,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:7,letterSpacing:-.1}}>
               {o.icoType==="cake" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/><line x1="8" y1="9" x2="8" y2="6"/><line x1="16" y1="9" x2="16" y2="6"/><line x1="12" y1="9" x2="12" y2="6"/></svg>}
               {o.icoType==="gift" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
               {o.icoType==="flag" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>}
@@ -21325,11 +21449,12 @@ function PageCalendarioInterno({isMob}){
         </div>
       </div>
 
-      {/* Grid do calendário */}
-      <CalendarGrid
+      {/* Grid do calendário (no celular do Meu Dashboard: lista por dia, mesmo renderDay) */}
+      <CalGradeOuLista
         WEEKDAYS={WEEKDAYS}
         days={calDays()}
         compact={true}
+        temAlgo={_lista?_diaTemAlgo:undefined}
         renderDay={function(date,i){
           if(!date)return null;
           // Dedup defensiva: se internal_event tem mesmo título do marco no mesmo dia, oculta o MARCO
@@ -21373,9 +21498,10 @@ function PageCalendarioInterno({isMob}){
               if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
             }}
             style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:_canCreateHere?"pointer":"default",position:"relative"}}>
-            <CalendarDayNumber day={date} isToday={isToday}/>
+            {/* na lista do celular o dia já aparece na coluna da esquerda */}
+            {!_lista&&<CalendarDayNumber day={date} isToday={isToday}/>}
             {/* Ghost card — wireframe estilo card que aparece no hover, posicionado APÓS os cards reais */}
-            {_canCreateHere&&<div data-ghost-evt aria-hidden="true"
+            {_canCreateHere&&!_lista&&<div data-ghost-evt aria-hidden="true"
               style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span>Novo evento</span>
@@ -23130,17 +23256,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                             {/* (22/09/2026) Selo de música: quem publica bate o olho no calendário e
                                 já sabe que a peça leva trilha — e QUAL dos dois jeitos.
                                 Mesmo desenho do selo do robô (PxSeloClaude): chip BRANCO com o ícone
-                                na cor do card. Rosa saía igual ao status "Agendar" e confundia, e a
-                                22px o desenho finalmente se lê (Rodrigo, 22/09). */}
+                                na cor do card. Rosa saía igual ao status "Agendar" e confundia.
+                                20x20 como TODOS os outros selos da fileira (status, robô, contador,
+                                Somente story) — a 22 ele saltava aos olhos do Rodrigo. */}
                             {(function(){
                               const _mm=String(t.musicaModo||t.musica_modo||(t.musica?"so":"")||"");
                               if(!_mm) return null;
                               const _baixo=_mm==="baixo";
                               return <span title={_baixo?"Música + áudio baixo — a música entra e o som do vídeo fica baixinho por trás":"Só a música — o áudio do vídeo sai e entra a trilha"}
-                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:6,background:"#fff",color:cardColor,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#fff",color:cardColor,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                                 {_baixo
-                                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3.4 9h3.7L12 4.4v15.2L7.1 15H3.4z" fill="currentColor" stroke="none"/><path d="M15.8 9.7a3.5 3.5 0 0 1 0 4.6"/></svg>
-                                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17.4V4.5l10.4-2.1v12.4"/><circle cx="6.1" cy="17.7" r="3" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.1" r="3" fill="currentColor" stroke="none"/></svg>}
+                                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M3.4 9h3.7L12 4.4v15.2L7.1 15H3.4z" fill="currentColor" stroke="none"/><path d="M15.8 9.7a3.5 3.5 0 0 1 0 4.6"/></svg>
+                                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 17.4V4.5l10.4-2.1v12.4"/><circle cx="6.1" cy="17.7" r="3" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.1" r="3" fill="currentColor" stroke="none"/></svg>}
                               </span>;
                             })()}
                             {(function(){
@@ -29678,6 +29805,35 @@ const _isVideoUrl=(u)=>typeof u==="string"&&_VIDEO_URL_RE.test(u);
 //   3) se falhar 2x, mostra fallback (controlado pelo pai via display:none nextElement)
 //   4) onLoad reseta display caso a img tenha aparecido depois de um retry tardio
 //   5) Se a URL for de vídeo, renderiza <video controls> em vez de <img>
+/* ═══ RÓTULO DA TAG EM NEGRITO DENTRO DO CAMPO (22/09/2026, Rodrigo) ═════════════════
+   "quando clica numa tag de instrução de alteração, coloca em negrito o texto da tag."
+
+   textarea não aceita negrito — é um campo de texto puro. Então o rótulo é engrossado
+   por um ESPELHO atrás do campo, que desenha só o CONTORNO das letras do rótulo
+   (-webkit-text-stroke) enquanto o texto de verdade continua sendo o do textarea por
+   cima. Contorno e não font-weight de propósito: negrito real muda a largura das letras,
+   o espelho quebraria linha em outro ponto e sairia do lugar do texto — do jeito que
+   está, as duas camadas têm métrica idêntica e o alinhamento não tem como escapar.
+
+   O recorte é o MESMO do _AJ_ACAO_RE lá do card, então o que fica grosso aqui é
+   exatamente o que vira tag escura na tela do designer. */
+const _AJ_FORTE = {color:"transparent", WebkitTextStroke:"0.62px #0f172a"};
+const _AJ_REALCE_LAM = /^(\s*\[\s*L[âa]mina[^\]\n]*\])/i;
+const _AJ_REALCE_ACAO = /^(\s*[•\-\*]\s*[^:\n]{2,42}?\s*:)/;
+function _ajRealceNodes(texto){
+  const linhas = String(texto||"").split("\n");
+  const out = [];
+  linhas.forEach(function(l, i){
+    if(i>0) out.push("\n");
+    let resto = l;
+    const mL = resto.match(_AJ_REALCE_LAM);
+    if(mL){ out.push(<span key={"l"+i} style={_AJ_FORTE}>{mL[1]}</span>); resto = resto.slice(mL[1].length); }
+    const mA = resto.match(_AJ_REALCE_ACAO);
+    if(mA){ out.push(<span key={"a"+i} style={_AJ_FORTE}>{mA[1]}</span>); resto = resto.slice(mA[1].length); }
+    if(resto) out.push(resto);
+  });
+  return out;
+}
 function _ApprovImg({src,idx,onFail,previewSrc}){
   const [tryNum,setTryNum]=useState(0); // 0 = original, 1 = retry1, 2 = falhou
   const [hidden,setHidden]=useState(false);
@@ -29988,6 +30144,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // Clicar insere/remove a linha "• Trocar foto: " no texto. A tag fica
   // destacada enquanto a linha existir (marcável), e o texto continua livre.
   const feedbackRef=useRef(null);
+  const feedbackBackRef=useRef(null);   // espelho que engrossa o rótulo da tag
   const _TAGS_IMG=["Trocar foto","Trocar título","Trocar texto","Corrigir ortografia","Trocar cor","Ajustar logo","Reposicionar elemento","Ajustar tamanho"];
   const _TAGS_VID=["Trocar trecho","Cortar trecho","Ajustar legenda","Ajustar áudio","Trocar trilha","Ajustar ritmo"];
   function _tagRe(lbl){
@@ -30007,6 +30164,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
     setTimeout(function(){
       const el=feedbackRef.current;
       if(el){ el.focus(); try{ el.selectionStart=el.selectionEnd=el.value.length; el.scrollTop=el.scrollHeight; }catch(_){} }
+      const bg=feedbackBackRef.current;
+      if(bg&&el){ try{ bg.scrollTop=el.scrollTop; }catch(_){} }
     },0);
   }
 
@@ -30705,12 +30864,23 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   })}
                 </div>;
               })()}
-              <textarea ref={feedbackRef} value={feedback} onChange={e=>setFeedback(e.target.value)}
-                placeholder="Clique nas tags acima ou escreva: trocar fundo verde por azul, centralizar o título, aumentar a logo no canto superior direito..."
-                rows={8}
-                style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13.5,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, box-shadow .15s",minHeight:180}}
-                onFocus={e=>{e.target.style.borderColor="#a140ff";e.target.style.boxShadow="0 0 0 3px rgba(161,64,255,0.1)";}}
-                onBlur={e=>{e.target.style.borderColor="#e5e7eb";e.target.style.boxShadow="none";}}/>
+              <div style={{position:"relative",background:"#fff",borderRadius:10}}>
+                {/* Espelho: mesma fonte, mesmo padding, mesma quebra de linha. Só o rótulo
+                    aparece, e só em contorno — o resto é transparente pra não pintar duas vezes. */}
+                <div ref={feedbackBackRef} aria-hidden="true"
+                  style={{position:"absolute",top:0,left:0,right:0,bottom:0,overflow:"hidden",pointerEvents:"none",
+                    border:"1px solid transparent",borderRadius:10,padding:"12px 14px",fontSize:13.5,lineHeight:1.55,
+                    boxSizing:"border-box",fontFamily:"inherit",whiteSpace:"pre-wrap",overflowWrap:"break-word",color:"transparent"}}>
+                  {_ajRealceNodes(feedback)}
+                </div>
+                <textarea ref={feedbackRef} value={feedback} onChange={e=>setFeedback(e.target.value)}
+                  onScroll={function(e){ const b=feedbackBackRef.current; if(b){ b.scrollTop=e.target.scrollTop; b.scrollLeft=e.target.scrollLeft; } }}
+                  placeholder="Clique nas tags acima ou escreva: trocar fundo verde por azul, centralizar o título, aumentar a logo no canto superior direito..."
+                  rows={8}
+                  style={{position:"relative",display:"block",width:"100%",background:"transparent",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13.5,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",overflowWrap:"break-word",transition:"border-color .15s, box-shadow .15s",minHeight:180}}
+                  onFocus={e=>{e.target.style.borderColor="#a140ff";e.target.style.boxShadow="0 0 0 3px rgba(161,64,255,0.1)";}}
+                  onBlur={e=>{e.target.style.borderColor="#e5e7eb";e.target.style.boxShadow="none";}}/>
+              </div>
             </div>
 
             {/* ═══ Comentários por tempo — SÓ vídeo (Frame.io style) ═══ */}
@@ -31631,7 +31801,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const _viraFeed=(patch&&Object.prototype.hasOwnProperty.call(patch,"somenteStory")&&!patch.somenteStory&&!!(task.somenteStory||task.somente_story))
                   ||(patch&&Object.prototype.hasOwnProperty.call(patch,"naoPublica")&&!patch.naoPublica&&!!(task.naoPublica||task.nao_publica));
     if(_viraFeed&&typeof pxCascataVarrer==="function"){
-      setTimeout(function(){ try{ pxCascataVarrer(); }catch(_e){ console.warn("[cascata varrer avaliacao]",_e); } },2500);
+      setTimeout(function(){ try{ pxCascataVarrer(task.id); }catch(_e){ console.warn("[cascata varrer avaliacao]",_e); } },2500);
     }
   };
 
@@ -37103,6 +37273,10 @@ function _pbPermItens(user, perms){
     const pc=_pbCadeiraPadrao(user,c.id);
     itens.push({key:"playbooks.cadeira."+c.id,nivel:"cadeira",cadeira:c.id,padrao:pc,label:c.label});
     (typeof PB_BLOCOS!=="undefined"?PB_BLOCOS:[]).forEach(bl=>{
+      /* (22/09/2026) A lista de blocos da cadeira virou o formato da cadeira: bloco que
+         não é daquele setor não aparece no playbook nem pro sócio. Ligar aqui não faria
+         efeito nenhum, então some do painel — interruptor morto engana quem administra. */
+      if(typeof _pbBlocoPadrao==="function" && !_pbBlocoPadrao(c.id,bl.id)) return;
       itens.push({key:"playbooks."+c.id+"."+bl.id,nivel:"bloco",cadeira:c.id,padrao:_pbBlocoPadrao(c.id,bl.id),label:bl.label});
     });
   });
@@ -43993,6 +44167,7 @@ async function pxRoteiro60(task, clienteNome){
         _ctxTxt+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(_pb.chamadas_proibidas)+"\n\n";
       if(typeof pxCtxRegrasTxt==="function") _ctxTxt+=pxCtxRegrasTxt((_ctx&&_ctx.regras)||[]);
       if(typeof pxCtxMateriaisTxt==="function") _ctxTxt+=pxCtxMateriaisTxt(_ctx);
+      if(typeof pxCtxProdutosFbTxt==="function") _ctxTxt+=pxCtxProdutosFbTxt(_ctx);
     }
   }catch(_){ _ctxTxt=""; }
   const usr="Cliente: "+(clienteNome||"—")+"\n"+
@@ -44839,8 +45014,20 @@ function _cardPodeSerResp(u){
        deixava a semana com um post a mais e ninguém reajustava. */
     const _viraFeed=(!somenteStory&&!!(task.somenteStory||task.somente_story))||(!naoPublica&&!!(task.naoPublica||task.nao_publica));
     const _mudouData=publishDate&&publishDate!==task.publishDate;
-    if(!task._isDraft&&(_viraFeed||_mudouData)&&!somenteStory&&!naoPublica&&typeof pxCascataVarrer==="function"){
-      setTimeout(function(){ try{ pxCascataVarrer(); }catch(_e){} },2500);
+    /* (22/09/2026, Rodrigo) "porque será um post collab, então a cadência tem que ser corrigida."
+       Trocar a unidade do card muda QUANTAS semanas ele ocupa: um post de Chapecó conta numa
+       unidade só; virando collab (Grupo Bioter / Bioter Brasil) ele passa a ocupar o dia das
+       CINCO unidades brasileiras de uma vez — e collab não anda, quem anda é a fila de cada
+       uma. Antes a varredura só acordava com mudança de data ou com o card saindo de story,
+       então "virou collab" deixava cinco semanas acima da cadência sem ninguém reajustar.
+       Vale também pra quem só troca de unidade ou de cliente. */
+    const _alvoDe=String((task.client||"")+"|"+((task.bioterUnit||task.bioter_unit)||""));
+    const _alvoPra=String((client||"")+"|"+(client==="bioter"?(bioterUnit||""):""));
+    const _mudouAlvo=_alvoDe!==_alvoPra;
+    if(!task._isDraft&&(_viraFeed||_mudouData||_mudouAlvo)&&!somenteStory&&!naoPublica&&typeof pxCascataVarrer==="function"){
+      /* O id vai junto: a data que a pessoa escolheu AQUI fica. Quem anda pra abrir espaço
+         é a fila, nunca o card que ela acabou de posicionar. */
+      setTimeout(function(){ try{ pxCascataVarrer(task.id); }catch(_e){} },2500);
     }
     _gravar();
     function _gravar(){
@@ -93006,6 +93193,70 @@ function _DGSec({title, sub, right, icon, accent}){
   </div>;
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  RECOLHER NO CELULAR — só o Meu Dashboard dos sócios (22/09/2026)
+//  Pedido do Rodrigo: no celular o Dashboard rolava "quase infinito".
+//  • COMPUTADOR: invisível. Devolve o conteúdo exatamente como era.
+//  • CELULAR: cada seção vira uma linha (ícone, título, uma frase e,
+//    quando existe, o número real). Toca, abre. Toca de novo, fecha.
+//    Começa fechado; o celular lembra o que ficou aberto.
+//    Seção que não tem nada pra mostrar não ganha linha vazia.
+//  A ordem no celular vem do "ordem" (CSS order) — o código não muda de lugar.
+// ═══════════════════════════════════════════════════════════════
+function _DGSecaoMob({mob, id, ordem, titulo, frase, pill, icone, cor, destaque, children}){
+  const _chave = "pixels-dash-mob-"+id;
+  const [aberta,setAberta] = useState(function(){
+    try{ return localStorage.getItem(_chave)==="1"; }catch(e){ return false; }
+  });
+  const [vazia,setVazia] = useState(false);
+  const caixa = useRef(null);
+  React.useLayoutEffect(function(){
+    if(!mob) return;
+    const el = caixa.current;
+    if(!el) return;
+    const ver = function(){ setVazia(el.childElementCount===0); };
+    ver();
+    let obs = null;
+    try{ obs = new MutationObserver(ver); obs.observe(el,{childList:true}); }catch(e){}
+    return function(){ if(obs) obs.disconnect(); };
+  },[mob]);
+
+  // computador: nada muda
+  if(!mob) return children===undefined ? null : children;
+
+  const c = cor || DG_PURPLE;
+  const trocar = function(){
+    const n = !aberta;
+    setAberta(n);
+    try{ localStorage.setItem(_chave, n?"1":"0"); }catch(e){}
+  };
+  const temPill = pill!==undefined && pill!==null && pill!=="";
+  return <div style={{order:ordem, display:vazia?"none":"block"}}>
+    <button type="button" onClick={trocar} aria-expanded={aberta}
+      style={{width:"100%",display:"flex",alignItems:"center",gap:11,
+              background:destaque?"linear-gradient(180deg,#faf7ff,#fff)":"#fff",
+              border:"1px solid "+(aberta?"#c4b5fd":(destaque?"#ddd0fb":"#e9ecf1")),
+              borderRadius:14,padding:"12px 13px",cursor:"pointer",fontFamily:DG_INTER,
+              textAlign:"left",WebkitTapHighlightColor:"transparent"}}>
+      <span style={{width:34,height:34,borderRadius:10,background:c+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n={icone} size={16} color={c}/>
+      </span>
+      <span style={{flex:1,minWidth:0,display:"block"}}>
+        <span style={{display:"block",color:"#0f172a",fontSize:14.5,fontWeight:700,letterSpacing:-.2,lineHeight:1.25}}>{titulo}</span>
+        {frase ? <span style={{display:"block",color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{frase}</span> : null}
+      </span>
+      {temPill && <span style={{background:c,color:"#fff",fontSize:12.5,fontWeight:800,padding:"4px 10px",borderRadius:99,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{pill}</span>}
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transform:aberta?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div ref={caixa} style={{display:aberta?"block":"none",marginTop:8}}>{children}</div>
+  </div>;
+}
+// Rótulo de grupo do recolher (só é desenhado no celular)
+function _DGGrupoMob({ordem, texto}){
+  return <div style={{order:ordem,color:"#94a3b8",fontSize:12,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",padding:"8px 4px 0",fontFamily:DG_INTER}}>{texto}</div>;
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 //  LINHA DO TEMPO DOS PROJETOS — onboarding de cada cliente (04/09/2026)
@@ -94675,7 +94926,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const sprintAtrasado  = sprintItems.filter(it=>it.status!=="concluido" && it.deadline && _dgDays(it.deadline)!==null && _dgDays(it.deadline)<0).length;
   const sprintEmAnd     = sprintItems.filter(it=>["producao","apv_int","apv_cli"].includes(it.status)).length;
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:isMob?8:14,fontFamily:DG_INTER}}>
 
     {/* ══════════ TÍTULO ÚNICO — sem indicadores genéricos ══════════ */}
     <div>
@@ -94687,8 +94938,12 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     {/* ══════════ NOVAS SOLICITAÇÕES DO PORTAL — some quando não há nada novo ══════════ */}
     <_DGPortalSolicitacoes isMob={isMob}/>
 
+    {/* ══════════ CELULAR: rótulos dos 2 grupos do recolher (no computador não aparecem) ══════════ */}
+    {isMob && <_DGGrupoMob ordem={2} texto="Pra fazer agora"/>}
+    {isMob && <_DGGrupoMob ordem={7} texto="Acompanhar"/>}
+
     {/* ══════════ LINHA DO TEMPO DOS PROJETOS — onboarding por cliente ══════════ */}
-    <_DGLinhaDoTempoProjetos isMob={isMob}/>
+    <_DGSecaoMob mob={isMob} id="linhatempo" ordem={8} titulo="Linha do tempo dos projetos" frase="Onboarding por cliente" icone="layers" cor="#64748b"><_DGLinhaDoTempoProjetos isMob={isMob}/></_DGSecaoMob>
 
     {/* ══════════ AVALIAÇÕES PENDENTES — filtrado por sócio (Vinicius=copys+vídeo+internas; Gustavo=design+internas) ══════════ */}
     {(function(){
@@ -94736,7 +94991,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         }catch(e){console.warn("[nav]",e);}
       }
 
-      return <div style={{background:bgGrad,border:"1px solid "+accent+"33",borderRadius:18,padding:isMob?"20px 22px":"24px 26px",boxShadow:"0 6px 22px "+accent+"15, 0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
+      return <_DGSecaoMob mob={isMob} id="avaliacoes" ordem={3} titulo="Avaliações pendentes" frase={cells.map(function(c){return c.l+" "+c.n;}).join(" · ")} icone="checkCircle" cor={accent} pill={totalMeus} destaque={true}>
+      <div style={{background:bgGrad,border:"1px solid "+accent+"33",borderRadius:18,padding:isMob?"20px 22px":"24px 26px",boxShadow:"0 6px 22px "+accent+"15, 0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
         {/* Faixa accent no topo */}
         <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,"+accent+","+accent+"cc)"}}/>
 
@@ -94788,13 +95044,16 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </button>;
           })}
         </div>
-      </div>;
+      </div>
+      </_DGSecaoMob>;
     })()}
 
     {/* ══════════ CALENDÁRIO INTERNO COMPLETO — movido de Demandas ══════════ */}
-    {typeof PageCalendarioInterno!=="undefined" && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-      <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
+    <_DGSecaoMob mob={isMob} id="calendario" ordem={5} titulo="Calendário interno" frase="Eventos, rituais e checkpoints" icone="calendar" cor="#2563eb">
+    {typeof PageCalendarioInterno!=="undefined" && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"14px 12px":"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <PageCalendarioInterno isMob={isMob} listaMobile={true} tasks={tasks} setTasks={setTasks}/>
     </div>}
+    </_DGSecaoMob>
 
     {/* Demandas internas SAIRAM daqui (08/2026) — unificadas em
         Estrategia > Clientes > (cliente) > Demandas, tabela client_demandas.
@@ -94808,7 +95067,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       const segLbl   = _dgFmtPrazoBR(_segIso);
       const wkLabel = "Sprints";
       const _hoje = sprintWeekOffset===0;
-      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
+      return <_DGSecaoMob mob={isMob} id="sprints" ordem={6} titulo="Sprints" frase={"Entregas de "+segLbl+" a "+sextaLbl} icone="flag" cor="#0ea5e9">
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
         <_DGSec icon="flag" title={wkLabel} sub={"Entregas de "+segLbl+" a "+sextaLbl+" — por cliente"} accent="#0ea5e9"
           right={<div style={{display:"inline-flex",alignItems:"center",gap:6}}>
             <button onClick={()=>setSprintWeekOffset(sprintWeekOffset-1)} title="Semana anterior"
@@ -95005,10 +95265,12 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             })}
           </div>;
         })()}
-      </div>;
+      </div>
+      </_DGSecaoMob>;
     })()}
 
     {/* ══════════ METAS DO DIA + METAS DA SEMANA — visual unificado ══════════ */}
+    <_DGSecaoMob mob={isMob} id="metas" ordem={4} titulo="Metas do dia e da semana" frase="Hoje e esta semana" icone="target" cor={DG_PURPLE}>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
       {/* METAS DO DIA */}
       <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column"}}>
@@ -95102,9 +95364,11 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         </div>}
       </div>
     </div>
+    </_DGSecaoMob>
 
 
     {/* ══════════ PLANEJAMENTO DA SEMANA — clean ══════════ */}
+    <_DGSecaoMob mob={isMob} id="planejamento" ordem={11} titulo="Planejamento da semana" frase="Rotina + metas adicionadas" icone="list" cor="#64748b">
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
       <_DGSec icon="calendar" title="Planejamento da semana" sub="Rotina personalizada + metas adicionadas"
         right={<div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -95201,8 +95465,10 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         })}
       </div>
     </div>
+    </_DGSecaoMob>
 
     {/* ══════════ MARCOS — histórico cronológico sincronizado entre sócios ══════════ */}
+    <_DGSecaoMob mob={isMob} id="checkpoints" ordem={12} titulo="Checkpoints" frase="O que entregamos pros clientes" icone="award" cor="#64748b">
     {(function(){
       // calMarcos já tem todos os marcos de todos os clientes (carregado no useEffect acima)
       const all = (calMarcos||[]).slice();
@@ -95310,13 +95576,15 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         }
       </section>;
     })()}
+    </_DGSecaoMob>
 
     {/* ══════════ PRODUÇÃO DOS CLIENTES — sync com Estratégia > Clientes > Produção ══════════ */}
-    <_DGProducaoDoMes tasks={tasks} isMob={isMob}/>
+    <_DGSecaoMob mob={isMob} id="producao" ordem={9} titulo="Produção do mês" frase="Por cliente" icone="kanban" cor="#64748b"><_DGProducaoDoMes tasks={tasks} isMob={isMob}/></_DGSecaoMob>
 
     {/* ══════════ ROTINA SEMANAL — itens fixos por dia ══════════ */}
-    <_DGRotinaSemanal user={user} isSocio={user.level===1}/>
+    <_DGSecaoMob mob={isMob} id="rotina" ordem={13} titulo="Rotina semanal" frase="Blocos de hora da semana" icone="clock" cor="#64748b"><_DGRotinaSemanal user={user} isSocio={user.level===1}/></_DGSecaoMob>
     {/* ══════════ RITUAIS — Daily / Weekly / Planejamentos ══════════ */}
+    <_DGSecaoMob mob={isMob} id="rituais" ordem={10} titulo="Rituais da agência" frase="Daily, Weekly e planejamentos" icone="refresh" cor="#64748b">
     {(function(){
       // Tick pra re-render quando outro user marca via realtime
       // (useState declarado uma vez no início do componente — ver _ritTick acima)
@@ -95444,6 +95712,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         }
       </section>;
     })()}
+    </_DGSecaoMob>
 
     {/* MODAL NOVA META */}
     {novaMeta && <_DGNovaMeta mode={novaMeta.mode||"semanal"} day={novaMeta.day} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(_dgPersistMeta(payload));setNovaMeta(null);}}/>}
@@ -95455,7 +95724,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       onDelete={(id)=>{if(typeof planRemove==="function")planRemove(id);setNovoSprint(null);}}/>}
 
     {/* ══════════ INDICADORES OPERACIONAIS — última seção do dash ══════════ */}
-    <_DGKpisSection allTasks={allTasks}/>
+    <_DGSecaoMob mob={isMob} id="indicadores" ordem={14} titulo="Indicadores da operação" frase="Estado atual da operação" icone="barChart" cor="#64748b"><_DGKpisSection allTasks={allTasks}/></_DGSecaoMob>
 
   </div>;
 }
@@ -97384,21 +97653,34 @@ function _pbProdutoUploadImg(pi, updFn){
 // é a VISÃO: cada cadeira enxerga só os blocos que precisa. Admin/Hellen alternam entre
 // as cadeiras por abas. Quem tem uma cadeira só (designer, editor, social, Erick) já
 // cai direto nela, sem abas.
+/* (22/09/2026, Rodrigo) "Feedbacks é SÓ Estratégia — e aqui no Playbooks pra nós deve
+   aparecer exatamente o que aparece pra cada pessoa do setor em específico."
+   Os dois blocos que ALIMENTAM o cérebro (pb-memoria e pb-materiais) ficam só na cadeira
+   Estratégia. Quem executa (social, design, vídeo, mídia) lê o playbook; quem ensina a IA
+   é a estratégia. Tirar daqui já esconde o bloco E o atalho na barra — a mesma lista
+   manda nos dois. */
 const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
-   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto","pb-memoria","pb-checklist"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
-   blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos","pb-checklist"]},
+   blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
-   blocos:["pb-sobre","pb-time","pb-processos","pb-equipe","pb-orientacoes-visuais","pb-contatos","pb-produtos","pb-checklist"]},
+   blocos:["pb-sobre","pb-time","pb-processos","pb-equipe","pb-orientacoes-visuais","pb-contatos","pb-produtos"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
-   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto","pb-memoria","pb-checklist"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto"]},
 ];
 // ═══ PERMISSÕES POR BLOCO (17/09/2026) ═══
 // Lista de TODOS os blocos do playbook (id + nome) — é o que aparece em
 // Acessos › Time › gerenciar acesso › Playbooks, cadeira por cadeira.
+/* (22/09/2026, Rodrigo) "quero dar uma limpada nesse visual do Playbooks: remover checklist,
+   esse materiais, documentos, links da sidebar que estão sendo pouco utilizados."
+   Saíram da tela o bloco Checklist e o bloco Materiais (links + documentos) da coluna da
+   direita; o Checklist saiu também da navegação e das permissões. Os DADOS continuam
+   gravados em playbooks.data (checklist, links, docs) — se um dia voltar, é só redesenhar.
+   Não confundir com "Materiais do cliente" (pb-materiais), que é o bloco NOVO do cérebro:
+   folder/manual que a IA lê pra escrever certo. É outro bicho e fica. */
 const PB_BLOCOS = [
   {id:"pb-sobre",               label:"Sobre a empresa"},
   {id:"pb-briefing-auto",       label:"Dados do Briefing"},
@@ -97416,7 +97698,6 @@ const PB_BLOCOS = [
   {id:"pb-orientacoes-visuais", label:"Orientações visuais"},
   {id:"pb-templates",           label:"Templates"},
   {id:"pb-processos",           label:"Processos técnicos de vídeo"},
-  {id:"pb-checklist",           label:"Checklist"},
 ];
 // Padrão FIXO (regra do sistema) — o que cada cadeira enxerga se ninguém mexeu.
 function _pbBlocoPadrao(cadeiraId, blocoId){
@@ -97447,6 +97728,14 @@ let _PB_PERMS_ATUAL = null;   // {user, perms} de quem está vendo (respeita "ve
 function _pbBlocoVisivel(id){
   if(!_PB_CADEIRA_ATUAL) return true;
   const padrao = _pbBlocoPadrao(_PB_CADEIRA_ATUAL, id);
+  /* (22/09/2026, Rodrigo) "no Playbooks pra nós deve aparecer exatamente o que aparece
+     pra cada pessoa do setor em específico."
+     A lista de blocos da cadeira NÃO é permissão — é o formato da cadeira. Bloco que não
+     é daquele setor não aparece nem pro sócio, porque pxPode devolve true pro nível 1
+     antes de olhar qualquer padrão: era por isso que o sócio abria "Social media" e via
+     o playbook inteiro, inclusive Feedbacks. O pxPode continua valendo pra TIRAR bloco de
+     alguém pelo painel de Acessos — nunca pra devolver bloco que a cadeira não tem. */
+  if(!padrao) return false;
   if(typeof pxPode!=="function") return padrao;
   return pxPode("playbooks."+_PB_CADEIRA_ATUAL+"."+id, padrao, _PB_PERMS_ATUAL||undefined);
 }
@@ -98042,10 +98331,15 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Guarda contra: (1) primeira render (não salvar valores iniciais),
   //                (2) troca de cliente/area (que reseta os states via useEffect).
   const _autosaveSkipRef = useRef(true);
+  /* Último nome NÃO VAZIO de cada posição da lista de produtos — âncora pro rename dos
+     feedbacks (ver pxProdFbRenomear). Guardar só o valor salvo não bastaria: apagar o
+     campo pra redigitar já quebraria a amarração no meio do caminho. */
+  const _prodNomeRef = useRef({});
   useEffect(function(){
     // Reset flag ao trocar cliente/area — a próxima mudança dos states
     // vem do useEffect de reset, não de edição do usuário.
     _autosaveSkipRef.current = true;
+    _prodNomeRef.current = {};
     const _t = setTimeout(function(){ _autosaveSkipRef.current = false; }, 500);
     return function(){ clearTimeout(_t); };
   },[cl.id, area]);
@@ -98059,6 +98353,22 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
         if(JSON.stringify(editContatos||{}) !== JSON.stringify(data.contatos||{})) _patch.contatos = editContatos;
         if(JSON.stringify(editContatosByUnit||{}) !== JSON.stringify(data.contatos_by_unit||{})) _patch.contatos_by_unit = editContatosByUnit;
         if(JSON.stringify(editProdutos||[]) !== JSON.stringify(data.produtos||[])) _patch.produtos = editProdutos;
+        /* Produto renomeado → leva os feedbacks junto. Conservador de propósito: só age
+           quando UM único nome mudou e o nome novo não é o de outro produto da lista.
+           Duas posições mudando de uma vez é reordenação/importação, não rename — e aí
+           renomear às cegas trocaria o aprendizado de produto. */
+        if(_patch.produtos && Array.isArray(data.produtos) && data.produtos.length===(editProdutos||[]).length){
+          const _nomeDe=function(p){ return String((p&&(p.nomePrincipalPt||p.nome))||"").trim(); };
+          const _antes=data.produtos.map(function(p,i){ return String(_prodNomeRef.current[i]||_nomeDe(p)).trim(); });
+          const _depois=(editProdutos||[]).map(_nomeDe);
+          const _mud=[];
+          _depois.forEach(function(n,i){ if(n!==_antes[i]) _mud.push(i); });
+          if(_mud.length===1){
+            const _i=_mud[0], _de=_antes[_i], _para=_depois[_i];
+            if(_de && _para && _antes.indexOf(_para)<0 && typeof pxProdFbRenomear==="function") pxProdFbRenomear(cl.id,_de,_para);
+          }
+          _depois.forEach(function(n,i){ if(n) _prodNomeRef.current[i]=n; });
+        }
         if(Object.keys(_patch).length > 0){
           onUpdate(_patch);
         }
@@ -98205,7 +98515,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Social", icon:"users"});
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
-  SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
   // Cadeira: só os atalhos dos blocos que ela enxerga
   const SECTIONS_VIS = SECTIONS.filter(function(sec){ return _pbBlocoVisivel(sec.id); });
 
@@ -98857,63 +99166,73 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
                         const _hasFilter = _isBioter && _unitTabProd;
                         const _viewUrls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
-                        return <div key={pi} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:16,display:"flex",gap:16,alignItems:"flex-start",boxShadow:"0 1px 2px rgba(15,23,42,.03)",transition:"box-shadow .15s, border-color .15s"}}
-                          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.06)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
-                          {_viewUrls.length>0
-                            ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
-                                {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
-                                  {_viewUrls.slice(1,5).map(function(_u,_ii){
-                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
-                                  })}
-                                  {_viewUrls.length>5 && <div onClick={function(){setProdLightbox({urls:_viewUrls, idx:5});}} style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800,cursor:"zoom-in"}}>+{_viewUrls.length-5}</div>}
-                                </div>}
-                              </div>
-                            : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
-                          }
-                          <div style={{flex:1,minWidth:0}}>
-                            {!_hasFilter && _isBioter && (unitObjs.length>0 || unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
-                              {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2}}>{u.pickerLabel||u.label}</span>;})}
-                              {unitsList.length===0 && <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase"}}>Todas as unidades</span>}
+                        // Parse defensivo dos apelidos — aceita string com vírgula OU array (legado)
+                        const _parseNomes=function(x){
+                          if(Array.isArray(x)) return x.filter(function(s){return s && String(s).trim();}).map(function(s){return String(s).trim();});
+                          if(typeof x==="string") return x.split(",").map(function(s){return s.trim();}).filter(Boolean);
+                          return [];
+                        };
+                        const _nomePt=prod.nomePrincipalPt||prod.nome||"";
+                        const _nomeEs=prod.nomePrincipalEs||"";
+                        const _outrosPt=_parseNomes(prod.nomesPt);
+                        const _outrosEs=_parseNomes(prod.nomesEs);
+                        // Espanhol só aparece quando a aba selecionada é Paraguay
+                        const _showEs = _isBioter && _unitTabProd==="paraguay";
+                        const _hasEs = _showEs && (_nomeEs||_outrosEs.length>0);
+                        const _rot={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:4};
+                        return <div key={pi} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.04)",transition:"box-shadow .15s, border-color .15s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,.07)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.04)";}}>
+
+                          {/* Cabeçalho da ficha — nome grande, apelidos logo abaixo, unidades à direita */}
+                          <div style={{display:"flex",alignItems:"flex-start",gap:11,padding:"13px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,#fcfcfd 0%,#ffffff 100%)"}}>
+                            <span style={{width:3,alignSelf:"stretch",minHeight:36,borderRadius:99,background:"#f59e0b",flexShrink:0}}/>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{color:"#b45309",fontSize:9,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",marginBottom:3}}>Ficha técnica</div>
+                              <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.35,lineHeight:1.2,wordBreak:"break-word"}}>{_nomePt||"(sem nome)"}</div>
+                              {_outrosPt.length>0 && <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>também chamado de {_outrosPt.join(" · ")}</div>}
+                            </div>
+                            {!_hasFilter && _isBioter && (unitObjs.length>0||unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"46%",flexShrink:0}}>
+                              {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2,whiteSpace:"nowrap"}}>{u.pickerLabel||u.label}</span>;})}
+                              {unitsList.length===0 && <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase",whiteSpace:"nowrap"}}>Todas as unidades</span>}
                             </div>}
-                            {(function(){
-                              const _nomePt=prod.nomePrincipalPt||prod.nome||"";
-                              const _nomeEs=prod.nomePrincipalEs||"";
-                              // Parse defensivo — aceita string com vírgula OU array (legado)
-                              const _parseNomes=function(x){
-                                if(Array.isArray(x)) return x.filter(function(s){return s && String(s).trim();}).map(function(s){return String(s).trim();});
-                                if(typeof x==="string") return x.split(",").map(function(s){return s.trim();}).filter(Boolean);
-                                return [];
-                              };
-                              const _outrosPt=_parseNomes(prod.nomesPt);
-                              const _outrosEs=_parseNomes(prod.nomesEs);
-                              const _hasPt=_nomePt||_outrosPt.length>0;
-                              // Espanhol só aparece quando aba selecionada é Paraguay
-                              const _showEs = _isBioter && _unitTabProd==="paraguay";
-                              const _hasEs=_showEs && (_nomeEs||_outrosEs.length>0);
-                              if(!_hasPt && !_hasEs) return <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>(sem nome)</div>;
-                              return <div style={{display:"grid",gridTemplateColumns:(_hasPt&&_hasEs)?"1fr 1fr":"1fr",gap:10}}>
-                                {_hasPt && <div style={{background:"#f0fdf4",border:"1px solid #86efac",borderRadius:9,padding:"9px 11px"}}>
-                                  <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:5,fontSize:10,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
-                                    <svg width="14" height="10" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
-                                    Português
-                                  </div>
-                                  <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,lineHeight:1.25}}>{_nomePt||"—"}</div>
-                                  {_outrosPt.length>0 && <div style={{color:"#475569",fontSize:11.5,fontWeight:500,marginTop:3,lineHeight:1.4}}>{_outrosPt.join(" · ")}</div>}
-                                </div>}
-                                {_hasEs && <div style={{background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:9,padding:"9px 11px"}}>
-                                  <div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:5,fontSize:10,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
-                                    <svg width="14" height="10" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                                    Español
-                                  </div>
-                                  <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,lineHeight:1.25,fontStyle:"italic"}}>{_nomeEs||"—"}</div>
-                                  {_outrosEs.length>0 && <div style={{color:"#475569",fontSize:11.5,fontWeight:500,marginTop:3,lineHeight:1.4,fontStyle:"italic"}}>{_outrosEs.join(" · ")}</div>}
-                                </div>}
-                              </div>;
-                            })()}
-                            {prod.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.5,marginTop:8}}>{prod.descricao}</div>}
                           </div>
+
+                          {/* Corpo da ficha — foto grande + os campos, cada um com sua etiqueta */}
+                          <div style={{display:"flex",gap:16,alignItems:"flex-start",padding:16,flexWrap:"wrap"}}>
+                            {_viewUrls.length>0
+                              ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                                  <img src={_viewUrls[0]} alt={_nomePt||""} referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
+                                  {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
+                                    {_viewUrls.slice(1,5).map(function(_u,_ii){
+                                      return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
+                                    })}
+                                    {_viewUrls.length>5 && <div onClick={function(){setProdLightbox({urls:_viewUrls, idx:5});}} style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800,cursor:"zoom-in"}}>+{_viewUrls.length-5}</div>}
+                                  </div>}
+                                </div>
+                              : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
+                            }
+                            <div style={{flex:1,minWidth:210,display:"flex",flexDirection:"column",gap:12}}>
+                              {_hasEs && <div>
+                                <div style={Object.assign({},_rot,{color:"#9a3412",display:"inline-flex",alignItems:"center",gap:5})}>
+                                  <svg width="14" height="10" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
+                                  Nome em espanhol
+                                </div>
+                                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.15,lineHeight:1.3,fontStyle:"italic"}}>{_nomeEs||"—"}</div>
+                                {_outrosEs.length>0 && <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,marginTop:2,lineHeight:1.4,fontStyle:"italic"}}>{_outrosEs.join(" · ")}</div>}
+                              </div>}
+                              <div>
+                                <div style={_rot}>O que é</div>
+                                {prod.descricao
+                                  ? <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,wordBreak:"break-word"}}>{prod.descricao}</div>
+                                  : <div style={{color:"#cbd5e1",fontSize:12.5,fontStyle:"italic"}}>Sem descrição ainda — entra pelo Editar.</div>}
+                              </div>
+                              {_hasFilter && unitsList.length===0 && <div style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>Vale pra todas as unidades.</div>}
+                            </div>
+                          </div>
+
+                          {/* Rodapé da ficha — o que a agência já aprendeu sobre ESTE produto */}
+                          <_PbProdFb clientId={cl.id} produto={_nomePt} unidade={_hasFilter?_unitTabProd:""} isAdmin={isAdmin}/>
                         </div>;
                       })}
                     </div>
@@ -99008,7 +99327,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <PbMini icon="building" label="Cliente" value={cl.name}/>
               {cl.sector && <PbMini icon="tag" label="Setor" value={cl.sector}/>}
               <PbMini icon={areaCfg.icon} label="Área" value={areaCfg.label}/>
-              <PbMini icon="checkCircle" label="Checklist" value={totalCheck>0?(doneCheck+"/"+totalCheck+" conferidos"):"sem itens"}/>
             </div>
           </div>
 
@@ -99044,365 +99362,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               }
             </div>;
           })()}
-
-          {/* Checklist com progresso */}
-          {_pbBlocoVisivel("pb-checklist") && <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg,#334155 0%,#0f172a 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(15,23,42,.28)"}}>
-                <Ico n="checkCircle" size={17} color="#fff"/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
-                <div style={{color:"#64748b",fontSize:11,marginTop:1,fontWeight:600}}>antes de entregar</div>
-              </div>
-            </div>
-
-            {editMode
-              ? (function(){
-                  const _items = (editChk||"").split("\n").map(s=>s).filter(()=>true);
-                  // Garantir pelo menos uma linha vazia
-                  const _list = _items.length===0 ? [""] : _items;
-                  return <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                    {_list.map(function(item, idx){
-                      return <div key={idx} style={{display:"flex",alignItems:"center",gap:7}}>
-                        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,minWidth:18,textAlign:"center"}}>{idx+1}</div>
-                        <input type="text" value={item}
-                          placeholder="Conferi o..."
-                          onChange={function(e){
-                            const _v = e.target.value;
-                            const _arr = _list.slice();
-                            _arr[idx] = _v;
-                            setEditChk(_arr.join("\n"));
-                          }}
-                          onKeyDown={function(e){
-                            if(e.key==="Enter"){
-                              e.preventDefault();
-                              const _arr = _list.slice();
-                              _arr.splice(idx+1, 0, "");
-                              setEditChk(_arr.join("\n"));
-                            }
-                          }}
-                          style={{flex:1,background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",color:PB_INK,fontSize:13,outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"}}/>
-                        <button type="button" onClick={function(){
-                          const _arr = _list.slice();
-                          _arr.splice(idx,1);
-                          setEditChk(_arr.join("\n"));
-                        }} title="Remover" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,borderRadius:7,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
-                          onMouseEnter={e=>{e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
-                          onMouseLeave={e=>{e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
-                          <Ico n="trash" size={13}/>
-                        </button>
-                      </div>;
-                    })}
-                    <button type="button" onClick={function(){
-                      const _arr = _list.slice();
-                      _arr.push("");
-                      setEditChk(_arr.join("\n"));
-                    }} style={{marginTop:3,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:9,padding:"8px 12px",color:PB_PURPLE_DK,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
-                      <Ico n="plus" size={12}/> Adicionar item
-                    </button>
-                  </div>;
-                })()
-              : totalCheck === 0
-                ? <_PbEmpty icon="checkCircle" text="Sem checklist cadastrado."/>
-                : <>
-                    {/* Barra de progresso */}
-                    <div style={{marginBottom:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                        <span style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>Progresso</span>
-                        <span style={{color:allDone?"#15803d":PB_INK,fontSize:12,fontWeight:800}}>{doneCheck}/{totalCheck}</span>
-                      </div>
-                      <div style={{height:7,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                        <div style={{width:(totalCheck?Math.round(100*doneCheck/totalCheck):0)+"%",height:"100%",background:allDone?"linear-gradient(90deg, #16a34a, #22c55e)":"linear-gradient(90deg, "+PB_PURPLE+", "+PB_PURPLE_DK+")",transition:"width .25s"}}/>
-                      </div>
-                    </div>
-
-                    {/* Itens */}
-                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                      {checklistArr.map((item,i)=>{
-                        const on = !!checks[i];
-                        return <div key={i} onClick={()=>toggleCheck(i)}
-                          style={{display:"flex",alignItems:"flex-start",gap:9,padding:"7px 8px",borderRadius:9,cursor:"pointer",background:on?"#f0fdf4":"transparent",transition:"background .15s"}}
-                          onMouseEnter={e=>{if(!on)e.currentTarget.style.background="#f8fafc";}}
-                          onMouseLeave={e=>{if(!on)e.currentTarget.style.background="transparent";}}>
-                          <div style={{width:18,height:18,borderRadius:6,border:on?"2px solid #16a34a":"2px solid #cbd5e1",background:on?"#16a34a":"#fff",flexShrink:0,marginTop:1,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>
-                            {on && <Ico n="check" size={11} color="#fff"/>}
-                          </div>
-                          <span style={{color:on?"#15803d":PB_TEXT,fontSize:12.5,lineHeight:1.45,fontWeight:on?600:500,textDecoration:on?"line-through":"none",textDecorationColor:"#86efac"}}>{item}</span>
-                        </div>;
-                      })}
-                    </div>
-
-                    {/* Banner "Tudo conferido" */}
-                    {allDone && <div style={{marginTop:12,background:"linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)",border:"1px solid #86efac",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:9}}>
-                      <div style={{width:30,height:30,borderRadius:8,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <Ico n="check" size={15} color="#fff"/>
-                      </div>
-                      <div>
-                        <div style={{color:"#14532d",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>Tudo conferido!</div>
-                        <div style={{color:"#166534",fontSize:10.5,marginTop:1,fontWeight:600}}>Pode mandar pra aprovação.</div>
-                      </div>
-                    </div>}
-                  </>
-            }
-          </div>}
-
-          {/* Materiais (Links + Documentos) */}
-          <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(99,102,241,.32)"}}>
-                <Ico n="folder" size={16} color="#fff"/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Materiais</div>
-                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>links e documentos do cliente</div>
-              </div>
-            </div>
-
-            {/* ── Sub-seção LINKS ── */}
-            <div style={{marginBottom:14}}>
-              <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-                <Ico n="link" size={11} color={PB_MUTE}/>Links
-              </div>
-              {refs.length === 0
-                ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:10,padding:"12px",textAlign:"center"}}>
-                    <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600}}>Nenhum link ainda</div>
-                    {isAdmin && <button onClick={()=>{
-                        const url = prompt("URL do link:");
-                        if(!url) return;
-                        const title = prompt("Título (opcional):") || url;
-                        onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
-                      }} style={{marginTop:8,background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
-                      <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar link
-                    </button>}
-                  </div>
-                : <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    {refs.map((r,i)=>(
-                      <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
-                        style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 10px",textDecoration:"none",display:"flex",alignItems:"center",gap:8,transition:"all .15s"}}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background=PB_PURPLE_BG;}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
-                        <Ico n="link" size={12} color={PB_PURPLE}/>
-                        <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
-                          <div style={{color:PB_INK,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title||r.url}</div>
-                          {r.title && <div style={{color:PB_SOFT,fontSize:9.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.url}</div>}
-                        </div>
-                        {isAdmin && <button onClick={(e)=>{e.preventDefault();e.stopPropagation(); if(confirm("Remover este link?")) onUpdateArea({refs:refs.filter((_,j)=>j!==i)});}} title="Remover"
-                          style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:PB_SOFT}}>
-                          <Ico n="x" size={11} color="currentColor"/>
-                        </button>}
-                      </a>
-                    ))}
-                    {isAdmin && <button onClick={()=>{
-                        const url = prompt("URL do link:");
-                        if(!url) return;
-                        const title = prompt("Título (opcional):") || url;
-                        onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
-                      }} style={{marginTop:2,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                      <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar link
-                    </button>}
-                  </div>
-              }
-            </div>
-
-            {/* ── Sub-seção DOCUMENTOS (uploads pra Supabase) ── */}
-            <div>
-              <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-                <Ico n="file" size={11} color={PB_MUTE}/>Documentos
-              </div>
-              {(()=>{
-                // Helpers
-                const _docExt = (name)=>{const m=String(name||"").match(/\.([a-z0-9]{1,5})$/i); return m?m[1].toLowerCase():"";};
-                const _docColor = (ext)=>{
-                  const m={pdf:"#dc2626",doc:"#2563eb",docx:"#2563eb",xls:"#16a34a",xlsx:"#16a34a",ppt:"#ea580c",pptx:"#ea580c",png:"#7c3aed",jpg:"#7c3aed",jpeg:"#7c3aed",zip:"#475569",txt:"#7c3aed"};
-                  return m[ext]||"#64748b";
-                };
-                const _fmtSize=(b)=>{if(!b)return"";const k=1024;if(b<k)return b+" B";if(b<k*k)return (b/k).toFixed(1)+" KB";return (b/k/k).toFixed(1)+" MB";};
-
-                // === Upload de arquivo ===
-                const _uploadDoc = async (file, title)=>{
-                  if(!file) return;
-                  try{
-                    const sb=window._sb;
-                    const ext=_docExt(file.name);
-                    const key="playbooks/"+(cl.id||"_")+"/"+area+"/"+Date.now()+"-"+file.name.replace(/[^a-z0-9._-]/gi,"_");
-                    const {error:upErr} = await sb.storage.from("agency-files").upload(key, file, {contentType:file.type||"application/octet-stream", upsert:false});
-                    if(upErr){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro no upload: "+upErr.message); return;}
-                    const {data:pub} = sb.storage.from("agency-files").getPublicUrl(key);
-                    const newDoc={
-                      id:"doc-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
-                      kind:"file",
-                      title:(title||file.name).trim(),
-                      fileName:file.name,
-                      url:pub?.publicUrl||"",
-                      storagePath:key,
-                      size:file.size||0,
-                      ext:ext,
-                      type:file.type||"",
-                      at:new Date().toISOString(),
-                    };
-                    onUpdateArea({docs:[newDoc,...docs]});
-                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento adicionado.");
-                  }catch(e){
-                    if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
-                  }
-                };
-                const _onPickFile = (e)=>{
-                  const file = e.target.files?.[0];
-                  if(!file) return;
-                  const title = prompt("Título do documento (opcional):", file.name) || file.name;
-                  _uploadDoc(file, title);
-                  e.target.value="";
-                };
-
-                // === Criar/Editar documento de texto inline ===
-                // _txtOpen/_setTxtOpen vêm do escopo do componente (hooks no topo)
-                // null=fechado, {} = novo, {id,...} = editando
-
-                const _newText = ()=>{
-                  _setTxtOpen({id:"", title:"", body:""});
-                };
-                const _editText = (d)=>{
-                  _setTxtOpen({id:d.id, title:d.title||"", body:d.body||""});
-                };
-                const _saveText = ()=>{
-                  const t = (_txtOpen.title||"").trim();
-                  const b = (_txtOpen.body||"").trim();
-                  if(!t){
-                    if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título.");
-                    return;
-                  }
-                  if(_txtOpen.id){
-                    // editar existente
-                    const next = docs.map(x=>x.id===_txtOpen.id?{...x,title:t,body:b,updatedAt:new Date().toISOString()}:x);
-                    onUpdateArea({docs:next});
-                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento atualizado.");
-                  }else{
-                    // criar novo
-                    const newDoc = {
-                      id:"doc-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
-                      kind:"text",
-                      title:t,
-                      body:b,
-                      at:new Date().toISOString(),
-                    };
-                    onUpdateArea({docs:[newDoc,...docs]});
-                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento criado.");
-                  }
-                  _setTxtOpen(null);
-                };
-
-                // === Remover ===
-                const _removeDoc = async (d)=>{
-                  if(!confirm("Remover '"+(d.title||d.fileName)+"'?")) return;
-                  try{
-                    if(d.storagePath){
-                      const sb=window._sb;
-                      await sb.storage.from("agency-files").remove([d.storagePath]).catch(()=>{});
-                    }
-                  }catch(e){}
-                  onUpdateArea({docs:docs.filter(x=>x.id!==d.id)});
-                  if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento removido.");
-                };
-
-                return <>
-                  {docs.length===0
-                    ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:10,padding:"12px",textAlign:"center"}}>
-                        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600,marginBottom:8}}>Nenhum documento ainda</div>
-                        {isAdmin && <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap"}}>
-                          <button onClick={_newText} style={{background:PB_PURPLE,border:"none",borderRadius:7,padding:"5px 11px",color:"#fff",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
-                            <Ico n="plus" size={10} color="#fff"/> Documento de texto
-                          </button>
-                          <label style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
-                            <Ico n="plus" size={10} color={PB_PURPLE}/> Anexar arquivo
-                            <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
-                          </label>
-                        </div>}
-                      </div>
-                    : <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {docs.map(d=>{
-                          const isText = d.kind==="text";
-                          const cor = isText ? PB_PURPLE : _docColor(d.ext);
-                          const tag = isText ? "TXT" : (d.ext||"DOC");
-                          return <div key={d.id}
-                            style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:8,transition:"all .15s"}}
-                            onMouseEnter={e=>{e.currentTarget.style.borderColor=cor;e.currentTarget.style.background=cor+"08";}}
-                            onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
-                            <div style={{width:24,height:24,borderRadius:6,background:cor+"18",color:cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
-                              {tag}
-                            </div>
-                            <div style={{flex:1,minWidth:0,overflow:"hidden",cursor:isText?"pointer":"default"}}
-                              onClick={isText?()=>_editText(d):null}>
-                              <div style={{color:PB_INK,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.title||d.fileName}</div>
-                              <div style={{color:PB_SOFT,fontSize:9.5,marginTop:1,display:"flex",alignItems:"center",gap:6}}>
-                                {!isText && d.size>0 && <span>{_fmtSize(d.size)}</span>}
-                                {isText && d.body && <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(d.body).slice(0,40)}{d.body.length>40?"…":""}</span>}
-                                {d.at && <span>{new Date(d.at).toLocaleDateString("pt-BR")}</span>}
-                              </div>
-                            </div>
-                            {!isText && <a href={d.url} target="_blank" rel="noopener noreferrer" title="Abrir/baixar"
-                              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:5,color:PB_PURPLE,textDecoration:"none",display:"inline-flex"}}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            </a>}
-                            {isText && isAdmin && <button onClick={()=>_editText(d)} title="Editar texto"
-                              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:5,color:PB_PURPLE,display:"inline-flex"}}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>}
-                            {isAdmin && <button onClick={()=>_removeDoc(d)} title="Remover"
-                              style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:PB_SOFT}}>
-                              <Ico n="x" size={11} color="currentColor"/>
-                            </button>}
-                          </div>;
-                        })}
-                        {isAdmin && <div style={{display:"flex",gap:5,marginTop:2}}>
-                          <button onClick={_newText} style={{flex:1,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                            <Ico n="plus" size={10} color={PB_PURPLE}/> Documento de texto
-                          </button>
-                          <label style={{flex:1,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                            <Ico n="plus" size={10} color={PB_PURPLE}/> Anexar arquivo
-                            <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
-                          </label>
-                        </div>}
-                      </div>
-                  }
-
-                  {/* === Modal Documento de Texto === */}
-                  {_txtOpen && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
-                    onClick={()=>_setTxtOpen(null)}>
-                    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:640,boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden",fontFamily:PB_INTER,display:"flex",flexDirection:"column",maxHeight:"85vh"}}>
-                      <div style={{background:"linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",padding:"16px 20px",color:"#fff"}}>
-                        <div style={{fontSize:14,fontWeight:800,letterSpacing:-.2}}>{_txtOpen.id?"Editar documento":"Novo documento de texto"}</div>
-                        <div style={{fontSize:11,opacity:.85,marginTop:1}}>Notas, decisões, ideias — escreva tudo aqui sem precisar subir arquivo</div>
-                      </div>
-                      <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:11,overflow:"auto",flex:1}}>
-                        <div>
-                          <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
-                          <input value={_txtOpen.title} onChange={e=>_setTxtOpen(p=>({...p,title:e.target.value}))}
-                            placeholder="Ex: Ata reunião Meta 30/06" autoFocus
-                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,color:PB_INK,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
-                        </div>
-                        <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-                          <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Conteúdo</div>
-                          <_PbAutoTextarea value={_txtOpen.body} onChange={e=>_setTxtOpen(p=>({...p,body:e.target.value}))}
-                            placeholder="Escreva aqui as decisões da reunião, pontos discutidos, próximos passos, ideias..."
-                            rows={12}
-                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"10px 12px",fontSize:13,color:PB_INK,fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box",lineHeight:1.6,minHeight:220}}/>
-                        </div>
-                      </div>
-                      <div style={{padding:"12px 20px",borderTop:"1px solid "+PB_BORDER,display:"flex",justifyContent:"flex-end",gap:8}}>
-                        <button onClick={()=>_setTxtOpen(null)}
-                          style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 14px",color:PB_MUTE,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-                        <button onClick={_saveText}
-                          style={{background:PB_PURPLE,border:"none",borderRadius:8,padding:"7px 18px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>
-                          Salvar
-                        </button>
-                      </div>
-                    </div>
-                  </div>}
-                </>;
-              })()}
-            </div>
-          </div>
 
         </div>
       </div>
@@ -99789,6 +99748,207 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       </div>
     </div>}
   </PlaybookBlock>;
+}
+
+/* ═══ FEEDBACK POR PRODUTO (22/09/2026, Rodrigo) ═══════════════════════════════════
+   "além do resumo de cada produto, nós vamos passando feedbacks de cada produto e assim
+    conseguimos ir aumentando o seu aprendizado."
+
+   Mesma mecânica do bloco Feedbacks, só que amarrada a UM produto da ficha. Vai pra
+   claude_produto_feedback e volta pro cérebro pela _claude_ctx_prod_fb — bloco "O QUE A
+   AGÊNCIA JÁ APRENDEU SOBRE CADA PRODUTO" em toda copy, briefing e roteiro do cliente.
+
+   Uma ficha renderiza um _PbProdFb; um cliente tem dezenas de fichas. Se cada uma
+   consultasse sozinha seriam dezenas de consultas idênticas ao abrir a aba — por isso a
+   lista do cliente é lida UMA vez e fica neste cache de módulo, e cada ficha só filtra a
+   sua parte. Salvou/apagou/desligou, recarrega a lista e avisa todas as fichas. */
+const _PB_PFB = {lista:{}, indo:{}, erro:{}, subs:[]};
+function _pbPfbAvisar(){ _PB_PFB.subs.slice().forEach(function(f){ try{f();}catch(_){} }); }
+function _pbPfbLer(clientId, recarregar){
+  if(!clientId) return;
+  if(!recarregar && (_PB_PFB.lista[clientId] || _PB_PFB.indo[clientId])) return;
+  _PB_PFB.indo[clientId]=true;
+  (async function(){
+    try{
+      const sb=window._sb;
+      if(!sb){ _PB_PFB.lista[clientId]=[]; }
+      else{
+        const {data,error}=await sb.from("claude_produto_feedback")
+          .select("id,produto,feedback,autor,unidade,ativo,criado_em")
+          .eq("client_id",clientId).order("criado_em",{ascending:false});
+        if(error) throw error;
+        _PB_PFB.lista[clientId]=Array.isArray(data)?data:[];
+        _PB_PFB.erro[clientId]="";
+      }
+    }catch(e){
+      _PB_PFB.lista[clientId]=_PB_PFB.lista[clientId]||[];
+      _PB_PFB.erro[clientId]=(e&&e.message)||String(e);
+    }
+    _PB_PFB.indo[clientId]=false;
+    _pbPfbAvisar();
+  })();
+}
+/* O feedback guarda o NOME do produto (texto), não um id — produto mora dentro do
+   playbooks.data, não tem tabela própria. Então a amarração é pelo nome normalizado,
+   senão "Cisterna de Estrutura " e "cisterna de estrutura" viram produtos diferentes. */
+function _pbProdChave(s){
+  return String(s||"").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/\s+/g," ").trim();
+}
+function _pbUniLabel(u){
+  if(!u) return "Todas as unidades";
+  if(typeof BIOTER_UNITS==="undefined") return u;
+  const x=BIOTER_UNITS.find(function(b){return b.id===u;});
+  return x?(x.pickerLabel||x.label):u;
+}
+/* Renomeou o produto no Editar? O aprendizado vai junto. A amarração é pelo NOME, então
+   sem isso "Cisterna metálica" → "Cisterna de estrutura" (aconteceu em 22/09) deixaria os
+   feedbacks órfãos — a IA continuaria sem saber deles. Lê direto do banco em vez do cache
+   porque no modo Editar as fichas não renderizam e o cache pode estar vazio. */
+async function pxProdFbRenomear(clientId, de, para){
+  try{
+    const sb=window._sb;
+    const _de=_pbProdChave(de), _para=String(para||"").trim();
+    if(!sb||!clientId||!_de||!_para) return;
+    const {data:rows,error}=await sb.from("claude_produto_feedback")
+      .select("id,produto").eq("client_id",clientId);
+    if(error) throw error;
+    const alvos=(Array.isArray(rows)?rows:[]).filter(function(x){return _pbProdChave(x.produto)===_de;});
+    if(!alvos.length) return;
+    const {error:e2}=await sb.from("claude_produto_feedback")
+      .update({produto:_para}).in("id",alvos.map(function(x){return x.id;}));
+    if(e2) throw e2;
+    _pbPfbLer(clientId,true);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(alvos.length+" feedback"+(alvos.length===1?"":"s")+" seguiram pro novo nome do produto.",3200);
+  }catch(e){ console.warn("[prodfb rename]",e); }
+}
+function _PbProdFb({clientId, produto, unidade, isAdmin}){
+  const [,_tick]=useState(0);
+  const [abrir,setAbrir]=useState(false);
+  const [txt,setTxt]=useState("");
+  const [soNaUni,setSoNaUni]=useState(false);
+  const [salvando,setSalvando]=useState(false);
+  useEffect(function(){
+    const f=function(){ _tick(function(n){return n+1;}); };
+    _PB_PFB.subs.push(f);
+    _pbPfbLer(clientId);
+    return function(){ const i=_PB_PFB.subs.indexOf(f); if(i>=0) _PB_PFB.subs.splice(i,1); };
+  },[clientId]);
+  const _chave=_pbProdChave(produto);
+  const _todos=_PB_PFB.lista[clientId];
+  const itens=(_chave&&Array.isArray(_todos))?_todos.filter(function(x){return _pbProdChave(x.produto)===_chave;}):[];
+  const _ativos=itens.filter(function(x){return x.ativo;}).length;
+  const salvar=async function(){
+    const _t=String(txt||"").trim();
+    if(!_t||!clientId||!_chave) return;
+    setSalvando(true);
+    try{
+      const sb=window._sb; if(!sb) throw new Error("sem conexão");
+      const _quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)?CURRENT_USER.name:"";
+      const {error}=await sb.from("claude_produto_feedback").insert({
+        client_id:clientId,
+        unidade:(soNaUni&&unidade)?String(unidade):"",
+        produto:String(produto||"").trim(),
+        feedback:_t, autor:_quem, ativo:true});
+      if(error) throw error;
+      setTxt(""); setAbrir(false); setSoNaUni(false);
+      _pbPfbLer(clientId,true);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Feedback salvo. A IA já escreve sabendo disso quando falar deste produto.",3400);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não salvou: "+((e&&e.message)||e)); }
+    setSalvando(false);
+  };
+  const alternar=async function(it){
+    try{
+      const sb=window._sb; if(!sb) return;
+      const {error}=await sb.from("claude_produto_feedback").update({ativo:!it.ativo}).eq("id",it.id);
+      if(error) throw error;
+      _pbPfbLer(clientId,true);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não mudou: "+((e&&e.message)||e)); }
+  };
+  const apagar=async function(it){
+    try{
+      if(typeof pixelsConfirm==="function"){
+        const ok=await pixelsConfirm("Apagar este feedback de vez? Pra só tirar do cérebro, use o interruptor.",{danger:true});
+        if(!ok) return;
+      }
+      const sb=window._sb; if(!sb) return;
+      const {error}=await sb.from("claude_produto_feedback").delete().eq("id",it.id);
+      if(error) throw error;
+      _pbPfbLer(clientId,true);
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não apagou: "+((e&&e.message)||e)); }
+  };
+  const _pill={borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap"};
+  return <div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:"11px 16px 13px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{display:"inline-flex",alignItems:"center",gap:6,color:PB_PURPLE_DK,fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>
+        <Ico n="message" size={11} color={PB_PURPLE_DK}/>Aprendizado deste produto
+      </span>
+      {itens.length>0 && <span style={Object.assign({},_pill,{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #ede9fe"})}>
+        {_ativos} no cérebro{itens.length>_ativos?(" · "+(itens.length-_ativos)+" fora"):""}
+      </span>}
+      <span style={{flex:1}}/>
+      {isAdmin && !abrir && <button type="button" onClick={function(){setAbrir(true);}}
+        style={{background:"#fff",border:"1px solid "+PB_PURPLE_BD,borderRadius:99,padding:"4px 12px",color:PB_PURPLE_DK,fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}
+        onMouseEnter={function(e){e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.borderColor=PB_PURPLE;}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_PURPLE_BD;}}>
+        <Ico n="plus" size={11} color={PB_PURPLE_DK}/>Feedback
+      </button>}
+    </div>
+
+    {_PB_PFB.erro[clientId] && <div style={{color:"#b91c1c",fontSize:11,marginTop:7}}>Não consegui ler os feedbacks: {_PB_PFB.erro[clientId]}</div>}
+
+    {isAdmin && abrir && <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:12,padding:11,marginTop:10,display:"flex",flexDirection:"column",gap:9}}>
+      <_PbAutoTextarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2}
+        placeholder={"O que a IA precisa saber quando falar de "+(produto||"este produto")+"? Ex.: o cliente quer o foco na economia de água, nunca no preço."}
+        style={{border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box",lineHeight:1.55,minHeight:60,overflow:"hidden",resize:"none"}}/>
+      {unidade && <button type="button" onClick={function(){setSoNaUni(!soNaUni);}}
+        style={{alignSelf:"flex-start",background:soNaUni?"#334155":"#fff",color:soNaUni?"#fff":"#64748b",border:"1px solid "+(soNaUni?"#334155":PB_BORDER),borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:soNaUni?800:600,cursor:"pointer",fontFamily:"inherit"}}>
+        {soNaUni?("Só na "+_pbUniLabel(unidade)):"Vale pra todas as unidades"}
+      </button>}
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button type="button" onClick={function(){setAbrir(false);setTxt("");setSoNaUni(false);}}
+          style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"7px 14px",color:"#64748b",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button type="button" onClick={salvar} disabled={salvando||!String(txt||"").trim()}
+          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"7px 16px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":"Salvar feedback"}</button>
+      </div>
+    </div>}
+
+    {itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:10}}>
+      {itens.map(function(it){
+        const on=!!it.ativo;
+        return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:9,background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_PURPLE_BD:"#eef0f3"),borderRadius:11,padding:"9px 11px",opacity:on?1:.6}}>
+          <span style={{width:3,alignSelf:"stretch",minHeight:18,borderRadius:99,background:on?PB_PURPLE_DK:"#cbd5e1",flexShrink:0}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.5,wordBreak:"break-word"}}>{it.feedback}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:5}}>
+              {it.autor && <span style={Object.assign({},_pill,{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8"})}>{it.autor}</span>}
+              <span style={Object.assign({},_pill,{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#94a3b8"})}>{_pbDataBr(String(it.criado_em||"").slice(0,10))}</span>
+              {it.unidade && <span style={Object.assign({},_pill,{background:"#f1f5f9",color:"#475569"})}>{_pbUniLabel(it.unidade)}</span>}
+              {!on && <span style={Object.assign({},_pill,{background:"#f1f5f9",color:"#94a3b8",letterSpacing:.4,textTransform:"uppercase",fontWeight:800})}>fora do cérebro</span>}
+            </div>
+          </div>
+          {isAdmin && <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+            <button type="button" onClick={function(){alternar(it);}} title={on?"Tirar do cérebro (guarda o feedback)":"Voltar pro cérebro"}
+              style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex"}}>
+              <span style={{width:30,height:18,borderRadius:99,background:on?PB_PURPLE_DK:"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+                <span style={{position:"absolute",top:2,left:on?14:2,width:14,height:14,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+              </span>
+            </button>
+            <button type="button" onClick={function(){apagar(it);}} title="Apagar de vez"
+              style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
+              onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}>
+              <Ico n="trash" size={13}/>
+            </button>
+          </div>}
+        </div>;
+      })}
+    </div>}
+
+    {itens.length===0 && !abrir && <div style={{color:"#94a3b8",fontSize:11.5,marginTop:7,lineHeight:1.5}}>
+      Nada anotado ainda.{isAdmin?" Cada feedback aqui entra no prompt sempre que a IA escrever sobre este produto.":""}
+    </div>}
+  </div>;
 }
 
 function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
@@ -104782,6 +104942,7 @@ async function pxGerarRoteiros(opts){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
   u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
     foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
@@ -104888,6 +105049,7 @@ async function pxAjustarRoteiro(r,feedback){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
   u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
   u+="ROTEIRO ATUAL (é ESTE que você vai ajustar):\n";
   u+="ASSUNTO: "+String((r&&r.assunto)||"")+"\n";
   if(r&&r.produto) u+="PRODUTO: "+String(r.produto)+"\n";
