@@ -19790,14 +19790,38 @@ async function pxCascataVarrer(protegerId){
              Comemorativa, feira e collab nunca saem — se o último for um desses, olha o
              anterior. A âncora é só o ponto de partida do planejador (fica onde está). */
           const ordenados=doAlvo.slice().sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
-          let sair=null;
-          for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
+          let sair=null, ancora=null;
+          /* ── SEMANA COM COLLAB SOBRANDO: QUEM ANDA É O COLLAB (22/09/2026, Rodrigo) ──────
+             "em semanas que é arrastado um novo collab pra uma semana que já tem collab,
+              daria pra arrastar só os collabs né, seria mais fácil."
+
+             É. O collab ocupa o dia das CINCO unidades brasileiras de uma vez, então dois
+             collabs na mesma semana estouram a cadência das cinco ao mesmo tempo. Mexer no
+             conteúdo de cada unidade é cinco filas andando pra resolver um problema que é de
+             UMA fila — a dos collabs, a das quartas. Bem mais simples: anda o collab.
+
+             O planejador já fazia isso quando o card era NOVO (_pxCasTrilhaAlvo devolve
+             ["collab",…] pra collab). A varredura é que não usava: ela pulava collab na hora
+             de escolher quem sai. Agora, SÓ quando sobra collab na semana, ela manda o collab.
+             Com um collab só, nada muda — collab continua sem sair do lugar.
+
+             O collab que anda é o ÚLTIMO movível: o que a pessoa acabou de posicionar está
+             protegido (_PX_CAS_PROTEGIDO), então quem cede é o que já estava lá. E a âncora
+             passa a ser o outro collab — isso faz o planejador resolver as cinco unidades numa
+             passada só, em vez de uma volta por unidade. */
+          const _collabs=ordenados.filter(function(x){ return _pxCasTrilha(x)==="collab"; });
+          if(_collabs.length>1){
+            for(let i=_collabs.length-1;i>=0;i--){ if(_pxCasMovivel(_collabs[i],hoje,null)){ sair=_collabs[i]; break; } }
+            if(sair) ancora=_collabs.find(function(x){ return String(x.id)!==String(sair.id); })||null;
+            if(!ancora) sair=null;   // sem o outro collab de âncora, cai na regra de sempre
+          }
+          if(!sair) for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
           if(!sair) continue;
           /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
              passada, então prefere um card de hoje em diante. O post já publicado na semana
              CONTA na cadência, mas não serve de âncora. */
-          const ancora=ordenados.find(function(x){ return String(x.id)!==String(sair.id)&&String(x.publish_date||"").slice(0,10)>=hoje; })
-                     ||ordenados.find(function(x){ return String(x.id)!==String(sair.id); });
+          if(!ancora) ancora=ordenados.find(function(x){ return String(x.id)!==String(sair.id)&&String(x.publish_date||"").slice(0,10)>=hoje; })
+                           ||ordenados.find(function(x){ return String(x.id)!==String(sair.id); });
           if(!ancora) continue;
           achou={ancora:ancora,sair:sair,semana:k,alvo:alvo}; break;
         }
