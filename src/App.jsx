@@ -4496,7 +4496,10 @@ function pxCtxMateriaisTxt(ctx){
         "não copie trecho):\n";
   arr.slice(0,12).forEach(function(m){
     const ficha=String((m&&m.ficha)||"").trim(); if(!ficha) return;
-    u+="--- "+String((m&&m.titulo)||"Material")+(m&&m.tipo?(" ("+m.tipo+")"):"")+
+    /* (22/09/2026) O tipo saiu da tela e sai do prompt junto: era etiqueta escolhida à mão
+       antes do upload e a IA já vê sozinha o que o material é. Sem isso o cérebro lia
+       "(outro)" do lado do título de todo material novo. */
+    u+="--- "+String((m&&m.titulo)||"Material")+
        (m&&m.unidade?(" — unidade "+m.unidade):"")+"\n"+ficha.slice(0,1800)+"\n";
   });
   return u+"\n";
@@ -19328,6 +19331,19 @@ const PX_CASCATA_FIM_CONTRATO={acreforte:"2026-10-30",construesclem:"2026-11-18"
 // VetService: comemorativa fica à parte (não conta na cadência) — regra do planejamento de 11/09.
 const PX_CASCATA_COMEM_NAO_CONTA=["vetservice"];
 const PX_CASCATA_HORIZONTE_SEMANAS=30;
+/* ── FREIO DE MÃO (22/09/2026, Rodrigo) ──────────────────────────────────────────────
+   Mudar UM card ("Itamar Vicente" de Chapecó pra collab) fez a varredura mover 48 cards —
+   17 deles já em produção — porque collab conta nas CINCO unidades e nenhuma tinha folga:
+   cada fila andou até janeiro, uma atrás da outra.
+
+   A cascata foi feita pra deslocar uma fila curta, não pra reescrever o calendário. Daqui
+   pra frente ela soma o que já moveu na rodada e, se o próximo empurrão passar deste teto,
+   ela PARA ANTES de aplicar e avisa — em vez de arrastar tudo. Parar entre uma fila e outra
+   é seguro: cada fila é aplicada inteira ou não é aplicada.
+
+   Quando o freio puxa, é sinal de que não existe folga nenhuma no período — isso é decisão
+   de planejamento, não coisa pra um reajuste automático resolver sozinho. */
+const PX_CASCATA_VARRE_MAX_MOVES=10;
 function _pxCasFixo(t){
   const id=String((t&&t.id)||"");
   if(id.indexOf("autocom-")===0||id.indexOf("autoev-")===0) return true;
@@ -19830,6 +19846,14 @@ async function pxCascataVarrer(protegerId){
       if(!achou) break;
       const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id});
       if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
+      if(total+plano.moves.length>PX_CASCATA_VARRE_MAX_MOVES){
+        console.warn("[cascata varrer] freio de mão:",total,"+",plano.moves.length,"> ",PX_CASCATA_VARRE_MAX_MOVES);
+        if(typeof pixelsToast!=="undefined") pixelsToast.info(
+          "Parei o reajuste automático: pra acertar a semana de "+_pxCasBr(achou.semana)+" seria preciso mover "+
+          (total+plano.moves.length)+" cards, um empurrando o outro até "+
+          _pxCasBr(String(plano.moves[plano.moves.length-1].para))+". Não existe folga no período — dá uma olhada no painel de auditoria do calendário.",11000);
+        break;
+      }
       const n=await pxCascataAplicar(plano,null,"varredura de cadência","a semana estava acima da cadência do cliente");
       if(!n) break;
       total+=n;
@@ -19912,10 +19936,21 @@ async function pxCascataVarrerCurtas(){
     }
     if(!buracos.length) return 0;
     let total=0;
-    /* mesma ordem do caminho que já existia: puxa primeiro, repõe depois (o repor confere a
-       cadência de novo e não faz nada se a semana já encheu com o card puxado). */
+    /* ── SÓ PUXA. NÃO INVENTA. (22/09/2026, Rodrigo) ──────────────────────────────────
+       "4 cards criados pelo Claude pra repor que perdeu a data comemorativa??? que porra
+        é essa?"
+
+       Esta varredura chamava o pxAutoplanRepor no fim, e o pxAutoplanRepor CRIA card. Como
+       ela roda sozinha sempre que o Calendário abre, o app passou a fabricar rascunho vazio
+       no calendário de quem só estava olhando a tela — e ainda registrava "data comemorativa
+       saiu da semana", que não tinha acontecido. Em 22/09 saíram 11 rascunhos assim.
+
+       Criar card é decisão de planejamento, não de varredura. Aqui a semana curta só é
+       resolvida PUXANDO um post que já existe mais pra frente. Vaga que sobrar fica vaga e
+       aparece no painel de auditoria — quem decide se vira card é a pessoa, pelo
+       "Gerar plano do mês". O pxAutoplanRepor continua existindo pro caso dele: comemorativa
+       APAGADA, que é onde ele sempre foi chamado. */
     try{ total+=(await pxCascataPuxar(buracos))||0; }catch(e){ console.warn("[curtas puxar]",e); }
-    try{ if(typeof pxAutoplanRepor==="function") total+=(await pxAutoplanRepor(buracos))||0; }catch(e){ console.warn("[curtas repor]",e); }
     return total;
   }catch(e){ console.warn("[cascata curtas]",e); return 0; }
 }
@@ -99543,15 +99578,12 @@ function _pbMemEtq(tipo){
    A equipe revisa a ficha aqui e pode desligar o material do cérebro sem apagar o arquivo.
 
    Mora na cadeira ESTRATÉGIA (que enxerga todos os blocos) — decisão do Rodrigo. */
-const PB_MAT_TIPOS=[
-  {id:"folder",   label:"Folder"},
-  {id:"manual",   label:"Manual"},
-  {id:"catalogo", label:"Catálogo"},
-  {id:"tabela",   label:"Tabela técnica"},
-  {id:"outro",    label:"Outro"},
-];
+/* (22/09/2026, Rodrigo) "aqui não precisa de tag se é folder ser o caralho a quatro.. tanto
+   faz." Tinha um seletor Folder/Manual/Catálogo/Tabela técnica/Outro antes de cada upload.
+   Não servia pra nada: a IA abre o arquivo e vê sozinha o que é, e o cérebro lê a FICHA, não
+   a etiqueta. Saiu o seletor, saiu a etiqueta do card e saiu do prompt. A coluna `tipo`
+   continua no banco com o default 'outro' — os materiais antigos não perdem nada. */
 const PB_MAT_MAX_LEITURA=8*1024*1024;   // acima disso o arquivo é guardado, mas a IA não lê
-function _pbMatTipoLabel(id){ const x=PB_MAT_TIPOS.find(function(t){return t.id===id;}); return x?x.label:"Material"; }
 function _pbMatTamanho(n){
   const b=Number(n)||0; if(!b) return "";
   return b<1024*1024?(Math.round(b/1024)+" KB"):((b/1048576).toFixed(1).replace(".",",")+" MB");
@@ -99566,7 +99598,7 @@ function _pbMatBase64(file){
 }
 /* A IA lê o PDF (ou a imagem) e devolve a ficha de fatos. Vai pelo askClaude porque é a
    Anthropic que lê documento nativo — o ask-claude é proxy transparente da API. */
-async function pxFichaDoMaterial(file, titulo, clienteNome, tipo){
+async function pxFichaDoMaterial(file, titulo, clienteNome){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const mime=String((file&&file.type)||"").toLowerCase();
   const ehPdf=mime.indexOf("pdf")>=0;
@@ -99577,8 +99609,9 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, tipo){
   const sys="Você lê material oficial de empresa (folder, manual, catálogo, tabela técnica) e extrai FATOS "+
     "pra uma equipe de marketing escrever com precisão. NUNCA invente: o que o material não diz, você não escreve. "+
     "Responda em texto puro, sem markdown, sem comentário antes nem depois.";
-  const pedido="Este é um material oficial de "+(clienteNome||"um cliente")+" — "+_pbMatTipoLabel(tipo)+
-    (titulo?(' intitulado "'+titulo+'"'):"")+".\n\n"+
+  const pedido="Este é um material oficial de "+(clienteNome||"um cliente")+
+    (titulo?(' — "'+titulo+'"'):"")+". Pode ser folder, manual, catálogo ou tabela técnica — "+
+    "olhe o arquivo e trate pelo que ele é.\n\n"+
     "Extraia a FICHA deste material, no máximo 180 palavras, exatamente neste formato:\n"+
     "O QUE É: (uma frase)\n"+
     "PRA QUEM / QUANDO USAR:\n"+
@@ -99601,7 +99634,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const [itens,setItens]=useState(null);
   const [erro,setErro]=useState("");
   const [subindo,setSubindo]=useState("");        // nome do arquivo em andamento
-  const [tipo,setTipo]=useState("folder");
+  const [arrastando,setArrastando]=useState(false);
   const [editId,setEditId]=useState(null);
   const [rascunho,setRascunho]=useState("");
   const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
@@ -99637,7 +99670,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const _lerArquivo=async function(m,file){
     await _patch(m,{ficha_status:"lendo"});
     try{
-      const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.tipo);
+      const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome);
       await _patch(m,{ficha:ficha,ficha_status:"pronta"});
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Ficha pronta — confira antes de confiar nela.",4000);
     }catch(e){
@@ -99658,7 +99691,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         if(upErr) throw upErr;
         const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
         const row={client_id:clientId,unidade:isBioter?String(unitTab||""):"",
-          titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),tipo:tipo,
+          titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),
           arquivo_url:(pub&&pub.publicUrl)||"",arquivo_nome:file.name,arquivo_tipo:file.type||"",
           arquivo_tamanho:file.size||0,ficha:"",ficha_status:"pendente",ativo:true,
           created_by:(_u&&_u.name)||""};
@@ -99689,28 +99722,41 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler os materiais: {erro}</div>}
 
-    {isAdmin && <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER,borderRadius:14,padding:14,marginBottom:16,display:"flex",flexWrap:"wrap",alignItems:"center",gap:10}}>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",flex:"1 1 240px"}}>
-        {PB_MAT_TIPOS.map(function(x){
-          const on=tipo===x.id;
-          return <button key={x.id} type="button" onClick={function(){setTipo(x.id);}}
-            style={{background:on?"#0d9488":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0d9488":PB_BORDER),borderRadius:99,padding:"5px 13px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{x.label}</button>;
-        })}
-      </div>
-      <label style={{background:subindo?"#cbd5e1":"#0d9488",color:"#fff",borderRadius:10,padding:"9px 15px",fontSize:12.5,fontWeight:700,cursor:subindo?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0}}>
-        <Ico n="upload" size={14} color="#fff"/>{subindo?("Subindo "+subindo.slice(0,18)+"…"):"Subir material"}
-        <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
-          onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
-      </label>
-      <div style={{color:"#94a3b8",fontSize:11,flexBasis:"100%",lineHeight:1.5}}>
-        PDF e imagem a IA lê e vira ficha{isBioter?(" · o material entra na unidade "+_uniLabel(unitTab)+" (troque no seletor do topo)"):""} · acima de 8 MB o arquivo fica guardado sem ficha
-      </div>
-    </div>}
+    {/* (22/09/2026, Rodrigo) "teria que poder arrastar direto aqui né, sem precisar clicar em
+        subir material." A caixa inteira é a zona: arrasta o arquivo em cima OU clica nela que
+        abre o seletor. Por isso ela é um <label> — não tem botão separado pra achar. */}
+    {isAdmin && <label
+      onDragOver={function(e){ e.preventDefault(); e.dataTransfer.dropEffect="copy"; if(!arrastando) setArrastando(true); }}
+      onDragEnter={function(e){ e.preventDefault(); setArrastando(true); }}
+      onDragLeave={function(e){ if(e.relatedTarget&&e.currentTarget.contains(e.relatedTarget)) return; setArrastando(false); }}
+      onDrop={function(e){
+        e.preventDefault(); setArrastando(false);
+        if(subindo) return;
+        const dt=e.dataTransfer;
+        const f=Array.prototype.slice.call((dt&&dt.files)||[]);
+        if(f.length) _subir(f);
+      }}
+      style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,textAlign:"center",
+        background:arrastando?"#ecfdf5":"#fafbfc",border:"1.5px dashed "+(arrastando?"#0d9488":"#cbd5e1"),
+        borderRadius:14,padding:"22px 18px",marginBottom:16,cursor:subindo?"progress":"pointer",
+        transition:"background .12s, border-color .12s",fontFamily:"inherit"}}>
+      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,
+        background:arrastando?"#0d9488":"#0d948814",color:arrastando?"#fff":"#0d9488",transition:"all .12s"}}>
+        <Ico n="upload" size={17} color="currentColor"/>
+      </span>
+      <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>
+        {subindo ? ("Subindo "+subindo.slice(0,28)+"…") : (arrastando ? "Solta aqui" : "Arraste o arquivo aqui, ou clique pra escolher")}
+      </span>
+      <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
+        PDF e imagem a IA lê e vira ficha{isBioter?(" · entra na unidade "+_uniLabel(unitTab)+", que você troca no seletor do topo"):""} · acima de 8 MB o arquivo fica guardado sem ficha
+      </span>
+      <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
+        onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
+    </label>}
 
     {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
-    {itens!==null && itens.length===0 && typeof _PbEmpty==="function" &&
-      <_PbEmpty icon="fileText" text="Nenhum material ainda."
-        sub={isAdmin?"Sobe o folder, o manual ou o catálogo que o cliente mandou — a IA passa a escrever sabendo o que está lá dentro.":""}/>}
+    {itens!==null && itens.length===0 && !isAdmin && typeof _PbEmpty==="function" &&
+      <_PbEmpty icon="fileText" text="Nenhum material ainda."/>}
 
     {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
       {itens.map(function(m){
@@ -99721,7 +99767,6 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             <div style={{flex:1,minWidth:180}}>
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                 <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{m.titulo||m.arquivo_nome||"Material"}</span>
-                <span style={{background:"#0d948814",color:"#0d9488",border:"1px solid #0d948844",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{_pbMatTipoLabel(m.tipo)}</span>
                 {m.unidade && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(m.unidade)}</span>}
                 <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
               </div>
