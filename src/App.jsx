@@ -20009,9 +20009,21 @@ async function pxCascataVarrerCurtas(){
         if(n<=0||n>=cap) continue;                     // 0 = semana não planejada pra esse alvo
         const cli=String(alvo).split(":")[0], uni=alvo.indexOf("bioter:")===0?alvo.slice(7):"";
         const meio=new Date(L.ini); meio.setDate(L.ini.getDate()+3);
+        /* (22/09/2026, Rodrigo) "por que na última arrastada faltou post de Chapecó na semana?"
+           O Diego Luzzi foi editado em dois passos: primeiro a data (a semana ficou com 4 e a
+           Foto de obra saiu), depois virou collab (o outro collab saiu). Sobrou a semana com 2
+           e a Foto de obra empurrada à toa. A vaga precisa saber O QUE falta: numa unidade
+           Bioter a semana tem 1 collab + 1 material (Foto/Short) + 1 conteúdo (principais) —
+           se não tem material, a vaga é de material e a Foto de obra volta; se não tem
+           conteúdo, a vaga é de conteúdo. Sem isso o puxar trazia um card de conteúdo de
+           outubro pra vaga da Foto e deixava a Foto lá na frente. */
+        const _doAlvo=_pxCasConta(daSemana,alvo);
+        const _temMat=_doAlvo.some(function(x){ return _pxCasTrilha(x)==="material"; });
+        const _temCont=_doAlvo.some(function(x){ const tr=_pxCasTrilha(x); return tr==="conteudo"||tr==="arte"||tr==="video"; });
+        const _trilhaFalta=(cli==="bioter"&&!_temMat)?"material":((!_temCont)?"conteudo":"");
         for(let i=n;i<cap&&buracos.length<PX_CASCATA_CURTAS_MAX;i++){
           buracos.push({id:"vaga-"+alvo+"-"+k+"-"+i,client:cli,bioter_unit:uni,publish_date:_pxApIso(meio),
-            status:"rascunhos",somente_story:false,nao_publica:false,content_type:null,title:"",tags:[]});
+            status:"rascunhos",somente_story:false,nao_publica:false,content_type:null,title:"",tags:[],_trilha:(i===n?_trilhaFalta:"")});
         }
       }
       if(buracos.length>=PX_CASCATA_CURTAS_MAX) break;
@@ -20139,7 +20151,7 @@ async function pxCascataPuxar(removidos){
       _pxColAlvos(t).forEach(function(a){
         if(!PX_CASCATA_CAP[a]) return;
         const L=_pxApLinha(iso);
-        buracos[a+"|"+L.iniIso]={alvo:a,L:L,trilha:(String(t.id||"").indexOf("vaga-")===0?"":_pxCasTrilha(t))};
+        buracos[a+"|"+L.iniIso]={alvo:a,L:L,trilha:(String(t.id||"").indexOf("vaga-")===0?String(t._trilha||""):_pxCasTrilha(t))};
       });
     });
     const fila=Object.keys(buracos).map(function(k){ return buracos[k]; });
@@ -20168,6 +20180,7 @@ async function pxCascataPuxar(removidos){
            grupo e deixa duas Fotos na mesma semana — foi o que o teste mostrou em dezembro.
            Só volta material se o que saiu da semana era material (a vaga sabe a trilha). */
         if(_pxCasTrilha(x)==="material"&&v.trilha!=="material") return false;
+        if(v.trilha==="material"&&_pxCasTrilha(x)!=="material") return false;   // vaga de Foto/Short só aceita Foto/Short
         return true;
       }).sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
       if(!cand.length) continue;
@@ -105640,6 +105653,16 @@ function PageRoteiros({isMob, perms, viewingAs}){
   useEffect(function(){ try{ localStorage.setItem("pixels-roteiros-cliente",clId||""); localStorage.setItem("pixels-roteiros-unidade",unit||""); }catch(_){} },[clId,unit]);
   const cl=_lista.find(function(c){return c.id===clId;})||null;
   const isBioter=clId==="bioter";
+  /* ══ CELULAR (22/09/2026, Rodrigo: "está muito confuso") ═══════════════════
+     No computador os 9 clientes e as 7 unidades ficam todos a mostra e funciona.
+     Em 390px viram 5 linhas de botoes, e unidade tem a mesma cara de cliente —
+     da pra achar que "Toledo" e um cliente. No celular vira UM campo so:
+       fechado  -> CLIENTE / "Bioter · Grupo"
+       toca     -> lista dos clientes (passo "cliente")
+       Bioter   -> a mesma lista vira "Bioter — unidade" (passo "unidade")
+       outro    -> fecha na hora, porque so a Bioter tem unidade.
+     _rtSelAberto: null (fechado) | "cliente" | "unidade".                      */
+  const [_rtSelAberto,_setRtSelAberto]=useState(null);
   const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:_RT_AC;
   const _logo=cl&&((typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||cl.logoUrl||null);
   const _nomeCl=function(id,un){ const c=_lista.find(function(x){return x.id===id;}); const n=c?c.name:id; if(id==="bioter"&&un){ const x=_unidades.find(function(y){return y.id===un;}); return "Bioter "+(x?(x.pickerLabel||x.label):un); } return n; };
@@ -105777,30 +105800,105 @@ function PageRoteiros({isMob, perms, viewingAs}){
   };
 
   const _inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_RT_FF};
-  const _lbl={color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
+  const _lbl={color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
   const _btnGerar=function(label,on,busy,cor){ return {background:busy?"#e2e8f0":("linear-gradient(135deg,"+(cor||_RT_AC)+","+(cor||_RT_AC)+"cc)"),color:busy?"#94a3b8":"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:13,fontWeight:800,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:busy?"none":("0 6px 18px "+(cor||_RT_AC)+"44"),whiteSpace:"nowrap"}; };
   const Spin=function(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite"}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>; };
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF,width:"100%",boxSizing:"border-box",padding:isMob?"14px":"18px"}}>
     <style>{"@keyframes pxspin{to{transform:rotate(360deg)}}"}</style>
     {/* Header */}
-    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"16px 14px 14px":"20px 24px",display:"flex",alignItems:"center",gap:isMob?10:14,position:"relative",overflow:"hidden",flexWrap:"wrap"}}>
       <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
-      <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}><Ico n="video" size={22} color="#fff"/></div>
-      <div style={{flex:1,minWidth:220}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Roteiros</div>
-        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
+      <div style={{width:isMob?38:46,height:isMob?38:46,borderRadius:isMob?11:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}><Ico n="video" size={22} color="#fff"/></div>
+      <div style={{flex:1,minWidth:isMob?0:220}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.5}}>Roteiros</div>
+        {/* Celular: a frase que explica a tela sai — quem abre no celular já sabe o que é
+            e ela sozinha come 2 linhas do alto. No computador continua igual. */}
+        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
       </div>
-      <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"roteiros",l:"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:"Ideias pro cliente"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
+      {/* Celular: as 3 abas ocupam a largura, uma do lado da outra */}
+      <div style={{display:isMob?"flex":"inline-flex",width:isMob?"100%":undefined,background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
+        {[{id:"roteiros",l:isMob?"Roteiros":"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:isMob?"Ideias":"Ideias pro cliente"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
     </div>
 
     {aba==="roteiros"&&<>
       {/* Cliente + unidade + gerar */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"12px":"14px 16px",display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:isMob?10:12,flexWrap:"wrap"}}>
+
+        {/* ══ CELULAR: o campo CLIENTE (fechado) ══════════════════════════════
+            Mostra quem está escolhido em letra grande. Toca e abre a lista. */}
+        {isMob&&(function(){
+          const _c=_lista.find(function(x){return x.id===clId;});
+          const _lg=(_c&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[_c.id])||(_c&&_c.logoUrl)||null;
+          const _cc=(_c&&/^#[0-9a-f]{6}$/i.test(_c.color||""))?_c.color:_RT_AC;
+          const _resp=_rtSelAberto==="unidade" ? "Bioter · escolha a unidade" : _nomeCl(clId,isBioter?unit:"").replace("Bioter ","Bioter · ");
+          return <button type="button" onClick={function(){ _setRtSelAberto(_rtSelAberto?null:"cliente"); }}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:"#fff",
+                    border:"1px solid "+(_rtSelAberto?"#c4b5fd":"#e2e8f0"),borderRadius:12,padding:"10px 12px",
+                    cursor:"pointer",fontFamily:_RT_FF,textAlign:"left",WebkitTapHighlightColor:"transparent"}}>
+            <span style={{width:34,height:34,borderRadius:9,background:"#f8fafc",border:"1px solid #eef0f3",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+              {_lg?<img src={_lg} alt="" style={{width:"80%",height:"80%",objectFit:"contain"}}/>:<span style={{color:_cc,fontSize:12,fontWeight:900}}>{String((_c&&_c.name)||"?").slice(0,2).toUpperCase()}</span>}
+            </span>
+            <span style={{flex:1,minWidth:0}}>
+              <span style={{display:"block",color:"#94a3b8",fontSize:12,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Cliente</span>
+              <span style={{display:"block",color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.2,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_resp}</span>
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+              style={{flexShrink:0,transform:_rtSelAberto?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>;
+        })()}
+
+        {/* ══ CELULAR: a lista — passo 1 cliente, passo 2 unidade ═════════════ */}
+        {isMob&&_rtSelAberto==="cliente"&&<div style={{width:"100%",background:"#fff",border:"1px solid #c4b5fd",borderRadius:12,overflow:"hidden"}}>
+          {_lista.map(function(c,i){
+            const on=c.id===clId;
+            const cc=/^#[0-9a-f]{6}$/i.test(c.color||"")?c.color:_RT_AC;
+            const lg=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[c.id])||c.logoUrl||null;
+            return <button key={c.id} type="button"
+              onClick={function(){
+                setClId(c.id); setUnit("");
+                /* Só a Bioter tem unidade: nos outros clientes fecha na hora. */
+                _setRtSelAberto(c.id==="bioter"?"unidade":null);
+              }}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:on?"#faf7ff":"#fff",
+                      border:"none",borderTop:i===0?"none":"1px solid #f5f6f8",padding:"11px 12px",cursor:"pointer",
+                      fontFamily:_RT_FF,textAlign:"left",WebkitTapHighlightColor:"transparent"}}>
+              <span style={{width:28,height:28,borderRadius:8,background:"#f8fafc",border:"1px solid #eef0f3",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                {lg?<img src={lg} alt="" style={{width:"80%",height:"80%",objectFit:"contain"}}/>:<span style={{color:cc,fontSize:pxFonte(11,isMob),fontWeight:900}}>{String(c.name||"?").slice(0,2).toUpperCase()}</span>}
+              </span>
+              <span style={{flex:1,minWidth:0,color:on?cc:"#334155",fontSize:14,fontWeight:on?800:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</span>
+              {on&&<span style={{color:cc,fontSize:15,fontWeight:900,flexShrink:0}}>✓</span>}
+            </button>;
+          })}
+        </div>}
+
+        {isMob&&_rtSelAberto==="unidade"&&<div style={{width:"100%",background:"#fff",border:"1px solid #c4b5fd",borderRadius:12,overflow:"hidden"}}>
+          <div style={{background:"#f8fafc",padding:"9px 12px",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{color:"#94a3b8",fontSize:12,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Bioter — unidade</span>
+            <span style={{flex:1}}/>
+            <button type="button" onClick={function(){ _setRtSelAberto("cliente"); }}
+              style={{background:"none",border:"none",color:_RT_AC,fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,padding:0}}>‹ trocar cliente</button>
+          </div>
+          {[{id:"",label:"Grupo Bioter",sub:"todas as unidades"}].concat(_unidades.map(function(u){
+            return {id:u.id,label:u.pickerLabel||u.label,sub:u.cidade||u.label};
+          })).map(function(u,i){
+            const on=(unit||"")===u.id;
+            return <button key={u.id||"g"} type="button" onClick={function(){ setUnit(u.id); _setRtSelAberto(null); }}
+              style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:on?"#faf7ff":"#fff",
+                      border:"none",borderTop:i===0?"none":"1px solid #f5f6f8",padding:"10px 12px",cursor:"pointer",
+                      fontFamily:_RT_FF,textAlign:"left",WebkitTapHighlightColor:"transparent"}}>
+              <span style={{flex:1,minWidth:0}}>
+                <span style={{display:"block",color:on?_RT_AC:"#334155",fontSize:14,fontWeight:on?800:600}}>{u.label}</span>
+                <span style={{display:"block",color:"#94a3b8",fontSize:12,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.sub}</span>
+              </span>
+              {on&&<span style={{color:_RT_AC,fontSize:15,fontWeight:900,flexShrink:0}}>✓</span>}
+            </button>;
+          })}
+        </div>}
+
         {/* CLIENTES COMO BOTÕES (16/09/2026, Vinicius: "pra só clicar, alternar fácil") */}
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",flex:1,minWidth:0}}>
+        <div style={{display:isMob?"none":"flex",gap:6,flexWrap:"wrap",alignItems:"center",flex:1,minWidth:0}}>
           {_lista.map(function(c){
             const on=c.id===clId;
             const cc=/^#[0-9a-f]{6}$/i.test(c.color||"")?c.color:_RT_AC;
@@ -105809,31 +105907,35 @@ function PageRoteiros({isMob, perms, viewingAs}){
               style={{display:"inline-flex",alignItems:"center",gap:7,background:on?cc:"#fff",color:on?"#fff":"#334155",border:"1px solid "+(on?cc:"#e2e8f0"),borderRadius:99,padding:"5px 12px 5px 5px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?("0 4px 12px "+cc+"55"):"none",transition:"all .12s",whiteSpace:"nowrap"}}
               onMouseEnter={function(e){if(!on){e.currentTarget.style.borderColor=cc;e.currentTarget.style.color=cc;}}} onMouseLeave={function(e){if(!on){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}}>
               <span style={{width:24,height:24,borderRadius:"50%",background:"#fff",border:"1px solid "+(on?"rgba(255,255,255,.6)":"#eef0f3"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
-                {lg?<img src={lg} alt="" style={{width:"78%",height:"78%",objectFit:"contain"}}/>:<span style={{color:cc,fontSize:9,fontWeight:900}}>{String(c.name||"?").slice(0,2).toUpperCase()}</span>}
+                {lg?<img src={lg} alt="" style={{width:"78%",height:"78%",objectFit:"contain"}}/>:<span style={{color:cc,fontSize:pxFonte(9,isMob),fontWeight:900}}>{String(c.name||"?").slice(0,2).toUpperCase()}</span>}
               </span>
               {c.name}
             </button>;
           })}
         </div>
-        {isBioter&&<div style={{display:"flex",gap:5,flexWrap:"wrap",width:"100%",alignItems:"center"}}><span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4}}>Unidade</span>
-          {[{id:"",label:"Grupo"}].concat(_unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{u.label}</button>; })}
+        {isBioter&&<div style={{display:isMob?"none":"flex",gap:5,flexWrap:"wrap",width:"100%",alignItems:"center"}}><span style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4}}>Unidade</span>
+          {[{id:"",label:"Grupo"}].concat(_unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{u.label}</button>; })}
         </div>}
-        <div style={{display:"flex",gap:10,alignItems:"center",marginLeft:"auto",flexWrap:"wrap"}}>
-        <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
-          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
+        <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,marginLeft:isMob?undefined:"auto",width:isMob?"100%":undefined,flexWrap:"wrap"}}>
+        {/* Celular: o filtro ocupa a largura */}
+        <div style={{display:isMob?"flex":"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
+          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:isMob?"8px 6px":"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
         </div>
-        {_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela numa mensagem só, agrupados pela tag de produto e formatados pro WhatsApp"
+        {/* (22/09/2026, Rodrigo: "não vai ser um tiro no pé?") Bioter · Grupo tem 20
+            roteiros = ~22 mil letras numa mensagem só. No computador dá pra reler antes
+            de enviar; no celular, não. Some no celular — lá se copia um por um, no card. */}
+        {!isMob&&_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela numa mensagem só, agrupados pela tag de produto e formatados pro WhatsApp"
           onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
           style={{background:"#fff",color:visiveis.length?"#16a34a":"#94a3b8",border:"1px solid "+(visiveis.length?"#86efac":"#e2e8f0"),borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:800,cursor:visiveis.length?"pointer":"default",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
         </button>}
         {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:1});}}
-          style={{background:"#fff",color:_cor,border:"1px solid "+_cor+"55",borderRadius:12,padding:"12px 16px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+          style={{width:isMob?"100%":undefined,justifyContent:isMob?"center":undefined,background:"#fff",color:_cor,border:"1px solid "+_cor+"55",borderRadius:12,padding:"12px 16px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Roteiro específico
         </button>}
-        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={_btnGerar("",true,!!gerando,_cor)}>
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={Object.assign({},_btnGerar("",true,!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
           {gerando==="ia"?<><Spin/> Escrevendo 5 roteiros…</>:<><Ico n="sparkles" size={14} color="#fff"/> Gerar 5 roteiros</>}
         </button>}
         </div>
@@ -105845,7 +105947,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={5} autoFocus
             placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
             style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/>
-          <div style={{color:"#94a3b8",fontSize:11.5,marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
         <div>
           <div style={_lbl}>Quantos roteiros</div>
@@ -105913,7 +106015,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
             <div style={{flex:1,minWidth:220}}>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>{t.titulo}</div>
               <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,marginTop:4,whiteSpace:"pre-wrap"}}>{t.descricao}</div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:6,display:"flex",gap:10,flexWrap:"wrap"}}>
+              <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),fontWeight:600,marginTop:6,display:"flex",gap:10,flexWrap:"wrap"}}>
                 {t.link&&<a href={t.link} target="_blank" rel="noreferrer" style={{color:"#db2777",fontWeight:700,textDecoration:"none"}}>Ver referência ↗</a>}
                 <span>por {t.created_by||"—"} · {new Date(t.created_at).toLocaleDateString("pt-BR")}</span>
                 <span>{gerados.length} ideia{gerados.length===1?"":"s"} gerada{gerados.length===1?"":"s"}</span>
@@ -105936,7 +106038,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           </div>
           {gerados.length>0&&<div style={{padding:12,background:"#fafbfc",overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,alignItems:"start"}}>
             {gerados.map(function(r){ const c=_lista.find(function(x){return x.id===r.client_id;}); const cc=(c&&/^#[0-9a-f]{6}$/i.test(c.color||""))?c.color:_RT_AC;
-              return <div key={r.id}><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
+              return <div key={r.id}><div style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,margin:"0 0 5px 4px"}}>{_nomeCl(r.client_id,r.unidade)}</div>
                 <RoteiroCard r={Object.assign({},r,{trend_titulo:""})} cor={cc} agencia={true} isMob={isMob} onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}} onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}} onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined} onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/></div>; })}
           </div></div>}
         </div>;
@@ -105947,7 +106049,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Operação › Ideias da Pixels</b>. O que ele aprova vira card com um clique.</div>
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
-          {[{id:"todas",l:"Todas"},{id:"enviada",l:"Aguardando"},{id:"aprovada",l:"Aprovadas"},{id:"recusada",l:"Recusadas"}].map(function(v){ const on=ideiaFiltro===v.id; const n=v.id==="todas"?ideias.length:ideias.filter(function(i){return i.status===v.id;}).length; return <button key={v.id} type="button" onClick={function(){setIdeiaFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l} · {n}</button>; })}
+          {[{id:"todas",l:"Todas"},{id:"enviada",l:"Aguardando"},{id:"aprovada",l:"Aprovadas"},{id:"recusada",l:"Recusadas"}].map(function(v){ const on=ideiaFiltro===v.id; const n=v.id==="todas"?ideias.length:ideias.filter(function(i){return i.status===v.id;}).length; return <button key={v.id} type="button" onClick={function(){setIdeiaFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l} · {n}</button>; })}
         </div>
         {_bl("ideias.nova")&&<button type="button" onClick={function(){setIdeiaForm({titulo:"",descricao:"",link:"",trend_id:null,alvos:[{client:clId,unit:clId==="bioter"?(unit||""):""}]});}} style={_btnGerar("",true,false,"#7c3aed")}><Ico n="plus" size={13} color="#fff"/> Nova ideia</button>}
       </div>
@@ -105959,9 +106061,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
           const st={enviada:{l:"Aguardando o cliente",bg:"#fffbeb",c:"#b45309",b:"#fde68a"},aprovada:{l:"Aprovada pelo cliente",bg:"#ecfdf5",c:"#047857",b:"#a7f3d0"},recusada:{l:"Recusada",bg:"#fef2f2",c:"#b91c1c",b:"#fecaca"}}[i.status]||{l:i.status,bg:"#f1f5f9",c:"#475569",b:"#e2e8f0"};
           return <div key={i.id} style={{background:"#fff",border:"1px solid "+st.b,borderTop:"4px solid "+cc,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:8,boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-              <span style={{background:cc+"18",color:cc,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_nomeCl(i.client_id,i.unidade)}</span>
-              <span style={{background:st.bg,color:st.c,border:"1px solid "+st.b,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{st.l}</span>
-              {i.trend_id&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase"}}>Trend</span>}
+              <span style={{background:cc+"18",color:cc,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{_nomeCl(i.client_id,i.unidade)}</span>
+              <span style={{background:st.bg,color:st.c,border:"1px solid "+st.b,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{st.l}</span>
+              {i.trend_id&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:pxFonte(10,isMob),fontWeight:800,textTransform:"uppercase"}}>Trend</span>}
               <span style={{flex:1}}/>
               {_bl("ideias.arquivar")&&<button type="button" title="Tirar do portal" onClick={function(){_arquivarIdeia(i);}} style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,display:"inline-flex"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg></button>}
             </div>
@@ -105970,7 +106072,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
             {i.link&&<IdeiaLinkCard link={i.link} plataforma={i.plataforma}/>}
             {i.status==="recusada"&&i.motivo&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"8px 11px",color:"#991b1b",fontSize:12}}><b>Por que não curtiu:</b> {i.motivo}</div>}
             {i.status==="aprovada"&&i.motivo&&<div style={{background:"#ecfdf5",border:"1px solid #a7f3d0",borderRadius:10,padding:"8px 11px",color:"#065f46",fontSize:12}}><b>Comentário:</b> {i.motivo}</div>}
-            <div style={{color:"#94a3b8",fontSize:11,display:"flex",gap:10,flexWrap:"wrap"}}>
+            <div style={{color:"#94a3b8",fontSize:pxFonte(11,isMob),display:"flex",gap:10,flexWrap:"wrap"}}>
               <span>por {i.created_by||"—"} · {new Date(i.created_at).toLocaleDateString("pt-BR")}</span>
               {i.respondido_em&&<span>respondida em {new Date(i.respondido_em).toLocaleDateString("pt-BR")}{i.respondido_por?(" por "+i.respondido_por):""}</span>}
             </div>
