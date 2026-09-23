@@ -4674,7 +4674,7 @@ function pxCtxFichasProdutosTxt(ctx){
       const g=String(pb.produtos_visao||"").trim();
       const pu=(pb.produtos_visao_por_unidade&&typeof pb.produtos_visao_por_unidade==="object")?String(pb.produtos_visao_por_unidade[u]||"").trim():"";
       if(g||pu){
-        visao="PRODUTOS E SERVIÇOS — VISÃO GERAL (como a empresa se posiciona: o carro-chefe manda no que se destaca; o que está marcado como complementar entra menos e o inativo NUNCA entra; o que a empresa faz mas não é foco não vira tema principal):\n"+
+        visao="PRODUTOS E SERVIÇOS — VISÃO GERAL (como a empresa se posiciona: o carro-chefe manda no que se destaca; o que está marcado como complementar entra menos e o inativo NUNCA entra; o que a empresa faz mas não é foco não vira tema principal. Vale pra TODA copy, briefing, roteiro e pauta — inclusive num post de marca, de qualidade ou de processo, o posicionamento daqui é o que aparece):\n"+
               (g?(g+"\n"):"")+(pu?("Nesta unidade ("+u+"): "+pu+"\n"):"")+"\n";
       }
     }catch(_){}
@@ -4957,7 +4957,7 @@ function pxProdutosOficiais(ctx,unit){
       if(m) m.forEach(function(g){ const s=g.replace(/[()]/g,"").trim(); if(s) aliases.push(s); });
     });
     const ordem=(pr.ordemPorUnidade&&u&&typeof pr.ordemPorUnidade[u]==="number")?pr.ordemPorUnidade[u]:999;
-    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem,prioridade:String(pr.prioridade||"")});
+    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem,prioridade:String(pr.prioridade||""),nomeEs:String(pr.nomePrincipalEs||"").trim()});
   });
   out.sort(function(a,b){ if(a.daUnidade!==b.daUnidade) return a.daUnidade?-1:1; return a.ordem-b.ordem; });
   return out;
@@ -5740,7 +5740,9 @@ async function pxSugerirPauta(opts){
   const _TIPO={arte:"arte única (1 imagem, 1 ideia forte, título curto na arte)",carrossel:"carrossel (sequência de lâminas, começa com um gancho e termina com CTA)",video:"vídeo (algo que o cliente consegue gravar no campo/obra/fábrica)",video_dinamico:"vídeo dinâmico (edição com cortes, textos na tela)",video_basico:"vídeo básico",reels:"reels",corte:"corte de vídeo"};
   const _pesos=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[];
   const sys="Você é o estrategista de conteúdo de uma agência e monta a PAUTA do mês de um cliente: o assunto de cada post, "+
-    "um por card, distribuindo os produtos pelo peso que a agência marcou. Pensa como quem conhece o negócio do cliente: "+
+    "um por card, distribuindo os produtos pelo peso que a agência marcou e reservando uma parte do mês pra MARCA "+
+    "(posicionamento, qualidade do serviço, processo, equipe, prova social) — a pauta é do negócio inteiro, não um catálogo. "+
+    "Pensa como quem conhece o negócio do cliente: "+
     "assunto concreto, que dá pra produzir, que o público daquele cliente quer ver. Nunca inventa número, cidade, prazo, "+
     "garantia ou depoimento. "+(py?"O cliente é a unidade do Paraguai: TÍTULO e CHAMADA em ESPANHOL; ÂNGULO em português (é pra equipe). ":"Escreva em português do Brasil. ")+
     "Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
@@ -5779,7 +5781,13 @@ async function pxSugerirPauta(opts){
   slots.forEach(function(s){ u+="- id "+s.id+" · "+(s.data||"sem data")+" · "+(_TIPO[String(s.tipo||"")]||String(s.tipo||"formato livre"))+"\n"; });
   u+="\n";
   u+="TAREFA: dê um assunto pra CADA card acima.\n"+
-     "DISTRIBUIÇÃO PELO PESO (somando o que o mês já tem): [PRIORIDADE] leva a maior parte (perto de 60%); [IMPORTANTE] o resto; [COMPLEMENTAR] no máximo 1 no mês, e só se sobrar; [INATIVO] nunca. "+
+     "MIX DO MÊS (23/09/2026): os cards NÃO são só de produto. Perto de 1 em cada 4 (mínimo 1 quando houver 4 ou mais cards no mês, contando os que já existem) é de MARCA: "+
+     "o posicionamento que a VISÃO GERAL descreve (ex.: qual é o carro-chefe e por quê, o que a empresa faz mas não é o foco), qualidade do serviço e da entrega, "+
+     "como o trabalho é feito (processo, bastidor, prazo, cuidado), equipe, prova social e obras/entregas feitas, dúvida geral que o público tem sobre o segmento. "+
+     "Esses assuntos saem dos PILARES DE CONTEÚDO, do SOBRE A EMPRESA, da VISÃO GERAL, dos FEEDBACKS e dos MATERIAIS do cliente — nunca inventados. "+
+     "Nesses cards, PRODUTO: — (ou o carro-chefe, quando o assunto for o posicionamento dele). Os demais cards seguem o peso dos produtos abaixo.\n"+
+     "A VISÃO GERAL vale pra TODOS os cards, inclusive os de produto: se ela diz que o foco é X e que Y a empresa também faz mas não é o foco, X puxa o mês e Y aparece no máximo como 'também fazemos', nunca como tema principal.\n"+
+     "DISTRIBUIÇÃO PELO PESO entre os cards de PRODUTO (somando o que o mês já tem): [PRIORIDADE] leva a maior parte (perto de 60%); [IMPORTANTE] o resto; [COMPLEMENTAR] no máximo 1 no mês, e só se sobrar; [INATIVO] nunca. "+
      "DENTRO DO MESMO PESO É RODÍZIO: produtos com o mesmo peso saem em quantidades parecidas (3 produtos [PRIORIDADE] dividem a fatia deles quase por igual); comece pelo que está com MENOS posts no mês, e nunca dê dois seguidos pro mesmo produto enquanto outro do mesmo peso está com menos. "+
      "Se NENHUM produto tem peso marcado, use TODOS os produtos cadastrados do cliente em rodízio — nenhum fica de fora, nenhum se repete antes de todos aparecerem — seguindo a visão geral, o briefing (🟣 🟢 🟡 🔴) e o foco do mês. Se a empresa tem menos produtos que cards, repita o produto com ÂNGULO totalmente diferente (dúvida frequente, erro comum, bastidor, como funciona, resultado, comparação, mito e verdade).\n"+
      "CADA ASSUNTO É ÚNICO no mês. O formato do card manda no que dá pra fazer (arte única = uma ideia; carrossel = sequência; vídeo = algo gravável).\n"+
@@ -107195,7 +107203,7 @@ function _rtTextoTodos(lista,nome){
   const n=(lista||[]).length;
   const grupos=[], idx={};
   (lista||[]).forEach(function(r){
-    const prod=String((r&&r.produto)||"").trim();
+    const prod=String((r&&(r.produto_tag||r.produto))||"").trim();
     const k=prod?("p:"+prod.toLowerCase()):"__sem__";
     if(idx[k]===undefined){ idx[k]=grupos.length; grupos.push({produto:prod,itens:[]}); }
     grupos[idx[k]].itens.push(r);
@@ -107322,7 +107330,8 @@ async function pxGerarRoteiros(opts){
     u+="PRODUTO: marque cada roteiro com o produto ou serviço da lista acima que ele trata (se o pedido não cita nenhum, use o que mais se aproxima). O pedido pode pedir vários roteiros do MESMO produto — nesse caso, cada um por um ângulo diferente.\n\n";
   }
   if(_temProdutos&&!pedido){
-    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize [PRIORIDADE] (ou 🟣 no briefing), depois [IMPORTANTE] (🟢); [COMPLEMENTAR] (🟡) só de vez em quando; [INATIVO] (🔴) NUNCA. Entre produtos do MESMO peso, rodízio: quantidades parecidas, o que tem menos roteiros vem primeiro. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
+    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize [PRIORIDADE] (ou 🟣 no briefing), depois [IMPORTANTE] (🟢); [COMPLEMENTAR] (🟡) só de vez em quando; [INATIVO] (🔴) NUNCA. Entre produtos do MESMO peso, rodízio: quantidades parecidas, o que tem menos roteiros vem primeiro. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente. "+
+       "MARCA (23/09/2026): quando forem 4 ou mais, UM deles pode ser institucional — qualidade do serviço, como o trabalho é feito, o posicionamento da VISÃO GERAL (ex.: por que o carro-chefe é o carro-chefe), equipe ou prova social — tirado dos pilares, do Sobre a empresa, dos feedbacks e dos materiais; esse conta como 'sem produto' e não quebra o rodízio dos outros. Se o pedido nomeia os assuntos, o pedido manda.\n";
     u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
   }
   u+=_rtRegras60();
@@ -107330,7 +107339,7 @@ async function pxGerarRoteiros(opts){
   u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 150 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
-  const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
+  const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL — é o título que o cliente do Paraguai vê":"em português")+")\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
   if(livre){
     u+="FORMATO EXATO DA RESPOSTA (um bloco por roteiro, numerados 1, 2, 3… — repita o bloco quantas vezes o pedido pedir, até 20):\n"+_bloco(1)+_bloco(2)+"(…e assim por diante)\n";
   } else {
@@ -107346,7 +107355,9 @@ async function pxGerarRoteiros(opts){
   const lista=out.slice(0,livre?20:quantos);
   /* A tag só existe se bater com o cadastro. Nome que a IA inventou não vira etiqueta. */
   if(_prodOf.length&&typeof pxProdutoOficial==="function"){
-    lista.forEach(function(r){ r.produto=pxProdutoOficial(r.produto,_prodOf)||""; });
+    lista.forEach(function(r){ r.produto=pxProdutoOficial(r.produto,_prodOf)||"";
+      /* (23/09/2026, Vinicius) Paraguay: a tag sai com o "Nombre principal (ES)" da ficha */
+      if(py&&r.produto){ const _o=_prodOf.find(function(p){return p.nome===r.produto;}); if(_o&&_o.nomeEs) r.produto=_o.nomeEs; } });
   }
   return lista;
 }
@@ -107411,7 +107422,7 @@ async function pxAjustarRoteiro(r,feedback){
   u+=_rtRegras60();
   u+="- PARÁGRAFOS: cada parte é UM parágrafo.\n";
   u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos).\n\n";
-  u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, em português)\n"+
+  u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL":"em português")+")\n"+
      ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
 
   const data=await askIA({model:PX_IA_MODELO,max_tokens:2400,system:sys,messages:[{role:"user",content:u}]});
@@ -107444,6 +107455,21 @@ const _RT_ICONES=[
 function _rtIcone(id){ let h=0; const t=String(id||""); for(let i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return _RT_ICONES[h%_RT_ICONES.length]; }
 
 /* ── CARD DE UM ROTEIRO (agência e portal usam o mesmo) ── */
+/* (23/09/2026, Vinicius) Bioter Paraguay: a tag do produto aparece em espanhol — "Nombre principal (ES)" da
+   ficha no Playbook › Produtos. Roteiro antigo gravado com o nome em português também mostra em espanhol. */
+let _RT_ES_MAP=null, _RT_ES_EM=0;
+async function _rtMapaEs(sb){
+  if(_RT_ES_MAP&&(Date.now()-_RT_ES_EM)<5*60*1000) return _RT_ES_MAP;
+  const m={};
+  try{
+    const r=await sb.from("playbooks").select("data").eq("client_id","bioter").maybeSingle();
+    const arr=(r&&r.data&&r.data.data&&Array.isArray(r.data.data.produtos))?r.data.data.produtos:[];
+    arr.forEach(function(p){ const es=String((p&&p.nomePrincipalEs)||"").trim(); if(!es) return;
+      [p.nome,p.nomePrincipalPt].forEach(function(n){ n=String(n||"").trim().toLowerCase(); if(n) m[n]=es; }); m[es.toLowerCase()]=es; });
+  }catch(_){}
+  _RT_ES_MAP=m; _RT_ES_EM=Date.now(); return m;
+}
+function _rtTagProduto(r,mapa){ const p=String((r&&r.produto)||"").trim(); if(!p||!mapa||String((r&&r.unidade)||"")!=="paraguay") return p; return mapa[p.toLowerCase()]||p; }
 function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado}){
   const [aberto,setAberto]=useState(true);
   /* (22/09/2026, Rodrigo) Ajustar o roteiro sem reescrever outro: `ajuste` é o texto do
@@ -107462,7 +107488,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span style={{width:30,height:30,borderRadius:9,background:_c,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 8px "+_c+"55"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">{_rtIcone(r.id)}</svg></span>
           <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.3,lineHeight:1.25}}>{r.assunto||"Roteiro"}</span>
-          {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.2,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.produto}</span>}
+          {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",lineHeight:1.4,maxWidth:"100%",whiteSpace:"normal",wordBreak:"break-word"}}>{r.produto_tag||r.produto}</span>}
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
           {r.gravado_em&&<span title={"Gravado"+(r.gravado_por?(" por "+r.gravado_por):"")+" em "+new Date(r.gravado_em).toLocaleDateString("pt-BR")} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:4}}>
@@ -107561,6 +107587,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const [aba,setAba]=useState("roteiros");
   useEffect(function(){ if(!_bl("aba."+aba)){ const f=["roteiros","trends","ideias"].find(function(a){return _bl("aba."+a);}); if(f) setAba(f); } },[aba]);
   const [roteiros,setRoteiros]=useState([]);
+  const [mapaEs,setMapaEs]=useState(null);
   const [trends,setTrends]=useState([]);
   const [loading,setLoading]=useState(true);
   const [gerando,setGerando]=useState("");   // "" | "ia" | trendId
@@ -107613,9 +107640,22 @@ function PageRoteiros({isMob, perms, viewingAs}){
     return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
   },[]);
 
+  useEffect(function(){ if(clId==="bioter"&&unit==="paraguay"&&sb&&!mapaEs) _rtMapaEs(sb).then(setMapaEs); },[clId,unit]);
   const _trendTitulo=function(id){ const t=trends.find(function(x){return x.id===id;}); return t?t.titulo:""; };
   const doCliente=roteiros.filter(function(r){ return r.client_id===clId && (!isBioter || String(r.unidade||"")===String(unit||"")); });
-  const visiveis=doCliente.filter(function(r){ return filtro==="todos"||(filtro==="gravado"?!!r.gravado_em:r.status===filtro); }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id)}); });
+  const visiveis=(function(){
+    const base=doCliente.filter(function(r){ return filtro==="todos"||(filtro==="gravado"?!!r.gravado_em:r.status===filtro); }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id),produto_tag:_rtTagProduto(r,mapaEs)}); });
+    /* (23/09/2026, Vinicius) "pedi 3 de cada produto, deixa lado a lado os produtos iguais": dentro do mesmo
+       lote os cards ficam agrupados por produto (na ordem em que o produto apareceu); os lotes seguem mais novo primeiro. */
+    const _L=function(r){ return String(r.lote||("s"+r.id)); };
+    const ordLote=[], ordProd={};
+    base.forEach(function(r,i){ const L=_L(r); if(ordLote.indexOf(L)<0) ordLote.push(L); const P=L+"|"+String(r.produto||"~"); if(!(P in ordProd)) ordProd[P]=i; });
+    return base.map(function(r,i){ return {r:r,i:i}; }).sort(function(a,b){
+      const La=_L(a.r), Lb=_L(b.r); const d=ordLote.indexOf(La)-ordLote.indexOf(Lb); if(d) return d;
+      const pa=ordProd[La+"|"+String(a.r.produto||"~")], pb=ordProd[Lb+"|"+String(b.r.produto||"~")]; if(pa!==pb) return pa-pb;
+      return a.i-b.i;
+    }).map(function(x){ return x.r; });
+  })();
 
   /* 21/09/2026 — BUG: o botao "Gerar 5 roteiros" chamava _gerar(null) sem unidade, entao uId
      caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
@@ -107730,7 +107770,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
 
   const _inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_RT_FF};
   const _lbl={color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
-  const _btnGerar=function(label,on,busy,cor){ return {background:busy?"#e2e8f0":("linear-gradient(135deg,"+(cor||_RT_AC)+","+(cor||_RT_AC)+"cc)"),color:busy?"#94a3b8":"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:13,fontWeight:800,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:busy?"none":("0 6px 18px "+(cor||_RT_AC)+"44"),whiteSpace:"nowrap"}; };
+  /* (23/09/2026, Vinicius) barra de ações com um padrão só: 40px de altura, Inter 12.5/700, raio 12 */
+  const _btnGerar=function(label,on,busy,cor){ return {background:busy?"#e2e8f0":(cor||_RT_AC),color:busy?"#94a3b8":"#fff",border:"1px solid "+(busy?"#e2e8f0":(cor||_RT_AC)),borderRadius:12,height:40,padding:"0 18px",fontSize:12.5,fontWeight:800,letterSpacing:-.1,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,boxShadow:busy?"none":("0 4px 12px "+(cor||_RT_AC)+"40"),whiteSpace:"nowrap",boxSizing:"border-box",transition:"all .12s"}; };
+  const _btnSec=function(off,cor){ return {background:"#fff",color:off?"#94a3b8":"#0f172a",border:"1px solid "+(off?"#eef2f7":"#e2e8f0"),borderRadius:12,height:40,padding:"0 16px",fontSize:12.5,fontWeight:700,letterSpacing:-.1,cursor:off?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:8,whiteSpace:"nowrap",boxSizing:"border-box",boxShadow:off?"none":"0 1px 2px rgba(15,23,42,.05)",transition:"all .12s"}; };
   const Spin=function(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite"}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>; };
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF,width:"100%",boxSizing:"border-box",padding:isMob?"14px":"18px"}}>
@@ -107847,21 +107889,21 @@ function PageRoteiros({isMob, perms, viewingAs}){
         </div>}
         <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,marginLeft:isMob?undefined:"auto",width:isMob?"100%":undefined,flexWrap:"wrap"}}>
         {/* Celular: o filtro ocupa a largura */}
-        <div style={{display:isMob?"flex":"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
-          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"},{id:"gravado",l:"Gravados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:isMob?"8px 6px":"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
+        <div style={{display:isMob?"flex":"inline-flex",background:"#f1f5f9",borderRadius:12,padding:3,gap:2,height:40,boxSizing:"border-box",alignItems:"center"}}>
+          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"},{id:"gravado",l:"Gravados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,height:34,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"0 6px":"0 13px",fontSize:12.5,fontWeight:on?800:600,letterSpacing:-.1,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none",transition:"all .12s"}}>{v.l}</button>; })}
         </div>
         {/* (22/09/2026, Rodrigo: "não vai ser um tiro no pé?") Bioter · Grupo tem 20
             roteiros = ~22 mil letras numa mensagem só. No computador dá pra reler antes
             de enviar; no celular, não. Some no celular — lá se copia um por um, no card. */}
         {!isMob&&_bl("roteiros.copiar_todos")&&<button type="button" disabled={!visiveis.length} title="Copia todos os roteiros desta tela numa mensagem só, agrupados pela tag de produto e formatados pro WhatsApp"
           onClick={function(){ if(visiveis.length) _rtCopiar(_rtTextoTodos(visiveis,_nomeCl(clId,isBioter?unit:"")),visiveis.length+" roteiros copiados — é só colar no WhatsApp"); }}
-          style={{background:"#fff",color:visiveis.length?"#16a34a":"#94a3b8",border:"1px solid "+(visiveis.length?"#86efac":"#e2e8f0"),borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:800,cursor:visiveis.length?"pointer":"default",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          style={_btnSec(!visiveis.length,_cor)}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={visiveis.length?_cor:"#cbd5e1"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
         </button>}
         {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:0});}}
-          style={{width:isMob?"100%":undefined,justifyContent:isMob?"center":undefined,background:"#fff",color:_cor,border:"1px solid "+_cor+"55",borderRadius:12,padding:"12px 16px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          style={Object.assign({},_btnSec(!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={gerando?"#cbd5e1":_cor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Roteiro específico
         </button>}
         {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} onClick={function(){_gerar(null);}} style={Object.assign({},_btnGerar("",true,!!gerando,_cor),isMob?{width:"100%",justifyContent:"center"}:{})}>
@@ -107886,10 +107928,10 @@ function PageRoteiros({isMob, perms, viewingAs}){
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
-          <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#475569",fontWeight:600,fontSize:13,cursor:gerando?"default":"pointer",fontFamily:_RT_FF}}>Cancelar</button>
+          <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={Object.assign({},_btnSec(!!gerando,_cor),{color:gerando?"#94a3b8":"#475569"})}>Cancelar</button>
           {(function(){ const _q=pedidoForm.quantos||0, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
             return <button type="button" disabled={_off} onClick={function(){ _gerar(null,clId,isBioter?unit:"",pedidoForm.texto,_q); }} style={_btnGerar("",true,_off,_cor)}>
-              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> {_q?("Gerar "+_q+" roteiro"+(_q>1?"s":"")):"Gerar quantos o pedido pedir"}</>}
+              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> {_q?("Gerar "+_q+" roteiro"+(_q>1?"s":"")):"Gerar"}</>}
             </button>; })()}
         </div>
       </div>}
@@ -108149,7 +108191,9 @@ function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixe
 function PortalSugestoesConteudo({cl, selUnit, isMob}){
   const sb=(typeof window!=="undefined")?window._sb:null;
   const [lista,setLista]=useState(null);
+  const [mapaEs,setMapaEs]=useState(null);
   const cid=String((cl&&cl.id)||"").replace(/^bioter_.*/,"bioter");
+  useEffect(function(){ if(cid==="bioter"&&sb&&!mapaEs) _rtMapaEs(sb).then(setMapaEs); },[cid]);
   const unitFiltro=(cid==="bioter")?String(selUnit||""):"";
   const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:_RT_AC;
   const _carregar=async function(){
@@ -108175,7 +108219,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
     {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
     <div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(0,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
-      {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}
+      {vis.map(function(r){ return <RoteiroCard key={r.id} r={Object.assign({},r,{produto_tag:_rtTagProduto(r,mapaEs)})} cor={_cor} agencia={false} isMob={isMob}
         onGravado={async function(){
           try{
             const rr=await sb.rpc("roteiro_marcar_gravado",{p_id:r.id,p_gravado:!r.gravado_em});
