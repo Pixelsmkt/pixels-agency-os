@@ -4663,12 +4663,13 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
    diferenciais, especificações e dúvidas frequentes. Só produtos da unidade (ou sem unidade).
    Até então a ficha do playbook NÃO ia pro cérebro — só o nome (lista oficial) e o briefing do
    portal. Orçamento de 16 mil caracteres: estourou, para de acrescentar produto. */
-/* (23/09/2026, Vinicius) "no Grupo Bioter o peso é por unidade, não geral": com unidade, vale o peso marcado
-   naquela unidade (prod.prioridadePorUnidade[unidade]); se ela não marcou nada, cai no geral (prod.prioridade). */
+/* (23/09/2026, Vinicius) "no Grupo Bioter o peso é por unidade, não geral — cada unidade tem uma prioridade
+   específica": com unidade, vale SÓ o que aquela unidade marcou (prod.prioridadePorUnidade[unidade]); nada
+   marcado = sem peso. Não herda do geral. O geral (prod.prioridade) só vale quando não há unidade. */
 function pxPesoProduto(pr,unit){
   if(!pr) return "";
-  const u=String(unit||"").trim(), pu=pr.prioridadePorUnidade;
-  if(u&&pu&&typeof pu==="object"&&Object.prototype.hasOwnProperty.call(pu,u)) return String(pu[u]||"");
+  const u=String(unit||"").trim();
+  if(u){ const pu=pr.prioridadePorUnidade; return (pu&&typeof pu==="object")?String(pu[u]||""):""; }
   return String(pr.prioridade||"");
 }
 if(typeof window!=="undefined"){ window.pxPesoProduto=pxPesoProduto; }
@@ -107357,6 +107358,10 @@ async function pxGerarRoteiros(opts){
   u+="- PARÁGRAFOS: cada parte é UM parágrafo (vai pro cliente com um \"•\" na frente): abertura 1 a 2 frases, desenvolvimento 3 a 4 frases, fechamento 2 a 3 frases com o CTA.\n";
   u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 150 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
+  /* (23/09/2026, Vinicius) "senti falta de ganchos fortes que prendam a atenção" */
+  u+="- GANCHO (obrigatório): a PRIMEIRA FRASE da abertura existe pra parar o dedo em 2 segundos. Nunca comece apresentando o produto ('A cisterna inflada é…', 'O reservatório serve pra…') nem com 'Você sabia' ou 'Hoje vamos falar'. Comece por UMA destas portas: uma dor real do público dita como ele diz ('Perdeu produção na estiagem e o vizinho não?'); uma pergunta que ele já se faz; um erro comum que custa caro; um contraste ou quebra de expectativa ('Não é o tamanho da lagoa que decide a safra'); uma consequência concreta ('Cada dia sem água na granja é dinheiro que não volta'). Frase curta, direta, na voz de quem grava. Sem clickbait: o gancho promete só o que o roteiro entrega, e nunca inventa número, cidade, prazo ou depoimento.\n";
+  u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
+
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
   const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL — é o título que o cliente do Paraguai vê":"em português")+")\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
   if(livre){
@@ -107440,7 +107445,11 @@ async function pxAjustarRoteiro(r,feedback){
      "Se o pedido fala só de uma parte (a abertura, por exemplo), as outras voltam praticamente iguais.\n";
   u+=_rtRegras60();
   u+="- PARÁGRAFOS: cada parte é UM parágrafo.\n";
-  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos).\n\n";
+  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos).\n";
+  /* (23/09/2026, Vinicius) "senti falta de ganchos fortes que prendam a atenção" */
+  u+="- GANCHO (vale sempre que a abertura for tocada): a PRIMEIRA FRASE da abertura existe pra parar o dedo em 2 segundos. Nunca comece apresentando o produto ('A cisterna inflada é…', 'O reservatório serve pra…') nem com 'Você sabia' ou 'Hoje vamos falar'. Comece por UMA destas portas: uma dor real do público dita como ele diz ('Perdeu produção na estiagem e o vizinho não?'); uma pergunta que ele já se faz; um erro comum que custa caro; um contraste ou quebra de expectativa ('Não é o tamanho da lagoa que decide a safra'); uma consequência concreta ('Cada dia sem água na granja é dinheiro que não volta'). Frase curta, direta, na voz de quem grava. Sem clickbait: o gancho promete só o que o roteiro entrega, e nunca inventa número, cidade, prazo ou depoimento.\n";
+  u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
+  u+="\n";
   u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL":"em português")+")\n"+
      ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
 
