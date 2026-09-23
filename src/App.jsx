@@ -6639,7 +6639,7 @@ function _LoginsCardsView(props){
 const PX_BRIEF_PESOS=[
   {id:"prioridade",  l:"Prioridade",  e:"\ud83d\udd34", c:"#dc2626", bg:"#fee2e2", d:"É o carro-chefe — aparece mais nos posts"},
   {id:"importante",  l:"Importante",  e:"\ud83d\udfe0", c:"#ea580c", bg:"#ffedd5", d:"Aparece com regularidade"},
-  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#ca8a04", bg:"#fef9c3", d:"Só de vez em quando"},
+  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#facc15", bg:"#fef9c3", t:"#a16207", ft:"#422006", d:"Só de vez em quando"},
   {id:"inativo",     l:"Inativo",     e:"\ud83d\udd35", c:"#2563eb", bg:"#dbeafe", d:"Não divulgar por enquanto"},
 ];
 function _PxBriefProdutos({val, canEdit, color, onCommit}){
@@ -6669,7 +6669,7 @@ function _PxBriefProdutos({val, canEdit, color, onCommit}){
         <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingLeft:30}}>
           {PX_BRIEF_PESOS.map(function(o){ const on=p.peso===o.id;
             return <button key={o.id} type="button" disabled={!canEdit} title={o.d} onClick={function(){ upd(i,{peso:on?"":o.id},true); }}
-              style={{background:on?o.c:"#fff",color:on?"#fff":"#475569",border:"1.5px solid "+(on?o.c:"#e2e8f0"),borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:on?800:600,cursor:canEdit?"pointer":"default",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              style={{background:on?o.c:"#fff",color:on?(o.ft||"#fff"):"#475569",border:"1.5px solid "+(on?o.c:"#e2e8f0"),borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:on?800:600,cursor:canEdit?"pointer":"default",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
               <span style={{fontSize:10}}>{o.e}</span>{o.l}
             </button>; })}
           {!p.peso&&<span style={{color:"#94a3b8",fontSize:11,alignSelf:"center"}}>← quanto ele importa pra vocês hoje</span>}
@@ -22974,7 +22974,7 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
     return function(){ vivo=false; };
   },[client,unit,_y,_m]);
   useEffect(function(){ const f=function(e){ if(e.key==="Escape"&&!gerando) onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[gerando]);
-  const _PES={prioridade:{l:"Prioridade",e:"\ud83d\udd34",c:"#dc2626",bg:"#fee2e2"},importante:{l:"Importante",e:"\ud83d\udfe0",c:"#ea580c",bg:"#ffedd5"},complementar:{l:"Complementar",e:"\ud83d\udfe1",c:"#ca8a04",bg:"#fef9c3"},inativo:{l:"Inativo",e:"\ud83d\udd35",c:"#2563eb",bg:"#dbeafe"}};
+  const _PES={prioridade:{l:"Prioridade",e:"\ud83d\udd34",c:"#dc2626",bg:"#fee2e2"},importante:{l:"Importante",e:"\ud83d\udfe0",c:"#ea580c",bg:"#ffedd5"},complementar:{l:"Complementar",e:"\ud83d\udfe1",c:"#a16207",bg:"#fef9c3"},inativo:{l:"Inativo",e:"\ud83d\udd35",c:"#2563eb",bg:"#dbeafe"}};
   const _prodDe=function(t){ if(!pesos.length||typeof pxProdutoOficial!=="function") return ""; return pxProdutoOficial(String(t.title||"")+" "+String(t.desc||"").replace(/<[^>]+>/g," ").slice(0,300),pesos)||""; };
   const _contagem=(function(){ const o={}; _doMes.forEach(function(t){ if(_pmEhMaterial(t)||_pmEhComem(t)) return; const p=_prodDe(t); if(p) o[p]=(o[p]||0)+1; }); return o; })();
   const _nVazios=Object.keys(selVazios).filter(function(k){return selVazios[k];}).length;
@@ -100837,7 +100837,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.3,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
                         {(function(){ const _p=_pbPrioDe(prod); return _p
                           ? <_PbTagPeso p={_p}/>
-                          : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Sem peso</span>; })()}
+                          : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.35,textTransform:"uppercase",lineHeight:1.3}}>Sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
                         {_uni.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
                           {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
@@ -101069,8 +101069,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           {_PB_PRIOS.map(function(o){
                             const on=String(prod.prioridade||"")===o.id;
                             return <button type="button" key={o.id} title={o.d} onClick={function(){ _produtoUpd(pi,{prioridade:on?"":o.id}); }}
-                              style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?"#fff":"#475569",borderRadius:8,padding:"7px 13px",fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s",boxShadow:on?("0 2px 6px "+o.c+"55"):"none"}}>
-                              <span style={{width:7,height:7,borderRadius:99,background:on?"#fff":o.c,flexShrink:0}}/>{o.l}
+                              style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+                              <span style={{fontSize:11}}>{o.e}</span>{o.l}
                             </button>;
                           })}
                         </div>
@@ -102064,7 +102064,7 @@ const _PB_FICHA_ROT={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.
 const _PB_PRIOS=[
   {id:"prioridade",  l:"Prioridade",  e:"\ud83d\udd34", c:"#dc2626", bg:"#fee2e2", d:"Carro-chefe — a maioria das copys e roteiros"},
   {id:"importante",  l:"Importante",  e:"\ud83d\udfe0", c:"#ea580c", bg:"#ffedd5", d:"Presença regular"},
-  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#ca8a04", bg:"#fef9c3", d:"Só de vez em quando, ou quando o pedido citar"},
+  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#facc15", bg:"#fef9c3", t:"#a16207", ft:"#422006", d:"Só de vez em quando, ou quando o pedido citar"},
   {id:"inativo",     l:"Inativo",     e:"\ud83d\udd35", c:"#2563eb", bg:"#dbeafe", d:"Nunca entra em copy nem roteiro"},
 ];
 /* (23/09/2026, Vinicius) "os mais importantes primeiro": ordem da grade pelo peso; empate = ordem manual */
@@ -102082,11 +102082,12 @@ function _pbCmpPeso(a,b){
 /* (23/09/2026, Vinicius) tag do peso: pílula sólida, MAIÚSCULAS, espaçada, pontinho branco */
 function _PbTagPeso({p, grande, clara}){
   if(!p) return null;
-  return <span title={p.d} style={{alignSelf:"flex-start",display:"inline-flex",alignItems:"center",gap:6,
-    background:clara?"#fff":p.c,color:clara?p.c:"#fff",borderRadius:6,padding:grande?"4px 10px 4px 8px":"3px 8px 3px 7px",
-    fontFamily:"'Inter',system-ui,sans-serif",fontSize:grande?10.5:9.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2,
-    boxShadow:clara?"none":("0 1px 2px "+p.c+"55"),whiteSpace:"nowrap"}}>
-    <span style={{width:6,height:6,borderRadius:99,background:clara?p.c:"rgba(255,255,255,.95)",flexShrink:0}}/>{p.l}
+  /* (23/09/2026) suave: fundo claro da cor, texto na cor, maiúsculas leves */
+  return <span title={p.d} style={{alignSelf:"flex-start",display:"inline-flex",alignItems:"center",gap:5,
+    background:clara?"#fff":p.bg,color:p.t||p.c,border:"1px solid "+(clara?"#fff":(p.c+"33")),borderRadius:99,
+    padding:grande?"3px 10px 3px 8px":"2px 9px 2px 7px",
+    fontFamily:"'Inter',system-ui,sans-serif",fontSize:grande?10.5:10,fontWeight:700,letterSpacing:.35,textTransform:"uppercase",lineHeight:1.3,whiteSpace:"nowrap"}}>
+    <span style={{width:6,height:6,borderRadius:99,background:p.c,flexShrink:0}}/>{p.l}
   </span>;
 }
 function _pbPrioDe(p){ const id=String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
