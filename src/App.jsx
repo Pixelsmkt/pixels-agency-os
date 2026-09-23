@@ -100788,7 +100788,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                      continua aqui, no card. */
                   const _isMobG=(typeof _pxMob==="function"&&_pxMob());
                   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {_editUnitFilter && _visibleEdit.length>1 && <div style={{background:"#faf5ff",border:"1px dashed "+PB_PURPLE+"55",borderRadius:10,padding:"9px 13px",fontSize:12,color:PB_PURPLE_DK,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8,alignSelf:"flex-start"}}>
+                  {false && _editUnitFilter && _visibleEdit.length>1 && <div style={{background:"#faf5ff",border:"1px dashed "+PB_PURPLE+"55",borderRadius:10,padding:"9px 13px",fontSize:12,color:PB_PURPLE_DK,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8,alignSelf:"flex-start"}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                     {_isMobG?"Use as setas pra ordenar por relevância nesta unidade":"Arraste os cards pra ordenar por relevância nesta unidade · clique pra abrir a ficha"}
                   </div>}
@@ -100808,7 +100808,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     return <div key={pi} role="button" tabIndex={0}
                       onClick={function(){ setFichaAberta(pi); }}
                       onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaAberta(pi); } }}
-                      draggable={!!_editUnitFilter && !_isMobG}
+                      draggable={false /* (23/09/2026) ordem automática: peso + alfabética */}
                       onDragStart={_editUnitFilter?function(e){ _dragProdRef.current={unitId:_unitTabProd, srcIdx:filteredIdx}; e.dataTransfer.effectAllowed="move"; try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){} setDropIdx(filteredIdx); }:undefined}
                       onDragEnd={_editUnitFilter?function(){ _dragProdRef.current={unitId:null,srcIdx:-1}; setDropIdx(-1); }:undefined}
                       onDragOver={_editUnitFilter?function(e){ e.preventDefault(); e.dataTransfer.dropEffect="move"; if(_dropIdx!==filteredIdx) setDropIdx(filteredIdx); }:undefined}
@@ -100828,16 +100828,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           : <span style={{color:"#a78bfa",display:"flex",flexDirection:"column",alignItems:"center",gap:4,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}><Ico n="image" size={24} color="currentColor"/>Sem foto</span>}
                         {_editUnitFilter && <span style={{position:"absolute",top:8,left:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.4}}>#{filteredIdx+1}</span>}
                         {_urls.length>1 && <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{_urls.length} fotos</span>}
-                        {_editUnitFilter && _isMobG && <span style={{position:"absolute",bottom:8,right:8,display:"inline-flex",gap:4}}>
+                        {false && _editUnitFilter && _isMobG && <span style={{position:"absolute",bottom:8,right:8,display:"inline-flex",gap:4}}>
                           <button type="button" disabled={filteredIdx===0} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx-1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx===0?.4:1}}>▲</button>
                           <button type="button" disabled={filteredIdx>=_visibleEdit.length-1} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx+1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx>=_visibleEdit.length-1?.4:1}}>▼</button>
                         </span>}
                       </div>
                       <div style={{padding:"11px 13px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
-                        <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
+                        <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.3,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
                         {(function(){ const _p=_pbPrioDe(prod); return _p
-                          ? <span title={_p.d} style={{alignSelf:"flex-start",background:_p.bg,color:_p.c,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:5}}><span style={{fontSize:9}}>{_p.e}</span>{_p.l}</span>
-                          : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",color:"#cbd5e1",fontSize:10.5,fontWeight:700}}>sem peso</span>; })()}
+                          ? <_PbTagPeso p={_p}/>
+                          : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
                         {_uni.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
                           {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
@@ -100988,11 +100988,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </span>
             <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
               <span style={{opacity:.75,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica{_pos>=0?(" · "+(_pos+1)+" de "+_lista.length):""}{_editUnitFilter&&typeof BIOTER_UNITS!=="undefined"?(" · "+((BIOTER_UNITS.find(function(u){return u.id===_unitTabProd;})||{}).pickerLabel||_unitTabProd)):""}</span>
-              <span style={{fontWeight:800,fontSize:_isMobF?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome||"Produto sem nome"}</span>
+              <span style={{fontWeight:800,fontSize:_isMobF?16:19,letterSpacing:-.4,lineHeight:1.2,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||"Produto sem nome"}</span>
             </span>
             {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
               {_uni.slice(0,6).map(function(u){ return <span key={u.id} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
-              {(function(){ const _p=_pbPrioDe(prod); return _p?<span title={_p.d} style={{background:"rgba(255,255,255,.92)",color:_p.c,borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_p.e} {_p.l}</span>:null; })()}
+              {(function(){ const _p=_pbPrioDe(prod); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
               <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
             </span>}
             <button type="button" onClick={function(){ _produtoDel(pi); setFichaAberta(null); }} title="Remover este produto do playbook" style={_btnCab}
@@ -101069,8 +101069,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           {_PB_PRIOS.map(function(o){
                             const on=String(prod.prioridade||"")===o.id;
                             return <button type="button" key={o.id} title={o.d} onClick={function(){ _produtoUpd(pi,{prioridade:on?"":o.id}); }}
-                              style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?"#fff":"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
-                              <span style={{fontSize:11}}>{o.e}</span>{o.l}
+                              style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?"#fff":"#475569",borderRadius:8,padding:"7px 13px",fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s",boxShadow:on?("0 2px 6px "+o.c+"55"):"none"}}>
+                              <span style={{width:7,height:7,borderRadius:99,background:on?"#fff":o.c,flexShrink:0}}/>{o.l}
                             </button>;
                           })}
                         </div>
@@ -102070,7 +102070,25 @@ const _PB_PRIOS=[
 /* (23/09/2026, Vinicius) "os mais importantes primeiro": ordem da grade pelo peso; empate = ordem manual */
 const _PB_PESO_RANK={prioridade:0,importante:1,"":2,complementar:3,inativo:4};
 function _pbPesoRank(p){ const k=String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
-function _pbCmpPeso(a,b){ const d=_pbPesoRank(a.prod||a.p)-_pbPesoRank(b.prod||b.p); return d!==0?d:(a.ord-b.ord); }
+/* (23/09/2026, Vinicius) "se forem da mesma prioridade, em ordem alfabética" */
+function _pbNomeProd(p){ return String((p&&(p.nomePrincipalPt||p.nome))||"").trim(); }
+function _pbCmpPeso(a,b){
+  const pa=a.prod||a.p, pb=b.prod||b.p;
+  const d=_pbPesoRank(pa)-_pbPesoRank(pb); if(d!==0) return d;
+  const na=_pbNomeProd(pa), nb=_pbNomeProd(pb);
+  if(!na!==!nb) return na?-1:1;   // sem nome (recém-criado) vai pro fim do grupo
+  const c=na.localeCompare(nb,"pt-BR",{sensitivity:"base",numeric:true}); return c!==0?c:(a.ord-b.ord);
+}
+/* (23/09/2026, Vinicius) tag do peso: pílula sólida, MAIÚSCULAS, espaçada, pontinho branco */
+function _PbTagPeso({p, grande, clara}){
+  if(!p) return null;
+  return <span title={p.d} style={{alignSelf:"flex-start",display:"inline-flex",alignItems:"center",gap:6,
+    background:clara?"#fff":p.c,color:clara?p.c:"#fff",borderRadius:6,padding:grande?"4px 10px 4px 8px":"3px 8px 3px 7px",
+    fontFamily:"'Inter',system-ui,sans-serif",fontSize:grande?10.5:9.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2,
+    boxShadow:clara?"none":("0 1px 2px "+p.c+"55"),whiteSpace:"nowrap"}}>
+    <span style={{width:6,height:6,borderRadius:99,background:clara?p.c:"rgba(255,255,255,.95)",flexShrink:0}}/>{p.l}
+  </span>;
+}
 function _pbPrioDe(p){ const id=String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
 /* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
    carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
