@@ -45159,6 +45159,8 @@ function _cardPodeSerResp(u){
 
   const _AJ_LAM_RE = /\[\s*L[âa]mina\s*(\d+)\s*\/\s*(\d+)\s*\]/i;
   const _AJ_ACAO_RE = /^\s*[•\-\*]\s*([^:\n]{2,42}?)\s*:\s?/;
+  // (23/09/2026, Vinicius) "* Lâmina X" sem dois-pontos também é tag preta: a linha inteira vira o rótulo
+  const _AJ_AST_RE  = /^\s*\*\s*([^:\n]{2,42}?)\s*$/;
   function _ajTsNodes(txt, hasVideo, k){
     if(!hasVideo) return [<span key={k}>{txt}</span>];
     const parts=[]; const re=/\[(\d{1,2}(?::\d{2}){1,2})\]/g;
@@ -45221,7 +45223,7 @@ function _cardPodeSerResp(u){
         </div>);
         resto=resto.replace(_AJ_LAM_RE,"");
       }
-      const ma=resto.match(_AJ_ACAO_RE);
+      const ma=resto.match(_AJ_ACAO_RE)||resto.match(_AJ_AST_RE);
       if(ma){
         resto=resto.slice(ma[0].length);
         out.push(<div key={"ac"+li} style={{display:"flex",alignItems:"flex-start",gap:8,margin:"3px 0"}}>
