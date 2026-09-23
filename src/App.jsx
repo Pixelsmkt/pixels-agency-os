@@ -2282,8 +2282,9 @@ function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
   if(!s)return "";
-  s=stripClientNames(s);
-  if(!s)return "";
+  /* (23/09/2026, Vinicius) "tira aquela regra que não pode o nome da empresa nos títulos dos
+     cards". O título fica como foi escrito — "A Climaves presta assistência?" não vira mais
+     "A presta assistência?". stripClientNames continua definida, mas ninguém chama. */
   s=s.replace(/\s+/g," ").trim();
   if(!s)return "";
   s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
