@@ -31734,9 +31734,30 @@ function PublicacaoEditModal({task, onClose, onReject}){
 }
 
 /* ─── PAGE APROVAÇÕES ─────────────────────── */
+/* (23/09/2026) Tipo do card pra fila da Avaliação de copys. Short antes de vídeo (short é vídeo);
+   comemorativa antes de tudo (o formato dela é fixo). */
+const PX_TIPOS_FILA=[
+  {id:"foto_obra",   label:"Foto de obra"},
+  {id:"short",       label:"Short"},
+  {id:"arte",        label:"Arte única"},
+  {id:"carrossel",   label:"Carrossel"},
+  {id:"video",       label:"Vídeo"},
+  {id:"comemorativa",label:"Comemorativa"},
+];
+function _pxTipoDaFila(t){
+  if(!t) return "arte";
+  if(typeof pxEhArteComemorativa==="function"&&pxEhArteComemorativa(t)) return "comemorativa";
+  if(typeof pxEhFotoDeObra==="function"?pxEhFotoDeObra(t):(String(t.contentType||"")==="foto"||/foto\s*de\s*obra/i.test(String(t.title||"")))) return "foto_obra";
+  if(typeof pxEhShort==="function"&&pxEhShort(t)) return "short";
+  const ct=String(t.contentType||t.content_type||"").toLowerCase();
+  if(/^(video|video_feira|video_complexo|reels|corte|video_dinamico|video_basico)$/.test(ct)) return "video";
+  if(ct==="carrossel") return "carrossel";
+  return "arte";
+}
 function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, initTab, perms, viewingAs}){
   const [tab,setTab]=useState(initTab||"copys");
   const [cardIdx,setCardIdx]=useState(0);
+  const [filtroTipo,setFiltroTipo]=useState("");   // (23/09/2026) "" = fila inteira
   const [imgIdx,setImgIdx]=useState(0);
   const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
   // ESC fecha o zoom
@@ -31926,7 +31947,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
   // Não filtra por `ajustar` — esse flag era usado antes da coluna Alteração de copy existir,
   // hoje cards reprovados vão pra status="alteracao_copy" (não ficam mais em demanda com o flag).
   // Mantemos a tolerância pra dados legados aparecerem na fila normalmente.
-  const copyQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"));
+  /* (23/09/2026, Vinicius) FILTRO POR TIPO na Avaliação de copys: "pra eu deixar só Fotos de obra,
+     ou só Shorts… aí quando desativa volta ao normal". Não é aprovar em lote — é a fila mostrar só
+     aquele tipo; a aprovação continua card a card. A régua é a mesma do contador do calendário
+     (pxEhFotoDeObra, pxEhShort) e do estilo da copy (pxEstiloCard). */
+  const copyQueueTudo=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"));
+  const copyQueue=filtroTipo?copyQueueTudo.filter(function(t){ return _pxTipoDaFila(t)===filtroTipo; }):copyQueueTudo;
   // Ajuste queue: cards marcados para ajuste
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
@@ -32990,7 +33016,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
 
   const isSocio=effectiveUser.level===1; // "ver como" fiel (18/09/2026)
   const TABS=[
-    {id:"copys",      label:"Avaliação de copys", count:copyQueue.length,     color:C.a},
+    {id:"copys",      label:"Avaliação de copys", count:copyQueueTudo.length, color:C.a},
     {id:"publicacao", label:"Avaliação de design",count:pubQueue.length,      color:C.gr},
     {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueue.length, color:"#0ea5e9"},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
@@ -33103,6 +33129,25 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           </button>
         </div>
       </div>
+
+      {/* (23/09/2026) CHIPS DE TIPO — só na Avaliação de copys. Um por vez; clicar de novo desliga. */}
+      {tab==="copys"&&(function(){
+        const _cont={}; (copyQueueTudo||[]).forEach(function(x){ const k=_pxTipoDaFila(x); _cont[k]=(_cont[k]||0)+1; });
+        return <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap",padding:"2px 0 6px"}}>
+          {PX_TIPOS_FILA.map(function(o){
+            const on=filtroTipo===o.id, n=_cont[o.id]||0;
+            return <button key={o.id} type="button" disabled={!n&&!on}
+              onClick={function(){ setFiltroTipo(on?"":o.id); setCardIdx(0); }}
+              title={on?"Desligar o filtro — volta a fila inteira":("Mostrar só "+o.label.toLowerCase()+" na fila")}
+              style={{background:on?"#9F43F6":"#fff",border:"1px solid "+(on?"#9F43F6":"#e2e8f0"),color:on?"#fff":(n?"#475569":"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:(n||on)?"pointer":"default",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}
+              onMouseEnter={function(e){ if(!on&&n){e.currentTarget.style.borderColor="#c9a5ff";e.currentTarget.style.color="#7c3aed";} }}
+              onMouseLeave={function(e){ if(!on&&n){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";} }}>
+              {o.label}<span style={{background:on?"rgba(255,255,255,.22)":"#f1f5f9",color:on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{n}</span>
+            </button>;
+          })}
+          {filtroTipo&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:4}}>mostrando só {(PX_TIPOS_FILA.find(function(o){return o.id===filtroTipo;})||{}).label} · {copyQueue.length} de {copyQueueTudo.length}</span>}
+        </div>;
+      })()}
 
       {/* Main content: image + sidebar — grid responsivo */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start",paddingBottom:(isMob&&isApprover)?((tab==="publicacao"||tab==="video")?170:230):0}}>
