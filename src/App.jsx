@@ -4287,6 +4287,11 @@ function _pxContatoUtil(pb, unit){
         return {num:_tel, quando:_limpa(c&&c.nome)};
       }).filter(Boolean).slice(0,3);
     };
+    /* (23/09/2026) DADOS CADASTRAIS primeiro: o WhatsApp oficial da empresa/unidade é o número da
+       legenda. Pessoas (Contatos) só se não houver cadastro. */
+    const _cadUn=(pb&&pb.cadastro_por_unidade)||{};
+    const _cad=(unit&&_cadUn[unit]&&typeof _cadUn[unit]==="object")?_cadUn[unit]:((pb&&pb.cadastro&&typeof pb.cadastro==="object")?pb.cadastro:null);
+    if(_cad){ const _tel=_limpa(_cad.whatsapp)||_limpa(_cad.telefone); if(_tel) return [{num:_tel, quando:"WhatsApp oficial"}]; }
     const _porUn=(pb&&pb.contatos_por_unidade)||{};
     if(unit&&_porUn[unit]){ const _r=_daLista(_porUn[unit]); if(_r.length) return _r; }
     const _c=pb&&pb.contatos;
@@ -4643,12 +4648,30 @@ function pxCtxProdutosFbTxt(ctx){
    cérebro perdia o fim — ângulos, frases prontas, público e "o que não dizer". */
 const PX_CTX_MAT_POR_MATERIAL=20000;
 const PX_CTX_MAT_ORCAMENTO=40000;
+/* (23/09/2026, Vinicius: "nos materiais não levar em consideração endereços e telefones, porque
+   é uma coisa que pode mudar") DADOS CADASTRAIS do Playbook são a única fonte de contato. */
+const PX_CADASTRO_CAMPOS=[
+  {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cidade",l:"Cidade/UF"},
+  {k:"telefone",l:"Telefone"},{k:"whatsapp",l:"WhatsApp oficial"},{k:"email",l:"E-mail"},{k:"site",l:"Site"},
+  {k:"instagram",l:"Instagram"},{k:"horario",l:"Horário de atendimento"}];
+function pxCtxCadastroTxt(ctx){
+  try{
+    const pb=(ctx&&ctx.playbook)||{}; const unit=String((ctx&&ctx._unit)||"");
+    const porUn=(pb.cadastro_por_unidade&&typeof pb.cadastro_por_unidade==="object")?pb.cadastro_por_unidade:{};
+    const cad=(unit&&porUn[unit]&&typeof porUn[unit]==="object")?porUn[unit]:((pb.cadastro&&typeof pb.cadastro==="object")?pb.cadastro:null);
+    if(!cad) return "";
+    const linhas=PX_CADASTRO_CAMPOS.map(function(c){ const v=String(cad[c.k]||"").trim(); return v?("- "+c.l+": "+v):""; }).filter(Boolean);
+    if(!linhas.length) return "";
+    return "DADOS CADASTRAIS"+(unit?(" — unidade "+unit):"")+" (a ÚNICA fonte pra endereço, telefone, WhatsApp, e-mail, site e Instagram — ignore contato que apareça em material, catálogo ou legenda antiga):\n"+linhas.join("\n")+"\n\n";
+  }catch(_){ return ""; }
+}
 function pxCtxMateriaisTxt(ctx){
+  const _cad=(typeof pxCtxCadastroTxt==="function")?pxCtxCadastroTxt(ctx):"";
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
-  if(!arr.length) return "";
-  let u="MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo, briefing que a própria empresa "+
+  if(!arr.length) return _cad;
+  let u=_cad+"MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo, briefing que a própria empresa "+
         "passou — é fato conferido, pode usar como verdade; ainda assim, escreva com as suas "+
-        "palavras, não copie trecho):\n";
+        "palavras, não copie trecho; endereço/telefone que apareça aqui NÃO vale — só os DADOS CADASTRAIS):\n";
   /* (22/09/2026, Rodrigo) Material do Grupo vale pro Paraguay também, "traduz pra espanhol".
      A ficha fica em português (é uma só pra todas as unidades); a peça do Paraguay sai em
      espanhol, então o aviso é pra traduzir os FATOS e não o texto — e usar o nome em espanhol
@@ -4666,7 +4689,7 @@ function pxCtxMateriaisTxt(ctx){
        (m&&m.unidade?(" — unidade "+m.unidade):"")+"\n"+corpo+"\n";
     gasto+=corpo.length; entraram++;
   }
-  if(!entraram) return "";
+  if(!entraram) return _cad;
   return u+"\n";
 }
 function pxCtxRegrasTxt(regras){
@@ -98426,7 +98449,7 @@ const PB_CADEIRAS = [
    folder/manual que a IA lê pra escrever certo. É outro bicho e fica. */
 const PB_BLOCOS = [
   {id:"pb-sobre",               label:"Sobre a empresa"},
-  {id:"pb-briefing-auto",       label:"Dados do Briefing"},
+  {id:"pb-briefing-auto",       label:"Dados cadastrais"},
   {id:"pb-memoria",             label:"Feedbacks"},
   {id:"pb-materiais",           label:"Materiais do cliente"},
   {id:"pb-contatos",            label:"Contatos"},
@@ -99425,8 +99448,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             }
           </PlaybookBlock>
 
-          {/* Dados do Briefing — auto, read-only, copiável */}
-          <_PbBriefingAuto clientId={cl.id}/>
+          {/* Dados cadastrais — editável, por unidade, puxa do Briefing */}
+          <_PbCadastro clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin} data={data} onUpdate={onUpdate}/>
 
           {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
           <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
@@ -100121,54 +100144,92 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 }
 
 // ─── Bloco genérico (com id pra ancora + subtitle) ──────────
-/* ── _PbBriefingAuto: puxa AUTOMÁTICO do Briefing (clients.briefing_data) os dados
-   não-confidenciais que a produção usa: identidade (razão social, CNPJ, cidade,
-   endereço, WhatsApp/e-mail empresarial), site e tom de voz. Read-only — edita no
-   Briefing. Clique num valor copia. NADA de logins/senhas/orçamento aqui. ── */
-function _PbBriefingAuto({clientId}){
+/* ── _PbCadastro — DADOS CADASTRAIS (23/09/2026, Vinicius) ─────────────────────────
+   Razão social, CNPJ, endereço, telefone, WhatsApp oficial, e-mail, site, Instagram, horário.
+   Editável (sócio/Hellen), POR UNIDADE na Bioter (Grupo = geral), gravado em
+   playbooks.data.cadastro / cadastro_by_unit. "Puxar do Briefing" preenche o que está vazio com
+   clients.briefing_data (identidade/processo; Bioter: unidade, depois grupo).
+   É a ÚNICA fonte de contato pra copy: o CTA lê daqui (_pxContatoUtil) e a ficha dos
+   Materiais não extrai mais endereço/telefone — catálogo envelhece, isto aqui não. ── */
+function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
+  const CAMPOS=(typeof PX_CADASTRO_CAMPOS!=="undefined")?PX_CADASTRO_CAMPOS:[
+    {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cidade",l:"Cidade/UF"},
+    {k:"telefone",l:"Telefone"},{k:"whatsapp",l:"WhatsApp oficial"},{k:"email",l:"E-mail"},{k:"site",l:"Site"},
+    {k:"instagram",l:"Instagram"},{k:"horario",l:"Horário de atendimento"}];
+  const _PH={razao_social:"Bioter Soluções Ambientais Ltda",cnpj:"00.000.000/0001-00",endereco:"Rua, número, bairro, CEP",cidade:"Chapecó/SC",telefone:"(49) 3322-0000",whatsapp:"(49) 9 9999-9999 — o que vai na legenda",email:"contato@empresa.com.br",site:"www.empresa.com.br",instagram:"@empresa",horario:"seg a sex, 8h às 18h"};
+  const _unit=isBioter?String(unitTab||""):"";
+  const _atual=(function(){
+    if(_unit){ const bu=(data&&data.cadastro_by_unit)||{}; return (bu[_unit]&&typeof bu[_unit]==="object")?bu[_unit]:{}; }
+    return (data&&data.cadastro&&typeof data.cadastro==="object")?data.cadastro:{};
+  })();
   const [bd,setBd]=useState(null);
   const [copiado,setCopiado]=useState("");
+  const [tick,setTick]=useState(0);
   useEffect(function(){
     let vivo=true;
     (async function(){
       try{
         if(!window._sb||!clientId) return;
-        const {data}=await window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle();
-        if(!vivo) return;
-        let _b=(data&&data.briefing_data)||null;
-        // Formato por unidade (Bioter): usa o "grupo" como base
-        if(_b&&_b.grupo&&typeof _b.grupo==="object"&&!_b.identidade) _b=_b.grupo;
-        setBd(_b);
+        const {data:r}=await window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle();
+        if(vivo) setBd((r&&r.briefing_data)||null);
       }catch(_){ if(vivo)setBd(null); }
     })();
     return function(){vivo=false;};
   },[clientId]);
-  const _g=function(sec,fid){ try{ const v=bd&&bd[sec]&&bd[sec][fid]; return (v&&String(v).trim())?String(v).trim():""; }catch(_){ return ""; } };
-  const itens=[
-    {l:"Razão social",        v:_g("identidade","nome_empresarial")},
-    {l:"CNPJ",                v:_g("identidade","cnpj")},
-    {l:"Cidade",              v:_g("identidade","cidade")},
-    {l:"Endereço",            v:_g("identidade","endereco")},
-    {l:"WhatsApp empresarial",v:_g("identidade","whatsapp_empresarial")},
-    {l:"E-mail empresarial",  v:_g("identidade","email_empresarial")},
-    {l:"Site",                v:_g("processo","site")},
-    {l:"Tom de voz",          v:_g("orcamento","tom_voz")},
-  ].filter(function(x){return x.v;});
-  if(itens.length===0) return null;
-  const _copiar=async function(v){
-    try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){}
+  // Briefing: unidade da Bioter primeiro, depois grupo, depois raiz.
+  const _doBriefing=function(){
+    const b=bd||{};
+    const fontes=[]; if(_unit&&b[_unit]&&typeof b[_unit]==="object") fontes.push(b[_unit]); if(b.grupo&&typeof b.grupo==="object") fontes.push(b.grupo); fontes.push(b);
+    const g=function(sec,fid){ for(const f of fontes){ try{ const v=f&&f[sec]&&f[sec][fid]; if(v&&String(v).trim()) return String(v).trim(); }catch(_){} } return ""; };
+    return {razao_social:g("identidade","nome_empresarial"),cnpj:g("identidade","cnpj"),cidade:g("identidade","cidade"),endereco:g("identidade","endereco"),
+            whatsapp:g("identidade","whatsapp_empresarial"),email:g("identidade","email_empresarial"),site:g("processo","site")};
   };
-  return <PlaybookBlock id="pb-briefing-auto" title="Dados do Briefing" subtitle="Puxado automático das respostas do Briefing — clique pra copiar; edita lá no Briefing" icon="fileText" color="#0d9488">
+  const _salvar=function(novo){
+    if(typeof onUpdate!=="function") return;
+    if(_unit){ const bu=Object.assign({},(data&&data.cadastro_by_unit)||{}); bu[_unit]=novo; onUpdate({cadastro_by_unit:bu}); }
+    else onUpdate({cadastro:novo});
+    setTick(function(n){return n+1;});
+  };
+  const _set=function(k,v){ const novo=Object.assign({},_atual); novo[k]=String(v||"").trim(); _salvar(novo); };
+  const _puxar=function(){
+    const br=_doBriefing(); const novo=Object.assign({},_atual); let n=0;
+    Object.keys(br).forEach(function(k){ if(br[k]&&!String(novo[k]||"").trim()){ novo[k]=br[k]; n++; } });
+    if(!n){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada novo pra puxar — o Briefing não tem nada que já não esteja aqui."); return; }
+    _salvar(novo); if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" campo"+(n===1?"":"s")+" preenchido"+(n===1?"":"s")+" a partir do Briefing. Confira.",3200);
+  };
+  const _copiar=async function(v){ try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){} };
+  const _preenchidos=CAMPOS.filter(function(c){ return String(_atual[c.k]||"").trim(); }).length;
+  const _uniLabel=function(u){ if(!u) return "Grupo"; if(typeof BIOTER_UNITS==="undefined") return u; const x=BIOTER_UNITS.find(function(b){return b.id===u;}); return x?(x.pickerLabel||x.label):u; };
+  const _temBriefing=(function(){ const br=_doBriefing(); return Object.keys(br).some(function(k){return !!br[k];}); })();
+  return <PlaybookBlock id="pb-briefing-auto" title="Dados cadastrais"
+    subtitle="Endereço, telefone, WhatsApp oficial, site — a única fonte que a IA usa pra contato. Catálogo envelhece; isto aqui a equipe mantém"
+    icon="fileText" color="#0d9488">
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:12}}>
+      {isBioter&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>}
+      {isBioter&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unit?"dados desta unidade — troque no seletor do topo":"dados gerais do grupo — escolha uma unidade no topo pra cadastrar os dela"}</span>}
+      <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:700}}>{_preenchidos} de {CAMPOS.length}</span>
+      {isAdmin&&_temBriefing&&<button type="button" onClick={_puxar} title="Preenche o que está vazio com as respostas do Briefing do cliente"
+        style={{background:"#fff",border:"1px solid #99f6e4",borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>Puxar do Briefing</button>}
+    </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
-      {itens.map(function(x,i){
-        const _on=copiado===x.v;
-        return <button key={i} type="button" onClick={function(){_copiar(x.v);}} title="Clique pra copiar"
-          style={{background:_on?"#f0fdfa":"#fafbfc",border:"1px solid "+(_on?"#5eead4":"#eef0f3"),borderRadius:11,padding:"10px 13px",textAlign:"left",cursor:"copy",fontFamily:"inherit",transition:"all .12s",minWidth:0}}>
-          <div style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{_on?"Copiado ✓":x.l}</div>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:3,lineHeight:1.45,wordBreak:"break-word"}}>{x.v}</div>
-        </button>;
+      {CAMPOS.map(function(c){
+        const v=String(_atual[c.k]||"").trim(); const _on=copiado===v&&!!v;
+        const _destaque=c.k==="whatsapp";
+        return <div key={c.k+"_"+_unit+"_"+tick} style={{background:_on?"#f0fdfa":(_destaque?"#f0fdfa":"#fafbfc"),border:"1px solid "+(_on?"#5eead4":(_destaque?"#99f6e4":"#eef0f3")),borderRadius:11,padding:"9px 12px",display:"flex",flexDirection:"column",gap:3}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flex:1}}>{_on?"Copiado ✓":c.l}</span>
+            {!!v&&<button type="button" title="Copiar" onClick={function(){_copiar(v);}} style={{border:"none",background:"transparent",color:"#94a3b8",cursor:"copy",padding:2,display:"inline-flex"}}><Ico n="copy" size={11}/></button>}
+          </div>
+          {isAdmin
+            ? <input type="text" defaultValue={v} placeholder={_PH[c.k]||""}
+                onBlur={function(e){ if(String(e.target.value||"").trim()!==v) _set(c.k,e.target.value); }}
+                style={{border:"none",background:"transparent",outline:"none",color:"#0f172a",fontSize:12.5,fontWeight:600,fontFamily:"inherit",padding:0,width:"100%"}}/>
+            : <div style={{color:v?"#0f172a":"#cbd5e1",fontSize:12.5,fontWeight:600,lineHeight:1.45,wordBreak:"break-word"}}>{v||"—"}</div>}
+        </div>;
       })}
     </div>
+    <div style={{color:"#94a3b8",fontSize:11,marginTop:9,lineHeight:1.5}}>O <b>WhatsApp oficial</b> é o número que fecha as legendas. Sem ele, a IA usa o WhatsApp do primeiro contato em Contatos; sem nenhum, fecha sem número.</div>
   </PlaybookBlock>;
 }
 
@@ -100393,6 +100454,8 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
     "O QUE NÃO DIZER\n"+
     "OUTRAS COISAS QUE O MATERIAL TRAZ (o que não coube acima e a equipe usaria)\n"+
     "NÃO COBERTO (o que a equipe perguntaria e o material não responde)\n\n"+
+    "NÃO EXTRAIA endereço, telefone, WhatsApp, e-mail, CEP nem site — isso muda com o tempo e mora "+
+    "nos Dados cadastrais do Playbook, que a equipe mantém à mão. Se o material tiver, pule. "+
     "REGRAS: não invente nada — o que o material não diz, você não escreve. O que você NÃO "+
     "consegue ler com certeza (logo borrado, texto pequeno demais, nome ilegível) NÃO entra — "+
     "nem com \"possivelmente\", nem com \"parece\": ou é certo, ou fica de fora. Copie número, "+
@@ -100638,6 +100701,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+              {editId===m.id && isAdmin && <button type="button" title="Salvar a ficha (o mesmo botão de baixo)"
+                onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }}
+                style={{background:"#0d9488",border:"none",borderRadius:99,padding:"6px 14px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar ficha</button>}
               {_abertoTopo && <button type="button" title="Recolher a ficha"
                 onClick={function(){ setAbertos(function(p){ const n=Object.assign({},p); delete n[m.id]; return n; }); }}
                 style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}
