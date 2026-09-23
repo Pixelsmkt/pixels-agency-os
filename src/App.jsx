@@ -2507,17 +2507,34 @@ function _pxAjList(raw){
   if(typeof raw==="object") return [raw]; // legado: objeto único
   return [];
 }
-function pxGetFreelaAjustes(freelaId, month){
-  var m=(typeof window!=="undefined"&&window.__pxFreelaAjustes)||{};
-  return _pxAjList(m[freelaId+":"+month]).map(function(a){
-    return {valor:Number(a.valor)||0,motivo:a.motivo||"",pago:!!a.pago};
-  });
+/* (23/09/2026, Vinicius: "esse botão pago tá me confundindo a cabeça… preciso saber se devo ou se
+   foi pago a mais"). Um item da lista tem TIPO:
+     - "ajuste":    bônus (+) ou desconto (−) — mexe no quanto ele tem a receber no mês;
+     - "pagamento": dinheiro que saiu do caixa, com data — abate do saldo, não muda o custo.
+   Item antigo sem tipo: pago:true era pagamento (valor em módulo, data lida do motivo quando tem
+   dd/mm), o resto era ajuste. A parcela de dívida é um ajuste com {parc:{id,total,n,i,valor}}. */
+function _pxAjNorm(a, month){
+  if(!a||typeof a!=="object") return null;
+  const tipo=a.tipo==="pagamento"?"pagamento":(a.tipo==="ajuste"?"ajuste":(a.pago?"pagamento":"ajuste"));
+  const valor=Number(a.valor)||0;
+  let data=String(a.data||"");
+  if(tipo==="pagamento"&&!data){
+    const m=String(a.motivo||"").match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+    if(m){ let y=m[3]?(m[3].length===2?"20"+m[3]:m[3]):String(month||"").slice(0,4); if(y) data=y+"-"+m[2].padStart(2,"0")+"-"+m[1].padStart(2,"0"); }
+  }
+  return {tipo:tipo,valor:tipo==="pagamento"?Math.abs(valor):valor,motivo:a.motivo||"",data:data,parc:(a.parc&&typeof a.parc==="object")?a.parc:null,pago:tipo==="pagamento"};
 }
+function pxGetFreelaItens(freelaId, month){
+  var m=(typeof window!=="undefined"&&window.__pxFreelaAjustes)||{};
+  return _pxAjList(m[freelaId+":"+month]).map(function(a){ return _pxAjNorm(a,month); }).filter(Boolean);
+}
+function pxGetFreelaAjustes(freelaId, month){ return pxGetFreelaItens(freelaId,month).filter(function(x){return x.tipo==="ajuste";}); }
+function pxGetFreelaPagamentos(freelaId, month){ return pxGetFreelaItens(freelaId,month).filter(function(x){return x.tipo==="pagamento";}); }
 function pxGetFreelaAjuste(freelaId, month){
-  // Compat: soma de todos os ajustes da chave + motivos concatenados.
+  // Compat: soma dos ajustes (só bônus/desconto) + motivos concatenados.
   var lst=pxGetFreelaAjustes(freelaId,month);
   var v=0, ms=[];
-  lst.forEach(function(a){ if(a.pago) return; v+=a.valor; if(a.motivo)ms.push(a.motivo);});
+  lst.forEach(function(a){ v+=a.valor; if(a.motivo)ms.push(a.motivo);});
   return {valor:v,motivo:ms.join(" · ")};
 }
 function _pxSaveAjustes(cur){
@@ -2525,46 +2542,46 @@ function _pxSaveAjustes(cur){
   window.__pxFreelaAjustes=cur;
   try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
   return sb.from("team_data").upsert({tipo:"pagamento_ajustes",dados:cur},{onConflict:"tipo"}).then(function(r){
-    if(r&&r.error){console.warn("[ajustes] save:",r.error.message);if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar ajuste: "+r.error.message);return false;}
+    if(r&&r.error){console.warn("[ajustes] save:",r.error.message);if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar: "+r.error.message);return false;}
     return true;
   });
 }
-function pxAddFreelaAjuste(freelaId, month){
+function _pxQuem(){ return (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:""; }
+function _pxHojeIso(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function pxAddFreelaItem(freelaId, month, tipo){
   try{
     var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
     var key=freelaId+":"+month;
     var lst=_pxAjList(cur[key]).slice();
-    lst.push({valor:0,motivo:"",updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()});
-    cur[key]=lst;
+    var it={tipo:tipo==="pagamento"?"pagamento":"ajuste",valor:0,motivo:"",updated_by:_pxQuem(),updated_at:new Date().toISOString()};
+    if(it.tipo==="pagamento") it.data=_pxHojeIso();
+    lst.push(it); cur[key]=lst;
     return _pxSaveAjustes(cur);
   }catch(e){return Promise.resolve(false);}
 }
-function pxUpdateFreelaAjuste(freelaId, month, idx, valor, motivo){
+function pxAddFreelaAjuste(freelaId, month){ return pxAddFreelaItem(freelaId,month,"ajuste"); }
+/* patch = {valor?, motivo?, data?}. Valor 0 + motivo vazio (+ sem data, se pagamento) apaga a linha. */
+function pxUpdateFreelaItem(freelaId, month, idx, patch){
   try{
     var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
     var key=freelaId+":"+month;
     var lst=_pxAjList(cur[key]).slice();
     if(idx<0||idx>=lst.length) return Promise.resolve(false);
-    if(!(Number(valor)||0)&&!String(motivo||"").trim()){ lst.splice(idx,1); } // valor 0 e sem motivo = apaga a linha
-    else lst[idx]={valor:Number(valor)||0,motivo:motivo||"",pago:!!(lst[idx]&&lst[idx].pago),updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+    var base=_pxAjNorm(lst[idx],month)||{tipo:"ajuste",valor:0,motivo:"",data:""};
+    var nv=Object.assign({},base,patch||{});
+    nv.valor=Number(nv.valor)||0; if(nv.tipo==="pagamento") nv.valor=Math.abs(nv.valor);
+    if(!nv.valor&&!String(nv.motivo||"").trim()&&!(nv.tipo==="pagamento"&&nv.data)){ lst.splice(idx,1); }
+    else lst[idx]={tipo:nv.tipo,valor:nv.valor,motivo:nv.motivo||"",data:nv.data||"",parc:nv.parc||undefined,updated_by:_pxQuem(),updated_at:new Date().toISOString()};
     if(lst.length===0){ delete cur[key]; } else cur[key]=lst;
-    return _pxSaveAjustes(cur).then(function(ok){
-      if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Ajuste salvo.",1800);
-      return ok;
-    });
+    return _pxSaveAjustes(cur).then(function(ok){ if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.",1500); return ok; });
   }catch(e){return Promise.resolve(false);}
 }
-/* "Já pago": o valor saiu do caixa (adiantamento, pagamento parcial). Não muda o custo do mês —
-   só abate do que ainda falta pagar. Guardado como flag pago:true no mesmo item. */
+function pxUpdateFreelaAjuste(freelaId, month, idx, valor, motivo){ return pxUpdateFreelaItem(freelaId,month,idx,{valor:valor,motivo:motivo}); }
+/* Compat: trocar de lado (ajuste ↔ pagamento). A tela nova não usa; fica pra quem chamar por fora. */
 function pxToggleFreelaAjustePago(freelaId, month, idx){
   try{
-    var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
-    var key=freelaId+":"+month;
-    var lst=_pxAjList(cur[key]).slice();
-    if(idx<0||idx>=lst.length) return Promise.resolve(false);
-    lst[idx]=Object.assign({},lst[idx],{pago:!lst[idx].pago,updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()});
-    cur[key]=lst;
-    return _pxSaveAjustes(cur);
+    var lst=pxGetFreelaItens(freelaId,month); var it=lst[idx]; if(!it) return Promise.resolve(false);
+    return pxUpdateFreelaItem(freelaId,month,idx,{tipo:it.tipo==="pagamento"?"ajuste":"pagamento",valor:it.tipo==="pagamento"?-Math.abs(it.valor):Math.abs(it.valor),data:it.tipo==="pagamento"?"":_pxHojeIso()});
   }catch(e){return Promise.resolve(false);}
 }
 function pxRemoveFreelaAjuste(freelaId, month, idx){
@@ -2578,6 +2595,28 @@ function pxRemoveFreelaAjuste(freelaId, month, idx){
     return _pxSaveAjustes(cur);
   }catch(e){return Promise.resolve(false);}
 }
+/* PARCELAR DÍVIDA: total em n parcelas a partir de startMonth ("YYYY-MM"). Cria um desconto por
+   mês, todos com o mesmo parc.id. Ex.: 600 em 3× a partir de 2026-09 → set/out/nov, −200 cada. */
+function _pxMesMais(month, k){ var y=Number(String(month).slice(0,4)), m=Number(String(month).slice(5,7))-1+k; y+=Math.floor(m/12); m=((m%12)+12)%12; return y+"-"+String(m+1).padStart(2,"0"); }
+function pxCriarParcelamento(freelaId, startMonth, total, n, motivo){
+  try{
+    total=Math.abs(Number(total)||0); n=Math.max(1,Math.min(36,parseInt(n,10)||1));
+    if(!total||!startMonth) return Promise.resolve(false);
+    var cur=Object.assign({},(window.__pxFreelaAjustes||{}));
+    var id="parc-"+Date.now().toString(36);
+    var cent=Math.round(total*100), base=Math.floor(cent/n), sobra=cent-base*n;
+    for(var i=0;i<n;i++){
+      var mes=_pxMesMais(startMonth,i), key=freelaId+":"+mes;
+      var v=(base+(i<sobra?1:0))/100;
+      var lst=_pxAjList(cur[key]).slice();
+      lst.push({tipo:"ajuste",valor:-v,motivo:(motivo||"Dívida")+" — parcela "+(i+1)+"/"+n,parc:{id:id,total:total,n:n,i:i+1,valor:v},updated_by:_pxQuem(),updated_at:new Date().toISOString()});
+      cur[key]=lst;
+    }
+    return _pxSaveAjustes(cur).then(function(ok){ if(ok&&typeof pixelsToast!=="undefined")pixelsToast.success("Parcelamento criado: "+n+" descontos, de "+startMonth+" em diante.",3200); return ok; });
+  }catch(e){return Promise.resolve(false);}
+}
+/* Quanto ainda falta da dívida DEPOIS desta parcela (pra mostrar "restam R$ X"). */
+function pxParcRestante(parc){ if(!parc) return 0; var r=(Number(parc.total)||0)-(Number(parc.valor)||0)*(Number(parc.i)||0); return r>0?Math.round(r*100)/100:0; }
 function calcDesignerPayments(tasks, designerId, refMonth){
   const out = { total:0, fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
                 tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
@@ -2626,20 +2665,28 @@ function calcDesignerPayments(tasks, designerId, refMonth){
   out._prices = _pricesFor(designerId, refMonth);
   // ── Ajuste manual do mês (bônus/desconto registrado no Financeiro) ──
   out.producao=out.total; // soma das demandas do mês, antes de qualquer ajuste
-  out.ajuste=0; out.ajusteMotivo=""; out.pago=0; // pago = já saiu do caixa (positivo); não entra no custo, só abate do saldo
+  out.ajuste=0; out.ajusteMotivo=""; out.pago=0; // pago = pagamentos feitos (saída de caixa); não entra no custo, só abate do saldo
+  out.saldoAnterior=0;   // (23/09/2026) o que sobrou do mês anterior: negativo = pagou a mais lá; positivo = ficou devendo lá
   try{
     if(refMonth && typeof pxGetFreelaAjuste==="function"){
       const _aj=pxGetFreelaAjuste(designerId, refMonth);
       out.ajuste=Number(_aj.valor)||0; out.ajusteMotivo=_aj.motivo||"";
       out.total+=out.ajuste;
-      pxGetFreelaAjustes(designerId, refMonth).forEach(function(a){ if(a.pago) out.pago+=Math.abs(Number(a.valor)||0); });
+      pxGetFreelaPagamentos(designerId, refMonth).forEach(function(a){ out.pago+=Math.abs(Number(a.valor)||0); });
+      // Saldo do mês anterior: recalcula o mês de trás (que por sua vez olha o anterior), até 6 meses.
+      const _prof=Number(arguments[3])||0;
+      if(_prof<6&&typeof _pxMesMais==="function"){
+        const _ant=calcDesignerPayments(tasks, designerId, _pxMesMais(refMonth,-1), _prof+1);
+        const _tem=(_ant.producao||0)!==0||(_ant.ajuste||0)!==0||(_ant.pago||0)!==0||(_ant.saldoAnterior||0)!==0;
+        if(_tem) out.saldoAnterior=Math.round(((_ant.aPagar)||0)*100)/100;
+      }
     } else if(!refMonth && typeof window!=="undefined" && window.__pxFreelaAjustes){
       Object.keys(window.__pxFreelaAjustes).forEach(function(k){
-        if(k.indexOf(designerId+":")===0){ _pxAjList(window.__pxFreelaAjustes[k]).forEach(function(a){const _v=Number(a.valor)||0; if(a.pago){ out.pago+=Math.abs(_v); return; } out.ajuste+=_v; out.total+=_v;}); }
+        if(k.indexOf(designerId+":")===0){ _pxAjList(window.__pxFreelaAjustes[k]).forEach(function(a){const _n=_pxAjNorm(a,k.split(":")[1]); if(!_n) return; if(_n.tipo==="pagamento"){ out.pago+=_n.valor; return; } out.ajuste+=_n.valor; out.total+=_n.valor;}); }
       });
     }
   }catch(_){}
-  out.aPagar=out.total-out.pago; // o que ainda falta pagar
+  out.aPagar=Math.round((out.total-out.pago+out.saldoAnterior)*100)/100; // o que falta pagar (negativo = pago a mais)
   return out;
 }
 function formatRefMonth(refMonth){
@@ -2663,6 +2710,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
   const _PAY_BY_DEMAND_IDS = ["andre","maria","guilherme"];
   // Re-render quando os ajustes manuais carregam/mudam (cache global)
   const [_ajTick,setAjTick]=useState(0);
+  const [_parcForm,_setParcForm]=useState(null); // (23/09/2026) formulário "Parcelar dívida" aberto em qual freela
   useEffect(function(){
     if(typeof pxLoadFreelaAjustes==="function") pxLoadFreelaAjustes();
     var _f=function(){ setAjTick(function(t){return t+1;}); };
@@ -2978,70 +3026,160 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             <span style={{marginLeft:"auto",color:(c.producao||0)>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{fmtBRL(c.producao||0)}</span>
           </div>}
 
-          {/* AJUSTE DO MÊS — bônus (+) ou desconto (−) além das demandas */}
+          {/* (23/09/2026) AJUSTES NO VALOR DEVIDO · PAGAMENTOS FEITOS · SALDO — três blocos, três
+              perguntas: quanto ele tem a receber, quanto já saiu do caixa, quanto falta. */}
           {(function(){
             const _souSocio=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER.level===1);
             const _temMes=!!refMonth;
+            const _ROT={color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5};
+            const _inp={border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:"inherit",background:"#fff"};
+            const _fmtData=function(d){ return d&&/^\d{4}-\d{2}-\d{2}$/.test(d)?(d.slice(8,10)+"/"+d.slice(5,7)):"sem data"; };
+            const _x=function(onClick){ return <button type="button" title="Apagar esta linha" onClick={function(e){e.stopPropagation();e.preventDefault();onClick();}}
+              style={{flexShrink:0,border:"none",background:"transparent",color:"#cbd5e1",cursor:"pointer",padding:"2px 4px",fontSize:14,lineHeight:1,fontFamily:"inherit"}}
+              onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>×</button>; };
             if(!_temMes){
-              return c.ajuste?<div style={{padding:"8px 18px",display:"flex",justifyContent:"space-between",borderTop:"1px dashed #eef0f3"}}>
-                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Ajustes (todos os meses)</span>
-                <span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span>
-              </div>:null;
+              return <React.Fragment>
+                {(c.ajuste||c.pago)?<div style={{padding:"8px 18px",display:"flex",flexDirection:"column",gap:4,borderTop:"1px dashed #eef0f3"}}>
+                  {!!c.ajuste&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={_ROT}>Ajustes (todos os meses)</span><span style={{color:c.ajuste>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(c.ajuste>0?"+":"")+fmtBRL(c.ajuste)}</span></div>}
+                  {!!c.pago&&<div style={{display:"flex",justifyContent:"space-between"}}><span style={_ROT}>Pagamentos (todos os meses)</span><span style={{color:"#64748b",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{fmtBRL(c.pago)}</span></div>}
+                </div>:null}
+                <div style={{padding:"14px 18px",background:"linear-gradient(180deg,"+accent+"08, "+accent+"14)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <span style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total (todos os meses)</span>
+                  <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.total)}</div>
+                </div>
+              </React.Fragment>;
             }
-            const _ajs=(typeof pxGetFreelaAjustes==="function")?pxGetFreelaAjustes(fr.id,refMonth):[];
-            if(!_souSocio&&!c.ajuste) return null;
-            return <div style={{padding:"10px 18px 12px",borderTop:"1px dashed #eef0f3",display:"flex",flexDirection:"column",gap:6}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{_ajs.length>1?"Ajustes do mês":"Ajuste do mês"} <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>· bônus (+) ou desconto (use −) · marque "pago" no que já saiu do caixa · pra apagar, limpe valor e motivo</span></div>
-              {_souSocio
-                ? <React.Fragment>
-                    {_ajs.map(function(_aj,_i){
-                      return <div key={fr.id+"_"+refMonth+"_"+_i+"_"+_ajTick} style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <input type="text" defaultValue={_aj.valor?String(_aj.valor).replace(".",","):""} placeholder="0,00"
-                          onBlur={function(e){var v=parseFloat(String(e.target.value||"").replace(",","."))||0;if(v!==(Number(_aj.valor)||0)&&typeof pxUpdateFreelaAjuste==="function")pxUpdateFreelaAjuste(fr.id,refMonth,_i,v,_aj.motivo||"");}}
-                          style={{width:104,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:"inherit",textAlign:"right"}}/>
-                        <input type="text" defaultValue={_aj.motivo||""} placeholder="Motivo — ex: bônus de meta · desconto de adiantamento"
-                          onBlur={function(e){var m=e.target.value;if(m!==(_aj.motivo||"")&&typeof pxUpdateFreelaAjuste==="function")pxUpdateFreelaAjuste(fr.id,refMonth,_i,Number(_aj.valor)||0,m);}}
-                          style={{flex:1,minWidth:0,border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12,color:"#334155",outline:"none",fontFamily:"inherit"}}/>
-                        {!!_aj.valor&&<span style={{color:_aj.pago?"#64748b":(_aj.valor>0?"#16a34a":"#dc2626"),fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'",textDecoration:_aj.pago?"none":"none"}}>{(_aj.valor>0?"+":"")+fmtBRL(_aj.valor)}</span>}
-                        <button type="button" title={_aj.pago?"Marcado como já pago: não muda o custo do mês, só abate do que falta pagar. Clique pra voltar a ajuste.":"Marcar como já pago (adiantamento / pagamento parcial)"}
-                          onClick={function(e){e.stopPropagation();e.preventDefault();if(typeof pxToggleFreelaAjustePago==="function")pxToggleFreelaAjustePago(fr.id,refMonth,_i);}}
-                          style={{flexShrink:0,border:"1px solid "+(_aj.pago?"#16a34a":"#e2e8f0"),background:_aj.pago?"#dcfce7":"#fff",color:_aj.pago?"#15803d":"#94a3b8",borderRadius:99,padding:"3px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{_aj.pago?"✓ pago":"pago"}</button>
-                      </div>;
-                    })}
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <button type="button"
-                        onClick={function(e){e.stopPropagation();e.preventDefault();if(typeof pxAddFreelaAjuste==="function")pxAddFreelaAjuste(fr.id,refMonth);}}
-                        style={{border:"1px dashed #cbd5e1",background:"transparent",color:"#64748b",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
-                        onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#334155";}}
-                        onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>+ Adicionar ajuste</button>
-                    </div>
-                  </React.Fragment>
-                : <React.Fragment>
-                    {_ajs.filter(function(a){return a.valor||a.motivo;}).map(function(_aj,_i){
-                      return <div key={_i} style={{display:"flex",justifyContent:"space-between",gap:8}}>
-                        <span style={{color:"#64748b",fontSize:12}}>{_aj.motivo||"Ajuste"}{_aj.pago&&<span style={{marginLeft:6,background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase"}}>pago</span>}</span>
-                        <span style={{color:_aj.pago?"#64748b":(_aj.valor>0?"#16a34a":"#dc2626"),fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{(_aj.valor>0?"+":"")+fmtBRL(_aj.valor)}</span>
-                      </div>;
-                    })}
-                  </React.Fragment>}
-            </div>;
-          })()}
+            const _itens=(typeof pxGetFreelaItens==="function")?pxGetFreelaItens(fr.id,refMonth):[];
+            const _ajs=[], _pgs=[];
+            _itens.forEach(function(it,i){ (it.tipo==="pagamento"?_pgs:_ajs).push({it:it,i:i}); });
+            const _somaAj=_ajs.reduce(function(s,x){return s+x.it.valor;},0);
+            const _devido=Number(c.total)||0;           // produção + ajustes
+            const _saldo=Number(c.aPagar)||0;           // devido − pago + saldo anterior
+            const _mesAnt=(typeof _pxMesMais==="function")?_pxMesMais(refMonth,-1):"";
+            const _mesProx=(typeof _pxMesMais==="function")?_pxMesMais(refMonth,1):"";
+            const _parcAberto=_parcForm&&_parcForm.fr===fr.id;
+            if(!_souSocio&&!_ajs.length&&!_pgs.length&&!c.saldoAnterior) return null;
+            return <React.Fragment>
+              {/* ── AJUSTES NO VALOR DEVIDO ── */}
+              <div style={{padding:"10px 18px 12px",borderTop:"1px dashed #eef0f3",display:"flex",flexDirection:"column",gap:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={_ROT}>Ajustes no valor devido</span>
+                  <span style={{color:"#cbd5e1",fontSize:10,fontWeight:600}}>bônus (+) · desconto (−) · mexem no quanto ele recebe</span>
+                  {!!_somaAj&&<span style={{marginLeft:"auto",color:_somaAj>0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{(_somaAj>0?"+":"")+fmtBRL(_somaAj)}</span>}
+                </div>
+                {_ajs.map(function(x){
+                  const _aj=x.it, _i=x.i;
+                  const _rest=(_aj.parc&&typeof pxParcRestante==="function")?pxParcRestante(_aj.parc):0;
+                  return <div key={fr.id+"_"+refMonth+"_"+_i+"_"+_ajTick} style={{display:"flex",gap:6,alignItems:"center"}}>
+                    {_souSocio
+                      ? <input type="text" defaultValue={_aj.valor?String(_aj.valor).replace(".",","):""} placeholder="+ ou −"
+                          onBlur={function(e){var v=parseFloat(String(e.target.value||"").replace(",","."))||0;if(v!==(Number(_aj.valor)||0))pxUpdateFreelaItem(fr.id,refMonth,_i,{valor:v});}}
+                          style={Object.assign({},_inp,{width:96,fontWeight:700,textAlign:"right"})}/>
+                      : null}
+                    {_souSocio
+                      ? <input type="text" defaultValue={_aj.motivo||""} placeholder="Motivo — ex: bônus de meta · desconto de equipamento"
+                          onBlur={function(e){var m=e.target.value;if(m!==(_aj.motivo||""))pxUpdateFreelaItem(fr.id,refMonth,_i,{motivo:m});}}
+                          style={Object.assign({},_inp,{flex:1,minWidth:0,fontSize:12,color:"#334155"})}/>
+                      : <span style={{flex:1,color:"#64748b",fontSize:12}}>{_aj.motivo||"Ajuste"}</span>}
+                    {!!_aj.parc&&<span title={"Parcelamento de "+fmtBRL(_aj.parc.total)+" em "+_aj.parc.n+"×"} style={{flexShrink:0,background:"#fff7ed",color:"#c2410c",border:"1px solid #fed7aa",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,whiteSpace:"nowrap"}}>{_aj.parc.i}/{_aj.parc.n}{_rest>0?(" · restam "+fmtBRL(_rest)):" · quitada"}</span>}
+                    <span style={{minWidth:82,textAlign:"right",color:_aj.valor>0?"#16a34a":(_aj.valor<0?"#dc2626":"#cbd5e1"),fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{_aj.valor?((_aj.valor>0?"+":"")+fmtBRL(_aj.valor)):"—"}</span>
+                    {_souSocio&&_x(function(){ pxRemoveFreelaAjuste(fr.id,refMonth,_i); })}
+                  </div>;
+                })}
+                {_souSocio&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:2}}>
+                  <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();pxAddFreelaItem(fr.id,refMonth,"ajuste");}}
+                    style={{border:"1px dashed #cbd5e1",background:"transparent",color:"#64748b",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                    onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#334155";}}
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>+ Bônus ou desconto</button>
+                  <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();_setParcForm(_parcAberto?null:{fr:fr.id,total:"",n:"3",motivo:"Dívida"});}}
+                    style={{border:"1px dashed "+(_parcAberto?"#c2410c":"#cbd5e1"),background:_parcAberto?"#fff7ed":"transparent",color:_parcAberto?"#c2410c":"#64748b",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                    onMouseEnter={function(e){if(!_parcAberto){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#334155";}}}
+                    onMouseLeave={function(e){if(!_parcAberto){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}}>Parcelar dívida</button>
+                </div>}
+                {_souSocio&&_parcAberto&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{color:"#9a3412",fontSize:11,fontWeight:700,lineHeight:1.4}}>Ele deve pra agência e vai pagar descontando do que recebe. Cria um desconto por mês, a partir de <b>{formatRefMonth(refMonth)}</b>.</div>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                    <input type="text" value={_parcForm.total} placeholder="Total (ex: 600)" onChange={function(e){_setParcForm(Object.assign({},_parcForm,{total:e.target.value}));}} style={Object.assign({},_inp,{width:120,fontWeight:700,textAlign:"right"})}/>
+                    <span style={{color:"#9a3412",fontSize:12,fontWeight:700}}>em</span>
+                    <input type="text" value={_parcForm.n} placeholder="3" onChange={function(e){_setParcForm(Object.assign({},_parcForm,{n:e.target.value}));}} style={Object.assign({},_inp,{width:52,fontWeight:700,textAlign:"center"})}/>
+                    <span style={{color:"#9a3412",fontSize:12,fontWeight:700}}>parcelas</span>
+                    <input type="text" value={_parcForm.motivo} placeholder="Motivo" onChange={function(e){_setParcForm(Object.assign({},_parcForm,{motivo:e.target.value}));}} style={Object.assign({},_inp,{flex:1,minWidth:120,fontSize:12})}/>
+                  </div>
+                  {(function(){ const tt=parseFloat(String(_parcForm.total||"").replace(",","."))||0, nn=parseInt(_parcForm.n,10)||0; if(!tt||!nn) return null;
+                    return <div style={{color:"#9a3412",fontSize:11.5}}>{nn}× de <b>{fmtBRL(tt/nn)}</b> — {Array.from({length:Math.min(nn,6)}).map(function(_,k){return formatRefMonth(_pxMesMais(refMonth,k));}).join(", ")}{nn>6?"…":""}</div>; })()}
+                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                    <button type="button" onClick={function(){_setParcForm(null);}} style={{border:"1px solid #fed7aa",background:"transparent",color:"#9a3412",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                    <button type="button" onClick={function(){ const tt=parseFloat(String(_parcForm.total||"").replace(",","."))||0, nn=parseInt(_parcForm.n,10)||0; if(!tt||!nn){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha o total e o número de parcelas."); return; } pxCriarParcelamento(fr.id,refMonth,tt,nn,_parcForm.motivo||"Dívida").then(function(ok){ if(ok)_setParcForm(null); }); }}
+                      style={{border:"none",background:"#c2410c",color:"#fff",borderRadius:8,padding:"6px 14px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Criar parcelas</button>
+                  </div>
+                </div>}
+              </div>
 
-          {/* TOTAL — separador limpo */}
-          <div style={{padding:"14px 18px",background:"linear-gradient(180deg,"+accent+"08, "+accent+"14)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-            <span style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total do mês</span>
-            <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.total)}</div>
-          </div>
-          {(c.pago||0)>0&&<div style={{padding:"10px 18px 12px",background:accent+"14",borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:5}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Já pago</span>
-              <span style={{color:"#64748b",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>− {fmtBRL(c.pago)}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>A pagar</span>
-              <span style={{color:(c.aPagar||0)>0?"#0f172a":"#16a34a",fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.aPagar||0)}</span>
-            </div>
-          </div>}
+              {/* ── TOTAL DEVIDO NO MÊS ── */}
+              <div style={{padding:"13px 18px",background:"linear-gradient(180deg,"+accent+"08, "+accent+"14)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <div>
+                  <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total devido no mês</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2}}>produzido {fmtBRL(c.producao||0)}{_somaAj?((_somaAj>0?" + ":" − ")+fmtBRL(Math.abs(_somaAj))+" de ajustes"):""}</div>
+                </div>
+                <div style={{color:_devido>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(_devido)}</div>
+              </div>
+
+              {/* ── PAGAMENTOS FEITOS ── */}
+              <div style={{padding:"10px 18px 12px",borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <span style={_ROT}>Pagamentos feitos</span>
+                  <span style={{color:"#cbd5e1",fontSize:10,fontWeight:600}}>dinheiro que saiu do caixa neste ciclo · com data</span>
+                  {!!c.pago&&<span style={{marginLeft:"auto",color:"#64748b",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(c.pago)}</span>}
+                </div>
+                {_pgs.slice().sort(function(a,b){return String(a.it.data||"").localeCompare(String(b.it.data||""));}).map(function(x){
+                  const _pg=x.it, _i=x.i;
+                  return <div key={fr.id+"_pg_"+refMonth+"_"+_i+"_"+_ajTick} style={{display:"flex",gap:6,alignItems:"center"}}>
+                    {_souSocio
+                      ? <input type="date" defaultValue={_pg.data||""} title="Data em que o dinheiro saiu"
+                          onBlur={function(e){var d=e.target.value||"";if(d!==(_pg.data||""))pxUpdateFreelaItem(fr.id,refMonth,_i,{data:d});}}
+                          style={Object.assign({},_inp,{width:138,fontSize:12,color:_pg.data?"#0f172a":"#94a3b8"})}/>
+                      : <span style={{width:52,color:"#64748b",fontSize:12,fontWeight:700}}>{_fmtData(_pg.data)}</span>}
+                    {_souSocio
+                      ? <input type="text" defaultValue={_pg.valor?String(_pg.valor).replace(".",","):""} placeholder="0,00"
+                          onBlur={function(e){var v=Math.abs(parseFloat(String(e.target.value||"").replace(",","."))||0);if(v!==(Number(_pg.valor)||0))pxUpdateFreelaItem(fr.id,refMonth,_i,{valor:v});}}
+                          style={Object.assign({},_inp,{width:96,fontWeight:700,textAlign:"right"})}/>
+                      : null}
+                    {_souSocio
+                      ? <input type="text" defaultValue={_pg.motivo||""} placeholder="Obs — ex: adiantamento · pix · parcial"
+                          onBlur={function(e){var m=e.target.value;if(m!==(_pg.motivo||""))pxUpdateFreelaItem(fr.id,refMonth,_i,{motivo:m});}}
+                          style={Object.assign({},_inp,{flex:1,minWidth:0,fontSize:12,color:"#334155"})}/>
+                      : <span style={{flex:1,color:"#64748b",fontSize:12}}>{_pg.motivo||"Pagamento"}</span>}
+                    <span style={{minWidth:82,textAlign:"right",color:"#0f172a",fontWeight:800,fontSize:12.5,whiteSpace:"nowrap",fontFeatureSettings:"'tnum'"}}>{_pg.valor?fmtBRL(_pg.valor):"—"}</span>
+                    {_souSocio&&_x(function(){ pxRemoveFreelaAjuste(fr.id,refMonth,_i); })}
+                  </div>;
+                })}
+                {_souSocio&&<div style={{marginTop:2}}>
+                  <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();pxAddFreelaItem(fr.id,refMonth,"pagamento");}}
+                    style={{border:"1px dashed #cbd5e1",background:"transparent",color:"#64748b",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                    onMouseEnter={function(e){e.currentTarget.style.borderColor="#94a3b8";e.currentTarget.style.color="#334155";}}
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>+ Registrar pagamento</button>
+                </div>}
+              </div>
+
+              {/* ── SALDO ── */}
+              <div style={{padding:"12px 18px 14px",background:accent+"14",borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:6}}>
+                {!!c.saldoAnterior&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                  <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Saldo de {formatRefMonth(_mesAnt)}</span>
+                  <span style={{color:c.saldoAnterior<0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{c.saldoAnterior<0?("pago a mais "+fmtBRL(Math.abs(c.saldoAnterior))+" → desconta aqui"):("ficou devendo "+fmtBRL(c.saldoAnterior)+" → soma aqui")}</span>
+                </div>}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                  <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Já pago</span>
+                  <span style={{color:"#64748b",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>− {fmtBRL(c.pago||0)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:2}}>
+                  <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{_saldo>0?"Falta pagar":(_saldo<0?"Pago a mais":"Fechado")}</span>
+                  <span style={{color:_saldo>0?"#0f172a":(_saldo<0?"#dc2626":"#16a34a"),fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{_saldo===0?"✓":fmtBRL(Math.abs(_saldo))}</span>
+                </div>
+                {_saldo<0&&<div style={{color:"#b45309",fontSize:11,fontWeight:600,lineHeight:1.4}}>Você pagou {fmtBRL(Math.abs(_saldo))} a mais neste ciclo. {formatRefMonth(_mesProx)} já nasce com esse crédito descontado.</div>}
+                {_saldo>0&&!!c.pago&&<div style={{color:"#64748b",fontSize:11,fontWeight:600,lineHeight:1.4}}>Devido {fmtBRL(_devido)}{c.saldoAnterior?((c.saldoAnterior>0?" + ":" − ")+fmtBRL(Math.abs(c.saldoAnterior))+" do mês anterior"):""} − pago {fmtBRL(c.pago)}.</div>}
+              </div>
+            </React.Fragment>;
+          })()}
 
           {/* VER DETALHE — abre lista completa pra bater conta */}
           <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();_setDetalheModal({fr:fr,calc:c,accent:accent});}} title={"Ver todas as demandas do "+fr.name+" no mês"} style={{background:"#fff",color:accent,border:"none",borderTop:"1px solid #f1f5f9",padding:"11px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
