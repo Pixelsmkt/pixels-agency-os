@@ -6198,7 +6198,7 @@ const BRIEFING_SECTIONS = [
       /* (23/09/2026, Vinicius) lista estruturada: nome + peso + o que é. Sincroniza com o Playbook. */
       { id:"lista", label:"Seus produtos e serviços, um a um", help:"Nome, o quanto ele importa pra vocês hoje e uma linha do que é. Isso vira a ficha de cada produto no nosso sistema e define quanto ele aparece nos posts", type:"produtos" },
       /* (23/09/2026, Vinicius) catálogo sobe aqui e já vai pro Playbook › Materiais do cliente; a IA lê. */
-      { id:"materiais", label:"Catálogo, folder, manual, tabela de preços", help:"Sobe os arquivos que explicam seus produtos. A nossa IA lê e usa o que está neles nas copys e roteiros — e você acompanha tudo na aba Produtos e serviços", type:"materiais" },
+      { id:"materiais", label:"Catálogo, folder, manual, tabela de preços", help:"Sobe os arquivos que explicam seus produtos. A nossa equipe usa o que está neles na produção dos seus conteúdos — e você acompanha tudo na aba Produtos e serviços", type:"materiais" },
       { id:"principais", label:"Cite todos os produtos e serviços em ordem de importância", help:"do mais vendido/estratégico até o secundário", type:"textarea" },
       { id:"precos", label:"Preço de cada produto ou serviço", help:"faixa média ou tabela — pode ser aproximado", type:"textarea" },
       { id:"beneficios", label:"Benefícios de cada produto ou serviço", help:"o que o cliente ganha ao comprar", type:"textarea" },
@@ -103468,7 +103468,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
       const r=await sb.rpc("portal_produto_peso",{p_client:cid,p_unidade:unit,p_produto:p.nome,p_peso:novo});
       if(r.error) throw r.error;
       const pz=_pesoDe(novo);
-      if(typeof pixelsToast!=="undefined") pixelsToast.success(pz?(p.nome+" agora é "+pz.l+". Já vale pras próximas copys e roteiros."):(p.nome+" ficou sem peso."),3600);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(pz?(p.nome+" agora é "+pz.l+". Já vale pros próximos conteúdos."):(p.nome+" ficou sem peso."),3600);
       await carregar();
     }catch(e){ _toastErr("Não deu pra mudar: ",e); }
     setSalvando("");
@@ -103688,7 +103688,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
         <span style={{width:36,height:36,borderRadius:11,background:"#f97316",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(249,115,22,.3)"}}><Ico n="message" size={17} color="#fff"/></span>
         <div style={{flex:1}}>
           <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Feedbacks{unit?(" · "+_uniLabel(unit)):""}</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.55}}>É o seu jeito de ensinar a nossa IA. Conte o que gostou, o que não quer ver, um produto que merece mais destaque, uma palavra que a sua empresa não usa. Entra direto no cérebro que escreve as suas copys: as próximas legendas, briefings e roteiros já saem respeitando — sem precisar de reunião.</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.55}}>Conte pra gente o que gostou, o que não quer ver, um produto que merece mais destaque, uma palavra que a sua empresa não usa. Vai direto pra nossa equipe e pra inteligência que auxilia na produção dos seus roteiros e conteúdos — os próximos já saem levando isso em conta, sem precisar de reunião.</div>
         </div>
       </div>
       <PortalFeedbacksCliente cl={cl} unit={unit} isMob={isMob} cor="#f97316"/>
@@ -103700,7 +103700,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
         <span style={{width:36,height:36,borderRadius:11,background:"#f5b301",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={17} color="#fff"/></span>
         <div style={{flex:1}}>
           <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Catálogos e materiais{unit?(" · "+_uniLabel(unit)):""}</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.5}}>Catálogo, folder, manual, tabela de preços. A nossa IA lê o arquivo e passa a usar o que está nele — o que você subiu no Briefing também aparece aqui.</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.5}}>Catálogo, folder, manual, tabela de preços. A nossa equipe usa o que está nos arquivos na produção dos seus conteúdos, com a ajuda da nossa inteligência — o que você subiu no Briefing também aparece aqui.</div>
         </div>
       </div>
       <PortalMateriaisCliente cl={cl} unit={unit} isMob={isMob} cor={_cor}/>
@@ -103812,7 +103812,7 @@ function PortalMateriaisCliente({cl, unit, isMob, compacto, cor, onCount}){
     }
     for(let i=0;i<guardados.length;i++){ setSubindo((guardados.length>1?("("+(i+1)+"/"+guardados.length+") "):"")+"lendo "+guardados[i].file.name); try{ await _ler(guardados[i].novo,guardados[i].file); }catch(_){} }
     setSubindo("");
-    if(guardados.length&&typeof pixelsToast!=="undefined") pixelsToast.success(guardados.length===1?"Material guardado. A Pixels já vê e a IA usa nas próximas copys.":(guardados.length+" materiais guardados. A Pixels já vê e a IA usa nas próximas copys."),4500);
+    if(guardados.length&&typeof pixelsToast!=="undefined") pixelsToast.success(guardados.length===1?"Material guardado. A equipe da Pixels já tem acesso.":(guardados.length+" materiais guardados. A equipe da Pixels já tem acesso."),4500);
     carregar();
   };
   const apagar=async function(m){
@@ -103835,7 +103835,7 @@ function PortalMateriaisCliente({cl, unit, isMob, compacto, cor, onCount}){
         ? <div style={{display:"inline-flex",alignItems:"center",gap:9,color:"#b45309",fontSize:12.5,fontWeight:700}}><span style={{width:14,height:14,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"pxspin .9s linear infinite",flexShrink:0}}/>{subindo}</div>
         : <div>
             <div style={{display:"inline-flex",alignItems:"center",gap:8,color:"#0f172a",fontSize:13.5,fontWeight:800}}><Ico n="upload" size={16} color={_cor}/>Subir catálogo, folder, manual ou tabela de preços</div>
-            <div style={{color:"#64748b",fontSize:12,marginTop:4,lineHeight:1.5}}>PDF, imagem, Word, PowerPoint ou Excel — arrasta aqui ou clica. A nossa IA lê e passa a usar o que está no arquivo nas copys e roteiros.</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:4,lineHeight:1.5}}>PDF, imagem, Word, PowerPoint ou Excel — arrasta aqui ou clica.</div>
           </div>}
     </div>
     {itens===null&&<div style={{color:"#94a3b8",fontSize:12.5,padding:"6px 0"}}>Carregando…</div>}
@@ -103890,7 +103890,7 @@ function PortalFeedbacksCliente({cl, unit, isMob, cor}){
       const r=await sb.rpc("portal_feedback_inserir",{p_client:cid,p_unidade:_u,p_texto:_t,p_etq:etq,p_porque:String(porque||"").trim()});
       if(r.error) throw r.error;
       setTxt(""); setPorque("");
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Feedback enviado. A Pixels já vê e as próximas copys saem sabendo disso.",4000);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Feedback enviado. A equipe da Pixels já vê e os próximos conteúdos saem levando isso em conta.",4000);
       await carregar();
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra enviar: "+((e&&e.message)||e),5000); }
     setSalvando(false);
