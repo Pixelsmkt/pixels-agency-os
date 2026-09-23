@@ -4838,6 +4838,63 @@ function pxTituloDoBriefing(briefTxt, task){
 }
 
 /* Devolve {briefing, legenda} em HTML, ou lança erro. */
+/* (23/09/2026, Vinicius) ORGANIZAR O PEDIDO DE AJUSTE COM IA — botão no "Anotar ajustes".
+   "poderíamos simplificar, colocar aqui no instruções de alterações ele, aí ele já organiza o que
+   precisamos segundo a solicitação do cliente… a IA organiza e produz um briefing de acordo com o
+   briefing simples que enviamos (e com todas as referências da inteligência da própria IA)".
+   Entra o pedido cru; sai um briefing de ajuste pro designer/editor: o que muda, o que fica e —
+   se o pedido cria conteúdo novo (lâmina, cena, texto) — o texto pronto na voz da marca, com o
+   cérebro do cliente (tom de voz, regras, materiais oficiais, aprendizado dos produtos).
+   Nunca mexe no que não foi pedido. Volta texto puro, editável na caixa. */
+async function pxOrganizarAjusteIA(opts){
+  const task=opts&&opts.task; if(!task) throw new Error("Card não informado.");
+  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const pedido=String((opts&&opts.pedido)||"").trim(); if(!pedido) throw new Error("Escreva o pedido primeiro.");
+  const lamina=Number((opts&&opts.lamina)||0)||0, total=Number((opts&&opts.total)||0)||0;
+  const unit=String(task.bioterUnit||task.bioter_unit||"");
+  const py=unit==="paraguay";
+  const ct=String(task.contentType||task.content_type||"").toLowerCase();
+  const ehVideo=/^(video|video_short|reels|corte|video_complexo|video_feira|video_dinamico|video_basico)$/.test(ct);
+  const ehCarrossel=ct==="carrossel"||(!ehVideo&&total>1);
+  const ctx=await pxContextoCopy(task.client, unit, task);
+  const pb=(ctx&&ctx.playbook)||{};
+  const brief=_pxHtmlParaTexto(task.desc||task.description||"").trim();
+  const leg=_pxHtmlParaTexto(task.caption||"").trim();
+  const sys="Você é o diretor de arte de uma agência e transforma o pedido de alteração de um cliente em instruções claras pro designer ou editor de vídeo. "+
+    "Escreve curto, numerado, concreto — como quem vai executar precisa ler. "+
+    "Nunca inventa número, cidade, prazo, garantia ou depoimento. "+
+    "Mexe SÓ no que o pedido pede: o resto da peça está aprovado e fica como está. "+
+    (py?"Texto que vai NA PEÇA é em ESPANHOL (unidade do Paraguai); as instruções ficam em português. ":"Escreva em português do Brasil. ")+
+    "Responda em texto puro, sem HTML, sem markdown, sem nada antes nem depois, neste formato:\n"+
+    "AJUSTE: (uma linha resumindo o que o cliente pediu)\n"+
+    "O QUE MUDA:\n1. (instrução objetiva, uma por linha)\n"+
+    (ehCarrossel
+      ?("LÂMINAS NOVAS (só se o pedido cria lâmina; numere continuando — a peça tem "+(total||"N")+" lâminas, a próxima é a "+((total||0)+1)+"; se não cria, escreva \"nenhuma\"):\n• Lâmina N — Título: … / Texto na arte: …\n")
+      :ehVideo
+      ?"CENAS NOVAS (só se o pedido cria cena; numere continuando; se não cria, escreva \"nenhuma\"):\n• Cena N — o que aparece. Na tela: \"…\"\n"
+      :"TEXTO NOVO NA ARTE (só se o pedido pede texto novo; se não, escreva \"nenhum\"):\n• …\n")+
+    "MANTER: (o que NÃO muda, em uma linha)\n"+
+    "MATERIAIS NECESSÁRIOS: (foto, print, logo… que quem executa precisa e ainda não tem; ou \"nenhum\")";
+  let u="CLIENTE: "+(task.client||"—")+(unit?(" — unidade "+unit):"")+"\nCARD: "+(task.title||"—")+"\nFORMATO: "+(ehCarrossel?("carrossel de "+(total||"?")+" lâminas"):(ehVideo?"vídeo":(ct||"arte")))+"\n";
+  if(lamina>0) u+="O PEDIDO FOI ANOTADO NA LÂMINA "+lamina+(total?(" de "+total):"")+".\n";
+  u+="\nPEDIDO DO CLIENTE (cru, como chegou):\n"+pedido+"\n\n";
+  if(brief) u+="BRIEFING APROVADO DA PEÇA (o que já existe — referência de estrutura e nível de texto; NÃO reescreva):\n"+brief.slice(0,6000)+"\n\n";
+  if(leg) u+="LEGENDA APROVADA:\n"+leg.slice(0,1500)+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  { const _bp=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,1800):""; if(_bp) u+=_bp+"\n"; }
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  u+=pxCtxRegrasTxt((ctx&&ctx.regras)||[]);
+  u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxProdutosFbTxt(ctx);
+  u+="\nTAREFA: organize o pedido acima em instruções pro "+(ehVideo?"editor":"designer")+". Se o pedido cria conteúdo novo, escreva o texto pronto na voz da marca usando os fatos do cérebro do cliente (materiais oficiais e aprendizado dos produtos) — sem inventar. Se faltar material, diga qual.";
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:u}]});
+  let txt=((data&&data.content)||[]).map(function(b){return b.text||"";}).join("").trim();
+  txt=txt.replace(/^```(?:json|text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"").trim();
+  if(!txt) throw new Error("A IA não devolveu texto.");
+  return txt;
+}
+if(typeof window!=="undefined"){ window.pxOrganizarAjusteIA=pxOrganizarAjusteIA; }
+
 async function pxReescreverCopy(opts){
   const task=opts&&opts.task; if(!task) throw new Error("Card não informado.");
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
@@ -7757,6 +7814,81 @@ function pxEscurecerCor(hex,f){
    Não publica nas redes). Mora aqui porque roda em DOIS lugares: o painel do cartão
    (10_radar_entrega) e a barra do topo da Avaliação de copys (06_aprovacoes).
    Um componente só: as linhas ficam iguais e mudam juntas. */
+/* (23/09/2026) UPLOAD RESUMÁVEL (TUS) — era do CardModal (10_radar_entrega), virou global porque o
+   Playbook › Materiais também sobe catálogo grande. Necessário acima de ~40 MB: o proxy do Supabase
+   corta POST simples. Cria o upload e manda em chunks de 6 MB, com retry por chunk e progresso. */
+async function pxUploadResumable(file,path,onProgress,bucket){
+  const sb=window._sb;
+  const{data:{session}}=await sb.auth.getSession();
+  const token=session?.access_token;
+  if(!token)throw new Error("Sessão expirada. Faça login novamente.");
+  const sbUrl=sb.supabaseUrl||sb.rest?.url?.replace("/rest/v1","")||"";
+  if(!sbUrl)throw new Error("URL Supabase não configurada");
+  const CHUNK=6*1024*1024;
+  const b64=function(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(_){return btoa(s);}};
+  const meta=[
+    `bucketName ${b64(bucket||"agency-files")}`,
+    `objectName ${b64(path)}`,
+    `contentType ${b64(file.type||"application/octet-stream")}`,
+    `cacheControl ${b64("31536000")}`
+  ].join(",");
+  // 1) Cria upload
+  const createRes=await fetch(`${sbUrl}/storage/v1/upload/resumable`,{
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${token}`,
+      "Tus-Resumable":"1.0.0",
+      "Upload-Length":String(file.size),
+      "Upload-Metadata":meta,
+      "x-upsert":"false"
+    }
+  });
+  if(!createRes.ok){
+    const t=await createRes.text().catch(()=>"");
+    throw new Error(`HTTP ${createRes.status} ao iniciar upload: ${t.slice(0,200)}`);
+  }
+  const uploadUrl=createRes.headers.get("Location")||createRes.headers.get("location");
+  if(!uploadUrl)throw new Error("Servidor não retornou Location pra upload resumable");
+  // 2) Envia chunks via PATCH
+  let offset=0;
+  while(offset<file.size){
+    const end=Math.min(offset+CHUNK,file.size);
+    const slice=file.slice(offset,end);
+    let lastErr=null;
+    let success=false;
+    for(let attempt=1;attempt<=3 && !success;attempt++){
+      try{
+        const patchRes=await fetch(uploadUrl,{
+          method:"PATCH",
+          headers:{
+            "Authorization":`Bearer ${token}`,
+            "Tus-Resumable":"1.0.0",
+            "Upload-Offset":String(offset),
+            "Content-Type":"application/offset+octet-stream"
+          },
+          body:slice
+        });
+        if(!patchRes.ok){
+          const t=await patchRes.text().catch(()=>"");
+          throw new Error(`HTTP ${patchRes.status} em offset ${offset}: ${t.slice(0,200)}`);
+        }
+        const newOffset=Number(patchRes.headers.get("Upload-Offset")||patchRes.headers.get("upload-offset")||end);
+        offset=newOffset;
+        success=true;
+      }catch(e){
+        lastErr=e;
+        if(attempt<3){
+          const delay=2000*Math.pow(2,attempt-1);
+          console.warn(`Chunk falhou (offset ${offset}), retry ${attempt+1}/3 em ${delay}ms`);
+          await new Promise(r=>setTimeout(r,delay));
+        }
+      }
+    }
+    if(!success)throw lastErr||new Error("Falha no chunk após 3 tentativas");
+    if(onProgress)onProgress(Math.round((offset/file.size)*100));
+  }
+}
+
 function PxSwitchLinha({on,onToggle,disabled,icone,corIcone,fundoIcone,label,hint,title,primeiro}){
   return <div title={title||""} onClick={function(){ if(!disabled&&onToggle) onToggle(); }}
     style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderTop:primeiro?"none":"1px solid #f1f5f9",cursor:disabled?"default":"pointer",transition:"background .12s",background:"transparent",opacity:disabled?.7:1}}
@@ -20336,7 +20468,9 @@ function pxMaterialPedidoInfo(t){
     const _tl=(t&&t.timeline)||[];
     for(let i=_tl.length-1;i>=0;i--){
       const x=_tl[i]; if(!x) continue;
-      if(/^pediu material pro cliente/i.test(String(x.label||""))) return {quem:String(x.user||""),quando:String(x.atFmt||"").slice(0,10)};
+      const _l=String(x.label||"");
+      if(/^desmarcou/i.test(_l)) return null;
+      if(/^(pediu material pro cliente|material solicitado pro cliente)/i.test(_l)) return {quem:String(x.user||""),quando:String(x.atFmt||"").slice(0,10)};
     }
   }catch(_){}
   return null;
@@ -20347,7 +20481,7 @@ function PxSeloMaterialCliente({size,claro,cor}){
   const s=size||18;
   const c=cor||"#f59e0b";
   const _hex=/^#[0-9a-f]{6}$/i.test(c);
-  return <span title="Material já pedido pro cliente — não pedir de novo" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:6,background:claro?"#fff":(_hex?c+"22":"#fef3c7"),color:c,flexShrink:0,boxShadow:claro?"0 1px 2px rgba(0,0,0,0.18)":"none"}}>
+  return <span title="Material solicitado pro cliente — não pedir de novo" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:6,background:claro?"#fff":(_hex?c+"22":"#fef3c7"),color:c,flexShrink:0,boxShadow:claro?"0 1px 2px rgba(0,0,0,0.18)":"none"}}>
     <svg width={Math.round(s*0.7)} height={Math.round(s*0.7)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M7 3v3.5a5 5 0 0 0 2.2 4.1L12 12l2.8-1.4A5 5 0 0 0 17 6.5V3"/><path d="M7 21v-3.5a5 5 0 0 1 2.2-4.1L12 12l2.8 1.4a5 5 0 0 1 2.2 4.1V21"/></svg>
   </span>;
 }
@@ -30485,6 +30619,21 @@ function PublicacaoEditModal({task, onClose, onReject}){
     }
   };
   const [feedback,setFeedback]=useState("");
+  /* (23/09/2026, Vinicius) ORGANIZAR COM IA: o pedido cru (o que o cliente falou) vira um
+     briefing de ajuste pro designer/editor, com o cérebro do cliente. O texto cai na própria
+     caixa, editável — nada vai pro card até o "Solicitar ajuste". */
+  const [iaOrganizando,setIaOrganizando]=useState(false);
+  const _organizarComIA=async function(){
+    const _p=String(feedback||"").trim();
+    if(!_p){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escreva primeiro o que o cliente pediu — a IA organiza em cima disso."); return; }
+    if(typeof pxOrganizarAjusteIA!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Pixels IA indisponível."); return; }
+    setIaOrganizando(true);
+    try{
+      const _txt=await pxOrganizarAjusteIA({task:task,pedido:_p,lamina:(allImgs.length>1?activeIdx+1:0),total:allImgs.length});
+      if(_txt){ setFeedback(_txt+"\n\n— Pedido original: "+_p); if(typeof pixelsToast!=="undefined") pixelsToast.success("Organizado. Revise, ajuste o que quiser e clique em Solicitar ajuste.",4500); }
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
+    setIaOrganizando(false);
+  };
   // Guarda ajustes POR LAMINA — {0: "texto lamina 1", 2: "texto lamina 3", ...}
   // Populado ao trocar de lamina. Ao salvar, gera 1 comentario por lamina com texto.
   const [feedbackByLamina, setFeedbackByLamina] = useState({});
@@ -31179,7 +31328,15 @@ function PublicacaoEditModal({task, onClose, onReject}){
             {/* Instruções */}
             <div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
-                <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
+                <span style={{display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
+                  <button type="button" onClick={_organizarComIA} disabled={iaOrganizando||!String(feedback||"").trim()}
+                    title="Escreva o pedido do cliente do jeito que chegou e a IA organiza: o que muda, o que fica, texto pronto na voz da marca se precisar de lâmina/cena nova, e o material que falta"
+                    style={{background:iaOrganizando?"#ede9fe":"#7c3aed",border:"none",color:iaOrganizando?"#6d28d9":"#fff",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:800,cursor:(iaOrganizando||!String(feedback||"").trim())?"default":"pointer",opacity:(!iaOrganizando&&!String(feedback||"").trim())?.45:1,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>
+                    {iaOrganizando?"Organizando…":"Organizar com IA"}
+                  </button>
+                </span>
                 {/* Tag da lamina atual + contador de laminas ja anotadas */}
                 {allImgs.length>1 && (function(){
                   const _outrasComTexto = Object.keys(feedbackByLamina).filter(function(k){return String(feedbackByLamina[k]||"").trim() && Number(k)!==activeIdx;}).length;
@@ -33500,7 +33657,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                  Vinicius passa o dia. Só leitura — marcar/desmarcar é no cartão. */
               const _matPed=(typeof pxMaterialPedido==="function")&&pxMaterialPedido(current);
               const _matInfo=_matPed&&(typeof pxMaterialPedidoInfo==="function")?pxMaterialPedidoInfo(current):null;
-              const _matVal=_matPed?("Pedido ao cliente"+(_matInfo&&_matInfo.quem?" · "+_matInfo.quem:"")+(_matInfo&&_matInfo.quando?" · "+_matInfo.quando.slice(0,5):"")):"";
+              const _matVal=_matPed?("Solicitado ao cliente"+(_matInfo&&_matInfo.quem?" · "+_matInfo.quem:"")+(_matInfo&&_matInfo.quando?" · "+_matInfo.quando.slice(0,5):"")):"";
               const linhas=[
                 {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
                 {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
@@ -33531,7 +33688,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     <div role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
                       onClick={clicar}
                       onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();clicar();}}):undefined}
-                      title={l.key==="mat"?"Material já pedido pro cliente — não pedir de novo (marcar/desmarcar é no cartão)":(podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined)}
+                      title={l.key==="mat"?"Material solicitado pro cliente — não pedir de novo (marcar/desmarcar é no cartão)":(podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined)}
                       style={{position:"relative",display:"flex",alignItems:"center",gap:11,background:"#fff",
                         border:"1px "+(vazio?"dashed":"solid")+" "+(aqui?"#7c3aed":(vazio?"#d7dde6":"#e9ecf3")),
                         borderRadius:14,padding:isMob?"10px 12px":"11px 14px",width:"100%",boxSizing:"border-box",
@@ -46046,77 +46203,9 @@ function _cardPodeSerResp(u){
 
   // TUS resumable — necessário pra arquivos > ~50MB (Supabase proxy corta POST simples).
   // Faz POST pra criar upload, depois PATCH em chunks de 6MB. Suporta progress + retry de chunk.
-  const uploadResumable=async(file,path,onProgress)=>{
-    const sb=window._sb;
-    const{data:{session}}=await sb.auth.getSession();
-    const token=session?.access_token;
-    if(!token)throw new Error("Sessão expirada. Faça login novamente.");
-    const sbUrl=sb.supabaseUrl||sb.rest?.url?.replace("/rest/v1","")||"";
-    if(!sbUrl)throw new Error("URL Supabase não configurada");
-    const CHUNK=6*1024*1024;
-    const b64=function(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(_){return btoa(s);}};
-    const meta=[
-      `bucketName ${b64("agency-files")}`,
-      `objectName ${b64(path)}`,
-      `contentType ${b64(file.type||"application/octet-stream")}`,
-      `cacheControl ${b64("31536000")}`
-    ].join(",");
-    // 1) Cria upload
-    const createRes=await fetch(`${sbUrl}/storage/v1/upload/resumable`,{
-      method:"POST",
-      headers:{
-        "Authorization":`Bearer ${token}`,
-        "Tus-Resumable":"1.0.0",
-        "Upload-Length":String(file.size),
-        "Upload-Metadata":meta,
-        "x-upsert":"false"
-      }
-    });
-    if(!createRes.ok){
-      const t=await createRes.text().catch(()=>"");
-      throw new Error(`HTTP ${createRes.status} ao iniciar upload: ${t.slice(0,200)}`);
-    }
-    const uploadUrl=createRes.headers.get("Location")||createRes.headers.get("location");
-    if(!uploadUrl)throw new Error("Servidor não retornou Location pra upload resumable");
-    // 2) Envia chunks via PATCH
-    let offset=0;
-    while(offset<file.size){
-      const end=Math.min(offset+CHUNK,file.size);
-      const slice=file.slice(offset,end);
-      let lastErr=null;
-      let success=false;
-      for(let attempt=1;attempt<=3 && !success;attempt++){
-        try{
-          const patchRes=await fetch(uploadUrl,{
-            method:"PATCH",
-            headers:{
-              "Authorization":`Bearer ${token}`,
-              "Tus-Resumable":"1.0.0",
-              "Upload-Offset":String(offset),
-              "Content-Type":"application/offset+octet-stream"
-            },
-            body:slice
-          });
-          if(!patchRes.ok){
-            const t=await patchRes.text().catch(()=>"");
-            throw new Error(`HTTP ${patchRes.status} em offset ${offset}: ${t.slice(0,200)}`);
-          }
-          const newOffset=Number(patchRes.headers.get("Upload-Offset")||patchRes.headers.get("upload-offset")||end);
-          offset=newOffset;
-          success=true;
-        }catch(e){
-          lastErr=e;
-          if(attempt<3){
-            const delay=2000*Math.pow(2,attempt-1);
-            console.warn(`Chunk falhou (offset ${offset}), retry ${attempt+1}/3 em ${delay}ms`);
-            await new Promise(r=>setTimeout(r,delay));
-          }
-        }
-      }
-      if(!success)throw lastErr||new Error("Falha no chunk após 3 tentativas");
-      if(onProgress)onProgress(Math.round((offset/file.size)*100));
-    }
-  };
+  /* (23/09/2026) O TUS virou função global — pxUploadResumable, 00b_preview_util.jsx — porque o
+     Playbook › Materiais também precisa subir catálogo de 70 MB+. Aqui só delega. */
+  const uploadResumable=(file,path,onProgress)=>pxUploadResumable(file,path,onProgress);
 
   // Roteador: arquivos grandes (> 40MB) usam TUS resumable; pequenos usam POST simples (XHR com progress).
   const SMART_THRESHOLD=40*1024*1024;
@@ -46275,7 +46364,7 @@ function _cardPodeSerResp(u){
      Salvar): quem marcou pode fechar o card e a estrategista já vê. Quem/quando ficam na timeline. */
   const _marcarPedidoMaterial=function(v){
     const _now=new Date().toISOString();
-    const _e={type:"edit",label:v?"Pediu material pro cliente":"Desfez o pedido de material ao cliente",at:_now,atFmt:nowFmt(),user:user.name};
+    const _e={type:"edit",label:v?"Material solicitado pro cliente":"Desmarcou: material solicitado pro cliente",at:_now,atFmt:nowFmt(),user:user.name};
     setAguardandoInfo(!!v);
     if(typeof setTasks==="function"){
       setTasks(function(prev){
@@ -46284,7 +46373,7 @@ function _cardPodeSerResp(u){
         return _base.map(function(t){ return t.id!==task.id?t:Object.assign({},t,{aguardando_info:!!v,timeline:[...(t.timeline||[]),_e]}); });
       });
     }
-    if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Marcado: material pedido pro cliente. Fica no topo do card e na capa até o material entrar.":"Pedido de material desmarcado.",3800);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Marcado: material solicitado pro cliente. Fica no topo do card e na capa até o material entrar.":"Desmarcado.",3800);
   };
   const _pedidoMatInfo=(function(){ try{ return pxMaterialPedidoInfo(((tasks||[]).find(function(t){ return t.id===task.id; }))||task); }catch(_){ return null; } })();
 
@@ -47481,27 +47570,34 @@ function _cardPodeSerResp(u){
           </div>
         </div>
 
-        {/* PEDI MATERIAL PRO CLIENTE (23/09/2026) — barra chamativa pra ninguém pedir duas vezes.
-            Ligado: faixa âmbar com quem/quando. Desligado: botão pequeno tracejado. */}
-        {_bl("campo.material_cliente")&&!task._isDraft&&(aguardandoInfo
-          ? <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fffbeb",border:"1px solid #fcd34d",borderLeft:"4px solid #f59e0b",borderRadius:10,padding:"9px 12px",marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
-              <PxSeloMaterialCliente size={26} cor="#d97706"/>
-              <div style={{flex:1,minWidth:200}}>
-                <div style={{fontSize:12.5,fontWeight:800,color:"#92400e",letterSpacing:-.1}}>Material já pedido pro cliente{_pedidoMatInfo&&_pedidoMatInfo.quem?" · "+_pedidoMatInfo.quem:""}{_pedidoMatInfo&&_pedidoMatInfo.quando?" · "+_pedidoMatInfo.quando:""}</div>
-                <div style={{fontSize:11,color:"#b45309",marginTop:1}}>Não pedir de novo. Quando o material entrar no card, esse aviso some sozinho.</div>
-              </div>
-              {canEdit&&<button type="button" onClick={function(){ _marcarPedidoMaterial(false); }} title="Marcou por engano? Desfaz."
-                style={{background:"transparent",border:"1px solid #fcd34d",color:"#92400e",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Desfazer</button>}
-            </div>
-          : (canEdit&&!isAgendado
-            ? <div style={{marginBottom:12}}>
-                <button type="button" onClick={function(){ _marcarPedidoMaterial(true); }} title="Marca que você já pediu o material pro cliente — pra ninguém pedir de novo"
-                  style={{background:"#fff",border:"1px dashed #fcd34d",color:"#b45309",borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:7}}
-                  onMouseEnter={function(e){ e.currentTarget.style.background="#fffbeb"; }} onMouseLeave={function(e){ e.currentTarget.style.background="#fff"; }}>
-                  <PxSeloMaterialCliente size={18} cor="#d97706"/> Pedi material pro cliente
-                </button>
-              </div>
-            : null))}
+        {/* MATERIAL SOLICITADO PRO CLIENTE (23/09/2026) — interruptor grande entre o título e as
+            abas, pra ninguém pedir duas vezes. Ligado: faixa âmbar com quem/quando. Grava na hora. */}
+        {_bl("campo.material_cliente")&&!task._isDraft&&(canEdit||aguardandoInfo)&&(function(){
+          const _on=!!aguardandoInfo;
+          const _pode=canEdit&&!isAgendado;
+          const _quem=_pedidoMatInfo&&_pedidoMatInfo.quem, _quando=_pedidoMatInfo&&_pedidoMatInfo.quando;
+          return <div role={_pode?"switch":undefined} aria-checked={_on} tabIndex={_pode?0:undefined}
+            onClick={function(){ if(_pode) _marcarPedidoMaterial(!_on); }}
+            onKeyDown={_pode?function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _marcarPedidoMaterial(!_on); } }:undefined}
+            title={_pode?(_on?"Desmarcar (marcou por engano)":"Marque quando pedir o material pro cliente"):""}
+            style={{display:"flex",alignItems:"center",gap:14,padding:"13px 16px",marginBottom:14,borderRadius:12,outline:"none",cursor:_pode?"pointer":"default",
+              background:_on?"#fffbeb":"#fff",border:"1.5px solid "+(_on?"#f59e0b":"#e2e8f0"),boxShadow:_on?"0 0 0 4px rgba(245,158,11,.13)":"none",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
+            onMouseEnter={function(e){ if(_pode&&!_on) e.currentTarget.style.borderColor="#fcd34d"; }}
+            onMouseLeave={function(e){ if(!_on) e.currentTarget.style.borderColor="#e2e8f0"; }}>
+            <PxSeloMaterialCliente size={40} cor={_on?"#d97706":"#94a3b8"}/>
+            <span style={{minWidth:0,flex:1}}>
+              <span style={{display:"block",fontSize:isMobile?14:15.5,fontWeight:800,color:_on?"#92400e":"#334155",letterSpacing:-.3,lineHeight:1.2}}>
+                Material solicitado pro cliente{_on&&_quem?" · "+_quem:""}{_on&&_quando?" · "+_quando:""}
+              </span>
+              <span style={{display:"block",fontSize:12,color:_on?"#b45309":"#94a3b8",marginTop:3,fontWeight:500,lineHeight:1.35}}>
+                {_on?"Já foi pedido — não pedir de novo. Some sozinho quando o material entrar no card.":"Marque quando pedir o material pro cliente, pra ninguém pedir duas vezes."}
+              </span>
+            </span>
+            <span aria-hidden="true" style={{width:48,height:27,borderRadius:99,background:_on?"#f59e0b":"#e2e8f0",flexShrink:0,position:"relative",transition:"background .16s"}}>
+              <span style={{position:"absolute",top:3,left:_on?24:3,width:21,height:21,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.3)",transition:"left .16s"}}/>
+            </span>
+          </div>;
+        })()}
 
         {/* TABS */}
         <div className={isMobile?"scroll-x":undefined} style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:isMobile?"auto":undefined,WebkitOverflowScrolling:"touch"}}>
@@ -99955,7 +100051,68 @@ function _pbMemEtq(tipo){
    Não servia pra nada: a IA abre o arquivo e vê sozinha o que é, e o cérebro lê a FICHA, não
    a etiqueta. Saiu o seletor, saiu a etiqueta do card e saiu do prompt. A coluna `tipo`
    continua no banco com o default 'outro' — os materiais antigos não perdem nada. */
-const PB_MAT_MAX_LEITURA=8*1024*1024;   // acima disso o arquivo é guardado, mas a IA não lê
+/* (23/09/2026, Vinicius: "Tentei subir materiais da Bioter, olha a mensagem… faça funcionar")
+   O teto de 8 MB existia porque o arquivo ia em base64 dentro do corpo da requisição. Agora a
+   IA recebe a URL PÚBLICA do storage e baixa o arquivo ela mesma (a Anthropic aceita PDF por
+   URL até 32 MB / 100 páginas). O base64 ficou só como reserva pra arquivo pequeno sem URL.
+   Passou de 32 MB ou 100 páginas: o navegador extrai o TEXTO do PDF (pdf.js) e manda em
+   partes — a ficha sai do texto; só perde o que for imagem sem texto. */
+const PB_MAT_MAX_LEITURA=8*1024*1024;   // teto SÓ do caminho base64 (reserva)
+const PB_MAT_MAX_ARQUIVO=1024*1024*1024; // teto do upload (1 GB) — o bucket aceita 2 GB
+const PB_MAT_MAX_URL_IA=30*1024*1024;    // acima disso a API não baixa (limite 32 MB) — vai direto pro texto
+const PB_PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/";
+async function _pbPdfJs(){
+  if(window.__pxPdfJs) return window.__pxPdfJs;
+  const mod=await import(/* @vite-ignore */ PB_PDFJS+"pdf.min.mjs");
+  try{ mod.GlobalWorkerOptions.workerSrc=PB_PDFJS+"pdf.worker.min.mjs"; }catch(_){}
+  window.__pxPdfJs=mod; return mod;
+}
+/* Texto de cada página do PDF (array). Página sem texto (escaneada) vem "". */
+async function _pbPdfPaginas(url,onProg){
+  const pdfjs=await _pbPdfJs();
+  const pdf=await pdfjs.getDocument({url:url}).promise;
+  const out=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    try{
+      const pg=await pdf.getPage(i); const tc=await pg.getTextContent();
+      out.push(tc.items.map(function(it){ return (it&&it.str)||""; }).join(" ").replace(/[ \t]+/g," ").trim());
+    }catch(_e){ out.push(""); }
+    if(onProg) onProg(i,pdf.numPages);
+  }
+  try{ pdf.destroy(); }catch(_){}
+  return out;
+}
+/* A ficha a partir do TEXTO do PDF, em partes de ~55 mil caracteres; se deu mais de uma parte,
+   uma chamada final junta as fichas parciais numa só. */
+async function _pbFichaPorTexto(url,sys,pedido,onProg){
+  const pags=await _pbPdfPaginas(url,onProg);
+  const total=pags.join("").length;
+  if(total<300) throw new Error("O PDF é imagem escaneada (sem texto) e passou do limite de leitura direta (32 MB / 100 páginas). Suba uma versão mais leve ou com menos páginas.");
+  const partes=[]; let cur="", ini=1;
+  for(let i=0;i<pags.length;i++){
+    const linha="\n[página "+(i+1)+"]\n"+pags[i];
+    if(cur.length+linha.length>55000&&cur){ partes.push({txt:cur,de:ini,ate:i}); cur=""; ini=i+1; }
+    cur+=linha;
+  }
+  if(cur.trim()) partes.push({txt:cur,de:ini,ate:pags.length});
+  const modelo=(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO);
+  const fichas=[];
+  for(let p=0;p<partes.length;p++){
+    if(onProg) onProg("ia",p+1,partes.length);
+    const cab=(partes.length>1?("PARTE "+(p+1)+" de "+partes.length+" — páginas "+partes[p].de+" a "+partes[p].ate+" de "+pags.length+". Faça a ficha SÓ desta parte.\n\n"):"")+
+      "TEXTO EXTRAÍDO DO PDF (as imagens não vieram; trabalhe com o texto):\n\n"+partes[p].txt;
+    const data=await askClaude({model:modelo,max_tokens:5000,system:sys,messages:[{role:"user",content:[{type:"text",text:cab},{type:"text",text:pedido}]}]});
+    const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+    if(txt) fichas.push(txt);
+  }
+  if(!fichas.length) throw new Error("A IA não devolveu a ficha. Tente de novo.");
+  if(fichas.length===1) return fichas[0];
+  const junta="Abaixo estão "+fichas.length+" fichas PARCIAIS do MESMO material (uma por parte do PDF). Junte numa ficha só, com as mesmas seções, sem perder nenhum fato, número, nome ou frase — e sem repetir. Máximo 1.800 palavras. Texto puro.\n\n"+
+    fichas.map(function(f,i){ return "=== FICHA PARCIAL "+(i+1)+" ===\n"+f; }).join("\n\n");
+  const d2=await askClaude({model:modelo,max_tokens:5000,system:sys,messages:[{role:"user",content:junta}]});
+  const t2=((d2&&d2.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  return t2||fichas.join("\n\n");
+}
 function _pbMatTamanho(n){
   const b=Number(n)||0; if(!b) return "";
   return b<1024*1024?(Math.round(b/1024)+" KB"):((b/1048576).toFixed(1).replace(".",",")+" MB");
@@ -99970,14 +100127,15 @@ function _pbMatBase64(file){
 }
 /* A IA lê o PDF (ou a imagem) e devolve a ficha de fatos. Vai pelo askClaude porque é a
    Anthropic que lê documento nativo — o ask-claude é proxy transparente da API. */
-async function pxFichaDoMaterial(file, titulo, clienteNome){
+async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
-  const mime=String((file&&file.type)||"").toLowerCase();
+  const mime=String((file&&file.type)||"").toLowerCase()||(/\.pdf(\?|$)/i.test(String(url||""))?"application/pdf":"");
   const ehPdf=mime.indexOf("pdf")>=0;
   const ehImg=mime.indexOf("image/")===0;
   if(!ehPdf&&!ehImg) throw new Error("Por enquanto a IA lê PDF e imagem. Outros formatos ficam guardados, sem ficha.");
-  if(file.size>PB_MAT_MAX_LEITURA) throw new Error("Arquivo grande demais pra leitura ("+_pbMatTamanho(file.size)+"). Guardei assim mesmo — se quiser a ficha, suba uma versão mais leve.");
-  const b64=await _pbMatBase64(file);
+  const _url=String(url||"").trim();
+  if(!_url&&file.size>PB_MAT_MAX_LEITURA) throw new Error("Sem URL do arquivo e grande demais pra mandar embutido ("+_pbMatTamanho(file.size)+"). Suba de novo.");
+  const b64=_url?"":await _pbMatBase64(file);
   const sys="Você lê material oficial de empresa (folder, manual, catálogo, tabela técnica, briefing) e "+
     "destila TUDO que serve pra uma equipe de marketing escrever com precisão — fatos, números, ângulos, "+
     "frases, tom e limites. NUNCA invente: o que o material não diz, você não escreve. Também não jogue "+
@@ -100017,16 +100175,36 @@ async function pxFichaDoMaterial(file, titulo, clienteNome){
     "REGRAS: não invente nada — o que o material não diz, você não escreve. Copie número, "+
     "nome e frase EXATAMENTE como estão. Se o material traz uma lista, mantenha a lista "+
     "INTEIRA, nunca uma amostra. Prefira perder elegância a perder informação.";
+  /* Com URL a IA baixa o arquivo direto do storage — nada de base64 no corpo da requisição. */
   const bloco=ehPdf
-    ? {type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}
-    : {type:"image",source:{type:"base64",media_type:(mime||"image/png"),data:b64}};
+    ? (_url?{type:"document",source:{type:"url",url:_url}}:{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}})
+    : (_url?{type:"image",source:{type:"url",url:_url}}:{type:"image",source:{type:"base64",media_type:(mime||"image/png"),data:b64}});
+  const _limpa=function(s){ return String(s||"").replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim(); };
   /* 900 tokens davam ~600 palavras e cortavam a ficha no meio. O teto de 1.800 palavras do
      pedido cabe em ~5.000 tokens com folga. */
-  const data=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
-    max_tokens:5000,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
-  const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
-  if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
-  return txt.replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
+  /* PDF acima de 30 MB: a API não baixa (limite 32 MB) — nem tenta, vai direto pro texto. */
+  if(ehPdf&&_url&&Number(file&&file.size)>PB_MAT_MAX_URL_IA){
+    console.info("[material] "+_pbMatTamanho(file.size)+" — lendo pelo texto do PDF");
+    return _limpa(await _pbFichaPorTexto(_url,sys,pedido,onProg));
+  }
+  try{
+    if(onProg) onProg("ia",1,1);
+    const data=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
+      max_tokens:5000,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
+    const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+    if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
+    return _limpa(txt);
+  }catch(e){
+    const msg=String((e&&e.message)||e||"");
+    /* PDF que passou do que a API lê direto (100 páginas / 32 MB) ou que ela não conseguiu
+       baixar → texto pelo pdf.js, em partes. Imagem e erro de outra natureza sobem. */
+    const _grande=/page|p[áa]gina|exceed|too (large|big|many)|32\s?mb|maximum|limit|size|fetch|download|url|could not|unable/i.test(msg);
+    if(ehPdf&&_url&&_grande){
+      console.warn("[material] leitura direta falhou ("+msg.slice(0,120)+") — indo pelo texto do PDF");
+      return _limpa(await _pbFichaPorTexto(_url,sys,pedido,onProg));
+    }
+    throw e;
+  }
 }
 
 function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
@@ -100070,7 +100248,12 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const _lerArquivo=async function(m,file){
     await _patch(m,{ficha_status:"lendo"});
     try{
-      const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome);
+      const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.arquivo_url,function(a,b,c){
+        try{
+          if(a==="ia") setSubindo(c>1?("lendo "+(m.titulo||m.arquivo_nome)+" — IA, parte "+b+" de "+c):("lendo "+(m.titulo||m.arquivo_nome)+" — IA"));
+          else setSubindo("extraindo texto de "+(m.titulo||m.arquivo_nome)+" — página "+a+" de "+b);
+        }catch(_){}
+      });
       await _patch(m,{ficha:ficha,ficha_status:"pronta"});
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Ficha pronta — confira antes de confiar nela.",4000);
     }catch(e){
@@ -100085,11 +100268,8 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const _relerDoUrl=async function(m){
     if(!m||!m.arquivo_url) return;
     try{
-      await _patch(m,{ficha_status:"lendo"});
-      const resp=await fetch(m.arquivo_url);
-      if(!resp.ok) throw new Error("não consegui baixar o arquivo ("+resp.status+")");
-      const blob=await resp.blob();
-      const file=new File([blob],m.arquivo_nome||"material",{type:m.arquivo_tipo||blob.type||""});
+      /* (23/09/2026) A IA lê pela URL — não precisa baixar o arquivo pro navegador. */
+      const file={name:m.arquivo_nome||"material",type:m.arquivo_tipo||(/\.pdf(\?|$)/i.test(String(m.arquivo_url))?"application/pdf":""),size:Number(m.arquivo_tamanho)||0};
       await _lerArquivo(m,file);
     }catch(e){
       await _patch(m,{ficha_status:"erro"});
@@ -100115,8 +100295,16 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         const ext=(String(file.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
         const rnd=Math.random().toString(36).slice(2,9);
         const path="playbook-materiais/"+clientId+"/"+Date.now()+"-"+rnd+"."+ext;
-        const {error:upErr}=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
-        if(upErr) throw upErr;
+        /* (23/09/2026, Vinicius: "temos catálogo de 70mb… não tem como aumentar pra 1gb?")
+           Teto de 1 GB. Acima de 40 MB o POST simples é cortado pelo proxy do Supabase — vai
+           pelo upload resumável (TUS), em chunks de 6 MB com progresso. */
+        if(file.size>PB_MAT_MAX_ARQUIVO) throw new Error("passa de 1 GB ("+_pbMatTamanho(file.size)+")");
+        if(file.size>40*1024*1024&&typeof pxUploadResumable==="function"){
+          await pxUploadResumable(file,path,function(pct){ setSubindo(_passo(i,lista.length,"guardando",file.name)+" — "+pct+"%"); });
+        } else {
+          const {error:upErr}=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
+          if(upErr) throw upErr;
+        }
         const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
         const row={client_id:clientId,unidade:isBioter?String(unitTab||""):"",
           titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),
@@ -100186,7 +100374,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         {subindo ? (subindo.slice(0,52)+"…") : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · acima de 8 MB o arquivo fica guardado sem ficha
+        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · até 1 GB por arquivo · catálogo grande é lido pelo texto do PDF
       </span>
       <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
@@ -105415,7 +105603,7 @@ function PageMatrizResponsabilidades({isMob, perms, viewUser}){
 /* ═══════════════════════════════════════════════════════════════════════
    ROTEIROS — sidebar, logo abaixo da Linha de produção (ideia do Vinicius, 16/09/2026)
    Criador de roteiros de vídeo pra mandar pro cliente gravar.
-   • Aba Roteiros: um clique → a IA escreve 5 roteiros de 90s sobre 5 ASSUNTOS diferentes
+   • Aba Roteiros: um clique → a IA escreve 5 roteiros de 60s (era 90s até 23/09/2026) sobre 5 ASSUNTOS diferentes
      pro cliente escolhido, no formato Abertura / Desenvolvimento / Fechamento com CTA.
      Cada um fica inteiro na tela, com "Copiar pro WhatsApp" e um olho que manda pro portal.
    • Aba Trends: a Luiza cadastra a trend (título + do que se trata) e clica pra gerar
@@ -105440,11 +105628,15 @@ function _rtParagrafos(txt){
   const out=[]; for(let i=0;i<fr.length;i+=2) out.push(fr.slice(i,i+2).join("").trim());
   return out.filter(Boolean).join("\n\n");
 }
-function _rtTexto(r,semCabecalho){
-  const py=String(r.unidade||"")==="paraguay";
-  const L=py?{a:"Apertura",d:"Desarrollo",f:"Cierre"}:{a:"Abertura",d:"Desenvolvimento",f:"Fechamento"};
-  return (semCabecalho?"":("🎬 *"+(r.assunto||"Roteiro")+"*\n\n"))+
-    "*"+L.a+"*\n"+_rtParagrafos(r.abertura)+"\n\n*"+L.d+"*\n"+_rtParagrafos(r.desenvolvimento)+"\n\n*"+L.f+"*\n"+_rtParagrafos(r.fechamento);
+/* (23/09/2026, Vinicius) FORMATO DO WHATSAPP — "3 pontos parágrafo por texto, títulos padrão e
+   caixa alta negrito.. achei que fica clean, prático". Cada parte (abertura, desenvolvimento,
+   fechamento) vira UM parágrafo com "•" na frente; os rótulos Abertura/Desenvolvimento/
+   Fechamento saíram. Título: *ROTEIRO N — ASSUNTO EM CAIXA ALTA*. */
+function _rtUmParagrafo(txt){ return String(txt||"").replace(/\r/g,"").replace(/\s*\n+\s*/g," ").replace(/[ \t]{2,}/g," ").trim(); }
+function _rtTexto(r,semCabecalho,numero){
+  const _tit="*ROTEIRO"+(numero?(" "+numero):"")+" — "+String(r.assunto||"Roteiro").toUpperCase()+"*";
+  return (semCabecalho?"":(_tit+"\n\n"))+
+    "• "+_rtUmParagrafo(r.abertura)+"\n\n• "+_rtUmParagrafo(r.desenvolvimento)+"\n\n• "+_rtUmParagrafo(r.fechamento);
 }
 /* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; por produto em 22/09/2026, a pedido do
    Rodrigo: "quero que seja organizado pro whats, separado pelas tags de produtos ali").
@@ -105467,19 +105659,33 @@ function _rtTextoTodos(lista,nome){
   });
   grupos.sort(function(a,b){ return (a.produto?0:1)-(b.produto?0:1); });   // "Outros" por último
   const porProduto=grupos.some(function(g){ return !!g.produto; });
-  let out="\ud83c\udfac *Roteiros de v\u00eddeo \u2014 "+(nome||"")+"*\n_"+n+(n===1?" roteiro":" roteiros")+" de ~90 segundos pra gravar_";
+  /* (23/09/2026) Sem cabeçalho "Roteiros de vídeo — cliente": começa direto no produto, como o
+     Vinicius manda pro cliente. *PRODUTO* ✅ por bloco; numeração corrida (bate com o botão). */
+  let out="";
   let i=0;
   grupos.forEach(function(g){
-    if(porProduto) out+="\n\n\ud83d\udce6 *"+String(g.produto||"Outros").toUpperCase()+"*";
+    if(porProduto) out+=(out?"\n\n\n":"")+"*"+String(g.produto||"Outros").toUpperCase()+"* \u2705";
     g.itens.forEach(function(r){
       i++;
-      out+="\n\n*"+i+". "+String(r.assunto||"Roteiro")+"*\n\n"+_rtTexto(r,true);
+      out+=(out?"\n\n":"")+_rtTexto(r,false,i);
     });
   });
   return out;
 }
 function _rtPalavras(r){ return ((r.abertura||"")+" "+(r.desenvolvimento||"")+" "+(r.fechamento||"")).trim().split(/\s+/).filter(Boolean).length; }
 function _rtCopiar(txt,msg){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800); }catch(_){} }
+
+/* (23/09/2026, Vinicius: "muda de 90 pra 60 segundos o padrão dos textos lá") As regras de fala
+   são as mesmas do card (PX_ROTEIRO_FALA_REGRAS), só o tamanho muda: 60s = 120 a 150 palavras.
+   O card ("Transformar em roteiro", Avaliação de copys) continua em 90s — foi só a aba. */
+function _rtRegras60(){
+  const base=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined")?PX_ROTEIRO_FALA_REGRAS
+    :"REGRAS DO ROTEIRO (é o texto que o CLIENTE vai FALAR olhando pra câmera):\n- 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n";
+  return base
+    .replace(/90 segundos falados COM CALMA: de 170 a 200 palavras NO TOTAL\. Frases curtas, de falar\. Passou de 200, corta\./,"60 segundos falados COM CALMA: de 120 a 150 palavras NO TOTAL. Frases curtas, de falar. Passou de 150, corta.")
+    .replace(/parágrafos CURTOS separados por linha em branco \(uma ideia por parágrafo; o Desenvolvimento tem 3 a 4\)\. Nunca um bloco só\./,"cada cena é UM parágrafo corrido (o Desenvolvimento com 3 a 4 frases).")
+    .replace(/90 segundos/g,"60 segundos");
+}
 
 /* ── GERADOR ──
    Devolve [{assunto,abertura,desenvolvimento,fechamento}] × quantos.
@@ -105568,9 +105774,9 @@ async function pxGerarRoteiros(opts){
     u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize 🟣, depois 🟢; 🟡 só de vez em quando; 🔴 NUNCA. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
     u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
   }
-  u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
-  u+="- PARÁGRAFOS: escreva em parágrafos CURTOS, uma ideia por parágrafo, com uma linha em branco entre eles. O DESENVOLVIMENTO tem 3 a 4 parágrafos; abertura e fechamento, 1 ou 2. Nunca um bloco só.\n";
-  u+="- TAMANHO: 170 a 200 palavras NO TOTAL (90 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 200 palavras, corte.\n";
+  u+=_rtRegras60();
+  u+="- PARÁGRAFOS: cada parte é UM parágrafo (vai pro cliente com um \"•\" na frente): abertura 1 a 2 frases, desenvolvimento 3 a 4 frases, fechamento 2 a 3 frases com o CTA.\n";
+  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 150 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
   u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
@@ -105645,9 +105851,9 @@ async function pxAjustarRoteiro(r,feedback){
   u+="TAREFA: devolva o MESMO roteiro com esse ajuste feito. MANTENHA tudo que não foi criticado — o assunto, o produto, a ordem das ideias e as frases que já estão boas. "+
      "Não reescreva do zero, não troque de tema e nunca invente número, cidade, prazo, garantia nem depoimento. "+
      "Se o pedido fala só de uma parte (a abertura, por exemplo), as outras voltam praticamente iguais.\n";
-  u+=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"REGRAS: 90 segundos falados (200 a 240 palavras), 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n");
-  u+="- PARÁGRAFOS: parágrafos CURTOS, uma ideia por parágrafo, com uma linha em branco entre eles.\n";
-  u+="- TAMANHO: 170 a 200 palavras NO TOTAL.\n\n";
+  u+=_rtRegras60();
+  u+="- PARÁGRAFOS: cada parte é UM parágrafo.\n";
+  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos).\n\n";
   u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, em português)\n"+
      ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
 
@@ -105706,7 +105912,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
             style={{background:"#fffbeb",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
             Ajustado{r.ajustes.length>1?(" "+r.ajustes.length+"x"):""}</span>}
         </div>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~90 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~60 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
         <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
@@ -105969,7 +106175,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
         <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.5}}>Roteiros</div>
         {/* Celular: a frase que explica a tela sai — quem abre no celular já sabe o que é
             e ela sozinha come 2 linhas do alto. No computador continua igual. */}
-        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 90 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
+        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 60 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
       </div>
       {/* Celular: as 3 abas ocupam a largura, uma do lado da outra */}
       <div style={{display:isMob?"flex":"inline-flex",width:isMob?"100%":undefined,background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
@@ -106102,7 +106308,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <textarea value={pedidoForm.texto} onChange={function(e){setPedidoForm(Object.assign({},pedidoForm,{texto:e.target.value}));}} rows={5} autoFocus
             placeholder={"Escreve como você explicaria pra equipe: o produto, o assunto, o ângulo, o que não pode faltar.\n\nex: 3 roteiros sobre cisterna inflada pra quem já perdeu produção na estiagem — falar da instalação rápida e da manutenção, sem citar preço."}
             style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.55})}/>
-          <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 90 segundos continuam valendo — o pedido manda no assunto.</div>
+          <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 60 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
         <div>
           <div style={_lbl}>Quantos roteiros</div>
@@ -106141,7 +106347,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
 
     {aba==="trends"&&<>
       <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:220,color:"#475569",fontSize:12.5,lineHeight:1.5}}>Cadastre a trend e explique do que se trata. Depois, em cada trend, escolha o cliente e clique em <b>Gerar 5 ideias</b>: a IA adapta a trend pro negócio dele, no mesmo formato de 90s.</div>
+        <div style={{flex:1,minWidth:220,color:"#475569",fontSize:12.5,lineHeight:1.5}}>Cadastre a trend e explique do que se trata. Depois, em cada trend, escolha o cliente e clique em <b>Gerar 5 ideias</b>: a IA adapta a trend pro negócio dele, no mesmo formato de 60s.</div>
         {_bl("trends.nova")&&<button type="button" onClick={function(){setTrendForm({titulo:"",descricao:"",link:""});}} style={_btnGerar("",true,false,"#db2777")}><Ico n="plus" size={13} color="#fff"/> Nova trend</button>}
       </div>
       {trendForm&&<div style={{background:"#fff",border:"1px solid #fbcfe8",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12,boxShadow:"0 8px 24px rgba(219,39,119,.08)"}}>
@@ -106394,7 +106600,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
       <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="video" size={20} color="#fff"/></div>
       <div style={{flex:1,minWidth:200}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>Sugestões de conteúdo</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 90 segundos pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
       </div>
     </div>
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
