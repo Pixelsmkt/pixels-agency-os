@@ -45196,15 +45196,9 @@ function _cardPodeSerResp(u){
     if(/legenda|caption|subt/.test(t))       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="7" y1="15" x2="11" y2="15"/><line x1="14" y1="15" x2="17" y2="15"/></svg>;
     if(/[aá]udio|trilha|m[uú]sica|som/.test(t)) return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
     if(/ritmo|velocidade|tempo/.test(t))     return <svg {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
-    /* (23/09/2026, Vinicius) "esse lápis pra editar sendo que não dá pra editar ficou nada a ver".
-       Rótulos do briefing organizado pela IA ganham ícone próprio; o padrão vira uma etiqueta. */
-    if(/\bnov[ao]s?\b/.test(t))             return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-    if(/l[âa]mina|cena|p[áa]gina|slide/.test(t)) return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
-    if(/manter|mant[ée]m|fica como/.test(t))  return <svg {...p}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
-    if(/materia|anexo|arquivo/.test(t))       return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
-    if(/muda|altera|ajuste/.test(t))          return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
-    // padrão: etiqueta (é um rótulo, não um botão de editar)
-    return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
+    /* (23/09/2026, Vinicius) "só deixa com fundo preto mas sem ícone". Rótulo que não é uma ação
+       conhecida (as de cima) fica sem ícone — nada de lápis, +, camadas ou etiqueta. */
+    return null;
   }
   function _renderAjusteText(text, hasVideo){
     let s = String(text||"");
@@ -45232,7 +45226,8 @@ function _cardPodeSerResp(u){
         resto=resto.slice(ma[0].length);
         out.push(<div key={"ac"+li} style={{display:"flex",alignItems:"flex-start",gap:8,margin:"3px 0"}}>
           <span style={Object.assign({},_tagBase,{background:"#0f172a",boxShadow:"0 2px 6px rgba(15,23,42,.22)",marginTop:1})}>
-            {_ajAcaoIco(ma[1])}
+            {/* (23/09/2026) linha com * (asterisco) = tag preta sem ícone, sempre */}
+            {/^\s*\*/.test(ma[0])?null:_ajAcaoIco(ma[1])}
             {ma[1]}
           </span>
           <span style={{flex:1,minWidth:0,lineHeight:1.65}}>{_ajTsNodes(resto, hasVideo, "n"+li)}</span>
@@ -45424,6 +45419,7 @@ function _cardPodeSerResp(u){
   const [newCheckItem,setNewCheckItem]=useState("");
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
   const [lightbox,setLightbox]=useState(null); // {url, name}
+  const [_refNomeEdit,setRefNomeEdit]=useState(null); // (23/09/2026) {id, v} — nome de imagem da solicitação sendo editado em modo leitura
   const [conclusionStep,setConclusionStep]=useState(null);
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
@@ -46097,6 +46093,12 @@ function _cardPodeSerResp(u){
     if(_m) _extra.laminaIdx=Number(_m[1])-1;
     handleFileUpload(e,"ajuste",_extra);
   };
+  /* (23/09/2026, Vinicius) "poder alterar o nome ali nela, pro designer saber do que se trata" */
+  const _renomearRefDoAjuste=function(f,nome){
+    const _n=String(nome||"").replace(/\s+/g," ").trim();
+    if(!f||!_n||_n===f.name) return;
+    setAttachments(function(p){ const next=p.map(function(a){ return a.id===f.id?Object.assign({},a,{name:_n}):a; }); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
+  };
   const _tirarRefDoAjuste=function(f){
     const _go=function(){
       setAttachments(function(p){ const next=p.filter(function(a){ return a.id!==f.id; }); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
@@ -46105,9 +46107,29 @@ function _cardPodeSerResp(u){
     if(typeof pixelsConfirm==="function") pixelsConfirm("Tirar \""+(f.name||"esta imagem")+"\" desta solicitação?",{danger:true,okText:"Tirar",cancelText:"Cancelar"}).then(function(y){ if(y) _go(); });
     else _go();
   };
+  /* Lâmina da solicitação: o texto começa com "[Lâmina N/M]" (índice N-1), ou null (arte única). */
+  const _lamDoAjuste=function(c){
+    const m=String((c&&c.text)||"").match(/\[\s*L[âa]mina\s*(\d+)/i);
+    return m?(Number(m[1])-1):null;
+  };
+  /* (23/09/2026, Vinicius) "salvou a foto em todas as lâminas" — num carrossel todas as solicitações
+     do lote têm o mesmo batchId. A imagem só aparece na lâmina em que foi subida (laminaIdx). Imagem
+     sem laminaIdx (antiga) fica na primeira lâmina do lote. */
   const _refsDoAjuste=function(c){
     if(!c||!c.batchId) return [];
-    return (attachments||[]).filter(function(a){ return a&&a.isRef&&a.batchId===c.batchId&&(a.uploading||(a.url&&isImg(a))); });
+    const lam=_lamDoAjuste(c);
+    return (attachments||[]).filter(function(a){
+      if(!(a&&a.isRef&&a.batchId===c.batchId&&(a.uploading||(a.url&&isImg(a))))) return false;
+      if(lam===null) return true;
+      if(typeof a.laminaIdx==="number") return a.laminaIdx===lam;
+      return lam===0;
+    });
+  };
+  /* Arquivos vindos de arrastar/colar → mesmo caminho do botão Anexar imagem */
+  const _subirRefArquivos=function(files,c){
+    const _imgs=Array.from(files||[]).filter(function(f){ return f&&String(f.type||"").indexOf("image/")===0; });
+    if(!_imgs.length){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Só imagem entra aqui.",2500); return; }
+    _subirRefDoAjuste({target:{files:_imgs,value:""}},c);
   };
 
   const addComment=(text,type)=>{
@@ -48364,8 +48386,14 @@ function _cardPodeSerResp(u){
                               const _textoLimpo=String(c.text||"").replace("AJUSTE NECESSARIO: ","");
                               return <div key={c.id} style={{background:tintBg,borderLeft:"3px solid "+accent,borderRadius:"0 8px 8px 0",padding:"9px 12px",position:"relative"}}>
                                 {_emEdicao
-                                  ? <div>
+                                  ? <div
+                                      /* (23/09/2026, Vinicius) "libera pra poder arrastar ali no editar" — solta a imagem em
+                                         qualquer ponto da caixa de edição; Ctrl+V com imagem no texto também sobe. */
+                                      onDragOver={function(e){ if(e.dataTransfer&&Array.from(e.dataTransfer.types||[]).indexOf("Files")>=0){ e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect="copy"; e.currentTarget.style.outline="2px dashed #a855f7"; e.currentTarget.style.outlineOffset="4px"; e.currentTarget.style.borderRadius="8px"; } }}
+                                      onDragLeave={function(e){ if(e.currentTarget.contains(e.relatedTarget)) return; e.currentTarget.style.outline="none"; }}
+                                      onDrop={function(e){ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.outline="none"; _subirRefArquivos(e.dataTransfer&&e.dataTransfer.files,c); }}>
                                       <textarea value={editingCmtText} onChange={function(e){setEditingCmtText(e.target.value);}} autoFocus rows={Math.min(18,Math.max(4,editingCmtText.split("\n").length+1))}
+                                        onPaste={function(e){ const _it=Array.from((e.clipboardData&&e.clipboardData.items)||[]); const _fs=_it.filter(function(i){ return i.kind==="file"&&String(i.type||"").indexOf("image/")===0; }).map(function(i){ return i.getAsFile(); }).filter(Boolean); if(_fs.length){ e.preventDefault(); _subirRefArquivos(_fs,c); } }}
                                         onKeyDown={function(e){ if(e.key==="Escape"){setEditingCmtId(null);} else if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){editarComentario(c.id,editingCmtText);} }}
                                         style={{width:"100%",border:"1px solid "+accent,borderRadius:8,padding:"10px 12px",fontSize:12.5,lineHeight:1.7,color:"#0f172a",background:"#fff",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
                                       {/* (23/09/2026) imagens desta solicitação + anexar */}
@@ -48374,22 +48402,30 @@ function _cardPodeSerResp(u){
                                         return <div style={{marginTop:8}}>
                                           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                                             {_refs.map(function(f){
-                                              if(f.uploading) return <div key={f.id} style={{width:62,height:62,borderRadius:8,border:"1.5px dashed #c4b5fd",background:"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",fontSize:10.5,fontWeight:800}}>{Math.round(f.progress||0)}%</div>;
-                                              return <div key={f.id} style={{position:"relative",width:62,height:62,borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff",flexShrink:0}}>
-                                                <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                                                <button type="button" title="Tirar esta imagem" onClick={function(e){e.stopPropagation();_tirarRefDoAjuste(f);}}
-                                                  style={{position:"absolute",top:3,right:3,width:18,height:18,borderRadius:99,border:"none",background:"rgba(15,23,42,.8)",color:"#fff",fontSize:12,lineHeight:1,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                                              if(f.uploading) return <div key={f.id} style={{width:150,height:150,borderRadius:10,border:"1.5px dashed #c4b5fd",background:"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",fontSize:12,fontWeight:800}}>{Math.round(f.progress||0)}%</div>;
+                                              return <div key={f.id} style={{width:150,display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                                                <div style={{position:"relative",width:150,height:150,borderRadius:10,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff"}}>
+                                                  <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                                                  <button type="button" title="Tirar esta imagem" onClick={function(e){e.stopPropagation();_tirarRefDoAjuste(f);}}
+                                                    style={{position:"absolute",top:5,right:5,width:22,height:22,borderRadius:99,border:"none",background:"rgba(15,23,42,.8)",color:"#fff",fontSize:13,lineHeight:1,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                                                </div>
+                                                {/* (23/09/2026) nome pro designer saber do que se trata — grava ao sair do campo */}
+                                                <input type="text" defaultValue={f.name||""} placeholder="Nome pro designer…" title="Do que se trata esta imagem — o designer vê este nome"
+                                                  onBlur={function(e){ _renomearRefDoAjuste(f,e.target.value); }}
+                                                  onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); e.currentTarget.blur(); } e.stopPropagation(); }}
+                                                  style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 8px",fontSize:11.5,fontWeight:600,color:"#0f172a",background:"#fff",fontFamily:"inherit",outline:"none"}}
+                                                  onFocus={function(e){e.currentTarget.style.borderColor="#a855f7";}} onBlurCapture={function(e){e.currentTarget.style.borderColor="#e2e8f0";}}/>
                                               </div>;
                                             })}
                                             <label title="Print, referência ou foto do que o cliente quer — fica junto desta solicitação e nos Anexos de ajustes"
-                                              style={{display:"inline-flex",alignItems:"center",gap:6,height:_refs.length?62:36,padding:"0 12px",borderRadius:8,border:"1.5px dashed #c4b5fd",background:"#fff",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}
+                                              style={{display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,height:_refs.length?150:36,width:_refs.length?150:"auto",padding:"0 12px",borderRadius:_refs.length?10:8,border:"1.5px dashed #c4b5fd",background:"#fff",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",alignSelf:"flex-start"}}
                                               onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
                                               <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={function(e){ _subirRefDoAjuste(e,c); }}/>
                                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                                               Anexar imagem
                                             </label>
                                           </div>
-                                          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:5}}>As imagens gravam na hora e ficam amarradas a esta solicitação.</div>
+                                          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:5}}>Arraste a imagem pra cá ou cole com Ctrl+V. Grava na hora, só nesta lâmina.</div>
                                         </div>;
                                       })()}
                                       <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
@@ -48411,12 +48447,25 @@ function _cardPodeSerResp(u){
                                         if(!_refs.length) return null;
                                         return <div style={{marginTop:8}}>
                                           <div style={{fontSize:9.5,color:accent,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>{_refs.length===1?"1 imagem nesta solicitação":(_refs.length+" imagens nesta solicitação")}</div>
-                                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                                             {_refs.map(function(f){
-                                              return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}}
-                                                style={{width:72,height:72,borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff",cursor:"zoom-in",flexShrink:0}}
-                                                onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}} onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
-                                                <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                                              const _edN=_refNomeEdit&&_refNomeEdit.id===f.id;
+                                              return <div key={f.id} style={{width:150,display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                                                <div onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}}
+                                                  style={{width:150,height:150,borderRadius:10,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff",cursor:"zoom-in"}}
+                                                  onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}} onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
+                                                  <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                                                </div>
+                                                {_edN
+                                                  ? <input type="text" autoFocus value={_refNomeEdit.v} onChange={function(e){ setRefNomeEdit({id:f.id,v:e.target.value}); }}
+                                                      onBlur={function(){ _renomearRefDoAjuste(f,_refNomeEdit.v); setRefNomeEdit(null); }}
+                                                      onKeyDown={function(e){ e.stopPropagation(); if(e.key==="Enter"){ e.preventDefault(); e.currentTarget.blur(); } if(e.key==="Escape"){ setRefNomeEdit(null); } }}
+                                                      style={{width:"100%",boxSizing:"border-box",border:"1px solid #a855f7",borderRadius:7,padding:"5px 8px",fontSize:11.5,fontWeight:600,color:"#0f172a",background:"#fff",fontFamily:"inherit",outline:"none"}}/>
+                                                  : <div title={_podeEditar?"Clique pra renomear — o designer vê este nome":(f.name||"")} onClick={function(e){ if(!_podeEditar) return; e.stopPropagation(); setRefNomeEdit({id:f.id,v:f.name||""}); }}
+                                                      style={{fontSize:11.5,fontWeight:700,color:"#0f172a",lineHeight:1.3,wordBreak:"break-word",cursor:_podeEditar?"text":"default",display:"flex",alignItems:"flex-start",gap:4}}>
+                                                      <span style={{flex:1,minWidth:0}}>{f.name||<span style={{color:"#94a3b8",fontWeight:600}}>Sem nome — clique pra nomear</span>}</span>
+                                                      {_podeEditar&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>}
+                                                    </div>}
                                               </div>;
                                             })}
                                           </div>
