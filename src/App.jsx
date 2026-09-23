@@ -4816,7 +4816,7 @@ function pxCtxRegrasTxt(regras){
   if(mem.length){
     u+="FEEDBACKS DESTA CONTA (o que o cliente falou em reunião e o que a equipe da agência "+
        "observou — respeite o espírito disso: é o rumo que se quer pra marca, não é regra "+
-       "literal nem texto pra copiar):\n";
+       "literal nem texto pra copiar; o que vem com origem 'Portal do cliente' foi o próprio cliente que escreveu, e é o mais recente):\n";
     for(let i=0;i<mem.length;i++){
       const m=mem[i];
       const _e=String(m.tipo||"").split(":")[1]||"contexto";
@@ -101339,7 +101339,7 @@ const PB_MEM_ETIQUETAS = [
 /* Canais de onde vem o feedback — vira a tag da Origem. "Outro" abre campo livre.
    (22/09/2026) "Interno" entrou porque o bloco deixou de ser só do cliente: sócio e
    equipe também registram feedback aqui. */
-const PB_MEM_CANAIS = ["Reunião","WhatsApp","Conversa presencial","Interno","Outro"];
+const PB_MEM_CANAIS = ["Reunião","WhatsApp","Conversa presencial","Interno","Portal do cliente","Outro"]; // (23/09/2026) "Portal do cliente" = o próprio cliente escreveu, pela aba Produtos e serviços
 function _pbHojeIso(){
   const d=new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -102467,7 +102467,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         <div style={{flex:"1 1 320px",minWidth:0}}>
           <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Origem</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {PB_MEM_CANAIS.map(function(c){
+            {PB_MEM_CANAIS.filter(function(c){ return c!=="Portal do cliente"; }).map(function(c){
               const on=canal===c;
               return <button key={c} type="button" onClick={function(){setCanal(c);}}
                 style={{background:on?"#334155":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#334155":PB_BORDER),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:"inherit"}}>{c}</button>;
@@ -102518,7 +102518,9 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
                 <span style={{background:e.cor+"18",color:e.cor,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{e.label}</span>
                 {it.bioter_unit && <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{_uniLabel(it.bioter_unit)}</span>}
                 {it.disse_quem && <span title="Quem deu o feedback" style={{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="users" size={10} color="#1d4ed8"/>{it.disse_quem}</span>}
-                {it.origem && <span style={{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{it.origem}</span>}
+                {it.origem && (/^Portal do cliente/.test(String(it.origem))
+                  ? <span title="O próprio cliente escreveu, pela aba Produtos e serviços do portal" style={{background:"#f97316",border:"1px solid #f97316",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800}}>{it.origem}</span>
+                  : <span style={{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{it.origem}</span>)}
                 {!on && <span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>fora do cérebro</span>}
               </div>
             </div>
@@ -103532,16 +103534,25 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
   const _preenchidos=function(p){ return _PTL_CAMPOS.filter(function(c){return String(p[c[0]]||"").trim();}).length+((p.fotos&&p.fotos.length)?1:0); };
   /* (23/09/2026, Vinicius) "o peso entre um card e outro deve manter simetria — nem que fique menor pra caber
      numa linha só": no card, 4 pílulas do mesmo tamanho numa linha; na ficha, tamanho normal. */
-  const _pesoBotoes=function(p,grande){ return <div style={grande?{display:"flex",flexWrap:"wrap",gap:6}:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:4}}>
-    {PESOS.map(function(o){ const on=String(p.peso||"")===o.id; const busy=salvando==="peso:"+p.nome;
-      return <button key={o.id} type="button" disabled={!podeEditar||!!salvando} title={o.l+" — "+o.d} onClick={function(){mudarPeso(p,o.id);}}
-        style={grande
-          ?{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"7px 13px",fontSize:12.5,fontWeight:on?800:600,cursor:(!podeEditar||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:5,opacity:(!podeEditar||(busy&&!on))?.55:1,transition:"all .12s"}
-          :{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"6px 2px",fontSize:10,letterSpacing:-.1,fontWeight:on?800:600,cursor:(!podeEditar||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,minWidth:0,overflow:"hidden",whiteSpace:"nowrap",opacity:(!podeEditar||(busy&&!on))?.55:1,transition:"all .12s"}}>
-        <span style={{width:6,height:6,borderRadius:99,background:on?(o.ft||"#fff"):o.c,flexShrink:0}}/><span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{o.l}</span>
-      </button>; })}
-  </div>; };
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_FF}}>
+  const _pesoBotoes=function(p,grande){
+    if(!grande){
+      /* (23/09/2026, Vinicius) card: uma barra só, 4 partes iguais — simétrico entre os cards e sem espremer */
+      return <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:"#fff",opacity:podeEditar?1:.6}}>
+        {PESOS.map(function(o,i){ const on=String(p.peso||"")===o.id;
+          return <button key={o.id} type="button" disabled={!podeEditar||!!salvando} title={o.l+" — "+o.d} onClick={function(){mudarPeso(p,o.id);}}
+            style={{height:32,border:"none",borderLeft:i?"1px solid #eef0f3":"none",background:on?o.c:"transparent",color:on?(o.ft||"#fff"):(o.t||o.c),
+              fontSize:10.5,fontWeight:on?800:600,fontFamily:_FF,padding:"0 2px",letterSpacing:-.1,cursor:(!podeEditar||salvando)?"default":"pointer",whiteSpace:"nowrap",minWidth:0,transition:"background .12s"}}>{o.l}</button>; })}
+      </div>;
+    }
+    return <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+      {PESOS.map(function(o){ const on=String(p.peso||"")===o.id; const busy=salvando==="peso:"+p.nome;
+        return <button key={o.id} type="button" disabled={!podeEditar||!!salvando} title={o.d} onClick={function(){mudarPeso(p,o.id);}}
+          style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"7px 13px",fontSize:12.5,fontWeight:on?800:600,cursor:(!podeEditar||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:5,opacity:(!podeEditar||(busy&&!on))?.55:1,transition:"all .12s"}}>
+          <span style={{width:7,height:7,borderRadius:99,background:on?(o.ft||"#fff"):o.c}}/>{o.l}
+        </button>; })}
+    </div>;
+  };
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_FF}}>
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
       <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="package" size={20} color="#fff"/></div>
       <div style={{flex:1,minWidth:220}}>
@@ -103571,7 +103582,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
     {dados!==null&&!produtos.length&&!erro&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Ainda não tem produto cadastrado{unit?(" pra "+_uniLabel(unit)):""}. {podeEditar?"Clique em \"Adicionar produto\" pra começar.":""}</div>}
 
     {/* (23/09/2026, Vinicius) simetria: foto 150, nome 2 linhas, descrição 2 linhas, peso sempre na mesma altura */}
-    {produtos.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:12,alignItems:"stretch"}}>
+    {produtos.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(350px,1fr))",gap:14,alignItems:"stretch"}}>
       {ordenados.map(function(p){
         const pz=_pesoDe(p.peso);
         const foto=p.thumb||p.foto||"";
@@ -103588,10 +103599,10 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
             <div role="button" tabIndex={0} onClick={_abrir} onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); _abrir(); } }} style={{cursor:"pointer"}}>
               <div title={nomeTop+(nomeSub?(" · "+nomeSub):"")} style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25,height:38,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{nomeTop}{nomeSub?<span style={{color:"#94a3b8",fontWeight:600,fontSize:11.5}}> · {nomeSub}</span>:null}</div>
               <div style={{color:p.descricao?"#475569":"#b6c0cc",fontSize:12.5,lineHeight:1.5,marginTop:4,height:38,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{p.descricao||(podeEditar?"Ficha vazia — abra e preencha":"Ficha vazia")}</div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,color:_cor,fontSize:11.5,fontWeight:700}}><span style={{color:"#94a3b8",fontWeight:600}}>{_preenchidos(p)} de 6 da ficha</span><span style={{flex:1}}/>{podeEditar?"Editar ficha":"Ver ficha"} <Ico n="chevronRight" size={12} color={_cor}/></div>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5,marginTop:10,background:_cor+"14",color:_cor,borderRadius:99,padding:"6px 12px",fontSize:11.5,fontWeight:700}}>Ver ficha completa <Ico n="chevronRight" size={12} color={_cor}/></span>
             </div>
-            <div style={{marginTop:"auto"}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Peso nas redes</div>
+            <div style={{marginTop:"auto",paddingTop:4}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:7}}>Peso nas redes</div>
               {_pesoBotoes(p,false)}
             </div>
           </div>
@@ -103620,7 +103631,6 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
               <div style={{fontWeight:800,fontSize:isMob?16:19,letterSpacing:-.4,lineHeight:1.2}}>{(py&&p.nomeEs)?p.nomeEs:p.nome}</div>
             </div>
             {pz&&<span style={{background:"#fff",color:pz.t||pz.c,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:7,height:7,borderRadius:99,background:pz.c}}/>{pz.l}</span>}
-            <span style={{background:"rgba(255,255,255,.22)",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:800}}>{_preenchidos(p)} de 6</span>
             <button type="button" onClick={function(){setFichaNome("");}} title="Fechar (Esc)" style={{width:34,height:34,borderRadius:10,border:"none",background:"rgba(255,255,255,.22)",color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={16} color="#fff"/></button>
           </div>
           <div style={{overflowY:"auto",padding:isMob?"14px":"18px 22px 22px",display:"flex",flexDirection:"column",gap:18}}>
@@ -103672,8 +103682,20 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
       <img src={lightbox} alt="" style={{maxWidth:"100%",maxHeight:"100%",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}/>
     </div>}
 
+    {/* (23/09/2026, Vinicius) feedbacks — sincroniza com Playbook › Feedbacks (origem "Portal do cliente") */}
+    {dados!==null&&typeof PortalFeedbacksCliente==="function"&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:14,marginTop:10}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+        <span style={{width:36,height:36,borderRadius:11,background:"#f97316",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(249,115,22,.3)"}}><Ico n="message" size={17} color="#fff"/></span>
+        <div style={{flex:1}}>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Feedbacks{unit?(" · "+_uniLabel(unit)):""}</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.55}}>É o seu jeito de ensinar a nossa IA. Conte o que gostou, o que não quer ver, um produto que merece mais destaque, uma palavra que a sua empresa não usa. Entra direto no cérebro que escreve as suas copys: as próximas legendas, briefings e roteiros já saem respeitando — sem precisar de reunião.</div>
+        </div>
+      </div>
+      <PortalFeedbacksCliente cl={cl} unit={unit} isMob={isMob} cor="#f97316"/>
+    </div>}
+
     {/* (23/09/2026) catálogos e materiais — sincroniza com Playbook › Materiais do cliente */}
-    {dados!==null&&typeof PortalMateriaisCliente==="function"&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+    {dados!==null&&typeof PortalMateriaisCliente==="function"&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",display:"flex",flexDirection:"column",gap:14,marginTop:10}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
         <span style={{width:36,height:36,borderRadius:11,background:"#f5b301",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={17} color="#fff"/></span>
         <div style={{flex:1}}>
@@ -103685,7 +103707,7 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
     </div>}
 
     {/* histórico */}
-    {dados!==null&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 18px"}}>
+    {dados!==null&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 18px",marginTop:10}}>
       <button type="button" onClick={function(){setMostrarHist(!mostrarHist);}} style={{width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:_FF,textAlign:"left"}}>
         <Ico n="clock" size={15} color="#64748b"/>
         <span style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>Histórico de mudanças</span>
@@ -103836,6 +103858,101 @@ function PortalMateriaisCliente({cl, unit, isMob, compacto, cor, onCount}){
   </div>;
 }
 if(typeof window!=="undefined"){ window.PortalMateriaisCliente=PortalMateriaisCliente; }
+
+
+/* ── PORTAL DO CLIENTE › Feedbacks (23/09/2026, Vinicius) ────────────────────────────────
+   "Sincronizar também o Feedbacks." O cliente escreve o que gostou, o que não quer ver, o que
+   puxar — entra em Playbook › Feedbacks (claude_copy_regras memoria:*) com a origem "Portal do
+   cliente", e o cérebro usa na próxima copy. Ele vê e apaga só o que ele mesmo mandou. */
+function PortalFeedbacksCliente({cl, unit, isMob, cor}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const cid=String((cl&&cl.id)||"").replace(/^bioter_.*/,"bioter");
+  const _u=String(unit||"");
+  const _cor=cor||"#f97316";
+  const _FF="'Inter',system-ui,sans-serif";
+  const ETQ=(typeof PB_MEM_ETIQUETAS!=="undefined")?PB_MEM_ETIQUETAS:[];
+  const _DICA={produto:"um produto ou serviço que merece mais (ou menos) destaque",abordagem:"o jeito de falar que funciona com o seu cliente",linguagem:"palavra, termo ou tom que a sua empresa usa — ou não usa",publico:"quem você quer alcançar",evitar:"o que você não quer ver nos posts"};
+  const [itens,setItens]=useState(null);
+  const [etq,setEtq]=useState("produto");
+  const [txt,setTxt]=useState("");
+  const [porque,setPorque]=useState("");
+  const [salvando,setSalvando]=useState(false);
+  const carregar=async function(){
+    if(!sb||!cid){ setItens([]); return; }
+    try{ const r=await sb.rpc("portal_feedbacks",{p_client:cid,p_unidade:_u}); if(r.error) throw r.error; setItens(Array.isArray(r.data)?r.data:[]); }
+    catch(e){ setItens([]); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui carregar os feedbacks: "+((e&&e.message)||e),5000); }
+  };
+  useEffect(function(){ setItens(null); carregar(); },[cid,_u]);
+  const enviar=async function(){
+    const _t=String(txt||"").trim(); if(!_t||salvando) return;
+    setSalvando(true);
+    try{
+      const r=await sb.rpc("portal_feedback_inserir",{p_client:cid,p_unidade:_u,p_texto:_t,p_etq:etq,p_porque:String(porque||"").trim()});
+      if(r.error) throw r.error;
+      setTxt(""); setPorque("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Feedback enviado. A Pixels já vê e as próximas copys saem sabendo disso.",4000);
+      await carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra enviar: "+((e&&e.message)||e),5000); }
+    setSalvando(false);
+  };
+  const apagar=async function(it){
+    try{
+      if(typeof pixelsConfirm==="function"){ const ok=await pixelsConfirm("Apagar este feedback? Sai do sistema da Pixels também.",{danger:true}); if(!ok) return; }
+      const r=await sb.rpc("portal_feedback_apagar",{p_id:it.id}); if(r.error) throw r.error;
+      setItens(function(p){ return (p||[]).filter(function(x){return x.id!==it.id;}); });
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra apagar: "+((e&&e.message)||e),5000); }
+  };
+  const _etqDe=function(tipo){ const k=String(tipo||"").split(":")[1]||""; return ETQ.find(function(e){return e.id===k;})||{id:"contexto",label:"Contexto",cor:"#64748b"}; };
+  const _data=function(x){ try{ return new Date(x).toLocaleDateString("pt-BR"); }catch(_){ return ""; } };
+  const _uniLabel=function(u){ if(!u) return ""; const x=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.find(function(y){return y.id===u;}):null; return x?(x.pickerLabel||x.label):u; };
+  const _sel=ETQ.find(function(e){return e.id===etq;})||ETQ[0]||{};
+  const _vazio=!String(txt||"").trim();
+  const lista=itens||[];
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:_FF}}>
+    <div style={{background:"#fff",border:"1px solid #fed7aa",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+      <div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:7}}>Sobre o quê?</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {ETQ.map(function(e){ const on=etq===e.id; return <button key={e.id} type="button" onClick={function(){setEtq(e.id);}} title={_DICA[e.id]||e.dica}
+            style={{background:on?e.cor:"#fff",border:"1.5px solid "+(on?e.cor:"#e2e8f0"),color:on?"#fff":"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:_FF,transition:"all .12s"}}>{e.label}</button>; })}
+        </div>
+        {_sel&&_sel.id&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:6}}>{_DICA[_sel.id]||_sel.dica}</div>}
+      </div>
+      <textarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={3}
+        placeholder={etq==="evitar"?"Ex.: não usar a palavra 'barato'; não mostrar obra sem acabamento.":etq==="produto"?"Ex.: o compost barn merece mais destaque nesta época; o silo não vender agora.":etq==="linguagem"?"Ex.: a gente fala 'produtor', nunca 'fazendeiro'.":etq==="publico"?"Ex.: quero falar mais com o produtor de leite, menos com o de corte.":"Ex.: puxar pelo manejo e pela economia, não pelo preço."}
+        style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13.5,lineHeight:1.55,fontFamily:_FF,color:"#0f172a",resize:"vertical",outline:"none"}}/>
+      <input value={porque} onChange={function(e){setPorque(e.target.value);}} placeholder="Por quê? (opcional — ajuda a IA a entender o espírito)"
+        style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",fontSize:12.5,fontFamily:_FF,color:"#0f172a",outline:"none"}}/>
+      <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:8}}>
+        {!_vazio&&<button type="button" onClick={function(){setTxt("");setPorque("");}} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",color:"#64748b",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:_FF}}>Limpar</button>}
+        <button type="button" disabled={_vazio||salvando} onClick={enviar}
+          style={{background:(_vazio||salvando)?"#fed7aa":_cor,border:"none",borderRadius:10,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:(_vazio||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:6,boxShadow:(_vazio||salvando)?"none":"0 3px 10px rgba(249,115,22,.3)"}}>
+          <Ico n="send" size={13} color="#fff"/>{salvando?"Enviando…":"Enviar feedback"}
+        </button>
+      </div>
+    </div>
+    {itens===null&&<div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
+    {itens!==null&&!lista.length&&<div style={{color:"#94a3b8",fontSize:12.5}}>Você ainda não mandou nenhum feedback por aqui.</div>}
+    {lista.length>0&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>O que você já mandou</div>
+      {lista.map(function(it){ const e=_etqDe(it.tipo);
+        return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:10,background:"#fff",border:"1px solid "+(it.ativa?"#fed7aa":"#eef0f3"),borderRadius:12,padding:"11px 13px",opacity:it.ativa?1:.6}}>
+          <span style={{width:4,alignSelf:"stretch",minHeight:20,borderRadius:99,background:e.cor,flexShrink:0}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:13.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{it.texto}</div>
+            {it.porque&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>Por quê: {it.porque}</div>}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+              <span style={{background:e.cor+"1a",color:e.cor,borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{e.label}</span>
+              <span style={{color:"#94a3b8",fontSize:10.5}}>{_data(it.criado_em)}{it.disse_quem?(" · "+it.disse_quem):""}{it.unidade?(" · "+_uniLabel(it.unidade)):""}</span>
+              {!it.ativa&&<span style={{background:"#f1f5f9",color:"#94a3b8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>a Pixels pausou</span>}
+            </div>
+          </div>
+          <button type="button" onClick={function(){apagar(it);}} title="Apagar" style={{background:"transparent",border:"none",padding:4,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}} onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}><Ico n="trash" size={14}/></button>
+        </div>; })}
+    </div>}
+  </div>;
+}
+if(typeof window!=="undefined"){ window.PortalFeedbacksCliente=PortalFeedbacksCliente; }
 
 /* ── Normalizador de texto das tarefas/etapas ──
    Regra da casa (pedido 2026-09-01): sem pontuação e símbolos (!?.:; emojis...),
