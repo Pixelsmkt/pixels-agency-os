@@ -4617,6 +4617,35 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
    Feedback de produto é diferente de feedback de conta: ele fala de COMO falar daquele
    produto (o nome que o cliente usa, o que não pode prometer, o ângulo que funciona).
    Por isso entra agrupado por produto, logo depois dos materiais. */
+/* (23/09/2026, Vinicius) FICHA TÉCNICA DOS PRODUTOS do Playbook no prompt: o que é, pra quem é,
+   diferenciais, especificações e dúvidas frequentes. Só produtos da unidade (ou sem unidade).
+   Até então a ficha do playbook NÃO ia pro cérebro — só o nome (lista oficial) e o briefing do
+   portal. Orçamento de 16 mil caracteres: estourou, para de acrescentar produto. */
+function pxCtxFichasProdutosTxt(ctx){
+  try{
+    const arr=(ctx&&ctx.playbook&&Array.isArray(ctx.playbook.produtos))?ctx.playbook.produtos:[];
+    if(!arr.length) return "";
+    const u=String((ctx&&ctx._unit)||"").trim();
+    const lim=function(s,n){ s=String(s||"").replace(/[ \t]+/g," ").replace(/\n{2,}/g,"\n").trim(); return s.length>n?(s.slice(0,n).replace(/\s+\S*$/,"")+"…"):s; };
+    const campos=[["O que é","descricao",500],["Pra quem é / que problema resolve","paraQuem",500],["Diferenciais e argumentos de venda","diferenciais",700],["Especificações técnicas","especificacoes",700],["Dúvidas frequentes e resposta oficial","duvidas",900]];
+    let out="";
+    for(let i=0;i<arr.length;i++){
+      const pr=arr[i]; if(!pr) continue;
+      const nome=String(pr.nomePrincipalPt||pr.nome||"").trim(); if(!nome) continue;
+      const uni=Array.isArray(pr.unidades)?pr.unidades:[];
+      if(u&&uni.length&&uni.indexOf(u)<0) continue;
+      let b="";
+      campos.forEach(function(c){ const v=lim(pr[c[1]],c[2]); if(v) b+="  "+c[0]+": "+v.replace(/\n/g,"\n    ")+"\n"; });
+      if(!b) continue;
+      const es=(u==="paraguay")?String(pr.nomePrincipalEs||"").trim():"";
+      const bloco="• "+nome+(es?(" (em espanhol: "+es+")"):"")+"\n"+b;
+      if(out.length+bloco.length>16000) break;
+      out+=bloco;
+    }
+    if(!out) return "";
+    return "FICHA TÉCNICA DOS PRODUTOS (Playbook — preenchida pela agência com o cliente; são fatos conferidos: use-os e NÃO invente além deles"+(u?"; só os produtos desta unidade":"")+"):\n"+out+"\n";
+  }catch(_){ return ""; }
+}
 function pxCtxProdutosFbTxt(ctx){
   const arr=(ctx&&Array.isArray(ctx.produto_feedbacks))?ctx.produto_feedbacks:[];
   if(!arr.length) return "";
@@ -5055,6 +5084,7 @@ async function pxOrganizarAjusteIA(opts){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=pxCtxRegrasTxt((ctx&&ctx.regras)||[]);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
   u+="\nTAREFA: organize o pedido acima em instruções pro "+(ehVideo?"editor":"designer")+". Se o pedido cria conteúdo novo, escreva o texto pronto na voz da marca usando os fatos do cérebro do cliente (materiais oficiais e aprendizado dos produtos) — sem inventar. Se faltar material, diga qual.";
   const data=await askIA({model:PX_IA_MODELO,max_tokens:1600,system:sys,messages:[{role:"user",content:u}]});
@@ -5131,6 +5161,7 @@ async function pxReescreverCopy(opts){
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
@@ -5463,6 +5494,7 @@ async function pxGerarLegendas(opts){
   if(pb.marcacoes&&pb.marcacoes.length) u+="PERFIS PRA MARCAR / HASHTAGS DA MARCA: "+_pxCtxTxt(pb.marcacoes)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (vem do Planejamento com o cliente):\n";
@@ -5696,6 +5728,7 @@ async function pxGerarBriefing(opts){
     u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=pxCtxRegrasTxt(regras);
   u+=pxCtxMateriaisTxt(ctx);
+  u+=pxCtxFichasProdutosTxt(ctx);
   u+=pxCtxProdutosFbTxt(ctx);
   { const _bp=pxBriefingProdutosTxt(ctx,1800); if(_bp) u+=_bp+"(Use só pra acertar fatos do produto do card — não troque o assunto do card.)\n\n"; }
   if(foco.length){
@@ -99150,6 +99183,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const _unitTabProd=_unitTab, setUnitTabProd=setUnitTab; // UNIFICADO: um seletor de unidade no topo governa Contatos e Produtos
   // Lightbox pra ver imagem de produto expandida (sem abrir nova aba)
   const [_prodLightbox,setProdLightbox] = useState(null);
+  /* (23/09/2026, Vinicius) FICHA TÉCNICA em tela cheia: índice (global) do produto aberto, ou null. */
+  const [_fichaAberta,setFichaAberta] = useState(null);
+  useEffect(function(){
+    if(_fichaAberta===null) return;
+    const _esc=function(e){ if(e.key==="Escape"&&!_prodLightbox) setFichaAberta(null); };
+    window.addEventListener("keydown",_esc);
+    return function(){ window.removeEventListener("keydown",_esc); };
+  },[_fichaAberta,_prodLightbox]);
   useEffect(function(){
     if(!_prodLightbox) return;
     const _esc = function(e){ if(e.key==="Escape") setProdLightbox(null); };
@@ -99343,6 +99384,31 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Indicador visual de drop position durante drag de produto
   const [_dropIdx, setDropIdx] = useState(-1);
   const _isBioter=cl.id==="bioter";
+  /* (23/09/2026) Produtos visíveis na ordem da grade: com unidade escolhida (Bioter), só os dela
+     (ou sem unidade), na ordem daquela unidade; sem filtro, todos na ordem do cadastro. */
+  const _pbProdutosVisiveis=function(){
+    const _f=_isBioter && _unitTabProd;
+    let out=[];
+    if(_f){
+      (editProdutos||[]).forEach(function(p,gi){
+        const u=Array.isArray(p.unidades)?p.unidades:[];
+        if(u.length===0 || u.indexOf(_unitTabProd)>=0){
+          const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
+          out.push({prod:p, gi:gi, ord:_ord});
+        }
+      });
+      out.sort(function(a,b){return a.ord-b.ord;});
+    } else {
+      out=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
+    }
+    return out;
+  };
+  const _PB_FICHA_CAMPOS=[["descricao","O que é"],["paraQuem","Pra quem é"],["diferenciais","Diferenciais"],["especificacoes","Especificações"],["duvidas","Dúvidas frequentes"]];
+  const _pbFichaPreenchidos=function(p){
+    let n=0; _PB_FICHA_CAMPOS.forEach(function(c){ if(String((p&&p[c[0]])||"").trim()) n++; });
+    const _fotos=(Array.isArray(p&&p.imgUrls)&&p.imgUrls.length)||(p&&p.imgUrl)?1:0;
+    return {n:n+_fotos, total:_PB_FICHA_CAMPOS.length+1};
+  };
 
   // Estado local dos checkboxes (lembra entre navegações)
   const checklistArr = areaData.checklist || [];
@@ -99881,181 +99947,82 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   } else {
                     _visibleEdit=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
                   }
+                  /* (23/09/2026, Vinicius) "cada produto numa ficha técnica, tipo um card maior só do
+                     produto específico". A lista de formulários virou uma GRADE de cards compactos;
+                     clicar abre a ficha técnica em tela cheia (_fichaAberta). Arrastar pra ordenar
+                     continua aqui, no card. */
+                  const _isMobG=(typeof _pxMob==="function"&&_pxMob());
                   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {_editUnitFilter && _visibleEdit.length>1 && <div style={{background:"#faf5ff",border:"1px dashed "+PB_PURPLE+"55",borderRadius:10,padding:"9px 13px",fontSize:12,color:PB_PURPLE_DK,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8,alignSelf:"flex-start"}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    Arraste os cards pra ordenar por relevância nesta unidade
+                    {_isMobG?"Use as setas pra ordenar por relevância nesta unidade":"Arraste os cards pra ordenar por relevância nesta unidade · clique pra abrir a ficha"}
                   </div>}
+                  <div style={{display:"grid",gridTemplateColumns:_isMobG?"1fr":"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>
                   {_visibleEdit.map(function(_item,filteredIdx){
                     const prod=_item.prod;
                     const pi=_item.gi;
                     const _dref = _dragProdRef.current;
                     const _isDragging = _dref.unitId===_unitTabProd && _dref.srcIdx===filteredIdx;
-                    // Onde renderizar o indicador: ANTES do card alvo se movendo pra cima, ANTES tambem se movendo pra baixo (indicador aparece na posicao de insercao)
-                    const _showDropBefore = _editUnitFilter && _dropIdx===filteredIdx && _dref.srcIdx>=0 && _dref.srcIdx!==filteredIdx;
-                    return <React.Fragment key={pi}>
-                      {_showDropBefore && <div style={{height:8,margin:"2px 0",background:"transparent",border:"2.5px dashed "+PB_PURPLE,borderRadius:99,boxShadow:"0 0 12px "+PB_PURPLE+"55",transition:"all .12s"}}/>}
-                    <div
-                      onDragOver={_editUnitFilter?function(e){e.preventDefault();e.dataTransfer.dropEffect="move";if(_dropIdx!==filteredIdx) setDropIdx(filteredIdx);}:undefined}
-                      onDragLeave={_editUnitFilter?function(e){
-                        // Só limpa se saiu de verdade do card (nao pra um filho)
-                        var _rt = e.relatedTarget;
-                        if(_rt && e.currentTarget.contains(_rt)) return;
-                      }:undefined}
+                    const _isDrop = _editUnitFilter && _dropIdx===filteredIdx && _dref.srcIdx>=0 && _dref.srcIdx!==filteredIdx;
+                    const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
+                    const _capa = _urls.length ? _pbThumbDe(prod,_urls[0]) : "";
+                    const _nome = prod.nomePrincipalPt || prod.nome || "";
+                    const _oq = String(prod.descricao||"").replace(/\s+/g," ").trim();
+                    const _pr = _pbFichaPreenchidos(prod);
+                    const _uni = (_isBioter&&typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.filter(function(u){ return Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0; }):[];
+                    return <div key={pi} role="button" tabIndex={0}
+                      onClick={function(){ setFichaAberta(pi); }}
+                      onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaAberta(pi); } }}
+                      draggable={!!_editUnitFilter && !_isMobG}
+                      onDragStart={_editUnitFilter?function(e){ _dragProdRef.current={unitId:_unitTabProd, srcIdx:filteredIdx}; e.dataTransfer.effectAllowed="move"; try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){} setDropIdx(filteredIdx); }:undefined}
+                      onDragEnd={_editUnitFilter?function(){ _dragProdRef.current={unitId:null,srcIdx:-1}; setDropIdx(-1); }:undefined}
+                      onDragOver={_editUnitFilter?function(e){ e.preventDefault(); e.dataTransfer.dropEffect="move"; if(_dropIdx!==filteredIdx) setDropIdx(filteredIdx); }:undefined}
                       onDrop={_editUnitFilter?function(e){
                         e.preventDefault();
                         const dref=_dragProdRef.current;
-                        if(dref.unitId===_unitTabProd && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){
-                          _produtoReorderInUnit(_unitTabProd, dref.srcIdx, filteredIdx);
-                        }
-                        _dragProdRef.current={unitId:null,srcIdx:-1};
-                        setDropIdx(-1);
+                        if(dref.unitId===_unitTabProd && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){ _produtoReorderInUnit(_unitTabProd, dref.srcIdx, filteredIdx); }
+                        _dragProdRef.current={unitId:null,srcIdx:-1}; setDropIdx(-1);
                       }:undefined}
-                      /* contentVisibility: com 9 produtos e 37 fotos, o navegador montava tudo de
-                         uma vez e a aba travava ao abrir o bloco (Rodrigo, 22/09). Assim ele só
-                         desenha o card quando ele chega perto da tela; containIntrinsicSize
-                         reserva a altura pra barra de rolagem não pular. */
-                      style={{background:"#fff",border:"1px solid "+(_isDragging?PB_PURPLE:"#e2e8f0"),borderRadius:14,padding:0,display:"flex",flexDirection:"column",cursor:"default",transition:"opacity .12s, border-color .12s",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.03)",opacity:_isDragging?0.35:1,contentVisibility:"auto",containIntrinsicSize:"520px"}}>
-                    {/* Header — draggable APENAS aqui pra nao conflitar com inputs internos */}
-                    {_editUnitFilter ? <div
-                      draggable={true}
-                      onDragStart={function(e){
-                        _dragProdRef.current={unitId:_unitTabProd, srcIdx:filteredIdx};
-                        e.dataTransfer.effectAllowed="move";
-                        try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){}
-                        // Force re-render pra mostrar opacity via state
-                        setDropIdx(filteredIdx);
-                      }}
-                      onDragEnd={function(e){
-                        _dragProdRef.current={unitId:null,srcIdx:-1};
-                        setDropIdx(-1);
-                      }}
-                      style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 16px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff",cursor:"grab",userSelect:"none"}}
-                      onMouseDown={function(e){e.currentTarget.style.cursor="grabbing";}}
-                      onMouseUp={function(e){e.currentTarget.style.cursor="grab";}}>
-                      <div style={{display:"inline-flex",alignItems:"center",gap:10,fontSize:13,fontWeight:800,letterSpacing:-.1,minWidth:0,flex:1}}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{opacity:.9,flexShrink:0}}><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>
-                        <span style={{background:"rgba(255,255,255,0.22)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>Posição {filteredIdx+1}</span>
-                        <span style={{minWidth:0,display:"flex",flexDirection:"column"}}>
-                          <span style={{opacity:.72,fontSize:8.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica</span>
-                          <span style={{fontWeight:800,fontSize:14.5,letterSpacing:-.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,lineHeight:1.25}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
-                        </span>
-                        {!(typeof _pxMob==="function"&&_pxMob())&&<span style={{opacity:.7,fontWeight:600,fontSize:11,letterSpacing:.1,flexShrink:0}}>· arraste pra reordenar</span>}
+                      title={"Abrir a ficha técnica de "+(_nome||"produto sem nome")}
+                      style={{background:"#fff",border:"1.5px solid "+(_isDrop?PB_PURPLE:"#e2e8f0"),borderRadius:14,overflow:"hidden",cursor:"pointer",display:"flex",flexDirection:"column",opacity:_isDragging?.45:1,boxShadow:_isDrop?("0 0 0 3px "+PB_PURPLE+"33"):"0 1px 3px rgba(15,23,42,.05)",transition:"box-shadow .15s, transform .15s, border-color .15s",outline:"none"}}
+                      onMouseEnter={function(e){ e.currentTarget.style.boxShadow="0 10px 28px rgba(124,58,237,.16)"; e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.borderColor="#c4b5fd"; }}
+                      onMouseLeave={function(e){ e.currentTarget.style.boxShadow=_isDrop?("0 0 0 3px "+PB_PURPLE+"33"):"0 1px 3px rgba(15,23,42,.05)"; e.currentTarget.style.transform="none"; e.currentTarget.style.borderColor=_isDrop?PB_PURPLE:"#e2e8f0"; }}>
+                      <div style={{position:"relative",height:138,background:_capa?"#0f172a":"linear-gradient(135deg,#f5f3ff,#ede9fe)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {_capa
+                          ? <img src={_capa} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                          : <span style={{color:"#a78bfa",display:"flex",flexDirection:"column",alignItems:"center",gap:4,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}><Ico n="image" size={24} color="currentColor"/>Sem foto</span>}
+                        {_editUnitFilter && <span style={{position:"absolute",top:8,left:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.4}}>#{filteredIdx+1}</span>}
+                        {_urls.length>1 && <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{_urls.length} fotos</span>}
+                        {_editUnitFilter && _isMobG && <span style={{position:"absolute",bottom:8,right:8,display:"inline-flex",gap:4}}>
+                          <button type="button" disabled={filteredIdx===0} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx-1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx===0?.4:1}}>▲</button>
+                          <button type="button" disabled={filteredIdx>=_visibleEdit.length-1} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx+1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx>=_visibleEdit.length-1?.4:1}}>▼</button>
+                        </span>}
                       </div>
-                      {/* Mobile: setas ▲▼ no lugar do arraste */}
-                      {(typeof _pxMob==="function"&&_pxMob())&&<span style={{display:"inline-flex",gap:4,flexShrink:0}}>
-                        <button type="button" draggable={false} disabled={filteredIdx===0} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx-1);}} title="Subir"
-                          style={{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,width:36,height:36,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:filteredIdx===0?.35:1}}>▲</button>
-                        <button type="button" draggable={false} disabled={filteredIdx>=_visibleEdit.length-1} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx+1);}} title="Descer"
-                          style={{background:"rgba(255,255,255,0.18)",border:"none",color:"#fff",borderRadius:8,width:36,height:36,display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:filteredIdx>=_visibleEdit.length-1?.35:1}}>▼</button>
-                      </span>}
-                      <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
-                        draggable={false}
-                        onMouseDown={function(e){e.stopPropagation();}}
-                        style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",cursor:"pointer",padding:"6px 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:8,transition:"background .12s"}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
-                        <Ico n="trash" size={14}/>
-                      </button>
-                    </div> : <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"11px 14px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff"}}>
-                      <span style={{minWidth:0,display:"flex",flexDirection:"column",flex:1}}>
-                        <span style={{opacity:.72,fontSize:8.5,fontWeight:800,letterSpacing:.9,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica</span>
-                        <span style={{fontWeight:800,fontSize:14.5,letterSpacing:-.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0,lineHeight:1.25}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
-                      </span>
-                      <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
-                        style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",cursor:"pointer",padding:"6px 8px",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:8,flexShrink:0,transition:"background .12s"}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,0.85)";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,0.15)";}}>
-                        <Ico n="trash" size={14}/>
-                      </button>
-                    </div>}
-                    <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 16px 16px 16px"}}>
-                      {/* Galeria grandona de imagens do produto */}
-                      {(function(){
-                        const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
-                        return <div>
-                          <div style={_PB_FICHA_ROT}>Fotos</div>
-                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          {_urls.map(function(_url,_ii){
-                            return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
-                              <img src={_pbThumbDe(prod,_url)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                              <button type="button" onClick={function(e){e.stopPropagation();_produtoRemoveImg(pi,_ii);}} title="Remover foto"
-                                style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
-                            </div>;
-                          })}
-                          <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); if(_patch.thumb) _produtoSetThumb(_pi,_patch.imgUrl,_patch.thumb); } });}}
-                            style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
-                            onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
-                            onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
-                            <Ico n="image" size={22} color="currentColor"/>
-                            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
-                          </button>
-                          </div>
-                        </div>;
-                      })()}
-                      {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
-                      {(function(){
-                        const _showEsEdit = _isBioter && _unitTabProd === "paraguay";
-                        return <div><div style={_PB_FICHA_ROT}>Como se chama</div>
-                          <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
-                          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
-                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
-                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
-                              Português
-                            </div>
-                            <_PbCampoFicha placeholder="Nome principal (PT)" valor={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
-                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalPt:x, nome:x});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                            <_PbCampoFicha placeholder="Outros nomes (ex: Fossa, Biofábrica)" valor={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
-                              onCommit={function(x){_produtoUpd(pi,{nomesPt:x});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                          </div>
-                          {_showEsEdit && <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
-                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
-                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                              Español
-                            </div>
-                            <_PbCampoFicha placeholder="Nombre principal (ES)" valor={prod.nomePrincipalEs||""}
-                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalEs:x});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                            <_PbCampoFicha placeholder="Otros nombres (ej: Estanque, Laguna)" valor={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
-                              onCommit={function(x){_produtoUpd(pi,{nomesEs:x});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
-                          </div>}
-                          </div>
-                        </div>;
-                      })()}
-                      <div>
-                        <div style={_PB_FICHA_ROT}>O que é</div>
-                        <_PbCampoFicha textarea placeholder="Em duas linhas: o que é, pra quem serve e o que ele resolve." valor={prod.descricao||""}
-                          onCommit={function(x){_produtoUpd(pi,{descricao:x});}}
-                          rows={2}
-                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
-                      </div>
-                      {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
-                        <div style={_PB_FICHA_ROT}>Unidades onde se aplica</div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                          {BIOTER_UNITS.map(function(u){
-                            const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
-                            return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
-                              style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,transition:"all .12s"}}>
-                              {u.pickerLabel||u.label}
-                            </button>;
-                          })}
+                      <div style={{padding:"11px 13px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                        <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
+                        <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
+                        {_uni.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
+                          {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
+                          {_uni.length>4 && <span style={{color:PB_MUTE,fontSize:10,fontWeight:700,padding:"1px 4px"}}>+{_uni.length-4}</span>}
+                        </div>}
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:"auto",paddingTop:6}}>
+                          <span style={{display:"inline-flex",alignItems:"center",gap:5,color:_pr.n>=_pr.total?"#15803d":(_pr.n>=3?"#b45309":"#94a3b8"),fontSize:10.5,fontWeight:800,letterSpacing:.2}}>
+                            <span style={{width:7,height:7,borderRadius:99,background:"currentColor"}}/>{_pr.n} de {_pr.total} da ficha
+                          </span>
+                          <span style={{color:PB_PURPLE_DK,fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}}>Abrir ficha <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
                         </div>
-                      </div>}
-                    </div>
-                    {/* Rodapé da ficha: o que a agência já aprendeu sobre ESTE produto. */}
-                    <_PbProdFb clientId={cl.id} produto={prod.nomePrincipalPt||prod.nome||""}
-                      unidade={_editUnitFilter?_unitTabProd:""} isAdmin={isAdmin}/>
-                  </div>
-                  </React.Fragment>;})}
-                  <button onClick={_produtoAdd}
-                    style={{background:"#fff",border:"1.5px dashed #cbd5e1",borderRadius:12,padding:"14px 18px",color:"#64748b",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .12s"}}
+                      </div>
+                    </div>;
+                  })}
+                  <button type="button" onClick={function(){ _produtoAdd(); setTimeout(function(){ setFichaAberta((editProdutos||[]).length); },0); }}
+                    style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:14,minHeight:_isMobG?92:230,padding:"14px 18px",color:"#64748b",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:PB_INTER,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,transition:"all .12s"}}
                     onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
-                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
-                    <Ico n="plus" size={14}/> Adicionar produto
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
+                    <span style={{width:42,height:42,borderRadius:13,background:"#ede9fe",color:PB_PURPLE_DK,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="plus" size={18} color="currentColor"/></span>
+                    <span>Adicionar produto</span>
+                    <span style={{fontSize:11,fontWeight:600,color:"#94a3b8"}}>abre a ficha técnica vazia</span>
                   </button>
+                  </div>
                 </div>;
             })()}
                     </PlaybookBlock>
@@ -100187,6 +100154,169 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     </div>
 
     {/* ═════ Lightbox de produto (fullscreen, mesma aba) ═════ */}
+    {/* (23/09/2026, Vinicius) FICHA TÉCNICA DO PRODUTO em tela cheia — "um card maior só do produto
+        específico, onde passamos feedbacks e etc". Mesmos campos e o mesmo autosave da lista antiga;
+        ◀ ▶ passa pra próxima ficha na ordem da grade; Esc fecha (o lightbox de foto fica por cima). */}
+    {_fichaAberta!==null && (function(){
+      const pi=_fichaAberta;
+      const prod=(editProdutos||[])[pi];
+      if(!prod) return null;
+      const _editUnitFilter = _isBioter && _unitTabProd;
+      const _isMobF=(typeof _pxMob==="function"&&_pxMob());
+      const _lista=_pbProdutosVisiveis();
+      const _pos=_lista.findIndex(function(x){ return x.gi===pi; });
+      const _ir=function(d){ const n=_lista[_pos+d]; if(n) setFichaAberta(n.gi); };
+      const _nome=prod.nomePrincipalPt||prod.nome||"";
+      const _pr=_pbFichaPreenchidos(prod);
+      const _uni=(_isBioter&&typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.filter(function(u){ return Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0; }):[];
+      const _btnCab={background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background .12s",flexShrink:0};
+      return <div onMouseDown={function(e){ if(e.target===e.currentTarget) setFichaAberta(null); }}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:320,display:"flex",alignItems:_isMobF?"stretch":"center",justifyContent:"center",padding:_isMobF?0:"18px 16px"}}>
+        <div style={{background:"#fff",borderRadius:_isMobF?0:20,width:"100%",maxWidth:1080,height:_isMobF?"100%":"auto",maxHeight:_isMobF?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)",fontFamily:PB_INTER}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobF?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#7c3aed 0%,#8b5cf6 100%)",color:"#fff",flexShrink:0}}>
+            <span style={{display:"inline-flex",gap:4,flexShrink:0}}>
+              <button type="button" disabled={_pos<=0} onClick={function(){_ir(-1);}} title="Ficha anterior" style={Object.assign({},_btnCab,{opacity:_pos<=0?.35:1,cursor:_pos<=0?"default":"pointer"})}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button type="button" disabled={_pos<0||_pos>=_lista.length-1} onClick={function(){_ir(1);}} title="Próxima ficha" style={Object.assign({},_btnCab,{opacity:(_pos<0||_pos>=_lista.length-1)?.35:1,cursor:(_pos<0||_pos>=_lista.length-1)?"default":"pointer"})}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </span>
+            <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
+              <span style={{opacity:.75,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase",lineHeight:1.2}}>Ficha técnica{_pos>=0?(" · "+(_pos+1)+" de "+_lista.length):""}{_editUnitFilter&&typeof BIOTER_UNITS!=="undefined"?(" · "+((BIOTER_UNITS.find(function(u){return u.id===_unitTabProd;})||{}).pickerLabel||_unitTabProd)):""}</span>
+              <span style={{fontWeight:800,fontSize:_isMobF?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome||"Produto sem nome"}</span>
+            </span>
+            {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+              {_uni.slice(0,6).map(function(u){ return <span key={u.id} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
+              <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
+            </span>}
+            <button type="button" onClick={function(){ _produtoDel(pi); setFichaAberta(null); }} title="Remover este produto do playbook" style={_btnCab}
+              onMouseEnter={function(e){e.currentTarget.style.background="rgba(220,38,38,.85)";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.16)";}}>
+              <Ico n="trash" size={15}/>
+            </button>
+            <button type="button" onClick={function(){ setFichaAberta(null); }} title="Fechar (Esc)" style={_btnCab}
+              onMouseEnter={function(e){e.currentTarget.style.background="rgba(255,255,255,.3)";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="rgba(255,255,255,.16)";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div style={{flex:1,overflowY:"auto",padding:_isMobF?"14px 14px 24px":"20px 24px 26px",background:"#fff"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:18,padding:0}}>
+                      {/* Galeria grandona de imagens do produto */}
+                      {(function(){
+                        const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
+                        return <div>
+                          <div style={_PB_FICHA_ROT}>Fotos</div>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                          {_urls.map(function(_url,_ii){
+                            return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
+                              <img src={_pbThumbDe(prod,_url)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                              <button type="button" onClick={function(e){e.stopPropagation();_produtoRemoveImg(pi,_ii);}} title="Remover foto"
+                                style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
+                            </div>;
+                          })}
+                          <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); if(_patch.thumb) _produtoSetThumb(_pi,_patch.imgUrl,_patch.thumb); } });}}
+                            style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
+                            onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
+                            onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
+                            <Ico n="image" size={22} color="currentColor"/>
+                            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
+                          </button>
+                          </div>
+                        </div>;
+                      })()}
+                      {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
+                      {(function(){
+                        const _showEsEdit = _isBioter && _unitTabProd === "paraguay";
+                        return <div><div style={_PB_FICHA_ROT}>Como se chama</div>
+                          <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
+                          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
+                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="14" fill="#009c3b"/><polygon points="10,2 18,7 10,12 2,7" fill="#ffdf00"/><circle cx="10" cy="7" r="2.6" fill="#002776"/></svg>
+                              Português
+                            </div>
+                            <_PbCampoFicha placeholder="Nome principal (PT)" valor={prod.nomePrincipalPt!==undefined?prod.nomePrincipalPt:(prod.nome||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalPt:x, nome:x});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            <_PbCampoFicha placeholder="Outros nomes (ex: Fossa, Biofábrica)" valor={Array.isArray(prod.nomesPt)?prod.nomesPt.join(", "):(prod.nomesPt||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomesPt:x});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                          </div>
+                          {_showEsEdit && <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
+                            <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
+                              <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
+                              Español
+                            </div>
+                            <_PbCampoFicha placeholder="Nombre principal (ES)" valor={prod.nomePrincipalEs||""}
+                              onCommit={function(x){_produtoUpd(pi,{nomePrincipalEs:x});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                            <_PbCampoFicha placeholder="Otros nombres (ej: Estanque, Laguna)" valor={Array.isArray(prod.nomesEs)?prod.nomesEs.join(", "):(prod.nomesEs||"")}
+                              onCommit={function(x){_produtoUpd(pi,{nomesEs:x});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",fontSize:12,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff"}}/>
+                          </div>}
+                          </div>
+                        </div>;
+                      })()}
+                      <div>
+                        <div style={_PB_FICHA_ROT}>O que é</div>
+                        <_PbCampoFicha textarea placeholder="Em duas linhas: o que é, pra quem serve e o que ele resolve." valor={prod.descricao||""}
+                          onCommit={function(x){_produtoUpd(pi,{descricao:x});}}
+                          rows={2}
+                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                      </div>
+                      {/* (23/09/2026, Vinicius) os 4 campos da ficha técnica — entram no cérebro (pxCtxFichasProdutosTxt) */}
+                      <div style={{display:"grid",gridTemplateColumns:_isMobF?"1fr":"1fr 1fr",gap:14}}>
+                        <div>
+                          <div style={_PB_FICHA_ROT}>Pra quem é / que problema resolve</div>
+                          <_PbCampoFicha textarea placeholder="Quem compra e a dor que ele resolve. Ex.: produtor de leite com esterco acumulando; resolve o cheiro, a mosca e ainda gera gás." valor={prod.paraQuem||""}
+                            onCommit={function(x){_produtoUpd(pi,{paraQuem:x});}} rows={3}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                        </div>
+                        <div>
+                          <div style={_PB_FICHA_ROT}>Diferenciais e argumentos de venda</div>
+                          <_PbCampoFicha textarea placeholder="Por que este e não o do concorrente. Um por linha. A IA usa nas chamadas." valor={prod.diferenciais||""}
+                            onCommit={function(x){_produtoUpd(pi,{diferenciais:x});}} rows={3}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                        </div>
+                        <div>
+                          <div style={_PB_FICHA_ROT}>Especificações técnicas</div>
+                          <_PbCampoFicha textarea placeholder="Medidas, capacidade, material, garantia, prazo. Só o que tiver certeza — o que entrar aqui a IA trata como fato." valor={prod.especificacoes||""}
+                            onCommit={function(x){_produtoUpd(pi,{especificacoes:x});}} rows={3}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                        </div>
+                        <div>
+                          <div style={_PB_FICHA_ROT}>Dúvidas frequentes do cliente</div>
+                          <_PbCampoFicha textarea placeholder={"Pergunta que chega no WhatsApp e a resposta oficial. Ex.:\nPrecisa de licença? — Sim, a gente cuida do processo."} valor={prod.duvidas||""}
+                            onCommit={function(x){_produtoUpd(pi,{duvidas:x});}} rows={3}
+                            style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                        </div>
+                      </div>
+                      {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
+                        <div style={_PB_FICHA_ROT}>Unidades onde se aplica</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {BIOTER_UNITS.map(function(u){
+                            const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
+                            return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
+                              style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,transition:"all .12s"}}>
+                              {u.pickerLabel||u.label}
+                            </button>;
+                          })}
+                        </div>
+                      </div>}
+                    </div>
+                    {/* Rodapé da ficha: o que a agência já aprendeu sobre ESTE produto. */}
+                    <_PbProdFb clientId={cl.id} produto={prod.nomePrincipalPt||prod.nome||""}
+                      unidade={_editUnitFilter?_unitTabProd:""} isAdmin={isAdmin}/>
+          </div>
+          <div style={{flexShrink:0,borderTop:"1px solid "+PB_BORDER2,padding:_isMobF?"10px 14px":"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fafbfc"}}>
+            <span style={{color:PB_MUTE,fontSize:11.5,fontWeight:600}}>Salva sozinho enquanto você escreve · o que está aqui entra no cérebro da IA</span>
+            <button type="button" onClick={function(){ setFichaAberta(null); }}
+              style={{background:"#0f172a",border:"none",color:"#fff",borderRadius:99,padding:"8px 18px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:PB_INTER}}>Fechar ficha</button>
+          </div>
+        </div>
+      </div>;
+    })()}
     {_prodLightbox && (function(){
       const _lbUrls = Array.isArray(_prodLightbox.urls) ? _prodLightbox.urls : [];
       const _lbIdx = Math.max(0, Math.min(_prodLightbox.idx||0, _lbUrls.length-1));
@@ -106132,6 +106262,7 @@ async function pxGerarRoteiros(opts){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
   u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
   u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
   if(foco.length){
     u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
@@ -106239,6 +106370,7 @@ async function pxAjustarRoteiro(r,feedback){
   if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
   u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
   u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
   u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
   u+="ROTEIRO ATUAL (é ESTE que você vai ajustar):\n";
   u+="ASSUNTO: "+String((r&&r.assunto)||"")+"\n";
