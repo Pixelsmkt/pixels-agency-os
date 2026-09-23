@@ -968,6 +968,8 @@ const MOBILE_CSS=`
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
   @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  @keyframes pxIndet{0%{left:-45%;}100%{left:100%;}}
+  @keyframes pxShimmer{0%{background-position:-400px 0;}100%{background-position:400px 0;}}
   /* Ajustes específicos pra mobile (narrow viewport) */
   @media (max-width:768px){
     body{overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
@@ -4499,8 +4501,10 @@ function pxCtxProdutosFbTxt(ctx){
    estoura, para de acrescentar material em vez de cortar todos pela metade. 12.000 é o tamanho
    de uma ficha de briefing inteiro (o da VetService deu 11.7k); manual grande cabe porque a
    ficha dele já sai condensada na leitura. */
-const PX_CTX_MAT_POR_MATERIAL=12000;
-const PX_CTX_MAT_ORCAMENTO=24000;
+/* (23/09/2026) A ficha do Catálogo Bioter tem 17 mil caracteres; com 12 mil por material o
+   cérebro perdia o fim — ângulos, frases prontas, público e "o que não dizer". */
+const PX_CTX_MAT_POR_MATERIAL=20000;
+const PX_CTX_MAT_ORCAMENTO=40000;
 function pxCtxMateriaisTxt(ctx){
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
   if(!arr.length) return "";
@@ -30625,7 +30629,11 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [iaOrganizando,setIaOrganizando]=useState(false);
   const _organizarComIA=async function(){
     const _p=String(feedback||"").trim();
-    if(!_p){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escreva primeiro o que o cliente pediu — a IA organiza em cima disso."); return; }
+    if(!_p){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escreva primeiro o que o cliente pediu, do jeito que chegou — a IA organiza em cima disso.",4500);
+      try{ if(feedbackRef&&feedbackRef.current) feedbackRef.current.focus(); }catch(_){}
+      return;
+    }
     if(typeof pxOrganizarAjusteIA!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Pixels IA indisponível."); return; }
     setIaOrganizando(true);
     try{
@@ -31330,9 +31338,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
                 <span style={{display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
-                  <button type="button" onClick={_organizarComIA} disabled={iaOrganizando||!String(feedback||"").trim()}
+                  <button type="button" onClick={_organizarComIA} disabled={iaOrganizando}
                     title="Escreva o pedido do cliente do jeito que chegou e a IA organiza: o que muda, o que fica, texto pronto na voz da marca se precisar de lâmina/cena nova, e o material que falta"
-                    style={{background:iaOrganizando?"#ede9fe":"#7c3aed",border:"none",color:iaOrganizando?"#6d28d9":"#fff",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:800,cursor:(iaOrganizando||!String(feedback||"").trim())?"default":"pointer",opacity:(!iaOrganizando&&!String(feedback||"").trim())?.45:1,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+                    style={{background:iaOrganizando?"#ede9fe":"#7c3aed",border:"none",color:iaOrganizando?"#6d28d9":"#fff",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:800,cursor:iaOrganizando?"progress":"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:"0 1px 3px rgba(124,58,237,.3)"}}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>
                     {iaOrganizando?"Organizando…":"Organizar com IA"}
                   </button>
@@ -100068,49 +100076,59 @@ async function _pbPdfJs(){
   window.__pxPdfJs=mod; return mod;
 }
 /* Texto de cada página do PDF (array). Página sem texto (escaneada) vem "". */
-async function _pbPdfPaginas(url,onProg){
+/* (23/09/2026) Cada página vira UMA imagem JPEG (largura até 1400px). Testei o pdf.js no
+   Catálogo Bioter real: zero texto nas 20 páginas — catálogo exportado como imagem. Por isso o
+   caminho grande é por IMAGEM, que funciona com ou sem camada de texto. Uma página por vez na
+   memória; guarda só o base64 (~150-300 KB por página). */
+async function _pbPdfImagens(url,onProg){
   const pdfjs=await _pbPdfJs();
   const pdf=await pdfjs.getDocument({url:url}).promise;
   const out=[];
   for(let i=1;i<=pdf.numPages;i++){
     try{
-      const pg=await pdf.getPage(i); const tc=await pg.getTextContent();
-      out.push(tc.items.map(function(it){ return (it&&it.str)||""; }).join(" ").replace(/[ \t]+/g," ").trim());
-    }catch(_e){ out.push(""); }
+      const pg=await pdf.getPage(i);
+      const v1=pg.getViewport({scale:1});
+      const escala=Math.min(2.5,Math.max(0.3,1400/Math.max(v1.width||1,v1.height||1)));
+      const vp=pg.getViewport({scale:escala});
+      const cv=document.createElement("canvas"); cv.width=Math.round(vp.width); cv.height=Math.round(vp.height);
+      const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+      await pg.render({canvasContext:ctx,viewport:vp}).promise;
+      const dataUrl=cv.toDataURL("image/jpeg",0.78);
+      out.push(dataUrl.slice(dataUrl.indexOf(",")+1));
+      try{ pg.cleanup(); }catch(_){}
+      cv.width=1; cv.height=1;
+    }catch(_e){ console.warn("[pdf página "+i+"]",_e&&_e.message||_e); out.push(""); }
     if(onProg) onProg(i,pdf.numPages);
   }
   try{ pdf.destroy(); }catch(_){}
   return out;
 }
-/* A ficha a partir do TEXTO do PDF, em partes de ~55 mil caracteres; se deu mais de uma parte,
-   uma chamada final junta as fichas parciais numa só. */
-async function _pbFichaPorTexto(url,sys,pedido,onProg){
-  const pags=await _pbPdfPaginas(url,onProg);
-  const total=pags.join("").length;
-  if(total<300) throw new Error("O PDF é imagem escaneada (sem texto) e passou do limite de leitura direta (32 MB / 100 páginas). Suba uma versão mais leve ou com menos páginas.");
-  const partes=[]; let cur="", ini=1;
-  for(let i=0;i<pags.length;i++){
-    const linha="\n[página "+(i+1)+"]\n"+pags[i];
-    if(cur.length+linha.length>55000&&cur){ partes.push({txt:cur,de:ini,ate:i}); cur=""; ini=i+1; }
-    cur+=linha;
-  }
-  if(cur.trim()) partes.push({txt:cur,de:ini,ate:pags.length});
+/* A ficha a partir das IMAGENS das páginas, em lotes de 10; se deu mais de um lote, uma chamada
+   final junta as fichas parciais numa só (sem perder fato, número, nome ou frase). */
+async function _pbFichaPorPaginas(url,sys,pedido,onProg){
+  const imgs=await _pbPdfImagens(url,onProg);
+  const validas=imgs.map(function(b,i){return {b64:b,pag:i+1};}).filter(function(x){return !!x.b64;});
+  if(!validas.length) throw new Error("Não consegui desenhar as páginas do PDF no navegador. Tente de novo ou suba uma versão mais leve.");
+  const LOTE=10, lotes=[];
+  for(let i=0;i<validas.length;i+=LOTE) lotes.push(validas.slice(i,i+LOTE));
   const modelo=(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO);
   const fichas=[];
-  for(let p=0;p<partes.length;p++){
-    if(onProg) onProg("ia",p+1,partes.length);
-    const cab=(partes.length>1?("PARTE "+(p+1)+" de "+partes.length+" — páginas "+partes[p].de+" a "+partes[p].ate+" de "+pags.length+". Faça a ficha SÓ desta parte.\n\n"):"")+
-      "TEXTO EXTRAÍDO DO PDF (as imagens não vieram; trabalhe com o texto):\n\n"+partes[p].txt;
-    const data=await askClaude({model:modelo,max_tokens:5000,system:sys,messages:[{role:"user",content:[{type:"text",text:cab},{type:"text",text:pedido}]}]});
-    const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  for(let p=0;p<lotes.length;p++){
+    if(onProg) onProg("ia",p+1,lotes.length);
+    const l=lotes[p];
+    const cab=(lotes.length>1?("PARTE "+(p+1)+" de "+lotes.length+" — páginas "+l[0].pag+" a "+l[l.length-1].pag+" de "+imgs.length+". Faça a ficha SÓ do que está nestas páginas.\n\n"):"")+
+      "As imagens abaixo são as páginas do material, na ordem.";
+    const content=[{type:"text",text:cab}];
+    l.forEach(function(x){ content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:x.b64}}); });
+    content.push({type:"text",text:pedido});
+    const txt=await _pbAskCompleto({model:modelo,max_tokens:9000,system:sys,messages:[{role:"user",content:content}]});
     if(txt) fichas.push(txt);
   }
   if(!fichas.length) throw new Error("A IA não devolveu a ficha. Tente de novo.");
   if(fichas.length===1) return fichas[0];
-  const junta="Abaixo estão "+fichas.length+" fichas PARCIAIS do MESMO material (uma por parte do PDF). Junte numa ficha só, com as mesmas seções, sem perder nenhum fato, número, nome ou frase — e sem repetir. Máximo 1.800 palavras. Texto puro.\n\n"+
+  const junta="Abaixo estão "+fichas.length+" fichas PARCIAIS do MESMO material (uma por lote de páginas). Junte numa ficha só, com as mesmas seções, sem perder nenhum fato, número, nome ou frase — e sem repetir. Máximo 3.000 palavras; listas inteiras. Texto puro.\n\n"+
     fichas.map(function(f,i){ return "=== FICHA PARCIAL "+(i+1)+" ===\n"+f; }).join("\n\n");
-  const d2=await askClaude({model:modelo,max_tokens:5000,system:sys,messages:[{role:"user",content:junta}]});
-  const t2=((d2&&d2.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+  const t2=await _pbAskCompleto({model:modelo,max_tokens:9000,system:sys,messages:[{role:"user",content:junta}]});
   return t2||fichas.join("\n\n");
 }
 function _pbMatTamanho(n){
@@ -100127,6 +100145,24 @@ function _pbMatBase64(file){
 }
 /* A IA lê o PDF (ou a imagem) e devolve a ficha de fatos. Vai pelo askClaude porque é a
    Anthropic que lê documento nativo — o ask-claude é proxy transparente da API. */
+/* (23/09/2026) A ficha do Catálogo Bioter saiu cortada no meio de "O QUE NÃO DIZER": a IA bateu
+   no max_tokens. Aqui, se parou por limite (stop_reason max_tokens), pede "continue de onde
+   parou" e emenda — até 2 vezes. */
+async function _pbAskCompleto(args){
+  const data=await askClaude(args);
+  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
+  let stop=data&&data.stop_reason, voltas=0;
+  const msgs=(args.messages||[]).slice();
+  while(stop==="max_tokens"&&voltas<2){
+    voltas++;
+    const m2=msgs.concat([{role:"assistant",content:txt},{role:"user",content:"Continue EXATAMENTE de onde parou, sem repetir nada do que já escreveu e sem comentário. Termine todas as seções."}]);
+    const d2=await askClaude(Object.assign({},args,{messages:m2}));
+    const t2=((d2&&d2.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
+    if(!t2) break;
+    txt+=t2; stop=d2&&d2.stop_reason;
+  }
+  return txt.trim();
+}
 async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const mime=String((file&&file.type)||"").toLowerCase()||(/\.pdf(\?|$)/i.test(String(url||""))?"application/pdf":"");
@@ -100157,8 +100193,10 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
     "Extraia a FICHA: tudo que uma equipe de marketing usaria pra escrever sobre isso sem "+
     "precisar abrir o arquivo de novo.\n\n"+
     "TAMANHO — a ficha acompanha o material. Material curto: a ficha sai quase do tamanho "+
-    "dele. Material longo: você condensa, mas nunca passa de 1.800 palavras. Isto NÃO é "+
-    "resumo executivo; é o material destilado em fatos aproveitáveis.\n\n"+
+    "dele. Material longo (catálogo de 20 páginas): você condensa o texto corrido, mas nunca "+
+    "passa de 3.000 palavras — e LISTA (benefícios, aplicações, clientes, contatos) entra "+
+    "INTEIRA, nunca resumida. Isto NÃO é resumo executivo; é o material destilado em fatos "+
+    "aproveitáveis. Termine TODAS as seções: uma ficha cortada no meio não serve.\n\n"+
     "Use as seções abaixo e PULE a que o material não tiver:\n"+
     "O QUE É\n"+
     "PRA QUEM / QUANDO USAR\n"+
@@ -100172,7 +100210,9 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
     "O QUE NÃO DIZER\n"+
     "OUTRAS COISAS QUE O MATERIAL TRAZ (o que não coube acima e a equipe usaria)\n"+
     "NÃO COBERTO (o que a equipe perguntaria e o material não responde)\n\n"+
-    "REGRAS: não invente nada — o que o material não diz, você não escreve. Copie número, "+
+    "REGRAS: não invente nada — o que o material não diz, você não escreve. O que você NÃO "+
+    "consegue ler com certeza (logo borrado, texto pequeno demais, nome ilegível) NÃO entra — "+
+    "nem com \"possivelmente\", nem com \"parece\": ou é certo, ou fica de fora. Copie número, "+
     "nome e frase EXATAMENTE como estão. Se o material traz uma lista, mantenha a lista "+
     "INTEIRA, nunca uma amostra. Prefira perder elegância a perder informação.";
   /* Com URL a IA baixa o arquivo direto do storage — nada de base64 no corpo da requisição. */
@@ -100184,14 +100224,13 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
      pedido cabe em ~5.000 tokens com folga. */
   /* PDF acima de 30 MB: a API não baixa (limite 32 MB) — nem tenta, vai direto pro texto. */
   if(ehPdf&&_url&&Number(file&&file.size)>PB_MAT_MAX_URL_IA){
-    console.info("[material] "+_pbMatTamanho(file.size)+" — lendo pelo texto do PDF");
-    return _limpa(await _pbFichaPorTexto(_url,sys,pedido,onProg));
+    console.info("[material] "+_pbMatTamanho(file.size)+" — lendo página a página, por imagem");
+    return _limpa(await _pbFichaPorPaginas(_url,sys,pedido,onProg));
   }
   try{
     if(onProg) onProg("ia",1,1);
-    const data=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
-      max_tokens:5000,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
-    const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+    const txt=await _pbAskCompleto({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
+      max_tokens:9000,system:sys,messages:[{role:"user",content:[bloco,{type:"text",text:pedido}]}]});
     if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
     return _limpa(txt);
   }catch(e){
@@ -100200,8 +100239,8 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
        baixar → texto pelo pdf.js, em partes. Imagem e erro de outra natureza sobem. */
     const _grande=/page|p[áa]gina|exceed|too (large|big|many)|32\s?mb|maximum|limit|size|fetch|download|url|could not|unable/i.test(msg);
     if(ehPdf&&_url&&_grande){
-      console.warn("[material] leitura direta falhou ("+msg.slice(0,120)+") — indo pelo texto do PDF");
-      return _limpa(await _pbFichaPorTexto(_url,sys,pedido,onProg));
+      console.warn("[material] leitura direta falhou ("+msg.slice(0,120)+") — indo página a página, por imagem");
+      return _limpa(await _pbFichaPorPaginas(_url,sys,pedido,onProg));
     }
     throw e;
   }
@@ -100251,7 +100290,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.arquivo_url,function(a,b,c){
         try{
           if(a==="ia") setSubindo(c>1?("lendo "+(m.titulo||m.arquivo_nome)+" — IA, parte "+b+" de "+c):("lendo "+(m.titulo||m.arquivo_nome)+" — IA"));
-          else setSubindo("extraindo texto de "+(m.titulo||m.arquivo_nome)+" — página "+a+" de "+b);
+          else setSubindo("desenhando "+(m.titulo||m.arquivo_nome)+" — página "+a+" de "+b);
         }catch(_){}
       });
       await _patch(m,{ficha:ficha,ficha_status:"pronta"});
@@ -100366,15 +100405,27 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         background:arrastando?"#ecfdf5":"#fafbfc",border:"1.5px dashed "+(arrastando?"#0d9488":"#cbd5e1"),
         borderRadius:14,padding:"22px 18px",marginBottom:16,cursor:subindo?"progress":"pointer",
         transition:"background .12s, border-color .12s",fontFamily:"inherit"}}>
-      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,
-        background:arrastando?"#0d9488":"#0d948814",color:arrastando?"#fff":"#0d9488",transition:"all .12s"}}>
-        <Ico n="upload" size={17} color="currentColor"/>
-      </span>
+      {/* (23/09/2026, Vinicius: "moderniza o layout ali enquanto ele está pensando, tá feio")
+          Lendo: anel girando, título limpo, o passo inteiro embaixo (sem cortar com "…") e uma
+          barra indeterminada. */}
+      {subindo
+        ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,background:"#0d948814",color:"#0d9488"}}>
+            <span style={{width:20,height:20,borderRadius:"50%",border:"2.5px solid #0d948833",borderTopColor:"#0d9488",animation:"spin .9s linear infinite"}}/>
+          </span>
+        : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,
+            background:arrastando?"#0d9488":"#0d948814",color:arrastando?"#fff":"#0d9488",transition:"all .12s"}}>
+            <Ico n="upload" size={17} color="currentColor"/>
+          </span>}
       <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>
-        {subindo ? (subindo.slice(0,52)+"…") : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
+        {subindo ? (/^\(?\d*\/?\d*\)?\s*guardando/i.test(subindo)?"Guardando o arquivo":(/desenhando/i.test(subindo)?"Desenhando as páginas":"A IA está lendo o material"))
+                 : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
+      {subindo && <span style={{color:"#0d9488",fontSize:11.5,fontWeight:700,letterSpacing:-.1,wordBreak:"break-word",maxWidth:520}}>{subindo}</span>}
+      {subindo && <span style={{position:"relative",display:"block",width:"min(360px,100%)",height:5,borderRadius:99,background:"#0d948822",overflow:"hidden",marginTop:2}}>
+        <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#0d948800,#0d9488,#0d948800)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
+      </span>}
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · até 1 GB por arquivo · catálogo grande é lido pelo texto do PDF
+        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · até 1 GB por arquivo · catálogo grande é lido página a página
       </span>
       <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
@@ -100388,6 +100439,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       {_vis.map(function(m){
         const st=_STATUS[String(m.ficha_status||"pendente")]||_STATUS.pendente;
         const on=!!m.ativo&&!!String(m.ficha||"").trim();
+        const _lendo=String(m.ficha_status||"")==="lendo";
+        // (23/09/2026, Vinicius) "tem que ter um recolher ficha aqui no topo também"
+        const _abertoTopo=!!abertos[m.id]&&String(m.ficha||"").trim().length>520&&editId!==m.id;
         return <div key={m.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.75}}>
           <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:180}}>
@@ -100401,6 +100455,13 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
+              {_abertoTopo && <button type="button" title="Recolher a ficha"
+                onClick={function(){ setAbertos(function(p){ const n=Object.assign({},p); delete n[m.id]; return n; }); }}
+                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0d9488";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_BORDER;}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>Recolher ficha
+              </button>}
               {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer"
                 style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"6px 11px",color:"#0f172a",fontSize:11.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6}}>
                 <Ico n="eye" size={12} color="#64748b"/>Abrir</a>}
@@ -100467,11 +100528,20 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                       </button>}
                     </div>;
                   })()
-                : (isAdmin?<div style={{marginTop:8,color:"#94a3b8",fontSize:11.5}}>Sem ficha — clique no lápis pra escrever à mão, ou suba o arquivo de novo pra IA ler.</div>:null))}
+                : (_lendo
+                    ? <div style={{marginTop:9,background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"11px 12px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,color:"#b45309",fontSize:11.5,fontWeight:800,marginBottom:9}}>
+                          <span style={{width:13,height:13,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"spin .9s linear infinite",flexShrink:0}}/>
+                          A IA está lendo — a ficha aparece aqui quando terminar
+                        </div>
+                        {[92,78,85,60].map(function(w,i){ return <div key={i} style={{height:9,width:w+"%",borderRadius:99,marginBottom:7,
+                          background:"linear-gradient(90deg,#e8edf3 0px,#f5f7fa 200px,#e8edf3 400px)",backgroundSize:"800px 100%",animation:"pxShimmer 1.6s linear infinite"}}/>; })}
+                      </div>
+                    : (isAdmin?<div style={{marginTop:8,color:"#94a3b8",fontSize:11.5}}>Sem ficha — clique no lápis pra escrever à mão, ou suba o arquivo de novo pra IA ler.</div>:null)))}
         </div>;
       })}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-        {_ativos} de {_vis.length} material{_vis.length===1?"":"is"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
+        {_ativos} de {_vis.length} {_vis.length===1?"material":"materiais"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
       </div>
     </div>}
   </PlaybookBlock>;
