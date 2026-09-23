@@ -4724,14 +4724,16 @@ function pxCtxProdutosFbTxt(ctx){
   if(!arr.length) return "";
   const por={}, ordem=[];
   arr.forEach(function(f){
-    const k=String((f&&f.produto)||"").trim(); const v=String((f&&f.feedback)||"").trim();
+    const k=String((f&&f.produto)||"").trim(); let v=String((f&&f.feedback)||"").trim();
     if(!k||!v) return;
+    /* (23/09/2026) o que veio do próprio cliente pelo portal é a informação mais recente e manda */
+    if(/^Cliente/.test(String((f&&f.autor)||""))) v="[O CLIENTE AVISOU"+(f.data?(" em "+f.data):"")+"] "+v;
     if(!por[k]){ por[k]=[]; ordem.push(k); }
     if(por[k].length<6) por[k].push(v);
   });
   if(!ordem.length) return "";
   let u="O QUE A AGÊNCIA JÁ APRENDEU SOBRE CADA PRODUTO (vale mais que o texto do briefing — "+
-        "é correção de quem já escreveu e ouviu o cliente):\n";
+        "é correção de quem já escreveu e ouviu o cliente; o que está marcado [O CLIENTE AVISOU] veio do próprio cliente pelo portal, é o mais recente e manda sobre a ficha):\n";
   ordem.slice(0,12).forEach(function(k){
     u+="- "+k+": "+por[k].join(" · ")+"\n";
   });
@@ -68851,6 +68853,7 @@ const PORTAL_ALL_TABS=[
   {id:"concorrencia",ico:"eye",         label:"Concorrência", sec:"Estratégia"},
   {id:"playbook",    ico:"book",        label:"Playbook",     sec:"Estratégia"},
   {id:"sugestoes",   ico:"video",       label:"Sugestões de conteúdo", sec:"Estratégia"}, // (16/09/2026) roteiros de vídeo marcados pra o portal
+  {id:"produtos",    ico:"package",     label:"Produtos e serviços", sec:"Estratégia"}, // (23/09/2026) fichas do Playbook: cliente marca o peso e conta o que mudou
   {id:"demandas",    ico:"zap",         label:"Demandas",     sec:"Operação"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações",   sec:"Operação"},
   {id:"marcos",      ico:"flame",       label:"Checkpoints",  sec:"Operação"},
@@ -68883,6 +68886,7 @@ const PORTAL_PERM_GRUPOS=[
     {key:"concorrencia",label:"Concorrência", desc:"Concorrentes acompanhados"},
     {key:"playbook",    label:"Playbook",     desc:"Tom de voz, pilares, chamadas"},
     {key:"sugestoes",   label:"Sugestões de conteúdo", desc:"Roteiros de vídeo marcados pra ele gravar"},
+    {key:"produtos",    label:"Produtos e serviços", desc:"Fichas dos produtos do Playbook: o cliente marca o peso de cada um (vale na hora) e conta o que mudou"},
   ]},
   {id:"operacao", label:"Operação", cor:"#16a34a", itens:[
     {key:"demandas",    label:"Demandas",     desc:"Acompanhamento das demandas"},
@@ -75136,6 +75140,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     })()}
     {tab==="ideias"&&typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!lockedClientId}/>}
     {tab==="sugestoes"&&typeof PortalSugestoesConteudo==="function"&&<PortalSugestoesConteudo cl={cl} selUnit={selUnit} isMob={isMob}/>}
+    {tab==="produtos"&&typeof PortalProdutosServicos==="function"&&<PortalProdutosServicos cl={cl} selUnit={selUnit} isMob={isMob} viewerIsPixels={!lockedClientId}/>}
     {tab==="playbook"&&typeof PortalPlaybookCliente==="function"&&(function(){
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       return <PortalPlaybookCliente cl={cl} canEdit={!!_gestor} isMob={isMob}/>;
@@ -101055,7 +101060,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       })()}
                       {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
                       {(function(){
-                        const _showEsEdit = _isBioter && _unitTabProd === "paraguay";
+                        /* (23/09/2026, Vinicius) "onde preencho o nome em espanhol? não achei": aparece sempre que o
+                           produto é da unidade Paraguay (antes só com a aba Paraguay filtrada) */
+                        const _showEsEdit = _isBioter && (_unitTabProd === "paraguay" || (Array.isArray(prod.unidades) && prod.unidades.indexOf("paraguay") >= 0));
                         return <div><div style={_PB_FICHA_ROT}>Como se chama</div>
                           <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
                           <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
@@ -101073,7 +101080,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           {_showEsEdit && <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
                             <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#7f1414",letterSpacing:.4,textTransform:"uppercase"}}>
                               <svg width="16" height="11.2" viewBox="0 0 20 14"><rect width="20" height="4.66" fill="#d52b1e"/><rect y="4.66" width="20" height="4.66" fill="#fff"/><rect y="9.32" width="20" height="4.66" fill="#0038a8"/></svg>
-                              Español
+                              Español <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· Bioter Paraguay (títulos, tags e copys)</span>
                             </div>
                             <_PbCampoFicha placeholder="Nombre principal (ES)" valor={prod.nomePrincipalEs||""}
                               onCommit={function(x){_produtoUpd(pi,{nomePrincipalEs:x});}}
@@ -101093,8 +101100,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                             const _pu=_editUnitFilter?_unitTabProd:"";
                             const on=((typeof pxPesoProduto==="function")?pxPesoProduto(prod,_pu):String(prod.prioridade||""))===o.id;
                             return <button type="button" key={o.id} title={o.d} onClick={function(){
+                                const _antes=(typeof pxPesoProduto==="function")?pxPesoProduto(prod,_pu):String(prod.prioridade||"");
                                 if(_pu){ const m=Object.assign({},(prod.prioridadePorUnidade&&typeof prod.prioridadePorUnidade==="object")?prod.prioridadePorUnidade:{}); m[_pu]=on?"":o.id; _produtoUpd(pi,{prioridadePorUnidade:m}); }
-                                else _produtoUpd(pi,{prioridade:on?"":o.id}); }}
+                                else _produtoUpd(pi,{prioridade:on?"":o.id});
+                                /* (23/09/2026) histórico — o portal mostra quem mudou, o quê, dia e hora */
+                                try{ const _sb=window._sb; if(_sb&&cl&&cl.id) _sb.from("claude_produto_peso_hist").insert({client_id:cl.id,unidade:_pu||"",produto:prod.nomePrincipalPt||prod.nome||"",peso_antes:_antes,peso_depois:on?"":o.id,autor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"",origem:"agencia"}).then(function(){}); }catch(_){}
+                              }}
                               style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
                               <span style={{fontSize:11}}>{o.e}</span>{o.l}
                             </button>;
@@ -102218,76 +102229,82 @@ function _PbProdFb({clientId, produto, unidade, isAdmin}){
       _pbPfbLer(clientId,true);
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não apagou: "+((e&&e.message)||e)); }
   };
-  const _pill={borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap"};
-  return <div style={{borderTop:"1px solid #f1f5f9",background:"#fcfcfd",padding:"11px 16px 13px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <span style={{display:"inline-flex",alignItems:"center",gap:6,color:PB_PURPLE_DK,fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>
-        <Ico n="message" size={11} color={PB_PURPLE_DK}/>Aprendizado deste produto
+  /* (23/09/2026, Vinicius) "a parte do feedback tá tão escondida e pequena": bloco de verdade, laranja dos
+     Feedbacks do Playbook, caixa de escrever sempre aberta. */
+  const _LAR="#f97316", _LAR_DK="#c2410c", _LAR_BG="#fff7ed", _LAR_BD="#fed7aa";
+  const _pill={borderRadius:99,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"};
+  const _vazio=!String(txt||"").trim();
+  return <div style={{margin:"6px 0 4px",border:"1.5px solid "+_LAR_BD,background:_LAR_BG,borderRadius:16,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
+      <span style={{width:36,height:36,borderRadius:11,background:_LAR,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(249,115,22,.3)"}}>
+        <Ico n="message" size={17} color="#fff"/>
       </span>
-      {itens.length>0 && <span style={Object.assign({},_pill,{background:"#f5f3ff",color:"#6d28d9",border:"1px solid #ede9fe"})}>
-        {_ativos} no cérebro{itens.length>_ativos?(" · "+(itens.length-_ativos)+" fora"):""}
-      </span>}
-      <span style={{flex:1}}/>
-      {isAdmin && !abrir && <button type="button" onClick={function(){setAbrir(true);}}
-        style={{background:"#fff",border:"1px solid "+PB_PURPLE_BD,borderRadius:99,padding:"4px 12px",color:PB_PURPLE_DK,fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}
-        onMouseEnter={function(e){e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.borderColor=PB_PURPLE;}}
-        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_PURPLE_BD;}}>
-        <Ico n="plus" size={11} color={PB_PURPLE_DK}/>Feedback
-      </button>}
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <span style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Feedbacks deste produto</span>
+          {itens.length>0 && <span style={Object.assign({},_pill,{background:"#fff",color:_LAR_DK,border:"1px solid "+_LAR_BD})}>
+            {_ativos} no cérebro{itens.length>_ativos?(" · "+(itens.length-_ativos)+" fora"):""}
+          </span>}
+        </div>
+        <div style={{color:"#9a3412",fontSize:12.5,marginTop:3,lineHeight:1.5}}>O que o cliente falou ou a equipe percebeu sobre {produto?<b>{produto}</b>:"este produto"}. A IA lê isto toda vez que escrever copy, briefing ou roteiro dele.</div>
+      </div>
     </div>
 
-    {_PB_PFB.erro[clientId] && <div style={{color:"#b91c1c",fontSize:11,marginTop:7}}>Não consegui ler os feedbacks: {_PB_PFB.erro[clientId]}</div>}
+    {_PB_PFB.erro[clientId] && <div style={{color:"#b91c1c",fontSize:12}}>Não consegui ler os feedbacks: {_PB_PFB.erro[clientId]}</div>}
 
-    {isAdmin && abrir && <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:12,padding:11,marginTop:10,display:"flex",flexDirection:"column",gap:9}}>
+    {isAdmin && <div style={{background:"#fff",border:"1px solid "+_LAR_BD,borderRadius:12,padding:12,display:"flex",flexDirection:"column",gap:10}}>
       <_PbAutoTextarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={2}
-        placeholder={"O que a IA precisa saber quando falar de "+(produto||"este produto")+"? Ex.: o cliente quer o foco na economia de água, nunca no preço."}
-        style={{border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box",lineHeight:1.55,minHeight:60,overflow:"hidden",resize:"none"}}/>
-      {unidade && <button type="button" onClick={function(){setSoNaUni(!soNaUni);}}
-        style={{alignSelf:"flex-start",background:soNaUni?"#334155":"#fff",color:soNaUni?"#fff":"#64748b",border:"1px solid "+(soNaUni?"#334155":PB_BORDER),borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:soNaUni?800:600,cursor:"pointer",fontFamily:"inherit"}}>
-        {soNaUni?("Só na "+_pbUniLabel(unidade)):"Vale pra todas as unidades"}
-      </button>}
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button type="button" onClick={function(){setAbrir(false);setTxt("");setSoNaUni(false);}}
-          style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"7px 14px",color:"#64748b",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button type="button" onClick={salvar} disabled={salvando||!String(txt||"").trim()}
-          style={{background:(salvando||!String(txt||"").trim())?"#cbd5e1":PB_PURPLE_DK,border:"none",borderRadius:10,padding:"7px 16px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:(salvando||!String(txt||"").trim())?"default":"pointer",fontFamily:"inherit"}}>{salvando?"Salvando…":"Salvar feedback"}</button>
+        placeholder={"Escreve aqui. Ex.: o cliente quer o foco na economia de água, nunca no preço."}
+        style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box",lineHeight:1.55,minHeight:64,overflow:"hidden",resize:"none"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        {unidade && <button type="button" onClick={function(){setSoNaUni(!soNaUni);}}
+          style={{background:soNaUni?"#334155":"#fff",color:soNaUni?"#fff":"#475569",border:"1px solid "+(soNaUni?"#334155":"#e2e8f0"),borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:soNaUni?800:600,cursor:"pointer",fontFamily:"inherit"}}>
+          {soNaUni?("Só na "+_pbUniLabel(unidade)):"Vale pra todas as unidades"}
+        </button>}
+        <span style={{flex:1}}/>
+        {!_vazio && <button type="button" onClick={function(){setTxt("");setSoNaUni(false);}}
+          style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",color:"#64748b",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Limpar</button>}
+        <button type="button" onClick={salvar} disabled={salvando||_vazio}
+          style={{background:(salvando||_vazio)?"#fed7aa":_LAR,border:"none",borderRadius:10,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:(salvando||_vazio)?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:(salvando||_vazio)?"none":"0 3px 10px rgba(249,115,22,.3)"}}>
+          <Ico n="plus" size={13} color="#fff"/>{salvando?"Salvando…":"Salvar feedback"}
+        </button>
       </div>
     </div>}
 
-    {itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:7,marginTop:10}}>
+    {itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {itens.map(function(it){
         const on=!!it.ativo;
-        return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:9,background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_PURPLE_BD:"#eef0f3"),borderRadius:11,padding:"9px 11px",opacity:on?1:.6}}>
-          <span style={{width:3,alignSelf:"stretch",minHeight:18,borderRadius:99,background:on?PB_PURPLE_DK:"#cbd5e1",flexShrink:0}}/>
+        return <div key={it.id} style={{display:"flex",alignItems:"flex-start",gap:10,background:"#fff",border:"1px solid "+(on?_LAR_BD:"#eef0f3"),borderRadius:12,padding:"11px 13px",opacity:on?1:.6}}>
+          <span style={{width:4,alignSelf:"stretch",minHeight:20,borderRadius:99,background:on?_LAR:"#cbd5e1",flexShrink:0}}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.5,wordBreak:"break-word"}}>{it.feedback}</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:5}}>
-              {it.autor && <span style={Object.assign({},_pill,{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8"})}>{it.autor}</span>}
-              <span style={Object.assign({},_pill,{background:"#f8fafc",border:"1px solid "+PB_BORDER,color:"#94a3b8"})}>{_pbDataBr(String(it.criado_em||"").slice(0,10))}</span>
-              {it.unidade && <span style={Object.assign({},_pill,{background:"#f1f5f9",color:"#475569"})}>{_pbUniLabel(it.unidade)}</span>}
+            <div style={{color:"#0f172a",fontSize:13.5,fontWeight:500,lineHeight:1.55,wordBreak:"break-word",whiteSpace:"pre-wrap"}}>{it.feedback}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
+              {it.autor && (/^Cliente/.test(String(it.autor))
+                ? <span style={Object.assign({},_pill,{background:_LAR,border:"1px solid "+_LAR,color:"#fff"})}>{String(it.autor).replace(/^Cliente\s*·\s*/,"Cliente · ")}{/^Cliente\s*$/.test(String(it.autor))?" (pelo portal)":""}</span>
+                : <span style={Object.assign({},_pill,{background:"#eff6ff",border:"1px solid #bfdbfe",color:"#1d4ed8"})}>{it.autor}</span>)}
+              <span style={Object.assign({},_pill,{background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b"})}>{_pbDataBr(String(it.criado_em||"").slice(0,10))}</span>
+              {it.unidade && <span style={Object.assign({},_pill,{background:"#f1f5f9",color:"#475569"})}>Só {_pbUniLabel(it.unidade)}</span>}
               {!on && <span style={Object.assign({},_pill,{background:"#f1f5f9",color:"#94a3b8",letterSpacing:.4,textTransform:"uppercase",fontWeight:800})}>fora do cérebro</span>}
             </div>
           </div>
-          {isAdmin && <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+          {isAdmin && <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
             <button type="button" onClick={function(){alternar(it);}} title={on?"Tirar do cérebro (guarda o feedback)":"Voltar pro cérebro"}
               style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex"}}>
-              <span style={{width:30,height:18,borderRadius:99,background:on?PB_PURPLE_DK:"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
-                <span style={{position:"absolute",top:2,left:on?14:2,width:14,height:14,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+              <span style={{width:34,height:20,borderRadius:99,background:on?_LAR:"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+                <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
               </span>
             </button>
             <button type="button" onClick={function(){apagar(it);}} title="Apagar de vez"
-              style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
+              style={{background:"transparent",border:"none",padding:4,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
               onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}>
-              <Ico n="trash" size={13}/>
+              <Ico n="trash" size={14}/>
             </button>
           </div>}
         </div>;
       })}
     </div>}
 
-    {itens.length===0 && !abrir && <div style={{color:"#94a3b8",fontSize:11.5,marginTop:7,lineHeight:1.5}}>
-      Nada anotado ainda.{isAdmin?" Cada feedback aqui entra no prompt sempre que a IA escrever sobre este produto.":""}
-    </div>}
+    {itens.length===0 && !isAdmin && <div style={{color:"#9a3412",fontSize:12.5,opacity:.8}}>Nada anotado ainda.</div>}
   </div>;
 }
 
@@ -103367,6 +103384,283 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
 
   </div>;
 }
+
+
+/* ── PORTAL DO CLIENTE › Produtos e serviços (23/09/2026, Vinicius) ─────────────────────────
+   "Eles mesmos passam atualizações sobre os produtos, ou se a época do ano / a estratégia mudou a
+   prioridade." O cliente vê as fichas do Playbook, marca o PESO de cada produto (vale na hora — na
+   Bioter, só na unidade que está aberta) e conta o que mudou (vira feedback do produto no cérebro,
+   marcado "Cliente"). Tudo fica no histórico da aba: quem mudou, o quê, dia e hora.
+   RPCs: portal_produtos · portal_produto_peso · portal_produto_atualizacao. */
+function _ptlDataHora(x){ try{ return new Date(x).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(_){ return String(x||""); } }
+function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const cid=String((cl&&cl.id)||"").replace(/^bioter_.*/,"bioter");
+  const isBioter=cid==="bioter";
+  const unit=isBioter?((selUnit&&selUnit!=="grupo"&&selUnit!=="_minhas_")?String(selUnit):""):"";
+  const precisaUnidade=isBioter&&!unit;
+  const py=unit==="paraguay";
+  const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:"#7c3aed";
+  const PESOS=(typeof PX_BRIEF_PESOS!=="undefined")?PX_BRIEF_PESOS:[];
+  const _pesoDe=function(id){ return PESOS.find(function(x){return x.id===String(id||"");})||null; };
+  const _uniLabel=function(u){ if(!u) return ""; const x=(typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.find(function(y){return y.id===u;}):null; return x?(x.pickerLabel||x.label):u; };
+  const [dados,setDados]=useState(null);
+  const [erro,setErro]=useState("");
+  const [aberto,setAberto]=useState("");     // produto com a caixa "contar o que mudou" aberta
+  const [txt,setTxt]=useState("");
+  const [salvando,setSalvando]=useState("");
+  const [mostrarHist,setMostrarHist]=useState(false);
+  const [fichaNome,setFichaNome]=useState("");   // (23/09/2026) "essa mesma ficha aparece pro cliente no portal"
+  const [lightbox,setLightbox]=useState("");
+  useEffect(function(){ if(!fichaNome&&!lightbox) return; const h=function(e){ if(e.key==="Escape"){ if(lightbox) setLightbox(""); else setFichaNome(""); } }; window.addEventListener("keydown",h); return function(){ window.removeEventListener("keydown",h); }; },[fichaNome,lightbox]);
+  const carregar=async function(){
+    if(!sb||!cid){ setDados({produtos:[],atualizacoes:[],historico:[]}); return; }
+    try{
+      const r=await sb.rpc("portal_produtos",{p_client:cid,p_unidade:unit});
+      if(r.error) throw r.error;
+      setDados(r.data||{produtos:[],atualizacoes:[],historico:[]}); setErro("");
+    }catch(e){ setErro((e&&e.message)||String(e)); setDados({produtos:[],atualizacoes:[],historico:[]}); }
+  };
+  useEffect(function(){ setDados(null); carregar(); },[cid,unit]);
+  const mudarPeso=async function(p,id){
+    if(precisaUnidade||salvando) return;
+    const novo=(String(p.peso||"")===id)?"":id;
+    setSalvando("peso:"+p.nome);
+    try{
+      const r=await sb.rpc("portal_produto_peso",{p_client:cid,p_unidade:unit,p_produto:p.nome,p_peso:novo});
+      if(r.error) throw r.error;
+      const pz=_pesoDe(novo);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success(pz?(p.nome+" agora é "+pz.l+". Já vale pras próximas copys e roteiros."):(p.nome+" ficou sem peso."),3600);
+      await carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra mudar: "+((e&&e.message)||e),5000); }
+    setSalvando("");
+  };
+  const enviar=async function(p){
+    const _t=String(txt||"").trim(); if(!_t||salvando) return;
+    setSalvando("txt:"+p.nome);
+    try{
+      const r=await sb.rpc("portal_produto_atualizacao",{p_client:cid,p_unidade:unit,p_produto:p.nome,p_texto:_t});
+      if(r.error) throw r.error;
+      setTxt(""); setAberto("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Anotado. A equipe da Pixels já vê e as próximas copys saem sabendo disso.",3800);
+      await carregar();
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra enviar: "+((e&&e.message)||e),5000); }
+    setSalvando("");
+  };
+  const produtos=(dados&&Array.isArray(dados.produtos))?dados.produtos:[];
+  const atualizacoes=(dados&&Array.isArray(dados.atualizacoes))?dados.atualizacoes:[];
+  const historico=(dados&&Array.isArray(dados.historico))?dados.historico:[];
+  const _RANK={prioridade:0,importante:1,"":2,complementar:3,inativo:4};
+  const ordenados=produtos.slice().sort(function(a,b){ const d=(_RANK[String(a.peso||"")]||0)-(_RANK[String(b.peso||"")]||0); if(d) return d; return String(a.nome).localeCompare(String(b.nome),"pt-BR",{sensitivity:"base"}); });
+  const _FF="'Inter',system-ui,sans-serif";
+  const _card={background:"#fff",border:"1px solid #eef0f3",borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column"};
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_FF}}>
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+      <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="package" size={20} color="#fff"/></div>
+      <div style={{flex:1,minWidth:220}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>Produtos e serviços{unit?(" · "+_uniLabel(unit)):""}</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.5}}>Marque o peso de cada produto nas redes e conte pra gente o que mudou — vale na hora pras próximas copys e roteiros. Tudo fica registrado no histórico aqui embaixo.</div>
+      </div>
+    </div>
+
+    {/* legenda dos pesos */}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {PESOS.map(function(o){ return <span key={o.id} style={{display:"inline-flex",alignItems:"center",gap:7,background:"#fff",border:"1px solid #eef0f3",borderRadius:99,padding:"6px 12px 6px 8px",fontSize:12,color:"#334155"}}>
+        <span style={{width:9,height:9,borderRadius:99,background:o.c,flexShrink:0}}/><b style={{color:o.t||o.c}}>{o.l}</b><span style={{color:"#64748b"}}>— {o.d}</span>
+      </span>; })}
+    </div>
+
+    {precisaUnidade&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,padding:"11px 14px",color:"#92400e",fontSize:12.5,lineHeight:1.5}}>
+      Escolha a unidade lá em cima pra marcar o peso — cada unidade tem o seu. Aqui você vê os produtos do Grupo.
+    </div>}
+    {erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:12,padding:"11px 14px",color:"#b91c1c",fontSize:12.5}}>Não consegui carregar os produtos: {erro}</div>}
+    {dados===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
+    {dados!==null&&!produtos.length&&!erro&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Ainda não tem produto cadastrado{unit?(" pra "+_uniLabel(unit)):""}. A equipe da Pixels cadastra no Playbook e aparece aqui.</div>}
+
+    {produtos.length>0&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:12,alignItems:"start"}}>
+      {ordenados.map(function(p){
+        const pz=_pesoDe(p.peso);
+        const foto=p.thumb||p.foto||"";
+        const minhas=atualizacoes.filter(function(a){ return String(a.produto||"").trim().toLowerCase()===String(p.nome||"").trim().toLowerCase(); });
+        const nomeTop=(py&&p.nomeEs)?p.nomeEs:p.nome;
+        const nomeSub=(py&&p.nomeEs&&p.nomeEs!==p.nome)?p.nome:"";
+        const _abrindo=aberto===p.nome;
+        const _preench=["descricao","paraQuem","diferenciais","especificacoes","duvidas"].filter(function(k){return String(p[k]||"").trim();}).length+((p.fotos&&p.fotos.length)?1:0);
+        return <div key={p.nome} style={Object.assign({},_card,{borderTop:"4px solid "+(pz?pz.c:"#e2e8f0")})}>
+          <div role="button" tabIndex={0} title="Abrir a ficha completa" onClick={function(){setFichaNome(p.nome);}} onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaNome(p.nome); } }} style={{cursor:"pointer",position:"relative"}}>
+            {foto?<div style={{height:150,background:"#f1f5f9",backgroundImage:"url("+foto+")",backgroundSize:"cover",backgroundPosition:"center"}}/>
+                 :<div style={{height:150,background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="package" size={28} color="#cbd5e1"/></div>}
+            {p.fotos&&p.fotos.length>1&&<span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{p.fotos.length} fotos</span>}
+          </div>
+          <div style={{padding:"13px 14px 14px",display:"flex",flexDirection:"column",gap:10}}>
+            <div role="button" tabIndex={0} onClick={function(){setFichaNome(p.nome);}} onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaNome(p.nome); } }} style={{cursor:"pointer"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.25}}>{nomeTop}</div>
+              {nomeSub&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>{nomeSub}</div>}
+              {p.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.5,marginTop:5,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{p.descricao}</div>}
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:7,color:_cor,fontSize:11.5,fontWeight:700}}><span style={{color:"#94a3b8",fontWeight:600}}>{_preench} de 6 da ficha</span><span style={{flex:1}}/>Ver ficha completa <Ico n="chevronRight" size={12} color={_cor}/></div>
+            </div>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Peso nas redes</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {PESOS.map(function(o){ const on=String(p.peso||"")===o.id; const busy=salvando==="peso:"+p.nome;
+                  return <button key={o.id} type="button" disabled={precisaUnidade||!!salvando} title={o.d} onClick={function(){mudarPeso(p,o.id);}}
+                    style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"6px 11px",fontSize:11.5,fontWeight:on?800:600,cursor:(precisaUnidade||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:5,opacity:(precisaUnidade||(busy&&!on))?.55:1,transition:"all .12s"}}>
+                    <span style={{width:7,height:7,borderRadius:99,background:on?(o.ft||"#fff"):o.c}}/>{o.l}
+                  </button>; })}
+              </div>
+            </div>
+            {minhas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {minhas.slice(0,3).map(function(a){ return <div key={a.id} style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"8px 10px"}}>
+                <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{a.texto}</div>
+                <div style={{color:"#9a3412",fontSize:10.5,marginTop:4}}>{String(a.autor||"").replace(/^Cliente\s*·\s*/,"")||"Cliente"} · {_ptlDataHora(a.criado_em)}{a.unidade?(" · "+_uniLabel(a.unidade)):""}</div>
+              </div>; })}
+              {minhas.length>3&&<div style={{color:"#94a3b8",fontSize:11}}>+{minhas.length-3} mais antigas</div>}
+            </div>}
+            {!_abrindo&&<button type="button" onClick={function(){setAberto(p.nome);setTxt("");}}
+              style={{alignSelf:"flex-start",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 13px",color:"#0f172a",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:6}}>
+              <Ico n="message" size={13} color={_cor}/>Contar o que mudou
+            </button>}
+            {_abrindo&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <textarea value={txt} onChange={function(e){setTxt(e.target.value);}} rows={3} autoFocus
+                placeholder={"Ex.: nesta época o foco é "+(nomeTop||"este produto")+"; mudou o prazo de entrega; não estamos vendendo agora."}
+                style={{width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 11px",fontSize:12.5,lineHeight:1.5,fontFamily:_FF,color:"#0f172a",resize:"vertical",outline:"none"}}/>
+              <div style={{display:"flex",gap:7,justifyContent:"flex-end"}}>
+                <button type="button" onClick={function(){setAberto("");setTxt("");}} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 12px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:_FF}}>Cancelar</button>
+                <button type="button" disabled={!String(txt||"").trim()||!!salvando} onClick={function(){enviar(p);}}
+                  style={{background:(!String(txt||"").trim()||salvando)?"#e2e8f0":_cor,border:"none",borderRadius:10,padding:"8px 14px",color:(!String(txt||"").trim()||salvando)?"#94a3b8":"#fff",fontSize:12,fontWeight:800,cursor:(!String(txt||"").trim()||salvando)?"default":"pointer",fontFamily:_FF}}>
+                  {salvando==="txt:"+p.nome?"Enviando…":"Enviar pra Pixels"}
+                </button>
+              </div>
+            </div>}
+          </div>
+        </div>;
+      })}
+    </div>}
+
+    {/* (23/09/2026, Vinicius) a MESMA ficha do Playbook, pro cliente: só leitura nos textos */}
+    {fichaNome&&(function(){
+      const idx=ordenados.findIndex(function(x){return x.nome===fichaNome;}); const p=idx>=0?ordenados[idx]:null;
+      if(!p) return null;
+      const pz=_pesoDe(p.peso);
+      const nomeTop=(py&&p.nomeEs)?p.nomeEs:p.nome, nomeSub=(py&&p.nomeEs&&p.nomeEs!==p.nome)?p.nome:"";
+      const minhas=atualizacoes.filter(function(a){ return String(a.produto||"").trim().toLowerCase()===String(p.nome||"").trim().toLowerCase(); });
+      const _ROT={color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6};
+      const _CAMPOS=[["descricao","O que é","Em duas linhas: o que é, pra quem serve e o que ele resolve."],["paraQuem","Pra quem é / que problema resolve","Quem compra e a dor que ele resolve."],["diferenciais","Diferenciais e argumentos de venda","Por que este e não o do concorrente."],["especificacoes","Especificações técnicas","Medidas, capacidade, material, garantia, prazo."],["duvidas","Dúvidas frequentes do cliente","A pergunta que chega no WhatsApp e a resposta oficial."]];
+      const _campo=function(c,grande){ const v=String(p[c[0]]||"").trim();
+        return <div key={c[0]} style={{gridColumn:grande?"1 / -1":undefined}}><div style={_ROT}>{c[1]}</div>
+          <div style={{background:v?"#fff":"#fafbfc",border:"1px solid "+(v?"#e2e8f0":"#eef0f3"),borderRadius:12,padding:"12px 14px",minHeight:grande?76:96,color:v?"#0f172a":"#b6c0cc",fontSize:13.5,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+            {v||("A Pixels ainda não preencheu. "+c[2]+" Se você quiser adiantar, conta em \"Contar o que mudou\" aqui embaixo.")}
+          </div></div>; };
+      const _nav=function(d){ const n=ordenados[idx+d]; if(n){ setFichaNome(n.nome); setAberto(""); setTxt(""); } };
+      const _btnNav=function(d,ok){ return <button type="button" disabled={!ok} onClick={function(){_nav(d);}} style={{width:34,height:34,borderRadius:10,border:"none",background:ok?"rgba(255,255,255,.22)":"rgba(255,255,255,.08)",color:"#fff",cursor:ok?"pointer":"default",display:"inline-flex",alignItems:"center",justifyContent:"center",opacity:ok?1:.5}}><Ico n={d<0?"chevronLeft":"chevronRight"} size={16} color="#fff"/></button>; };
+      return <div onClick={function(){setFichaNome("");}} style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(15,23,42,.55)",display:"flex",alignItems:isMob?"stretch":"center",justifyContent:"center",padding:isMob?0:18,fontFamily:_FF}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",width:"100%",maxWidth:1100,maxHeight:isMob?"100%":"92vh",borderRadius:isMob?0:22,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 30px 80px rgba(15,23,42,.35)"}}>
+          <div style={{background:_cor,color:"#fff",padding:isMob?"12px 14px":"14px 22px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {_btnNav(-1,idx>0)}{_btnNav(1,idx<ordenados.length-1)}
+            <div style={{flex:1,minWidth:160}}>
+              <div style={{opacity:.8,fontSize:9.5,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Ficha técnica · {idx+1} de {ordenados.length}{unit?(" · "+_uniLabel(unit)):""}</div>
+              <div style={{fontWeight:800,fontSize:isMob?16:19,letterSpacing:-.4,lineHeight:1.2}}>{nomeTop}{nomeSub?<span style={{opacity:.75,fontWeight:600,fontSize:13}}> · {nomeSub}</span>:null}</div>
+            </div>
+            {pz&&<span style={{background:"#fff",color:pz.t||pz.c,borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:7,height:7,borderRadius:99,background:pz.c}}/>{pz.l}</span>}
+            <button type="button" onClick={function(){setFichaNome("");}} title="Fechar (Esc)" style={{width:34,height:34,borderRadius:10,border:"none",background:"rgba(255,255,255,.22)",color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={16} color="#fff"/></button>
+          </div>
+          <div style={{overflowY:"auto",padding:isMob?"14px":"18px 22px 22px",display:"flex",flexDirection:"column",gap:18}}>
+            <div><div style={_ROT}>Fotos</div>
+              {(p.fotos&&p.fotos.length)?<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                {p.fotos.map(function(f,i){ return <button key={i} type="button" onClick={function(){setLightbox(f.url||f.thumb);}} style={{width:isMob?"calc(50% - 5px)":130,height:isMob?110:130,borderRadius:12,border:"1px solid #e2e8f0",padding:0,cursor:"zoom-in",background:"#f1f5f9",backgroundImage:"url("+(f.thumb||f.url)+")",backgroundSize:"cover",backgroundPosition:"center"}}/>; })}
+              </div>:<div style={{color:"#b6c0cc",fontSize:12.5}}>Sem foto ainda.</div>}
+            </div>
+            <div>
+              <div style={_ROT}>Peso nas redes{unit?(" · "+_uniLabel(unit)):""} <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· quanto este produto aparece nas copys e roteiros{unit?" desta unidade":""}</span></div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {PESOS.map(function(o){ const on=String(p.peso||"")===o.id;
+                  return <button key={o.id} type="button" disabled={precisaUnidade||!!salvando} title={o.d} onClick={function(){mudarPeso(p,o.id);}}
+                    style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"7px 13px",fontSize:12.5,fontWeight:on?800:600,cursor:(precisaUnidade||salvando)?"default":"pointer",fontFamily:_FF,display:"inline-flex",alignItems:"center",gap:6,opacity:precisaUnidade?.55:1}}>
+                    <span style={{width:8,height:8,borderRadius:99,background:on?(o.ft||"#fff"):o.c}}/>{o.l}
+                  </button>; })}
+              </div>
+              <div style={{color:"#94a3b8",fontSize:11.5,marginTop:6}}>{pz?pz.d:"Sem peso marcado — a IA trata como Importante."}{precisaUnidade?" · Escolha a unidade lá em cima pra mudar.":""}</div>
+            </div>
+            {_campo(_CAMPOS[0],true)}
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+              {_CAMPOS.slice(1).map(function(c){ return _campo(c,false); })}
+            </div>
+            <div style={{border:"1.5px solid #fed7aa",background:"#fff7ed",borderRadius:16,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                <span style={{width:36,height:36,borderRadius:11,background:"#f97316",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="message" size={17} color="#fff"/></span>
+                <div style={{flex:1}}>
+                  <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Contar o que mudou</div>
+                  <div style={{color:"#9a3412",fontSize:12.5,marginTop:3,lineHeight:1.5}}>Novidade, época do ano, prazo, o que não vender agora, uma dúvida que os clientes fazem — a Pixels vê e as próximas copys e roteiros já saem sabendo.</div>
+                </div>
+              </div>
+              <textarea value={aberto===p.nome?txt:""} onFocus={function(){ if(aberto!==p.nome){ setAberto(p.nome); setTxt(""); } }} onChange={function(e){ setAberto(p.nome); setTxt(e.target.value); }} rows={3}
+                placeholder={"Ex.: nesta época o foco é "+(nomeTop||"este produto")+"; mudou o prazo de entrega; os clientes sempre perguntam se precisa de licença."}
+                style={{width:"100%",boxSizing:"border-box",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 12px",fontSize:13.5,lineHeight:1.55,fontFamily:_FF,color:"#0f172a",resize:"vertical",outline:"none",background:"#fff"}}/>
+              <div style={{display:"flex",justifyContent:"flex-end"}}>
+                <button type="button" disabled={aberto!==p.nome||!String(txt||"").trim()||!!salvando} onClick={function(){enviar(p);}}
+                  style={{background:(aberto!==p.nome||!String(txt||"").trim()||salvando)?"#fed7aa":"#f97316",border:"none",borderRadius:10,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:(aberto!==p.nome||!String(txt||"").trim()||salvando)?"default":"pointer",fontFamily:_FF}}>
+                  {salvando==="txt:"+p.nome?"Enviando…":"Enviar pra Pixels"}
+                </button>
+              </div>
+              {minhas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {minhas.map(function(a){ return <div key={a.id} style={{background:"#fff",border:"1px solid #fed7aa",borderRadius:10,padding:"9px 11px"}}>
+                  <div style={{color:"#0f172a",fontSize:13,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{a.texto}</div>
+                  <div style={{color:"#9a3412",fontSize:10.5,marginTop:4}}>{String(a.autor||"").replace(/^Cliente\s*·\s*/,"")||"Cliente"} · {_ptlDataHora(a.criado_em)}{a.unidade?(" · "+_uniLabel(a.unidade)):""}</div>
+                </div>; })}
+              </div>}
+            </div>
+          </div>
+          <div style={{flexShrink:0,borderTop:"1px solid #eef0f3",padding:isMob?"10px 14px":"10px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fafbfc"}}>
+            <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>Os textos da ficha são escritos pela Pixels · o peso e o que você contar valem na hora</span>
+            <button type="button" onClick={function(){setFichaNome("");}} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:_FF}}>Fechar ficha</button>
+          </div>
+        </div>
+      </div>;
+    })()}
+    {lightbox&&<div onClick={function(){setLightbox("");}} style={{position:"fixed",inset:0,zIndex:9100,background:"rgba(15,23,42,.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:20,cursor:"zoom-out"}}>
+      <img src={lightbox} alt="" style={{maxWidth:"100%",maxHeight:"100%",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}/>
+    </div>}
+
+    {/* histórico */}
+    {dados!==null&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 18px"}}>
+      <button type="button" onClick={function(){setMostrarHist(!mostrarHist);}} style={{width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:_FF,textAlign:"left"}}>
+        <Ico n="clock" size={15} color="#64748b"/>
+        <span style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>Histórico de mudanças</span>
+        <span style={{color:"#94a3b8",fontSize:12}}>· {historico.length} de peso · {atualizacoes.length} atualizações</span>
+        <span style={{flex:1}}/>
+        <span style={{color:"#64748b",fontSize:12,fontWeight:600}}>{mostrarHist?"Esconder":"Ver"}</span>
+      </button>
+      {mostrarHist&&<div style={{display:"flex",flexDirection:"column",gap:6,marginTop:12}}>
+        {(function(){
+          const linhas=[].concat(
+            historico.map(function(h){ return {t:h.criado_em,tipo:"peso",h:h}; }),
+            atualizacoes.map(function(a){ return {t:a.criado_em,tipo:"txt",a:a}; })
+          ).sort(function(x,y){ return String(y.t).localeCompare(String(x.t)); });
+          if(!linhas.length) return <div style={{color:"#94a3b8",fontSize:12.5}}>Nada mudou ainda.</div>;
+          return linhas.slice(0,80).map(function(l,i){
+            if(l.tipo==="peso"){ const h=l.h, a=_pesoDe(h.antes), d=_pesoDe(h.depois);
+              return <div key={"h"+i} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:12.5,color:"#334155",padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
+                <span style={{color:"#94a3b8",fontSize:11.5,minWidth:118}}>{_ptlDataHora(h.criado_em)}</span>
+                <b style={{color:"#0f172a"}}>{h.autor||(h.origem==="agencia"?"Pixels":"Cliente")}</b>
+                <span style={{color:"#64748b"}}>mudou</span><b>{h.produto}</b>{h.unidade?<span style={{color:"#94a3b8"}}>({_uniLabel(h.unidade)})</span>:null}
+                <span style={{color:"#64748b"}}>de</span><span style={{color:a?(a.t||a.c):"#94a3b8",fontWeight:700}}>{a?a.l:"sem peso"}</span>
+                <span style={{color:"#64748b"}}>pra</span><span style={{color:d?(d.t||d.c):"#94a3b8",fontWeight:700}}>{d?d.l:"sem peso"}</span>
+                {h.origem==="agencia"&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>Pixels</span>}
+              </div>; }
+            const a=l.a;
+            return <div key={"a"+i} style={{display:"flex",alignItems:"flex-start",gap:8,flexWrap:"wrap",fontSize:12.5,color:"#334155",padding:"7px 0",borderBottom:"1px solid #f1f5f9"}}>
+              <span style={{color:"#94a3b8",fontSize:11.5,minWidth:118}}>{_ptlDataHora(a.criado_em)}</span>
+              <b style={{color:"#0f172a"}}>{String(a.autor||"").replace(/^Cliente\s*·\s*/,"")||"Cliente"}</b>
+              <span style={{color:"#64748b"}}>contou sobre</span><b>{a.produto}</b>{a.unidade?<span style={{color:"#94a3b8"}}>({_uniLabel(a.unidade)})</span>:null}
+              <span style={{flexBasis:"100%",color:"#475569",whiteSpace:"pre-wrap",paddingLeft:isMob?0:126}}>{a.texto}</span>
+            </div>;
+          });
+        })()}
+      </div>}
+    </div>}
+  </div>;
+}
+if(typeof window!=="undefined"){ window.PortalProdutosServicos=PortalProdutosServicos; }
 
 /* ── Normalizador de texto das tarefas/etapas ──
    Regra da casa (pedido 2026-09-01): sem pontuação e símbolos (!?.:; emojis...),
