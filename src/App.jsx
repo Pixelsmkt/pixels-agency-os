@@ -4624,8 +4624,19 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
 function pxCtxFichasProdutosTxt(ctx){
   try{
     const arr=(ctx&&ctx.playbook&&Array.isArray(ctx.playbook.produtos))?ctx.playbook.produtos:[];
-    if(!arr.length) return "";
     const u=String((ctx&&ctx._unit)||"").trim();
+    /* (23/09/2026, Vinicius) VISÃO GERAL antes das fichas — carro-chefe, prioridades, o que não é foco. */
+    let visao="";
+    try{
+      const pb=(ctx&&ctx.playbook)||{};
+      const g=String(pb.produtos_visao||"").trim();
+      const pu=(pb.produtos_visao_por_unidade&&typeof pb.produtos_visao_por_unidade==="object")?String(pb.produtos_visao_por_unidade[u]||"").trim():"";
+      if(g||pu){
+        visao="PRODUTOS E SERVIÇOS — VISÃO GERAL (como a empresa se posiciona: o carro-chefe manda no que se destaca; o que está marcado como complementar entra menos e o inativo NUNCA entra; o que a empresa faz mas não é foco não vira tema principal):\n"+
+              (g?(g+"\n"):"")+(pu?("Nesta unidade ("+u+"): "+pu+"\n"):"")+"\n";
+      }
+    }catch(_){}
+    if(!arr.length) return visao;
     const lim=function(s,n){ s=String(s||"").replace(/[ \t]+/g," ").replace(/\n{2,}/g,"\n").trim(); return s.length>n?(s.slice(0,n).replace(/\s+\S*$/,"")+"…"):s; };
     const campos=[["O que é","descricao",500],["Pra quem é / que problema resolve","paraQuem",500],["Diferenciais e argumentos de venda","diferenciais",700],["Especificações técnicas","especificacoes",700],["Dúvidas frequentes e resposta oficial","duvidas",900]];
     let out="";
@@ -4642,8 +4653,8 @@ function pxCtxFichasProdutosTxt(ctx){
       if(out.length+bloco.length>16000) break;
       out+=bloco;
     }
-    if(!out) return "";
-    return "FICHA TÉCNICA DOS PRODUTOS (Playbook — preenchida pela agência com o cliente; são fatos conferidos: use-os e NÃO invente além deles"+(u?"; só os produtos desta unidade":"")+"):\n"+out+"\n";
+    if(!out) return visao;
+    return visao+"FICHA TÉCNICA DOS PRODUTOS (Playbook — preenchida pela agência com o cliente; são fatos conferidos: use-os e NÃO invente além deles"+(u?"; só os produtos desta unidade":"")+"):\n"+out+"\n";
   }catch(_){ return ""; }
 }
 function pxCtxProdutosFbTxt(ctx){
@@ -98682,7 +98693,7 @@ const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
-   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-social","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
    blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
@@ -98710,7 +98721,6 @@ const PB_BLOCOS = [
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
   {id:"pb-comunicacao",         label:"Comunicação da marca"},
   {id:"pb-produtos",            label:"Produtos/serviços"},
-  {id:"pb-social",              label:"Publicação social"},
   {id:"pb-chamadas",            label:"Exemplos de chamadas"},
   {id:"pb-designer",            label:"Instruções pro designer"},
   {id:"pb-equipe",              label:"Orientações"},
@@ -99596,7 +99606,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   if(false){}
   const _pbProcTopo = _PB_CADEIRA_ATUAL==="video"; // Edição de vídeo: processos técnicos no topo
   if(area==="all" || area==="video"){ const _sp={id:"pb-processos", label:"Processos", icon:"play"}; if(_pbProcTopo) SECTIONS.unshift(_sp); else SECTIONS.push(_sp); }
-  if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Social", icon:"users"});
+  /* (23/09/2026, Vinicius) "Publicação social" saiu — duplicava o Marcar no post (@); cadência,
+     mix, particularidades e restrições ninguém preenchia e nenhum prompt lia. */
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   // Cadeira: só os atalhos dos blocos que ela enxerga
@@ -100063,6 +100074,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 })}
               </div>
             </div>}
+            {/* (23/09/2026, Vinicius) VISÃO GERAL antes das fichas: "dar contexto sobre os produtos e
+                serviços da empresa" — carro-chefe, prioridades, o que não é foco. Vai pro cérebro. */}
+            <_PbProdutosVisao isBioter={_isBioter} unitTab={_unitTabProd} isAdmin={isAdmin} data={data} onUpdate={onUpdate}/>
             {/* (22/09/2026, Rodrigo) "cadê a porra da ficha técnica que eu pedi de cada produto?
                 continuou a mesma merda que estava antes."
                 Estava certo, e o motivo é feio: eu tinha construído a ficha no ramo de LEITURA
@@ -100233,10 +100247,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             <_PbVideoProcesses isAdmin={isAdmin}/>
           </PlaybookBlock>}
 
-          {/* Configuração de publicação — Social Media (perfis a marcar, cadência, particularidades) */}
-          {(area==="all" || area==="social") && <PlaybookBlock id="pb-social" title="Publicação social" subtitle="Perfis a marcar, cadência, tipos de post e particularidades desse cliente" icon="users" color="#ec4899">
-            <_PbSocialConfig areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} clientId={cl.id}/>
-          </PlaybookBlock>}
+          {/* (23/09/2026) bloco "Publicação social" removido a pedido do Vinicius — duplicava Marcar no post (@) */}
 
           {/* Orientações visuais — imagem + descrição por área. Aparece nos cards do setor correspondente. */}
           <PlaybookBlock id="pb-orientacoes-visuais" title="Orientações visuais" subtitle={area==="all" ? "Referências pra equipe — aparecem automaticamente nos cards deste cliente" : ("Referências visuais desta área — aparecem automaticamente nos cards de "+areaCfg.label)} icon="image" color={areaCfg.color||PB_PURPLE_DK}>
@@ -101367,6 +101378,49 @@ function _PbCampoFicha({valor, onCommit, textarea, ...resto}){
 }
 /* Etiqueta das seções da ficha técnica do produto — mesma em todas, pra ler como ficha. */
 const _PB_FICHA_ROT={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6};
+/* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
+   carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
+   (Grupo/cliente) e data.produtos_visao_by_unit[unidade] (Bioter com unidade selecionada). Entra no
+   prompt antes da FICHA TÉCNICA DOS PRODUTOS (pxCtxFichasProdutosTxt). Salva ao sair do campo. */
+function _PbProdutosVisao({isBioter, unitTab, isAdmin, data, onUpdate}){
+  const _unit=isBioter?String(unitTab||""):"";
+  const _geral=String((data&&data.produtos_visao)||"");
+  const _daUnidade=_unit?String(((data&&data.produtos_visao_by_unit)||{})[_unit]||""):"";
+  const _valor=_unit?_daUnidade:_geral;
+  const [v,setV]=useState(_valor);
+  const [foco,setFoco]=useState(false);
+  useEffect(function(){ setV(_valor); },[_unit,_valor]);
+  const _salvar=function(){
+    if(typeof onUpdate!=="function") return;
+    const novo=String(v||"").replace(/[ \t]+\n/g,"\n").trim();
+    if(novo===_valor) return;
+    if(_unit){ const bu=Object.assign({},(data&&data.produtos_visao_by_unit)||{}); if(novo) bu[_unit]=novo; else delete bu[_unit]; onUpdate({produtos_visao_by_unit:bu}); }
+    else onUpdate({produtos_visao:novo});
+  };
+  const _uniNome=(_unit&&typeof BIOTER_UNITS!=="undefined")?(((BIOTER_UNITS.find(function(u){return u.id===_unit;})||{}).pickerLabel)||_unit):"";
+  const _ph=_unit
+    ? ("O que muda em "+_uniNome+": produtos que só aqui vende, o que é foco nesta unidade, o que não oferece. O texto do Grupo continua valendo junto.")
+    : "Como a empresa se posiciona. Ex.:\nIMPORTANTE: o carro-chefe é pré-moldados, não construir o pavilhão completo (turn key) — fazem, mas o foco é entregar os pré-moldados.\n🟣 Prioridade · 🟢 Importante · 🟡 Complementar · 🔴 Inativo\n🟣 Estruturas pré-moldadas para o agronegócio: aviários, granjas…";
+  return <div style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid "+PB_BORDER2}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:7}}>
+      <div>
+        <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Visão geral dos produtos e serviços{_unit?(" · "+_uniNome):""}</div>
+        <div style={{color:PB_MUTE,fontSize:11.5,marginTop:2,lineHeight:1.45}}>
+          O que a empresa vende, o carro-chefe, a ordem de prioridade e o que faz mas não é foco. A IA lê isto antes das fichas, em toda copy e roteiro{_unit?" — junto com o texto do Grupo":""}.
+        </div>
+      </div>
+      {_unit&&_geral&&<span title={_geral} style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Grupo: {_geral.replace(/\s+/g," ").slice(0,60)}{_geral.length>60?"…":""}</span>}
+    </div>
+    {isAdmin
+      ? <textarea value={v} onChange={function(e){ setV(e.target.value); }} onFocus={function(){ setFoco(true); }} onBlur={function(){ setFoco(false); _salvar(); }}
+          placeholder={_ph} rows={Math.min(14,Math.max(4,String(v||"").split("\n").length+1))}
+          style={{width:"100%",boxSizing:"border-box",border:"1.5px solid "+(foco?"#f59e0b":PB_BORDER),borderRadius:12,padding:"11px 13px",fontSize:13,lineHeight:1.6,color:PB_TEXT,background:"#fff",fontFamily:PB_INTER,outline:"none",resize:"vertical",boxShadow:foco?"0 0 0 3px #f59e0b1f":"none",transition:"border-color .12s, box-shadow .12s"}}/>
+      : (_valor
+          ? <div style={{whiteSpace:"pre-wrap",color:PB_TEXT,fontSize:13,lineHeight:1.6,background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"11px 13px"}}>{_valor}</div>
+          : <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Ninguém escreveu a visão geral ainda.</div>)}
+    {isAdmin&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:5}}>Salva quando você sai do campo.</div>}
+  </div>;
+}
 function _PbProdFb({clientId, produto, unidade, isAdmin}){
   const [,_tick]=useState(0);
   const [abrir,setAbrir]=useState(false);
