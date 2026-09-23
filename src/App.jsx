@@ -100506,7 +100506,9 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cidade",l:"Cidade/UF"},
     {k:"telefone",l:"Telefone"},{k:"whatsapp",l:"WhatsApp oficial"},{k:"email",l:"E-mail"},{k:"site",l:"Site"},
     {k:"instagram",l:"Instagram"},{k:"horario",l:"Horário de atendimento"}];
-  const _PH={razao_social:"Bioter Soluções Ambientais Ltda",cnpj:"00.000.000/0001-00",endereco:"Rua, número, bairro, CEP",cidade:"Chapecó/SC",telefone:"(49) 3322-0000",whatsapp:"(49) 9 9999-9999 — o que vai na legenda",email:"contato@empresa.com.br",site:"www.empresa.com.br",instagram:"@empresa",horario:"seg a sex, 8h às 18h"};
+  /* (23/09/2026, Vinicius) "não deixa pré-preenchido" — os exemplos pareciam dado real. Campo vazio
+     mostra só o que é pra pôr ali. */
+  const _PH={razao_social:"Nome da empresa no CNPJ",cnpj:"Só números ou com pontuação",endereco:"Rua, número, bairro e CEP",cidade:"Cidade/UF",telefone:"Fixo, com DDD",whatsapp:"O número que fecha as legendas, com DDD",email:"E-mail de contato",site:"Endereço do site",instagram:"@ do perfil",horario:"Dias e horários"};
   const _unit=isBioter?String(unitTab||""):"";
   const _atual=(function(){
     if(_unit){ const bu=(data&&data.cadastro_by_unit)||{}; return (bu[_unit]&&typeof bu[_unit]==="object")?bu[_unit]:{}; }
@@ -100757,12 +100759,103 @@ async function _pbAskCompleto(args){
   }
   return txt.trim();
 }
+/* (23/09/2026, Vinicius: "Arrastei um simples Word e você não conseguiu ler?")
+   Word/PowerPoint/Excel modernos são um zip com XML dentro. O navegador abre (JSZip do cdnjs,
+   carregado na hora), tira o texto e manda pra IA como texto. Texto puro (.txt/.md/.csv/.json)
+   vai direto. .doc/.ppt/.xls antigos são binários — ficam fora, com aviso. */
+const PB_JSZIP="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+function _pbJsZip(){
+  if(window.JSZip) return Promise.resolve(window.JSZip);
+  if(window.__pxJsZipP) return window.__pxJsZipP;
+  window.__pxJsZipP=new Promise(function(res,rej){
+    const s=document.createElement("script"); s.src=PB_JSZIP; s.async=true;
+    s.onload=function(){ window.JSZip?res(window.JSZip):rej(new Error("JSZip não carregou")); };
+    s.onerror=function(){ rej(new Error("Não deu pra baixar o leitor de Word/PowerPoint/Excel (sem internet?)")); };
+    document.head.appendChild(s);
+  });
+  return window.__pxJsZipP;
+}
+function _pbTipoOffice(file,url){
+  const nome=String((file&&file.name)||"")+" "+String(url||"").split("?")[0];
+  const mime=String((file&&file.type)||"").toLowerCase();
+  if(/wordprocessingml/.test(mime)||/\.docx$/i.test(nome.trim())) return "docx";
+  if(/presentationml/.test(mime)||/\.pptx$/i.test(nome.trim())) return "pptx";
+  if(/spreadsheetml/.test(mime)||/\.xlsx$/i.test(nome.trim())) return "xlsx";
+  if(/^text\/|json$/.test(mime)||/\.(txt|md|csv|json)$/i.test(nome.trim())) return "texto";
+  if(/msword|ms-powerpoint|ms-excel/.test(mime)||/\.(doc|ppt|xls)$/i.test(nome.trim())) return "antigo";
+  return "";
+}
+function _pbXmlTexto(xml){
+  return String(xml||"")
+    .replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+    .replace(/&#x([0-9a-f]+);/gi,function(_,h){ return String.fromCodePoint(parseInt(h,16)); })
+    .replace(/&#(\d+);/g,function(_,d){ return String.fromCodePoint(Number(d)); });
+}
+async function _pbBytesDoMaterial(file,url){
+  if(file&&typeof file.arrayBuffer==="function"&&file.size>0) return await file.arrayBuffer();
+  const r=await fetch(String(url||""),{mode:"cors",credentials:"omit"});
+  if(!r.ok) throw new Error("Não consegui baixar o arquivo (HTTP "+r.status+")");
+  return await r.arrayBuffer();
+}
+async function _pbTextoDoOffice(file,url,tipo){
+  const buf=await _pbBytesDoMaterial(file,url);
+  if(tipo==="texto") return new TextDecoder("utf-8").decode(buf);
+  const JSZip=await _pbJsZip();
+  const zip=await JSZip.loadAsync(buf);
+  const _strip=function(x){ return _pbXmlTexto(String(x||"").replace(/<[^>]+>/g,"")).replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim(); };
+  if(tipo==="docx"){
+    const f=zip.file("word/document.xml"); if(!f) throw new Error("Word sem conteúdo legível (document.xml não achado)");
+    let xml=await f.async("string");
+    xml=xml.replace(/<w:tab\/>/g,"\t").replace(/<w:br[^>]*\/>/g,"\n").replace(/<\/w:p>\s*<\/w:tc>/g," | ").replace(/<\/w:tc>/g," | ").replace(/<\/w:tr>/g,"\n").replace(/<\/w:p>/g,"\n");
+    return _strip(xml);
+  }
+  if(tipo==="pptx"){
+    const nomes=Object.keys(zip.files).filter(function(n){ return /^ppt\/slides\/slide\d+\.xml$/.test(n); })
+      .sort(function(a,b){ return Number(a.match(/(\d+)\.xml$/)[1])-Number(b.match(/(\d+)\.xml$/)[1]); });
+    if(!nomes.length) throw new Error("PowerPoint sem slides legíveis");
+    let out="";
+    for(let i=0;i<nomes.length;i++){
+      let xml=await zip.file(nomes[i]).async("string");
+      xml=xml.replace(/<\/a:p>/g,"\n").replace(/<a:br\/>/g,"\n").replace(/<\/a:tc>/g," | ");
+      const tx=_strip(xml); if(tx) out+="— Slide "+(i+1)+" —\n"+tx+"\n\n";
+    }
+    return out.trim();
+  }
+  if(tipo==="xlsx"){
+    const ss=[]; const fss=zip.file("xl/sharedStrings.xml");
+    if(fss){ const x=await fss.async("string"); (x.match(/<si>[\s\S]*?<\/si>/g)||[]).forEach(function(si){ ss.push(_pbXmlTexto(si.replace(/<[^>]+>/g,""))); }); }
+    const nomes=Object.keys(zip.files).filter(function(n){ return /^xl\/worksheets\/sheet\d+\.xml$/.test(n); })
+      .sort(function(a,b){ return Number(a.match(/(\d+)\.xml$/)[1])-Number(b.match(/(\d+)\.xml$/)[1]); });
+    if(!nomes.length) throw new Error("Excel sem planilhas legíveis");
+    let out="";
+    for(let i=0;i<nomes.length;i++){
+      const xml=await zip.file(nomes[i]).async("string");
+      const linhas=[];
+      (xml.match(/<row[^>]*>[\s\S]*?<\/row>/g)||[]).forEach(function(row){
+        const cels=[];
+        (row.match(/<c [^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)||[]).forEach(function(c){
+          const tS=/ t="s"/.test(c), tIn=/ t="inlineStr"/.test(c);
+          let v="";
+          if(tIn){ const m=c.match(/<t[^>]*>([\s\S]*?)<\/t>/); v=m?_pbXmlTexto(m[1]):""; }
+          else { const m=c.match(/<v>([\s\S]*?)<\/v>/); v=m?m[1]:""; if(tS) v=ss[Number(v)]||""; }
+          cels.push(String(v).trim());
+        });
+        if(cels.some(Boolean)) linhas.push(cels.join("\t"));
+      });
+      if(linhas.length) out+="— Planilha "+(i+1)+" —\n"+linhas.join("\n")+"\n\n";
+    }
+    return out.trim();
+  }
+  throw new Error("Formato não suportado");
+}
 async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
   if(typeof askClaude!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const mime=String((file&&file.type)||"").toLowerCase()||(/\.pdf(\?|$)/i.test(String(url||""))?"application/pdf":"");
   const ehPdf=mime.indexOf("pdf")>=0;
   const ehImg=mime.indexOf("image/")===0;
-  if(!ehPdf&&!ehImg) throw new Error("Por enquanto a IA lê PDF e imagem. Outros formatos ficam guardados, sem ficha.");
+  const tipoOff=(!ehPdf&&!ehImg)?_pbTipoOffice(file,url):"";
+  if(tipoOff==="antigo") throw new Error("Esse é o formato antigo do Office (.doc/.ppt/.xls). Abra no Word/PowerPoint/Excel, salve como .docx/.pptx/.xlsx e suba de novo.");
+  if(!ehPdf&&!ehImg&&!tipoOff) throw new Error("A IA lê PDF, imagem, Word (.docx), PowerPoint (.pptx), Excel (.xlsx) e texto. Esse formato fica guardado, sem ficha.");
   const _url=String(url||"").trim();
   if(!_url&&file.size>PB_MAT_MAX_LEITURA) throw new Error("Sem URL do arquivo e grande demais pra mandar embutido ("+_pbMatTamanho(file.size)+"). Suba de novo.");
   const b64=_url?"":await _pbMatBase64(file);
@@ -100819,6 +100912,19 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
   /* 900 tokens davam ~600 palavras e cortavam a ficha no meio. O teto de 1.800 palavras do
      pedido cabe em ~5.000 tokens com folga. */
   /* PDF acima de 30 MB: a API não baixa (limite 32 MB) — nem tenta, vai direto pro texto. */
+  if(tipoOff){
+    if(onProg) onProg("ia",1,1);
+    let texto=await _pbTextoDoOffice(file,_url,tipoOff);
+    texto=String(texto||"").trim();
+    if(!texto) throw new Error("O arquivo abriu, mas não tem texto legível dentro (só imagens?). Exporte como PDF e suba de novo.");
+    const MAXC=160000; // ~40 mil tokens — cabe com folga; acima disso corta e avisa na ficha
+    const cortado=texto.length>MAXC;
+    if(cortado) texto=texto.slice(0,MAXC);
+    const txt=await _pbAskCompleto({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
+      max_tokens:9000,system:sys,messages:[{role:"user",content:[{type:"text",text:"CONTEÚDO DO ARQUIVO ("+tipoOff.toUpperCase()+(cortado?", só o começo — o arquivo era maior":"")+"):\n\n"+texto},{type:"text",text:pedido}]}]});
+    if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
+    return _limpa(txt);
+  }
   if(ehPdf&&_url&&Number(file&&file.size)>PB_MAT_MAX_URL_IA){
     console.info("[material] "+_pbMatTamanho(file.size)+" — lendo página a página, por imagem");
     return _limpa(await _pbFichaPorPaginas(_url,sys,pedido,onProg));
@@ -101021,9 +101127,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#0d948800,#0d9488,#0d948800)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
       </span>}
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF e imagem a IA lê e vira ficha · até 1 GB por arquivo · catálogo grande é lido página a página
+        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
       </span>
-      <input type="file" multiple accept=".pdf,image/*" disabled={!!subindo} style={{display:"none"}}
+      <input type="file" multiple accept=".pdf,image/*,.docx,.pptx,.xlsx,.txt,.md,.csv,.json" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
     </label>}
 
@@ -106728,6 +106834,16 @@ function PageRoteiros({isMob, perms, viewingAs}){
      caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
      filtra por bioter_unit) e os roteiros nasciam em Grupo, invisiveis na lista, que e filtrada
      pela unidade da tela. Sem unitAlvo (botao da aba Roteiros), vale a unidade selecionada. */
+  /* (23/09/2026, Vinicius) "vou solicitar ali na descrição quantos quero". Lê "3 roteiros",
+     "cinco vídeos", "dois roteiros"… no texto do pedido. 0 = o texto não diz. */
+  const _rtQtdDoPedido=function(txt){
+    const s=String(txt||"").toLowerCase();
+    const _n={um:1,uma:1,dois:2,duas:2,"três":3,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10};
+    const m=s.match(/(\d{1,2}|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(?:novos?\s+|outros?\s+)?(?:roteiros?|v[ií]deos?|ideias?|op[çc][õo]es)/);
+    if(!m) return 0;
+    const v=/^\d+$/.test(m[1])?Number(m[1]):(_n[m[1]]||0);
+    return Math.max(0,Math.min(10,v));
+  };
   const _gerar=async function(trend,clientAlvo,unitAlvo,pedidoTxt,quantosPedido){
     const _ped=String(pedidoTxt||"").trim();
     const _qtd=Math.max(1,Math.min(10,Number(quantosPedido)||5));
@@ -106962,7 +107078,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar todos{visiveis.length?(" ("+visiveis.length+")"):""}
         </button>}
-        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:1});}}
+        {_bl("roteiros.gerar")&&<button type="button" disabled={!!gerando} title="Você escreve o briefing e escolhe quantos" onClick={function(){setPedidoForm(pedidoForm?null:{texto:"",quantos:0});}}
           style={{width:isMob?"100%":undefined,justifyContent:isMob?"center":undefined,background:"#fff",color:_cor,border:"1px solid "+_cor+"55",borderRadius:12,padding:"12px 16px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Roteiro específico
@@ -106982,17 +107098,17 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 60 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
         <div>
-          <div style={_lbl}>Quantos roteiros</div>
+          <div style={_lbl}>Quantos roteiros <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — sem marcar, vale o que você escreveu no pedido</span></div>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {[1,2,3,4,5,6,7,8,9,10].map(function(n){ const on=(pedidoForm.quantos||1)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:n}));}}
+            {[1,2,3,4,5,6,7,8,9,10].map(function(n){ const on=(pedidoForm.quantos||0)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:on?0:n}));}}
               style={{minWidth:44,background:on?_cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?_cor:"#e2e8f0"),borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
           <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#475569",fontWeight:600,fontSize:13,cursor:gerando?"default":"pointer",fontFamily:_RT_FF}}>Cancelar</button>
-          {(function(){ const _q=pedidoForm.quantos||1, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
+          {(function(){ const _qTxt=_rtQtdDoPedido(pedidoForm.texto), _q=pedidoForm.quantos||_qTxt||1, _doTxt=!pedidoForm.quantos&&_qTxt>0, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
             return <button type="button" disabled={_off} onClick={function(){ _gerar(null,clId,isBioter?unit:"",pedidoForm.texto,_q); }} style={_btnGerar("",true,_off,_cor)}>
-              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> Gerar {_q} roteiro{_q>1?"s":""}</>}
+              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> Gerar {_q} roteiro{_q>1?"s":""}{_doTxt?" (do pedido)":""}</>}
             </button>; })()}
         </div>
       </div>}
