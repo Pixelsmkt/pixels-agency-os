@@ -100193,10 +100193,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
         const u=Array.isArray(p.unidades)?p.unidades:[];
         if(u.length===0 || u.indexOf(unitId)>=0){
           const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[unitId]==="number")?p.ordemPorUnidade[unitId]:999+gi;
-          filtered.push({gi:gi, ord:_ord});
+          filtered.push({gi:gi, ord:_ord, p:p});
         }
       });
-      filtered.sort(function(a,b){return a.ord-b.ord;});
+      filtered.sort(_pbCmpPeso);
       if(srcIdx<0||srcIdx>=filtered.length||dstIdx<0||dstIdx>=filtered.length) return prods;
       const moved=filtered.splice(srcIdx,1)[0];
       filtered.splice(dstIdx,0,moved);
@@ -100226,9 +100226,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           out.push({prod:p, gi:gi, ord:_ord});
         }
       });
-      out.sort(function(a,b){return a.ord-b.ord;});
+      out.sort(_pbCmpPeso);
     } else {
       out=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
+      out.sort(_pbCmpPeso);
     }
     return out;
   };
@@ -100776,9 +100777,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         _visibleEdit.push({prod:p, gi:gi, ord:_ord});
                       }
                     });
-                    _visibleEdit.sort(function(a,b){return a.ord-b.ord;});
+                    _visibleEdit.sort(_pbCmpPeso);
                   } else {
                     _visibleEdit=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
+                    _visibleEdit.sort(_pbCmpPeso);
                   }
                   /* (23/09/2026, Vinicius) "cada produto numa ficha técnica, tipo um card maior só do
                      produto específico". A lista de formulários virou uma GRADE de cards compactos;
@@ -101780,7 +101782,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                  erro:{t:"não deu pra ler",c:"#b91c1c",b:"#fef2f2"}};
   return <PlaybookBlock id="pb-materiais" title="Materiais do cliente"
     subtitle="Folder, manual, catálogo — a IA lê uma vez e guarda os fatos; é isso que entra em toda copy, briefing e roteiro deste cliente"
-    icon="fileText" color="#0d9488">
+    icon="fileText" color="#f5b301" fixo="#f5b301">
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler os materiais: {erro}</div>}
 
@@ -101799,27 +101801,27 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         if(f.length) _subir(f);
       }}
       style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,textAlign:"center",
-        background:arrastando?"#ecfdf5":"#fafbfc",border:"1.5px dashed "+(arrastando?"#0d9488":"#cbd5e1"),
+        background:arrastando?"#ecfdf5":"#fafbfc",border:"1.5px dashed "+(arrastando?"#f5b301":"#cbd5e1"),
         borderRadius:14,padding:"22px 18px",marginBottom:16,cursor:subindo?"progress":"pointer",
         transition:"background .12s, border-color .12s",fontFamily:"inherit"}}>
       {/* (23/09/2026, Vinicius: "moderniza o layout ali enquanto ele está pensando, tá feio")
           Lendo: anel girando, título limpo, o passo inteiro embaixo (sem cortar com "…") e uma
           barra indeterminada. */}
       {subindo
-        ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,background:"#0d948814",color:"#0d9488"}}>
-            <span style={{width:20,height:20,borderRadius:"50%",border:"2.5px solid #0d948833",borderTopColor:"#0d9488",animation:"spin .9s linear infinite"}}/>
+        ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,background:"#f5b30114",color:"#b45309"}}>
+            <span style={{width:20,height:20,borderRadius:"50%",border:"2.5px solid #f5b30133",borderTopColor:"#f5b301",animation:"spin .9s linear infinite"}}/>
           </span>
         : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:38,height:38,borderRadius:12,
-            background:arrastando?"#0d9488":"#0d948814",color:arrastando?"#fff":"#0d9488",transition:"all .12s"}}>
+            background:arrastando?"#f5b301":"#f5b30114",color:arrastando?"#fff":"#f5b301",transition:"all .12s"}}>
             <Ico n="upload" size={17} color="currentColor"/>
           </span>}
       <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>
         {subindo ? (/^\(?\d*\/?\d*\)?\s*guardando/i.test(subindo)?"Guardando o arquivo":(/desenhando/i.test(subindo)?"Desenhando as páginas":"A IA está lendo o material"))
                  : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
-      {subindo && <span style={{color:"#0d9488",fontSize:11.5,fontWeight:700,letterSpacing:-.1,wordBreak:"break-word",maxWidth:520}}>{subindo}</span>}
-      {subindo && <span style={{position:"relative",display:"block",width:"min(360px,100%)",height:5,borderRadius:99,background:"#0d948822",overflow:"hidden",marginTop:2}}>
-        <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#0d948800,#0d9488,#0d948800)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
+      {subindo && <span style={{color:"#b45309",fontSize:11.5,fontWeight:700,letterSpacing:-.1,wordBreak:"break-word",maxWidth:520}}>{subindo}</span>}
+      {subindo && <span style={{position:"relative",display:"block",width:"min(360px,100%)",height:5,borderRadius:99,background:"#f5b30122",overflow:"hidden",marginTop:2}}>
+        <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#f5b30100,#f5b301,#f5b30100)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
       </span>}
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
         {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
@@ -101847,7 +101849,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         const _resumo=_ficha.replace(/^FICHA[^\n]*\n+/i,"").replace(/^O QUE É\s*\n/i,"").replace(/\s+/g," ").slice(0,140);
         return <div key={m.id} role="button" tabIndex={0} title="Abrir a ficha"
           onClick={function(){ setFichaMat(m.id); }} onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaMat(m.id); } }}
-          style={{background:on?"#fff":"#fafbfc",border:"1.5px solid "+(on?PB_BORDER:"#eef0f3"),borderTop:"4px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:14,padding:"12px 13px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,opacity:on||_lendo?1:.8,outline:"none",transition:"box-shadow .15s, transform .15s"}}
+          style={{background:on?"#fff":"#fafbfc",border:"1.5px solid "+(on?PB_BORDER:"#eef0f3"),borderTop:"4px solid "+(on?"#f5b301":"#cbd5e1"),borderRadius:14,padding:"12px 13px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,opacity:on||_lendo?1:.8,outline:"none",transition:"box-shadow .15s, transform .15s"}}
           onMouseEnter={function(e){ e.currentTarget.style.boxShadow="0 10px 26px rgba(13,148,136,.14)"; e.currentTarget.style.transform="translateY(-2px)"; }}
           onMouseLeave={function(e){ e.currentTarget.style.boxShadow="none"; e.currentTarget.style.transform="none"; }}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -101857,7 +101859,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"}
               onClick={function(e){ e.stopPropagation(); _patch(m,{ativo:!m.ativo}); }}
               style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex",flexShrink:0}}>
-              <span style={{width:32,height:18,borderRadius:99,background:on?"#0d9488":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+              <span style={{width:32,height:18,borderRadius:99,background:on?"#f5b301":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
                 <span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
               </span>
             </button>}
@@ -101887,7 +101889,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         return <div onMouseDown={function(e){ if(e.target===e.currentTarget) _fechar(); }}
           style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:320,display:"flex",alignItems:_isMobM?"stretch":"center",justifyContent:"center",padding:_isMobM?0:"18px 16px",fontFamily:PB_INTER}}>
           <div style={{background:"#fff",borderRadius:_isMobM?0:20,width:"100%",maxWidth:960,maxHeight:_isMobM?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobM?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#0d9488 0%,#14b8a6 100%)",color:"#fff",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobM?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#f5b301 0%,#fbbf24 100%)",color:"#fff",flexShrink:0}}>
               <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
                 <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Material do cliente · {st.t}{isBioter?(" · "+(m.unidade?_uniLabel(m.unidade):"Grupo, todas as unidades")):""}</span>
                 <span style={{fontWeight:800,fontSize:_isMobM?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.titulo||m.arquivo_nome||"Material"}</span>
@@ -101895,7 +101897,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               </span>
               {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"} onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
                 style={{background:"rgba(255,255,255,.16)",border:"none",borderRadius:99,padding:"6px 12px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8}}>
-                <span style={{width:32,height:18,borderRadius:99,background:on?"#fff":"rgba(255,255,255,.35)",display:"inline-block",position:"relative"}}><span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:on?"#0d9488":"#fff",transition:"left .16s"}}/></span>
+                <span style={{width:32,height:18,borderRadius:99,background:on?"#fff":"rgba(255,255,255,.35)",display:"inline-block",position:"relative"}}><span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:on?"#f5b301":"#fff",transition:"left .16s"}}/></span>
                 {on?"No cérebro":"Fora do cérebro"}
               </button>}
               <button type="button" onClick={_fechar} title="Fechar (Esc)" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -101907,7 +101909,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               {isAdmin && m.arquivo_url && <button type="button" disabled={_lendo} onClick={function(){ _relerDoUrl(m); }} style={Object.assign({},_btn,{opacity:_lendo?.5:1})} title="Ler o arquivo de novo e refazer a ficha"><Ico n="refresh" size={12} color="#64748b"/>Reler com a IA</button>}
               {isAdmin && editId!==m.id && <button type="button" onClick={function(){ setEditId(m.id); setRascunho(_ficha); }} style={_btn}><Ico n="edit" size={12} color="#64748b"/>Editar à mão</button>}
               {isAdmin && editId===m.id && <>
-                <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }} style={Object.assign({},_btn,{background:"#0d9488",border:"none",color:"#fff"})}>Salvar ficha</button>
+                <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }} style={Object.assign({},_btn,{background:"#f5b301",border:"none",color:"#fff"})}>Salvar ficha</button>
                 <button type="button" onClick={function(){ setEditId(null); }} style={_btn}>Cancelar</button>
               </>}
               <span style={{flex:1}}/>
@@ -102065,6 +102067,10 @@ const _PB_PRIOS=[
   {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#ca8a04", bg:"#fef9c3", d:"Só de vez em quando, ou quando o pedido citar"},
   {id:"inativo",     l:"Inativo",     e:"\ud83d\udd35", c:"#2563eb", bg:"#dbeafe", d:"Nunca entra em copy nem roteiro"},
 ];
+/* (23/09/2026, Vinicius) "os mais importantes primeiro": ordem da grade pelo peso; empate = ordem manual */
+const _PB_PESO_RANK={prioridade:0,importante:1,"":2,complementar:3,inativo:4};
+function _pbPesoRank(p){ const k=String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
+function _pbCmpPeso(a,b){ const d=_pbPesoRank(a.prod||a.p)-_pbPesoRank(b.prod||b.p); return d!==0?d:(a.ord-b.ord); }
 function _pbPrioDe(p){ const id=String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
 /* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
    carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
@@ -102342,12 +102348,12 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
      do cliente: sócio e equipe também anotam aqui o que a IA tem que saber desta conta. */
   return <PlaybookBlock id="pb-memoria" title="Feedbacks"
     subtitle="O que o cliente falou e o que a equipe observou — entra automático em toda copy, briefing e roteiro deste cliente"
-    icon="message" color={PB_PURPLE_DK}>
+    icon="message" color="#f97316" fixo="#f97316">
 
     {erro && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",color:"#b91c1c",fontSize:12,marginBottom:12}}>Não consegui ler as anotações: {erro}</div>}
 
     {isAdmin && !abrir && <button type="button" onClick={function(){_abrirForm();}}
-      style={{background:PB_PURPLE_DK,border:"none",borderRadius:10,padding:"9px 15px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,marginBottom:(itens&&itens.length)?14:0}}>
+      style={{background:"#f97316",border:"none",borderRadius:10,padding:"9px 15px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,marginBottom:(itens&&itens.length)?14:0,boxShadow:"0 3px 10px rgba(249,115,22,.3)"}}>
       <Ico n="plus" size={14} color="#fff"/>Novo feedback
     </button>}
 
@@ -102459,7 +102465,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
   </PlaybookBlock>;
 }
 
-function PlaybookBlock({id, title, subtitle, icon, color, children}){
+function PlaybookBlock({id, title, subtitle, icon, color, fixo, children}){
   const _visivel = _pbBlocoVisivel(id); // cadeira não enxerga este bloco (checado depois dos hooks)
   // Cabeçalho SÓLIDO seguindo o rainbow da Linha de produção (mesmo padrão dos Scripts
   // e das sub-seções de Orientações): a cor vem da POSIÇÃO do bloco entre os blocos
@@ -102485,7 +102491,8 @@ function PlaybookBlock({id, title, subtitle, icon, color, children}){
     };
   },[_visivel]);
   if(!_visivel) return null;
-  const _c = (typeof _pxCorSequencial==="function") ? _pxCorSequencial(_pos.i, _pos.n) : (color || "#7c3aed");
+  /* (23/09/2026, Vinicius) `fixo` = cor fixa deste bloco (Materiais amarelo vivo, Feedbacks laranja vivo) */
+  const _c = fixo || ((typeof _pxCorSequencial==="function") ? _pxCorSequencial(_pos.i, _pos.n) : (color || "#7c3aed"));
   return <div id={id} ref={_ref} data-pb-block="1" style={{background:"#fff",border:"1px solid #e6eaf0",borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 1px 2px rgba(15,23,42,.03), 0 8px 24px -12px rgba(15,23,42,.10)",scrollMarginTop:80}}>
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 18px 12px 14px",background:"linear-gradient(120deg,"+_c+" 0%,"+_pbDarken(_c)+" 100%)"}}>
       <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.16)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.22)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
