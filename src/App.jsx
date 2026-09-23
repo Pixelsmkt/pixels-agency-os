@@ -45196,8 +45196,15 @@ function _cardPodeSerResp(u){
     if(/legenda|caption|subt/.test(t))       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="7" y1="15" x2="11" y2="15"/><line x1="14" y1="15" x2="17" y2="15"/></svg>;
     if(/[aá]udio|trilha|m[uú]sica|som/.test(t)) return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
     if(/ritmo|velocidade|tempo/.test(t))     return <svg {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
-    // padrão: caneta de ajuste
-    return <svg {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>;
+    /* (23/09/2026, Vinicius) "esse lápis pra editar sendo que não dá pra editar ficou nada a ver".
+       Rótulos do briefing organizado pela IA ganham ícone próprio; o padrão vira uma etiqueta. */
+    if(/\bnov[ao]s?\b/.test(t))             return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    if(/l[âa]mina|cena|p[áa]gina|slide/.test(t)) return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+    if(/manter|mant[ée]m|fica como/.test(t))  return <svg {...p}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
+    if(/materia|anexo|arquivo/.test(t))       return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
+    if(/muda|altera|ajuste/.test(t))          return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+    // padrão: etiqueta (é um rótulo, não um botão de editar)
+    return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
   }
   function _renderAjusteText(text, hasVideo){
     let s = String(text||"");
@@ -46074,6 +46081,35 @@ function _cardPodeSerResp(u){
     if(typeof pixelsToast!=="undefined")pixelsToast.success(_eraAjuste?"Solicitação de ajuste atualizada.":"Comentário atualizado.",2500);
   };
 
+  /* (23/09/2026, Vinicius) "poderia dar pra subir imagem quando é feito ajuste". A imagem vira um
+     anexo do card com isRef + o batchId da solicitação — é assim que a modal Anotar ajustes já amarra
+     as referências. Aparece embaixo do texto da solicitação e nos Anexos de ajustes. */
+  const _subirRefDoAjuste=function(e,c){
+    let bid=c&&c.batchId;
+    if(!bid){
+      bid="adj-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+      const _ap=function(x){ return (x&&x.id===c.id)?Object.assign({},x,{batchId:bid}):x; };
+      setComments(function(p){ return p.map(_ap); });
+      if(typeof setTasks==="function") setTasks(function(prev){ return prev.map(function(x){ return x.id===task.id?Object.assign({},x,{comments:(x.comments||[]).map(_ap)}):x; }); });
+    }
+    const _m=String((c&&c.text)||"").match(/\[\s*L[âa]mina\s*(\d+)/i);
+    const _extra={isRef:true,batchId:bid,persistNow:true};
+    if(_m) _extra.laminaIdx=Number(_m[1])-1;
+    handleFileUpload(e,"ajuste",_extra);
+  };
+  const _tirarRefDoAjuste=function(f){
+    const _go=function(){
+      setAttachments(function(p){ const next=p.filter(function(a){ return a.id!==f.id; }); setTimeout(function(){ _persistFilesNow(next); },0); return next; });
+      if(f&&f.storagePath&&window._sb){ try{ window._sb.storage.from("agency-files").remove([f.storagePath]).catch(function(){}); }catch(_){} }
+    };
+    if(typeof pixelsConfirm==="function") pixelsConfirm("Tirar \""+(f.name||"esta imagem")+"\" desta solicitação?",{danger:true,okText:"Tirar",cancelText:"Cancelar"}).then(function(y){ if(y) _go(); });
+    else _go();
+  };
+  const _refsDoAjuste=function(c){
+    if(!c||!c.batchId) return [];
+    return (attachments||[]).filter(function(a){ return a&&a.isRef&&a.batchId===c.batchId&&(a.uploading||(a.url&&isImg(a))); });
+  };
+
   const addComment=(text,type)=>{
     const txt=text||comment;
     if(!txt&&type!=="audio")return;
@@ -46553,7 +46589,17 @@ function _cardPodeSerResp(u){
     await Promise.all(workers);
   };
 
-  const handleFileUpload=async(e,tipo="final")=>{
+  /* (23/09/2026) Grava tasks.files agora (sem esperar o Salvar do card) — usado pelas imagens
+     anexadas numa solicitação de ajuste: quem anexa costuma fechar o card em seguida. */
+  const _persistFilesNow=function(next){
+    try{
+      const sb=window._sb; if(!sb||!task||!task.id) return;
+      const clean=(next||[]).filter(function(a){ return a&&!a.uploading&&a.url; });
+      sb.from("tasks").update({files:clean}).eq("id",task.id).then(function(r){ if(r&&r.error) console.warn("[files] gravar agora:",r.error.message); });
+      if(typeof setTasks==="function") setTasks(function(prev){ return prev.map(function(x){ return x.id===task.id?Object.assign({},x,{files:clean}):x; }); });
+    }catch(_){}
+  };
+  const handleFileUpload=async(e,tipo="final",extra)=>{
     const files=Array.from(e.target.files||[]);
     e.target.value="";
     if(files.length===0)return;
@@ -46618,6 +46664,7 @@ function _cardPodeSerResp(u){
         id:tempId,name:file.name,type:mime,size:file.size,url:null,
         uploading:true,progress:0,addedAt:nowFmt(),addedAtIso:new Date().toISOString(),addedBy:user.name,
         tipo,
+        ...((extra&&typeof extra==="object")?extra:{}),
       }]);
 
       try{
@@ -46633,7 +46680,11 @@ function _cardPodeSerResp(u){
         const thumb=(_thumbRaw&&typeof pxThumbToStorage==="function")?await pxThumbToStorage(task.id,tempId,_thumbRaw):_thumbRaw;
         const dims=await dimsPromise;
         const _fmt=(dims&&dims.w&&dims.h)?{w:dims.w,h:dims.h,formato:(dims.h/dims.w>=1.45?"story":"feed")}:{};
-        setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb,..._fmt}:a));
+        setAttachments(p=>{
+          const next=p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb,..._fmt}:a);
+          if(extra&&extra.persistNow) setTimeout(function(){ _persistFilesNow(next); },0);
+          return next;
+        });
 
         // ── Preview comprimido (background, nao bloqueia o card) ──
         // Roda depois do upload do original; se falhar, o app continua usando o original.
@@ -48317,6 +48368,30 @@ function _cardPodeSerResp(u){
                                       <textarea value={editingCmtText} onChange={function(e){setEditingCmtText(e.target.value);}} autoFocus rows={Math.min(18,Math.max(4,editingCmtText.split("\n").length+1))}
                                         onKeyDown={function(e){ if(e.key==="Escape"){setEditingCmtId(null);} else if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){editarComentario(c.id,editingCmtText);} }}
                                         style={{width:"100%",border:"1px solid "+accent,borderRadius:8,padding:"10px 12px",fontSize:12.5,lineHeight:1.7,color:"#0f172a",background:"#fff",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
+                                      {/* (23/09/2026) imagens desta solicitação + anexar */}
+                                      {(function(){
+                                        const _refs=_refsDoAjuste(c);
+                                        return <div style={{marginTop:8}}>
+                                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                            {_refs.map(function(f){
+                                              if(f.uploading) return <div key={f.id} style={{width:62,height:62,borderRadius:8,border:"1.5px dashed #c4b5fd",background:"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",fontSize:10.5,fontWeight:800}}>{Math.round(f.progress||0)}%</div>;
+                                              return <div key={f.id} style={{position:"relative",width:62,height:62,borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff",flexShrink:0}}>
+                                                <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                                                <button type="button" title="Tirar esta imagem" onClick={function(e){e.stopPropagation();_tirarRefDoAjuste(f);}}
+                                                  style={{position:"absolute",top:3,right:3,width:18,height:18,borderRadius:99,border:"none",background:"rgba(15,23,42,.8)",color:"#fff",fontSize:12,lineHeight:1,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                                              </div>;
+                                            })}
+                                            <label title="Print, referência ou foto do que o cliente quer — fica junto desta solicitação e nos Anexos de ajustes"
+                                              style={{display:"inline-flex",alignItems:"center",gap:6,height:_refs.length?62:36,padding:"0 12px",borderRadius:8,border:"1.5px dashed #c4b5fd",background:"#fff",color:"#7c3aed",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}
+                                              onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+                                              <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={function(e){ _subirRefDoAjuste(e,c); }}/>
+                                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                              Anexar imagem
+                                            </label>
+                                          </div>
+                                          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:5}}>As imagens gravam na hora e ficam amarradas a esta solicitação.</div>
+                                        </div>;
+                                      })()}
                                       <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
                                         <button type="button" onClick={function(){editarComentario(c.id,editingCmtText);}} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
                                         <button type="button" onClick={function(){setEditingCmtId(null);setEditingCmtText("");}} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
@@ -48331,6 +48406,22 @@ function _cardPodeSerResp(u){
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                                       </button>}
                                       <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.9,whiteSpace:"pre-wrap",wordBreak:"break-word",paddingRight:_podeEditar?30:0}}>{_renderAjusteText(_textoLimpo, _hasVid)}</div>
+                                      {(function(){
+                                        const _refs=_refsDoAjuste(c).filter(function(f){ return !f.uploading; });
+                                        if(!_refs.length) return null;
+                                        return <div style={{marginTop:8}}>
+                                          <div style={{fontSize:9.5,color:accent,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>{_refs.length===1?"1 imagem nesta solicitação":(_refs.length+" imagens nesta solicitação")}</div>
+                                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                            {_refs.map(function(f){
+                                              return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||"Referência",storagePath:f.storagePath});}}
+                                                style={{width:72,height:72,borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",background:"#faf5ff",cursor:"zoom-in",flexShrink:0}}
+                                                onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}} onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
+                                                <img src={f.url} alt="" loading="lazy" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                                              </div>;
+                                            })}
+                                          </div>
+                                        </div>;
+                                      })()}
                                       {(cwhen||c.editedAt)&&<div style={{color:"#94a3b8",fontSize:10,marginTop:5,fontWeight:500}}>
                                         {cwhen}
                                         {c.editedAt&&<span style={{color:"#b45309",fontWeight:600}}>{cwhen?" · ":""}editado {(function(){try{const d=new Date(c.editedAt);return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}catch(_){return "";}})()}{c.editedBy?" por "+c.editedBy:""}</span>}
