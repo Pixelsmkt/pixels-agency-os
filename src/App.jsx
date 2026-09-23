@@ -33135,8 +33135,11 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     {/* Card view */}
     {current&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
 
-      {/* Navigation — setas juntas, roxo Pixels */}
-      <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"4px 0"}}>
+      {/* Navigation — setas juntas, roxo Pixels.
+          (23/09/2026, Vinicius) "a seta e as tags estão pra direita" — centralizava na largura toda
+          (card + barra de botões). Agora centraliza EM CIMA DO CARD: reserva à direita a barra
+          lateral (360 copys / 380 outras) + o gap (18) do grid logo abaixo. */}
+      <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"4px 0",paddingRight:(isMob?0:(tab==="copys"?378:398))}}>
         <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:4,boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
           <button onClick={prev} disabled={queue.length<=1}
             style={{background:queue.length<=1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:queue.length<=1?"not-allowed":"pointer",color:queue.length<=1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
@@ -33165,7 +33168,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
            ficar fixas". O texto "mostrando só…" estava NA linha dos chips, centralizada — aparecia e
            empurrava tudo pra esquerda. Agora fica numa linha própria, com altura reservada. */
         const _rotulo=filtroTipo?((PX_TIPOS_FILA.find(function(o){return o.id===filtroTipo;})||{}).label||""):"";
-        return <div style={{padding:"2px 0 4px"}}>
+        return <div style={{padding:"2px 0 4px",paddingRight:(isMob?0:(tab==="copys"?378:398))}}>
         <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {PX_TIPOS_FILA.map(function(o){
             const on=filtroTipo===o.id, n=_cont[o.id]||0;
