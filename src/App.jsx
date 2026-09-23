@@ -4663,6 +4663,15 @@ if(typeof window!=="undefined") window.pxTraduzirParaPt = pxTraduzirParaPt;
    diferenciais, especificações e dúvidas frequentes. Só produtos da unidade (ou sem unidade).
    Até então a ficha do playbook NÃO ia pro cérebro — só o nome (lista oficial) e o briefing do
    portal. Orçamento de 16 mil caracteres: estourou, para de acrescentar produto. */
+/* (23/09/2026, Vinicius) "no Grupo Bioter o peso é por unidade, não geral": com unidade, vale o peso marcado
+   naquela unidade (prod.prioridadePorUnidade[unidade]); se ela não marcou nada, cai no geral (prod.prioridade). */
+function pxPesoProduto(pr,unit){
+  if(!pr) return "";
+  const u=String(unit||"").trim(), pu=pr.prioridadePorUnidade;
+  if(u&&pu&&typeof pu==="object"&&Object.prototype.hasOwnProperty.call(pu,u)) return String(pu[u]||"");
+  return String(pr.prioridade||"");
+}
+if(typeof window!=="undefined"){ window.pxPesoProduto=pxPesoProduto; }
 function pxCtxFichasProdutosTxt(ctx){
   try{
     const arr=(ctx&&ctx.playbook&&Array.isArray(ctx.playbook.produtos))?ctx.playbook.produtos:[];
@@ -4690,7 +4699,7 @@ function pxCtxFichasProdutosTxt(ctx){
       const nome=String(pr.nomePrincipalPt||pr.nome||"").trim(); if(!nome) continue;
       const uni=Array.isArray(pr.unidades)?pr.unidades:[];
       if(u&&uni.length&&uni.indexOf(u)<0) continue;
-      const peso=String(pr.prioridade||"");
+      const peso=pxPesoProduto(pr,u);
       if(peso) temPeso=true;
       if(peso==="inativo"){ inativos.push(nome); continue; }
       let b="";
@@ -4957,7 +4966,7 @@ function pxProdutosOficiais(ctx,unit){
       if(m) m.forEach(function(g){ const s=g.replace(/[()]/g,"").trim(); if(s) aliases.push(s); });
     });
     const ordem=(pr.ordemPorUnidade&&u&&typeof pr.ordemPorUnidade[u]==="number")?pr.ordemPorUnidade[u]:999;
-    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem,prioridade:String(pr.prioridade||""),nomeEs:String(pr.nomePrincipalEs||"").trim()});
+    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem,prioridade:pxPesoProduto(pr,u),nomeEs:String(pr.nomePrincipalEs||"").trim()});
   });
   out.sort(function(a,b){ if(a.daUnidade!==b.daUnidade) return a.daUnidade?-1:1; return a.ordem-b.ordem; });
   return out;
@@ -6715,12 +6724,16 @@ async function pxSincronizarProdutosDoBriefing(clientId, unitId, lista){
       if(alvo){
         const pr=Object.assign({},prods[alvo.idx]);
         let m=false;
-        if(peso&&pr.prioridade!==peso){ pr.prioridade=peso; m=true; }
+        if(peso){
+          if(unit){ const pu=Object.assign({},(pr.prioridadePorUnidade&&typeof pr.prioridadePorUnidade==="object")?pr.prioridadePorUnidade:{}); if(pu[unit]!==peso){ pu[unit]=peso; pr.prioridadePorUnidade=pu; m=true; } }
+          else if(pr.prioridade!==peso){ pr.prioridade=peso; m=true; }
+        }
         if(desc&&!String(pr.descricao||"").trim()){ pr.descricao=desc; m=true; }
         if(unit){ const u=Array.isArray(pr.unidades)?pr.unidades.slice():[]; if(u.length&&u.indexOf(unit)<0){ u.push(unit); pr.unidades=u; m=true; } }
         if(m){ prods[alvo.idx]=pr; mudou=true; atualizados++; }
       }else{
-        prods.push({nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:peso,unidades:unit?[unit]:[],imgUrls:[],origem:"briefing"});
+        prods.push(unit?{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:"",prioridadePorUnidade:(peso?{[unit]:peso}:{}),unidades:[unit],imgUrls:[],origem:"briefing"}
+                       :{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:peso,unidades:[],imgUrls:[],origem:"briefing"});
         lst.push({nome:nome,aliases:[nome],idx:prods.length-1});
         mudou=true; criados++;
       }
@@ -100204,7 +100217,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           filtered.push({gi:gi, ord:_ord, p:p});
         }
       });
-      filtered.sort(_pbCmpPeso);
+      filtered.sort(_pbCmpPesoU(unitId));
       if(srcIdx<0||srcIdx>=filtered.length||dstIdx<0||dstIdx>=filtered.length) return prods;
       const moved=filtered.splice(srcIdx,1)[0];
       filtered.splice(dstIdx,0,moved);
@@ -100234,10 +100247,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           out.push({prod:p, gi:gi, ord:_ord});
         }
       });
-      out.sort(_pbCmpPeso);
+      out.sort(_pbCmpPesoU(_unitTabProd));
     } else {
       out=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
-      out.sort(_pbCmpPeso);
+      out.sort(_pbCmpPesoU(""));
     }
     return out;
   };
@@ -100785,10 +100798,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         _visibleEdit.push({prod:p, gi:gi, ord:_ord});
                       }
                     });
-                    _visibleEdit.sort(_pbCmpPeso);
+                    _visibleEdit.sort(_pbCmpPesoU(_unitTabProd));
                   } else {
                     _visibleEdit=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
-                    _visibleEdit.sort(_pbCmpPeso);
+                    _visibleEdit.sort(_pbCmpPesoU(""));
                   }
                   /* (23/09/2026, Vinicius) "cada produto numa ficha técnica, tipo um card maior só do
                      produto específico". A lista de formulários virou uma GRADE de cards compactos;
@@ -100843,7 +100856,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       </div>
                       <div style={{padding:"11px 13px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
                         <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.3,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
-                        {(function(){ const _p=_pbPrioDe(prod); return _p
+                        {(function(){ const _p=_pbPrioDe(prod,_editUnitFilter?_unitTabProd:""); return _p
                           ? <_PbTagPeso p={_p}/>
                           : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.35,textTransform:"uppercase",lineHeight:1.3}}>Sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
@@ -101000,7 +101013,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </span>
             {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
               {_uni.slice(0,6).map(function(u){ return <span key={u.id} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
-              {(function(){ const _p=_pbPrioDe(prod); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
+              {(function(){ const _p=_pbPrioDe(prod,_editUnitFilter?_unitTabProd:""); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
               <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
             </span>}
             <button type="button" onClick={function(){ _produtoDel(pi); setFichaAberta(null); }} title="Remover este produto do playbook" style={_btnCab}
@@ -101072,17 +101085,21 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>;
                       })()}
                       <div>
-                        <div style={_PB_FICHA_ROT}>Peso nas copys <span style={{textTransform:"none",letterSpacing:0,fontWeight:600}}>· quanto este produto aparece nas copys e roteiros</span></div>
+                        <div style={_PB_FICHA_ROT}>Peso nas copys{_editUnitFilter&&typeof BIOTER_UNITS!=="undefined"?(" · "+((BIOTER_UNITS.find(function(u){return u.id===_unitTabProd;})||{}).pickerLabel||_unitTabProd)):""} <span style={{textTransform:"none",letterSpacing:0,fontWeight:600}}>· quanto este produto aparece nas copys e roteiros{_editUnitFilter?" desta unidade (cada unidade tem o seu)":""}</span></div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                           {_PB_PRIOS.map(function(o){
-                            const on=String(prod.prioridade||"")===o.id;
-                            return <button type="button" key={o.id} title={o.d} onClick={function(){ _produtoUpd(pi,{prioridade:on?"":o.id}); }}
+                            /* (23/09/2026, Vinicius) Bioter: o peso é por unidade — grava em prod.prioridadePorUnidade[unidade] */
+                            const _pu=_editUnitFilter?_unitTabProd:"";
+                            const on=((typeof pxPesoProduto==="function")?pxPesoProduto(prod,_pu):String(prod.prioridade||""))===o.id;
+                            return <button type="button" key={o.id} title={o.d} onClick={function(){
+                                if(_pu){ const m=Object.assign({},(prod.prioridadePorUnidade&&typeof prod.prioridadePorUnidade==="object")?prod.prioridadePorUnidade:{}); m[_pu]=on?"":o.id; _produtoUpd(pi,{prioridadePorUnidade:m}); }
+                                else _produtoUpd(pi,{prioridade:on?"":o.id}); }}
                               style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?(o.ft||"#fff"):"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
                               <span style={{fontSize:11}}>{o.e}</span>{o.l}
                             </button>;
                           })}
                         </div>
-                        {!_pbPrioDe(prod)&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Sem peso marcado, a IA trata como Importante.</div>}
+                        {!_pbPrioDe(prod,_editUnitFilter?_unitTabProd:"")&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Sem peso marcado, a IA trata como Importante.</div>}
                       </div>
                       <div>
                         <div style={_PB_FICHA_ROT}>O que é</div>
@@ -102077,12 +102094,14 @@ const _PB_PRIOS=[
 ];
 /* (23/09/2026, Vinicius) "os mais importantes primeiro": ordem da grade pelo peso; empate = ordem manual */
 const _PB_PESO_RANK={prioridade:0,importante:1,"":2,complementar:3,inativo:4};
-function _pbPesoRank(p){ const k=String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
+function _pbPesoRank(p,u){ const k=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
 /* (23/09/2026, Vinicius) "se forem da mesma prioridade, em ordem alfabética" */
 function _pbNomeProd(p){ return String((p&&(p.nomePrincipalPt||p.nome))||"").trim(); }
-function _pbCmpPeso(a,b){
+/* (23/09/2026) Bioter: a ordem da grade usa o peso DA UNIDADE filtrada */
+function _pbCmpPesoU(u){ return function(a,b){ return _pbCmpPeso(a,b,u); }; }
+function _pbCmpPeso(a,b,u){
   const pa=a.prod||a.p, pb=b.prod||b.p;
-  const d=_pbPesoRank(pa)-_pbPesoRank(pb); if(d!==0) return d;
+  const d=_pbPesoRank(pa,u)-_pbPesoRank(pb,u); if(d!==0) return d;
   const na=_pbNomeProd(pa), nb=_pbNomeProd(pb);
   if(!na!==!nb) return na?-1:1;   // sem nome (recém-criado) vai pro fim do grupo
   const c=na.localeCompare(nb,"pt-BR",{sensitivity:"base",numeric:true}); return c!==0?c:(a.ord-b.ord);
@@ -102098,7 +102117,7 @@ function _PbTagPeso({p, grande, clara}){
     <span style={{width:6,height:6,borderRadius:99,background:p.c,flexShrink:0}}/>{p.l}
   </span>;
 }
-function _pbPrioDe(p){ const id=String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
+function _pbPrioDe(p,u){ const id=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
 /* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
    carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
    (Grupo/cliente) e data.produtos_visao_by_unit[unidade] (Bioter com unidade selecionada). Entra no
