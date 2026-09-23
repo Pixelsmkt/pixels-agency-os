@@ -1813,6 +1813,8 @@ PX_BLOCOS.calendario={label:"Calendário de publicações", navIcon:"demandas", 
     {key:"cal.filtro.cliente",    label:"Filtro por cliente / unidade", desc:""},
     {key:"cal.resumo",            label:"Resumo do mês",             desc:"Progresso e contagem do mês visualizado"},
     {key:"cal.resumo.contadores", label:"Contadores Fotos de obra / Vídeos short", desc:"Botões com a lista de quem já tem material"},
+    {key:"cal.pauta",             label:"Gerar plano do mês (IA)",   desc:"Puxa o que está sem data, cria os cards que faltam pra cadência e escreve pauta + copy pelo peso de cada produto; com Desfazer. Padrão: sócio, Hellen ou coordenação",
+      padrao:(u)=>!!(u&&(u.level===1||u.dash==="coordinator"||u.id==="ellen"))},
     {key:"cal.acoes.desfazer",    label:"Desfazer última sugestão",  desc:"Volta as datas do último 'Aplicar datas'"},
     {key:"cal.auditoria",         label:"Painel 'Fora da regra'",    desc:"Auditoria do mês (só avisa)"},
   ]},
@@ -4223,6 +4225,9 @@ const PX_IA_MODELO = "claude-opus-5";
    Se a OpenAI falhar (chave não configurada, função não deployada, erro da API),
    `askIA` cai sozinha pro Claude — ninguém fica sem conseguir reescrever copy. */
 const PX_IA_PROVEDOR_COPY = "openai";
+/* (23/09/2026, Vinicius) Leitura dos MATERIAIS do cliente (ficha): "GPT é melhor pra analisar dados".
+   "openai" = GPT lê (texto e imagem; PDF vai página a página como imagem); Claude fica de reserva. */
+const PX_IA_PROVEDOR_MATERIAL = "openai";
 const PX_IA_MODELO_GPT = "gpt-5.6-sol";
 /* Modelo das tarefas mecânicas (traduzir, resumir): não precisa de Opus e roda mais barato. */
 const PX_IA_MODELO_RAPIDO = "claude-sonnet-5";
@@ -4511,6 +4516,43 @@ async function askGPT({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]
   return {content:[{type:"text",text:out}]};
 }
 
+/* (23/09/2026) askGPT com IMAGEM: recebe mensagens no formato do askClaude (blocos text / image
+   base64 / image url), converte pro formato da OpenAI e devolve como o askClaude devolve —
+   inclusive stop_reason ("max_tokens" quando o GPT parou por limite), pra continuação. Bloco
+   "document" (PDF) não existe na OpenAI por URL: quem chama manda as páginas como imagem. */
+async function askGPTBlocos({model=PX_IA_MODELO_GPT,max_tokens=2000,system,messages=[]}){
+  const sb=window._sb;
+  if(!sb)throw new Error("Supabase client indisponível");
+  const msgs=[];
+  if(system)msgs.push({role:"system",content:system});
+  (messages||[]).forEach(function(m){
+    if(typeof m.content==="string"){ msgs.push({role:m.role||"user",content:m.content}); return; }
+    const parts=[];
+    (m.content||[]).forEach(function(b){
+      if(!b) return;
+      if(b.type==="text"){ if(b.text) parts.push({type:"text",text:String(b.text)}); return; }
+      if(b.type==="image"&&b.source){
+        const s=b.source;
+        const url=s.type==="url"?String(s.url||""):("data:"+(s.media_type||"image/jpeg")+";base64,"+String(s.data||""));
+        if(url) parts.push({type:"image_url",image_url:{url:url,detail:"high"}});
+        return;
+      }
+      if(b.type==="document") throw new Error("GPT não lê PDF direto — mande as páginas como imagem.");
+    });
+    if(m.role==="assistant") msgs.push({role:"assistant",content:parts.map(function(p){return p.text||"";}).join("")});
+    else msgs.push({role:m.role||"user",content:parts});
+  });
+  // o modelo é SEMPRE o da OpenAI — quem chama costuma passar o nome do Claude (PX_IA_MODELO_RAPIDO)
+  const {data,error}=await sb.functions.invoke("ask-openai",{body:{model:PX_IA_MODELO_GPT,max_tokens:max_tokens,messages:msgs}});
+  if(error)throw new Error("Pixels IA (GPT) indisponível: "+(error.message||"erro"));
+  if(data&&data.error)throw new Error(String(data.error.message||data.error));
+  const ch=(((data||{}).choices||[])[0])||{};
+  const out=(ch.message&&ch.message.content)||"";
+  if(!out)throw new Error("O GPT respondeu vazio.");
+  return {content:[{type:"text",text:out}],stop_reason:(ch.finish_reason==="length"?"max_tokens":"end_turn")};
+}
+if(typeof window!=="undefined"){ window.askGPTBlocos=askGPTBlocos; }
+
 /* Porta única da COPY: tenta o provedor escolhido e cai pro Claude se ele falhar. */
 async function askIA(opts){
   if(PX_IA_PROVEDOR_COPY==="openai"){
@@ -4639,22 +4681,32 @@ function pxCtxFichasProdutosTxt(ctx){
     if(!arr.length) return visao;
     const lim=function(s,n){ s=String(s||"").replace(/[ \t]+/g," ").replace(/\n{2,}/g,"\n").trim(); return s.length>n?(s.slice(0,n).replace(/\s+\S*$/,"")+"…"):s; };
     const campos=[["O que é","descricao",500],["Pra quem é / que problema resolve","paraQuem",500],["Diferenciais e argumentos de venda","diferenciais",700],["Especificações técnicas","especificacoes",700],["Dúvidas frequentes e resposta oficial","duvidas",900]];
-    let out="";
+    /* (23/09/2026, Vinicius) PESO do produto vem da tag da ficha — substitui a matriz escrita à mão. */
+    // em PALAVRA, não em bolinha: o briefing do portal usa 🟣🟢🟡🔴 com outro sentido
+    const PESO={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]",inativo:"[INATIVO]"};
+    let out="", inativos=[], temPeso=false;
     for(let i=0;i<arr.length;i++){
       const pr=arr[i]; if(!pr) continue;
       const nome=String(pr.nomePrincipalPt||pr.nome||"").trim(); if(!nome) continue;
       const uni=Array.isArray(pr.unidades)?pr.unidades:[];
       if(u&&uni.length&&uni.indexOf(u)<0) continue;
+      const peso=String(pr.prioridade||"");
+      if(peso) temPeso=true;
+      if(peso==="inativo"){ inativos.push(nome); continue; }
       let b="";
       campos.forEach(function(c){ const v=lim(pr[c[1]],c[2]); if(v) b+="  "+c[0]+": "+v.replace(/\n/g,"\n    ")+"\n"; });
-      if(!b) continue;
+      if(!b&&!peso) continue;
       const es=(u==="paraguay")?String(pr.nomePrincipalEs||"").trim():"";
-      const bloco="• "+nome+(es?(" (em espanhol: "+es+")"):"")+"\n"+b;
+      const bloco="• "+nome+(es?(" (em espanhol: "+es+")"):"")+(peso?(" — "+PESO[peso]):"")+"\n"+b;
       if(out.length+bloco.length>16000) break;
       out+=bloco;
     }
-    if(!out) return visao;
-    return visao+"FICHA TÉCNICA DOS PRODUTOS (Playbook — preenchida pela agência com o cliente; são fatos conferidos: use-os e NÃO invente além deles"+(u?"; só os produtos desta unidade":"")+"):\n"+out+"\n";
+    if(!out&&!inativos.length) return visao;
+    const legenda=temPeso
+      ? "PESO DE CADA PRODUTO (marcado pela agência, entre colchetes): [PRIORIDADE] = carro-chefe, é a maioria das copys e roteiros; [IMPORTANTE] = presença regular; [COMPLEMENTAR] = só de vez em quando ou quando o pedido citar; sem marcação = trate como IMPORTANTE. Quando o card ou o pedido NÃO nomeia o produto, escolha pelo peso — e, entre produtos do MESMO peso, faça rodízio (quantidades parecidas, o que apareceu menos vem primeiro). (Se o briefing do portal trouxer 🟣🟢🟡🔴, é a mesma escala: 🟣 prioridade, 🟢 importante, 🟡 complementar, 🔴 inativo.)\n"
+      : "PESO DOS PRODUTOS: nenhum foi marcado — trate TODOS os produtos cadastrados como iguais e, quando o card ou o pedido não nomeia o produto, faça rodízio entre eles (nenhum fica de fora).\n";
+    const naoUsar=inativos.length?("[INATIVOS] — NUNCA entram em copy, briefing nem roteiro: "+inativos.join(", ")+"\n"):"";
+    return visao+"FICHA TÉCNICA DOS PRODUTOS (Playbook — preenchida pela agência com o cliente; são fatos conferidos: use-os e NÃO invente além deles"+(u?"; só os produtos desta unidade":"")+"):\n"+legenda+naoUsar+out+"\n";
   }catch(_){ return ""; }
 }
 function pxCtxProdutosFbTxt(ctx){
@@ -4695,10 +4747,11 @@ const PX_CTX_MAT_POR_MATERIAL=30000;
 const PX_CTX_MAT_ORCAMENTO=200000;
 /* (23/09/2026, Vinicius: "nos materiais não levar em consideração endereços e telefones, porque
    é uma coisa que pode mudar") DADOS CADASTRAIS do Playbook são a única fonte de contato. */
+/* (23/09/2026, Vinicius) um fone só (Fone/WhatsApp = o que fecha a legenda), CEP separado; sem
+   horário e sem Instagram. */
 const PX_CADASTRO_CAMPOS=[
-  {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cidade",l:"Cidade/UF"},
-  {k:"telefone",l:"Telefone"},{k:"whatsapp",l:"WhatsApp oficial"},{k:"email",l:"E-mail"},{k:"site",l:"Site"},
-  {k:"instagram",l:"Instagram"},{k:"horario",l:"Horário de atendimento"}];
+  {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cep",l:"CEP"},{k:"cidade",l:"Cidade/UF"},
+  {k:"whatsapp",l:"Fone / WhatsApp"},{k:"email",l:"E-mail"},{k:"site",l:"Site"}];
 function pxCtxCadastroTxt(ctx){
   try{
     const pb=(ctx&&ctx.playbook)||{}; const unit=String((ctx&&ctx._unit)||"");
@@ -4707,7 +4760,7 @@ function pxCtxCadastroTxt(ctx){
     if(!cad) return "";
     const linhas=PX_CADASTRO_CAMPOS.map(function(c){ const v=String(cad[c.k]||"").trim(); return v?("- "+c.l+": "+v):""; }).filter(Boolean);
     if(!linhas.length) return "";
-    return "DADOS CADASTRAIS"+(unit?(" — unidade "+unit):"")+" (a ÚNICA fonte pra endereço, telefone, WhatsApp, e-mail, site e Instagram — ignore contato que apareça em material, catálogo ou legenda antiga):\n"+linhas.join("\n")+"\n\n";
+    return "DADOS CADASTRAIS"+(unit?(" — unidade "+unit):"")+" (a ÚNICA fonte pra endereço, CEP, fone/WhatsApp, e-mail e site — ignore contato que apareça em material, catálogo ou legenda antiga):\n"+linhas.join("\n")+"\n\n";
   }catch(_){ return ""; }
 }
 function pxCtxMateriaisTxt(ctx){
@@ -4904,7 +4957,7 @@ function pxProdutosOficiais(ctx,unit){
       if(m) m.forEach(function(g){ const s=g.replace(/[()]/g,"").trim(); if(s) aliases.push(s); });
     });
     const ordem=(pr.ordemPorUnidade&&u&&typeof pr.ordemPorUnidade[u]==="number")?pr.ordemPorUnidade[u]:999;
-    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem});
+    out.push({nome:nome,aliases:aliases,daUnidade:daUnidade,ordem:ordem,prioridade:String(pr.prioridade||"")});
   });
   out.sort(function(a,b){ if(a.daUnidade!==b.daUnidade) return a.daUnidade?-1:1; return a.ordem-b.ordem; });
   return out;
@@ -4957,6 +5010,13 @@ function pxBriefingProdutosTxt(ctx,limite){
   const bp=(ctx&&ctx.briefing_produtos)||{};
   if(!bp||typeof bp!=="object") return "";
   const max=limite||4000; let out="";
+  /* (23/09/2026) lista estruturada do briefing: nome [PESO] — o que é */
+  if(Array.isArray(bp.lista)&&bp.lista.length){
+    const P={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]",inativo:"[INATIVO — nunca usar]"};
+    let l="";
+    bp.lista.forEach(function(p){ const n=String((p&&p.nome)||"").trim(); if(!n) return; l+="- "+n+(P[p.peso]?(" "+P[p.peso]):"")+(String((p&&p.descricao)||"").trim()?(" — "+String(p.descricao).trim()):"")+"\n"; });
+    if(l) out+="Lista do cliente (com o peso que ele mesmo marcou):\n"+l+"\n";
+  }
   for(let i=0;i<_PX_BRIEF_PROD_CAMPOS.length;i++){
     const c=_PX_BRIEF_PROD_CAMPOS[i]; const v=_pxCtxTxt(bp[c[0]]);
     if(!v) continue;
@@ -5658,6 +5718,92 @@ async function pxBriefingsAprovados(client,unit,tipo){
   }catch(_){ return []; }
 }
 
+/* ═══ PAUTA DO MÊS (23/09/2026, Vinicius: "precisamos desse gerador mensal específico") ═══
+   A IA propõe o ASSUNTO de cada card vazio do mês — título, produto, ângulo e chamada —
+   distribuindo os produtos pelo PESO marcado na ficha do Playbook. Não escreve a copy nem o
+   briefing (isso é o pxGerarBriefing, card a card). Não cria card, não mexe em data.
+   opts: {client, unit, clienteNome, slots:[{id,data,tipo}], doMes:[{data,titulo,tipo}],
+          recentes:[titulo], orientacao} → [{id,titulo,produto,angulo,chamada}] */
+async function pxSugerirPauta(opts){
+  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const client=String((opts&&opts.client)||""); if(!client) throw new Error("Cliente não informado.");
+  const unit=String((opts&&opts.unit)||"");
+  const slots=Array.isArray(opts&&opts.slots)?opts.slots.filter(function(s){return s&&s.id;}):[];
+  if(!slots.length) throw new Error("Nenhum card marcado pra receber pauta.");
+  const clienteNome=String((opts&&opts.clienteNome)||client);
+  const doMes=Array.isArray(opts&&opts.doMes)?opts.doMes:[];
+  const recentes=Array.isArray(opts&&opts.recentes)?opts.recentes:[];
+  const orient=String((opts&&opts.orientacao)||"").trim();
+  const py=unit==="paraguay";
+  const ctx=await pxContextoCopy(client,unit,null);
+  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[], foco=(ctx&&ctx.foco_do_mes)||[];
+  const _TIPO={arte:"arte única (1 imagem, 1 ideia forte, título curto na arte)",carrossel:"carrossel (sequência de lâminas, começa com um gancho e termina com CTA)",video:"vídeo (algo que o cliente consegue gravar no campo/obra/fábrica)",video_dinamico:"vídeo dinâmico (edição com cortes, textos na tela)",video_basico:"vídeo básico",reels:"reels",corte:"corte de vídeo"};
+  const _pesos=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[];
+  const sys="Você é o estrategista de conteúdo de uma agência e monta a PAUTA do mês de um cliente: o assunto de cada post, "+
+    "um por card, distribuindo os produtos pelo peso que a agência marcou. Pensa como quem conhece o negócio do cliente: "+
+    "assunto concreto, que dá pra produzir, que o público daquele cliente quer ver. Nunca inventa número, cidade, prazo, "+
+    "garantia ou depoimento. "+(py?"O cliente é a unidade do Paraguai: TÍTULO e CHAMADA em ESPANHOL; ÂNGULO em português (é pra equipe). ":"Escreva em português do Brasil. ")+
+    "Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
+  let u="CLIENTE: "+clienteNome+(unit?(" — unidade "+unit):"")+"\n\n";
+  if(pb.descricao||pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.descricao||pb.sobre)+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  { const _bp=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,3000):""; if(_bp) u+=_bp+"\n"; }
+  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
+  if(_pesos.length){
+    const _E={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]"};
+    u+="LISTA OFICIAL DE PRODUTOS (o campo PRODUTO da resposta copia um nome daqui, EXATAMENTE):\n";
+    _pesos.forEach(function(pr){ if(pr.prioridade==="inativo") return; u+="- "+pr.nome+(_E[pr.prioridade]?(" "+_E[pr.prioridade]):"")+(pr.daUnidade?"":" (não é desta unidade — evite)")+"\n"; });
+    u+="\n";
+  }
+  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
+  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
+  if(foco.length){
+    u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
+    foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(_pxCtxTxt(f.sazonalidades))p.push("sazonalidade: "+_pxCtxTxt(f.sazonalidades)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
+    u+="\n";
+  }
+  if(doMes.length){
+    u+="O MÊS JÁ TEM ESTES POSTS (fixos — conte-os na distribuição por peso e NÃO repita o assunto):\n";
+    doMes.slice(0,40).forEach(function(d){ u+="- "+(d.data||"")+(d.tipo?(" · "+d.tipo):"")+" · "+(d.titulo||"")+"\n"; });
+    u+="\n";
+  }
+  if(recentes.length){
+    u+="PUBLICADOS NOS ÚLTIMOS 60 DIAS (não repita nem chegue perto):\n";
+    recentes.slice(0,40).forEach(function(r){ u+="- "+r+"\n"; });
+    u+="\n";
+  }
+  if(orient) u+="ORIENTAÇÃO DA AGÊNCIA PRA ESTE MÊS (manda acima de tudo):\n"+orient+"\n\n";
+  u+="CARDS QUE PRECISAM DE PAUTA ("+slots.length+"):\n";
+  slots.forEach(function(s){ u+="- id "+s.id+" · "+(s.data||"sem data")+" · "+(_TIPO[String(s.tipo||"")]||String(s.tipo||"formato livre"))+"\n"; });
+  u+="\n";
+  u+="TAREFA: dê um assunto pra CADA card acima.\n"+
+     "DISTRIBUIÇÃO PELO PESO (somando o que o mês já tem): [PRIORIDADE] leva a maior parte (perto de 60%); [IMPORTANTE] o resto; [COMPLEMENTAR] no máximo 1 no mês, e só se sobrar; [INATIVO] nunca. "+
+     "DENTRO DO MESMO PESO É RODÍZIO: produtos com o mesmo peso saem em quantidades parecidas (3 produtos [PRIORIDADE] dividem a fatia deles quase por igual); comece pelo que está com MENOS posts no mês, e nunca dê dois seguidos pro mesmo produto enquanto outro do mesmo peso está com menos. "+
+     "Se NENHUM produto tem peso marcado, use TODOS os produtos cadastrados do cliente em rodízio — nenhum fica de fora, nenhum se repete antes de todos aparecerem — seguindo a visão geral, o briefing (🟣 🟢 🟡 🔴) e o foco do mês. Se a empresa tem menos produtos que cards, repita o produto com ÂNGULO totalmente diferente (dúvida frequente, erro comum, bastidor, como funciona, resultado, comparação, mito e verdade).\n"+
+     "CADA ASSUNTO É ÚNICO no mês. O formato do card manda no que dá pra fazer (arte única = uma ideia; carrossel = sequência; vídeo = algo gravável).\n"+
+     "Título: 3 a 8 palavras, só a primeira letra maiúscula, sem ponto final, sem o nome da empresa. Ângulo: 2 a 3 frases dizendo o que o post mostra e o que resolve pro público — é a instrução pra quem vai escrever o briefing. Chamada: 1 frase de gancho na voz da marca.\n\n"+
+     "FORMATO EXATO DA RESPOSTA ("+slots.length+" blocos, na ordem dos cards):\n";
+  slots.forEach(function(s){ u+="===CARD "+s.id+"===\nTITULO: …\nPRODUTO: (nome EXATO da lista oficial, ou — se nenhum)\nANGULO: …\nCHAMADA: …\n"; });
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,600+slots.length*320),system:sys,messages:[{role:"user",content:u}]});
+  const txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").replace(/\*\*/g,"");
+  const out=[];
+  const re=/===CARD\s+([^=\n]+?)\s*===([\s\S]*?)(?====CARD|$)/g; let m;
+  while((m=re.exec(txt))){
+    const id=String(m[1]||"").trim(), corpo=m[2]||"";
+    const g=function(k){ const r=corpo.match(new RegExp("^\\s*"+k+"\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:TITULO|PRODUTO|ANGULO|CHAMADA)\\s*:|$)","im")); return r?String(r[1]).replace(/\s+/g," ").trim():""; };
+    let produto=g("PRODUTO"); if(/^[—\-–]?$/.test(produto)) produto="";
+    if(produto&&typeof pxProdutoOficial==="function"&&_pesos.length) produto=pxProdutoOficial(produto,_pesos)||produto;
+    const titulo=g("TITULO").replace(/[.。]$/,"");
+    if(!id||!titulo) continue;
+    out.push({id:id,titulo:titulo,produto:produto,angulo:g("ANGULO"),chamada:g("CHAMADA")});
+  }
+  if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
+  return out;
+}
+if(typeof window!=="undefined"){ window.pxSugerirPauta=pxSugerirPauta; }
+
 /* Devolve {tipo, tipoLabel, porque, briefing(HTML)} ou lança erro. */
 async function pxGerarBriefing(opts){
   const task=(opts&&opts.task)||null;
@@ -6029,6 +6175,8 @@ const BRIEFING_SECTIONS = [
   },
   { id:"produtos",        label:"Produtos e serviços",   icon:"image",        color:"#f97316",
     fields:[
+      /* (23/09/2026, Vinicius) lista estruturada: nome + peso + o que é. Sincroniza com o Playbook. */
+      { id:"lista", label:"Seus produtos e serviços, um a um", help:"Nome, o quanto ele importa pra vocês hoje e uma linha do que é. Isso vira a ficha de cada produto no nosso sistema e define quanto ele aparece nos posts", type:"produtos" },
       { id:"principais", label:"Cite todos os produtos e serviços em ordem de importância", help:"do mais vendido/estratégico até o secundário", type:"textarea" },
       { id:"precos", label:"Preço de cada produto ou serviço", help:"faixa média ou tabela — pode ser aproximado", type:"textarea" },
       { id:"beneficios", label:"Benefícios de cada produto ou serviço", help:"o que o cliente ganha ao comprar", type:"textarea" },
@@ -6486,6 +6634,97 @@ function _LoginsCardsView(props){
 }
 
 // Componente canônico — usado em Estratégia > Briefing E no Portal > Briefing
+/* ═══ LISTA DE PRODUTOS DO BRIEFING (23/09/2026) ═══
+   Mesma escala e cores da tag do Playbook (quente → frio). */
+const PX_BRIEF_PESOS=[
+  {id:"prioridade",  l:"Prioridade",  e:"\ud83d\udd34", c:"#dc2626", bg:"#fee2e2", d:"É o carro-chefe — aparece mais nos posts"},
+  {id:"importante",  l:"Importante",  e:"\ud83d\udfe0", c:"#ea580c", bg:"#ffedd5", d:"Aparece com regularidade"},
+  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#ca8a04", bg:"#fef9c3", d:"Só de vez em quando"},
+  {id:"inativo",     l:"Inativo",     e:"\ud83d\udd35", c:"#2563eb", bg:"#dbeafe", d:"Não divulgar por enquanto"},
+];
+function _PxBriefProdutos({val, canEdit, color, onCommit}){
+  const _norm=function(a){ return (Array.isArray(a)?a:[]).map(function(p){ return {nome:String((p&&p.nome)||""),peso:String((p&&p.peso)||""),descricao:String((p&&p.descricao)||"")}; }); };
+  const [rows,setRows]=useState(_norm(val));
+  const _keyRef=useRef(JSON.stringify(_norm(val)));
+  useEffect(function(){ const k=JSON.stringify(_norm(val)); if(k!==_keyRef.current){ _keyRef.current=k; setRows(_norm(val)); } },[val]);
+  const commit=function(next){
+    const limpo=next.filter(function(p){ return String(p.nome||"").trim()||String(p.descricao||"").trim(); });
+    const k=JSON.stringify(_norm(limpo)); if(k===_keyRef.current) return; _keyRef.current=k;
+    if(typeof onCommit==="function") onCommit(limpo);
+  };
+  const upd=function(i,patch,agora){ const next=rows.map(function(p,j){ return j===i?Object.assign({},p,patch):p; }); setRows(next); if(agora) commit(next); };
+  const _inp={border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box",width:"100%"};
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {rows.length===0&&<div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>Nenhum produto cadastrado ainda.</div>}
+    {rows.map(function(p,i){
+      const w=PX_BRIEF_PESOS.find(function(x){return x.id===p.peso;});
+      return <div key={i} style={{border:"1px solid "+(w?w.c+"55":"#e2e8f0"),borderLeft:"4px solid "+(w?w.c:"#e2e8f0"),borderRadius:12,padding:"12px 14px",background:"#fff",display:"flex",flexDirection:"column",gap:9}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:800,minWidth:22}}>{i+1}.</span>
+          <input value={p.nome} disabled={!canEdit} placeholder="Nome do produto ou serviço" onChange={function(e){upd(i,{nome:e.target.value});}} onBlur={function(){commit(rows);}}
+            style={Object.assign({},_inp,{fontWeight:700})}/>
+          {canEdit&&<button type="button" title="Tirar da lista" onClick={function(){ const next=rows.filter(function(_,j){return j!==i;}); setRows(next); commit(next); }}
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:32,height:32,color:"#94a3b8",cursor:"pointer",flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>×</button>}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingLeft:30}}>
+          {PX_BRIEF_PESOS.map(function(o){ const on=p.peso===o.id;
+            return <button key={o.id} type="button" disabled={!canEdit} title={o.d} onClick={function(){ upd(i,{peso:on?"":o.id},true); }}
+              style={{background:on?o.c:"#fff",color:on?"#fff":"#475569",border:"1.5px solid "+(on?o.c:"#e2e8f0"),borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:on?800:600,cursor:canEdit?"pointer":"default",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:10}}>{o.e}</span>{o.l}
+            </button>; })}
+          {!p.peso&&<span style={{color:"#94a3b8",fontSize:11,alignSelf:"center"}}>← quanto ele importa pra vocês hoje</span>}
+        </div>
+        <div style={{paddingLeft:30}}>
+          <input value={p.descricao} disabled={!canEdit} placeholder="Em uma linha: o que é, pra quem serve e o que resolve" onChange={function(e){upd(i,{descricao:e.target.value});}} onBlur={function(){commit(rows);}} style={_inp}/>
+        </div>
+      </div>;
+    })}
+    {canEdit&&<button type="button" onClick={function(){ setRows(rows.concat([{nome:"",peso:"",descricao:""}])); }}
+      style={{alignSelf:"flex-start",background:"#fff",border:"1.5px dashed "+(color||"#f97316"),color:color||"#f97316",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>+ Adicionar produto ou serviço</button>}
+  </div>;
+}
+/* Sincroniza a lista do briefing com playbooks.data.produtos (ficha técnica). Nunca apaga; acha pelo
+   nome ou apelido (mesma régua da tag de produto); cria o que não existe. Bioter: a unidade do
+   briefing entra em "unidades" do produto (grupo/raiz = vale pra todas, unidades:[]). */
+async function pxSincronizarProdutosDoBriefing(clientId, unitId, lista){
+  try{
+    const sb=window._sb; if(!sb||!clientId) return;
+    const itens=(Array.isArray(lista)?lista:[]).filter(function(p){ return p&&String(p.nome||"").trim(); });
+    if(!itens.length) return;
+    const unit=(clientId==="bioter"&&unitId&&unitId!=="grupo")?String(unitId):"";
+    const r=await sb.from("playbooks").select("data").eq("client_id",clientId).maybeSingle();
+    const dataPb=(r&&r.data&&r.data.data&&typeof r.data.data==="object")?r.data.data:{};
+    const prods=Array.isArray(dataPb.produtos)?dataPb.produtos.slice():[];
+    const lst=prods.map(function(pr,i){
+      const aliases=[]; [pr.nome,pr.nomePrincipalPt,pr.nomePrincipalEs,pr.nomesPt].forEach(function(x){ String(x||"").split(/[,;\/]/).forEach(function(a){ a=String(a||"").trim(); if(a) aliases.push(a); }); });
+      return {nome:String(pr.nomePrincipalPt||pr.nome||"").trim(),aliases:aliases,idx:i};
+    }).filter(function(x){return x.nome;});
+    let mudou=false, criados=0, atualizados=0;
+    itens.forEach(function(p){
+      const nome=String(p.nome).trim(), peso=String(p.peso||""), desc=String(p.descricao||"").trim();
+      const achou=(typeof pxProdutoOficial==="function")?pxProdutoOficial(nome,lst):"";
+      const alvo=achou?lst.find(function(x){return x.nome===achou;}):null;
+      if(alvo){
+        const pr=Object.assign({},prods[alvo.idx]);
+        let m=false;
+        if(peso&&pr.prioridade!==peso){ pr.prioridade=peso; m=true; }
+        if(desc&&!String(pr.descricao||"").trim()){ pr.descricao=desc; m=true; }
+        if(unit){ const u=Array.isArray(pr.unidades)?pr.unidades.slice():[]; if(u.length&&u.indexOf(unit)<0){ u.push(unit); pr.unidades=u; m=true; } }
+        if(m){ prods[alvo.idx]=pr; mudou=true; atualizados++; }
+      }else{
+        prods.push({nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:peso,unidades:unit?[unit]:[],imgUrls:[],origem:"briefing"});
+        lst.push({nome:nome,aliases:[nome],idx:prods.length-1});
+        mudou=true; criados++;
+      }
+    });
+    if(!mudou) return;
+    const novo=Object.assign({},dataPb,{produtos:prods});
+    const up=await sb.from("playbooks").upsert({client_id:clientId,data:novo},{onConflict:"client_id"});
+    if(up&&up.error){ console.warn("[briefing→playbook]",up.error.message); return; }
+    if(typeof pixelsToast!=="undefined"&&(criados||atualizados)) pixelsToast.success("Produtos sincronizados com o Playbook"+(criados?(" · "+criados+" novo"+(criados>1?"s":"")):"")+(atualizados?(" · "+atualizados+" atualizado"+(atualizados>1?"s":"")):"")+".",3500);
+  }catch(e){ console.warn("[briefing→playbook]",(e&&e.message)||e); }
+}
+if(typeof window!=="undefined"){ window.pxSincronizarProdutosDoBriefing=pxSincronizarProdutosDoBriefing; }
 function BriefingFormCanonico(props){
   const cl = props.cl;
   const canEdit = !!props.canEdit;
@@ -6721,6 +6960,13 @@ function BriefingFormCanonico(props){
                   disabled={!canEdit} rows={1}
                   placeholder={f.placeholder||""}
                   style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,resize:"none",fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1",overflow:"hidden",minHeight:40}}/>
+              </div>;
+            }
+            if(f.type==="produtos"){
+              return <div key={f.id}>
+                {labelDom}
+                <_PxBriefProdutos val={val} canEdit={canEdit} color={current.color}
+                  onCommit={function(lista){ setField(current.id, f.id, lista); if(typeof pxSincronizarProdutosDoBriefing==="function") pxSincronizarProdutosDoBriefing(cl.id, unitId, lista); }}/>
               </div>;
             }
             if(f.type==="radio"){
@@ -16443,6 +16689,8 @@ function EditarClienteModal({cl, onClose}){
       }catch(_){}
       // Contrato (fonte única): início e status seguem o cadastro
       try{ if(typeof pxCtSyncFromClient==="function") pxCtSyncFromClient(cl.id, sinceLabel.trim(), status||"ativo"); }catch(_){}
+      // (23/09/2026) Cidade/UF também vai pro cadastro do Playbook (uma fonte só)
+      try{ if(typeof pxSincronizarCidadePlaybook==="function") pxSincronizarCidadePlaybook(cl.id, patch.cidade, patch.estado); }catch(_){}
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Cliente atualizado.");
       setSaving(false);
       onClose();
@@ -22541,6 +22789,383 @@ function _pxContadorProjeto(tasks, faseMap){
   return out;
 }
 
+/* ═══ CIDADE/UF: UMA FONTE SÓ (23/09/2026, Vinicius) ═══════════════════════════════
+   Playbook › Dados cadastrais (cidade "Cidade/UF") ⇄ Estratégia › Clientes (clients.cidade/estado).
+   Bioter: só o cadastro do Grupo sincroniza (as unidades têm cidade própria). */
+async function pxSincronizarCidadeCliente(clientId, cidadeUf){
+  try{
+    const sb=window._sb; if(!sb||!clientId) return;
+    const s=String(cidadeUf||"").trim(); if(!s) return;
+    const m=s.match(/^(.*?)\s*[\/\-–]\s*([A-Za-z]{2})$/);
+    const cidade=(m?m[1]:s).trim(), estado=m?m[2].toUpperCase():null;
+    const cl=(typeof CLIENTS!=="undefined"?(CLIENTS||[]):[]).find(function(c){return c.id===clientId;});
+    if(cl&&String(cl.cidade||"")===cidade&&String(cl.estado||"")===(estado||"")) return;
+    const patch={cidade:cidade||null}; if(estado) patch.estado=estado;
+    const r=await sb.from("clients").update(patch).eq("client_id",clientId);
+    if(r&&r.error){ console.warn("[cidade→clientes]",r.error.message); return; }
+    if(cl){ cl.cidade=cidade; if(estado) cl.estado=estado; }
+  }catch(e){ console.warn("[cidade→clientes]",(e&&e.message)||e); }
+}
+async function pxSincronizarCidadePlaybook(clientId, cidade, estado){
+  try{
+    const sb=window._sb; if(!sb||!clientId) return;
+    const s=[String(cidade||"").trim(),String(estado||"").trim().toUpperCase()].filter(Boolean).join("/"); if(!s) return;
+    const r=await sb.from("playbooks").select("data").eq("client_id",clientId).maybeSingle();
+    const d=(r&&r.data&&r.data.data&&typeof r.data.data==="object")?r.data.data:{};
+    const cad=Object.assign({},(d.cadastro&&typeof d.cadastro==="object")?d.cadastro:{});
+    if(String(cad.cidade||"")===s) return;
+    cad.cidade=s;
+    const up=await sb.from("playbooks").upsert({client_id:clientId,data:Object.assign({},d,{cadastro:cad})},{onConflict:"client_id"});
+    if(up&&up.error) console.warn("[cidade→playbook]",up.error.message);
+  }catch(e){ console.warn("[cidade→playbook]",(e&&e.message)||e); }
+}
+/* ═══ GERAR PLANO DO MÊS (23/09/2026, Vinicius) ════════════════════════════════════
+   Pra UM cliente/unidade e o mês da tela. Prévia → Aplicar. Passos:
+   (A) puxar cards sem data pras vagas da cadência; (B) criar os cards que faltam (regras do
+   planejamento automático de 2026); (C) pauta + briefing + legenda nos cards vazios.
+   Tudo numa execução "plano-…" em claude_plano_execucoes — "Desfazer plano do mês" reverte.
+   Em 2027 nada é criado sozinho: é este botão, mês a mês. */
+const PX_PLANO_PREFS={arte:[1,4,2,5],video:[4,1,2,5],material:[1,2,5],bioterArte:[4,5,2,1],paraguay:[3,2,4]};
+function _pmDia(L,prefs,ocupIsos,hoje,iniMes,fimMes){
+  const ds=prefs.concat([1,2,3,4,5,6]).map(function(dd){const d=new Date(L.ini);d.setDate(L.ini.getDate()+dd);return _pxApIso(d);})
+    .filter(function(iso,i,arr){return arr.indexOf(iso)===i&&iso>hoje&&iso>=iniMes&&iso<=fimMes&&ocupIsos.indexOf(iso)<0;});
+  if(!ds.length) return null;
+  const dist=function(iso){ if(!ocupIsos.length) return 9; const tt=_pxApData(iso).getTime(); return Math.min.apply(null,ocupIsos.map(function(o){return Math.abs(tt-_pxApData(o).getTime())/86400000;})); };
+  return ds.find(function(iso){return dist(iso)>=2;})||ds[0];
+}
+function _pmEhMaterial(t){ return (typeof pxEhShort==="function"&&pxEhShort(t))||(typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(t)); }
+function _pmEhComem(t){ return String(t.id||"").indexOf("autocom-")===0||String(t.id||"").indexOf("autoev-")===0||(Array.isArray(t.tags)&&t.tags.indexOf("Data comemorativa")>=0); }
+function _pmEhVideo(t){ const ct=String(t.content_type||t.contentType||"").toLowerCase(); return /video|reels|corte/.test(ct)||/v[ií]deo|depoimento/i.test(String(t.title||"")); }
+/* Prévia: o que o mês vai receber. Não grava nada. */
+async function pxPlanoMesPrever(args){
+  const client=args.client, unit=String(args.unit||""), ano=args.ano, mes=args.mes, tasksState=args.tasksState||[];
+  const alvo=client==="bioter"?("bioter:"+unit):client;
+  const cap=PX_CASCATA_CAP[alvo]||0;
+  if(!cap) throw new Error("Este cliente/unidade não tem cadência configurada — o plano não sabe quantos posts por semana.");
+  const hoje=_pxApIso(new Date());
+  const iniMes=ano+"-"+String(mes+1).padStart(2,"0")+"-01";
+  const fimD=new Date(ano,mes+1,0); const fimMes=_pxApIso(fimD);
+  const fimContrato=PX_CASCATA_FIM_CONTRATO[client]||"";
+  const d0=_pxApData(iniMes); d0.setDate(d0.getDate()-7); const d1=_pxApData(fimMes); d1.setDate(d1.getDate()+7);
+  const rows=await _pxApLinhasDe(_pxApIso(d0),_pxApIso(d1)); if(!rows) throw new Error("Não consegui ler o calendário no banco.");
+  const _doAlvoNaLinha=function(L){
+    let lst=rows.filter(function(r){ const d=String(r.publish_date||"").slice(0,10); return d>=L.iniIso&&d<=L.fimIso; });
+    lst=_pxColConta(lst,alvo);   // conta pra TODO cliente (vetservice/acreforte/clem não estão no PX_AUTOPLAN_CAP)
+    if(PX_CASCATA_COMEM_NAO_CONTA.indexOf(client)>=0) lst=lst.filter(function(r){ return !_pmEhComem(r); });
+    return lst;
+  };
+  const _daUnidade=function(r){ return String(r.client)===client&&(client!=="bioter"||_pxApUnits(r).indexOf(unit)>=0); };
+  // (A) candidatos sem data
+  const _meu=function(x){ return x&&!x.deletedAt&&x.client===client&&(client!=="bioter"||String(x.bioterUnit||"")===unit); };
+  const _fora=["publicado","agendado","reprovado","pausado","concluido","arquivado"];
+  const semData=tasksState.filter(function(x){
+    if(!_meu(x)||String(x.publishDate||"").trim()) return false;
+    if(_fora.indexOf(String(x.status||""))>=0) return false;
+    if(x.naoPublica||x.somenteStory||String(x.contentType||"")==="folder") return false;
+    if(/template/i.test(String(x.title||""))||String(x.contentType||"")==="template") return false;
+    if(_pmEhComem(x)) return false;
+    return true;
+  }).sort(function(a,b){ return String(a.createdAt||"").localeCompare(String(b.createdAt||"")); });
+  const fila=semData.slice();
+  // semanas do mês
+  const semanas=[]; const puxar=[]; const criar=[];
+  let L=_pxApLinha(iniMes);
+  let prevMaterial="", prevVideo=null;
+  // material da semana anterior ao mês (pra alternar)
+  (function(){ const Lp=_pxApLinha(_pxApIso(new Date(L.ini.getFullYear(),L.ini.getMonth(),L.ini.getDate()-7)));
+    const lp=_doAlvoNaLinha(Lp).filter(_daUnidade);
+    const s=lp.find(function(r){return typeof pxEhShort==="function"&&pxEhShort(r);}), f=lp.find(function(r){return typeof pxEhFotoDeObra==="function"&&pxEhFotoDeObra(r);});
+    prevMaterial=s?"short":(f?"foto":""); prevVideo=lp.some(_pmEhVideo); })();
+  while(L.iniIso<=fimMes){
+    if(fimContrato&&L.iniIso>fimContrato) break;
+    if(L.fimIso>hoje){
+      const existentes=_doAlvoNaLinha(L);
+      const ocup=existentes.map(function(r){return String(r.publish_date||"").slice(0,10);});
+      const novosDaLinha=[]; const info={ini:L.iniIso,fim:L.fimIso,existentes:existentes.length,cap:cap,puxados:0,criados:0};
+      let vagas=cap-existentes.length;
+      const temMaterial=existentes.some(_pmEhMaterial), temCollab=existentes.some(_pxApEhCollab), temVideoSem=existentes.some(_pmEhVideo);
+      const temArteSem=existentes.some(function(r){ return !_pmEhMaterial(r)&&!_pxApEhCollab(r); });
+      let materialFeito=temMaterial, videoFeito=temVideoSem, arteFeita=temArteSem;
+      while(vagas>0){
+        // (A) primeiro puxa um sem data
+        const cand=fila.shift();
+        if(cand){
+          const ehV=_pmEhVideo(cand), ehM=_pmEhMaterial(cand);
+          const prefs=(client==="pixels"||client==="vetservice")?[3]:(client==="bioter"?(unit==="paraguay"?PX_PLANO_PREFS.paraguay:(ehM?PX_PLANO_PREFS.material:PX_PLANO_PREFS.bioterArte)):(ehV?PX_PLANO_PREFS.video:PX_PLANO_PREFS.arte));
+          const iso=_pmDia(L,prefs,ocup,hoje,iniMes,fimMes);
+          if(!iso){ fila.unshift(cand); break; }
+          puxar.push({task:cand,iso:iso}); ocup.push(iso); vagas--; info.puxados++;
+          if(ehM) materialFeito=true; else arteFeita=true; if(ehV) videoFeito=true;
+          continue;
+        }
+        // (B) cria o que falta
+        let tipo, titulo, prefs, tags=[];
+        if(client==="bioter"){
+          if(!materialFeito){
+            const m=prevMaterial==="short"?"foto":"short";
+            tipo="material"; titulo=(m==="short")?"Short":"Foto de obra"; prefs=PX_PLANO_PREFS.material; materialFeito=true; prevMaterial=m;
+          } else if(unit==="paraguay"||(cap>=3&&!arteFeita)){
+            /* principais: collab + material + 1 arte; Paraguay (sem collab): material + arte */
+            tipo="arte"; titulo=unit==="paraguay"?"Publicación — Arte":"Arte"; prefs=unit==="paraguay"?PX_PLANO_PREFS.paraguay:PX_PLANO_PREFS.bioterArte; if(unit==="paraguay") tags=["Español"]; arteFeita=true;
+          } else {
+            /* a vaga que sobra é do collab (fila de collabs, quarta) — não cria arte no lugar */
+            info.aguardaCollab=true; break;
+          }
+        } else if(client==="pixels"||client==="vetservice"){
+          /* 1 por semana, na quarta, alternando arte e vídeo de uma semana pra outra */
+          tipo=prevVideo?"arte":"video"; titulo=(tipo==="arte"?"Arte — ":"Vídeo — ")+(PX_AUTOPLAN_NOMES[client]||(((CLIENTS||[]).find(function(c){return c.id===client;})||{}).name)||client); prefs=[3]; videoFeito=true; prevVideo=(tipo==="video");
+        } else {
+          tipo=videoFeito?"arte":"video"; titulo=(tipo==="arte"?"Arte — ":"Vídeo — ")+(PX_AUTOPLAN_NOMES[client]||(((CLIENTS||[]).find(function(c){return c.id===client;})||{}).name)||client); prefs=tipo==="arte"?PX_PLANO_PREFS.arte:PX_PLANO_PREFS.video; videoFeito=true;
+        }
+        const iso=_pmDia(L,prefs,ocup,hoje,iniMes,fimMes); if(!iso) break;
+        const agora=new Date(); const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        const card={id:"plano-"+client+(unit?"-"+unit:"")+"-"+iso+"-"+(tipo==="material"?(titulo==="Short"?"short":"foto"):tipo)+"-"+Math.random().toString(36).slice(2,6),
+          title:titulo, status:"rascunhos", assignee:"ellen", assignees:["ellen"], sector:(tipo==="video"?"video":"design"), client:client, priority:"media",
+          deadline:iso, start_date:_pxApIso(agora), created_at:fmt, created_by:"Claude", publish_date:iso, publish_time:"11:00", bioter_unit:unit||"", tags:tags,
+          timeline:[{type:"created",user:"Claude",atFmt:fmt,label:"Card criado pelo Gerar plano do mês"}],
+          content_type:(tipo==="arte"||tipo==="video"?tipo:null), col_entered_at:agora.toISOString()};
+        criar.push({card:card,tipo:tipo}); ocup.push(iso); vagas--; info.criados++;
+      }
+      info.vagasSobrando=Math.max(0,vagas); semanas.push(info);
+      if(existentes.length&&(client==="pixels"||client==="vetservice")) prevVideo=temVideoSem;
+    }
+    const n=new Date(L.ini); n.setDate(n.getDate()+7); L=_pxApLinha(_pxApIso(n));
+  }
+  return {alvo:alvo,cap:cap,semanas:semanas,puxar:puxar,criar:criar,sobraSemData:fila,iniMes:iniMes,fimMes:fimMes};
+}
+function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}){
+  const _isMobP=(typeof _pxMob==="function"&&_pxMob());
+  const _y=mes.getFullYear(), _m=mes.getMonth();
+  const _iniIso=_y+"-"+String(_m+1).padStart(2,"0")+"-01";
+  const _fimD=new Date(_y,_m+1,0); const _fimIso=_y+"-"+String(_m+1).padStart(2,"0")+"-"+String(_fimD.getDate()).padStart(2,"0");
+  const _hoje=_pxApIso(new Date());
+  const _cl=(CLIENTS||[]).find(function(c){return c.id===client;})||{};
+  const _uni=(unit&&typeof BIOTER_UNITS!=="undefined")?(BIOTER_UNITS.find(function(u){return u.id===unit;})||{}):{};
+  const _nome=(_cl.name||client)+(unit?(" · "+(_uni.pickerLabel||_uni.label||unit)):"");
+  const _mesLabel=mes.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  const _meu=function(t){ return t&&!t.deletedAt&&t.client===client&&(client!=="bioter"||String(t.bioterUnit||"")===unit)&&!t.naoPublica; };
+  const _doMes=(tasks||[]).filter(function(t){ const d=String(t.publishDate||""); return _meu(t)&&d>=_iniIso&&d<=_fimIso; }).sort(function(a,b){ return String(a.publishDate).localeCompare(String(b.publishDate)); });
+  const _temArq=function(t){ return (t.files||[]).some(function(a){ return a&&a.url&&!a.uploading&&!a.isAnnotation&&!a.isRef; }); };
+  const _vazio=function(t){ return !String(t.desc||"").trim()&&!String(t.caption||"").trim(); };
+  const _elegivel=function(t){ return String(t.publishDate||"")>_hoje&&["rascunhos","demanda"].indexOf(String(t.status||""))>=0&&!_pmEhComem(t)&&!_pmEhMaterial(t)&&!_temArq(t)&&!t.somenteStory; };
+  const _tipoLbl=function(t){ const ct=String(t.contentType||t.content_type||""); if(_pmEhMaterial(t)) return (typeof pxEhShort==="function"&&pxEhShort(t))?"Short":"Foto de obra"; return ct==="arte"?"Arte única":ct==="carrossel"?"Carrossel":/^video/.test(ct)||ct==="reels"||ct==="corte"?"Vídeo":ct==="foto"?"Foto de obra":(ct||"—"); };
+  const _dt=function(iso){ const d=String(iso||""); return d?(d.slice(8,10)+"/"+d.slice(5,7)):"—"; };
+  const [opts,setOpts]=useState({puxar:true,criar:true,pauta:true,copy:true});
+  const [orient,setOrient]=useState("");
+  const [previa,setPrevia]=useState(null);
+  const [gerando,setGerando]=useState("");
+  const [erro,setErro]=useState("");
+  const [pesos,setPesos]=useState([]);
+  const [prog,setProg]=useState("");
+  const [selVazios,setSelVazios]=useState(function(){ const o={}; _doMes.forEach(function(t){ if(_elegivel(t)&&_vazio(t)) o[t.id]=true; }); return o; });
+  useEffect(function(){
+    let vivo=true;
+    (async function(){
+      try{
+        const sb=window._sb; if(!sb) return;
+        const r=await sb.from("playbooks").select("data").eq("client_id",client).maybeSingle();
+        const pbd=(r&&r.data&&r.data.data)||{};
+        const l=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais({playbook:{produtos:Array.isArray(pbd.produtos)?pbd.produtos:[]}},unit):[];
+        if(vivo) setPesos(l.filter(function(p){return p.daUnidade;}));
+      }catch(_){}
+      try{ const p=await pxPlanoMesPrever({client:client,unit:unit,ano:_y,mes:_m,tasksState:tasks}); if(vivo) setPrevia(p); }
+      catch(e){ if(vivo) setErro((e&&e.message)||String(e)); }
+    })();
+    return function(){ vivo=false; };
+  },[client,unit,_y,_m]);
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape"&&!gerando) onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[gerando]);
+  const _PES={prioridade:{l:"Prioridade",e:"\ud83d\udd34",c:"#dc2626",bg:"#fee2e2"},importante:{l:"Importante",e:"\ud83d\udfe0",c:"#ea580c",bg:"#ffedd5"},complementar:{l:"Complementar",e:"\ud83d\udfe1",c:"#ca8a04",bg:"#fef9c3"},inativo:{l:"Inativo",e:"\ud83d\udd35",c:"#2563eb",bg:"#dbeafe"}};
+  const _prodDe=function(t){ if(!pesos.length||typeof pxProdutoOficial!=="function") return ""; return pxProdutoOficial(String(t.title||"")+" "+String(t.desc||"").replace(/<[^>]+>/g," ").slice(0,300),pesos)||""; };
+  const _contagem=(function(){ const o={}; _doMes.forEach(function(t){ if(_pmEhMaterial(t)||_pmEhComem(t)) return; const p=_prodDe(t); if(p) o[p]=(o[p]||0)+1; }); return o; })();
+  const _nVazios=Object.keys(selVazios).filter(function(k){return selVazios[k];}).length;
+  const _nPuxar=previa&&opts.puxar?previa.puxar.length:0, _nCriar=previa&&opts.criar?previa.criar.length:0;
+  const _nPauta=opts.pauta?(_nVazios+(opts.criar&&previa?previa.criar.filter(function(c){return c.tipo!=="material";}).length:0)+(opts.puxar&&previa?previa.puxar.filter(function(p){return _vazio(p.task)&&!_pmEhMaterial(p.task);}).length:0)):0;
+  const _aplicar=async function(){
+    if(!previa){ setErro("A prévia ainda não carregou."); return; }
+    const sb=window._sb; if(!sb){ setErro("Sem conexão."); return; }
+    setErro(""); setGerando("1");
+    const agora=new Date(); const fmt=agora.toLocaleDateString("pt-BR")+" às "+agora.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Pixels";
+    const execId="plano-"+client+(unit?"-"+unit:"")+"-"+_y+String(_m+1).padStart(2,"0")+"-"+Date.now().toString(36);
+    const criados=[], alterados=[];
+    const _reg=function(id,antes,depois){ const a=alterados.find(function(x){return x.id===id;}); if(a){ Object.assign(a.depois,depois); Object.keys(antes).forEach(function(k){ if(!(k in a.antes)) a.antes[k]=antes[k]; }); } else alterados.push({id:id,antes:antes,depois:depois}); };
+    try{
+      // (A) puxar
+      if(opts.puxar&&previa.puxar.length){
+        setProg("Puxando "+previa.puxar.length+" pro calendário…");
+        for(const p of previa.puxar){
+          const t=p.task; const tl={type:"edit",label:"Gerar plano do mês: entrou no calendário em "+_dt(p.iso)+" (estava sem data) — "+quem,at:agora.toISOString(),atFmt:fmt,user:quem};
+          const patch={publish_date:p.iso,deadline:p.iso,publish_time:t.publishTime||"11:00",timeline:(t.timeline||[]).concat([tl])};
+          const r=await sb.from("tasks").update(patch).eq("id",t.id); if(r&&r.error) throw new Error("Puxar "+t.title+": "+r.error.message);
+          _reg(t.id,{publish_date:t.publishDate||null,deadline:t.deadline||null,publish_time:t.publishTime||null},{publish_date:p.iso,deadline:p.iso,publish_time:patch.publish_time});
+          if(typeof setTasks==="function") setTasks(function(prev){ return (prev||[]).map(function(x){ return x.id===t.id?Object.assign({},x,{publishDate:p.iso,deadline:p.iso,publishTime:patch.publish_time,timeline:patch.timeline}):x; }); });
+        }
+      }
+      // (B) criar
+      const novosRows=[];
+      if(opts.criar&&previa.criar.length){
+        setProg("Criando "+previa.criar.length+" card"+(previa.criar.length>1?"s":"")+"…");
+        const rowsIns=previa.criar.map(function(c){return c.card;});
+        const r=await sb.from("tasks").insert(rowsIns).select("*"); if(r&&r.error) throw new Error("Criar cards: "+r.error.message);
+        (r.data||[]).forEach(function(x){ novosRows.push(x); criados.push(x.id); });
+        if(typeof setTasks==="function"&&typeof rowToTask==="function") setTasks(function(prev){ return (prev||[]).concat(novosRows.map(rowToTask)); });
+      }
+      // (C) pauta + copy
+      if(opts.pauta){
+        const alvos=[];
+        _doMes.forEach(function(t){ if(selVazios[t.id]) alvos.push({id:t.id,data:_dt(t.publishDate),tipo:String(t.contentType||""),obj:t}); });
+        if(opts.puxar) previa.puxar.forEach(function(p){ if(_vazio(p.task)&&!_pmEhMaterial(p.task)&&!alvos.some(function(a){return a.id===p.task.id;})) alvos.push({id:p.task.id,data:_dt(p.iso),tipo:String(p.task.contentType||""),obj:Object.assign({},p.task,{publishDate:p.iso})}); });
+        if(opts.criar) novosRows.forEach(function(x){ if(x.title==="Short"||x.title==="Foto de obra") return; alvos.push({id:x.id,data:_dt(x.publish_date),tipo:String(x.content_type||""),obj:(typeof rowToTask==="function")?rowToTask(x):x}); });
+        if(alvos.length){
+          setProg("Pensando a pauta de "+alvos.length+" card"+(alvos.length>1?"s":"")+"…");
+          const outros=_doMes.filter(function(t){ return !alvos.some(function(a){return a.id===t.id;}); }).map(function(t){ return {data:_dt(t.publishDate),titulo:t.title||"",tipo:_tipoLbl(t)}; });
+          const _d60=(function(){ const d=new Date(_y,_m,1); d.setDate(d.getDate()-60); return _pxApIso(d); })();
+          const recentes=(tasks||[]).filter(function(t){ const d=String(t.publishDate||""); return _meu(t)&&d>=_d60&&d<_iniIso&&t.title; }).map(function(t){return t.title;}).slice(0,40);
+          const lista=await pxSugerirPauta({client:client,unit:unit,clienteNome:_cl.name||client,slots:alvos.map(function(a){return {id:a.id,data:a.data,tipo:a.tipo};}),doMes:outros,recentes:recentes,orientacao:orient});
+          let n=0;
+          for(const a of alvos){
+            const p=lista.find(function(x){return String(x.id)===String(a.id);}); if(!p) continue;
+            n++; setProg((opts.copy?"Escrevendo briefing e legenda":"Gravando a pauta")+" "+n+"/"+alvos.length+" — "+p.titulo);
+            const t=a.obj;
+            let descHtml="<p><strong>• PAUTA</strong></p><p>"+String(p.angulo||"").replace(/</g,"&lt;")+"</p>"+(p.chamada?("<p><strong>• CHAMADA</strong></p><p>"+String(p.chamada).replace(/</g,"&lt;")+"</p>"):"")+(p.produto?("<p><strong>• PRODUTO</strong></p><p>"+String(p.produto).replace(/</g,"&lt;")+"</p>"):"");
+            let capHtml=null, tipoNovo=null;
+            if(opts.copy){
+              try{
+                const r=await pxGerarBriefing({task:Object.assign({},t,{title:p.titulo}),clienteNome:_cl.name||client,necessidade:"PAUTA: "+p.titulo+". "+(p.angulo||"")+(p.chamada?(" Chamada sugerida: "+p.chamada):"")+(p.produto?(" Produto: "+p.produto+"."):""),modo:"gerar"});
+                if(r&&r.briefing){ descHtml=r.briefing; if(r.tipo&&!String(t.contentType||t.content_type||"")) tipoNovo=r.tipo; }
+                try{
+                  const ops=await pxGerarLegendas({task:Object.assign({},t,{title:p.titulo,contentType:tipoNovo||t.contentType}),clienteNome:_cl.name||client,briefing:(r&&(r.briefingTexto||r.briefing))||"",quantas:1});
+                  const txt=(Array.isArray(ops)&&ops[0])||""; if(txt) capHtml=(typeof _pxTextoParaHtml==="function")?_pxTextoParaHtml(txt):("<p>"+txt.replace(/\n/g,"</p><p>")+"</p>");
+                }catch(e2){ console.warn("[plano] legenda "+a.id+":",(e2&&e2.message)||e2); }
+              }catch(e){ console.warn("[plano] briefing "+a.id+":",(e&&e.message)||e); }
+            }
+            const tl={type:"edit",label:"Gerar plano do mês: "+(opts.copy?"pauta, briefing e legenda":"pauta")+" — "+quem,at:new Date().toISOString(),atFmt:fmt,user:quem};
+            const patch={title:p.titulo,description:descHtml,timeline:(t.timeline||[]).concat([tl])};
+            if(capHtml) patch.caption=capHtml; if(tipoNovo) patch.content_type=tipoNovo;
+            const r2=await sb.from("tasks").update(patch).eq("id",a.id); if(r2&&r2.error){ console.warn("[plano] gravar "+a.id+":",r2.error.message); continue; }
+            if(criados.indexOf(a.id)<0){ const antes={title:t.title||"",description:t.desc||t.description||"",caption:t.caption||""}; const depois={title:p.titulo,description:descHtml}; if(capHtml){ depois.caption=capHtml; } if(tipoNovo){ antes.content_type=t.contentType||t.content_type||null; depois.content_type=tipoNovo; } _reg(a.id,antes,depois); }
+            if(typeof setTasks==="function") setTasks(function(prev){ return (prev||[]).map(function(x){ return x.id===a.id?Object.assign({},x,{title:p.titulo,desc:descHtml,caption:capHtml||x.caption,contentType:tipoNovo||x.contentType,timeline:patch.timeline}):x; }); });
+          }
+        }
+      }
+      // registro pro Desfazer
+      if(criados.length||alterados.length){
+        await sb.from("claude_plano_execucoes").insert({id:execId,descricao:"Plano do mês · "+_nome+" · "+_mesLabel+" ("+quem+")",criados:criados,alterados:alterados});
+      }
+      setGerando(""); setProg("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Plano de "+_mesLabel+" aplicado: "+(opts.puxar?previa.puxar.length:0)+" puxado"+((opts.puxar?previa.puxar.length:0)===1?"":"s")+", "+criados.length+" criado"+(criados.length===1?"":"s")+", "+alterados.length+" alterado"+(alterados.length===1?"":"s")+". Dá pra desfazer no botão ao lado.",8000);
+      onClose();
+    }catch(e){
+      setGerando(""); setProg("");
+      setErro((e&&e.message)||String(e));
+      if(criados.length||alterados.length){ try{ await sb.from("claude_plano_execucoes").insert({id:execId,descricao:"Plano do mês (parcial, deu erro) · "+_nome+" · "+_mesLabel,criados:criados,alterados:alterados}); }catch(_){} }
+    }
+  };
+  const _inp={width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"inherit",outline:"none",background:"#fff"};
+  const _chk=function(k,l,sub){ return <label style={{display:"flex",alignItems:"flex-start",gap:9,cursor:gerando?"default":"pointer",padding:"8px 10px",border:"1px solid "+(opts[k]?"#c4b5fd":"#eef0f3"),background:opts[k]?"#faf5ff":"#fff",borderRadius:10}}>
+    <input type="checkbox" checked={!!opts[k]} disabled={!!gerando} onChange={function(e){ setOpts(Object.assign({},opts,{[k]:e.target.checked})); }} style={{width:15,height:15,marginTop:2}}/>
+    <span style={{display:"flex",flexDirection:"column",gap:2}}><span style={{fontSize:12.5,fontWeight:800,color:"#0f172a"}}>{l}</span><span style={{fontSize:11,color:"#64748b",lineHeight:1.4}}>{sub}</span></span>
+  </label>; };
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget&&!gerando) onClose(); }}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:320,display:"flex",alignItems:_isMobP?"stretch":"center",justifyContent:"center",padding:_isMobP?0:"18px 16px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{background:"#fff",borderRadius:_isMobP?0:20,width:"100%",maxWidth:1040,maxHeight:_isMobP?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobP?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#7c3aed 0%,#9F43F6 100%)",color:"#fff",flexShrink:0}}>
+        <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
+          <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Gerar plano do mês · {_mesLabel}</span>
+          <span style={{fontWeight:800,fontSize:_isMobP?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome}</span>
+        </span>
+        <button type="button" onClick={onClose} disabled={!!gerando} title="Fechar (Esc)" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:_isMobP?"14px":"18px 22px",display:"flex",flexDirection:"column",gap:16}}>
+        {/* o que vai fazer */}
+        <div style={{display:"grid",gridTemplateColumns:_isMobP?"1fr":"1fr 1fr",gap:8}}>
+          {_chk("puxar","Puxar pro calendário o que está sem data",previa?(previa.puxar.length+" card"+(previa.puxar.length===1?"":"s")+" em produção sem data"+(previa.sobraSemData.length?(" · "+previa.sobraSemData.length+" não cabe"+(previa.sobraSemData.length===1?"":"m")+" neste mês"):"")):"calculando…")}
+          {_chk("criar","Criar os cards que faltam pra cadência",previa?(previa.criar.length+" card"+(previa.criar.length===1?"":"s")+" · cadência "+previa.cap+"/semana · comemorativas, feiras e collabs já contam"):"calculando…")}
+          {_chk("pauta","Escrever a pauta pelo peso dos produtos",_nPauta+" card"+(_nPauta===1?"":"s")+" vazio"+(_nPauta===1?"":"s")+" recebem título, produto, ângulo e chamada")}
+          {_chk("copy","…e o briefing completo + legenda",opts.pauta?"uns 40–60 s por card, com progresso":"precisa da pauta ligada")}
+        </div>
+        {/* semanas */}
+        {previa&&<div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:8}}>Semanas de {_mesLabel} <span style={{color:"#94a3b8",fontWeight:600}}>· domingo a sábado · cadência {previa.cap}/semana</span></div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {previa.semanas.map(function(s){ const total=s.existentes+(opts.puxar?s.puxados:0)+(opts.criar?s.criados:0); const ok=total>=s.cap;
+              return <span key={s.ini} title={"Já tem "+s.existentes+" · puxa "+s.puxados+" · cria "+s.criados+(s.aguardaCollab?" · a vaga que sobra é do collab":"")} style={{display:"inline-flex",alignItems:"center",gap:6,background:"#fff",border:"1px solid "+(ok?"#bbf7d0":"#fde68a"),borderRadius:99,padding:"4px 10px",fontSize:11.5,fontWeight:700,color:"#0f172a"}}>
+                {_dt(s.ini)}–{_dt(s.fim)} <span style={{color:ok?"#15803d":"#b45309",fontWeight:800}}>{total}/{s.cap}</span>
+                {s.puxados>0&&opts.puxar&&<span style={{color:"#0ea5e9",fontSize:10.5}}>+{s.puxados} puxado{s.puxados>1?"s":""}</span>}
+                {s.criados>0&&opts.criar&&<span style={{color:"#7c3aed",fontSize:10.5}}>+{s.criados} novo{s.criados>1?"s":""}</span>}
+                {s.aguardaCollab&&<span style={{color:"#94a3b8",fontSize:10.5}}>collab</span>}
+              </span>; })}
+            {!previa.semanas.length&&<span style={{color:"#94a3b8",fontSize:12}}>Nenhuma semana futura neste mês.</span>}
+          </div>
+        </div>}
+        {/* puxar */}
+        {previa&&opts.puxar&&previa.puxar.length>0&&<div>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Vai puxar pro calendário</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {previa.puxar.map(function(p){ return <div key={p.task.id} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid #eef0f3",borderRadius:10,padding:"8px 12px",background:"#fff"}}>
+              <span style={{background:"#e0f2fe",color:"#0369a1",borderRadius:99,padding:"2px 9px",fontSize:11,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{_dt(p.iso)}</span>
+              <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:700}}>{_tipoLbl(p.task)}</span>
+              <span onClick={function(){ if(onOpenCard) onOpenCard(p.task); }} style={{flex:1,fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.task.title||"Sem título"}</span>
+              <span style={{color:"#94a3b8",fontSize:10.5}}>{p.task.status}</span>
+            </div>; })}
+            {previa.sobraSemData.length>0&&<div style={{color:"#b45309",fontSize:11.5,fontWeight:600}}>Não cabem neste mês (ficam sem data): {previa.sobraSemData.map(function(t){return t.title;}).join(" · ")}</div>}
+          </div>
+        </div>}
+        {/* criar */}
+        {previa&&opts.criar&&previa.criar.length>0&&<div>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Vai criar</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {previa.criar.map(function(c){ return <span key={c.card.id} style={{display:"inline-flex",alignItems:"center",gap:6,border:"1px solid #e9d5ff",background:"#faf5ff",borderRadius:99,padding:"4px 11px",fontSize:11.5,fontWeight:700,color:"#4c1d95"}}>{_dt(c.card.publish_date)} · {c.card.title}</span>; })}
+          </div>
+        </div>}
+        {/* vazios já no mês */}
+        {_doMes.filter(_elegivel).length>0&&<div>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Cards do mês que recebem pauta <span style={{color:"#94a3b8",fontWeight:600}}>· os vazios já vêm marcados; marcar um com pauta substitui</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {_doMes.filter(_elegivel).map(function(t){ const on=!!selVazios[t.id]; const prod=_prodDe(t); const w=(function(){ const pr=pesos.find(function(x){return x.nome===prod;}); return pr?_PES[pr.prioridade]:null; })();
+              return <label key={t.id} style={{display:"flex",alignItems:"center",gap:10,border:"1px solid "+(on?"#c4b5fd":"#eef0f3"),background:on?"#faf5ff":"#fff",borderRadius:10,padding:"7px 12px",cursor:"pointer"}}>
+                <input type="checkbox" checked={on} disabled={!opts.pauta||!!gerando} onChange={function(e){ setSelVazios(function(s){ const o=Object.assign({},s); if(e.target.checked) o[t.id]=true; else delete o[t.id]; return o; }); }} style={{width:15,height:15}}/>
+                <span style={{fontSize:11.5,fontWeight:800,color:"#0f172a",fontVariantNumeric:"tabular-nums",minWidth:40}}>{_dt(t.publishDate)}</span>
+                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:700}}>{_tipoLbl(t)}</span>
+                <span style={{flex:1,fontSize:12.5,fontWeight:700,color:_vazio(t)?"#94a3b8":"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}{_vazio(t)?" · vazio":" · já tem pauta"}</span>
+                {prod&&<span style={{background:w?w.bg:"#f1f5f9",color:w?w.c:"#475569",borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:700}}>{w?w.e+" ":""}{prod}</span>}
+              </label>; })}
+          </div>
+        </div>}
+        {/* pesos */}
+        <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Produtos e peso <span style={{color:"#94a3b8",fontWeight:600}}>· quantos posts o mês já tem de cada um</span></div>
+          {pesos.length
+            ? <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {pesos.filter(function(p){return p.prioridade!=="inativo";}).map(function(p){ const w=_PES[p.prioridade]; const n=_contagem[p.nome]||0;
+                  return <span key={p.nome} style={{display:"inline-flex",alignItems:"center",gap:6,background:w?w.bg:"#f1f5f9",color:w?w.c:"#475569",border:"1px solid "+(w?w.c+"44":"#e2e8f0"),borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:700}}>{w&&<span style={{fontSize:9}}>{w.e}</span>}{p.nome}<span style={{background:"rgba(255,255,255,.7)",borderRadius:99,padding:"0 7px",fontSize:10.5,fontWeight:800}}>{n}</span></span>; })}
+              </div>
+            : <div style={{color:"#94a3b8",fontSize:12}}>Nenhum produto com ficha no Playbook{unit?" pra esta unidade":""} — a IA se guia pela visão geral e pelo briefing. Marcar o peso na ficha deixa a pauta muito melhor.</div>}
+        </div>
+        <div>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Orientação pra este mês <span style={{color:"#94a3b8",fontWeight:600}}>· opcional, manda acima do peso</span></div>
+          <textarea value={orient} onChange={function(e){setOrient(e.target.value);}} rows={2} disabled={!!gerando} placeholder="Ex.: outubro é mês de feira — puxar pra aviário; evitar falar de preço; um post sobre a obra da fazenda X." style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+        </div>
+        {erro&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",color:"#991b1b",borderRadius:10,padding:"9px 12px",fontSize:12.5,fontWeight:600}}>{erro}</div>}
+      </div>
+      <div style={{flexShrink:0,borderTop:"1px solid #eef0f3",padding:_isMobP?"10px 14px":"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",background:"#fafbfc"}}>
+        <span style={{color:gerando?"#7c3aed":"#94a3b8",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:8}}>
+          {gerando&&<span style={{width:12,height:12,borderRadius:"50%",border:"2px solid #7c3aed44",borderTopColor:"#7c3aed",animation:"spin .9s linear infinite"}}/>}
+          {gerando?prog:"Nada é gravado até você clicar em Aplicar. Depois dá pra desfazer no botão do calendário."}
+        </span>
+        <span style={{display:"inline-flex",gap:8}}>
+          <button type="button" disabled={!!gerando} onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#475569",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button type="button" disabled={!!gerando||!previa||(_nPuxar+_nCriar+_nPauta)===0} onClick={_aplicar}
+            style={{background:(previa&&(_nPuxar+_nCriar+_nPauta)>0)?"#0f172a":"#e2e8f0",border:"none",color:(previa&&(_nPuxar+_nCriar+_nPauta)>0)?"#fff":"#94a3b8",borderRadius:99,padding:"9px 18px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:"inherit"}}>
+            {gerando?"Aplicando…":"Aplicar plano do mês"}
+          </button>
+        </span>
+      </div>
+    </div>
+  </div>;
+}
 function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs, perms}){
   // Social media (Luiza) nunca exclui — regra fixa, independe de Acessos
   const _calUser=(viewingAs&&(TEAM||[]).find(function(u){return u.id===viewingAs;}))||CURRENT_USER;
@@ -22576,6 +23201,42 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
   const [matAberto,setMatAberto]=useState(null); // "foto" | "short" | null — lista de material do contador
+  const [pautaAberta,setPautaAberta]=useState(false); // (23/09/2026) modal Gerar plano do mês
+  /* (23/09/2026) DESFAZER PLANO DO MÊS — última passada ainda não desfeita (id "plano-…") */
+  const [_planoUltimo,setPlanoUltimo]=useState(null);
+  const [_planoDesfazendo,setPlanoDesfazendo]=useState(false);
+  const _carregarPlanoUltimo=useCallback(function(){
+    const sb=window._sb; if(!sb) return;
+    sb.from("claude_plano_execucoes").select("id,criado_em,descricao,criados,alterados").like("id","plano-%").is("revertido_em",null)
+      .order("criado_em",{ascending:false}).limit(1).then(function(r){ setPlanoUltimo((r&&!r.error&&r.data&&r.data[0])||null); });
+  },[]);
+  useEffect(function(){ _carregarPlanoUltimo(); },[_carregarPlanoUltimo]);
+  const _desfazerPlanoMes=function(){
+    if(!_planoUltimo||_planoDesfazendo) return;
+    const nC=(_planoUltimo.criados||[]).length, nA=(_planoUltimo.alterados||[]).length;
+    const msg="Desfazer \""+(_planoUltimo.descricao||"último plano do mês")+"\"? "+nC+" card"+(nC===1?"":"s")+" criado"+(nC===1?"":"s")+" vão pra lixeira (menos os que alguém já mexeu) e "+nA+" volta"+(nA===1?"":"m")+" pra como estava"+(nA===1?"":"m")+".";
+    const go=function(){
+      setPlanoDesfazendo(true);
+      const _por=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"";
+      window._sb.rpc("claude_reverter_plano_mes",{p_exec:_planoUltimo.id,p_por:_por}).then(async function(rr){
+        setPlanoDesfazendo(false);
+        if(!rr||rr.error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra desfazer: "+((rr&&rr.error&&rr.error.message)||"erro"),6000); return; }
+        const d=rr.data||{}; const ids=Array.isArray(d.ids)?d.ids:[];
+        try{
+          if(ids.length&&typeof setTasks==="function"){
+            const q=await window._sb.from("tasks").select("*").in("id",ids);
+            const rows=(q&&!q.error&&q.data)||[];
+            const conv=(typeof rowToTask==="function")?rows.map(rowToTask):null;
+            if(conv) setTasks(function(prev){ const byId={}; conv.forEach(function(x){ byId[x.id]=x; }); return (prev||[]).map(function(x){ return byId[x.id]||x; }); });
+          }
+        }catch(_){}
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Desfeito: "+(d.apagados||0)+" apagado"+((d.apagados||0)===1?"":"s")+", "+(d.restaurados||0)+" restaurado"+((d.restaurados||0)===1?"":"s")+((d.mantidos||[]).length?(" · "+(d.mantidos||[]).length+" mantido"+((d.mantidos||[]).length===1?"":"s")+" porque alguém já mexeu"):"")+".",7000);
+        _carregarPlanoUltimo();
+      });
+    };
+    if(typeof pixelsConfirm==="function") pixelsConfirm(msg,{danger:true,okText:"Desfazer",cancelText:"Cancelar"}).then(function(y){ if(y) go(); });
+    else if(window.confirm(msg)) go();
+  };
   // Ref síncrono de tasks salvas nesta sessão (draft → não-draft).
   // Evita o bug do card sumir após save: o close checa este ref em vez do estado stale de openCard.
   const _savedInSessionRef=useRef(new Set());
@@ -23638,8 +24299,24 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             {_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
           </div>}
           {_bl("resumo.contadores")&&_painelMat()}
+          {/* (23/09/2026) PAUTA DO MÊS — um cliente (e uma unidade, na Bioter) de cada vez */}
+          {_bl("pauta")&&!_isAll&&(filterClient!=="bioter"||filterBioterUnit!=="todos")&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <button type="button" onClick={function(){ setPautaAberta(true); }}
+              style={{background:"linear-gradient(135deg,#7c3aed,#9F43F6)",border:"none",color:"#fff",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 14px rgba(124,58,237,.3)"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+              Gerar plano do mês
+            </button>
+            {_planoUltimo&&<button type="button" disabled={_planoDesfazendo} onClick={_desfazerPlanoMes} title={"Desfaz a última passada: "+(_planoUltimo.descricao||"")}
+              style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:99,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:_planoDesfazendo?"default":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:_planoDesfazendo?.6:1}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9 9 9 0 00-6.4 2.6L3 13"/></svg>
+              {_planoDesfazendo?"Desfazendo…":"Desfazer plano do mês"}
+            </button>}
+            <span style={{color:"#94a3b8",fontSize:11.5}}>Puxa o que está sem data, cria o que falta pra cadência de {_mesLabel} e escreve pauta + copy pelo peso dos produtos. Com prévia antes de aplicar.</span>
+          </div>}
         </div>;
       })()}
+      {pautaAberta&&filterClient!=="todos"&&<_PxPlanoDoMes client={filterClient} unit={filterClient==="bioter"&&filterBioterUnit!=="todos"?filterBioterUnit:""} mes={calMonth} tasks={tasks} setTasks={setTasks}
+        onClose={function(){ setPautaAberta(false); _carregarPlanoUltimo(); }} onOpenCard={function(t){ setOpenCard(t); }}/>}
 
 
       {/* Ações (mês controlado pelo ProgressoDoMes acima) */}
@@ -100044,13 +100721,13 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Seções por cadeira: Design/Vídeo não precisam de tom de voz, hashtags e CTA (isso é Social/Comunicação).
               null = todas (Estratégia, sócios sem aba). */}
           {(function(){
+            /* (23/09/2026, Vinicius) Tom de voz, Hashtags padrão e CTA padrão saem das Orientações em
+               todas as cadeiras — o tom mora em Comunicação da marca. */
             const _secs = _PB_CADEIRA_ATUAL==="video"  ? ["logos","paleta","fontes","siteredes"]
-                        : _PB_CADEIRA_ATUAL==="design" ? ["logos","paleta","fontes","naofazer","siteredes"]
-                        : null;
-            const _sub = _secs ? "Logo, paleta de cores, fontes e links oficiais — referência única usada nos cartões"
-                               : "Logo, paleta de cores, fontes, tom de voz — referência única usada nos cartões";
+                        : ["logos","paleta","fontes","naofazer","siteredes"];
+            const _sub = "Logo, paleta de cores, fontes e links oficiais — referência única usada nos cartões";
             return typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle={_sub} icon="sparkles" color={PB_PURPLE_DK}>
-              <COrientacoes key={"orient-"+cl.id+"-"+(_PB_CADEIRA_ATUAL||"all")} cl={cl} sections={_secs||undefined}/>
+              <COrientacoes key={"orient-"+cl.id+"-"+(_PB_CADEIRA_ATUAL||"all")} cl={cl} sections={_secs}/>
             </PlaybookBlock>;
           })()}
 
@@ -100156,6 +100833,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       </div>
                       <div style={{padding:"11px 13px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
                         <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
+                        {(function(){ const _p=_pbPrioDe(prod); return _p
+                          ? <span title={_p.d} style={{alignSelf:"flex-start",background:_p.bg,color:_p.c,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800,display:"inline-flex",alignItems:"center",gap:5}}><span style={{fontSize:9}}>{_p.e}</span>{_p.l}</span>
+                          : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",color:"#cbd5e1",fontSize:10.5,fontWeight:700}}>sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
                         {_uni.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
                           {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
@@ -100269,38 +100949,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>
           </div>
 
-          {/* Google Drive — link clicável pra pasta do cliente */}
-          {(function(){
-            const _driveUrl = (data && data.driveUrl) || "";
-            const _hasDrive = !!_driveUrl.trim();
-            return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:editMode?10:(_hasDrive?10:0)}}>
-                <div style={{width:34,height:34,borderRadius:9,background:"#eff6ff",border:"1px solid #bfdbfe",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <svg width="17" height="15" viewBox="0 0 87 78" xmlns="http://www.w3.org/2000/svg"><path d="M14.5 78L0 52.5L28 4H57L43 28.5L14.5 78Z" fill="#0066DA"/><path d="M43 28.5L57 4H87L72.5 28.5L43 28.5Z" fill="#EA4335"/><path d="M43 28.5L14.5 78H72.5L87 52.5L43 28.5Z" fill="#00832D"/><path d="M28 4L14.5 27L43 28.5L28 4Z" fill="#FFBA00"/></svg>
-                </div>
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Google Drive</div>
-                  <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>pasta do cliente</div>
-                </div>
-              </div>
-              {editMode && isAdmin
-                ? <input type="url" value={_driveUrl}
-                    onChange={function(e){ if(typeof onUpdate==="function") onUpdate({driveUrl: e.target.value}); }}
-                    placeholder="Cole aqui: https://drive.google.com/…"
-                    style={{width:"100%",background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",color:PB_INK,fontSize:12.5,outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"}}/>
-                : (_hasDrive
-                    ? <a href={_driveUrl} target="_blank" rel="noreferrer"
-                        style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 14px",color:"#1e40af",fontSize:12.5,fontWeight:700,cursor:"pointer",textDecoration:"none",transition:"all .12s"}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="#dbeafe";e.currentTarget.style.borderColor="#93c5fd";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="#eff6ff";e.currentTarget.style.borderColor="#bfdbfe";}}>
-                        Abrir pasta no Drive
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      </a>
-                    : <div style={{color:PB_SOFT,fontSize:11.5,fontStyle:"italic",padding:"6px 2px"}}>Nenhum link cadastrado{isAdmin?" — clique em Editar pra adicionar":""}.</div>
-                  )
-              }
-            </div>;
-          })()}
+          {/* (23/09/2026, Vinicius) bloco "Google Drive — pasta do cliente" removido do Playbook */}
 
         </div>
       </div>
@@ -100341,6 +100990,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </span>
             {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
               {_uni.slice(0,6).map(function(u){ return <span key={u.id} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
+              {(function(){ const _p=_pbPrioDe(prod); return _p?<span title={_p.d} style={{background:"rgba(255,255,255,.92)",color:_p.c,borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_p.e} {_p.l}</span>:null; })()}
               <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
             </span>}
             <button type="button" onClick={function(){ _produtoDel(pi); setFichaAberta(null); }} title="Remover este produto do playbook" style={_btnCab}
@@ -100411,6 +101061,19 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           </div>
                         </div>;
                       })()}
+                      <div>
+                        <div style={_PB_FICHA_ROT}>Peso nas copys <span style={{textTransform:"none",letterSpacing:0,fontWeight:600}}>· quanto este produto aparece nas copys e roteiros</span></div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                          {_PB_PRIOS.map(function(o){
+                            const on=String(prod.prioridade||"")===o.id;
+                            return <button type="button" key={o.id} title={o.d} onClick={function(){ _produtoUpd(pi,{prioridade:on?"":o.id}); }}
+                              style={{background:on?o.c:"#fff",border:"1.5px solid "+(on?o.c:"#e2e8f0"),color:on?"#fff":"#475569",borderRadius:99,padding:"6px 13px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+                              <span style={{fontSize:11}}>{o.e}</span>{o.l}
+                            </button>;
+                          })}
+                        </div>
+                        {!_pbPrioDe(prod)&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Sem peso marcado, a IA trata como Importante.</div>}
+                      </div>
                       <div>
                         <div style={_PB_FICHA_ROT}>O que é</div>
                         <_PbCampoFicha textarea placeholder="Em duas linhas: o que é, pra quem serve e o que ele resolve." valor={prod.descricao||""}
@@ -100514,12 +101177,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
    Materiais não extrai mais endereço/telefone — catálogo envelhece, isto aqui não. ── */
 function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
   const CAMPOS=(typeof PX_CADASTRO_CAMPOS!=="undefined")?PX_CADASTRO_CAMPOS:[
-    {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cidade",l:"Cidade/UF"},
-    {k:"telefone",l:"Telefone"},{k:"whatsapp",l:"WhatsApp oficial"},{k:"email",l:"E-mail"},{k:"site",l:"Site"},
-    {k:"instagram",l:"Instagram"},{k:"horario",l:"Horário de atendimento"}];
+    {k:"razao_social",l:"Razão social"},{k:"cnpj",l:"CNPJ"},{k:"endereco",l:"Endereço"},{k:"cep",l:"CEP"},{k:"cidade",l:"Cidade/UF"},
+    {k:"whatsapp",l:"Fone / WhatsApp"},{k:"email",l:"E-mail"},{k:"site",l:"Site"}];
   /* (23/09/2026, Vinicius) "não deixa pré-preenchido" — os exemplos pareciam dado real. Campo vazio
      mostra só o que é pra pôr ali. */
-  const _PH={razao_social:"Nome da empresa no CNPJ",cnpj:"Só números ou com pontuação",endereco:"Rua, número, bairro e CEP",cidade:"Cidade/UF",telefone:"Fixo, com DDD",whatsapp:"O número que fecha as legendas, com DDD",email:"E-mail de contato",site:"Endereço do site",instagram:"@ do perfil",horario:"Dias e horários"};
+  const _PH={razao_social:"Nome da empresa no CNPJ",cnpj:"Só números ou com pontuação",endereco:"Rua, número e bairro",cep:"00000-000",cidade:"Cidade/UF",whatsapp:"O número que fecha as legendas, com DDD",email:"E-mail de contato",site:"Endereço do site"};
   const _unit=isBioter?String(unitTab||""):"";
   const _atual=(function(){
     if(_unit){ const bu=(data&&data.cadastro_by_unit)||{}; return (bu[_unit]&&typeof bu[_unit]==="object")?bu[_unit]:{}; }
@@ -100544,7 +101206,10 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     const b=bd||{};
     const fontes=[]; if(_unit&&b[_unit]&&typeof b[_unit]==="object") fontes.push(b[_unit]); if(b.grupo&&typeof b.grupo==="object") fontes.push(b.grupo); fontes.push(b);
     const g=function(sec,fid){ for(const f of fontes){ try{ const v=f&&f[sec]&&f[sec][fid]; if(v&&String(v).trim()) return String(v).trim(); }catch(_){} } return ""; };
-    return {razao_social:g("identidade","nome_empresarial"),cnpj:g("identidade","cnpj"),cidade:g("identidade","cidade"),endereco:g("identidade","endereco"),
+    const _end=g("identidade","endereco"); const _cepM=_end.match(/\b\d{5}-?\d{3}\b/);
+    const _cl=(typeof CLIENTS!=="undefined"?(CLIENTS||[]):[]).find(function(c){return c.id===clientId;})||{};
+    const _cidCl=(!_unit&&_cl.cidade)?[_cl.cidade,_cl.estado].filter(Boolean).join("/"):"";
+    return {razao_social:g("identidade","nome_empresarial"),cnpj:g("identidade","cnpj"),cidade:g("identidade","cidade")||_cidCl,endereco:_end,cep:_cepM?_cepM[0]:"",
             whatsapp:g("identidade","whatsapp_empresarial"),email:g("identidade","email_empresarial"),site:g("processo","site")};
   };
   const _salvar=function(novo){
@@ -100552,6 +101217,9 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     if(_unit){ const bu=Object.assign({},(data&&data.cadastro_by_unit)||{}); bu[_unit]=novo; onUpdate({cadastro_by_unit:bu}); }
     else onUpdate({cadastro:novo});
     setTick(function(n){return n+1;});
+    /* (23/09/2026, Vinicius) "não fica duas coisas diferentes": Cidade/UF do Playbook (cliente comum,
+       ou Bioter no Grupo) grava também em Estratégia › Clientes (clients.cidade/estado). */
+    if(!_unit&&typeof pxSincronizarCidadeCliente==="function") pxSincronizarCidadeCliente(clientId, novo.cidade);
   };
   const _set=function(k,v){ const novo=Object.assign({},_atual); novo[k]=String(v||"").trim(); _salvar(novo); };
   const _puxar=function(){
@@ -100565,7 +101233,7 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
   const _uniLabel=function(u){ if(!u) return "Grupo"; if(typeof BIOTER_UNITS==="undefined") return u; const x=BIOTER_UNITS.find(function(b){return b.id===u;}); return x?(x.pickerLabel||x.label):u; };
   const _temBriefing=(function(){ const br=_doBriefing(); return Object.keys(br).some(function(k){return !!br[k];}); })();
   return <PlaybookBlock id="pb-briefing-auto" title="Dados cadastrais"
-    subtitle="Endereço, telefone, WhatsApp oficial, site — a única fonte que a IA usa pra contato. Catálogo envelhece; isto aqui a equipe mantém"
+    subtitle="Endereço, CEP, fone/WhatsApp, site — a única fonte que a IA usa pra contato. Catálogo envelhece; isto aqui a equipe mantém"
     icon="fileText" color="#0d9488">
     <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:12}}>
       {isBioter&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>}
@@ -100592,7 +101260,7 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
         </div>;
       })}
     </div>
-    <div style={{color:"#94a3b8",fontSize:11,marginTop:9,lineHeight:1.5}}>O <b>WhatsApp oficial</b> é o número que fecha as legendas. Sem ele, a IA usa o WhatsApp do primeiro contato em Contatos; sem nenhum, fecha sem número.</div>
+    <div style={{color:"#94a3b8",fontSize:11,marginTop:9,lineHeight:1.5}}>O <b>Fone / WhatsApp</b> é o número que fecha as legendas. Sem ele, a IA usa o WhatsApp do primeiro contato em Contatos; sem nenhum, fecha sem número.</div>
   </PlaybookBlock>;
 }
 
@@ -100755,15 +101423,24 @@ function _pbMatBase64(file){
 /* (23/09/2026) A ficha do Catálogo Bioter saiu cortada no meio de "O QUE NÃO DIZER": a IA bateu
    no max_tokens. Aqui, se parou por limite (stop_reason max_tokens), pede "continue de onde
    parou" e emenda — até 2 vezes. */
+/* (23/09/2026, Vinicius) "gostaria que fosse o GPT" — a leitura vai pelo GPT (askGPTBlocos);
+   se o GPT falhar na primeira chamada, cai pro Claude e segue. */
+function _pbMaterialUsaGPT(){
+  return (typeof PX_IA_PROVEDOR_MATERIAL!=="undefined"&&PX_IA_PROVEDOR_MATERIAL==="openai"&&typeof askGPTBlocos==="function");
+}
 async function _pbAskCompleto(args){
-  const data=await askClaude(args);
+  let _ask=askClaude, data;
+  if(_pbMaterialUsaGPT()){
+    try{ data=await askGPTBlocos(args); _ask=askGPTBlocos; }
+    catch(e){ console.warn("[material] GPT falhou, lendo com o Claude:",(e&&e.message)||e); data=await askClaude(args); }
+  } else data=await askClaude(args);
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
   let stop=data&&data.stop_reason, voltas=0;
   const msgs=(args.messages||[]).slice();
   while(stop==="max_tokens"&&voltas<2){
     voltas++;
     const m2=msgs.concat([{role:"assistant",content:txt},{role:"user",content:"Continue EXATAMENTE de onde parou, sem repetir nada do que já escreveu e sem comentário. Termine todas as seções."}]);
-    const d2=await askClaude(Object.assign({},args,{messages:m2}));
+    const d2=await _ask(Object.assign({},args,{messages:m2}));
     const t2=((d2&&d2.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
     if(!t2) break;
     txt+=t2; stop=d2&&d2.stop_reason;
@@ -100936,10 +101613,11 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
     if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
     return _limpa(txt);
   }
-  if(ehPdf&&_url&&Number(file&&file.size)>PB_MAT_MAX_URL_IA){
-    console.info("[material] "+_pbMatTamanho(file.size)+" — lendo página a página, por imagem");
+  if(ehPdf&&_url&&(Number(file&&file.size)>PB_MAT_MAX_URL_IA||_pbMaterialUsaGPT())){
+    console.info("[material] "+(_pbMaterialUsaGPT()?"GPT lê PDF página a página, por imagem":(_pbMatTamanho(file.size)+" — lendo página a página, por imagem")));
     return _limpa(await _pbFichaPorPaginas(_url,sys,pedido,onProg));
   }
+  if(ehPdf&&!_url&&_pbMaterialUsaGPT()) throw new Error("Sem URL do arquivo — suba de novo pra o GPT ler página a página.");
   try{
     if(onProg) onProg("ia",1,1);
     const txt=await _pbAskCompleto({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
@@ -100967,6 +101645,12 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const [editId,setEditId]=useState(null);
   const [rascunho,setRascunho]=useState("");
   const [abertos,setAbertos]=useState({});   // ficha expandida por material
+  const [fichaMat,setFichaMat]=useState(null); // (23/09/2026) id do material aberto em tela cheia
+  useEffect(function(){
+    if(fichaMat===null) return;
+    const f=function(e){ if(e.key==="Escape"){ setFichaMat(null); setEditId(null); } };
+    window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); };
+  },[fichaMat]);
   const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
   const _inp={border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 11px",fontSize:12.5,fontFamily:"inherit",color:"#0f172a",background:"#fff",outline:"none",width:"100%",boxSizing:"border-box"};
   const carregar=async function(){
@@ -101149,113 +101833,106 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
       <_PbEmpty icon="fileText" text="Nenhum material ainda."/>}
 
     {itens!==null && _vis.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {/* (23/09/2026, Vinicius) "tão ocupando muito espaço… quadrados que abrem e ficam maiores
+          quando clica". Grade de cards compactos; a ficha abre em tela cheia (fichaMat). */}
+      <div style={{display:"grid",gridTemplateColumns:(typeof _pxMob==="function"&&_pxMob())?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
       {_vis.map(function(m){
         const st=_STATUS[String(m.ficha_status||"pendente")]||_STATUS.pendente;
         const on=!!m.ativo&&!!String(m.ficha||"").trim();
         const _lendo=String(m.ficha_status||"")==="lendo";
-        // (23/09/2026, Vinicius) "tem que ter um recolher ficha aqui no topo também"
-        const _abertoTopo=!!abertos[m.id]&&String(m.ficha||"").trim().length>520&&editId!==m.id;
-        return <div key={m.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.75}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:180}}>
-              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-                <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{m.titulo||m.arquivo_nome||"Material"}</span>
-                {isBioter && <span title={m.unidade?"Só esta unidade lê":"Todas as unidades leem (Paraguay traduzido)"} style={{background:m.unidade?"#f1f5f9":"#ecfdf5",color:m.unidade?"#475569":"#047857",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700}}>{m.unidade?_uniLabel(m.unidade):"Grupo · todas"}</span>}
-                <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
-              </div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:3}}>
-                {m.arquivo_nome||""}{m.arquivo_tamanho?(" · "+_pbMatTamanho(m.arquivo_tamanho)):""}{m.created_by?(" · "+m.created_by):""}
-              </div>
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:7,flexShrink:0}}>
-              {editId===m.id && isAdmin && <button type="button" title="Salvar a ficha (o mesmo botão de baixo)"
-                onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }}
-                style={{background:"#0d9488",border:"none",borderRadius:99,padding:"6px 14px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar ficha</button>}
-              {_abertoTopo && <button type="button" title="Recolher a ficha"
-                onClick={function(){ setAbertos(function(p){ const n=Object.assign({},p); delete n[m.id]; return n; }); }}
-                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}
-                onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0d9488";}}
-                onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_BORDER;}}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>Recolher ficha
-              </button>}
-              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer"
-                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"6px 11px",color:"#0f172a",fontSize:11.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6}}>
-                <Ico n="eye" size={12} color="#64748b"/>Abrir</a>}
-              {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"}
-                onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
-                style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex"}}>
-                <span style={{width:34,height:20,borderRadius:99,background:on?"#0d9488":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
-                  <span style={{position:"absolute",top:2,left:on?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
-                </span>
-              </button>}
-              {isAdmin && m.arquivo_url && <button type="button" title="Ler o arquivo de novo e refazer a ficha"
-                disabled={String(m.ficha_status||"")==="lendo"}
-                onClick={function(){ _relerDoUrl(m); }}
-                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}
-                onMouseEnter={function(ev){ev.currentTarget.style.color="#0d9488";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#94a3b8";}}><Ico n="refresh" size={14}/></button>}
-              {isAdmin && <button type="button" title="Editar a ficha à mão"
-                onClick={function(){ setEditId(editId===m.id?null:m.id); setRascunho(String(m.ficha||"")); }}
-                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#94a3b8",cursor:"pointer",display:"inline-flex"}}><Ico n="edit" size={14}/></button>}
-              {isAdmin && <button type="button" title="Apagar este material"
-                onClick={function(){ _apagar(m); }}
-                style={{background:"transparent",border:"none",padding:3,borderRadius:6,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}}
-                onMouseEnter={function(ev){ev.currentTarget.style.color="#dc2626";}} onMouseLeave={function(ev){ev.currentTarget.style.color="#cbd5e1";}}><Ico n="trash" size={14}/></button>}
-            </div>
+        const _nome=String(m.arquivo_nome||"").toLowerCase();
+        const _ext=/\.pdf$/.test(_nome)?"PDF":/\.docx?$/.test(_nome)?"Word":/\.pptx?$/.test(_nome)?"PowerPoint":/\.xlsx?$/.test(_nome)?"Excel":/\.(png|jpe?g|webp|gif|heic)$/.test(_nome)?"Imagem":/\.(txt|md|csv|json)$/.test(_nome)?"Texto":"Arquivo";
+        const _corExt={PDF:"#dc2626",Word:"#2563eb",PowerPoint:"#ea580c",Excel:"#16a34a",Imagem:"#7c3aed",Texto:"#475569",Arquivo:"#64748b"}[_ext];
+        const _ficha=String(m.ficha||"").trim();
+        const _resumo=_ficha.replace(/^FICHA[^\n]*\n+/i,"").replace(/^O QUE É\s*\n/i,"").replace(/\s+/g," ").slice(0,140);
+        return <div key={m.id} role="button" tabIndex={0} title="Abrir a ficha"
+          onClick={function(){ setFichaMat(m.id); }} onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaMat(m.id); } }}
+          style={{background:on?"#fff":"#fafbfc",border:"1.5px solid "+(on?PB_BORDER:"#eef0f3"),borderTop:"4px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:14,padding:"12px 13px",cursor:"pointer",display:"flex",flexDirection:"column",gap:8,opacity:on||_lendo?1:.8,outline:"none",transition:"box-shadow .15s, transform .15s"}}
+          onMouseEnter={function(e){ e.currentTarget.style.boxShadow="0 10px 26px rgba(13,148,136,.14)"; e.currentTarget.style.transform="translateY(-2px)"; }}
+          onMouseLeave={function(e){ e.currentTarget.style.boxShadow="none"; e.currentTarget.style.transform="none"; }}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{background:_corExt+"14",color:_corExt,border:"1px solid "+_corExt+"33",borderRadius:7,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>{_ext}</span>
+            {isBioter && <span title={m.unidade?"Só esta unidade lê":"Todas as unidades leem (Paraguay traduzido)"} style={{background:m.unidade?"#f1f5f9":"#ecfdf5",color:m.unidade?"#475569":"#047857",borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,flexShrink:0}}>{m.unidade?_uniLabel(m.unidade):"Grupo · todas"}</span>}
+            <span style={{flex:1}}/>
+            {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"}
+              onClick={function(e){ e.stopPropagation(); _patch(m,{ativo:!m.ativo}); }}
+              style={{background:"transparent",border:"none",padding:0,cursor:"pointer",display:"inline-flex",flexShrink:0}}>
+              <span style={{width:32,height:18,borderRadius:99,background:on?"#0d9488":"#e2e8f0",display:"inline-block",position:"relative",transition:"background .16s"}}>
+                <span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+              </span>
+            </button>}
           </div>
-
-          {editId===m.id
-            ? <div style={{marginTop:9,display:"flex",flexDirection:"column",gap:8}}>
-                <_PbAutoTextarea value={rascunho} onChange={function(e){setRascunho(e.target.value);}} rows={6}
-                  placeholder="A ficha que a IA lê junto com o resto do cérebro. Escreva fatos, não texto de propaganda."
-                  style={Object.assign({},_inp,{lineHeight:1.55,minHeight:120,overflow:"hidden",resize:"none"})}/>
-                <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                  <button type="button" onClick={function(){setEditId(null);}}
-                    style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"8px 15px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-                  <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }}
-                    style={{background:"#0d9488",border:"none",borderRadius:10,padding:"8px 17px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>Salvar ficha</button>
-                </div>
-              </div>
-            : (String(m.ficha||"").trim()
-                ? (function(){
-                    /* (22/09/2026, Rodrigo) "não precisa ficar alargadão assim né kkk, coloca um
-                       limite com um botão expandir." Ficha de briefing inteiro dá 11 mil
-                       caracteres e empurrava o resto do Playbook pra baixo. Fica dobrada em ~190px
-                       com o texto sumindo num degradê; ficha curta nem ganha botão. */
-                    const _ficha=String(m.ficha||"").trim();
-                    const _aberto=!!abertos[m.id];
-                    const _longa=_ficha.length>520;
-                    const _linhas=_ficha.split("\n").filter(function(l){return l.trim();}).length;
-                    return <div style={{marginTop:8}}>
-                      <div style={{position:"relative",background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",color:"#334155",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap",
-                        maxHeight:(_longa&&!_aberto)?190:"none",overflow:(_longa&&!_aberto)?"hidden":"visible"}}>
-                        {_ficha}
-                        {_longa&&!_aberto&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:58,borderRadius:"0 0 10px 10px",
-                          background:"linear-gradient(180deg, rgba(248,250,252,0) 0%, #f8fafc 78%)",pointerEvents:"none"}}/>}
-                      </div>
-                      {_longa&&<button type="button"
-                        onClick={function(){ setAbertos(function(p){ const n=Object.assign({},p); if(n[m.id]) delete n[m.id]; else n[m.id]=true; return n; }); }}
-                        style={{marginTop:6,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:99,padding:"5px 13px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}
-                        onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";e.currentTarget.style.borderColor="#0d9488";}}
-                        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_BORDER;}}>
-                        <span style={{display:"inline-flex",transform:_aberto?"rotate(180deg)":"none",transition:"transform .15s"}}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                        </span>
-                        {_aberto?"Recolher ficha":("Expandir ficha · "+_linhas+" linhas")}
-                      </button>}
-                    </div>;
-                  })()
-                : (_lendo
-                    ? <div style={{marginTop:9,background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"11px 12px"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8,color:"#b45309",fontSize:11.5,fontWeight:800,marginBottom:9}}>
-                          <span style={{width:13,height:13,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"spin .9s linear infinite",flexShrink:0}}/>
-                          A IA está lendo — a ficha aparece aqui quando terminar
-                        </div>
-                        {[92,78,85,60].map(function(w,i){ return <div key={i} style={{height:9,width:w+"%",borderRadius:99,marginBottom:7,
-                          background:"linear-gradient(90deg,#e8edf3 0px,#f5f7fa 200px,#e8edf3 400px)",backgroundSize:"800px 100%",animation:"pxShimmer 1.6s linear infinite"}}/>; })}
-                      </div>
-                    : (isAdmin?<div style={{marginTop:8,color:"#94a3b8",fontSize:11.5}}>Sem ficha — clique no lápis pra escrever à mão, ou suba o arquivo de novo pra IA ler.</div>:null)))}
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.3,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{m.titulo||m.arquivo_nome||"Material"}</div>
+          {_lendo
+            ? <div style={{display:"flex",alignItems:"center",gap:7,color:"#b45309",fontSize:11,fontWeight:800}}><span style={{width:12,height:12,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"spin .9s linear infinite",flexShrink:0}}/>A IA está lendo…</div>
+            : <div style={{color:_resumo?PB_MUTE:"#cbd5e1",fontSize:11.5,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:50}}>{_resumo||(String(m.ficha_status||"")==="erro"?"Não deu pra ler — abra pra reler ou escrever à mão.":"Sem ficha ainda.")}</div>}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginTop:"auto"}}>
+            <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.arquivo_tamanho?_pbMatTamanho(m.arquivo_tamanho):""}{m.created_by?(" · "+m.created_by):""}</span>
+          </div>
         </div>;
       })}
+      </div>
+      {/* FICHA DO MATERIAL em tela cheia */}
+      {fichaMat!==null && (function(){
+        const m=_vis.find(function(x){return x.id===fichaMat;})||(itens||[]).find(function(x){return x.id===fichaMat;});
+        if(!m) return null;
+        const st=_STATUS[String(m.ficha_status||"pendente")]||_STATUS.pendente;
+        const on=!!m.ativo&&!!String(m.ficha||"").trim();
+        const _lendo=String(m.ficha_status||"")==="lendo";
+        const _ficha=String(m.ficha||"").trim();
+        const _isMobM=(typeof _pxMob==="function"&&_pxMob());
+        const _fechar=function(){ setFichaMat(null); setEditId(null); };
+        const _btn={background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"7px 12px",color:"#0f172a",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,textDecoration:"none"};
+        return <div onMouseDown={function(e){ if(e.target===e.currentTarget) _fechar(); }}
+          style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:320,display:"flex",alignItems:_isMobM?"stretch":"center",justifyContent:"center",padding:_isMobM?0:"18px 16px",fontFamily:PB_INTER}}>
+          <div style={{background:"#fff",borderRadius:_isMobM?0:20,width:"100%",maxWidth:960,maxHeight:_isMobM?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobM?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#0d9488 0%,#14b8a6 100%)",color:"#fff",flexShrink:0}}>
+              <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
+                <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Material do cliente · {st.t}{isBioter?(" · "+(m.unidade?_uniLabel(m.unidade):"Grupo, todas as unidades")):""}</span>
+                <span style={{fontWeight:800,fontSize:_isMobM?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.titulo||m.arquivo_nome||"Material"}</span>
+                <span style={{opacity:.85,fontSize:11,fontWeight:600,marginTop:2}}>{m.arquivo_nome||""}{m.arquivo_tamanho?(" · "+_pbMatTamanho(m.arquivo_tamanho)):""}{m.created_by?(" · "+m.created_by):""}</span>
+              </span>
+              {isAdmin && <button type="button" title={on?"Tirar do cérebro (guarda o arquivo e a ficha)":"Voltar pro cérebro"} onClick={function(){ _patch(m,{ativo:!m.ativo}); }}
+                style={{background:"rgba(255,255,255,.16)",border:"none",borderRadius:99,padding:"6px 12px",color:"#fff",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8}}>
+                <span style={{width:32,height:18,borderRadius:99,background:on?"#fff":"rgba(255,255,255,.35)",display:"inline-block",position:"relative"}}><span style={{position:"absolute",top:2,left:on?16:2,width:14,height:14,borderRadius:"50%",background:on?"#0d9488":"#fff",transition:"left .16s"}}/></span>
+                {on?"No cérebro":"Fora do cérebro"}
+              </button>}
+              <button type="button" onClick={_fechar} title="Fechar (Esc)" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:_isMobM?"10px 14px":"10px 20px",borderBottom:"1px solid "+PB_BORDER2,background:"#fafbfc",flexShrink:0}}>
+              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={_btn}><Ico n="eye" size={12} color="#64748b"/>Abrir arquivo</a>}
+              {isAdmin && m.arquivo_url && <button type="button" disabled={_lendo} onClick={function(){ _relerDoUrl(m); }} style={Object.assign({},_btn,{opacity:_lendo?.5:1})} title="Ler o arquivo de novo e refazer a ficha"><Ico n="refresh" size={12} color="#64748b"/>Reler com a IA</button>}
+              {isAdmin && editId!==m.id && <button type="button" onClick={function(){ setEditId(m.id); setRascunho(_ficha); }} style={_btn}><Ico n="edit" size={12} color="#64748b"/>Editar à mão</button>}
+              {isAdmin && editId===m.id && <>
+                <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }} style={Object.assign({},_btn,{background:"#0d9488",border:"none",color:"#fff"})}>Salvar ficha</button>
+                <button type="button" onClick={function(){ setEditId(null); }} style={_btn}>Cancelar</button>
+              </>}
+              <span style={{flex:1}}/>
+              {isAdmin && <button type="button" onClick={function(){ _apagar(m); _fechar(); }} style={Object.assign({},_btn,{color:"#dc2626"})} title="Apagar este material"><Ico n="trash" size={12} color="#dc2626"/>Apagar</button>}
+            </div>
+            <div style={{flex:1,overflowY:"auto",padding:_isMobM?"14px":"18px 22px 24px"}}>
+              {editId===m.id
+                ? <_PbAutoTextarea value={rascunho} onChange={function(e){setRascunho(e.target.value);}} rows={16}
+                    placeholder="A ficha que a IA lê junto com o resto do cérebro. Escreva fatos, não texto de propaganda."
+                    style={Object.assign({},_inp,{lineHeight:1.6,minHeight:320,overflow:"hidden",resize:"none"})}/>
+                : (_ficha
+                    ? <div style={{background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"14px 16px",color:"#334155",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{_ficha}</div>
+                    : (_lendo
+                        ? <div style={{background:"#f8fafc",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"14px 16px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,color:"#b45309",fontSize:12,fontWeight:800,marginBottom:10}}>
+                              <span style={{width:13,height:13,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"spin .9s linear infinite",flexShrink:0}}/>
+                              A IA está lendo — a ficha aparece aqui quando terminar
+                            </div>
+                            {[92,78,85,60,70].map(function(w,i){ return <div key={i} style={{height:9,width:w+"%",borderRadius:99,marginBottom:8,background:"linear-gradient(90deg,#e8edf3 0px,#f5f7fa 200px,#e8edf3 400px)",backgroundSize:"800px 100%",animation:"pxShimmer 1.6s linear infinite"}}/>; })}
+                          </div>
+                        : <div style={{color:"#94a3b8",fontSize:12.5,padding:"24px 0",textAlign:"center"}}>Sem ficha{isAdmin?" — clique em Editar à mão, ou em Reler com a IA.":"."}</div>))}
+            </div>
+          </div>
+        </div>;
+      })()}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
         {_ativos} de {_vis.length} {_vis.length===1?"material":"materiais"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
       </div>
@@ -101378,6 +102055,17 @@ function _PbCampoFicha({valor, onCommit, textarea, ...resto}){
 }
 /* Etiqueta das seções da ficha técnica do produto — mesma em todas, pra ler como ficha. */
 const _PB_FICHA_ROT={color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:6};
+/* (23/09/2026, Vinicius) PESO do produto nas copys — a tag substitui a "matriz de prioridade" escrita
+   à mão. Grava em prod.prioridade. Entra no cérebro (pxCtxFichasProdutosTxt) e no rodízio dos Roteiros. */
+/* Cores do QUENTE pro FRIO (Vinicius: "vermelho dá um ar de errado… do vermelho pro azul"):
+   quanto mais quente, mais o produto aparece. */
+const _PB_PRIOS=[
+  {id:"prioridade",  l:"Prioridade",  e:"\ud83d\udd34", c:"#dc2626", bg:"#fee2e2", d:"Carro-chefe — a maioria das copys e roteiros"},
+  {id:"importante",  l:"Importante",  e:"\ud83d\udfe0", c:"#ea580c", bg:"#ffedd5", d:"Presença regular"},
+  {id:"complementar",l:"Complementar",e:"\ud83d\udfe1", c:"#ca8a04", bg:"#fef9c3", d:"Só de vez em quando, ou quando o pedido citar"},
+  {id:"inativo",     l:"Inativo",     e:"\ud83d\udd35", c:"#2563eb", bg:"#dbeafe", d:"Nunca entra em copy nem roteiro"},
+];
+function _pbPrioDe(p){ const id=String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
 /* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
    carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
    (Grupo/cliente) e data.produtos_visao_by_unit[unidade] (Bioter com unidade selecionada). Entra no
@@ -101400,13 +102088,13 @@ function _PbProdutosVisao({isBioter, unitTab, isAdmin, data, onUpdate}){
   const _uniNome=(_unit&&typeof BIOTER_UNITS!=="undefined")?(((BIOTER_UNITS.find(function(u){return u.id===_unit;})||{}).pickerLabel)||_unit):"";
   const _ph=_unit
     ? ("O que muda em "+_uniNome+": produtos que só aqui vende, o que é foco nesta unidade, o que não oferece. O texto do Grupo continua valendo junto.")
-    : "Como a empresa se posiciona. Ex.:\nIMPORTANTE: o carro-chefe é pré-moldados, não construir o pavilhão completo (turn key) — fazem, mas o foco é entregar os pré-moldados.\n🟣 Prioridade · 🟢 Importante · 🟡 Complementar · 🔴 Inativo\n🟣 Estruturas pré-moldadas para o agronegócio: aviários, granjas…";
+    : "Como a empresa se posiciona — o que vende, o carro-chefe, o que faz mas não é foco e por quê. Ex.:\nO carro-chefe é pré-moldados, não construir o pavilhão completo (turn key). Fazem também, mas o foco é entregar os pré-moldados: gera mais fluxo e a entrega é mais rápida e simples.\n\nO peso de cada produto (quanto aparece nas copys) você marca na ficha dele, não aqui.";
   return <div style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid "+PB_BORDER2}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:7}}>
       <div>
         <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Visão geral dos produtos e serviços{_unit?(" · "+_uniNome):""}</div>
         <div style={{color:PB_MUTE,fontSize:11.5,marginTop:2,lineHeight:1.45}}>
-          O que a empresa vende, o carro-chefe, a ordem de prioridade e o que faz mas não é foco. A IA lê isto antes das fichas, em toda copy e roteiro{_unit?" — junto com o texto do Grupo":""}.
+          O que a empresa vende, o carro-chefe e o que faz mas não é foco. A IA lê isto antes das fichas, em toda copy e roteiro{_unit?" — junto com o texto do Grupo":""}. O peso de cada produto é a tag na ficha dele.
         </div>
       </div>
       {_unit&&_geral&&<span title={_geral} style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:700,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Grupo: {_geral.replace(/\s+/g," ").slice(0,60)}{_geral.length>60?"…":""}</span>}
@@ -106525,7 +107213,11 @@ async function pxGerarRoteiros(opts){
   const trend=(opts&&opts.trend)||null;
   const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
   const produtosFeitos=(opts&&opts.produtosFeitos)||{}; // {produto: quantos roteiros já tem}
-  const quantos=Math.max(1,Math.min(10,(opts&&opts.quantos)||5));   // (22/09/2026) teto passou de 5 pra 10
+  /* (23/09/2026, Vinicius) quantos=0 = LIVRE: a IA faz quantos o PEDIDO determinar ("3 de cada" pra 4
+     produtos = 12), até 20. Número marcado manda. */
+  const livre=!!(opts&&opts.pedido)&&(opts.quantos===0||opts.quantos==="livre");
+  const quantos=livre?0:Math.max(1,Math.min(20,(opts&&opts.quantos)||5));
+  const _qTxt=livre?"quantos o pedido determinar":String(quantos);
   /* (22/09/2026) BUG "pedido is not defined": o Roteiro específico (21/09) manda `opts.pedido`,
      o prompt usa `pedido` em 5 lugares — e a variável nunca foi declarada. Estourava
      ReferenceError já no bloco de "assuntos que já têm roteiro", ou seja, em QUALQUER geração
@@ -106557,7 +107249,10 @@ async function pxGerarRoteiros(opts){
   const _prodOf=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[];
   if(_prodOf.length){
     u+="LISTA OFICIAL DE PRODUTOS (é daqui que sai a tag do roteiro — copie o nome EXATAMENTE como está escrito):\n";
-    _prodOf.forEach(function(pr){ u+="- "+pr.nome+(pr.daUnidade?"":" (não é desta unidade — só use se o roteiro for mesmo sobre isso)")+"\n"; });
+    /* (23/09/2026) o peso vem da tag da ficha do produto; 🔴 inativo nem entra na lista */
+    const _E={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]"};
+    _prodOf.forEach(function(pr){ if(pr.prioridade==="inativo") return; u+="- "+pr.nome+(_E[pr.prioridade]?(" "+_E[pr.prioridade]):"")+(pr.daUnidade?"":" (não é desta unidade — só use se o roteiro for mesmo sobre isso)")+"\n"; });
+    if(_prodOf.some(function(pr){return pr.prioridade==="inativo";})) u+="(fora da lista, NUNCA use: "+_prodOf.filter(function(pr){return pr.prioridade==="inativo";}).map(function(pr){return pr.nome;}).join(", ")+")\n";
     u+="\n";
   }
   const _temProdutos=!!_bpTxt||_prodOf.length>0;
@@ -106590,9 +107285,9 @@ async function pxGerarRoteiros(opts){
     u+="TAREFA: escreva "+quantos+" IDEIAS DE ROTEIRO que adaptem ESSA TREND pra "+clienteNome+" — cada uma encaixa a trend num assunto diferente do negócio do cliente (produto, rotina, bastidor, dúvida do cliente, resultado). A trend é o formato/gancho; o conteúdo é da marca. Nunca invente que a marca fez algo que não fez.\n";
   }else if(pedido){
     u+="PEDIDO DA AGÊNCIA (é ISTO que manda — acima do rodízio de produtos e da regra de assunto inédito):\n"+pedido+"\n\n";
-    u+="TAREFA: escreva "+quantos+" ROTEIRO"+(quantos>1?"S":"")+" atendendo EXATAMENTE esse pedido pra "+clienteNome+". "+
-       "Se o pedido nomeia um produto, um assunto ou um ângulo, é sobre isso que "+(quantos>1?"os roteiros falam":"o roteiro fala")+". "+
-       (quantos>1?"Sendo mais de um, cada roteiro entra por um ÂNGULO diferente dentro do que foi pedido (dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega) — nunca o mesmo texto com outras palavras. ":"")+
+    u+="TAREFA: escreva "+(livre?"EXATAMENTE A QUANTIDADE DE ROTEIROS QUE O PEDIDO DETERMINA (some tudo: \"3 de cada\" pra 4 produtos são 12 roteiros; se o pedido não diz quantos, faça 1 por assunto/produto citado; nunca menos do que o pedido soma; máximo 20)":(quantos+" ROTEIRO"+(quantos>1?"S":"")))+" atendendo EXATAMENTE esse pedido pra "+clienteNome+". "+
+       "Se o pedido nomeia um produto, um assunto ou um ângulo, é sobre isso que "+((livre||quantos>1)?"os roteiros falam":"o roteiro fala")+". "+
+       ((livre||quantos>1)?"Sendo mais de um, cada roteiro entra por um ÂNGULO diferente dentro do que foi pedido (dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega) — nunca o mesmo texto com outras palavras. Se o pedido diz o tipo de abordagem de cada um (comercial, técnico, topo de funil…), siga à risca. ":"")+
        "O que o pedido não disser, você completa com o playbook, o briefing do cliente e o foco do mês. Nunca invente número, cidade, prazo, garantia nem depoimento.\n";
   }else{
     u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
@@ -106601,7 +107296,7 @@ async function pxGerarRoteiros(opts){
     u+="PRODUTO: marque cada roteiro com o produto ou serviço da lista acima que ele trata (se o pedido não cita nenhum, use o que mais se aproxima). O pedido pode pedir vários roteiros do MESMO produto — nesse caso, cada um por um ângulo diferente.\n\n";
   }
   if(_temProdutos&&!pedido){
-    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize 🟣, depois 🟢; 🟡 só de vez em quando; 🔴 NUNCA. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
+    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize [PRIORIDADE] (ou 🟣 no briefing), depois [IMPORTANTE] (🟢); [COMPLEMENTAR] (🟡) só de vez em quando; [INATIVO] (🔴) NUNCA. Entre produtos do MESMO peso, rodízio: quantidades parecidas, o que tem menos roteiros vem primeiro. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente.\n";
     u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
   }
   u+=_rtRegras60();
@@ -106609,15 +107304,20 @@ async function pxGerarRoteiros(opts){
   u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 150 palavras, corte.\n";
   u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
-  u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
-  for(let i=1;i<=quantos;i++){ u+="===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; }
+  const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, em português)\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
+  if(livre){
+    u+="FORMATO EXATO DA RESPOSTA (um bloco por roteiro, numerados 1, 2, 3… — repita o bloco quantas vezes o pedido pedir, até 20):\n"+_bloco(1)+_bloco(2)+"(…e assim por diante)\n";
+  } else {
+    u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
+    for(let i=1;i<=quantos;i++){ u+=_bloco(i); }
+  }
 
   /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
      estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:Math.min(8000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
+  const data=await askIA({model:PX_IA_MODELO,max_tokens:livre?16000:Math.min(16000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
   const out=_rtParseResposta(data);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  const lista=out.slice(0,quantos);
+  const lista=out.slice(0,livre?20:quantos);
   /* A tag só existe se bater com o cadastro. Nome que a IA inventou não vira etiqueta. */
   if(_prodOf.length&&typeof pxProdutoOficial==="function"){
     lista.forEach(function(r){ r.produto=pxProdutoOficial(r.produto,_prodOf)||""; });
@@ -106718,7 +107418,7 @@ const _RT_ICONES=[
 function _rtIcone(id){ let h=0; const t=String(id||""); for(let i=0;i<t.length;i++) h=(h*31+t.charCodeAt(i))>>>0; return _RT_ICONES[h%_RT_ICONES.length]; }
 
 /* ── CARD DE UM ROTEIRO (agência e portal usam o mesmo) ── */
-function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob}){
+function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar, isMob, onGravado}){
   const [aberto,setAberto]=useState(true);
   /* (22/09/2026, Rodrigo) Ajustar o roteiro sem reescrever outro: `ajuste` é o texto do
      pedido (null = painel fechado). Quem sabe falar com a IA é a página — aqui só coleta. */
@@ -106739,6 +107439,8 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.2,maxWidth:"100%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.produto}</span>}
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
+          {r.gravado_em&&<span title={"Gravado"+(r.gravado_por?(" por "+r.gravado_por):"")+" em "+new Date(r.gravado_em).toLocaleDateString("pt-BR")} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:4}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Gravado {new Date(r.gravado_em).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>}
           {Array.isArray(r.ajustes)&&r.ajustes.length>0&&<span title={"Último ajuste pedido: "+String((r.ajustes[r.ajustes.length-1]||{}).feedback||"")}
             style={{background:"#fffbeb",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
             Ajustado{r.ajustes.length>1?(" "+r.ajustes.length+"x"):""}</span>}
@@ -106753,6 +107455,11 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
         {agencia&&<button type="button" title={r.visivel_portal?"Está no portal do cliente (Sugestões de conteúdo). Clique pra tirar.":"Mostrar no portal do cliente, em Sugestões de conteúdo"} onClick={onPortal} style={_pill(!!r.visivel_portal,"#0ea5e9")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           {r.visivel_portal?"No portal":"Portal"}
+        </button>}
+        {/* (23/09/2026, Vinicius) "um check quando tal roteiro for gravado — a gente registra quais o cliente gravou" */}
+        {onGravado&&<button type="button" title={r.gravado_em?"Desmarcar gravado":(agencia?"Marcar: o cliente já gravou este roteiro":"Marque quando gravar este vídeo — a agência fica sabendo na hora")} onClick={onGravado} style={_pill(!!r.gravado_em,"#16a34a")}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          {r.gravado_em?"Gravado":(agencia?"Gravado?":"Já gravei")}
         </button>}
         {agencia&&<button type="button" title={r.status==="enviado"?"Voltar pra sugestão":"Marcar como enviado pro cliente"} onClick={onEnviado} style={_pill(r.status==="enviado","#7c3aed")}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -106882,25 +107589,19 @@ function PageRoteiros({isMob, perms, viewingAs}){
 
   const _trendTitulo=function(id){ const t=trends.find(function(x){return x.id===id;}); return t?t.titulo:""; };
   const doCliente=roteiros.filter(function(r){ return r.client_id===clId && (!isBioter || String(r.unidade||"")===String(unit||"")); });
-  const visiveis=doCliente.filter(function(r){ return filtro==="todos"||r.status===filtro; }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id)}); });
+  const visiveis=doCliente.filter(function(r){ return filtro==="todos"||(filtro==="gravado"?!!r.gravado_em:r.status===filtro); }).map(function(r){ return Object.assign({},r,{trend_titulo:_trendTitulo(r.trend_id)}); });
 
   /* 21/09/2026 — BUG: o botao "Gerar 5 roteiros" chamava _gerar(null) sem unidade, entao uId
      caia sempre em "" (Grupo). A IA nao recebia as regras/memorias da unidade (claude_contexto_copy
      filtra por bioter_unit) e os roteiros nasciam em Grupo, invisiveis na lista, que e filtrada
      pela unidade da tela. Sem unitAlvo (botao da aba Roteiros), vale a unidade selecionada. */
-  /* (23/09/2026, Vinicius) "vou solicitar ali na descrição quantos quero". Lê "3 roteiros",
-     "cinco vídeos", "dois roteiros"… no texto do pedido. 0 = o texto não diz. */
-  const _rtQtdDoPedido=function(txt){
-    const s=String(txt||"").toLowerCase();
-    const _n={um:1,uma:1,dois:2,duas:2,"três":3,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10};
-    const m=s.match(/(\d{1,2}|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(?:novos?\s+|outros?\s+)?(?:roteiros?|v[ií]deos?|ideias?|op[çc][õo]es)/);
-    if(!m) return 0;
-    const v=/^\d+$/.test(m[1])?Number(m[1]):(_n[m[1]]||0);
-    return Math.max(0,Math.min(10,v));
-  };
+  /* (23/09/2026, Vinicius) "não é pra inferir nada, é pra fazer quantos forem pedidos (limita a 20)".
+     Sem número marcado, a quantidade é LIVRE: vai quantos=0 pro gerador e a IA soma o que o pedido
+     pede ("3 de cada" × 4 produtos = 12). */
   const _gerar=async function(trend,clientAlvo,unitAlvo,pedidoTxt,quantosPedido){
     const _ped=String(pedidoTxt||"").trim();
-    const _qtd=Math.max(1,Math.min(10,Number(quantosPedido)||5));
+    const _livre=!!_ped&&(quantosPedido===0||quantosPedido==="livre");
+    const _qtd=_livre?0:Math.max(1,Math.min(20,Number(quantosPedido)||5));
     const cId=clientAlvo||clId;
     const uId=(cId==="bioter")?String(((unitAlvo===undefined||unitAlvo===null)?unit:unitAlvo)||""):"";
     if(!cId){ pixelsToast.warning("Escolhe o cliente."); return; }
@@ -107121,7 +107822,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
         <div style={{display:"flex",gap:isMob?9:10,alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,marginLeft:isMob?undefined:"auto",width:isMob?"100%":undefined,flexWrap:"wrap"}}>
         {/* Celular: o filtro ocupa a largura */}
         <div style={{display:isMob?"flex":"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
-          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:isMob?"8px 6px":"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
+          {[{id:"todos",l:"Todos"},{id:"sugestao",l:"Sugestões"},{id:"enviado",l:"Enviados"},{id:"gravado",l:"Gravados"}].map(function(v){ const on=filtro===v.id; return <button key={v.id} type="button" onClick={function(){setFiltro(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:isMob?"8px 6px":"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l}</button>; })}
         </div>
         {/* (22/09/2026, Rodrigo: "não vai ser um tiro no pé?") Bioter · Grupo tem 20
             roteiros = ~22 mil letras numa mensagem só. No computador dá pra reler antes
@@ -107152,17 +107853,17 @@ function PageRoteiros({isMob, perms, viewingAs}){
           <div style={{color:"#94a3b8",fontSize:pxFonte(11.5,isMob),marginTop:6,lineHeight:1.5}}>O playbook, o briefing do cliente, o foco do mês, os feedbacks e o formato de 60 segundos continuam valendo — o pedido manda no assunto.</div>
         </div>
         <div>
-          <div style={_lbl}>Quantos roteiros <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — sem marcar, vale o que você escreveu no pedido</span></div>
+          <div style={_lbl}>Quantos roteiros <span style={{textTransform:"none",letterSpacing:0,fontWeight:600,color:"#94a3b8"}}>· opcional — sem marcar, a IA faz quantos o pedido somar (até 20)</span></div>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            {[1,2,3,4,5,6,7,8,9,10].map(function(n){ const on=(pedidoForm.quantos||0)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:on?0:n}));}}
+            {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(function(n){ const on=(pedidoForm.quantos||0)===n; return <button key={n} type="button" onClick={function(){setPedidoForm(Object.assign({},pedidoForm,{quantos:on?0:n}));}}
               style={{minWidth:44,background:on?_cor:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?_cor:"#e2e8f0"),borderRadius:10,padding:"9px 0",fontSize:13,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{n}</button>; })}
           </div>
         </div>
         <div style={{display:"flex",justifyContent:"flex-end",gap:8,alignItems:"center"}}>
           <button type="button" disabled={!!gerando} onClick={function(){setPedidoForm(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#475569",fontWeight:600,fontSize:13,cursor:gerando?"default":"pointer",fontFamily:_RT_FF}}>Cancelar</button>
-          {(function(){ const _qTxt=_rtQtdDoPedido(pedidoForm.texto), _q=pedidoForm.quantos||_qTxt||1, _doTxt=!pedidoForm.quantos&&_qTxt>0, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
+          {(function(){ const _q=pedidoForm.quantos||0, _vazio=!String(pedidoForm.texto||"").trim(), _off=!!gerando||_vazio;
             return <button type="button" disabled={_off} onClick={function(){ _gerar(null,clId,isBioter?unit:"",pedidoForm.texto,_q); }} style={_btnGerar("",true,_off,_cor)}>
-              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> Gerar {_q} roteiro{_q>1?"s":""}{_doTxt?" (do pedido)":""}</>}
+              {gerando==="pedido"?<><Spin/> Escrevendo…</>:<><Ico n="sparkles" size={14} color={_off?"#94a3b8":"#fff"}/> {_q?("Gerar "+_q+" roteiro"+(_q>1?"s":"")):"Gerar quantos o pedido pedir"}</>}
             </button>; })()}
         </div>
       </div>}
@@ -107181,6 +107882,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
         {visiveis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={true} isMob={isMob}
           onPortal={function(){_patch(r,{visivel_portal:!r.visivel_portal});}}
           onEnviado={function(){_patch(r,{status:r.status==="enviado"?"sugestao":"enviado"});}}
+          onGravado={function(){ const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Agência"; _patch(r, r.gravado_em?{gravado_em:null,gravado_por:null}:{gravado_em:new Date().toISOString(),gravado_por:quem}); }}
           onAjustar={_bl("roteiros.gerar")?function(txt){ return _ajustar(r,txt); }:undefined}
           onExcluir={_bl("roteiros.excluir")?function(){_excluir(r);}:undefined}/>; })}
       </div></div>}
@@ -107447,7 +108149,15 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
     {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
     <div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(0,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
-      {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}/>; })}
+      {vis.map(function(r){ return <RoteiroCard key={r.id} r={r} cor={_cor} agencia={false} isMob={isMob}
+        onGravado={async function(){
+          try{
+            const rr=await sb.rpc("roteiro_marcar_gravado",{p_id:r.id,p_gravado:!r.gravado_em});
+            if(rr&&rr.error) throw rr.error;
+            setLista(function(p){ return (p||[]).map(function(x){ return x.id===r.id?Object.assign({},x,{gravado_em:r.gravado_em?null:new Date().toISOString(),gravado_por:r.gravado_em?null:"Cliente"}):x; }); });
+            if(typeof pixelsToast!=="undefined") pixelsToast.success(r.gravado_em?"Desmarcado.":"Anotado: gravado. A equipe da Pixels já vê.",3000);
+          }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra marcar: "+((e&&e.message)||e),5000); }
+        }}/>; })}
     </div></div>
   </div>;
 }
