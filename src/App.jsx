@@ -1748,6 +1748,7 @@ const PX_BLOCOS={
       {key:"demandas.card.campo.mes_pagamento", label:"Mês de pagamento",      desc:"Ver o campo (só aparece com freela no card; só o Gustavo edita)"},
       {key:"demandas.card.campo.etiquetas",     label:"Etiqueta interna e Tags", desc:"Padrão: sócio ou Etiquetas",
         padrao:_pxAdminCard},
+      {key:"demandas.card.campo.material_cliente", label:"Pedi material pro cliente", desc:"Barra no topo do card + selo na capa: um clique de quem pede, some quando entra material (23/09/2026)"},
     ]},
     {id:"card_arquivos", label:"Card aberto › arquivos", itens:[
       {key:"demandas.card.arq.referencias", label:"Imagens de referência",  desc:"Ver, baixar e enviar"},
@@ -20326,6 +20327,30 @@ function PxSeloClaude({size,claro,cor}){
     <svg width={Math.round(s*0.72)} height={Math.round(s*0.72)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="8" width="16" height="12" rx="3.2"/><path d="M12 8V5"/><circle cx="12" cy="3.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="13.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="13.6" r="1.5" fill="currentColor" stroke="none"/><path d="M9.6 17.2h4.8"/><path d="M2 13v2.5M22 13v2.5"/></svg>
   </span>;
 }
+/* (23/09/2026) "PEDI MATERIAL PRO CLIENTE" — pra ninguém pedir duas vezes (sócio e depois a
+   estrategista). Um clique de quem pede liga `aguardando_info`; quando entra material de
+   verdade no card, o save() do cartão desliga sozinho. Quem/quando vêm da timeline. */
+function pxMaterialPedido(t){ return !!(t&&(t.aguardando_info||t.aguardandoInfo)); }
+function pxMaterialPedidoInfo(t){
+  try{
+    const _tl=(t&&t.timeline)||[];
+    for(let i=_tl.length-1;i>=0;i--){
+      const x=_tl[i]; if(!x) continue;
+      if(/^pediu material pro cliente/i.test(String(x.label||""))) return {quem:String(x.user||""),quando:String(x.atFmt||"").slice(0,10)};
+    }
+  }catch(_){}
+  return null;
+}
+function PxSeloMaterialCliente({size,claro,cor}){
+  // Mesmo molde do PxSeloClaude: no calendário chip branco com o ícone na cor do card;
+  // no quadro (card branco) âmbar clarinho. Ampulheta = "esperando o cliente".
+  const s=size||18;
+  const c=cor||"#f59e0b";
+  const _hex=/^#[0-9a-f]{6}$/i.test(c);
+  return <span title="Material já pedido pro cliente — não pedir de novo" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:s,height:s,borderRadius:6,background:claro?"#fff":(_hex?c+"22":"#fef3c7"),color:c,flexShrink:0,boxShadow:claro?"0 1px 2px rgba(0,0,0,0.18)":"none"}}>
+    <svg width={Math.round(s*0.7)} height={Math.round(s*0.7)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 21h12"/><path d="M7 3v3.5a5 5 0 0 0 2.2 4.1L12 12l2.8-1.4A5 5 0 0 0 17 6.5V3"/><path d="M7 21v-3.5a5 5 0 0 1 2.2-4.1L12 12l2.8 1.4a5 5 0 0 1 2.2 4.1V21"/></svg>
+  </span>;
+}
 /* (11/09/2026) "Somente story" marcado ou desmarcado DEPOIS que os cards automáticos já
    existiam: o gerador é idempotente (não mexe em card que já existe), então sem isso o card
    ficava com a Hellen, sem a tag e contando na cota. Aqui acerta os cards do evento:
@@ -23548,6 +23573,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                               return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:pxFonte(9.5,isMob),fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
                             })()}
                             {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
+                            {pxMaterialPedido(t)&&<PxSeloMaterialCliente size={20} claro cor={cardColor}/>}
                             {(function(){
                               const isReprovada = t.status==="reprovado";
                               const isPausada = t.status==="pausado";
@@ -26593,7 +26619,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
                     <div style={{color:"#0f172a",fontSize:14,fontWeight:600,lineHeight:1.42,letterSpacing:-.1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:10})}}>
-                      {pxCriadoPeloClaude(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloClaude size={18} cor={(cl&&cl.color)||"#7c3aed"}/></span>}{t.title}
+                      {pxCriadoPeloClaude(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloClaude size={18} cor={(cl&&cl.color)||"#7c3aed"}/></span>}{pxMaterialPedido(t)&&<span style={{display:"inline-flex",marginRight:6,verticalAlign:"-3px"}}><PxSeloMaterialCliente size={18}/></span>}{t.title}
                     </div>
 
                     {/* FOOTER único — sempre na mesma posição com a mesma anatomia.
@@ -33470,12 +33496,18 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               const _salvarMusica=(m)=>{
                 salvarMetaCard(current,{musicaModo:m||"",musica:!!m},"música",_nomeMus(_musModo),_nomeMus(m),false);
               };
+              /* (23/09/2026) Material já pedido pro cliente: aparece aqui porque é onde o
+                 Vinicius passa o dia. Só leitura — marcar/desmarcar é no cartão. */
+              const _matPed=(typeof pxMaterialPedido==="function")&&pxMaterialPedido(current);
+              const _matInfo=_matPed&&(typeof pxMaterialPedidoInfo==="function")?pxMaterialPedidoInfo(current):null;
+              const _matVal=_matPed?("Pedido ao cliente"+(_matInfo&&_matInfo.quem?" · "+_matInfo.quem:"")+(_matInfo&&_matInfo.quando?" · "+_matInfo.quando.slice(0,5):"")):"";
               const linhas=[
                 {key:"pub",icon:"calendar",rot:"Data de publicação",val:fmtBR(pubD),color:"#0ea5e9"},
                 {key:"ct", icon:ctCfg?ctCfg.icon:"image",rot:"Tipo de conteúdo",val:ctCfg?ctCfg.label:"",color:"#7c3aed"},
                 {key:"dl", icon:"clock", rot:"Entrega",val:fmtBR(dl),color:"#f97316"},
                 {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
                 {key:"saida",icon:_musModo?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
+                ...(_matPed?[{key:"mat",icon:"clock",rot:"Material",val:_matVal,color:"#f59e0b"}]:[]),
               ].filter(l=>podeEditar||l.val);
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
@@ -33490,6 +33522,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   const aqui=aberto===l.key;
                   const clicar=()=>{
                     if(!podeEditar)return;
+                    if(l.key==="mat")return; // só leitura: marcar/desmarcar é no cartão
                     if(l.key==="ct"||l.key==="saida"){ setMetaAberto(aqui?null:{id:current.id,campo:l.key}); return; }
                     setMetaAberto(null);
                     abrirSeletor(ID(l.key));
@@ -33498,12 +33531,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                     <div role={podeEditar?"button":undefined} tabIndex={podeEditar?0:undefined}
                       onClick={clicar}
                       onKeyDown={podeEditar?(e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();clicar();}}):undefined}
-                      title={podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined}
+                      title={l.key==="mat"?"Material já pedido pro cliente — não pedir de novo (marcar/desmarcar é no cartão)":(podeEditar?("Clique pra alterar "+l.rot.toLowerCase()+" — salva no card"):undefined)}
                       style={{position:"relative",display:"flex",alignItems:"center",gap:11,background:"#fff",
                         border:"1px "+(vazio?"dashed":"solid")+" "+(aqui?"#7c3aed":(vazio?"#d7dde6":"#e9ecf3")),
                         borderRadius:14,padding:isMob?"10px 12px":"11px 14px",width:"100%",boxSizing:"border-box",
                         boxShadow:aqui?"0 0 0 3px rgba(124,58,237,.13)":"0 1px 2px rgba(15,23,42,.05)",
-                        cursor:podeEditar?"pointer":"default",transition:"border-color .12s,box-shadow .12s",outline:"none"}}
+                        cursor:(podeEditar&&l.key!=="mat")?"pointer":"default",transition:"border-color .12s,box-shadow .12s",outline:"none"}}
                       onMouseEnter={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor="#cbd5e1";}}
                       onMouseLeave={ev=>{if(podeEditar&&!aqui)ev.currentTarget.style.borderColor=vazio?"#d7dde6":"#e9ecf3";}}>
                       <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:isMob?29:32,height:isMob?29:32,borderRadius:10,background:vazio?"#f1f4f8":l.color+"14",flexShrink:0}}>
@@ -33520,7 +33553,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             style={{background:"#f1f4f8",color:pubT?"#334155":"#a5adba",borderRadius:7,padding:"2px 7px",fontSize:isMob?11:11.5,fontWeight:800,letterSpacing:-.1,flexShrink:0,cursor:podeEditar?"pointer":"default",outline:"none"}}>{pubT||"hora"}</span>)}
                         </span>
                       </span>
-                      {podeEditar&&<Ico n={(l.key==="ct"||l.key==="saida")?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
+                      {podeEditar&&l.key!=="mat"&&<Ico n={(l.key==="ct"||l.key==="saida")?"chevron-right":"edit"} size={12} color="#b6bec9"/>}
                       {/* Inputs nativos invisíveis: são eles que abrem calendário, relógio e mês. */}
                       {podeEditar&&l.key==="pub"&&(<>
                         <input id={ID("pub")} type="date" value={pubD||""} tabIndex={-1} aria-hidden="true" style={{...INVIS,left:14,bottom:6}}
@@ -44747,6 +44780,8 @@ function _cardPodeSerResp(u){
      cima com o áudio original baixinho. Qual música é, se combina no card. */
   const _pxModoMus=function(t){ return String((t&&(t.musicaModo||t.musica_modo))||((t&&t.musica)?"so":"")||""); };
   const [musicaModo,setMusicaModo]=useState(_pxModoMus(task));
+  // (23/09/2026) "Pedi material pro cliente": um clique de quem pede; apaga sozinho quando entra material.
+  const [aguardandoInfo,setAguardandoInfo]=useState(!!(task.aguardando_info||task.aguardandoInfo));
   /* (22/09/2026, Rodrigo) "Vídeo short não precisa de edição, não precisa ter o editor
      marcado." O app marcava o Guilherme sozinho sempre que alguém escolhia um tipo de
      vídeo — foi assim que ele entrou nos dois Shorts da Bioter Toledo quando a Hellen
@@ -44989,6 +45024,7 @@ function _cardPodeSerResp(u){
       setSomenteStory(!!(task.somenteStory||task.somente_story));
       setNaoPublica(!!(task.naoPublica||task.nao_publica));
       setMusicaModo(_pxModoMus(task));
+      setAguardandoInfo(!!(task.aguardando_info||task.aguardandoInfo));
       setReferenceMonth(task.referenceMonth||"");
       // Recalcula deadline corrigido pro novo card + reset baseline
       const _newDeadline = _computeInitialDeadline(task);
@@ -45371,6 +45407,20 @@ function _cardPodeSerResp(u){
     // Usa updater functional — preserva comments/timeline mais recentes do `prev`
     // (caso outro usuário tenha adicionado algo via realtime entre o open e o save)
     const cleanedFiles=cleanAttachments(attachments);
+    /* (23/09/2026) MATERIAL CHEGOU → O PEDIDO AO CLIENTE ENCERRA SOZINHO. "Recebido" não é
+       clique de ninguém: se entrou arquivo de material/referência que não existia antes, o
+       aviso apaga e a timeline registra. Anotação, anexo de ajuste e upload em curso não contam. */
+    let _agInfoNext=!!aguardandoInfo;
+    if(_agInfoNext){
+      const _ehMat=function(f){ return !!(f&&f.url&&!f.uploading&&!f.isAnnotation&&!f.isRef&&(f.tipo==="material"||f.tipo==="referencia")); };
+      const _antes=new Set(((task.files)||[]).filter(_ehMat).map(function(f){ return String(f.id||f.url); }));
+      const _chegou=(cleanedFiles||[]).some(function(f){ return _ehMat(f)&&!_antes.has(String(f.id||f.url)); });
+      if(_chegou){
+        _agInfoNext=false;
+        tl.push({type:"edit",label:"Material recebido — pedido ao cliente encerrado",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
+      }
+    }
+    setAguardandoInfo(_agInfoNext);
     setTasks(prev=>{
       // Guard: se a task ainda NÃO está em prev (race entre createDraft + openCard + save rápido),
       // insere um objeto base a partir do task prop pra garantir que o map abaixo encontre.
@@ -45421,7 +45471,7 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -46219,6 +46269,24 @@ function _cardPodeSerResp(u){
     // Roda em paralelo limitado a MAX_PARALLEL_UPLOADS
     await runWithConcurrency(validFiles,MAX_PARALLEL_UPLOADS,uploadOne);
   };
+
+  /* PEDI MATERIAL PRO CLIENTE (23/09/2026). Vinicius: "pra não ser pedido duas vezes material
+     pro cliente, talvez por um sócio e depois pela estrategista". Grava na hora (não espera o
+     Salvar): quem marcou pode fechar o card e a estrategista já vê. Quem/quando ficam na timeline. */
+  const _marcarPedidoMaterial=function(v){
+    const _now=new Date().toISOString();
+    const _e={type:"edit",label:v?"Pediu material pro cliente":"Desfez o pedido de material ao cliente",at:_now,atFmt:nowFmt(),user:user.name};
+    setAguardandoInfo(!!v);
+    if(typeof setTasks==="function"){
+      setTasks(function(prev){
+        const _hasIt=(prev||[]).some(function(t){ return String(t.id)===String(task.id); });
+        const _base=_hasIt?prev:(prev||[]).concat([task]);
+        return _base.map(function(t){ return t.id!==task.id?t:Object.assign({},t,{aguardando_info:!!v,timeline:[...(t.timeline||[]),_e]}); });
+      });
+    }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(v?"Marcado: material pedido pro cliente. Fica no topo do card e na capa até o material entrar.":"Pedido de material desmarcado.",3800);
+  };
+  const _pedidoMatInfo=(function(){ try{ return pxMaterialPedidoInfo(((tasks||[]).find(function(t){ return t.id===task.id; }))||task); }catch(_){ return null; } })();
 
   /* PREENCHER MATERIAL → DEMANDA (14/09/2026).
      Move o card da etapa nova pra fila do freelancer. Fica aqui em cima (e não
@@ -47412,6 +47480,28 @@ function _cardPodeSerResp(u){
             {!isMobile&&<button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>}
           </div>
         </div>
+
+        {/* PEDI MATERIAL PRO CLIENTE (23/09/2026) — barra chamativa pra ninguém pedir duas vezes.
+            Ligado: faixa âmbar com quem/quando. Desligado: botão pequeno tracejado. */}
+        {_bl("campo.material_cliente")&&!task._isDraft&&(aguardandoInfo
+          ? <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fffbeb",border:"1px solid #fcd34d",borderLeft:"4px solid #f59e0b",borderRadius:10,padding:"9px 12px",marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+              <PxSeloMaterialCliente size={26} cor="#d97706"/>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{fontSize:12.5,fontWeight:800,color:"#92400e",letterSpacing:-.1}}>Material já pedido pro cliente{_pedidoMatInfo&&_pedidoMatInfo.quem?" · "+_pedidoMatInfo.quem:""}{_pedidoMatInfo&&_pedidoMatInfo.quando?" · "+_pedidoMatInfo.quando:""}</div>
+                <div style={{fontSize:11,color:"#b45309",marginTop:1}}>Não pedir de novo. Quando o material entrar no card, esse aviso some sozinho.</div>
+              </div>
+              {canEdit&&<button type="button" onClick={function(){ _marcarPedidoMaterial(false); }} title="Marcou por engano? Desfaz."
+                style={{background:"transparent",border:"1px solid #fcd34d",color:"#92400e",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Desfazer</button>}
+            </div>
+          : (canEdit&&!isAgendado
+            ? <div style={{marginBottom:12}}>
+                <button type="button" onClick={function(){ _marcarPedidoMaterial(true); }} title="Marca que você já pediu o material pro cliente — pra ninguém pedir de novo"
+                  style={{background:"#fff",border:"1px dashed #fcd34d",color:"#b45309",borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:7}}
+                  onMouseEnter={function(e){ e.currentTarget.style.background="#fffbeb"; }} onMouseLeave={function(e){ e.currentTarget.style.background="#fff"; }}>
+                  <PxSeloMaterialCliente size={18} cor="#d97706"/> Pedi material pro cliente
+                </button>
+              </div>
+            : null))}
 
         {/* TABS */}
         <div className={isMobile?"scroll-x":undefined} style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:isMobile?"auto":undefined,WebkitOverflowScrolling:"touch"}}>
@@ -97948,6 +98038,34 @@ function _pbTemplateUploadImg(updFn){
   }
 }
 
+/* (23/09/2026, Vinicius: "sempre que passa ali pelos produtos dá uma travada")
+   MINIATURA DAS FOTOS DE PRODUTO. As fotos subiam no tamanho original — 55 fotos, 279 MB, média
+   de 5 MB, uma de 30 MB — e eram desenhadas em quadradinhos de 130px. Era ISSO que travava: o
+   navegador baixava e decodificava tudo a cada abertura. Agora cada foto tem uma miniatura de
+   até 420px (JPEG) em prod.thumbs[urlOriginal]; a original só abre no lightbox.
+   Foto antiga sem miniatura: PlaybookDetalhe gera em segundo plano, uma por vez, e grava. */
+async function _pbGerarThumb(src){
+  const sb=window._sb; if(!sb) throw new Error("Supabase indisponível");
+  let bmp;
+  if(typeof src==="string"){
+    const r=await fetch(src,{mode:"cors"}); if(!r.ok) throw new Error("HTTP "+r.status);
+    bmp=await createImageBitmap(await r.blob());
+  } else { bmp=await createImageBitmap(src); }
+  const MAX=420, k=Math.min(1,MAX/Math.max(bmp.width||1,bmp.height||1));
+  const w=Math.max(1,Math.round(bmp.width*k)), h=Math.max(1,Math.round(bmp.height*k));
+  const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+  const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(bmp,0,0,w,h);
+  try{ if(bmp.close) bmp.close(); }catch(_){}
+  const blob=await new Promise(function(res){ cv.toBlob(res,"image/jpeg",0.82); });
+  if(!blob) throw new Error("canvas vazio");
+  const path="playbook-produtos/thumbs/"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+".jpg";
+  const {error}=await sb.storage.from("agency-files").upload(path,blob,{cacheControl:"31536000",upsert:false,contentType:"image/jpeg"});
+  if(error) throw error;
+  const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
+  return (pub&&pub.publicUrl)||"";
+}
+function _pbThumbDe(prod,url){ const t=prod&&prod.thumbs; return (t&&typeof t==="object"&&t[url])||url; }
+
 function _pbProdutoUploadImg(pi, updFn){
   try{
     const inp = document.createElement("input");
@@ -97966,7 +98084,8 @@ function _pbProdutoUploadImg(pi, updFn){
         if(error) throw error;
         const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
         if(pub && pub.publicUrl){
-          updFn(pi, {imgUrl: pub.publicUrl});
+          let _thumb=""; try{ _thumb=await _pbGerarThumb(file); }catch(_e){ console.warn("[thumb produto]",_e&&_e.message||_e); }
+          updFn(pi, {imgUrl: pub.publicUrl, thumb:_thumb});
           if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida.",1500);
         }
       }catch(err){
@@ -98749,6 +98868,34 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       return Object.assign({},it,{imgUrls:cur.concat([url]), imgUrl: it.imgUrl || url});
     });});
   };
+  const _produtoSetThumb=function(idx,url,thumb){
+    if(!url||!thumb) return;
+    setEditProdutos(function(p){return p.map(function(it,i){
+      if(i!==idx) return it;
+      return Object.assign({},it,{thumbs:Object.assign({},(it.thumbs&&typeof it.thumbs==="object")?it.thumbs:{},{[url]:thumb})});
+    });});
+  };
+  /* (23/09/2026) Fotos antigas sem miniatura: gera em segundo plano, uma por vez, e grava no
+     playbook pelo autosave. Só quem edita (isAdmin) — leitor não grava nada. Foto que falhar
+     fica marcada e não é tentada de novo nesta abertura. */
+  const _thumbJobRef=useRef({busy:false,falhou:{}});
+  const [_thumbTickN,_thumbTick]=useState(0);
+  useEffect(function(){
+    if(!isAdmin||typeof _pbGerarThumb!=="function") return;
+    const job=_thumbJobRef.current; if(job.busy) return;
+    let alvo=null;
+    for(let i=0;i<editProdutos.length&&!alvo;i++){
+      const p=editProdutos[i]||{};
+      const urls=(Array.isArray(p.imgUrls)&&p.imgUrls.length)?p.imgUrls:(p.imgUrl?[p.imgUrl]:[]);
+      for(let j=0;j<urls.length;j++){ const u=urls[j]; if(u&&!(p.thumbs&&p.thumbs[u])&&!job.falhou[u]){ alvo={idx:i,url:u}; break; } }
+    }
+    if(!alvo) return;
+    job.busy=true;
+    _pbGerarThumb(alvo.url)
+      .then(function(th){ if(th) _produtoSetThumb(alvo.idx,alvo.url,th); else job.falhou[alvo.url]=true; })
+      .catch(function(e){ console.warn("[thumb produto]",e&&e.message||e); job.falhou[alvo.url]=true; })
+      .then(function(){ job.busy=false; _thumbTick(function(n){return n+1;}); });
+  },[editProdutos,isAdmin,_thumbTickN]);
   const _produtoRemoveImg=function(idx,imgIdx){
     setEditProdutos(function(p){return p.map(function(it,i){
       if(i!==idx) return it;
@@ -99443,12 +99590,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {_urls.map(function(_url,_ii){
                             return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
-                              <img src={_url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                              <img src={_pbThumbDe(prod,_url)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
                               <button type="button" onClick={function(e){e.stopPropagation();_produtoRemoveImg(pi,_ii);}} title="Remover foto"
                                 style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
                             </div>;
                           })}
-                          <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); } });}}
+                          <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); if(_patch.thumb) _produtoSetThumb(_pi,_patch.imgUrl,_patch.thumb); } });}}
                             style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
                             onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
                             onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
@@ -100001,7 +100148,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
     const x=BIOTER_UNITS.find(function(b){return b.id===u;});
     return x?(x.pickerLabel||x.label):u;
   };
-  const _ativos=(itens||[]).filter(function(x){ return x.ativo&&String(x.ficha||"").trim(); }).length;
+  /* (23/09/2026) Mesma regra dos Feedbacks: unidade ativa vê os dela + os do Grupo. */
+  const _vis=(itens||[]).filter(function(x){ const u=String(x.unidade||""); return !isBioter||!unitTab||!u||u===unitTab; });
+  const _ativos=_vis.filter(function(x){ return x.ativo&&String(x.ficha||"").trim(); }).length;
   const _STATUS={pendente:{t:"sem ficha",c:"#94a3b8",b:"#f1f5f9"},lendo:{t:"lendo…",c:"#b45309",b:"#fffbeb"},
                  pronta:{t:"ficha pronta",c:"#047857",b:"#ecfdf5"},manual:{t:"ficha escrita à mão",c:"#047857",b:"#ecfdf5"},
                  erro:{t:"não deu pra ler",c:"#b91c1c",b:"#fef2f2"}};
@@ -100044,11 +100193,11 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
     </label>}
 
     {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
-    {itens!==null && itens.length===0 && !isAdmin && typeof _PbEmpty==="function" &&
+    {itens!==null && _vis.length===0 && !isAdmin && typeof _PbEmpty==="function" &&
       <_PbEmpty icon="fileText" text="Nenhum material ainda."/>}
 
-    {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
-      {itens.map(function(m){
+    {itens!==null && _vis.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {_vis.map(function(m){
         const st=_STATUS[String(m.ficha_status||"pendente")]||_STATUS.pendente;
         const on=!!m.ativo&&!!String(m.ficha||"").trim();
         return <div key={m.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?"#0d9488":"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.75}}>
@@ -100134,7 +100283,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         </div>;
       })}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-        {_ativos} de {itens.length} material{itens.length===1?"":"is"} indo pro cérebro. O interruptor tira do prompt sem apagar o arquivo.
+        {_ativos} de {_vis.length} material{_vis.length===1?"":"is"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar o arquivo.
       </div>
     </div>}
   </PlaybookBlock>;
@@ -100269,7 +100418,8 @@ function _PbProdFb({clientId, produto, unidade, isAdmin}){
   },[clientId]);
   const _chave=_pbProdChave(produto);
   const _todos=_PB_PFB.lista[clientId];
-  const itens=(_chave&&Array.isArray(_todos))?_todos.filter(function(x){return _pbProdChave(x.produto)===_chave;}):[];
+  // (23/09/2026) unidade ativa vê os dela + os que valem pra todas; Grupo vê tudo.
+  const itens=(_chave&&Array.isArray(_todos))?_todos.filter(function(x){return _pbProdChave(x.produto)===_chave&&(!unidade||!x.unidade||String(x.unidade)===String(unidade));}):[];
   const _ativos=itens.filter(function(x){return x.ativo;}).length;
   const salvar=async function(){
     const _t=String(txt||"").trim();
@@ -100477,7 +100627,12 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
     const _x=BIOTER_UNITS.find(function(b){return b.id===u;});
     return _x?(_x.pickerLabel||_x.label):u;
   };
-  const _ativas=(itens||[]).filter(function(x){return x.ativa;}).length;
+  /* (23/09/2026, Vinicius) "está aparecendo feedback de Toledo com Castro marcado". Com uma
+     unidade ativa, a lista mostra SÓ o que vale pra ela: os dela + os do Grupo (sem unidade).
+     Com Grupo Bioter ativo mostra tudo, cada um com o seu chip. O banco já filtrava assim no
+     prompt (unidade = '' OR unidade = p_unit); a tela é que mostrava tudo. */
+  const _vis=(itens||[]).filter(function(x){ const u=String(x.bioter_unit||""); return !isBioter||!unitTab||!u||u===unitTab; });
+  const _ativas=_vis.filter(function(x){return x.ativa;}).length;
   /* (22/09/2026, Rodrigo) Era "O que o cliente falou". Virou "Feedbacks" porque não é só
      do cliente: sócio e equipe também anotam aqui o que a IA tem que saber desta conta. */
   return <PlaybookBlock id="pb-memoria" title="Feedbacks"
@@ -100550,12 +100705,12 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
 
     {itens===null && <div style={{color:"#94a3b8",fontSize:12.5}}>Carregando…</div>}
 
-    {itens!==null && itens.length===0 && typeof _PbEmpty==="function" &&
-      <_PbEmpty icon="message" text="Nenhum feedback ainda."
+    {itens!==null && _vis.length===0 && typeof _PbEmpty==="function" &&
+      <_PbEmpty icon="message" text={(isBioter&&unitTab)?("Nenhum feedback de "+_uniLabel(unitTab)+" nem do grupo ainda."):"Nenhum feedback ainda."}
         sub={isAdmin?"Feedback sobre produto, ângulo ou linguagem — do cliente em reunião ou da própria equipe — entra aqui, e a IA passa a escrever sabendo disso.":""}/>}
 
-    {itens!==null && itens.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
-      {itens.map(function(it){
+    {itens!==null && _vis.length>0 && <div style={{display:"flex",flexDirection:"column",gap:9}}>
+      {_vis.map(function(it){
         const e=_pbMemEtq(it.tipo);
         const on=!!it.ativa;
         return <div key={it.id} style={{background:on?"#fff":"#fafbfc",border:"1px solid "+(on?PB_BORDER:"#eef0f3"),borderLeft:"3px solid "+(on?e.cor:"#cbd5e1"),borderRadius:12,padding:"11px 13px",opacity:on?1:.6}}>
@@ -100593,7 +100748,7 @@ function _PbMemoriaCliente({clientId, isBioter, unitTab, isAdmin}){
         </div>;
       })}
       <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
-        {_ativas} de {itens.length} feedback{itens.length===1?"":"s"} indo pro cérebro. O interruptor tira do prompt sem apagar.
+        {_ativas} de {_vis.length} feedback{_vis.length===1?"":"s"} indo pro cérebro{(isBioter&&unitTab&&itens&&itens.length>_vis.length)?(" · mostrando só "+_uniLabel(unitTab)+" + Grupo ("+(itens.length-_vis.length)+" de outras unidades escondidos)"):""}. O interruptor tira do prompt sem apagar.
       </div>
     </div>}
   </PlaybookBlock>;
