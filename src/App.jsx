@@ -30793,18 +30793,37 @@ function PublicacaoEditModal({task, onClose, onReject}){
      briefing de ajuste pro designer/editor, com o cérebro do cliente. O texto cai na própria
      caixa, editável — nada vai pro card até o "Solicitar ajuste". */
   const [iaOrganizando,setIaOrganizando]=useState(false);
+  /* (23/09/2026, Vinicius) "clicar aí que abrisse aquele box pra gente passar o que quer, e não
+     escrever solto ali e depois clicar". O botão abre a caixa; o pedido é escrito NELA. Se já
+     tinha texto solto nas instruções, a caixa abre com ele. */
+  const [iaBox,setIaBox]=useState(false);
+  const [iaPedido,setIaPedido]=useState("");
+  const iaPedidoRef=useRef(null);
+  const _abrirOrganizarIA=function(){
+    if(typeof pxOrganizarAjusteIA!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Pixels IA indisponível."); return; }
+    const _atual=String(feedback||"").trim();
+    // instruções já organizadas pela IA não voltam pra caixa — só texto solto
+    setIaPedido(_atual&&_atual.indexOf("— Pedido original:")<0?_atual:"");
+    setIaBox(true);
+    setTimeout(function(){ try{ if(iaPedidoRef.current){ iaPedidoRef.current.focus(); } }catch(_){} },60);
+  };
   const _organizarComIA=async function(){
-    const _p=String(feedback||"").trim();
+    const _p=String(iaPedido||"").trim();
     if(!_p){
-      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Escreva primeiro o que o cliente pediu, do jeito que chegou — a IA organiza em cima disso.",4500);
-      try{ if(feedbackRef&&feedbackRef.current) feedbackRef.current.focus(); }catch(_){}
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Cole o que o cliente pediu, do jeito que chegou — a IA organiza em cima disso.",4000);
+      try{ if(iaPedidoRef.current) iaPedidoRef.current.focus(); }catch(_){}
       return;
     }
     if(typeof pxOrganizarAjusteIA!=="function"){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Pixels IA indisponível."); return; }
     setIaOrganizando(true);
     try{
       const _txt=await pxOrganizarAjusteIA({task:task,pedido:_p,lamina:(allImgs.length>1?activeIdx+1:0),total:allImgs.length});
-      if(_txt){ setFeedback(_txt+"\n\n— Pedido original: "+_p); if(typeof pixelsToast!=="undefined") pixelsToast.success("Organizado. Revise, ajuste o que quiser e clique em Solicitar ajuste.",4500); }
+      if(_txt){
+        setFeedback(_txt+"\n\n— Pedido original: "+_p);
+        setIaBox(false); setIaPedido("");
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Organizado. Revise, ajuste o que quiser e clique em Solicitar ajuste.",4500);
+        setTimeout(function(){ try{ if(feedbackRef&&feedbackRef.current) feedbackRef.current.focus(); }catch(_){} },60);
+      }
     }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu: "+((e&&e.message)||e),5000); }
     setIaOrganizando(false);
   };
@@ -31217,6 +31236,49 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const _refsOutras   = _isCarrossel ? refImages.length - _refsDaLamina.length : 0;
 
   return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.78)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px 12px",overflowY:"auto"}} onClick={onClose}>
+    {/* (23/09/2026) CAIXA "ORGANIZAR COM IA" — o pedido do cliente é escrito aqui, não solto nas instruções */}
+    {iaBox && <div onMouseDown={function(e){ if(e.target===e.currentTarget&&!iaOrganizando){ setIaBox(false); } }} onClick={function(e){ e.stopPropagation(); }}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.45)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onMouseDown={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 70px rgba(0,0,0,.35)",fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden"}}>
+        <div style={{padding:"18px 22px 12px",display:"flex",alignItems:"flex-start",gap:12}}>
+          <span style={{width:38,height:38,borderRadius:12,background:"#7c3aed14",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {iaOrganizando
+              ? <span style={{width:18,height:18,borderRadius:"50%",border:"2.5px solid #7c3aed33",borderTopColor:"#7c3aed",animation:"spin .9s linear infinite"}}/>
+              : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>}
+          </span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>{iaOrganizando?"Organizando o pedido…":"O que o cliente pediu?"}</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:3,lineHeight:1.45}}>
+              {iaOrganizando
+                ? "A IA está montando o briefing de ajuste com o cérebro do cliente. Leva alguns segundos."
+                : ("Cole do jeito que chegou — áudio transcrito, WhatsApp, e-mail. A IA organiza em briefing pro "+(String(task&&task.contentType||"").indexOf("video")>=0||String(task&&task.contentType||"")==="corte"?"editor":"designer")+(allImgs.length>1?(", já marcado pra lâmina "+(activeIdx+1)):"")+".")}
+            </div>
+          </div>
+          {!iaOrganizando && <button type="button" onClick={function(){ setIaBox(false); }} title="Fechar"
+            style={{background:"#f1f5f9",border:"none",width:30,height:30,borderRadius:9,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>}
+        </div>
+        <div style={{padding:"0 22px 16px"}}>
+          <textarea ref={iaPedidoRef} value={iaPedido} onChange={function(e){ setIaPedido(e.target.value); }} disabled={iaOrganizando}
+            onKeyDown={function(e){ if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){ e.preventDefault(); _organizarComIA(); } if(e.key==="Escape"&&!iaOrganizando){ setIaBox(false); } }}
+            placeholder={"Ex.: \"oi, ficou top, só troca a foto da capa por uma do galpão novo e tira o telefone antigo, o certo é o (45) 9…\""}
+            style={{width:"100%",minHeight:150,maxHeight:320,resize:"vertical",boxSizing:"border-box",padding:"12px 13px",border:"1.5px solid "+(iaOrganizando?"#e2e8f0":"#c4b5fd"),borderRadius:12,fontSize:13.5,lineHeight:1.55,color:"#0f172a",background:iaOrganizando?"#f8fafc":"#fff",outline:"none",fontFamily:"inherit",boxShadow:iaOrganizando?"none":"0 0 0 3px #7c3aed12"}}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginTop:12,flexWrap:"wrap"}}>
+            <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>Ctrl+Enter organiza · o resultado cai nas instruções, editável</span>
+            <span style={{display:"inline-flex",gap:8}}>
+              {!iaOrganizando && <button type="button" onClick={function(){ setIaBox(false); }}
+                style={{background:"#fff",border:"1px solid #e2e8f0",color:"#475569",borderRadius:99,padding:"8px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>}
+              <button type="button" onClick={_organizarComIA} disabled={iaOrganizando}
+                style={{background:iaOrganizando?"#ede9fe":"#7c3aed",border:"none",color:iaOrganizando?"#6d28d9":"#fff",borderRadius:99,padding:"8px 18px",fontSize:12.5,fontWeight:800,cursor:iaOrganizando?"progress":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:iaOrganizando?"none":"0 2px 8px rgba(124,58,237,.35)"}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
+                {iaOrganizando?"Organizando…":"Organizar"}
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>}
     <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:1100,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.4)",fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
 
       {/* Header — neutro, padrão atual */}
@@ -31504,8 +31566,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,flexWrap:"wrap"}}>
                 <span style={{display:"inline-flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Instruções de alteração</label>
-                  <button type="button" onClick={_organizarComIA} disabled={iaOrganizando}
-                    title="Escreva o pedido do cliente do jeito que chegou e a IA organiza: o que muda, o que fica, texto pronto na voz da marca se precisar de lâmina/cena nova, e o material que falta"
+                  <button type="button" onClick={_abrirOrganizarIA} disabled={iaOrganizando}
+                    title="Abre uma caixa: cole o pedido do cliente do jeito que chegou e a IA organiza: o que muda, o que fica, texto pronto na voz da marca se precisar de lâmina/cena nova, e o material que falta"
                     style={{background:iaOrganizando?"#ede9fe":"#7c3aed",border:"none",color:iaOrganizando?"#6d28d9":"#fff",borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:800,cursor:iaOrganizando?"progress":"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:"0 1px 3px rgba(124,58,237,.3)"}}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg>
                     {iaOrganizando?"Organizando…":"Organizar com IA"}
