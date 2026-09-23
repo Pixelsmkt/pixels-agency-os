@@ -6197,6 +6197,8 @@ const BRIEFING_SECTIONS = [
     fields:[
       /* (23/09/2026, Vinicius) lista estruturada: nome + peso + o que é. Sincroniza com o Playbook. */
       { id:"lista", label:"Seus produtos e serviços, um a um", help:"Nome, o quanto ele importa pra vocês hoje e uma linha do que é. Isso vira a ficha de cada produto no nosso sistema e define quanto ele aparece nos posts", type:"produtos" },
+      /* (23/09/2026, Vinicius) catálogo sobe aqui e já vai pro Playbook › Materiais do cliente; a IA lê. */
+      { id:"materiais", label:"Catálogo, folder, manual, tabela de preços", help:"Sobe os arquivos que explicam seus produtos. A nossa IA lê e usa o que está neles nas copys e roteiros — e você acompanha tudo na aba Produtos e serviços", type:"materiais" },
       { id:"principais", label:"Cite todos os produtos e serviços em ordem de importância", help:"do mais vendido/estratégico até o secundário", type:"textarea" },
       { id:"precos", label:"Preço de cada produto ou serviço", help:"faixa média ou tabela — pode ser aproximado", type:"textarea" },
       { id:"beneficios", label:"Benefícios de cada produto ou serviço", help:"o que o cliente ganha ao comprar", type:"textarea" },
@@ -6984,6 +6986,15 @@ function BriefingFormCanonico(props){
                   disabled={!canEdit} rows={1}
                   placeholder={f.placeholder||""}
                   style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,resize:"none",fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1",overflow:"hidden",minHeight:40}}/>
+              </div>;
+            }
+            if(f.type==="materiais"){
+              return <div key={f.id}>
+                {labelDom}
+                {typeof PortalMateriaisCliente==="function"
+                  ? <PortalMateriaisCliente cl={cl} unit={(unitId&&unitId!=="grupo")?String(unitId):""} isMob={false} compacto cor={current.color}
+                      onCount={function(n){ const s=n?(n+" arquivo"+(n>1?"s":"")):""; if(String(val||"")!==s) setField(current.id, f.id, s); }}/>
+                  : null}
               </div>;
             }
             if(f.type==="produtos"){
@@ -101702,6 +101713,16 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
     }catch(e){ setErro((e&&e.message)||String(e)); setItens([]); }
   };
   useEffect(function(){ carregar(); },[clientId]);
+  /* (23/09/2026) material que o cliente subiu no portal e ficou "pendente" (fechou a aba antes da IA
+     terminar): a agência abre o Playbook e a leitura acontece sozinha, um por vez. */
+  const _autoLendo=useRef(false);
+  useEffect(function(){
+    if(_autoLendo.current||!Array.isArray(itens)||subindo) return;
+    const p=itens.find(function(m){ return m.origem==="portal"&&String(m.ficha_status||"")==="pendente"&&m.arquivo_url; });
+    if(!p) return;
+    _autoLendo.current=true;
+    (async function(){ try{ setSubindo("lendo "+(p.titulo||p.arquivo_nome)+" (subido pelo cliente)"); await _relerDoUrl(p); }catch(_){} setSubindo(""); _autoLendo.current=false; })();
+  },[itens]);
   const _patch=async function(m,patch){
     const sb=window._sb; if(!sb) return;
     setItens(function(p){ return (p||[]).map(function(x){ return x.id===m.id?Object.assign({},x,patch):x; }); });
@@ -101907,7 +101928,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             : <div style={{color:_resumo?PB_MUTE:"#cbd5e1",fontSize:11.5,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:50}}>{_resumo||(String(m.ficha_status||"")==="erro"?"Não deu pra ler — abra pra reler ou escrever à mão.":"Sem ficha ainda.")}</div>}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginTop:"auto"}}>
             <span style={{background:st.b,color:st.c,borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
-            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.arquivo_tamanho?_pbMatTamanho(m.arquivo_tamanho):""}{m.created_by?(" · "+m.created_by):""}</span>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"inline-flex",alignItems:"center",gap:5}}>{m.origem==="portal"&&<span title={"Subido pelo cliente no portal"+(m.created_by?(" — "+m.created_by):"")} style={{background:"#f97316",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Cliente</span>}{m.arquivo_tamanho?_pbMatTamanho(m.arquivo_tamanho):""}{m.created_by&&m.origem!=="portal"?(" · "+m.created_by):""}</span>
           </div>
         </div>;
       })}
@@ -103621,6 +103642,18 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
       <img src={lightbox} alt="" style={{maxWidth:"100%",maxHeight:"100%",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}/>
     </div>}
 
+    {/* (23/09/2026) catálogos e materiais — sincroniza com Playbook › Materiais do cliente */}
+    {dados!==null&&typeof PortalMateriaisCliente==="function"&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+        <span style={{width:36,height:36,borderRadius:11,background:"#f5b301",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={17} color="#fff"/></span>
+        <div style={{flex:1}}>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3}}>Catálogos e materiais{unit?(" · "+_uniLabel(unit)):""}</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,lineHeight:1.5}}>Catálogo, folder, manual, tabela de preços. A nossa IA lê o arquivo e passa a usar o que está nele — o que você subiu no Briefing também aparece aqui.</div>
+        </div>
+      </div>
+      <PortalMateriaisCliente cl={cl} unit={unit} isMob={isMob} cor={_cor}/>
+    </div>}
+
     {/* histórico */}
     {dados!==null&&<div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"14px 18px"}}>
       <button type="button" onClick={function(){setMostrarHist(!mostrarHist);}} style={{width:"100%",background:"transparent",border:"none",padding:0,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:_FF,textAlign:"left"}}>
@@ -103661,6 +103694,112 @@ function PortalProdutosServicos({cl, selUnit, isMob, viewerIsPixels}){
   </div>;
 }
 if(typeof window!=="undefined"){ window.PortalProdutosServicos=PortalProdutosServicos; }
+
+
+/* ── PORTAL DO CLIENTE › Catálogos e materiais (23/09/2026, Vinicius) ─────────────────────
+   "Quando o cliente tiver catálogo e subir no briefing, já vai sincronizar no Estratégia › Materiais."
+   O arquivo vai pro mesmo lugar que a agência usa (storage + claude_materiais, origem 'portal') e a IA
+   lê ali mesmo, no navegador do cliente — a ficha entra no cérebro sem ninguém da Pixels mexer. Se a
+   leitura não terminar (fechou a aba), fica "na fila" e a agência lê ao abrir o Playbook.
+   Usado no Briefing (Produtos e serviços) e na aba Produtos e serviços do portal. */
+function _ptlMatIco(m){ const n=String((m&&(m.arquivo_nome||m.arquivo_tipo))||"").toLowerCase(); if(/pdf/.test(n)) return "fileText"; if(/\.(png|jpe?g|webp|gif)$|image/.test(n)) return "image"; if(/\.(xlsx?|csv)$|sheet|excel/.test(n)) return "table"; if(/\.(pptx?)$|presentation/.test(n)) return "layers"; if(/\.(docx?)$|word/.test(n)) return "file"; return "paperclip"; }
+function PortalMateriaisCliente({cl, unit, isMob, compacto, cor, onCount}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const cid=String((cl&&cl.id)||"").replace(/^bioter_.*/,"bioter");
+  const _u=String(unit||"");
+  const _cor=cor||((cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:"#7c3aed");
+  const _FF="'Inter',system-ui,sans-serif";
+  const [itens,setItens]=useState(null);
+  const [subindo,setSubindo]=useState("");
+  const [drag,setDrag]=useState(false);
+  const inputRef=useRef(null);
+  const carregar=async function(){
+    if(!sb||!cid){ setItens([]); return; }
+    try{ const r=await sb.rpc("portal_materiais",{p_client:cid,p_unidade:_u}); if(r.error) throw r.error; const l=Array.isArray(r.data)?r.data:[]; setItens(l); if(typeof onCount==="function") onCount(l.length); }
+    catch(e){ setItens([]); if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui carregar os materiais: "+((e&&e.message)||e),5000); }
+  };
+  useEffect(function(){ setItens(null); carregar(); },[cid,_u]);
+  const _status=async function(id,ficha,st){ try{ const r=await sb.rpc("portal_material_ficha",{p_id:id,p_ficha:ficha||"",p_status:st}); if(r.error) throw r.error; }catch(_){} setItens(function(p){ return (p||[]).map(function(x){ return x.id===id?Object.assign({},x,{ficha_status:st}):x; }); }); };
+  const _ler=async function(novo,file){
+    if(typeof pxFichaDoMaterial!=="function") return;
+    await _status(novo.id,"","lendo");
+    try{
+      const ficha=await pxFichaDoMaterial(file,novo.titulo,(cl&&cl.name)||cid,novo.arquivo_url,function(a,b,c){ try{ setSubindo(a==="ia"?("lendo "+file.name+(c>1?(" — parte "+b+" de "+c):"")):("lendo "+file.name+" — página "+a+" de "+b)); }catch(_){} });
+      await _status(novo.id,ficha,"pronta");
+    }catch(e){ await _status(novo.id,"","erro"); }
+  };
+  const subir=async function(files){
+    if(!sb||!files||!files.length||subindo) return;
+    const lista=Array.prototype.slice.call(files); const guardados=[];
+    for(let i=0;i<lista.length;i++){
+      const file=lista[i]; const _p=(lista.length>1?("("+(i+1)+"/"+lista.length+") "):"");
+      setSubindo(_p+"guardando "+file.name);
+      try{
+        const max=(typeof PB_MAT_MAX_ARQUIVO!=="undefined")?PB_MAT_MAX_ARQUIVO:1024*1024*1024;
+        if(file.size>max) throw new Error("passa de 1 GB");
+        const ext=(String(file.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
+        const path="playbook-materiais/"+cid+"/portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+"."+ext;
+        if(file.size>40*1024*1024&&typeof pxUploadResumable==="function"){
+          await pxUploadResumable(file,path,function(pct){ setSubindo(_p+"guardando "+file.name+" — "+pct+"%"); });
+        } else {
+          const up=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
+          if(up.error) throw up.error;
+        }
+        const pub=sb.storage.from("agency-files").getPublicUrl(path);
+        const url=(pub&&pub.data&&pub.data.publicUrl)||"";
+        const ins=await sb.rpc("portal_material_inserir",{p_client:cid,p_unidade:_u,p_titulo:String(file.name).replace(/\.[^.]+$/,"").slice(0,120),p_url:url,p_nome:file.name,p_tipo:file.type||"",p_tamanho:file.size||0});
+        if(ins.error) throw ins.error;
+        const novo=ins.data; setItens(function(p){ return [novo].concat(p||[]); }); guardados.push({novo:novo,file:file});
+      }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+file.name+": "+((e&&e.message)||e),7000); }
+    }
+    for(let i=0;i<guardados.length;i++){ setSubindo((guardados.length>1?("("+(i+1)+"/"+guardados.length+") "):"")+"lendo "+guardados[i].file.name); try{ await _ler(guardados[i].novo,guardados[i].file); }catch(_){} }
+    setSubindo("");
+    if(guardados.length&&typeof pixelsToast!=="undefined") pixelsToast.success(guardados.length===1?"Material guardado. A Pixels já vê e a IA usa nas próximas copys.":(guardados.length+" materiais guardados. A Pixels já vê e a IA usa nas próximas copys."),4500);
+    carregar();
+  };
+  const apagar=async function(m){
+    try{
+      if(typeof pixelsConfirm==="function"){ const ok=await pixelsConfirm('Tirar "'+(m.titulo||m.arquivo_nome)+'"? Sai do sistema da Pixels também.',{danger:true}); if(!ok) return; }
+      const r=await sb.rpc("portal_material_apagar",{p_id:m.id}); if(r.error) throw r.error;
+      setItens(function(p){ const l=(p||[]).filter(function(x){return x.id!==m.id;}); if(typeof onCount==="function") onCount(l.length); return l; });
+    }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra tirar: "+((e&&e.message)||e),5000); }
+  };
+  const _ST={pronta:{t:"A IA já leu",c:"#047857",b:"#ecfdf5"},lendo:{t:"Lendo…",c:"#b45309",b:"#fffbeb"},pendente:{t:"Na fila pra leitura",c:"#475569",b:"#f1f5f9"},erro:{t:"A Pixels vai conferir",c:"#b91c1c",b:"#fef2f2"}};
+  const _tam=function(n){ n=Number(n)||0; if(!n) return ""; if(n<1024*1024) return Math.max(1,Math.round(n/1024))+" KB"; return (n/1024/1024).toFixed(n>100*1024*1024?0:1)+" MB"; };
+  const _data=function(x){ try{ return new Date(x).toLocaleDateString("pt-BR"); }catch(_){ return ""; } };
+  const lista=itens||[];
+  return <div style={{display:"flex",flexDirection:"column",gap:10,fontFamily:_FF}}>
+    <div onDragOver={function(e){ e.preventDefault(); if(!drag) setDrag(true); }} onDragLeave={function(){ setDrag(false); }} onDrop={function(e){ e.preventDefault(); setDrag(false); subir(e.dataTransfer&&e.dataTransfer.files); }}
+      onClick={function(){ if(!subindo&&inputRef.current) inputRef.current.click(); }}
+      style={{border:"1.5px dashed "+(drag?_cor:"#cbd5e1"),background:drag?(_cor+"0d"):"#fafbfc",borderRadius:14,padding:compacto?"14px 16px":"20px 18px",textAlign:"center",cursor:subindo?"default":"pointer",transition:"all .12s"}}>
+      <input ref={inputRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt" style={{display:"none"}} onChange={function(e){ subir(e.target.files); e.target.value=""; }}/>
+      {subindo
+        ? <div style={{display:"inline-flex",alignItems:"center",gap:9,color:"#b45309",fontSize:12.5,fontWeight:700}}><span style={{width:14,height:14,borderRadius:"50%",border:"2px solid #f59e0b44",borderTopColor:"#f59e0b",animation:"pxspin .9s linear infinite",flexShrink:0}}/>{subindo}</div>
+        : <div>
+            <div style={{display:"inline-flex",alignItems:"center",gap:8,color:"#0f172a",fontSize:13.5,fontWeight:800}}><Ico n="upload" size={16} color={_cor}/>Subir catálogo, folder, manual ou tabela de preços</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:4,lineHeight:1.5}}>PDF, imagem, Word, PowerPoint ou Excel — arrasta aqui ou clica. A nossa IA lê e passa a usar o que está no arquivo nas copys e roteiros.</div>
+          </div>}
+    </div>
+    {itens===null&&<div style={{color:"#94a3b8",fontSize:12.5,padding:"6px 0"}}>Carregando…</div>}
+    {itens!==null&&!lista.length&&<div style={{color:"#94a3b8",fontSize:12.5,padding:"2px 0"}}>Nenhum material ainda{_u?"":""}.</div>}
+    {lista.length>0&&<div style={{display:"grid",gridTemplateColumns:(isMob||compacto)?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:8}}>
+      {lista.map(function(m){ const st=_ST[String(m.ficha_status||"pendente")]||_ST.pendente; const doCliente=m.origem==="portal";
+        return <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"10px 12px"}}>
+          <span style={{width:34,height:34,borderRadius:9,background:"#fffbeb",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={_ptlMatIco(m)} size={16} color="#b45309"/></span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.titulo||m.arquivo_nome}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:3}}>
+              <span style={{background:st.b,color:st.c,borderRadius:99,padding:"1px 7px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{st.t}</span>
+              <span style={{color:"#94a3b8",fontSize:10.5}}>{_tam(m.arquivo_tamanho)}{m.created_at?(" · "+_data(m.created_at)):""}{doCliente?(" · "+String(m.created_by||"Cliente").replace(/^Cliente\s*·\s*/,"")):" · Pixels"}</span>
+            </div>
+          </div>
+          {m.arquivo_url&&<a href={m.arquivo_url} target="_blank" rel="noopener" title="Abrir" style={{color:_cor,display:"inline-flex",padding:4}}><Ico n="eye" size={15} color={_cor}/></a>}
+          {doCliente&&<button type="button" onClick={function(){apagar(m);}} title="Tirar" style={{background:"transparent",border:"none",padding:4,color:"#cbd5e1",cursor:"pointer",display:"inline-flex"}} onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}} onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}><Ico n="trash" size={14}/></button>}
+        </div>; })}
+    </div>}
+  </div>;
+}
+if(typeof window!=="undefined"){ window.PortalMateriaisCliente=PortalMateriaisCliente; }
 
 /* ── Normalizador de texto das tarefas/etapas ──
    Regra da casa (pedido 2026-09-01): sem pontuação e símbolos (!?.:; emojis...),
