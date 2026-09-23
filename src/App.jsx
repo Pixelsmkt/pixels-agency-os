@@ -4646,8 +4646,12 @@ function pxCtxProdutosFbTxt(ctx){
    ficha dele já sai condensada na leitura. */
 /* (23/09/2026) A ficha do Catálogo Bioter tem 17 mil caracteres; com 12 mil por material o
    cérebro perdia o fim — ângulos, frases prontas, público e "o que não dizer". */
-const PX_CTX_MAT_POR_MATERIAL=20000;
-const PX_CTX_MAT_ORCAMENTO=40000;
+/* (23/09/2026, Vinicius: "é pra levar em conta tudo") Entra TUDO que estiver ligado no cérebro. A
+   ficha nunca passa de 3.000 palavras (~20 mil caracteres), então 30 mil por material não corta
+   nenhuma; 200 mil no total dá pras 20 fichas que a RPC devolve. Custo por copy sobe com a
+   quantidade de material — arquivo repetido a RPC já descarta. */
+const PX_CTX_MAT_POR_MATERIAL=30000;
+const PX_CTX_MAT_ORCAMENTO=200000;
 /* (23/09/2026, Vinicius: "nos materiais não levar em consideração endereços e telefones, porque
    é uma coisa que pode mudar") DADOS CADASTRAIS do Playbook são a única fonte de contato. */
 const PX_CADASTRO_CAMPOS=[
@@ -33156,7 +33160,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
       {/* (23/09/2026) CHIPS DE TIPO — só na Avaliação de copys. Um por vez; clicar de novo desliga. */}
       {tab==="copys"&&(function(){
         const _cont={}; (copyQueueTudo||[]).forEach(function(x){ const k=_pxTipoDaFila(x); _cont[k]=(_cont[k]||0)+1; });
-        return <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap",padding:"2px 0 6px"}}>
+        /* (23/09/2026, Vinicius) "quando eu clico em algum filtro ele muda o lugar das tags… devem
+           ficar fixas". O texto "mostrando só…" estava NA linha dos chips, centralizada — aparecia e
+           empurrava tudo pra esquerda. Agora fica numa linha própria, com altura reservada. */
+        const _rotulo=filtroTipo?((PX_TIPOS_FILA.find(function(o){return o.id===filtroTipo;})||{}).label||""):"";
+        return <div style={{padding:"2px 0 4px"}}>
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {PX_TIPOS_FILA.map(function(o){
             const on=filtroTipo===o.id, n=_cont[o.id]||0;
             return <button key={o.id} type="button" disabled={!n&&!on}
@@ -33168,7 +33177,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
               {o.label}<span style={{background:on?"rgba(255,255,255,.22)":"#f1f5f9",color:on?"#fff":"#94a3b8",borderRadius:99,padding:"0 6px",fontSize:10,fontWeight:800,fontVariantNumeric:"tabular-nums"}}>{n}</span>
             </button>;
           })}
-          {filtroTipo&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:4}}>mostrando só {(PX_TIPOS_FILA.find(function(o){return o.id===filtroTipo;})||{}).label} · {copyQueue.length} de {copyQueueTudo.length}</span>}
+        </div>
+        <div style={{minHeight:16,textAlign:"center",color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4,lineHeight:"16px"}}>
+          {filtroTipo?("mostrando só "+_rotulo+" · "+copyQueue.length+" de "+copyQueueTudo.length):""}
+        </div>
         </div>;
       })()}
 
