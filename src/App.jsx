@@ -20406,7 +20406,10 @@ async function pxCascataPlanejar(novo,extras,opts){
       if(_forcarCollab){
         // conta TODOS os collabs movíveis da semana, inclusive a âncora (ela é um deles —
         // excluí-la aqui deixava a conta em 1 e o planejador desistia sem mover nada)
-        if(daSemana0.filter(function(x){ return _pxCasTrilha(x)==="collab"&&_pxCasMovivel(x,hoje,null); }).length<=1) continue;
+        /* (24/09/2026) conta os collabs que VÃO PRO FEED, ignorando proteção: o collab que a pessoa acabou
+           de arrastar é protegido (não é "movível") e a conta caía em 1 → o planejador desistia e os dois
+           collabs ficavam no mesmo dia. Foi o caso do Daniel Lorenzzato (11/11) em cima do "Uma solução". */
+        if(daSemana0.filter(function(x){ return _pxCasTrilha(x)==="collab"&&!x.deleted_at&&x.status!=="publicado"&&x.status!=="reprovado"&&x.status!=="pausado"&&!_pxNaoEhPublicacao(x)&&String(x.publish_date||"").slice(0,10)>hoje; }).length<=1) continue;
       } else if(_pxCasConta(daSemana0,alvo).length<=cap) continue;
       /* (19/09/2026) `opts.sair` = quem TEM que sair da semana, decidido por quem chamou.
          A varredura manda o ÚLTIMO card movível da semana (regra do Vinicius: o do fim da
@@ -20414,6 +20417,12 @@ async function pxCascataPlanejar(novo,extras,opts){
          semana — foi o que aconteceu quando a "Caixinha de perguntas" deixou de ser story. */
       const _sair=(opts&&opts.sair)?daSemana0.find(function(x){ return String(x.id)===String(opts.sair); }):null;
       if(_sair&&_pxCasMovivel(_sair,hoje,nn.id)&&_pxCasConta(daSemana0,alvo).indexOf(_sair)>=0) t=_sair;
+      /* (24/09/2026) Na varredura (opts.sair) quem sai de cada alvo é escolhido lá, uma semana/alvo por
+         volta. Se este alvo estourou mas o `sair` não é dele (a âncora é um collab e os cinco alvos
+         entram aqui), NÃO cai na preferência por trilha — ela começa por "collab" quando a âncora é
+         collab e mandava o collab da semana embora ("Uma solução" 18/11 → 25/11 sem ninguém pedir).
+         O alvo fica pra próxima volta da varredura. */
+      else if(opts&&opts.sair&&!_forcarCollab) continue;   // (o `sair` pode já ter mudado de semana nesta rodada — a decisão continua sendo da varredura)
       else for(const tr of prefs){ t=ultimoDaTrilha(_pxCasConta(daSemana0,alvo),tr); if(t) break; }
       if(!t){ travou.push({semana:_pxCasBr(L.iniIso)+"–"+_pxCasBr(L.fimIso),alvo:alvo}); continue; }
       const trilha=_pxCasTrilha(t);
@@ -20608,12 +20617,24 @@ async function pxCascataAuto(novos){
    collab) fica como está — ali é decisão, não bug. Tudo registrado em
    claude_plano_execucoes: o botão de emergência desfaz.                              */
 const PX_CASCATA_VARRE_SEMANAS=30;
-async function pxCascataVarrer(protegerId){
+/* ═══ TROCA DE LUGAR (24/09/2026, Rodrigo) ══════════════════════════════════════════
+   "passei manualmente o Daniel Lorenzzato pra dia 11, vc deveria automaticamente passar o collab
+    'Uma solução' pro dia 18." E de manhã: "se ela arrastou pra quinta um card, você deveria ter
+    jogado o outro pra sábado."
+   Quando a pessoa arrasta um card pra CIMA de outro, o deslocado vai pra VAGA que o arrastado
+   deixou — a troca simples que qualquer pessoa faria — em vez de andar semana a semana pela fila.
+   `opts.vaga` é a data de onde o card protegido saiu (o arraste e o cartão passam). A vaga serve
+   quando: é futura, está em OUTRA semana, o deslocado ocupa alvos que o arrastado também ocupava
+   (collab deixou a vaga das cinco unidades; post de Chapecó deixou a vaga de Chapecó) e nenhum
+   post desses alvos já está naquele dia. Senão, cai na fila de sempre. */
+async function pxCascataVarrer(protegerId,opts){
   const _protAntes=_PX_CAS_PROTEGIDO;
   _PX_CAS_PROTEGIDO=protegerId?String(protegerId):null;
+  let _vaga=String((opts&&opts.vaga)||"").slice(0,10);
   try{
     const sb=window._sb; if(!sb) return 0;
     const hoje=_pxApIso(new Date());
+    if(_vaga&&_vaga<=hoje) _vaga="";
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
     let total=0;
@@ -20709,6 +20730,23 @@ async function pxCascataVarrer(protegerId){
         if(achou) break;
       }
       if(!achou) break;
+      // (24/09) primeiro a troca de lugar: o deslocado vai pra vaga que o card arrastado deixou
+      if(_vaga&&protegerId&&_pxApLinha(_vaga).iniIso!==achou.semana){
+        const prot=(r.data||[]).find(function(x){ return String(x.id)===String(protegerId); });
+        const sair=achou.sair;
+        const alvosP=prot?_pxColAlvos(prot):[], alvosS=_pxColAlvos(sair);
+        const cabeAlvo=!!prot&&alvosS.length>0&&alvosS.every(function(a){ return alvosP.indexOf(a)>=0; });
+        const noDia=(r.data||[]).filter(function(x){ return String(x.publish_date||"").slice(0,10)===_vaga&&String(x.id)!==String(sair.id); });
+        const diaLivre=!_pxColConta(noDia,alvosS[0]).length&&alvosS.every(function(a){ return !_pxColConta(noDia,a).length; });
+        if(cabeAlvo&&diaLivre&&String(sair.publish_date||"").slice(0,10)!==_vaga){
+          const de=String(sair.publish_date||"").slice(0,10);
+          const n=await pxCascataAplicar({moves:[{id:sair.id,title:sair.title||"",de:de,para:_vaga,client:sair.client,unit:sair.bioter_unit||""}],lixeira:[],travou:[],semana:""},null,"troca de lugar",
+            "trocou de lugar com \""+String(prot.title||"").slice(0,50)+"\", que foi posto à mão em "+_pxCasBr(de),{sufixo:" — ficou com a vaga que ele deixou"});
+          _vaga="";
+          if(n){ total+=n; continue; }
+        }
+        _vaga="";   // não serviu: segue a fila normal (e não tenta de novo)
+      }
       const plano=await pxCascataPlanejar(achou.ancora,null,{sair:achou.sair.id,forcarCollab:!!achou.forcarCollab});
       if(!plano.moves.length&&!(plano.lixeira||[]).length) break;
       const n=await pxCascataAplicar(plano,null,achou.forcarCollab?"dois collabs na semana":"varredura de cadência",
@@ -23808,14 +23846,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
        sem a varredura, a semana ficava torta até alguém abrir o calendário — e aí a varredura
        rodava sem proteção e devolvia o card pro lugar antigo. Agora: linha na timeline com
        de → pra, e a varredura roda com este card protegido. Quem anda é o outro. */
-    const _idArr=dragTaskId; let _mexeu=false;
+    const _idArr=dragTaskId; let _mexeu=false, _deArr="";
     if(typeof setTasks==="function"){
       setTasks(function(prev){
         return (prev||[]).map(function(t){
           if(t.id!==_idArr)return t;
           if(t.publishDate===ds)return t; // mesmo dia, sem mudança
           _mexeu=true;
-          const _de=String(t.publishDate||"").slice(0,10);
+          const _de=String(t.publishDate||"").slice(0,10); _deArr=_de;
           const _br=function(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):"sem data"; };
           const _ag=new Date();
           const _tl=(Array.isArray(t.timeline)?t.timeline:[]).concat([{type:"edit",user:(_calUser&&_calUser.name)||"",at:_ag.toISOString(),
@@ -23826,7 +23864,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       });
     }
     setDragTaskId(null);setDropDayId(null);
-    setTimeout(function(){ try{ if(_mexeu&&typeof pxCascataVarrer==="function") pxCascataVarrer(_idArr); }catch(_e){} },2500);
+    setTimeout(function(){ try{ if(_mexeu&&typeof pxCascataVarrer==="function") pxCascataVarrer(_idArr,{vaga:_deArr}); }catch(_e){} },2500);
   }
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
@@ -47017,7 +47055,9 @@ function _cardPodeSerResp(u){
     if(!task._isDraft&&(_viraFeed||_mudouData||_mudouAlvo)&&!somenteStory&&!naoPublica&&typeof pxCascataVarrer==="function"){
       /* O id vai junto: a data que a pessoa escolheu AQUI fica. Quem anda pra abrir espaço
          é a fila, nunca o card que ela acabou de posicionar. */
-      setTimeout(function(){ try{ pxCascataVarrer(task.id); }catch(_e){} },2500);
+      // (24/09) a data de onde o card saiu vira a vaga do deslocado (troca de lugar)
+      const _vagaDe=_mudouData?String(task.publishDate||"").slice(0,10):"";
+      setTimeout(function(){ try{ pxCascataVarrer(task.id,{vaga:_vagaDe}); }catch(_e){} },2500);
     }
     _gravar();
     function _gravar(){
