@@ -14639,10 +14639,9 @@ function _PBProjeto({cl, idx}){
 function COrientacoes({cl, sections}){
   // sections: opcional. Array com IDs das secoes a mostrar. Se nao passar, mostra todas.
   // IDs: 'logos', 'paleta', 'fontes', 'tom', 'hashtags', 'cta', 'naofazer', 'siteredes'
-  // "projeto" aparece sempre (é info do contrato, serve pra todo mundo que abre o cartão)
-  const _showSec = function(id){ return id==="projeto" || !sections || sections.indexOf(id)!==-1; };
+  const _showSec = function(id){ return !sections || sections.indexOf(id)!==-1; };
   // Posição da seção entre as VISÍVEIS → cor do rainbow no cabeçalho (_PlaybookSection idx)
-  const _SEC_ORDER = ["projeto","logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
+  const _SEC_ORDER = ["logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
   const _secVis = _SEC_ORDER.filter(_showSec);
   const _secIdx = function(id){ return Math.max(0,_secVis.indexOf(id)); };
   const sb=window._sb;
@@ -14812,7 +14811,8 @@ function COrientacoes({cl, sections}){
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
 
-    <_PBProjeto cl={cl} idx={_secIdx("projeto")}/>
+    {/* (24/09/2026, Vinicius) "essa parte de timeline do projeto ao invés de ficar aqui como um
+        Orientações nada a ver": o Projeto saiu daqui. No cartão ele virou aba própria. */}
 
     {_showSec("logos") && <_PlaybookSection idx={_secIdx("logos")} icon="image" accent="#7c3aed" title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
@@ -46122,7 +46122,7 @@ function _cardPodeSerResp(u){
   const [activeTab,setActiveTab]=useState((task.status==="agendado"||task.status==="publicado")?"legenda":"desc");
   // Aba escondida por permissão de bloco → cai na primeira aba liberada (18/09/2026)
   useEffect(function(){
-    const _ord=[["desc","briefing"],["legenda","legenda"],["files","arquivos"],["orientacoes","orientacoes"],["activity","historico"]];
+    const _ord=[["desc","briefing"],["legenda","legenda"],["files","arquivos"],["orientacoes","orientacoes"],["projeto","orientacoes"],["activity","historico"]];
     const _cur=_ord.find(function(x){return x[0]===activeTab;});
     if(_cur&&!_bl("aba."+_cur[1])){ const _f=_ord.find(function(x){return _bl("aba."+x[1]);}); if(_f&&_f[0]!==activeTab) setActiveTab(_f[0]); }
   },[activeTab]);
@@ -48718,7 +48718,10 @@ function _cardPodeSerResp(u){
         <div className={isMobile?"scroll-x":undefined} style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:isMobile?"auto":undefined,WebkitOverflowScrolling:"touch"}}>
           {/* Aba "Áudio" removida (14/09/2026): a seção "Áudios de Orientação" da aba
               Briefing faz o mesmo e melhor — lá dá pra revisar e salvar a gravação. */}
-          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>_bl("aba."+({desc:"briefing",files:"arquivos",activity:"historico"}[id]||id))).map(([id,lbl])=>(
+          {/* (24/09/2026, Vinicius) "Projeto" virou aba própria — a linha do tempo do contrato não
+              é orientação de peça. Usa a MESMA permissão da aba Orientações: bloco novo nasceria
+              fechado pra alguém, e ninguém pode perder acesso num deploy. */}
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"],["projeto","Projeto"]]:[]),["activity","Histórico"]].filter(([id])=>_bl("aba."+({desc:"briefing",files:"arquivos",activity:"historico",projeto:"orientacoes"}[id]||id))).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:isMobile?"11px 13px":"12px 18px",fontSize:isMobile?13:13.5,flexShrink:0,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -50435,6 +50438,7 @@ function _cardPodeSerResp(u){
           {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
               Passa bioterUnit pra puxar contatos automaticamente da unidade certa do Playbook. */}
           {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""} sector={sector||""} viewUser={user} viewPerms={_blPerms}/>}
+          {activeTab==="projeto"&&client&&<div style={{padding:"4px 0"}}><_OVProjeto clientId={client}/></div>}
 
           {/* CONTATOS — só os contatos do Playbook, da unidade Bioter do card. */}
           {activeTab==="contatos"&&client&&<ContatosView clientId={client} bioterUnit={bioterUnit||""}/>}
@@ -51704,16 +51708,34 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
     return function(){vivo=false;};
   },[clientId]);
   const _bg=function(sec,fid){ try{ const v=briefingBd&&briefingBd[sec]&&briefingBd[sec][fid]; return (v&&String(v).trim())?String(v).trim():""; }catch(_){ return ""; } };
+  /* (24/09/2026, Vinicius) "lá tá puxando do briefing e não tá aparecendo o telefone".
+     Desde 23/09 os DADOS CADASTRAIS do Playbook são a única fonte de endereço, fone/WhatsApp,
+     e-mail e site (regra `dados-cadastrais-unica-fonte-de-contato`) — mas esta aba, que é o que
+     o designer lê, ainda lia só o briefing do cliente. Cliente com cadastro preenchido e
+     briefing vazio (Acreforte) não mostrava nada. Agora o cadastro manda; o briefing só tampa
+     o que o cadastro não tem. Bioter: cadastro da unidade do card → cadastro do grupo. */
+  const _cad=(function(){
+    const pb=playbookData||{};
+    if(bioterUnit){
+      const bu=(pb.cadastro_by_unit&&typeof pb.cadastro_by_unit==="object")?pb.cadastro_by_unit:{};
+      const u=bu[bioterUnit];
+      if(u&&typeof u==="object"&&Object.keys(u).some(function(k){return String(u[k]||"").trim();})) return u;
+    }
+    return (pb.cadastro&&typeof pb.cadastro==="object")?pb.cadastro:{};
+  })();
+  const _cg=function(k){ try{ return String(_cad[k]||"").trim(); }catch(_){ return ""; } };
+  const _cadOuBrief=function(k,sec,fid){ return _cg(k)||_bg(sec,fid); };
   const _briefItens=[
-    {l:"Razão social",         v:_bg("identidade","nome_empresarial")},
-    {l:"CNPJ",                 v:_bg("identidade","cnpj")},
-    {l:"Cidade",               v:_bg("identidade","cidade")},
-    {l:"Endereço",             v:_bg("identidade","endereco")},
-    {l:"WhatsApp empresarial", v:_bg("identidade","whatsapp_empresarial")},
-    {l:"E-mail empresarial",   v:_bg("identidade","email_empresarial")},
-    {l:"Site",                 v:_bg("processo","site")},
-    {l:"Tom de voz",           v:_bg("orcamento","tom_voz")},
-    {l:"Time comercial",       v:_bg("processo","contato_comercial"), multi:true},
+    {l:"Razão social",      v:_cadOuBrief("razao_social","identidade","nome_empresarial")},
+    {l:"CNPJ",              v:_cadOuBrief("cnpj","identidade","cnpj")},
+    {l:"Cidade/UF",         v:_cadOuBrief("cidade","identidade","cidade")},
+    {l:"Endereço",          v:_cadOuBrief("endereco","identidade","endereco")},
+    {l:"CEP",               v:_cg("cep")},
+    {l:"Fone / WhatsApp",   v:_cadOuBrief("whatsapp","identidade","whatsapp_empresarial")},
+    {l:"E-mail",            v:_cadOuBrief("email","identidade","email_empresarial")},
+    {l:"Site",              v:_cadOuBrief("site","processo","site")},
+    {l:"Tom de voz",        v:_bg("orcamento","tom_voz")},
+    {l:"Time comercial",    v:_bg("processo","contato_comercial"), multi:true},
   ].filter(function(x){return x.v;});
 
   // Contatos resolvidos: se card tem bioterUnit → contatos daquela unidade; senão → contatos default
@@ -51772,7 +51794,9 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
     const lista=Array.isArray(c)?c:[c];
     return lista.filter(function(x){return x&&(x.nome||x.whatsapp||x.email);});
   })();
-  const hasContent=_briefItens.length>0||_hasContatos||_hasOrientacoesVisuais||_pbEquipe.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  /* (24/09/2026) Contatos, Equipe e Orientações visuais saíram da aba — não contam mais pra
+     decidir se a aba tem conteúdo, senão ela abre "cheia" e não mostra nada. */
+  const hasContent=_briefItens.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -51838,12 +51862,9 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-      {/* ═══ Projeto — início, fim e mês do plano (só cliente com projeto registrado) ═══ */}
-      <_OVProjeto clientId={clientId}/>
-
-      {/* ═══ Do Briefing — dados não-confidenciais preenchidos no Briefing (auto) ═══ */}
+      {/* ═══ Dados cadastrais (Playbook) + o que só o Briefing tem ═══ */}
       {_vis("pb-briefing-auto")&&_briefItens.length>0&&<div>
-        <SectionTitle label="Do Briefing" sub="Respostas do Briefing do cliente — clique pra copiar" icon="fileText" accent="#0d9488"/>
+        <SectionTitle label="Dados cadastrais" sub="Playbook › Dados cadastrais manda; o Briefing completa o que falta — clique pra copiar" icon="fileText" accent="#0d9488"/>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {_briefItens.map(function(x,i){
             const _on=copiedHex===x.v;
@@ -51856,33 +51877,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-      {/* ═══ Orientações visuais UNIFICADAS (todas as áreas do Playbook) ═══
-          Mostra TODAS as orientações visuais cadastradas no Playbook deste cliente,
-          sem filtrar por setor. Merge de data.orientacoes_visuais + design + video + social. */}
-      {(function(){
-        if(!_vis("pb-orientacoes-visuais")) return null;
-        const _ovs = _allOV;
-        if(_ovs.length===0) return null;
-        return <div>
-          <SectionTitle label="Orientações visuais" sub="Referências pra equipe — cadastradas no Playbook" icon="image" accent="#7c3aed"/>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {_ovs.map(function(ov){
-              return <div key={ov.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(15,23,42,.03)"}}>
-                {ov.imgUrl && <a href={ov.imgUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"#fafafa",borderBottom:"1px solid #f1f5f9",textDecoration:"none",cursor:"zoom-in"}}>
-                  <img src={ov.imgUrl} alt={ov.title||""} referrerPolicy="no-referrer" style={{width:"100%",height:"auto",maxHeight:520,objectFit:"contain",display:"block",background:"#fafafa"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                </a>}
-                <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-                  {ov.title && <div style={{color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.2}}>{ov.title}</div>}
-                  {ov.description
-                    ? <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{ov.description}</div>
-                    : <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Sem descrição.</div>
-                  }
-                </div>
-              </div>;
-            })}
-          </div>
-        </div>;
-      })()}
 
       {/* ═══ Logos ═══ */}
       {_vis("pb-equipe")&&data.logos?.length>0&&<div>
@@ -51996,23 +51990,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-      {/* ═══ Equipe do cliente (Playbook) — nome e cargo certos pro GC ═══ */}
-      {_vis("pb-time")&&_pbEquipe.length>0&&<div>
-        <SectionTitle label="Equipe do cliente" sub="Quem aparece nos conteúdos — nome e cargo pro GC" icon="users" accent="#6366f1"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {_pbEquipe.map(function(m,i){
-            const _inic=(function(n){const p=String(n||"").trim().split(/\s+/).filter(Boolean);if(!p.length)return "?";return (p[0][0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase();})(m.nome);
-            return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px"}}>
-              <span style={{width:32,height:32,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{_inic}</span>
-              <div style={{minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{m.nome||"—"}</div>
-                <div style={{color:"#6366f1",fontSize:10.5,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
-                {m.obs&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,lineHeight:1.4}}>{m.obs}</div>}
-              </div>
-            </div>;
-          })}
-        </div>
-      </div>}
 
       {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
       {_vis("pb-marcacoes")&&_pbMarcacoes.length>0&&<div>
@@ -52040,24 +52017,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-      {/* ═══ Contatos do cliente (Playbook) — resumo; a aba Contatos tem o completo ═══ */}
-      {_vis("pb-contatos")&&_contatosArr.length>0&&<div>
-        <SectionTitle label="Contatos do cliente" sub="Do Playbook — a aba Contatos ao lado tem o detalhe" icon="phone" accent="#16a34a"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {_contatosArr.map(function(ct,i){
-            const _wa=String(ct.whatsapp||"").replace(/\D/g,"");
-            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:3}}>
-              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{ct.nome||"—"}</div>
-              {ct.whatsapp&&<button type="button" onClick={function(){copyHex(ct.whatsapp);}} title="Clique pra copiar o número"
-                style={{background:"none",border:"none",padding:0,color:copiedHex===ct.whatsapp?"#0d9488":"#16a34a",fontSize:11.5,fontWeight:700,cursor:"copy",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",textAlign:"left"}}>
-                <Ico n="phone" size={11}/>{copiedHex===ct.whatsapp?"Copiado ✓":ct.whatsapp}
-              </button>}
-              {ct.email&&<button type="button" onClick={function(){copyHex(ct.email);}} title="Clique pra copiar o e-mail"
-                style={{background:"none",border:"none",padding:0,color:copiedHex===ct.email?"#0d9488":"#64748b",fontSize:11,fontWeight:600,cursor:"copy",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"inherit",textAlign:"left"}}>{copiedHex===ct.email?"Copiado ✓":ct.email}</button>}
-            </div>;
-          })}
-        </div>
-      </div>}
 
       {/* ═══ Hashtags ═══ */}
       {_vis("pb-social")&&data.hashtags?.length>0&&<div>
@@ -99411,13 +99370,13 @@ const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
-   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-contatos","pb-produtos","pb-briefing-auto"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
-   blocos:["pb-sobre","pb-designer","pb-equipe","pb-orientacoes-visuais","pb-templates","pb-chamadas","pb-contatos","pb-produtos"]},
+   blocos:["pb-sobre","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
-   blocos:["pb-sobre","pb-time","pb-processos","pb-equipe","pb-orientacoes-visuais","pb-contatos","pb-produtos"]},
+   blocos:["pb-sobre","pb-processos","pb-equipe","pb-produtos"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
-   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-contatos","pb-briefing-auto"]},
+   blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-briefing-auto"]},
 ];
 // ═══ PERMISSÕES POR BLOCO (17/09/2026) ═══
 // Lista de TODOS os blocos do playbook (id + nome) — é o que aparece em
@@ -99434,15 +99393,12 @@ const PB_BLOCOS = [
   {id:"pb-briefing-auto",       label:"Dados cadastrais"},
   {id:"pb-memoria",             label:"Feedbacks"},
   {id:"pb-materiais",           label:"Materiais do cliente"},
-  {id:"pb-contatos",            label:"Contatos"},
-  {id:"pb-time",                label:"Equipe do cliente"},
   {id:"pb-marcacoes",           label:"Marcar no post (@)"},
   {id:"pb-comunicacao",         label:"Comunicação da marca"},
   {id:"pb-produtos",            label:"Produtos/serviços"},
   {id:"pb-chamadas",            label:"Exemplos de chamadas"},
   {id:"pb-designer",            label:"Instruções pro designer"},
   {id:"pb-equipe",              label:"Orientações"},
-  {id:"pb-orientacoes-visuais", label:"Orientações visuais"},
   {id:"pb-templates",           label:"Templates"},
   {id:"pb-processos",           label:"Processos técnicos de vídeo"},
 ];
@@ -100293,7 +100249,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     {id:"pb-memoria",      label:"Feedbacks",    icon:"message"},
     {id:"pb-designer",     label:"Designer",     icon:"image"},
     {id:"pb-equipe",       label:"Orientações",  icon:"sparkles"},
-    {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
     {id:"pb-produtos",     label:"Produtos/serviços", icon:"package"},
   ];
   // UNIFICADO: Orientacoes ja incluida no topo. Nao push denovo.
@@ -100303,7 +100258,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   if(area==="all" || area==="video"){ const _sp={id:"pb-processos", label:"Processos", icon:"play"}; if(_pbProcTopo) SECTIONS.unshift(_sp); else SECTIONS.push(_sp); }
   /* (23/09/2026, Vinicius) "Publicação social" saiu — duplicava o Marcar no post (@); cadência,
      mix, particularidades e restrições ninguém preenchia e nenhum prompt lia. */
-  SECTIONS.push({id:"pb-orientacoes-visuais", label:"Visuais", icon:"image"});
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   // Cadeira: só os atalhos dos blocos que ela enxerga
   const SECTIONS_VIS = SECTIONS.filter(function(sec){ return _pbBlocoVisivel(sec.id); });
@@ -100449,200 +100403,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Materiais do cliente — folder/manual/catálogo que viram ficha de fatos no cérebro */}
           <_PbMateriais clientId={cl.id} clienteNome={cl.name||cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
 
-          <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
-            {_isBioter && typeof BIOTER_UNITS!=="undefined" && (function(){
-              const _u=BIOTER_UNITS.find(function(x){return x.id===_unitTab;});
-              return <div style={{marginBottom:14,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"5px 14px",fontSize:11.5,fontWeight:800,letterSpacing:-.1}}>{(_u&&(_u.pickerLabel||_u.label))||(_unitTab||"Grupo Bioter")}</span>
-                <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unitTab?"unidade ativa — troque no seletor fixo do topo":"contatos gerais do grupo — escolha uma unidade no topo pra ver os dela"}</span>
-              </div>;
-            })()}
-            {(function(){
-              const _currentUnit = _isBioter ? _unitTab : null;
-              // ── Normaliza contatos pra sempre ser array ──
-              // Backcompat: se vier objeto único {nome/whatsapp/email/telefone,...} vira [obj].
-              // Se vier array, mantém.
-              const _norm = function(raw){
-                if(!raw) return [];
-                if(Array.isArray(raw)) return raw.filter(Boolean);
-                if(typeof raw==="object"){
-                  const hasAny = raw.nome||raw.whatsapp||raw.email||raw.telefone||raw.site||raw.instagram||raw.endereco;
-                  return hasAny ? [{
-                    nome: raw.nome||"",
-                    whatsapp: raw.whatsapp||raw.telefone||"",
-                    email: raw.email||"",
-                  }] : [];
-                }
-                return [];
-              };
-              // Lista atual (edição usa state; leitura usa data)
-              const listEdit = editMode
-                ? (_isBioter ? _norm(editContatosByUnit[_currentUnit]) : _norm(editContatos))
-                : [];
-              const listRead = !editMode
-                ? (_isBioter ? _norm((data.contatos_by_unit||{})[_currentUnit]) : _norm(data.contatos))
-                : [];
-              // Setter que salva array
-              const _saveList = function(newList){
-                if(_isBioter){
-                  setEditContatosByUnit(function(p){return Object.assign({},p||{},{[_currentUnit]:newList});});
-                } else {
-                  setEditContatos(newList);
-                }
-              };
-              const _updateAt = function(idx, patch){
-                const cur = [...listEdit];
-                cur[idx] = Object.assign({}, cur[idx]||{}, patch);
-                _saveList(cur);
-              };
-              const _removeAt = function(idx){
-                const cur = listEdit.filter(function(_,i){return i!==idx;});
-                _saveList(cur);
-              };
-              const _addNew = function(){
-                _saveList([...listEdit, {nome:"", cargo:"", whatsapp:"", email:""}]);
-              };
-
-              /* (19/09/2026, Vinicius) CARGO/FUNÇÃO no contato: "deve falar a função, cargo
-                 do colaborador". Sem isso o card só diz "Martins" e ninguém sabe se liga pra
-                 ele pra tratar de arte, de obra ou de pagamento. */
-              const FIELDS = [
-                {key:"nome",     label:"Nome",             ph:"Ex: Rodrigo Silva",        icon:"user"},
-                {key:"cargo",    label:"Cargo / função",   ph:"Ex: Gerente comercial",    icon:"briefcase"},
-                {key:"whatsapp", label:"WhatsApp",         ph:"(00) 0 0000-0000",         icon:"phone"},
-                {key:"email",    label:"E-mail",           ph:"contato@cliente.com.br",   icon:"mail"},
-              ];
-
-              if(editMode){
-                // Se ainda não tem nenhum contato, mostra 1 card em branco pronto pra preencher.
-                // Quando o usuário digitar, _updateAt cria o item no state.
-                const displayList = listEdit.length > 0 ? listEdit : [{nome:"",cargo:"",whatsapp:"",email:""}];
-                return <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {displayList.map(function(ct,idx){
-                    return <div key={(_currentUnit||"c")+"-"+idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                        <div style={{color:"#0d9488",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Contato {idx+1}</div>
-                        <button type="button" onClick={function(){_removeAt(idx);}} title="Remover contato"
-                          style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}
-                          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
-                          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
-                          Remover
-                        </button>
-                      </div>
-                      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
-                        {FIELDS.map(function(f){
-                          return <div key={f.key}>
-                            <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
-                            <input type="text" placeholder={f.ph}
-                              value={ct[f.key]||""}
-                              onChange={function(e){_updateAt(idx,{[f.key]:e.target.value});}}
-                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                          </div>;
-                        })}
-                      </div>
-                    </div>;
-                  })}
-                  <button type="button" onClick={_addNew}
-                    style={{background:"linear-gradient(135deg,#0d9488,#14b8a6)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,alignSelf:"flex-start",boxShadow:"0 4px 12px rgba(13,148,136,0.30)",letterSpacing:-.1,transition:"all .15s"}}
-                    onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(13,148,136,0.40)";}}
-                    onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(13,148,136,0.30)";}}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                    Adicionar contato
-                  </button>
-                </div>;
-              }
-
-              // ── Modo leitura ──
-              if(listRead.length===0) return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>;
-              return <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                {listRead.map(function(ct,idx){
-                  const items = FIELDS.filter(function(it){return ct[it.key];});
-                  if(items.length===0) return null;
-                  return <div key={idx} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:12,padding:"12px 14px"}}>
-                    {(ct.nome||ct.cargo) && <div style={{marginBottom:9,display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{width:28,height:28,borderRadius:8,background:"#0d9488",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <Ico n="user" size={13}/>
-                      </div>
-                      <div style={{minWidth:0}}>
-                        {ct.nome && <div style={{color:"#134e4a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{ct.nome}</div>}
-                        {ct.cargo && <div style={{color:"#0d9488",fontSize:11,fontWeight:700,letterSpacing:.1,marginTop:1}}>{ct.cargo}</div>}
-                      </div>
-                    </div>}
-                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-                      {items.filter(function(it){return it.key!=="nome"&&it.key!=="cargo";}).map(function(it){
-                        return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #99f6e480",borderRadius:9,padding:"7px 10px"}}>
-                          <div style={{width:26,height:26,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={11} color="#fff"/></div>
-                          <div style={{minWidth:0,flex:1}}>
-                            <div style={{color:"#134e4a",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
-                            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ct[it.key]}</div>
-                          </div>
-                          <button type="button" onClick={function(){try{navigator.clipboard.writeText(ct[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
-                            style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:3,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
-                            <Ico n="copy" size={12}/>
-                          </button>
-                        </div>;
-                      })}
-                    </div>
-                  </div>;
-                })}
-              </div>;
-            })()}
-          </PlaybookBlock>
 
 
-          {/* Equipe do cliente — pessoas DA EMPRESA (cliente) que aparecem nos conteúdos */}
-          <PlaybookBlock id="pb-time" title="Equipe do cliente" subtitle="Funcionários e sócios da empresa que aparecem nos vídeos — nome e cargo certos pro GC" icon="users" color="#6366f1">
-            {(function(){
-              const _eq=Array.isArray(data.equipe)?data.equipe:[];
-              const _upd=function(lista){ onUpdate({equipe:lista}); };
-              const _inic=function(n){
-                const _p=String(n||"").trim().split(/\s+/).filter(Boolean);
-                if(!_p.length)return "?";
-                return (_p[0][0]+(_p.length>1?_p[_p.length-1][0]:"")).toUpperCase();
-              };
-              if(!editMode){
-                return _eq.length===0
-                  ? <_PbEmpty icon="users" text="Ninguém cadastrado ainda." sub={isAdmin?"Ative o modo edição pra cadastrar as pessoas da empresa (nome + cargo pro GC).":""}/>
-                  : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:10}}>
-                      {_eq.map(function(m,i){
-                        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:11,background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"11px 13px"}}>
-                          <span style={{width:36,height:36,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
-                          <div style={{minWidth:0}}>
-                            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{m.nome||"—"}</div>
-                            <div style={{color:"#6366f1",fontSize:11,fontWeight:700,marginTop:1}}>{m.cargo||"—"}</div>
-                            {m.obs?<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,marginTop:3,lineHeight:1.45}}>{m.obs}</div>:null}
-                          </div>
-                        </div>;
-                      })}
-                    </div>;
-              }
-              return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {_eq.map(function(m,i){
-                  return <div key={"eq"+i} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"8px 11px",flexWrap:"wrap"}}>
-                    <span style={{width:28,height:28,borderRadius:"50%",background:"#6366f114",border:"1px solid #6366f12b",color:"#6366f1",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{_inic(m.nome)}</span>
-                    <input defaultValue={m.nome||""} placeholder="Nome da pessoa"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.nome||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{nome:v}):x;}));}}
-                      style={{width:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontWeight:700,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <input defaultValue={m.cargo||""} placeholder="Cargo — ex: Sócio-diretor · Engenheira"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.cargo||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{cargo:v}):x;}));}}
-                      style={{width:210,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <input defaultValue={m.obs||""} placeholder="Obs pro editor (opcional) — ex: como escrever no GC, onde aparece"
-                      onBlur={function(e){const v=e.target.value;if(v!==(m.obs||""))_upd(_eq.map(function(x,j){return j===i?Object.assign({},x,{obs:v}):x;}));}}
-                      style={{flex:1,minWidth:170,background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 11px",fontSize:12.5,color:"#0f172a",outline:"none",fontFamily:PB_INTER}}/>
-                    <button type="button" onClick={function(){_upd(_eq.filter(function(_,j){return j!==i;}));}} title="Remover"
-                      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"inline-flex"}}
-                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>;
-                })}
-                <button type="button" onClick={function(){_upd(_eq.concat([{nome:"",cargo:"",obs:""}]));}}
-                  style={{background:"#6366f10d",border:"1px dashed #6366f155",borderRadius:10,padding:"9px 0",fontSize:11.5,fontWeight:800,color:"#6366f1",cursor:"pointer",fontFamily:PB_INTER}}>+ Adicionar pessoa</button>
-              </div>;
-            })()}
-          </PlaybookBlock>
 
           {/* Marcar no post (@) — DIFERENTE do GC: aqui vão os @ pra marcar na publicação */}
           <PlaybookBlock id="pb-marcacoes" title="Marcar no post (@)" subtitle="Perfis pra marcar na publicação — @ do cliente, sócios, parceiros (não é o GC)" icon="tag" color="#0ea5e9">
@@ -100938,12 +100700,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             <_PbVideoProcesses isAdmin={isAdmin}/>
           </PlaybookBlock>}
 
-          {/* (23/09/2026) bloco "Publicação social" removido a pedido do Vinicius — duplicava Marcar no post (@) */}
+          {/* (23/09/2026) bloco "Publicação social" removido a pedido do Vinicius — duplicava Marcar no post (@)
+              (24/09/2026) saíram também: "Contatos" (Dados cadastrais é a única fonte de contato),
+              "Equipe do cliente" (vazia nos 9 clientes; quem marca é o Marcar no post) e
+              "Orientações visuais" (1 item no acervo inteiro contra Instruções pro Designer em 7 de 9).
+              Os dados continuam gravados no banco — saiu a tela, não o conteúdo. */}
 
-          {/* Orientações visuais — imagem + descrição por área. Aparece nos cards do setor correspondente. */}
-          <PlaybookBlock id="pb-orientacoes-visuais" title="Orientações visuais" subtitle={area==="all" ? "Referências pra equipe — aparecem automaticamente nos cards deste cliente" : ("Referências visuais desta área — aparecem automaticamente nos cards de "+areaCfg.label)} icon="image" color={areaCfg.color||PB_PURPLE_DK}>
-            <_PbVisualOrientations areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} areaColor={areaCfg.color||PB_PURPLE_DK}/>
-          </PlaybookBlock>
 
         </div>
 
@@ -101235,6 +100997,23 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     if(!n){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada novo pra puxar — o Briefing não tem nada que já não esteja aqui."); return; }
     _salvar(novo); if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" campo"+(n===1?"":"s")+" preenchido"+(n===1?"":"s")+" a partir do Briefing. Confira.",3200);
   };
+  /* (24/09/2026, Vinicius) "eles preencheram o briefing… por que não sincronizou automático?"
+     O "Puxar do Briefing" só existia no clique — então cliente que preenchia o briefing não
+     aparecia aqui até alguém lembrar de apertar o botão. Agora entra sozinho assim que o
+     briefing chega: UMA vez por cliente/unidade, só pra quem pode editar, e SÓ NOS CAMPOS
+     VAZIOS. O que a equipe digitou nunca é sobrescrito — o cadastro é que manda. */
+  const _autoBriefRef=useRef({});
+  useEffect(function(){
+    if(!isAdmin||!bd) return;
+    const chave=String(clientId||"")+"|"+_unit;
+    if(_autoBriefRef.current[chave]) return;
+    _autoBriefRef.current[chave]=true;
+    const br=_doBriefing(); const novo=Object.assign({},_atual); let n=0;
+    Object.keys(br).forEach(function(k){ if(br[k]&&!String(novo[k]||"").trim()){ novo[k]=br[k]; n++; } });
+    if(!n) return;
+    _salvar(novo);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info(n+" campo"+(n===1?"":"s")+" do Briefing entr"+(n===1?"ou":"aram")+" nos Dados cadastrais. Confira.",3600);
+  },[bd,clientId,_unit,isAdmin]);
   const _copiar=async function(v){ try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){} };
   const _preenchidos=CAMPOS.filter(function(c){ return String(_atual[c.k]||"").trim(); }).length;
   const _uniLabel=function(u){ if(!u) return "Grupo"; if(typeof BIOTER_UNITS==="undefined") return u; const x=BIOTER_UNITS.find(function(b){return b.id===u;}); return x?(x.pickerLabel||x.label):u; };
@@ -101246,7 +101025,7 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
       {isBioter&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>}
       {isBioter&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unit?"dados desta unidade — troque no seletor do topo":"dados gerais do grupo — escolha uma unidade no topo pra cadastrar os dela"}</span>}
       <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:700}}>{_preenchidos} de {CAMPOS.length}</span>
-      {isAdmin&&_temBriefing&&<button type="button" onClick={_puxar} title="Preenche o que está vazio com as respostas do Briefing do cliente"
+      {isAdmin&&_temBriefing&&<button type="button" onClick={_puxar} title="Preenche de novo o que estiver vazio com as respostas do Briefing (isso já acontece sozinho quando o cliente responde)"
         style={{background:"#fff",border:"1px solid #99f6e4",borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}
         onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>Puxar do Briefing</button>}
     </div>
@@ -107747,10 +107526,24 @@ function _rtParagrafos(txt){
    fechamento) vira UM parágrafo com "•" na frente; os rótulos Abertura/Desenvolvimento/
    Fechamento saíram. Título: *ROTEIRO N — ASSUNTO EM CAIXA ALTA*. */
 function _rtUmParagrafo(txt){ return String(txt||"").replace(/\r/g,"").replace(/\s*\n+\s*/g," ").replace(/[ \t]{2,}/g," ").trim(); }
+/* (24/09/2026, Vinicius) "se for fora desse padrãozinho que temos, configura como foi pedido...
+   como está no roteiro". Padrão = as três partes preenchidas, cada uma texto corrido. Aí vale o
+   formato de 23/09: um "•" por parte, parágrafo único. Fora do padrão — roteiro que veio numa
+   parte só, ou com lista / passo a passo / tópicos numerados dentro de alguma parte — o texto sai
+   EXATAMENTE como está na tela: quebras de linha preservadas, sem bullet inventado por cima. */
+function _rtForaDoPadrao(r){
+  const ps=[r&&r.abertura,r&&r.desenvolvimento,r&&r.fechamento].map(function(x){return String(x||"").replace(/\r/g,"").trim();});
+  if(ps.filter(Boolean).length!==3) return true;
+  return ps.some(function(p){ return /(^|\n)\s*(?:[-–—•*]|\d+\s*[.)º°]|passo\s*\d|dica\s*\d|t[oó]pico\s*\d|cena\s*\d)/i.test(p); });
+}
 function _rtTexto(r,semCabecalho,numero){
   const _tit="*ROTEIRO"+(numero?(" "+numero):"")+" — "+String(r.assunto||"Roteiro").toUpperCase()+"*";
-  return (semCabecalho?"":(_tit+"\n\n"))+
-    "• "+_rtUmParagrafo(r.abertura)+"\n\n• "+_rtUmParagrafo(r.desenvolvimento)+"\n\n• "+_rtUmParagrafo(r.fechamento);
+  const _cru=[r.abertura,r.desenvolvimento,r.fechamento]
+    .map(function(x){return String(x||"").replace(/\r/g,"").replace(/[ \t]+$/gm,"").trim();}).filter(Boolean);
+  const _corpo=_rtForaDoPadrao(r)
+    ? _cru.join("\n\n")
+    : _cru.map(function(p){return "• "+_rtUmParagrafo(p);}).join("\n\n");
+  return (semCabecalho?"":(_tit+"\n\n"))+_corpo;
 }
 /* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; por produto em 22/09/2026, a pedido do
    Rodrigo: "quero que seja organizado pro whats, separado pelas tags de produtos ali").
@@ -107800,6 +107593,14 @@ function _rtRegras60(){
     .replace(/parágrafos CURTOS separados por linha em branco \(uma ideia por parágrafo; o Desenvolvimento tem 3 a 4\)\. Nunca um bloco só\./,"cada cena é UM parágrafo corrido (o Desenvolvimento com 3 a 4 frases).")
     .replace(/90 segundos/g,"60 segundos");
 }
+
+  /* (24/09/2026, Vinicius) "se o pedido for fora dessa estrutura de abertura desenvolvimento
+     fechamento, você obedece o que for pedido". As regras de formato viram o PADRÃO; o pedido
+     escrito à mão vence todas elas. Só o que é verdade da marca continua inegociável. */
+  const _rtPedidoManda=function(comoChama){ return ""+
+    "O "+comoChama+" MANDA NO FORMATO: tudo que está escrito acima sobre formato — 60 segundos, 120 a 150 palavras, três partes, um parágrafo por parte, gancho na primeira frase, CTA no fim — é o PADRÃO de quando ninguém pede nada diferente. Se o "+comoChama+" pedir outra estrutura, outro tamanho, outra divisão, outro tipo de abertura ou nenhum CTA, OBEDEÇA e ignore a regra de formato que ele contrariar. Não avise, não peça licença, não entregue os dois jeitos.\n"+
+    "O que continua valendo de qualquer jeito: é fala pra gravar olhando pra câmera, na voz da marca; nunca inventar número, cidade, prazo, garantia nem depoimento; e responder nos rótulos do formato abaixo.\n"+
+    "COMO ENCAIXAR NOS RÓTULOS: ABERTURA, DESENVOLVIMENTO e FECHAMENTO são só as três caixas onde o texto fica guardado na tela — não são obrigação de escrever em três atos. Escreva do jeito pedido e distribua na ordem: o começo em ABERTURA, o miolo em DESENVOLVIMENTO, o final em FECHAMENTO. Se o que foi pedido não se divide em três (uma fala corrida, só um gancho, um texto curto), escreva tudo em ABERTURA e deixe DESENVOLVIMENTO e FECHAMENTO VAZIOS — nunca invente conteúdo só pra encher caixa.\n\n"; };
 
 /* ── GERADOR ──
    Devolve [{assunto,abertura,desenvolvimento,fechamento}] × quantos.
@@ -107906,6 +107707,7 @@ async function pxGerarRoteiros(opts){
   u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
 
   u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
+  if(pedido) u+=_rtPedidoManda("PEDIDO DA AGÊNCIA");
   const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL — é o título que o cliente do Paraguai vê":"em português")+")\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
   if(livre){
     u+="FORMATO EXATO DA RESPOSTA (um bloco por roteiro, numerados 1, 2, 3… — repita o bloco quantas vezes o pedido pedir, até 20):\n"+_bloco(1)+_bloco(2)+"(…e assim por diante)\n";
@@ -107917,7 +107719,7 @@ async function pxGerarRoteiros(opts){
   /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
      estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
   const data=await askIA({model:PX_IA_MODELO,max_tokens:livre?16000:Math.min(16000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
-  const out=_rtParseResposta(data);
+  const out=_rtParseResposta(data, !!pedido);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
   const lista=out.slice(0,livre?20:quantos);
   /* A tag só existe se bater com o cadastro. Nome que a IA inventou não vira etiqueta. */
@@ -107931,7 +107733,7 @@ async function pxGerarRoteiros(opts){
 
 /* Lê os blocos ===ROTEIRO n=== da resposta da IA. Um lugar só: o gerador e o AJUSTE
    pedem o mesmo formato, então não pode existir um segundo parser. */
-function _rtParseResposta(data){
+function _rtParseResposta(data, formatoLivre){
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
   txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"");
   const blocos=txt.split(/===\s*ROTEIRO\s*\d+\s*===/i).map(function(b){return b.trim();}).filter(Boolean);
@@ -107943,7 +107745,10 @@ function _rtParseResposta(data){
       abertura:pega("ABERTURA|APERTURA","DESENVOLVIMENTO|DESARROLLO"),
       desenvolvimento:pega("DESENVOLVIMENTO|DESARROLLO","FECHAMENTO|CIERRE"),
       fechamento:pega("FECHAMENTO|CIERRE","NUNCA_ACHA_ISSO_AQUI")};
-    if(r.abertura&&r.desenvolvimento&&r.fechamento) out.push(r);
+    /* (24/09/2026) Com pedido à mão, o roteiro pode vir numa parte só — a exigência das três
+       caixas cheias iria jogar fora exatamente o que o Vinicius pediu. Sem pedido, a regra
+       estrita continua: bloco faltando é resposta cortada no meio, não formato novo. */
+    if(formatoLivre ? !!r.abertura : (r.abertura&&r.desenvolvimento&&r.fechamento)) out.push(r);
   });
   return out;
 }
@@ -107992,12 +107797,13 @@ async function pxAjustarRoteiro(r,feedback){
   /* (23/09/2026, Vinicius) "senti falta de ganchos fortes que prendam a atenção" */
   u+="- GANCHO (vale sempre que a abertura for tocada): a PRIMEIRA FRASE da abertura existe pra parar o dedo em 2 segundos. Nunca comece apresentando o produto ('A cisterna inflada é…', 'O reservatório serve pra…') nem com 'Você sabia' ou 'Hoje vamos falar'. Comece por UMA destas portas: uma dor real do público dita como ele diz ('Perdeu produção na estiagem e o vizinho não?'); uma pergunta que ele já se faz; um erro comum que custa caro; um contraste ou quebra de expectativa ('Não é o tamanho da lagoa que decide a safra'); uma consequência concreta ('Cada dia sem água na granja é dinheiro que não volta'). Frase curta, direta, na voz de quem grava. Sem clickbait: o gancho promete só o que o roteiro entrega, e nunca inventa número, cidade, prazo ou depoimento.\n";
   u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
+  u+=_rtPedidoManda("QUE A AGÊNCIA PEDIU");
   u+="\n";
   u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL":"em português")+")\n"+
      ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
 
   const data=await askIA({model:PX_IA_MODELO,max_tokens:2400,system:sys,messages:[{role:"user",content:u}]});
-  const out=_rtParseResposta(data);
+  const out=_rtParseResposta(data, true);
   if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
   const _novo=out[0];
   if(typeof pxProdutosOficiais==="function"&&typeof pxProdutoOficial==="function"){
@@ -108049,7 +107855,9 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
   const [ajustando,setAjustando]=useState(false);
   const py=String(r.unidade||"")==="paraguay";
   const L=py?["Apertura","Desarrollo","Cierre"]:["Abertura","Desenvolvimento","Fechamento"];
-  const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]];
+  /* (24/09/2026) Roteiro que veio numa parte só não mostra caixa vazia na tela. */
+  const partes=[["a",L[0],r.abertura],["d",L[1],r.desenvolvimento],["f",L[2],r.fechamento]]
+    .filter(function(p){ return String(p[2]||"").trim(); });
   const _c=cor||_RT_AC;
   const _pill=function(on,c){ return {background:on?c:"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?c:"#e2e8f0"),borderRadius:99,padding:"6px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}; };
   const dt=r.created_at?new Date(r.created_at):null;
