@@ -2669,27 +2669,20 @@ function calcDesignerPayments(tasks, designerId, refMonth){
   // ── Ajuste manual do mês (bônus/desconto registrado no Financeiro) ──
   out.producao=out.total; // soma das demandas do mês, antes de qualquer ajuste
   out.ajuste=0; out.ajusteMotivo=""; out.pago=0; // pago = pagamentos feitos (saída de caixa); não entra no custo, só abate do saldo
-  out.saldoAnterior=0;   // (23/09/2026) o que sobrou do mês anterior: negativo = pagou a mais lá; positivo = ficou devendo lá
+  out.saldoAnterior=0;   // (24/09/2026) sempre 0: cada mês fecha sozinho, nada vem do mês anterior
   try{
     if(refMonth && typeof pxGetFreelaAjuste==="function"){
       const _aj=pxGetFreelaAjuste(designerId, refMonth);
       out.ajuste=Number(_aj.valor)||0; out.ajusteMotivo=_aj.motivo||"";
       out.total+=out.ajuste;
       pxGetFreelaPagamentos(designerId, refMonth).forEach(function(a){ out.pago+=Math.abs(Number(a.valor)||0); });
-      // Saldo do mês anterior: recalcula o mês de trás (que por sua vez olha o anterior), até 6 meses.
-      const _prof=Number(arguments[3])||0;
-      if(_prof<6&&typeof _pxMesMais==="function"){
-        const _ant=calcDesignerPayments(tasks, designerId, _pxMesMais(refMonth,-1), _prof+1);
-        const _tem=(_ant.producao||0)!==0||(_ant.ajuste||0)!==0||(_ant.pago||0)!==0||(_ant.saldoAnterior||0)!==0;
-        if(_tem) out.saldoAnterior=Math.round(((_ant.aPagar)||0)*100)/100;
-      }
     } else if(!refMonth && typeof window!=="undefined" && window.__pxFreelaAjustes){
       Object.keys(window.__pxFreelaAjustes).forEach(function(k){
         if(k.indexOf(designerId+":")===0){ _pxAjList(window.__pxFreelaAjustes[k]).forEach(function(a){const _n=_pxAjNorm(a,k.split(":")[1]); if(!_n) return; if(_n.tipo==="pagamento"){ out.pago+=_n.valor; return; } out.ajuste+=_n.valor; out.total+=_n.valor;}); }
       });
     }
   }catch(_){}
-  out.aPagar=Math.round((out.total-out.pago+out.saldoAnterior)*100)/100; // o que falta pagar (negativo = pago a mais)
+  out.aPagar=Math.round((out.total-out.pago)*100)/100; // o que falta pagar NESTE mês (negativo = pago a mais)
   return out;
 }
 function formatRefMonth(refMonth){
@@ -3057,11 +3050,9 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             _itens.forEach(function(it,i){ (it.tipo==="pagamento"?_pgs:_ajs).push({it:it,i:i}); });
             const _somaAj=_ajs.reduce(function(s,x){return s+x.it.valor;},0);
             const _devido=Number(c.total)||0;           // produção + ajustes
-            const _saldo=Number(c.aPagar)||0;           // devido − pago + saldo anterior
-            const _mesAnt=(typeof _pxMesMais==="function")?_pxMesMais(refMonth,-1):"";
-            const _mesProx=(typeof _pxMesMais==="function")?_pxMesMais(refMonth,1):"";
+            const _saldo=Number(c.aPagar)||0;           // devido − pago, só deste mês
             const _parcAberto=_parcForm&&_parcForm.fr===fr.id;
-            if(!_souSocio&&!_ajs.length&&!_pgs.length&&!c.saldoAnterior) return null;
+            if(!_souSocio&&!_ajs.length&&!_pgs.length) return null;
             return <React.Fragment>
               {/* ── AJUSTES NO VALOR DEVIDO ── */}
               <div style={{padding:"10px 18px 12px",borderTop:"1px dashed #eef0f3",display:"flex",flexDirection:"column",gap:6}}>
@@ -3166,10 +3157,6 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
 
               {/* ── SALDO ── */}
               <div style={{padding:"12px 18px 14px",background:accent+"14",borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:6}}>
-                {!!c.saldoAnterior&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                  <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Saldo de {formatRefMonth(_mesAnt)}</span>
-                  <span style={{color:c.saldoAnterior<0?"#16a34a":"#dc2626",fontWeight:800,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{c.saldoAnterior<0?("pago a mais "+fmtBRL(Math.abs(c.saldoAnterior))+" → desconta aqui"):("ficou devendo "+fmtBRL(c.saldoAnterior)+" → soma aqui")}</span>
-                </div>}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                   <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Já pago</span>
                   <span style={{color:"#64748b",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>− {fmtBRL(c.pago||0)}</span>
@@ -3178,8 +3165,8 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
                   <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{_saldo>0?"Falta pagar":(_saldo<0?"Pago a mais":"Fechado")}</span>
                   <span style={{color:_saldo>0?"#0f172a":(_saldo<0?"#dc2626":"#16a34a"),fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{_saldo===0?"✓":fmtBRL(Math.abs(_saldo))}</span>
                 </div>
-                {_saldo<0&&<div style={{color:"#b45309",fontSize:11,fontWeight:600,lineHeight:1.4}}>Você pagou {fmtBRL(Math.abs(_saldo))} a mais neste ciclo. {formatRefMonth(_mesProx)} já nasce com esse crédito descontado.</div>}
-                {_saldo>0&&!!c.pago&&<div style={{color:"#64748b",fontSize:11,fontWeight:600,lineHeight:1.4}}>Devido {fmtBRL(_devido)}{c.saldoAnterior?((c.saldoAnterior>0?" + ":" − ")+fmtBRL(Math.abs(c.saldoAnterior))+" do mês anterior"):""} − pago {fmtBRL(c.pago)}.</div>}
+                {_saldo<0&&<div style={{color:"#b45309",fontSize:11,fontWeight:600,lineHeight:1.4}}>Você pagou {fmtBRL(Math.abs(_saldo))} a mais do que este mês pedia.</div>}
+                {_saldo>0&&!!c.pago&&<div style={{color:"#64748b",fontSize:11,fontWeight:600,lineHeight:1.4}}>Devido {fmtBRL(_devido)} − pago {fmtBRL(c.pago)}.</div>}
               </div>
             </React.Fragment>;
           })()}
