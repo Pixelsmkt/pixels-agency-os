@@ -20045,9 +20045,65 @@ function _pxCasGrupo(t){
    Aqui o id fica guardado durante a varredura inteira — as três passadas e tudo que elas
    chamam — em vez de ser empurrado por meia dúzia de assinaturas. Sempre zerado no fim. */
 let _PX_CAS_PROTEGIDO=null;
+/* ═══ MEXEU NA DATA À MÃO, A DATA FICA (24/09/2026, Rodrigo) ═══════════════════════
+   "Hellen arrastou post de sábado pra quinta.. mas jogou de volta pra sábado por conta da
+    organização automática.. se ela arrastou pra quinta um card, você deveria ter jogado o
+    outro pra sábado. Modificação manual deve prevalecer."
+
+   O que aconteceu em 23/09 (Climaves, "Vídeo expositivo (urgente)"): a Hellen pôs o card na
+   quinta 24, onde já estava o "Vídeo de obra - Martins". A proteção acima (_PX_CAS_PROTEGIDO)
+   só vale DURANTE a varredura disparada pelo save dela. Quinze minutos depois outra pessoa
+   abriu o calendário, a varredura rodou de novo — sem proteção nenhuma — e o espaçamento
+   desempatou "dois no mesmo dia" pelo updated_at, que qualquer miniatura de vídeo ou
+   comentário altera. Sobrou pro card da Hellen, que voltou pro sábado. Duas vezes.
+
+   Agora a escolha da pessoa fica gravada no card: `publish_date_manual_at` (trigger no
+   banco, `_pixels_publish_date_manual`: toda vez que a data de publicação muda e a timeline
+   ganha um "data de publicação" feito por gente, a hora fica aí; quando quem muda é a
+   cascata, zera). E a cascata lê isso em TODA rodada, de qualquer pessoa, pra sempre:
+
+   - em cada semana, por alvo (cliente ou unidade), o card com a marca MAIS RECENTE nunca
+     anda — é a última decisão humana daquela semana (_PX_CAS_MANUAL, montado por
+     _pxCasProtegidosManuais logo depois de cada leitura do banco);
+   - quando alguém precisa sair da semana, sai primeiro quem NÃO tem marca (o do fim da
+     fila, como sempre); entre marcados, o mais antigo cede pro mais novo (_pxCasCmpSaida);
+   - no "dois no mesmo dia" do espaçamento, quem tem marca fica; sem marca dos dois lados,
+     continua o desempate antigo.
+   Card novo continua protegido pelo novoId; o id passado pra varredura continua valendo. */
+let _PX_CAS_MANUAL={};
+function _pxCasManualAt(t){ return String((t&&(t.publish_date_manual_at||t.publishDateManualAt))||""); }
+function _pxCasProtegidosManuais(rows){
+  const prot={}; const melhor={};
+  (rows||[]).forEach(function(x){
+    if(!x||x.deleted_at) return;
+    const m=_pxCasManualAt(x); if(!m) return;
+    const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
+    if(x.status==="reprovado"||x.status==="pausado"||_pxNaoEhPublicacao(x)) return;
+    const sem=_pxApLinha(iso).iniIso;
+    _pxColAlvos(x).forEach(function(a){
+      const k=sem+"|"+a;
+      if(!melhor[k]||m>melhor[k].m) melhor[k]={m:m,id:String(x.id)};
+    });
+  });
+  Object.keys(melhor).forEach(function(k){ prot[melhor[k].id]=true; });
+  _PX_CAS_MANUAL=prot;
+  return prot;
+}
+/* Ordem de quem SAI da semana: primeiro quem não tem marca manual (o de data mais tarde,
+   como sempre); depois os marcados à mão, do mais antigo pro mais novo. `jaMovido` (opcional)
+   deixa por último quem já andou nesta rodada. */
+function _pxCasCmpSaida(a,b,jaMovido){
+  const ma=_pxCasManualAt(a), mb=_pxCasManualAt(b);
+  if(!!ma!==!!mb) return ma?1:-1;
+  if(ma&&mb&&ma!==mb) return ma<mb?-1:1;
+  if(typeof jaMovido==="function"){ const xa=jaMovido(a)?1:0, xb=jaMovido(b)?1:0; if(xa!==xb) return xa-xb; }
+  const d=String(b.publish_date||"").localeCompare(String(a.publish_date||"")); if(d) return d;
+  return String(a.updated_at||"").localeCompare(String(b.updated_at||""));
+}
 function _pxCasMovivel(t,hoje,novoId){
   if(!t||String(t.id)===String(novoId)) return false;
   if(_PX_CAS_PROTEGIDO&&String(t.id)===String(_PX_CAS_PROTEGIDO)) return false;
+  if(_PX_CAS_MANUAL[String(t.id)]) return false;   // última decisão humana da semana: fica
   if(t.deleted_at) return false;
   const st=String(t.status||"");
   if(st==="publicado"||st==="reprovado"||st==="pausado") return false;
@@ -20220,13 +20276,16 @@ async function pxCascataPlanejar(novo,extras,opts){
     const nn={id:novo.id,client:novo.client,bioter_unit:novo.bioterUnit||novo.bioter_unit||"",publish_date:iso,
       status:novo.status||"rascunhos",somente_story:!!(novo.somenteStory||novo.somente_story),
       nao_publica:!!(novo.naoPublica||novo.nao_publica),content_type:novo.contentType||novo.content_type||null,
-      title:novo.title||"",tags:novo.tags||[]};
+      title:novo.title||"",tags:novo.tags||[],
+      // o card que a pessoa está posicionando AGORA é a decisão mais nova da semana; a âncora da
+      // varredura (opts.sair) é um card que já estava lá e carrega a marca que tem no banco
+      publish_date_manual_at:(opts&&opts.sair)?(_pxCasManualAt(novo)||null):(_pxCasManualAt(novo)||new Date().toISOString())};
     if(_pxNaoEhPublicacao(nn)) return vazio;
     const alvos=_pxColAlvos(nn).filter(function(a){ return !!PX_CASCATA_CAP[a]; });
     if(!alvos.length) return vazio;
     const L0=_pxApLinha(iso);
     const fimH=new Date(L0.ini); fimH.setDate(L0.ini.getDate()+7*PX_CASCATA_HORIZONTE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,publish_date_manual_at")
       .is("deleted_at",null).gte("publish_date",_pxApIso(new Date(L0.ini.getFullYear(),L0.ini.getMonth(),L0.ini.getDate()-7))).lte("publish_date",_pxApIso(fimH)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return vazio;
     const _ids={}; _ids[String(nn.id)]=true;
@@ -20237,8 +20296,9 @@ async function pxCascataPlanejar(novo,extras,opts){
       _ids[String(e.id)]=true;
       rows.push({id:e.id,client:e.client,bioter_unit:e.bioterUnit||e.bioter_unit||"",publish_date:ei,status:e.status||"rascunhos",
         somente_story:!!(e.somenteStory||e.somente_story),nao_publica:!!(e.naoPublica||e.nao_publica),
-        content_type:e.contentType||e.content_type||null,title:e.title||"",tags:e.tags||[]});
+        content_type:e.contentType||e.content_type||null,title:e.title||"",tags:e.tags||[],publish_date_manual_at:_pxCasManualAt(e)||null});
     });
+    _pxCasProtegidosManuais(rows);
     const moves=[], travou=[], lixeira=[];
     const fimContrato=PX_CASCATA_FIM_CONTRATO[String(nn.client)]||null;
     const semanaDe=function(x){ return _pxApLinha(String(x.publish_date||"").slice(0,10)).iniIso; };
@@ -20253,7 +20313,7 @@ async function pxCascataPlanejar(novo,extras,opts){
     // último card movível de uma trilha na semana (o que já estava lá vem antes do recém-chegado)
     const ultimoDaTrilha=function(daSemana,trilha){
       return daSemana.filter(function(x){ return _pxCasMovivel(x,hoje,nn.id)&&_pxCasTrilha(x)===trilha; })
-        .sort(function(a,b){ const ma=jaMovido(a)?1:0, mb=jaMovido(b)?1:0; if(ma!==mb) return ma-mb; return String(b.publish_date).localeCompare(String(a.publish_date)); })[0]||null;
+        .sort(function(a,b){ return _pxCasCmpSaida(a,b,jaMovido); })[0]||null;
     };
     for(const alvo of alvos){
       const cap=PX_CASCATA_CAP[alvo];
@@ -20364,7 +20424,7 @@ async function pxCascataAplicar(plano,setTasks,quem,motivo,opts){
       // alguém mexeu nesse card entre a prévia e o OK → não sobrescreve
       if(String(q.data.publish_date||"").slice(0,10)!==mv.de){ console.warn("[cascata] pulou",mv.id,"data mudou"); continue; }
       const tl=Array.isArray(q.data.timeline)?q.data.timeline:[];
-      const r=await sb.from("tasks").update({publish_date:mv.para,deadline:mv.para,
+      const r=await sb.from("tasks").update({publish_date:mv.para,deadline:mv.para,publish_date_manual_at:null,
         timeline:tl.concat([{type:"edit",user:"Claude",atFmt:fmt,
           label:"Movido de "+_pxCasBr(mv.de)+" pra "+_pxCasBr(mv.para)+": "+(motivo||("entrou um card novo na semana"+(quem?(" ("+quem+")"):"")))+((opts&&typeof opts.sufixo==="string")?opts.sufixo:" e a cadência do cliente empurrou este pra frente")}])
       }).eq("id",mv.id);
@@ -20492,9 +20552,10 @@ async function pxCascataVarrer(protegerId){
          passava como certa — o Dia do Gaúcho de domingo (20), que fechava o terceiro, era
          invisível. Aí só o espaçamento rodava e empurrava o Short pro sábado, mantendo 3
          posts na mesma semana. Mover continua valendo só pra card futuro (_pxCasMovivel). */
-      const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at")
+      const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at,publish_date_manual_at")
         .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
       if(!r||r.error) break;
+      _pxCasProtegidosManuais(r.data||[]);
       const porSemana={};
       (r.data||[]).forEach(function(x){
         const iso=String(x.publish_date||"").slice(0,10); if(!iso) return;
@@ -20516,11 +20577,8 @@ async function pxCascataVarrer(protegerId){
         const _colsTodos=daSemana.filter(function(x){ return String(x.client)==="bioter"&&_pxCasTrilha(x)==="collab"; });
         if(_colsTodos.length>1&&_cols.length>=1){
           // sai o de data mais tarde; empate de data → o menos recentemente mexido (o outro é o que chegou)
-          const ord=_cols.slice().sort(function(p,q){
-            const d=String(p.publish_date).localeCompare(String(q.publish_date)); if(d) return d;
-            return String(q.updated_at||"").localeCompare(String(p.updated_at||""));
-          });
-          const sairC=ord[ord.length-1];
+          // (24/09) quem sai: sem marca manual primeiro (o de data mais tarde); marcado à mão só cede pro mais novo
+          const sairC=_cols.slice().sort(function(p,q){ return _pxCasCmpSaida(p,q); })[0];
           const ancoraC=_colsTodos.find(function(x){ return String(x.id)!==String(sairC.id); });
           if(sairC&&ancoraC){ achou={ancora:ancoraC,sair:sairC,semana:k,alvo:"collab",forcarCollab:true}; break; }
         }
@@ -20561,7 +20619,8 @@ async function pxCascataVarrer(protegerId){
              passa a ser o outro collab — isso faz o planejador resolver as cinco unidades numa
              passada só, em vez de uma volta por unidade. */
           // (collab sobrando na semana já foi tratado acima, antes da conta de cadência)
-          if(!sair) for(let i=ordenados.length-1;i>=0;i--){ const x=ordenados[i]; if(_pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"){ sair=x; break; } }
+          // (24/09) sai primeiro quem NÃO tem data marcada à mão (o do fim da semana); marcado à mão só cede pro mais novo
+          if(!sair) sair=ordenados.filter(function(x){ return _pxCasMovivel(x,hoje,null)&&_pxCasTrilha(x)!=="collab"; }).sort(function(p,q){ return _pxCasCmpSaida(p,q); })[0]||null;
           if(!sair) continue;
           /* A âncora é só o ponto de partida (semana + alvo) do planejador e ele recusa data
              passada, então prefere um card de hoje em diante. O post já publicado na semana
@@ -20619,7 +20678,7 @@ async function pxCascataVarrerCurtas(){
     const L0=_pxApLinha(hoje);
     const piso=_pxApIso(new Date(_h.getFullYear(),_h.getMonth(),_h.getDate()+PX_CASCATA_PUXA_MIN_DIAS));
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,publish_date_manual_at")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return 0;
     const rows=(r.data||[]);
@@ -20708,10 +20767,11 @@ async function pxCascataEspacar(){
     const hoje=_pxApIso(new Date());
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,updated_at,publish_date_manual_at")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return 0;
     const rows=(r.data||[]);
+    _pxCasProtegidosManuais(rows);
     const podeAndar=function(t){ return _pxCasMovivel(t,hoje,null)&&_pxCasTrilha(t)!=="collab"; };
     const moves=[];
     const porSemana={};
@@ -20740,7 +20800,17 @@ async function pxCascataEspacar(){
              ESSE card pra 22/09. Quem acabou de marcar a data na mão é quem manda;
              quem tem que andar é o card que já estava no dia. */
           let pri=b, sec=a;
-          if(dif===0){
+          /* 24/09/2026 — QUEM MARCOU A DATA À MÃO FICA. O desempate por updated_at era
+             loteria: miniatura de vídeo, comentário, upload — tudo mexe no updated_at.
+             Foi assim que o card da Hellen perdeu duas vezes pro "Vídeo de obra". Com marca
+             manual de um lado só, anda o outro; com marca dos dois lados, anda o mais antigo. */
+          const _ma=_pxCasManualAt(a), _mb=_pxCasManualAt(b);
+          if(_ma||_mb){
+            if(_ma&&!_mb){ pri=b; sec=a; }
+            else if(_mb&&!_ma){ pri=a; sec=b; }
+            else if(_ma<_mb){ pri=a; sec=b; }
+            else { pri=b; sec=a; }
+          } else if(dif===0){
             const _ua=String(a.updated_at||""), _ub=String(b.updated_at||"");
             if(_ua&&_ub&&_ua<_ub){ pri=a; sec=b; }
           }
@@ -20800,10 +20870,11 @@ async function pxCascataPuxar(removidos){
 
     const L0=_pxApLinha(hoje);
     const fim=new Date(L0.ini); fim.setDate(L0.ini.getDate()+7*PX_CASCATA_VARRE_SEMANAS-1);
-    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,from_drive")
+    const r=await sb.from("tasks").select("id,title,client,bioter_unit,publish_date,status,somente_story,nao_publica,content_type,tags,deleted_at,publish_date_manual_at")
       .is("deleted_at",null).gte("publish_date",L0.iniIso).lte("publish_date",_pxApIso(fim)).in("client",PX_COLISAO_CLIENTES);
     if(!r||r.error) return 0;
     const rows=(r.data||[]);
+    _pxCasProtegidosManuais(rows);
     const daSemana=function(L){ return rows.filter(function(x){ const d=String(x.publish_date||"").slice(0,10); return d>=L.iniIso&&d<=L.fimIso; }); };
 
     const moves=[]; let guard=0;
@@ -20823,7 +20894,11 @@ async function pxCascataPuxar(removidos){
         if(_pxCasTrilha(x)==="material"&&v.trilha!=="material") return false;
         if(v.trilha==="material"&&_pxCasTrilha(x)!=="material") return false;   // vaga de Foto/Short só aceita Foto/Short
         return true;
-      }).sort(function(p,q){ return String(p.publish_date).localeCompare(String(q.publish_date)); });
+      }).sort(function(p,q){
+        // (24/09) primeiro quem não tem data marcada à mão; entre iguais, o mais perto
+        const ma=_pxCasManualAt(p), mb=_pxCasManualAt(q); if(!!ma!==!!mb) return ma?1:-1;
+        return String(p.publish_date).localeCompare(String(q.publish_date));
+      });
       if(!cand.length) continue;
       const t=cand[0];
       const de=String(t.publish_date||"").slice(0,10);
@@ -23433,16 +23508,31 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   function handleDropOnDay(targetDate){
     if(!dragTaskId||!targetDate)return;
     const ds=targetDate.getFullYear()+"-"+String(targetDate.getMonth()+1).padStart(2,"0")+"-"+String(targetDate.getDate()).padStart(2,"0");
+    /* (24/09/2026, Rodrigo) "modificação manual deve prevalecer". O arraste gravava só a data —
+       sem linha na timeline e sem acordar a cascata. Sem a linha, o banco não sabia que foi
+       gente que mexeu (é o "data de publicação" na timeline que marca publish_date_manual_at);
+       sem a varredura, a semana ficava torta até alguém abrir o calendário — e aí a varredura
+       rodava sem proteção e devolvia o card pro lugar antigo. Agora: linha na timeline com
+       de → pra, e a varredura roda com este card protegido. Quem anda é o outro. */
+    const _idArr=dragTaskId; let _mexeu=false;
     if(typeof setTasks==="function"){
       setTasks(function(prev){
         return (prev||[]).map(function(t){
-          if(t.id!==dragTaskId)return t;
+          if(t.id!==_idArr)return t;
           if(t.publishDate===ds)return t; // mesmo dia, sem mudança
-          return Object.assign({},t,{publishDate:ds, publishTime:t.publishTime||"11:00"});
+          _mexeu=true;
+          const _de=String(t.publishDate||"").slice(0,10);
+          const _br=function(iso){ return iso?iso.slice(8,10)+"/"+iso.slice(5,7):"sem data"; };
+          const _ag=new Date();
+          const _tl=(Array.isArray(t.timeline)?t.timeline:[]).concat([{type:"edit",user:(_calUser&&_calUser.name)||"",at:_ag.toISOString(),
+            atFmt:_ag.toLocaleDateString("pt-BR")+" às "+_ag.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+            label:"Editado: data de publicação (arrastou no calendário: "+_br(_de)+" → "+_br(ds)+")"}]);
+          return Object.assign({},t,{publishDate:ds, publishTime:t.publishTime||"11:00", timeline:_tl});
         });
       });
     }
     setDragTaskId(null);setDropDayId(null);
+    setTimeout(function(){ try{ if(_mexeu&&typeof pxCascataVarrer==="function") pxCascataVarrer(_idArr); }catch(_e){} },2500);
   }
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
@@ -56575,6 +56665,7 @@ const rowToTask = (r) => ({
   createdBy:    r.created_by   || "",
   publishDate:  r.publish_date || "",
   publishTime:  r.publish_time || "09:00",
+  publishDateManualAt: r.publish_date_manual_at || null,   // (24/09) data marcada à mão — só leitura; quem escreve é o trigger do banco
   bioterUnit:   r.bioter_unit  || "",
   contentType:  r.content_type || "",
   referenceMonth: r.reference_month || "",
