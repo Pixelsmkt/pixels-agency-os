@@ -5744,6 +5744,73 @@ async function pxBriefingsAprovados(client,unit,tipo){
    briefing (isso é o pxGerarBriefing, card a card). Não cria card, não mexe em data.
    opts: {client, unit, clienteNome, slots:[{id,data,tipo}], doMes:[{data,titulo,tipo}],
           recentes:[titulo], orientacao} → [{id,titulo,produto,angulo,chamada}] */
+/* ═══ DISTRIBUIÇÃO DA PAUTA EM CÓDIGO (24/09/2026, Rodrigo) ═══════════════════════════
+   "Lembra que eu tinha pedido pra considerar a Relevância pelos produtos (prioridades registradas nas
+    fichas de produtos de cada cliente) e também alternar não só com posts de produtos.. não tô com a
+    certeza de que foi bem implementado."
+   Estava — mas como INSTRUÇÃO pro GPT: ele lia os pesos e decidia sozinho. Agora quem decide é isto
+   aqui, card a card, e a prévia do Gerar plano do mês mostra a decisão antes de gerar:
+   - MARCA: perto de 1 em cada 4 posts do mês (mínimo 1 quando o mês tem 4+, contando o que já existe;
+     desconta os de marca que o mês já tem), espalhados pelo mês — nunca todos juntos;
+   - PRODUTO: [PRIORIDADE] ≈ 60% dos posts de produto (100% se não há [IMPORTANTE]); [IMPORTANTE] o resto;
+     [COMPLEMENTAR] no máximo 1 no mês e só se sobrar depois de todo prioridade/importante ter o seu;
+     [INATIVO] nunca. Sem peso marcado em nenhum produto: todos iguais. Peso marcado em alguns: o sem
+     marca vale como IMPORTANTE (mesma regra do briefing);
+   - dentro do mesmo peso é RODÍZIO: começa pelo que tem MENOS posts no mês (contando os que já
+     existem) e nunca repete o produto do card anterior enquanto outro do mesmo peso está com menos.
+   Entrada: slots [{id,data,tipo}] (ordem por data), pesos (pxProdutosOficiais), contagem {produto: n já
+   no mês}, marcaJa (posts de marca já no mês), jaNoMes (posts de conteúdo já no mês, fora os que vão
+   receber pauta). Saída: [{id,alvo:"marca"|"produto",produto,peso}]. Puro — testável em Node. */
+function pxPlanoDistribuir(o){
+  const slots=(Array.isArray(o&&o.slots)?o.slots:[]).filter(function(s){return s&&s.id;}).slice()
+    .sort(function(a,b){ return String(a.data||"").localeCompare(String(b.data||""))||String(a.id).localeCompare(String(b.id)); });
+  const N=slots.length; if(!N) return [];
+  const pesos=(Array.isArray(o&&o.pesos)?o.pesos:[]).filter(function(p){ return p&&p.nome&&String(p.prioridade||"")!=="inativo"; });
+  // sem NENHUMA ficha de produto: não tem o que distribuir — a IA escolhe pela visão geral e pelo briefing (como antes)
+  if(!pesos.length) return slots.map(function(s){ return {id:s.id,alvo:"livre",produto:"",peso:""}; });
+  const cont=Object.assign({},(o&&o.contagem)||{});
+  const marcaJa=Math.max(0,Number((o&&o.marcaJa)||0)), jaNoMes=Math.max(0,Number((o&&o.jaNoMes)||0));
+  const totalMes=jaNoMes+N;
+  // ── quantos de MARCA e em que posições ──
+  let nMarca=0;
+  if(totalMes>=4) nMarca=Math.max(0,Math.min(N,Math.max(1,Math.round(totalMes/4))-marcaJa));
+  const marcaIdx={}; for(let k=1;k<=nMarca;k++){ marcaIdx[Math.floor((k-0.5)*N/nMarca)]=true; }
+  // ── grupos por peso ──
+  const temPeso=pesos.some(function(p){ return ["prioridade","importante","complementar"].indexOf(String(p.prioridade||""))>=0; });
+  const G={prioridade:[],importante:[],complementar:[]};
+  pesos.forEach(function(p){ const w=temPeso?(G[String(p.prioridade||"")]?String(p.prioridade):"importante"):"importante"; G[w].push(p.nome); });
+  const M=N-nMarca;
+  const somaG=function(g){ return G[g].reduce(function(a,n){ return a+(cont[n]||0); },0); };
+  const T=M+somaG("prioridade")+somaG("importante")+somaG("complementar");
+  const alvo={prioridade:0,importante:0,complementar:0};
+  if(G.complementar.length&&T>G.prioridade.length+G.importante.length) alvo.complementar=1;
+  const resto=Math.max(0,T-alvo.complementar);
+  if(G.prioridade.length&&G.importante.length){ alvo.prioridade=Math.round(resto*0.6); alvo.importante=resto-alvo.prioridade; }
+  else if(G.prioridade.length) alvo.prioridade=resto;
+  else if(G.importante.length) alvo.importante=resto;
+  else alvo.complementar=T;
+  const ordemG=["prioridade","importante","complementar"];
+  const _peso={}; pesos.forEach(function(p){ _peso[p.nome]=temPeso?(G[String(p.prioridade||"")]?String(p.prioridade):"importante"):""; });
+  let anterior="";
+  const out=[];
+  slots.forEach(function(s,i){
+    if(marcaIdx[i]){ out.push({id:s.id,alvo:"marca",produto:"",peso:""}); return; }
+    // grupo com maior falta; empate → prioridade > importante > complementar
+    let g=null, melhor=-Infinity;
+    ordemG.forEach(function(k){ if(!G[k].length) return; const falta=alvo[k]-somaG(k); if(falta>melhor){ melhor=falta; g=k; } });
+    if(!g){ out.push({id:s.id,alvo:"marca",produto:"",peso:""}); return; }
+    // produto com menos posts no grupo; empate → o que não é o anterior; empate → ordem da lista
+    const cands=G[g].slice().sort(function(a,b){
+      const ca=cont[a]||0, cb=cont[b]||0; if(ca!==cb) return ca-cb;
+      const pa=a===anterior?1:0, pb=b===anterior?1:0; if(pa!==pb) return pa-pb;
+      return G[g].indexOf(a)-G[g].indexOf(b);
+    });
+    const nome=cands[0]; cont[nome]=(cont[nome]||0)+1; anterior=nome;
+    out.push({id:s.id,alvo:"produto",produto:nome,peso:_peso[nome]||""});
+  });
+  return out;
+}
+if(typeof window!=="undefined"){ window.pxPlanoDistribuir=pxPlanoDistribuir; }
 async function pxSugerirPauta(opts){
   if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
   const client=String((opts&&opts.client)||""); if(!client) throw new Error("Cliente não informado.");
@@ -5798,18 +5865,26 @@ async function pxSugerirPauta(opts){
   }
   if(orient) u+="ORIENTAÇÃO DA AGÊNCIA PRA ESTE MÊS (manda acima de tudo):\n"+orient+"\n\n";
   u+="CARDS QUE PRECISAM DE PAUTA ("+slots.length+"):\n";
-  slots.forEach(function(s){ u+="- id "+s.id+" · "+(s.data||"sem data")+" · "+(_TIPO[String(s.tipo||"")]||String(s.tipo||"formato livre"))+"\n"; });
+  /* (24/09/2026) A decisão produto/marca de cada card vem PRONTA (pxPlanoDistribuir) — o GPT só escreve o assunto. */
+  const _dist=(Array.isArray(opts&&opts.distribuicao)&&opts.distribuicao.length)?opts.distribuicao
+    :pxPlanoDistribuir({slots:slots,pesos:_pesos,contagem:(opts&&opts.contagem)||{},marcaJa:(opts&&opts.marcaJa)||0,jaNoMes:(opts&&opts.jaNoMes)||doMes.length});
+  const _distDe=function(id){ return _dist.find(function(d){ return String(d.id)===String(id); })||null; };
+  const _E2={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]"};
+  slots.forEach(function(s){
+    const d=_distDe(s.id);
+    const base=!d?"":(d.alvo==="marca"?" · ASSUNTO-BASE: MARCA (institucional, sem produto)":(" · ASSUNTO-BASE: PRODUTO «"+d.produto+"»"+(_E2[d.peso]?(" "+_E2[d.peso]):"")));
+    u+="- id "+s.id+" · "+(s.data||"sem data")+" · "+(_TIPO[String(s.tipo||"")]||String(s.tipo||"formato livre"))+base+"\n";
+  });
   u+="\n";
   u+="TAREFA: dê um assunto pra CADA card acima.\n"+
-     "MIX DO MÊS (23/09/2026): os cards NÃO são só de produto. Perto de 1 em cada 4 (mínimo 1 quando houver 4 ou mais cards no mês, contando os que já existem) é de MARCA: "+
+     "MIX DO MÊS (23/09/2026): os cards NÃO são só de produto. O ASSUNTO-BASE de cada card JÁ FOI DECIDIDO pela agência (está na lista acima, card a card, pelo peso das fichas): "+
+     "PRODUTO «nome» = o post é sobre esse produto — não troque por outro; MARCA = post institucional, sem produto: "+
      "o posicionamento que a VISÃO GERAL descreve (ex.: qual é o carro-chefe e por quê, o que a empresa faz mas não é o foco), qualidade do serviço e da entrega, "+
      "como o trabalho é feito (processo, bastidor, prazo, cuidado), equipe, prova social e obras/entregas feitas, dúvida geral que o público tem sobre o segmento. "+
      "Esses assuntos saem dos PILARES DE CONTEÚDO, do SOBRE A EMPRESA, da VISÃO GERAL, dos FEEDBACKS e dos MATERIAIS do cliente — nunca inventados. "+
-     "Nesses cards, PRODUTO: — (ou o carro-chefe, quando o assunto for o posicionamento dele). Os demais cards seguem o peso dos produtos abaixo.\n"+
+     "Nos cards de MARCA, PRODUTO: — (ou o carro-chefe, quando o assunto for o posicionamento dele).\n"+
      "A VISÃO GERAL vale pra TODOS os cards, inclusive os de produto: se ela diz que o foco é X e que Y a empresa também faz mas não é o foco, X puxa o mês e Y aparece no máximo como 'também fazemos', nunca como tema principal.\n"+
-     "DISTRIBUIÇÃO PELO PESO entre os cards de PRODUTO (somando o que o mês já tem): [PRIORIDADE] leva a maior parte (perto de 60%); [IMPORTANTE] o resto; [COMPLEMENTAR] no máximo 1 no mês, e só se sobrar; [INATIVO] nunca. "+
-     "DENTRO DO MESMO PESO É RODÍZIO: produtos com o mesmo peso saem em quantidades parecidas (3 produtos [PRIORIDADE] dividem a fatia deles quase por igual); comece pelo que está com MENOS posts no mês, e nunca dê dois seguidos pro mesmo produto enquanto outro do mesmo peso está com menos. "+
-     "Se NENHUM produto tem peso marcado, use TODOS os produtos cadastrados do cliente em rodízio — nenhum fica de fora, nenhum se repete antes de todos aparecerem — seguindo a visão geral, o briefing (🟣 🟢 🟡 🔴) e o foco do mês. Se a empresa tem menos produtos que cards, repita o produto com ÂNGULO totalmente diferente (dúvida frequente, erro comum, bastidor, como funciona, resultado, comparação, mito e verdade).\n"+
+     "Quando o mesmo produto aparece em mais de um card, cada card usa um ÂNGULO totalmente diferente (dúvida frequente, erro comum, bastidor, como funciona, resultado, comparação, mito e verdade).\n"+
      "CADA ASSUNTO É ÚNICO no mês. O formato do card manda no que dá pra fazer (arte única = uma ideia; carrossel = sequência; vídeo = algo gravável).\n"+
      "Título: 3 a 8 palavras, só a primeira letra maiúscula, sem ponto final, sem o nome da empresa. Ângulo: 2 a 3 frases dizendo o que o post mostra e o que resolve pro público — é a instrução pra quem vai escrever o briefing. Chamada: 1 frase de gancho na voz da marca.\n\n"+
      "FORMATO EXATO DA RESPOSTA ("+slots.length+" blocos, na ordem dos cards):\n";
@@ -5823,6 +5898,7 @@ async function pxSugerirPauta(opts){
     const g=function(k){ const r=corpo.match(new RegExp("^\\s*"+k+"\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:TITULO|PRODUTO|ANGULO|CHAMADA)\\s*:|$)","im")); return r?String(r[1]).replace(/\s+/g," ").trim():""; };
     let produto=g("PRODUTO"); if(/^[—\-–]?$/.test(produto)) produto="";
     if(produto&&typeof pxProdutoOficial==="function"&&_pesos.length) produto=pxProdutoOficial(produto,_pesos)||produto;
+    { const d=_distDe(id); if(d&&d.alvo!=="livre"){ produto=(d.alvo==="produto")?d.produto:""; } }   // (24/09) a decisão é do código
     const titulo=g("TITULO").replace(/[.。]$/,"");
     if(!id||!titulo) continue;
     out.push({id:id,titulo:titulo,produto:produto,angulo:g("ANGULO"),chamada:g("CHAMADA")});
@@ -23054,7 +23130,180 @@ async function pxPlanoMesPrever(args){
   }
   return {alvo:alvo,cap:cap,semanas:semanas,puxar:puxar,criar:criar,sobraSemData:fila,iniMes:iniMes,fimMes:fimMes};
 }
-function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}){
+/* ═══ GERAR PLANO DO MÊS EM "TODOS" (24/09/2026, Rodrigo) ═══════════════════════════
+   "como assim cara, se é pra criar de todos os clientes quando tiver aberto."
+   O botão só funcionava com um cliente filtrado. Agora, em Todos (ou Bioter sem unidade), abre esta
+   prévia consolidada — uma linha por cliente/unidade com o que puxa, cria e pauta — e "Aplicar em
+   todos" roda o _PxPlanoDoMes de cada um em fila (auto), com as mesmas opções e orientação. O registro
+   é UM só (id plano-lote-…): o Desfazer do calendário desfaz o lote inteiro. */
+function _pmAlvosPlano(soBioter){
+  const out=[];
+  const cl=(typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS))?CLIENTS:[];
+  const nome=function(id){ const c=cl.find(function(x){return x.id===id;}); return (c&&(c.name||c.abbr))||id; };
+  const ordem=cl.map(function(c){return c.id;});
+  Object.keys(PX_CASCATA_CAP).sort(function(a,b){ const ia=ordem.indexOf(a.split(":")[0]), ib=ordem.indexOf(b.split(":")[0]); return (ia<0?999:ia)-(ib<0?999:ib)||a.localeCompare(b); }).forEach(function(k){
+    const parts=k.split(":"); const client=parts[0], unit=parts[1]||"";
+    if(soBioter&&client!=="bioter") return;
+    if(client==="bioter"&&!unit) return;
+    if(client!=="bioter"&&!cl.some(function(c){return c.id===client;})) return;
+    const u=(unit&&typeof BIOTER_UNITS!=="undefined")?(BIOTER_UNITS.find(function(x){return x.id===unit;})||{}):{};
+    out.push({key:k,client:client,unit:unit,nome:nome(client)+(unit?(" · "+(u.pickerLabel||u.label||unit)):"")});
+  });
+  return out;
+}
+function _PxPlanoDoMesTodos({soBioter, mes, tasks, setTasks, onClose, onOpenCard}){
+  const _isMobP=(typeof _pxMob==="function"&&_pxMob());
+  const _y=mes.getFullYear(), _m=mes.getMonth();
+  const _iniIso=_y+"-"+String(_m+1).padStart(2,"0")+"-01";
+  const _fimD=new Date(_y,_m+1,0); const _fimIso=_y+"-"+String(_m+1).padStart(2,"0")+"-"+String(_fimD.getDate()).padStart(2,"0");
+  const _hoje=_pxApIso(new Date());
+  const _mesLabel=mes.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  const alvos=useMemo(function(){ return _pmAlvosPlano(!!soBioter); },[soBioter]);
+  const [opts,setOpts]=useState({puxar:true,criar:true,pauta:true,copy:true});
+  const [orient,setOrient]=useState("");
+  const [info,setInfo]=useState({});          // key → {previa, vazios, erro}
+  const [sel,setSel]=useState({});
+  const [fase,setFase]=useState("previa");    // previa | rodando | fim
+  const [idx,setIdx]=useState(-1);
+  const [res,setRes]=useState({});            // key → resultado
+  const acum=useRef({criados:[],alterados:[],puxados:0,execId:""});
+  const _temArq=function(t){ return (t.files||[]).some(function(a){ return a&&a.url&&!a.uploading&&!a.isAnnotation&&!a.isRef; }); };
+  const _vazio=function(t){ return !String(t.desc||"").trim()&&!String(t.caption||"").trim(); };
+  const _vaziosDe=function(client,unit){
+    return (tasks||[]).filter(function(t){
+      if(!t||t.deletedAt||t.client!==client||(client==="bioter"&&String(t.bioterUnit||"")!==unit)||t.naoPublica) return false;
+      const d=String(t.publishDate||""); if(!(d>=_iniIso&&d<=_fimIso&&d>_hoje)) return false;
+      return ["rascunhos","demanda"].indexOf(String(t.status||""))>=0&&!_pmEhComem(t)&&!_pmEhMaterial(t)&&!_temArq(t)&&!t.somenteStory&&_vazio(t);
+    }).length;
+  };
+  useEffect(function(){
+    let vivo=true;
+    (async function(){
+      for(const a of alvos){
+        let previa=null, erro="";
+        try{ previa=await pxPlanoMesPrever({client:a.client,unit:a.unit,ano:_y,mes:_m,tasksState:tasks}); }
+        catch(e){ erro=(e&&e.message)||String(e); }
+        if(!vivo) return;
+        const vazios=_vaziosDe(a.client,a.unit);
+        setInfo(function(o){ const n=Object.assign({},o); n[a.key]={previa:previa,vazios:vazios,erro:erro}; return n; });
+        const faz=!erro&&previa&&(previa.puxar.length+previa.criar.length+vazios)>0;
+        setSel(function(o){ const n=Object.assign({},o); n[a.key]=faz; return n; });
+      }
+    })();
+    return function(){ vivo=false; };
+  },[alvos,_y,_m]);
+  const _conta=function(a){
+    const i=info[a.key]; if(!i||!i.previa) return null;
+    const p=i.previa;
+    const nPux=opts.puxar?p.puxar.length:0, nCri=opts.criar?p.criar.length:0;
+    const nPau=opts.pauta?(i.vazios+(opts.puxar?p.puxar.filter(function(x){return _vazio(x.task)&&!_pmEhMaterial(x.task);}).length:0)+(opts.criar?p.criar.filter(function(c){return c.tipo!=="material";}).length:0)):0;
+    return {nPux:nPux,nCri:nCri,nPau:nPau,total:nPux+nCri+nPau};
+  };
+  const fila=alvos.filter(function(a){ return sel[a.key]&&_conta(a)&&_conta(a).total>0; });
+  const carregados=alvos.filter(function(a){ return !!info[a.key]; }).length;
+  const _iniciar=function(){
+    if(!fila.length) return;
+    acum.current={criados:[],alterados:[],puxados:0,execId:"plano-lote-"+Date.now().toString(36)+"-"+_y+String(_m+1).padStart(2,"0")};
+    setRes({}); setFase("rodando"); setIdx(0);
+  };
+  const _gravarLote=async function(parcial){
+    const sb=window._sb; const ac=acum.current;
+    if(!sb||(!ac.criados.length&&!ac.alterados.length)) return;
+    const quem=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Pixels";
+    try{ await sb.from("claude_plano_execucoes").insert({id:ac.execId,descricao:"Plano do mês · "+(soBioter?"todas as unidades da Bioter":"todos os clientes")+" · "+_mesLabel+(parcial?" (parcial, deu erro)":"")+" ("+quem+")",criados:ac.criados,alterados:ac.alterados}); }
+    catch(e){ console.warn("[plano lote] registro:",e); }
+  };
+  const _onDone=function(a){ return async function(r){
+    r=r||{};
+    if(r.criados) acum.current.criados=acum.current.criados.concat(r.criados);
+    if(r.alterados) acum.current.alterados=acum.current.alterados.concat(r.alterados);
+    if(r.puxados) acum.current.puxados+=r.puxados;
+    setRes(function(o){ const n=Object.assign({},o); n[a.key]=r; return n; });
+    if(r.cancelado){ await _gravarLote(true); setFase("fim"); setIdx(-1); return; }
+    const pos=fila.findIndex(function(x){return x.key===a.key;});
+    if(pos+1<fila.length){ setIdx(pos+1); return; }
+    await _gravarLote(false);
+    setFase("fim"); setIdx(-1);
+    const ac=acum.current;
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Plano de "+_mesLabel+" aplicado em "+fila.length+" cliente"+(fila.length===1?"":"s")+": "+ac.puxados+" puxado"+(ac.puxados===1?"":"s")+", "+ac.criados.length+" criado"+(ac.criados.length===1?"":"s")+", "+ac.alterados.length+" alterado"+(ac.alterados.length===1?"":"s")+". Dá pra desfazer o lote inteiro no botão do calendário.",9000);
+  }; };
+  const atual=(fase==="rodando"&&idx>=0)?fila[idx]:null;
+  const _chk=function(k,l,sub){ return <label style={{display:"flex",alignItems:"flex-start",gap:9,cursor:fase!=="previa"?"default":"pointer",padding:"8px 10px",border:"1px solid "+(opts[k]?"#c4b5fd":"#eef0f3"),background:opts[k]?"#faf5ff":"#fff",borderRadius:10}}>
+    <input type="checkbox" checked={!!opts[k]} disabled={fase!=="previa"} onChange={function(e){ setOpts(Object.assign({},opts,{[k]:e.target.checked})); }} style={{width:15,height:15,marginTop:2}}/>
+    <span style={{display:"flex",flexDirection:"column",gap:2}}><span style={{fontSize:12.5,fontWeight:800,color:"#0f172a"}}>{l}</span><span style={{fontSize:11,color:"#64748b",lineHeight:1.4}}>{sub}</span></span>
+  </label>; };
+  const _inp={width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"inherit",outline:"none",background:"#fff"};
+  const _st=function(a){
+    const r=res[a.key];
+    if(atual&&atual.key===a.key) return <span style={{color:"#7c3aed",fontWeight:800,fontSize:11}}>rodando…</span>;
+    if(r){ if(r.erro) return <span style={{color:"#b91c1c",fontWeight:800,fontSize:11}} title={r.erro}>erro</span>; if(r.vazio) return <span style={{color:"#94a3b8",fontWeight:700,fontSize:11}}>nada a fazer</span>; if(r.cancelado) return <span style={{color:"#94a3b8",fontWeight:700,fontSize:11}}>cancelado</span>;
+      return <span style={{color:"#15803d",fontWeight:800,fontSize:11}}>{(r.puxados||0)+" puxado"+((r.puxados||0)===1?"":"s")+" · "+((r.criados||[]).length)+" criado"+((r.criados||[]).length===1?"":"s")+" · "+((r.alterados||[]).length)+" alterado"+((r.alterados||[]).length===1?"":"s")}</span>; }
+    if(fase!=="previa"&&!fila.some(function(x){return x.key===a.key;})) return <span style={{color:"#cbd5e1",fontSize:11}}>—</span>;
+    if(fase!=="previa") return <span style={{color:"#94a3b8",fontSize:11}}>na fila</span>;
+    return null;
+  };
+  return <div onMouseDown={function(e){ if(e.target===e.currentTarget&&fase!=="rodando") onClose(); }}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:318,display:"flex",alignItems:_isMobP?"stretch":"center",justifyContent:"center",padding:_isMobP?0:"18px 16px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{background:"#fff",borderRadius:_isMobP?0:20,width:"100%",maxWidth:900,maxHeight:_isMobP?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobP?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#7c3aed 0%,#9F43F6 100%)",color:"#fff",flexShrink:0}}>
+        <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
+          <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Gerar plano do mês · {_mesLabel}</span>
+          <span style={{fontWeight:800,fontSize:_isMobP?16:19,letterSpacing:-.4,lineHeight:1.2}}>{soBioter?"Todas as unidades da Bioter":"Todos os clientes"}</span>
+        </span>
+        <button type="button" onClick={onClose} disabled={fase==="rodando"} title="Fechar" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:_isMobP?"14px":"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"grid",gridTemplateColumns:_isMobP?"1fr":"1fr 1fr",gap:8}}>
+          {_chk("puxar","Puxar pro calendário o que está sem data","cards em produção sem data entram nas vagas da cadência")}
+          {_chk("criar","Criar os cards que faltam pra cadência","por semana, respeitando comemorativas, feiras e collabs")}
+          {_chk("pauta","Escrever a pauta pelo peso dos produtos","produto ou marca de cada card decidido pelo app; a IA escreve o assunto")}
+          {_chk("copy","…e o briefing completo + legenda","uns 40–60 s por card — com muitos clientes, demora")}
+        </div>
+        <div style={{border:"1px solid #eef0f3",borderRadius:12,overflow:"hidden"}}>
+          <div style={{display:"grid",gridTemplateColumns:"28px 1fr 70px 70px 70px 150px",gap:8,padding:"8px 12px",background:"#fafbfc",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.4}}>
+            <span></span><span>Cliente</span><span>Puxa</span><span>Cria</span><span>Pauta</span><span>{fase==="previa"?"":"Resultado"}</span>
+          </div>
+          {alvos.map(function(a){ const i=info[a.key]; const c=_conta(a); const on=!!sel[a.key];
+            return <label key={a.key} style={{display:"grid",gridTemplateColumns:"28px 1fr 70px 70px 70px 150px",gap:8,alignItems:"center",padding:"7px 12px",borderTop:"1px solid #f1f5f9",background:on?"#faf5ff":"#fff",cursor:fase==="previa"?"pointer":"default",fontSize:12.5}}>
+              <input type="checkbox" checked={on} disabled={fase!=="previa"||!c||c.total===0} onChange={function(e){ setSel(function(o){ const n=Object.assign({},o); n[a.key]=e.target.checked; return n; }); }} style={{width:15,height:15}}/>
+              <span style={{fontWeight:700,color:"#0f172a"}}>{a.nome}{i&&i.erro&&<span style={{color:"#b91c1c",fontWeight:600,fontSize:11}} title={i.erro}> · {i.erro}</span>}</span>
+              {!i?<span style={{color:"#cbd5e1",gridColumn:"3 / span 3"}}>calculando…</span>:!c?<span style={{color:"#cbd5e1",gridColumn:"3 / span 3"}}>—</span>:[
+                <span key="p" style={{fontVariantNumeric:"tabular-nums",color:c.nPux?"#0ea5e9":"#cbd5e1",fontWeight:800}}>{c.nPux}</span>,
+                <span key="c" style={{fontVariantNumeric:"tabular-nums",color:c.nCri?"#7c3aed":"#cbd5e1",fontWeight:800}}>{c.nCri}</span>,
+                <span key="a" style={{fontVariantNumeric:"tabular-nums",color:c.nPau?"#0f172a":"#cbd5e1",fontWeight:800}}>{c.nPau}</span>]}
+              <span>{_st(a)}</span>
+            </label>; })}
+        </div>
+        {fase==="previa"&&<div>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Orientação pra este mês <span style={{color:"#94a3b8",fontWeight:600}}>· opcional, vale pra todos, manda acima do peso</span></div>
+          <textarea value={orient} onChange={function(e){setOrient(e.target.value);}} rows={2} placeholder="Ex.: fevereiro tem a Show Rural — puxar pra feira; evitar falar de preço." style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/>
+        </div>}
+      </div>
+      <div style={{flexShrink:0,borderTop:"1px solid #eef0f3",padding:_isMobP?"10px 14px":"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",background:"#fafbfc"}}>
+        <span style={{color:fase==="rodando"?"#7c3aed":"#94a3b8",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:8}}>
+          {fase==="rodando"&&<span style={{width:12,height:12,borderRadius:"50%",border:"2px solid #7c3aed44",borderTopColor:"#7c3aed",animation:"spin .9s linear infinite"}}/>}
+          {fase==="rodando"?("Rodando "+(idx+1)+" de "+fila.length+(atual?(" — "+atual.nome):"")):fase==="fim"?"Pronto. O lote inteiro dá pra desfazer no botão do calendário.":(carregados<alvos.length?("Calculando "+carregados+"/"+alvos.length+"…"):"Nada é gravado até você clicar em Aplicar. Cada cliente roda em fila, com a mesma prévia de sempre.")}
+        </span>
+        <span style={{display:"inline-flex",gap:8}}>
+          <button type="button" disabled={fase==="rodando"} onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#475569",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{fase==="fim"?"Fechar":"Cancelar"}</button>
+          {fase==="previa"&&<button type="button" disabled={!fila.length||carregados<alvos.length} onClick={_iniciar}
+            style={{background:fila.length&&carregados>=alvos.length?"linear-gradient(135deg,#7c3aed,#9F43F6)":"#e2e8f0",border:"none",color:fila.length&&carregados>=alvos.length?"#fff":"#94a3b8",borderRadius:99,padding:"9px 18px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>
+            Aplicar em {fila.length} cliente{fila.length===1?"":"s"}
+          </button>}
+        </span>
+      </div>
+    </div>
+    {atual&&<_PxPlanoDoMes key={atual.key+"-"+acum.current.execId} client={atual.client} unit={atual.unit} mes={mes} tasks={tasks} setTasks={setTasks} onOpenCard={onOpenCard}
+      auto={{opts:opts,orient:orient,rotulo:(idx+1)+" de "+fila.length,onDone:_onDone(atual)}}
+      onClose={function(){ _onDone(atual)({cancelado:true}); }}/>}
+  </div>;
+}
+function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard, auto}){
+  /* (24/09/2026) `auto` = este cliente está numa FILA do "Gerar plano do mês" em Todos (_PxPlanoDoMesTodos):
+     {opts, orient, rotulo, onDone(res)}. Aí a prévia carrega e o Aplicar roda sozinho; o registro pro
+     Desfazer NÃO é gravado aqui — vai junto no lote (um registro só). */
   const _isMobP=(typeof _pxMob==="function"&&_pxMob());
   const _y=mes.getFullYear(), _m=mes.getMonth();
   const _iniIso=_y+"-"+String(_m+1).padStart(2,"0")+"-01";
@@ -23071,8 +23320,10 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
   const _elegivel=function(t){ return String(t.publishDate||"")>_hoje&&["rascunhos","demanda"].indexOf(String(t.status||""))>=0&&!_pmEhComem(t)&&!_pmEhMaterial(t)&&!_temArq(t)&&!t.somenteStory; };
   const _tipoLbl=function(t){ const ct=String(t.contentType||t.content_type||""); if(_pmEhMaterial(t)) return (typeof pxEhShort==="function"&&pxEhShort(t))?"Short":"Foto de obra"; return ct==="arte"?"Arte única":ct==="carrossel"?"Carrossel":/^video/.test(ct)||ct==="reels"||ct==="corte"?"Vídeo":ct==="foto"?"Foto de obra":(ct||"—"); };
   const _dt=function(iso){ const d=String(iso||""); return d?(d.slice(8,10)+"/"+d.slice(5,7)):"—"; };
-  const [opts,setOpts]=useState({puxar:true,criar:true,pauta:true,copy:true});
-  const [orient,setOrient]=useState("");
+  const [opts,setOpts]=useState((auto&&auto.opts)||{puxar:true,criar:true,pauta:true,copy:true});
+  const [orient,setOrient]=useState((auto&&auto.orient)||"");
+  const [pronto,setPronto]=useState(false);
+  const _autoRodou=useRef(false);
   const [previa,setPrevia]=useState(null);
   const [gerando,setGerando]=useState("");
   const [erro,setErro]=useState("");
@@ -23091,16 +23342,39 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
       }catch(_){}
       try{ const p=await pxPlanoMesPrever({client:client,unit:unit,ano:_y,mes:_m,tasksState:tasks}); if(vivo) setPrevia(p); }
       catch(e){ if(vivo) setErro((e&&e.message)||String(e)); }
+      if(vivo) setPronto(true);
     })();
     return function(){ vivo=false; };
   },[client,unit,_y,_m]);
-  useEffect(function(){ const f=function(e){ if(e.key==="Escape"&&!gerando) onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[gerando]);
+  useEffect(function(){ const f=function(e){ if(e.key==="Escape"&&!gerando&&!auto) onClose(); }; window.addEventListener("keydown",f); return function(){ window.removeEventListener("keydown",f); }; },[gerando]);
   const _PES={prioridade:{l:"Prioridade",e:"\ud83d\udd34",c:"#dc2626",bg:"#fee2e2"},importante:{l:"Importante",e:"\ud83d\udfe0",c:"#ea580c",bg:"#ffedd5"},complementar:{l:"Complementar",e:"\ud83d\udfe1",c:"#a16207",bg:"#fef9c3"},inativo:{l:"Inativo",e:"\ud83d\udd35",c:"#2563eb",bg:"#dbeafe"}};
   const _prodDe=function(t){ if(!pesos.length||typeof pxProdutoOficial!=="function") return ""; return pxProdutoOficial(String(t.title||"")+" "+String(t.desc||"").replace(/<[^>]+>/g," ").slice(0,300),pesos)||""; };
   const _contagem=(function(){ const o={}; _doMes.forEach(function(t){ if(_pmEhMaterial(t)||_pmEhComem(t)) return; const p=_prodDe(t); if(p) o[p]=(o[p]||0)+1; }); return o; })();
+  /* (24/09/2026) DISTRIBUIÇÃO EM CÓDIGO: quem decide produto/marca de cada card é pxPlanoDistribuir,
+     aqui, antes de gerar — a prévia mostra e o Aplicar manda a MESMA lista pro pxSugerirPauta. */
+  const _slotsPauta=(function(){
+    const l=[];
+    if(opts.pauta){
+      _doMes.forEach(function(t){ if(selVazios[t.id]) l.push({id:t.id,data:String(t.publishDate||"").slice(0,10),tipo:String(t.contentType||""),titulo:t.title||"",novo:false}); });
+      if(opts.puxar&&previa) previa.puxar.forEach(function(p){ if(_vazio(p.task)&&!_pmEhMaterial(p.task)&&!l.some(function(a){return a.id===p.task.id;})) l.push({id:p.task.id,data:String(p.iso||"").slice(0,10),tipo:String(p.task.contentType||""),titulo:p.task.title||"",novo:false}); });
+      if(opts.criar&&previa) previa.criar.forEach(function(c){ if(c.tipo==="material"||c.card.title==="Short"||c.card.title==="Foto de obra") return; l.push({id:c.card.id,data:String(c.card.publish_date||"").slice(0,10),tipo:String(c.card.content_type||""),titulo:c.card.title||"",novo:true}); });
+    }
+    return l.sort(function(a,b){ return a.data.localeCompare(b.data)||String(a.id).localeCompare(String(b.id)); });
+  })();
+  const _marcaJa=_doMes.filter(function(t){ return !_pmEhMaterial(t)&&!_pmEhComem(t)&&!selVazios[t.id]&&!_vazio(t)&&!_prodDe(t); }).length;
+  const _jaNoMes=_doMes.filter(function(t){ return !_pmEhMaterial(t)&&!_pmEhComem(t)&&!selVazios[t.id]; }).length;
+  const _distrib=(typeof pxPlanoDistribuir==="function"&&_slotsPauta.length)?pxPlanoDistribuir({slots:_slotsPauta,pesos:pesos,contagem:_contagem,marcaJa:_marcaJa,jaNoMes:_jaNoMes}):[];
+  const _distDe=function(id){ return _distrib.find(function(d){ return String(d.id)===String(id); })||null; };
   const _nVazios=Object.keys(selVazios).filter(function(k){return selVazios[k];}).length;
   const _nPuxar=previa&&opts.puxar?previa.puxar.length:0, _nCriar=previa&&opts.criar?previa.criar.length:0;
   const _nPauta=opts.pauta?(_nVazios+(opts.criar&&previa?previa.criar.filter(function(c){return c.tipo!=="material";}).length:0)+(opts.puxar&&previa?previa.puxar.filter(function(p){return _vazio(p.task)&&!_pmEhMaterial(p.task);}).length:0)):0;
+  useEffect(function(){
+    if(!auto||!pronto||_autoRodou.current) return;
+    _autoRodou.current=true;
+    if(erro){ auto.onDone({erro:erro}); return; }
+    if(!previa||(_nPuxar+_nCriar+_nPauta)===0){ auto.onDone({vazio:true}); return; }
+    _aplicar();
+  },[auto,pronto,erro,previa]);
   const _aplicar=async function(){
     if(!previa){ setErro("A prévia ainda não carregou."); return; }
     const sb=window._sb; if(!sb){ setErro("Sem conexão."); return; }
@@ -23142,7 +23416,8 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
           const outros=_doMes.filter(function(t){ return !alvos.some(function(a){return a.id===t.id;}); }).map(function(t){ return {data:_dt(t.publishDate),titulo:t.title||"",tipo:_tipoLbl(t)}; });
           const _d60=(function(){ const d=new Date(_y,_m,1); d.setDate(d.getDate()-60); return _pxApIso(d); })();
           const recentes=(tasks||[]).filter(function(t){ const d=String(t.publishDate||""); return _meu(t)&&d>=_d60&&d<_iniIso&&t.title; }).map(function(t){return t.title;}).slice(0,40);
-          const lista=await pxSugerirPauta({client:client,unit:unit,clienteNome:_cl.name||client,slots:alvos.map(function(a){return {id:a.id,data:a.data,tipo:a.tipo};}),doMes:outros,recentes:recentes,orientacao:orient});
+          const lista=await pxSugerirPauta({client:client,unit:unit,clienteNome:_cl.name||client,slots:alvos.map(function(a){return {id:a.id,data:a.data,tipo:a.tipo};}),doMes:outros,recentes:recentes,orientacao:orient,
+            distribuicao:_distrib,contagem:_contagem,marcaJa:_marcaJa,jaNoMes:_jaNoMes});
           let n=0;
           for(const a of alvos){
             const p=lista.find(function(x){return String(x.id)===String(a.id);}); if(!p) continue;
@@ -23169,7 +23444,8 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
           }
         }
       }
-      // registro pro Desfazer
+      // registro pro Desfazer (na fila do "Todos" o registro é do lote, gravado pelo _PxPlanoDoMesTodos)
+      if(auto){ setGerando(""); setProg(""); auto.onDone({ok:true,puxados:(opts.puxar?previa.puxar.length:0),criados:criados,alterados:alterados}); return; }
       if(criados.length||alterados.length){
         await sb.from("claude_plano_execucoes").insert({id:execId,descricao:"Plano do mês · "+_nome+" · "+_mesLabel+" ("+quem+")",criados:criados,alterados:alterados});
       }
@@ -23179,12 +23455,13 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
     }catch(e){
       setGerando(""); setProg("");
       setErro((e&&e.message)||String(e));
+      if(auto){ auto.onDone({erro:(e&&e.message)||String(e),criados:criados,alterados:alterados}); return; }
       if(criados.length||alterados.length){ try{ await sb.from("claude_plano_execucoes").insert({id:execId,descricao:"Plano do mês (parcial, deu erro) · "+_nome+" · "+_mesLabel,criados:criados,alterados:alterados}); }catch(_){} }
     }
   };
   const _inp={width:"100%",boxSizing:"border-box",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"inherit",outline:"none",background:"#fff"};
   const _chk=function(k,l,sub){ return <label style={{display:"flex",alignItems:"flex-start",gap:9,cursor:gerando?"default":"pointer",padding:"8px 10px",border:"1px solid "+(opts[k]?"#c4b5fd":"#eef0f3"),background:opts[k]?"#faf5ff":"#fff",borderRadius:10}}>
-    <input type="checkbox" checked={!!opts[k]} disabled={!!gerando} onChange={function(e){ setOpts(Object.assign({},opts,{[k]:e.target.checked})); }} style={{width:15,height:15,marginTop:2}}/>
+    <input type="checkbox" checked={!!opts[k]} disabled={!!gerando||!!auto} onChange={function(e){ setOpts(Object.assign({},opts,{[k]:e.target.checked})); }} style={{width:15,height:15,marginTop:2}}/>
     <span style={{display:"flex",flexDirection:"column",gap:2}}><span style={{fontSize:12.5,fontWeight:800,color:"#0f172a"}}>{l}</span><span style={{fontSize:11,color:"#64748b",lineHeight:1.4}}>{sub}</span></span>
   </label>; };
   return <div onMouseDown={function(e){ if(e.target===e.currentTarget&&!gerando) onClose(); }}
@@ -23192,8 +23469,8 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
     <div style={{background:"#fff",borderRadius:_isMobP?0:20,width:"100%",maxWidth:1040,maxHeight:_isMobP?"100%":"94vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 80px rgba(0,0,0,.45)"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,padding:_isMobP?"12px 14px":"14px 20px",background:"linear-gradient(90deg,#7c3aed 0%,#9F43F6 100%)",color:"#fff",flexShrink:0}}>
         <span style={{minWidth:0,flex:1,display:"flex",flexDirection:"column"}}>
-          <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Gerar plano do mês · {_mesLabel}</span>
-          <span style={{fontWeight:800,fontSize:_isMobP?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome}</span>
+          <span style={{opacity:.8,fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>Gerar plano do mês · {_mesLabel}{auto&&auto.rotulo?(" · "+auto.rotulo):""}</span>
+          <span style={{fontWeight:800,fontSize:_isMobP?16:19,letterSpacing:-.4,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_nome}{auto?" · rodando sozinho":""}</span>
         </span>
         <button type="button" onClick={onClose} disabled={!!gerando} title="Fechar (Esc)" style={{background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -23255,6 +23532,23 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
               </label>; })}
           </div>
         </div>}
+        {/* (24/09/2026) a decisão produto/marca de cada card, antes de gerar */}
+        {opts.pauta&&_distrib.length>0&&<div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Assunto-base de cada card <span style={{color:"#94a3b8",fontWeight:600}}>· decidido pelo app pelo peso das fichas ({_distrib.filter(function(d){return d.alvo==="marca";}).length} de marca, {_distrib.filter(function(d){return d.alvo==="produto";}).length} de produto) — a IA só escreve o assunto</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {_slotsPauta.map(function(s){ const d=_distDe(s.id)||{}; const w=_PES[d.peso]||null;
+              return <div key={s.id} style={{display:"flex",alignItems:"center",gap:8,fontSize:11.5}}>
+                <span style={{fontWeight:800,color:"#0f172a",fontVariantNumeric:"tabular-nums",minWidth:40}}>{_dt(s.data)}</span>
+                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700}}>{_tipoLbl({contentType:s.tipo})}</span>
+                <span style={{flex:1,color:"#64748b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.novo?"novo card":(s.titulo||"Sem título")}</span>
+                {d.alvo==="marca"
+                  ? <span style={{background:"#e0e7ff",color:"#3730a3",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>MARCA · institucional</span>
+                  : d.alvo==="livre"
+                  ? <span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>livre · sem ficha de produto, a IA escolhe</span>
+                  : <span style={{background:w?w.bg:"#f1f5f9",color:w?w.c:"#475569",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{w?w.e+" ":""}{d.produto||"—"}</span>}
+              </div>; })}
+          </div>
+        </div>}
         {/* pesos */}
         <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px"}}>
           <div style={{fontSize:12.5,fontWeight:800,color:"#0f172a",marginBottom:6}}>Produtos e peso <span style={{color:"#94a3b8",fontWeight:600}}>· quantos posts o mês já tem de cada um</span></div>
@@ -23278,7 +23572,7 @@ function _PxPlanoDoMes({client, unit, mes, tasks, setTasks, onClose, onOpenCard}
         </span>
         <span style={{display:"inline-flex",gap:8}}>
           <button type="button" disabled={!!gerando} onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#475569",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-          <button type="button" disabled={!!gerando||!previa||(_nPuxar+_nCriar+_nPauta)===0} onClick={_aplicar}
+          <button type="button" disabled={!!gerando||!!auto||!previa||(_nPuxar+_nCriar+_nPauta)===0} onClick={_aplicar}
             style={{background:(previa&&(_nPuxar+_nCriar+_nPauta)>0)?"#0f172a":"#e2e8f0",border:"none",color:(previa&&(_nPuxar+_nCriar+_nPauta)>0)?"#fff":"#94a3b8",borderRadius:99,padding:"9px 18px",fontSize:12.5,fontWeight:800,cursor:gerando?"default":"pointer",fontFamily:"inherit"}}>
             {gerando?"Aplicando…":"Aplicar plano do mês"}
           </button>
@@ -24436,9 +24730,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
           </div>}
           {_bl("resumo.contadores")&&_painelMat()}
           {/* (23/09/2026) PAUTA DO MÊS — um cliente (e uma unidade, na Bioter) de cada vez */}
-          {_bl("pauta")&&!_isAll&&(filterClient!=="bioter"||filterBioterUnit!=="todos")&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <button type="button" onClick={function(){ setPautaAberta(true); }}
-              style={{background:"linear-gradient(135deg,#7c3aed,#9F43F6)",border:"none",color:"#fff",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 14px rgba(124,58,237,.3)"}}>
+          {_bl("pauta")&&(function(){
+            /* (24/09/2026, Rodrigo) "cadê aquele botão de gerar plano do mês e o botão de voltar atrás?"
+               Só aparecia com um cliente filtrado (Bioter: uma unidade) — em "Todos" sumia sem aviso.
+               Agora aparece sempre; sem cliente escolhido fica apagado e o clique explica. */
+            /* (24/09/2026, Rodrigo) "se é pra criar de todos os clientes quando tiver aberto" — em Todos
+               (ou Bioter sem unidade) abre a fila de todos (_PxPlanoDoMesTodos). */
+            const _planoPode=true;
+            const _planoTodos=_isAll||(filterClient==="bioter"&&filterBioterUnit==="todos");
+            const _planoAviso=_planoTodos?("Roda o plano de "+(_isAll?"todos os clientes":"todas as unidades da Bioter")+" em fila, com prévia consolidada antes de aplicar."):"";
+            return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <button type="button" title={_planoPode?"":_planoAviso} onClick={function(){ if(_planoPode) setPautaAberta(true); else if(typeof pixelsToast!=="undefined") pixelsToast.info(_planoAviso,5000); }}
+              style={{background:_planoPode?"linear-gradient(135deg,#7c3aed,#9F43F6)":"#e2e8f0",border:"none",color:_planoPode?"#fff":"#64748b",borderRadius:99,padding:"9px 16px",fontSize:12.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:_planoPode?"0 4px 14px rgba(124,58,237,.3)":"none"}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>
               Gerar plano do mês
             </button>
@@ -24447,11 +24750,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9 9 9 0 00-6.4 2.6L3 13"/></svg>
               {_planoDesfazendo?"Desfazendo…":"Desfazer plano do mês"}
             </button>}
-            <span style={{color:"#94a3b8",fontSize:11.5}}>Puxa o que está sem data, cria o que falta pra cadência de {_mesLabel} e escreve pauta + copy pelo peso dos produtos. Com prévia antes de aplicar.</span>
-          </div>}
+            <span style={{color:"#94a3b8",fontSize:11.5}}>{_planoTodos?_planoAviso:("Puxa o que está sem data, cria o que falta pra cadência de "+_mesLabel+" e escreve pauta + copy pelo peso dos produtos. Com prévia antes de aplicar.")}</span>
+          </div>;
+          })()}
         </div>;
       })()}
-      {pautaAberta&&filterClient!=="todos"&&<_PxPlanoDoMes client={filterClient} unit={filterClient==="bioter"&&filterBioterUnit!=="todos"?filterBioterUnit:""} mes={calMonth} tasks={tasks} setTasks={setTasks}
+      {pautaAberta&&(filterClient==="todos"||(filterClient==="bioter"&&filterBioterUnit==="todos"))&&<_PxPlanoDoMesTodos soBioter={filterClient==="bioter"} mes={calMonth} tasks={tasks} setTasks={setTasks}
+        onClose={function(){ setPautaAberta(false); _carregarPlanoUltimo(); }} onOpenCard={function(t){ setOpenCard(t); }}/>}
+      {pautaAberta&&filterClient!=="todos"&&!(filterClient==="bioter"&&filterBioterUnit==="todos")&&<_PxPlanoDoMes client={filterClient} unit={filterClient==="bioter"&&filterBioterUnit!=="todos"?filterBioterUnit:""} mes={calMonth} tasks={tasks} setTasks={setTasks}
         onClose={function(){ setPautaAberta(false); _carregarPlanoUltimo(); }} onOpenCard={function(t){ setOpenCard(t); }}/>}
 
 
