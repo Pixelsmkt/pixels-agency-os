@@ -3022,6 +3022,15 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             <span style={{marginLeft:"auto",color:(c.producao||0)>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{fmtBRL(c.producao||0)}</span>
           </div>}
 
+          {/* (24/09/2026) VER DETALHE mora aqui, colado no Produzido no mês: o detalhamento é a
+              lista do que foi produzido. Ajustes e pagamentos, que vêm logo abaixo, não entram. */}
+          <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();_setDetalheModal({fr:fr,calc:c,accent:accent});}} title={"Ver tudo que o "+fr.name+" produziu no mês"} style={{width:"100%",background:"#fff",color:accent,border:"none",borderTop:"1px dashed #eef0f3",padding:"9px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=accent+"10";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Ver detalhe ({(c.fotoObra+c.arte+c.carrossel+c.folder+c.video+c.corte+c.videoComplexo+c.videoFeira)||0} itens)
+          </button>
+
           {/* (23/09/2026) AJUSTES NO VALOR DEVIDO · PAGAMENTOS FEITOS · SALDO — três blocos, três
               perguntas: quanto ele tem a receber, quanto já saiu do caixa, quanto falta. */}
           {(function(){
@@ -3171,14 +3180,6 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             </React.Fragment>;
           })()}
 
-          {/* VER DETALHE — abre lista completa pra bater conta */}
-          <button type="button" onClick={function(e){e.stopPropagation();e.preventDefault();_setDetalheModal({fr:fr,calc:c,accent:accent});}} title={"Ver todas as demandas do "+fr.name+" no mês"} style={{background:"#fff",color:accent,border:"none",borderTop:"1px solid #f1f5f9",padding:"11px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
-            onMouseEnter={function(e){e.currentTarget.style.background=accent+"10";}}
-            onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Ver detalhe ({c.total>0?(c.fotoObra+c.arte+c.carrossel+c.folder+c.video+c.corte+c.videoComplexo+c.videoFeira):0} itens)
-          </button>
-
         </div>;
       })}
     </div>
@@ -3233,11 +3234,11 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.3}}>Detalhamento — {_dm.fr.name}</div>
-              <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Confira cada arte antes de pagar — {refMonth?(function(){const mn=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];const p=refMonth.split("-");return (mn[parseInt(p[1],10)-1]||"?")+"/"+p[0].slice(-2);})():"todos meses"}</div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Só o que foi produzido — bônus e descontos ficam no card — {refMonth?(function(){const mn=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];const p=refMonth.split("-");return (mn[parseInt(p[1],10)-1]||"?")+"/"+p[0].slice(-2);})():"todos meses"}</div>
             </div>
             <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Total</div>
-              <div style={{color:"#16a34a",fontSize:20,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(_c.total)}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Produzido</div>
+              <div style={{color:"#16a34a",fontSize:20,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(_c.producao!==undefined?_c.producao:_c.total)}</div>
             </div>
             <button type="button" onClick={function(){_setDetalheModal(null);}} style={{background:"transparent",border:"none",cursor:"pointer",padding:6,color:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6,marginLeft:4}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -47768,6 +47769,12 @@ function _cardPodeSerResp(u){
   // ═══ DRAG-DROP UPLOAD — handler pra área Arquivos ═══
   // Aceita tipo explícito quando soltado em cima de uma dropzone específica
   // (referencia / final). Se for solto na área neutra, decide pelo cargo do user.
+  // (24/09/2026) Arrasto que traz arquivo de fora do navegador. As miniaturas do carrossel
+  // reordenam por drag; sem esta checagem elas davam stopPropagation no drop e o arquivo
+  // do Explorer morria ali — a seção "Arquivo final" nunca recebia o upload.
+  const _pxDragTemArquivo=function(e){
+    try{ var tp=(e&&e.dataTransfer&&e.dataTransfer.types)||[]; return Array.prototype.indexOf.call(tp,"Files")>=0; }catch(_){ return false; }
+  };
   const handleFilesDrop=(e,explicitTipo)=>{
     e.preventDefault();e.stopPropagation();
     _resetDragSection();
@@ -48817,6 +48824,7 @@ function _cardPodeSerResp(u){
                             try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",a.id);}catch(_){}
                           }:undefined}
                           onDragOver={_podeOrd?function(e){
+                            if(_pxDragTemArquivo(e)) return;
                             if(!_dragItemIdRef.current) return;
                             const _de=arr.find(function(x){return x.id===_dragItemIdRef.current;});
                             if(!_de||!_mesmaSecao(_de)) return;   // feed não entra no meio do story
@@ -48824,9 +48832,10 @@ function _cardPodeSerResp(u){
                             try{e.dataTransfer.dropEffect="move";}catch(_){}
                             if(_dragOverItemId!==a.id) _setDragOverItemId(a.id);
                           }:undefined}
-                          onDragLeave={_podeOrd?function(e){ e.stopPropagation(); if(_dragOverItemId===a.id) _setDragOverItemId(null); }:undefined}
+                          onDragLeave={_podeOrd?function(e){ if(_pxDragTemArquivo(e)) return; e.stopPropagation(); if(_dragOverItemId===a.id) _setDragOverItemId(null); }:undefined}
                           onDrop={_podeOrd?function(e){
                             e.preventDefault(); e.stopPropagation();
+                            if(_pxDragTemArquivo(e)){ _dragItemIdRef.current=null; _setDragOverItemId(null); return; }
                             const _fromId=_dragItemIdRef.current;
                             _dragItemIdRef.current=null; _setDragOverItemId(null);
                             if(_fromId&&_fromId!==a.id) reorderFinItem(_fromId,a.id);
@@ -49899,6 +49908,7 @@ function _cardPodeSerResp(u){
                             try{e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",a.id);}catch(_){}
                           }:undefined}
                           onDragOver={canEdit?function(e){
+                            if(_pxDragTemArquivo(e)) return;          // arquivo de fora: deixa passar pra seção
                             if(!_dragItemIdRef.current) return;
                             e.preventDefault();
                             e.stopPropagation();
@@ -49906,10 +49916,16 @@ function _cardPodeSerResp(u){
                             if(_dragOverItemId!==a.id) _setDragOverItemId(a.id);
                           }:undefined}
                           onDragLeave={canEdit?function(e){
+                            if(_pxDragTemArquivo(e)) return;
                             e.stopPropagation();
                             if(_dragOverItemId===a.id) _setDragOverItemId(null);
                           }:undefined}
                           onDrop={canEdit?function(e){
+                            if(_pxDragTemArquivo(e)){                 // upload: quem recebe é a seção "Arquivo final"
+                              _dragItemIdRef.current=null;
+                              if(_dragOverItemId===a.id) _setDragOverItemId(null);
+                              return;
+                            }
                             e.preventDefault();
                             e.stopPropagation();
                             const _fromId = _dragItemIdRef.current;
@@ -56832,13 +56848,18 @@ const MOBILE_NAV=[
 
 // ── LoadingScreen ─────────────────────────────────────────────
 function LoadingScreen({msg}){
+  // (24/09/2026) Marca da Pixels no lugar do hexagono generico. /logo-pixels.png ja esta no public
+  // do repo do Vite (a tela "Definir nova senha" usa o mesmo arquivo) - nada novo entra no deploy.
   return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-      <div style={{width:54,height:54,borderRadius:16,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>⬡</div>
-      <div style={{color:C.ts,fontSize:13,fontWeight:600}}>{msg}</div>
-      <div style={{width:180,height:4,borderRadius:99,background:C.b1,overflow:"hidden"}}>
-        <div style={{width:"60%",height:"100%",borderRadius:99,background:C.a,animation:"pulse 1.5s ease-in-out infinite"}}/>
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",animation:"pxLoadIn .5s cubic-bezier(.22,1,.36,1) both"}}>
+        <img src="/logo-pixels.png" alt="Pixels" style={{height:34,width:"auto",maxWidth:240,objectFit:"contain",marginBottom:22}}/>
+        <div style={{width:200,height:3,borderRadius:99,background:C.b1,overflow:"hidden",position:"relative"}}>
+          <div style={{position:"absolute",top:0,left:0,height:"100%",width:"42%",borderRadius:99,background:`linear-gradient(90deg,${C.aD},${C.a})`,animation:"pxLoadBar 1.15s cubic-bezier(.65,.05,.36,1) infinite"}}/>
+        </div>
+        <div style={{color:C.ts,fontSize:11.5,fontWeight:600,letterSpacing:.3,marginTop:14}}>{msg}</div>
       </div>
+      <style>{`@keyframes pxLoadBar{0%{transform:translateX(-115%)}100%{transform:translateX(350%)}}@keyframes pxLoadIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}`}</style>
     </div>
   );
 }
@@ -100868,10 +100889,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
                           {_uni.length>4 && <span style={{color:PB_MUTE,fontSize:10,fontWeight:700,padding:"1px 4px"}}>+{_uni.length-4}</span>}
                         </div>}
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:"auto",paddingTop:6}}>
-                          <span style={{display:"inline-flex",alignItems:"center",gap:5,color:_pr.n>=_pr.total?"#15803d":(_pr.n>=3?"#b45309":"#94a3b8"),fontSize:10.5,fontWeight:800,letterSpacing:.2}}>
-                            <span style={{width:7,height:7,borderRadius:99,background:"currentColor"}}/>{_pr.n} de {_pr.total} da ficha
-                          </span>
+                        {/* (24/09/2026, Vinicius) O contador "N de 6 da ficha" saiu do card: ninguém
+                            sabia que 6 eram esses, e o que falta já aparece aberto dentro da ficha. */}
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,marginTop:"auto",paddingTop:6}}>
                           <span style={{color:PB_PURPLE_DK,fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}}>Abrir ficha <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
                         </div>
                       </div>
