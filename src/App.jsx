@@ -100839,6 +100839,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     {_isMobG?"Use as setas pra ordenar por relevância nesta unidade":"Arraste os cards pra ordenar por relevância nesta unidade · clique pra abrir a ficha"}
                   </div>}
                   <div style={{display:"grid",gridTemplateColumns:_isMobG?"1fr":"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>
+                  {/* (24/09/2026, Vinicius) capa limpa: sem #N, sem "N fotos", sem as tags das
+                      unidades — isso tudo mora dentro da ficha. Só nome, peso, o que é e o botão. */}
+                  <style>{`.pxProdCard .pxFichaBtn{transition:background .15s,border-color .15s,color .15s}.pxProdCard .pxFichaBtn svg{transition:transform .15s}.pxProdCard:hover .pxFichaBtn{background:`+PB_PURPLE_DK+`;border-color:`+PB_PURPLE_DK+`;color:#fff}.pxProdCard:hover .pxFichaBtn svg{transform:translateX(2px)}`}</style>
                   {_visibleEdit.map(function(_item,filteredIdx){
                     const prod=_item.prod;
                     const pi=_item.gi;
@@ -100850,8 +100853,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     const _nome = prod.nomePrincipalPt || prod.nome || "";
                     const _oq = String(prod.descricao||"").replace(/\s+/g," ").trim();
                     const _pr = _pbFichaPreenchidos(prod);
-                    const _uni = (_isBioter&&typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.filter(function(u){ return Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0; }):[];
-                    return <div key={pi} role="button" tabIndex={0}
+                    return <div key={pi} role="button" tabIndex={0} className="pxProdCard"
                       onClick={function(){ setFichaAberta(pi); }}
                       onKeyDown={function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setFichaAberta(pi); } }}
                       draggable={false /* (23/09/2026) ordem automática: peso + alfabética */}
@@ -100872,8 +100874,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         {_capa
                           ? <img src={_capa} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                           : <span style={{color:"#a78bfa",display:"flex",flexDirection:"column",alignItems:"center",gap:4,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}><Ico n="image" size={24} color="currentColor"/>Sem foto</span>}
-                        {_editUnitFilter && <span style={{position:"absolute",top:8,left:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.4}}>#{filteredIdx+1}</span>}
-                        {_urls.length>1 && <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.72)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800}}>{_urls.length} fotos</span>}
                         {false && _editUnitFilter && _isMobG && <span style={{position:"absolute",bottom:8,right:8,display:"inline-flex",gap:4}}>
                           <button type="button" disabled={filteredIdx===0} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx-1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx===0?.4:1}}>▲</button>
                           <button type="button" disabled={filteredIdx>=_visibleEdit.length-1} onClick={function(e){e.stopPropagation();_produtoReorderInUnit(_unitTabProd,filteredIdx,filteredIdx+1);}} style={{background:"rgba(255,255,255,.92)",border:"none",borderRadius:8,width:32,height:32,opacity:filteredIdx>=_visibleEdit.length-1?.4:1}}>▼</button>
@@ -100885,14 +100885,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           ? <_PbTagPeso p={_p}/>
                           : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.35,textTransform:"uppercase",lineHeight:1.3}}>Sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
-                        {_uni.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
-                          {_uni.slice(0,4).map(function(u){ return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"44",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
-                          {_uni.length>4 && <span style={{color:PB_MUTE,fontSize:10,fontWeight:700,padding:"1px 4px"}}>+{_uni.length-4}</span>}
-                        </div>}
                         {/* (24/09/2026, Vinicius) O contador "N de 6 da ficha" saiu do card: ninguém
                             sabia que 6 eram esses, e o que falta já aparece aberto dentro da ficha. */}
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8,marginTop:"auto",paddingTop:6}}>
-                          <span style={{color:PB_PURPLE_DK,fontSize:11,fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}}>Abrir ficha <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+                        <div style={{display:"flex",marginTop:"auto",paddingTop:10}}>
+                          <span className="pxFichaBtn" style={{flex:1,background:"#f5f3ff",border:"1px solid #ede9fe",color:PB_PURPLE_DK,borderRadius:10,padding:"8px 12px",fontSize:11.5,fontWeight:800,letterSpacing:-.1,display:"inline-flex",alignItems:"center",justifyContent:"space-between",gap:6}}>Abrir ficha <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
                         </div>
                       </div>
                     </div>;
