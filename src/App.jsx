@@ -2280,6 +2280,27 @@ function _normalizeBrStateInWord(s){
     return seg;
   }).join("-");
 }
+/* (24/09/2026, Vinicius) "tentei escrever ETA.. não bloqueia isso.. deixou tudo minúsculo".
+   A regra de sigla do smartFormatTitle só valia quando a palavra INTEIRA era a sigla — e
+   "Cisterna/ETA" é uma palavra só pra ele. Esta passada final devolve a sigla como a pessoa
+   digitou, em qualquer posição. Só mexe em token que continua sendo o MESMO (ignorando caixa),
+   então nada de novo aparece no título: é devolver o que o formatador tinha derrubado. */
+function _pxRestauraSiglas(original, formatado){
+  try{
+    const orig=String(original||"").match(/[A-Za-zÀ-ÿ0-9]+/g)||[];
+    const saida=String(formatado||"").match(/[A-Za-zÀ-ÿ0-9]+/g)||[];
+    if(!orig.length||orig.length!==saida.length) return formatado;
+    let i=-1;
+    return String(formatado||"").replace(/[A-Za-zÀ-ÿ0-9]+/g, function(tk){
+      i++;
+      const o=orig[i]||"";
+      if(o.toLocaleLowerCase("pt-BR")!==tk.toLocaleLowerCase("pt-BR")) return tk;
+      if(!/^[A-ZÀ-Ý]{2,6}$/.test(o)) return tk;                       // só sequência TODA maiúscula
+      if(typeof TITLE_STOPWORDS_PTBR!=="undefined"&&TITLE_STOPWORDS_PTBR.has(o.toLocaleLowerCase("pt-BR"))) return tk; // "DE"/"DO" é caps lock, não sigla
+      return o;
+    });
+  }catch(_){ return formatado; }
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
@@ -2438,7 +2459,7 @@ function smartFormatTitle(input){
       result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
     }
   }
-  return result;
+  return _pxRestauraSiglas(input, result);
 }
 
 /* ─── DESIGNER PAYMENTS ─── */
@@ -6146,7 +6167,10 @@ const BRIEFING_SECTIONS = [
       { id:"nome_empresarial", label:"Nome empresarial",   help:"Razão social registrada na Receita", type:"text" },
       { id:"cnpj",             label:"CNPJ",               help:"00.000.000/0000-00",                  type:"text" },
       { id:"cidade",           label:"Cidade",             help:"Cidade/UF onde o cliente atua",        type:"text" },
-      { id:"endereco",         label:"Endereço completo",  help:"Rua, número, complemento, bairro, CEP", type:"textarea" },
+      { id:"endereco",         label:"Endereço completo",  help:"Rua, número, complemento, bairro", type:"textarea" },
+      /* (24/09/2026, Vinicius) CEP separado do endereço: o Playbook tem campo proprio
+         pra ele, e pedir junto obrigava o app a garimpar com regex. */
+      { id:"cep",              label:"CEP",                help:"00000-000",                            type:"text" },
       { id:"responsavel_legal",label:"Responsável legal",  help:"Nome + contato",                       type:"text" },
       { id:"whatsapp_empresarial", label:"WhatsApp empresarial", help:"(00) 00000-0000 — numero oficial da empresa", type:"text" },
       { id:"email_empresarial",    label:"E-mail empresarial",   help:"contato@empresa.com.br",                      type:"text" },
@@ -14638,10 +14662,10 @@ function _PBProjeto({cl, idx}){
 
 function COrientacoes({cl, sections}){
   // sections: opcional. Array com IDs das secoes a mostrar. Se nao passar, mostra todas.
-  // IDs: 'logos', 'paleta', 'fontes', 'tom', 'hashtags', 'cta', 'naofazer', 'siteredes'
+  // IDs: 'logos', 'paleta', 'fontes', 'tom', 'hashtags', 'cta', 'siteredes'
   const _showSec = function(id){ return !sections || sections.indexOf(id)!==-1; };
   // Posição da seção entre as VISÍVEIS → cor do rainbow no cabeçalho (_PlaybookSection idx)
-  const _SEC_ORDER = ["logos","paleta","fontes","tom","hashtags","cta","naofazer","siteredes"];
+  const _SEC_ORDER = ["logos","paleta","fontes","tom","hashtags","cta","siteredes"];
   const _secVis = _SEC_ORDER.filter(_showSec);
   const _secIdx = function(id){ return Math.max(0,_secVis.indexOf(id)); };
   const sb=window._sb;
@@ -14922,9 +14946,8 @@ function COrientacoes({cl, sections}){
       <input value={data.ctaPadrao||""} onChange={e=>setData(p=>({...p,ctaPadrao:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Acesse o link na bio →"' style={inp}/>
     </_PlaybookSection>}
 
-    {_showSec("naofazer") && <_PlaybookSection idx={_secIdx("naofazer")} icon="alert" accent="#dc2626" title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
-      <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
-    </_PlaybookSection>}
+    {/* (24/09/2026, Vinicius) "O que NÃO fazer" saiu — repetia Instruções pro designer, que é
+        onde a regra passou a morar. O texto dos clientes que tinham algo foi migrado pra lá. */}
 
     {_showSec("siteredes") && <_PlaybookSection idx={_secIdx("siteredes")} icon="globe" accent="#0d9488" title="Site e redes oficiais" subtitle={_isBioterCli?"Cada unidade tem seu site, drive e perfis próprios — trocar aba pra editar":"Pra usar em arte, em links de bio, em posts"}>
       {/* Tabs por unidade (só Bioter) */}
@@ -17774,8 +17797,10 @@ function _cadDoBriefing(briefing, unitId){
     const _tel = _blob.match(/\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/);
     if(_tel && !out.telefone) _por("telefone", _tel[0].trim());
   }
-  // CEP pode estar dentro do endereco completo
-  if(ident.endereco){
+  // CEP: campo proprio do briefing (24/09/2026) manda; o endereco completo
+  // continua servindo de rede pros briefings preenchidos antes disso.
+  _por("cep", ident.cep);
+  if(!out.cep && ident.endereco){
     const _cep = String(ident.endereco).match(/\d{5}-?\d{3}/);
     if(_cep) _por("cep", _cep[0]);
   }
@@ -51796,7 +51821,7 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
   })();
   /* (24/09/2026) Contatos, Equipe e Orientações visuais saíram da aba — não contam mais pra
      decidir se a aba tem conteúdo, senão ela abre "cheia" e não mostra nada. */
-  const hasContent=_briefItens.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  const hasContent=_briefItens.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -52043,13 +52068,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
       </div>}
 
       {/* ═══ Não fazer ═══ */}
-      {data.naoFazer&&<div style={{background:"linear-gradient(135deg,#fff,#fef2f2)",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px"}}>
-        <div style={{color:"#dc2626",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"inline-flex",alignItems:"center",gap:6}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-          NÃO fazer
-        </div>
-        <div style={{color:"#7f1d1d",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap",fontWeight:500}}>{data.naoFazer}</div>
-      </div>}
 
       {/* ═══ Links (renomeado — Contatos agora tem aba própria) ═══ */}
       {_vis("pb-social")&&_linksItems.length>0&&<div>
@@ -100510,7 +100528,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             /* (24/09/2026, Vinicius) "Site e redes oficiais" saiu daqui e virou bloco próprio no fim
                do playbook — links não são referência visual de peça. */
             const _secs = _PB_CADEIRA_ATUAL==="video"  ? ["logos","paleta","fontes"]
-                        : ["logos","paleta","fontes","naofazer"];
+                        : ["logos","paleta","fontes"];
             const _sub = "Logo, paleta de cores e fontes — referência única usada nos cartões";
             return typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle={_sub} icon="sparkles" color={PB_PURPLE_DK}>
               <COrientacoes key={"orient-"+cl.id+"-"+(_PB_CADEIRA_ATUAL||"all")} cl={cl} sections={_secs}/>
@@ -100997,11 +101015,19 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
   const _doBriefing=function(){
     const b=bd||{};
     const fontes=[]; if(_unit&&b[_unit]&&typeof b[_unit]==="object") fontes.push(b[_unit]); if(b.grupo&&typeof b.grupo==="object") fontes.push(b.grupo); fontes.push(b);
-    const g=function(sec,fid){ for(const f of fontes){ try{ const v=f&&f[sec]&&f[sec][fid]; if(v&&String(v).trim()) return String(v).trim(); }catch(_){} } return ""; };
-    const _end=g("identidade","endereco"); const _cepM=_end.match(/\b\d{5}-?\d{3}\b/);
+    /* (24/09/2026) "Não", "Não se aplica", "-", "nenhum" são o jeito do cliente dizer que NÃO
+       TEM aquilo. Isso não é dado cadastral — virava um site chamado "Não" na ficha. */
+    const _lixo=function(v){ const s=String(v||"").trim().toLowerCase().replace(/[.!]+$/,"");
+      return !s||["-","--","x","n/a","na","nao","não","nao se aplica","não se aplica","nao possui","não possui","nao temos","não temos","nao tem","não tem","nenhum","nenhuma","sem","sem site","a definir","nao informado","não informado"].indexOf(s)>=0; };
+    const g=function(sec,fid){ for(const f of fontes){ try{ const v=f&&f[sec]&&f[sec][fid]; if(!_lixo(v)) return String(v).trim(); }catch(_){} } return ""; };
+    const _end=g("identidade","endereco");
+    /* (24/09/2026) CEP agora e campo proprio do briefing. O regex no endereco fica
+       so como rede pros briefings preenchidos antes dessa mudanca. */
+    const _cepM=_end.match(/\b\d{5}-?\d{3}\b/);
+    const _cep=g("identidade","cep")||(_cepM?_cepM[0]:"");
     const _cl=(typeof CLIENTS!=="undefined"?(CLIENTS||[]):[]).find(function(c){return c.id===clientId;})||{};
     const _cidCl=(!_unit&&_cl.cidade)?[_cl.cidade,_cl.estado].filter(Boolean).join("/"):"";
-    return {razao_social:g("identidade","nome_empresarial"),cnpj:g("identidade","cnpj"),cidade:g("identidade","cidade")||_cidCl,endereco:_end,cep:_cepM?_cepM[0]:"",
+    return {razao_social:g("identidade","nome_empresarial"),cnpj:g("identidade","cnpj"),cidade:g("identidade","cidade")||_cidCl,endereco:_end,cep:_cep,
             whatsapp:g("identidade","whatsapp_empresarial"),email:g("identidade","email_empresarial"),site:g("processo","site")};
   };
   const _salvar=function(novo){
@@ -101040,18 +101066,17 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     return null;
   };
   const _copiar=async function(v){ try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){} };
-  const _preenchidos=CAMPOS.filter(function(c){ return String(_atual[c.k]||"").trim(); }).length;
   const _uniLabel=function(u){ if(!u) return "Grupo"; if(typeof BIOTER_UNITS==="undefined") return u; const x=BIOTER_UNITS.find(function(b){return b.id===u;}); return x?(x.pickerLabel||x.label):u; };
   return <PlaybookBlock id="pb-briefing-auto" title="Dados cadastrais"
     subtitle="Endereço, CEP, fone/WhatsApp, site — a única fonte que a IA usa pra contato. Catálogo envelhece; isto aqui a equipe mantém"
     icon="fileText" color="#0d9488">
-    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:12}}>
-      {isBioter&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>}
-      {isBioter&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unit?"dados desta unidade — troque no seletor do topo":"dados gerais do grupo — escolha uma unidade no topo pra cadastrar os dela"}</span>}
-      <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:700}}>{_preenchidos} de {CAMPOS.length}</span>
-      {/* (24/09/2026, Vinicius) "pra que esse botão puxar do briefing.. já é pra puxar
-          automaticamente": o botão saiu. Quem preenche é o sync automático, logo acima. */}
-    </div>
+    {/* (24/09/2026, Vinicius) Saíram daqui o botão "Puxar do Briefing" ("já é pra puxar
+        automaticamente") e o contador "N de 8" — o que falta já está à vista, vazio na tela.
+        Sem os dois, a linha só existe na Bioter, pra dizer de qual unidade são os dados. */}
+    {isBioter&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:12}}>
+      <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unit?"dados desta unidade — troque no seletor do topo":"dados gerais do grupo — escolha uma unidade no topo pra cadastrar os dela"}</span>
+    </div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
       {CAMPOS.map(function(c){
         const v=String(_atual[c.k]||"").trim(); const _on=copiado===v&&!!v;
