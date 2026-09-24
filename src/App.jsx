@@ -4686,8 +4686,6 @@ function pxCtxFichasProdutosTxt(ctx){
     for(let i=0;i<arr.length;i++){
       const pr=arr[i]; if(!pr) continue;
       const nome=String(pr.nomePrincipalPt||pr.nome||"").trim(); if(!nome) continue;
-      const uni=Array.isArray(pr.unidades)?pr.unidades:[];
-      if(u&&uni.length&&uni.indexOf(u)<0) continue;
       const peso=pxPesoProduto(pr,u);
       if(peso) temPeso=true;
       if(peso==="inativo"){ inativos.push(nome); continue; }
@@ -4947,8 +4945,9 @@ function pxProdutosOficiais(ctx,unit){
   const out=[];
   arr.forEach(function(pr){
     const nome=String((pr&&(pr.nome||pr.nomePrincipalPt))||"").trim(); if(!nome) return;
-    const uni=Array.isArray(pr&&pr.unidades)?pr.unidades:[];
-    const daUnidade=(!u||!uni.length||uni.indexOf(u)>=0);
+    /* (24/09/2026, Vinicius) "Unidades onde se aplica" saiu: o cadastro e do grupo inteiro.
+       Quem diz se o produto serve pra unidade e o peso dela (Inativo = fora). */
+    const daUnidade=true;
     const aliases=[];
     [pr.nome,pr.nomePrincipalPt,pr.nomePrincipalEs,pr.nomesPt].forEach(function(x){
       String(x||"").split(/[,;\/]/).forEach(function(a){ a=String(a||"").trim(); if(a) aliases.push(a); });
@@ -6722,11 +6721,10 @@ async function pxSincronizarProdutosDoBriefing(clientId, unitId, lista){
           else if(pr.prioridade!==peso){ pr.prioridade=peso; m=true; }
         }
         if(desc&&!String(pr.descricao||"").trim()){ pr.descricao=desc; m=true; }
-        if(unit){ const u=Array.isArray(pr.unidades)?pr.unidades.slice():[]; if(u.length&&u.indexOf(unit)<0){ u.push(unit); pr.unidades=u; m=true; } }
         if(m){ prods[alvo.idx]=pr; mudou=true; atualizados++; }
       }else{
-        prods.push(unit?{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:"",prioridadePorUnidade:(peso?{[unit]:peso}:{}),unidades:[unit],imgUrls:[],origem:"briefing"}
-                       :{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:peso,unidades:[],imgUrls:[],origem:"briefing"});
+        prods.push(unit?{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:"",prioridadePorUnidade:(peso?{[unit]:peso}:{}),imgUrls:[],origem:"briefing"}
+                       :{nome:nome,nomePrincipalPt:nome,descricao:desc,prioridade:peso,imgUrls:[],origem:"briefing"});
         lst.push({nome:nome,aliases:[nome],idx:prods.length-1});
         mudou=true; criados++;
       }
@@ -59240,7 +59238,7 @@ function useQGData(clients,year,month){
       if(!alive) return;
       const funnels={}; (rs[2].data||[]).forEach(function(r){ funnels[r.client_id+"|"+(r.unit||"grupo")]=r; });
       const roi={}; (rs[3].data||[]).forEach(function(r){ roi[r.client_id]=r; });
-      const produtos={}; (rs[4].data||[]).forEach(function(r){ const pb=(r&&r.data)||{}; produtos[r.client_id]=(Array.isArray(pb.produtos)?pb.produtos:[]).map(function(p){ return {nome:String((p&&(p.nomePrincipalPt||p.nome))||"").trim(),unidades:Array.isArray(p&&p.unidades)?p.unidades:[]}; }).filter(function(p){return p.nome;}); });
+      const produtos={}; (rs[4].data||[]).forEach(function(r){ const pb=(r&&r.data)||{}; produtos[r.client_id]=(Array.isArray(pb.produtos)?pb.produtos:[]).map(function(p){ return {nome:String((p&&(p.nomePrincipalPt||p.nome))||"").trim()}; }).filter(function(p){return p.nome;}); });
       const goals={}; (rs[5].data||[]).forEach(function(r){ goals[r.client_id]=r; });
       rs.forEach(function(r,i){ if(r.error) console.warn("[qg data]",i,r.error.message); });
       if(rs[8]&&rs[8].data&&!window._pxAdsAccounts) window._pxAdsAccounts=rs[8].data; /* rs[8] = ads_accounts (rs[7] é o nível campanha) */
@@ -60454,7 +60452,8 @@ function QGLinhaModal({linha,clientId,clients,data,year,month,onClose,onSaved,cu
   const [f,setF]=useState(function(){ return Object.assign({client_id:clientId||(linha&&linha.client_id)||"",plataforma:"meta",produto:"",regiao:"",publico:"",campanha:"",orcamento:"",gasto:"",leads:"",vendas:"",receita:""},linha||{}); });
   const [saving,setSaving]=useState(false);
   const mc=clients.find(function(c){return c.client_id===f.client_id;});
-  const prods=mc?((data.produtos||{})[_qgPortalClientId(mc)]||[]).filter(function(p){ return !mc.bioter_unit||!p.unidades.length||p.unidades.indexOf(mc.bioter_unit)>=0; }).map(function(p){return p.nome;}):[];
+  /* (24/09/2026) O cadastro de produtos e do grupo — nao filtra mais por unidade. */
+  const prods=mc?((data.produtos||{})[_qgPortalClientId(mc)]||[]).map(function(p){return p.nome;}):[];
   const sug=function(k){ return Array.from(new Set((data.budgets||[]).filter(function(b){return b.client_id===f.client_id;}).map(function(b){return b[k];}).filter(Boolean))); };
   const regs=sug("regiao").concat((typeof PX_UF_LISTA!=="undefined"?PX_UF_LISTA:[]).filter(function(u){return sug("regiao").indexOf(u)<0;}));
   const set=function(k){ return function(e){ setF(Object.assign({},f,{[k]:e.target.value})); }; };
@@ -73412,14 +73411,10 @@ function PortalFaturamentoROI({cl, selUnit, isMob, month, year, semTrafego}){
         const _row = (r && r.data) || null;
         const _pb  = (_row && _row.data) || {};
         const _prods = Array.isArray(_pb.produtos) ? _pb.produtos : [];
-        const _un=(cl.id==="bioter"&&selUnit&&selUnit!=="grupo"&&selUnit!=="_minhas_")?selUnit:null;
+        /* (24/09/2026) O cadastro de produtos e do grupo inteiro — toda unidade ve a lista toda. */
         const _nomes=[];
         _prods.forEach(function(pr){
           if(!pr) return;
-          if(_un){
-            const u=Array.isArray(pr.unidades)?pr.unidades:[];
-            if(u.length>0 && u.indexOf(_un)===-1) return;
-          }
           const nome=String(pr.nomePrincipalPt||pr.nome||"").trim();
           if(nome && _nomes.indexOf(nome)===-1) _nomes.push(nome);
         });
@@ -100042,7 +100037,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const [editChk,setEditChk]     = useState((areaData.checklist||[]).join("\n"));
   // Contatos: campos pra colocar nas artes e vídeos (telefone, WhatsApp, etc)
   const [editContatos,setEditContatos] = useState(data.contatos||{telefone:"",whatsapp:"",endereco:"",site:"",instagram:"",email:""});
-  // Produtos: lista editável. Pra Bioter, cada produto tem array de unidades onde se aplica.
+  // Produtos: lista editável do GRUPO — na Bioter toda unidade vê todos; o peso por unidade
+  // (Inativo = fora) é que diz se o produto serve pra ela. (24/09/2026)
   const [editProdutos,setEditProdutos] = useState(Array.isArray(data.produtos)?data.produtos:[]);
   // Bioter: contatos POR UNIDADE — cada unidade tem dados próprios.
   // Estrutura: {chapeco:{telefone,whatsapp,...}, toledo:{...}, ...}
@@ -100160,7 +100156,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     });
   };
   // Helper produtos: adicionar/remover/atualizar
-  const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",unidades:[],imgUrls:[]}]);});};
+  const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",imgUrls:[]}]);});};
   const _produtoUpd=function(idx,patch){setEditProdutos(function(p){return p.map(function(it,i){return i===idx?Object.assign({},it,patch):it;});});};
   const _produtoDel=function(idx){setEditProdutos(function(p){return p.filter(function(_,i){return i!==idx;});});};
   // Adiciona uma nova imagem ao array imgUrls do produto (migra imgUrl legado se existir)
@@ -100209,38 +100205,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       return Object.assign({},it,{imgUrls:cur, imgUrl: cur[0] || ""});
     });});
   };
-  const _produtoToggleUnit=function(idx,unitId){
-    setEditProdutos(function(p){return p.map(function(it,i){
-      if(i!==idx) return it;
-      const cur=Array.isArray(it.unidades)?it.unidades:[];
-      const has=cur.indexOf(unitId)>=0;
-      let next;
-      if(has){
-        // Removendo — se ficar vazio, volta pra "coringa" (aparece em todas)
-        next = cur.filter(function(u){return u!==unitId;});
-      } else {
-        // Adicionando. Se era coringa (sem unidades) e a aba ativa eh outra,
-        // inclui a aba atual TAMBEM pra o produto nao sumir de onde o usuario
-        // estava mexendo.
-        next = cur.concat([unitId]);
-        if(cur.length===0 && _unitTab && _unitTab!==unitId && next.indexOf(_unitTab)<0){
-          next.push(_unitTab);
-        }
-      }
-      return Object.assign({},it,{unidades:next});
-    });});
-  };
   // Reordena produtos dentro de UMA unidade Bioter e persiste em prod.ordemPorUnidade[unitId]
   const _produtoReorderInUnit=function(unitId, srcIdx, dstIdx){
     if(!unitId || srcIdx===dstIdx) return;
     setEditProdutos(function(prods){
       const filtered=[];
       prods.forEach(function(p,gi){
-        const u=Array.isArray(p.unidades)?p.unidades:[];
-        if(u.length===0 || u.indexOf(unitId)>=0){
-          const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[unitId]==="number")?p.ordemPorUnidade[unitId]:999+gi;
-          filtered.push({gi:gi, ord:_ord, p:p});
-        }
+        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[unitId]==="number")?p.ordemPorUnidade[unitId]:999+gi;
+        filtered.push({gi:gi, ord:_ord, p:p});
       });
       filtered.sort(_pbCmpPesoU(unitId));
       if(srcIdx<0||srcIdx>=filtered.length||dstIdx<0||dstIdx>=filtered.length) return prods;
@@ -100265,12 +100237,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     const _f=_isBioter && _unitTabProd;
     let out=[];
     if(_f){
+      /* (24/09/2026, Vinicius) O cadastro e do GRUPO: toda unidade ve todos os produtos.
+         Quem diz se serve pra ela e o PESO daquela unidade (Inativo = nao usar). */
       (editProdutos||[]).forEach(function(p,gi){
-        const u=Array.isArray(p.unidades)?p.unidades:[];
-        if(u.length===0 || u.indexOf(_unitTabProd)>=0){
-          const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
-          out.push({prod:p, gi:gi, ord:_ord});
-        }
+        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
+        out.push({prod:p, gi:gi, ord:_ord});
       });
       out.sort(_pbCmpPesoU(_unitTabProd));
     } else {
@@ -100811,17 +100782,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 campos com etiqueta e o rodapé de aprendizado por produto — vive aqui, no card que
                 todo mundo vê. */}
             {(function(){
-                  // Filtro por unidade ativo? Se sim, mostra apenas produtos daquela unidade + habilita drag
+                  /* (24/09/2026, Vinicius) Unidade escolhida muda o PESO e a ORDEM, não a lista:
+                     o cadastro de produtos é do grupo inteiro e toda unidade vê todos. */
                   const _editUnitFilter = _isBioter && _unitTabProd;
                   let _visibleEdit;
                   if(_editUnitFilter){
-                    _visibleEdit=[];
-                    (editProdutos||[]).forEach(function(p,gi){
-                      const u=Array.isArray(p.unidades)?p.unidades:[];
-                      if(u.length===0 || u.indexOf(_unitTabProd)>=0){
-                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
-                        _visibleEdit.push({prod:p, gi:gi, ord:_ord});
-                      }
+                    _visibleEdit=(editProdutos||[]).map(function(p,gi){
+                      const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
+                      return {prod:p, gi:gi, ord:_ord};
                     });
                     _visibleEdit.sort(_pbCmpPesoU(_unitTabProd));
                   } else {
@@ -101013,7 +100981,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       const _ir=function(d){ const n=_lista[_pos+d]; if(n) setFichaAberta(n.gi); };
       const _nome=prod.nomePrincipalPt||prod.nome||"";
       const _pr=_pbFichaPreenchidos(prod);
-      const _uni=(_isBioter&&typeof BIOTER_UNITS!=="undefined")?BIOTER_UNITS.filter(function(u){ return Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0; }):[];
       const _btnCab={background:"rgba(255,255,255,.16)",border:"none",color:"#fff",borderRadius:9,width:34,height:34,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"background .12s",flexShrink:0};
       return <div onMouseDown={function(e){ if(e.target===e.currentTarget) setFichaAberta(null); }}
         style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",backdropFilter:"blur(3px)",zIndex:320,display:"flex",alignItems:_isMobF?"stretch":"center",justifyContent:"center",padding:_isMobF?0:"18px 16px"}}>
@@ -101032,7 +100999,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <span style={{fontWeight:800,fontSize:_isMobF?16:19,letterSpacing:-.4,lineHeight:1.2,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||"Produto sem nome"}</span>
             </span>
             {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
-              {_uni.slice(0,6).map(function(u){ return <span key={u.id} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.35)",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{u.pickerLabel||u.label}</span>; })}
               {(function(){ const _p=_pbPrioDe(prod,_editUnitFilter?_unitTabProd:""); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
               <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
             </span>}
@@ -101074,9 +101040,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       })()}
                       {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
                       {(function(){
-                        /* (23/09/2026, Vinicius) "onde preencho o nome em espanhol? não achei": aparece sempre que o
-                           produto é da unidade Paraguay (antes só com a aba Paraguay filtrada) */
-                        const _showEsEdit = _isBioter && (_unitTabProd === "paraguay" || (Array.isArray(prod.unidades) && prod.unidades.indexOf("paraguay") >= 0));
+                        /* (24/09/2026) Sem "unidades onde se aplica", todo produto do grupo pode ir pro
+                           Paraguay — o quadro do espanhol fica sempre à vista na Bioter. */
+                        const _showEsEdit = _isBioter;
                         return <div><div style={_PB_FICHA_ROT}>Como se chama</div>
                           <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
                           <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
@@ -101161,18 +101127,6 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                             style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
                         </div>
                       </div>
-                      {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
-                        <div style={_PB_FICHA_ROT}>Unidades onde se aplica</div>
-                        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                          {BIOTER_UNITS.map(function(u){
-                            const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
-                            return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
-                              style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"4px 12px",fontSize:11.5,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,transition:"all .12s"}}>
-                              {u.pickerLabel||u.label}
-                            </button>;
-                          })}
-                        </div>
-                      </div>}
                     </div>
                     {/* Rodapé da ficha: o que a agência já aprendeu sobre ESTE produto. */}
                     <_PbProdFb clientId={cl.id} produto={prod.nomePrincipalPt||prod.nome||""}
