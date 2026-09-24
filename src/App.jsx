@@ -99372,9 +99372,9 @@ const PB_CADEIRAS = [
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
    blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
-   blocos:["pb-sobre","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos"]},
+   blocos:["pb-sobre","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos","pb-siteredes"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
-   blocos:["pb-sobre","pb-processos","pb-equipe","pb-produtos"]},
+   blocos:["pb-sobre","pb-processos","pb-equipe","pb-produtos","pb-siteredes"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
    blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-briefing-auto"]},
 ];
@@ -99401,6 +99401,7 @@ const PB_BLOCOS = [
   {id:"pb-equipe",              label:"Orientações"},
   {id:"pb-templates",           label:"Templates"},
   {id:"pb-processos",           label:"Processos técnicos de vídeo"},
+  {id:"pb-siteredes",           label:"Site e redes oficiais"},
 ];
 // Padrão FIXO (regra do sistema) — o que cada cadeira enxerga se ninguém mexeu.
 function _pbBlocoPadrao(cadeiraId, blocoId){
@@ -100202,7 +100203,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       out.sort(_pbCmpPesoU(_unitTabProd));
     } else {
       out=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
-      out.sort(_pbCmpPesoU(""));
+      out.sort(_pbCmpPesoU(_pbUnidadeDoPeso(_isBioter,"")));
     }
     return out;
   };
@@ -100259,6 +100260,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   /* (23/09/2026, Vinicius) "Publicação social" saiu — duplicava o Marcar no post (@); cadência,
      mix, particularidades e restrições ninguém preenchia e nenhum prompt lia. */
   if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
+  SECTIONS.push({id:"pb-siteredes", label:"Site e redes", icon:"globe"});   // (24/09) último do playbook
   // Cadeira: só os atalhos dos blocos que ela enxerga
   const SECTIONS_VIS = SECTIONS.filter(function(sec){ return _pbBlocoVisivel(sec.id); });
 
@@ -100395,7 +100397,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           </PlaybookBlock>
 
           {/* Dados cadastrais — editável, por unidade, puxa do Briefing */}
-          <_PbCadastro clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin} data={data} onUpdate={onUpdate}/>
+          {/* (24/09/2026) key com cliente+unidade: sem isso o React reaproveitava os inputs e o
+              cadastro do cliente anterior ficava na tela depois de trocar o seletor. */}
+          <_PbCadastro key={"cad-"+cl.id+"-"+(_unitTab||"grupo")} clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin} data={data} onUpdate={onUpdate}/>
 
           {/* Feedbacks — contexto (do cliente e da equipe) que alimenta a IA */}
           <_PbMemoriaCliente clientId={cl.id} isBioter={_isBioter} unitTab={_unitTab} isAdmin={isAdmin}/>
@@ -100503,9 +100507,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {(function(){
             /* (23/09/2026, Vinicius) Tom de voz, Hashtags padrão e CTA padrão saem das Orientações em
                todas as cadeiras — o tom mora em Comunicação da marca. */
-            const _secs = _PB_CADEIRA_ATUAL==="video"  ? ["logos","paleta","fontes","siteredes"]
-                        : ["logos","paleta","fontes","naofazer","siteredes"];
-            const _sub = "Logo, paleta de cores, fontes e links oficiais — referência única usada nos cartões";
+            /* (24/09/2026, Vinicius) "Site e redes oficiais" saiu daqui e virou bloco próprio no fim
+               do playbook — links não são referência visual de peça. */
+            const _secs = _PB_CADEIRA_ATUAL==="video"  ? ["logos","paleta","fontes"]
+                        : ["logos","paleta","fontes","naofazer"];
+            const _sub = "Logo, paleta de cores e fontes — referência única usada nos cartões";
             return typeof COrientacoes==="function" && <PlaybookBlock id="pb-equipe" title="Orientações" subtitle={_sub} icon="sparkles" color={PB_PURPLE_DK}>
               <COrientacoes key={"orient-"+cl.id+"-"+(_PB_CADEIRA_ATUAL||"all")} cl={cl} sections={_secs}/>
             </PlaybookBlock>;
@@ -100556,7 +100562,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     _visibleEdit.sort(_pbCmpPesoU(_unitTabProd));
                   } else {
                     _visibleEdit=(editProdutos||[]).map(function(p,gi){return {prod:p, gi:gi, ord:gi};});
-                    _visibleEdit.sort(_pbCmpPesoU(""));
+                    _visibleEdit.sort(_pbCmpPesoU(_pbUnidadeDoPeso(_isBioter,"")));
                   }
                   /* (23/09/2026, Vinicius) "cada produto numa ficha técnica, tipo um card maior só do
                      produto específico". A lista de formulários virou uma GRADE de cards compactos;
@@ -100571,7 +100577,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   <div style={{display:"grid",gridTemplateColumns:_isMobG?"1fr":"repeat(auto-fill,minmax(230px,1fr))",gap:12}}>
                   {/* (24/09/2026, Vinicius) capa limpa: sem #N, sem "N fotos", sem as tags das
                       unidades — isso tudo mora dentro da ficha. Só nome, peso, o que é e o botão. */}
-                  <style>{`.pxProdCard .pxFichaBtn{transition:background .15s,border-color .15s,color .15s}.pxProdCard .pxFichaBtn svg{transition:transform .15s}.pxProdCard:hover .pxFichaBtn{background:`+PB_PURPLE_DK+`;border-color:`+PB_PURPLE_DK+`;color:#fff}.pxProdCard:hover .pxFichaBtn svg{transform:translateX(2px)}`}</style>
+                  <style>{`.pxProdCard .pxFichaBtn{transition:background .15s,border-color .15s,color .15s}.pxProdCard .pxFichaBtn svg{transition:transform .15s}.pxProdCard:hover .pxFichaBtn{background:#f1f5f9;border-color:#cbd5e1;color:#334155}.pxProdCard:hover .pxFichaBtn svg{transform:translateX(2px)}`}</style>
                   {_visibleEdit.map(function(_item,filteredIdx){
                     const prod=_item.prod;
                     const pi=_item.gi;
@@ -100611,14 +100617,20 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       </div>
                       <div style={{padding:"11px 13px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
                         <div style={{color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.3,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||<span style={{color:"#cbd5e1"}}>Sem nome — clique pra preencher</span>}</div>
-                        {(function(){ const _p=_pbPrioDe(prod,_editUnitFilter?_unitTabProd:""); return _p
+                        {(function(){
+                          const _u=_pbUnidadeDoPeso(_isBioter,_editUnitFilter?_unitTabProd:"");
+                          if(_u===null) return null;   // Grupo da Bioter: o peso é de cada unidade
+                          const _p=_pbPrioDe(prod,_u); return _p
                           ? <_PbTagPeso p={_p}/>
                           : <span title="Sem peso marcado — abre a ficha e escolhe" style={{alignSelf:"flex-start",border:"1px dashed #cbd5e1",color:"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.35,textTransform:"uppercase",lineHeight:1.3}}>Sem peso</span>; })()}
                         <div style={{color:_oq?PB_MUTE:"#cbd5e1",fontSize:12,lineHeight:1.45,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden",minHeight:34}}>{_oq||"O que é ainda não preenchido"}</div>
                         {/* (24/09/2026, Vinicius) O contador "N de 6 da ficha" saiu do card: ninguém
                             sabia que 6 eram esses, e o que falta já aparece aberto dentro da ficha. */}
+                        {/* (24/09/2026, Vinicius) "tá muito chamativo": o botão encolheu pro tamanho
+                            do texto e virou cinza. Ele é a confirmação de que o card abre, não o
+                            assunto do card. */}
                         <div style={{display:"flex",marginTop:"auto",paddingTop:10}}>
-                          <span className="pxFichaBtn" style={{flex:1,background:"#f5f3ff",border:"1px solid #ede9fe",color:PB_PURPLE_DK,borderRadius:10,padding:"8px 12px",fontSize:11.5,fontWeight:800,letterSpacing:-.1,display:"inline-flex",alignItems:"center",justifyContent:"space-between",gap:6}}>Abrir ficha <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+                          <span className="pxFichaBtn" style={{background:"transparent",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:8,padding:"4px 9px",fontSize:10.5,fontWeight:700,letterSpacing:-.05,display:"inline-flex",alignItems:"center",gap:4}}>Abrir ficha <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
                         </div>
                       </div>
                     </div>;
@@ -100706,6 +100718,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               "Orientações visuais" (1 item no acervo inteiro contra Instruções pro Designer em 7 de 9).
               Os dados continuam gravados no banco — saiu a tela, não o conteúdo. */}
 
+          {/* ───── ÚLTIMO BLOCO: Site e redes oficiais ───── */}
+          {typeof COrientacoes==="function" && <PlaybookBlock id="pb-siteredes" title="Site e redes oficiais"
+            subtitle={_isBioter?"Cada unidade tem seu site, drive e perfis próprios — troque a aba pra editar":"Pra usar em arte, em link de bio e em post"}
+            icon="globe" color="#0d9488">
+            <COrientacoes key={"siteredes-"+cl.id} cl={cl} sections={["siteredes"]}/>
+          </PlaybookBlock>}
 
         </div>
 
@@ -100761,7 +100779,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <span style={{fontWeight:800,fontSize:_isMobF?16:19,letterSpacing:-.4,lineHeight:1.2,whiteSpace:"normal",wordBreak:"break-word"}}>{_nome||"Produto sem nome"}</span>
             </span>
             {!_isMobF && <span style={{display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
-              {(function(){ const _p=_pbPrioDe(prod,_editUnitFilter?_unitTabProd:""); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
+              {(function(){ const _p=_pbPrioDe(prod,_pbUnidadeDoPeso(_isBioter,_editUnitFilter?_unitTabProd:"")); return _p?<_PbTagPeso p={_p} grande clara/>:null; })()}
               <span title="Campos preenchidos da ficha" style={{background:_pr.n>=_pr.total?"rgba(34,197,94,.35)":"rgba(255,255,255,.2)",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800}}>{_pr.n} de {_pr.total}</span>
             </span>}
             <button type="button" onClick={function(){ _produtoDel(pi); setFichaAberta(null); }} title="Remover este produto do playbook" style={_btnCab}
@@ -100853,7 +100871,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                             </button>;
                           })}
                         </div>
-                        {!_pbPrioDe(prod,_editUnitFilter?_unitTabProd:"")&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Sem peso marcado, a IA trata como Importante.</div>}
+                        {_pbUnidadeDoPeso(_isBioter,_editUnitFilter?_unitTabProd:"")===null
+                          ? <div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Na Bioter o peso é de cada unidade — escolha uma no topo pra marcar.</div>
+                          : (!_pbPrioDe(prod,_editUnitFilter?_unitTabProd:"")&&<div style={{color:"#94a3b8",fontSize:11,marginTop:5}}>Sem peso marcado, a IA trata como Importante.</div>)}
                       </div>
                       <div>
                         <div style={_PB_FICHA_ROT}>O que é</div>
@@ -100940,7 +100960,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 /* ── _PbCadastro — DADOS CADASTRAIS (23/09/2026, Vinicius) ─────────────────────────
    Razão social, CNPJ, endereço, telefone, WhatsApp oficial, e-mail, site, Instagram, horário.
    Editável (sócio/Hellen), POR UNIDADE na Bioter (Grupo = geral), gravado em
-   playbooks.data.cadastro / cadastro_by_unit. "Puxar do Briefing" preenche o que está vazio com
+   playbooks.data.cadastro / cadastro_by_unit. O briefing preenche sozinho o que está vazio, com
    clients.briefing_data (identidade/processo; Bioter: unidade, depois grupo).
    É a ÚNICA fonte de contato pra copy: o CTA lê daqui (_pxContatoUtil) e a ficha dos
    Materiais não extrai mais endereço/telefone — catálogo envelhece, isto aqui não. ── */
@@ -100961,6 +100981,9 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
   const [tick,setTick]=useState(0);
   useEffect(function(){
     let vivo=true;
+    /* (24/09/2026) zera ANTES de buscar: o briefing do cliente anterior não pode ficar de pé
+       enquanto o novo carrega — é ele que alimenta o preenchimento automático. */
+    setBd(null);
     (async function(){
       try{
         if(!window._sb||!clientId) return;
@@ -100991,12 +101014,6 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     if(!_unit&&typeof pxSincronizarCidadeCliente==="function") pxSincronizarCidadeCliente(clientId, novo.cidade);
   };
   const _set=function(k,v){ const novo=Object.assign({},_atual); novo[k]=String(v||"").trim(); _salvar(novo); };
-  const _puxar=function(){
-    const br=_doBriefing(); const novo=Object.assign({},_atual); let n=0;
-    Object.keys(br).forEach(function(k){ if(br[k]&&!String(novo[k]||"").trim()){ novo[k]=br[k]; n++; } });
-    if(!n){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada novo pra puxar — o Briefing não tem nada que já não esteja aqui."); return; }
-    _salvar(novo); if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" campo"+(n===1?"":"s")+" preenchido"+(n===1?"":"s")+" a partir do Briefing. Confira.",3200);
-  };
   /* (24/09/2026, Vinicius) "eles preencheram o briefing… por que não sincronizou automático?"
      O "Puxar do Briefing" só existia no clique — então cliente que preenchia o briefing não
      aparecia aqui até alguém lembrar de apertar o botão. Agora entra sozinho assim que o
@@ -101014,10 +101031,17 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
     _salvar(novo);
     if(typeof pixelsToast!=="undefined") pixelsToast.info(n+" campo"+(n===1?"":"s")+" do Briefing entr"+(n===1?"ou":"aram")+" nos Dados cadastrais. Confira.",3600);
   },[bd,clientId,_unit,isAdmin]);
+  /* Paraguay de fora: lá o número não tem DDD brasileiro, e CNPJ/CEP são documentos daqui. */
+  const _mascara=function(k){
+    if(_unit==="paraguay") return null;
+    if(k==="whatsapp"||k==="telefone") return _pbFmtFone;
+    if(k==="cnpj") return _pbFmtCnpj;
+    if(k==="cep")  return _pbFmtCep;
+    return null;
+  };
   const _copiar=async function(v){ try{ await navigator.clipboard.writeText(v); setCopiado(v); setTimeout(function(){setCopiado("");},1400); }catch(_){} };
   const _preenchidos=CAMPOS.filter(function(c){ return String(_atual[c.k]||"").trim(); }).length;
   const _uniLabel=function(u){ if(!u) return "Grupo"; if(typeof BIOTER_UNITS==="undefined") return u; const x=BIOTER_UNITS.find(function(b){return b.id===u;}); return x?(x.pickerLabel||x.label):u; };
-  const _temBriefing=(function(){ const br=_doBriefing(); return Object.keys(br).some(function(k){return !!br[k];}); })();
   return <PlaybookBlock id="pb-briefing-auto" title="Dados cadastrais"
     subtitle="Endereço, CEP, fone/WhatsApp, site — a única fonte que a IA usa pra contato. Catálogo envelhece; isto aqui a equipe mantém"
     icon="fileText" color="#0d9488">
@@ -101025,22 +101049,22 @@ function _PbCadastro({clientId, isBioter, unitTab, isAdmin, data, onUpdate}){
       {isBioter&&<span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>{_uniLabel(_unit)}</span>}
       {isBioter&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_unit?"dados desta unidade — troque no seletor do topo":"dados gerais do grupo — escolha uma unidade no topo pra cadastrar os dela"}</span>}
       <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:700}}>{_preenchidos} de {CAMPOS.length}</span>
-      {isAdmin&&_temBriefing&&<button type="button" onClick={_puxar} title="Preenche de novo o que estiver vazio com as respostas do Briefing (isso já acontece sozinho quando o cliente responde)"
-        style={{background:"#fff",border:"1px solid #99f6e4",borderRadius:99,padding:"5px 12px",color:"#0d9488",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}
-        onMouseEnter={function(e){e.currentTarget.style.background="#f0fdfa";}} onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>Puxar do Briefing</button>}
+      {/* (24/09/2026, Vinicius) "pra que esse botão puxar do briefing.. já é pra puxar
+          automaticamente": o botão saiu. Quem preenche é o sync automático, logo acima. */}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
       {CAMPOS.map(function(c){
         const v=String(_atual[c.k]||"").trim(); const _on=copiado===v&&!!v;
         const _destaque=c.k==="whatsapp";
-        return <div key={c.k+"_"+_unit+"_"+tick} style={{background:_on?"#f0fdfa":(_destaque?"#f0fdfa":"#fafbfc"),border:"1px solid "+(_on?"#5eead4":(_destaque?"#99f6e4":"#eef0f3")),borderRadius:11,padding:"9px 12px",display:"flex",flexDirection:"column",gap:3}}>
+        return <div key={clientId+"_"+c.k+"_"+_unit+"_"+tick} style={{background:_on?"#f0fdfa":(_destaque?"#f0fdfa":"#fafbfc"),border:"1px solid "+(_on?"#5eead4":(_destaque?"#99f6e4":"#eef0f3")),borderRadius:11,padding:"9px 12px",display:"flex",flexDirection:"column",gap:3}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{color:_on?"#0d9488":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flex:1}}>{_on?"Copiado ✓":c.l}</span>
             {!!v&&<button type="button" title="Copiar" onClick={function(){_copiar(v);}} style={{border:"none",background:"transparent",color:"#94a3b8",cursor:"copy",padding:2,display:"inline-flex"}}><Ico n="copy" size={11}/></button>}
           </div>
           {isAdmin
             ? <input type="text" defaultValue={v} placeholder={_PH[c.k]||""}
-                onBlur={function(e){ if(String(e.target.value||"").trim()!==v) _set(c.k,e.target.value); }}
+                onInput={_mascara(c.k)?function(e){ const _f=_mascara(c.k)(e.target.value); if(_f!==e.target.value) e.target.value=_f; }:undefined}
+                onBlur={function(e){ const _m=_mascara(c.k); const _v=_m?_m(e.target.value):e.target.value; if(String(_v||"").trim()!==v) _set(c.k,_v); }}
                 style={{border:"none",background:"transparent",outline:"none",color:"#0f172a",fontSize:12.5,fontWeight:600,fontFamily:"inherit",padding:0,width:"100%"}}/>
             : <div style={{color:v?"#0f172a":"#cbd5e1",fontSize:12.5,fontWeight:600,lineHeight:1.45,wordBreak:"break-word"}}>{v||"—"}</div>}
         </div>;
@@ -101863,7 +101887,10 @@ const _PB_PRIOS=[
 ];
 /* (23/09/2026, Vinicius) "os mais importantes primeiro": ordem da grade pelo peso; empate = ordem manual */
 const _PB_PESO_RANK={prioridade:0,importante:1,"":2,complementar:3,inativo:4};
-function _pbPesoRank(p,u){ const k=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
+/* (24/09/2026, Vinicius) u === null quer dizer "aqui não existe peso" — é o caso da Bioter na aba
+   Grupo, onde o peso é de cada unidade e o `prod.prioridade` geral não vale (regra de 23/09).
+   Sem isso, a grade do Grupo ordenava (e mostrava) por um peso que não é de ninguém. */
+function _pbPesoRank(p,u){ if(u===null) return 2; const k=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return (k in _PB_PESO_RANK)?_PB_PESO_RANK[k]:2; }
 /* (23/09/2026, Vinicius) "se forem da mesma prioridade, em ordem alfabética" */
 function _pbNomeProd(p){ return String((p&&(p.nomePrincipalPt||p.nome))||"").trim(); }
 /* (23/09/2026) Bioter: a ordem da grade usa o peso DA UNIDADE filtrada */
@@ -101886,7 +101913,42 @@ function _PbTagPeso({p, grande, clara}){
     <span style={{width:6,height:6,borderRadius:99,background:p.c,flexShrink:0}}/>{p.l}
   </span>;
 }
-function _pbPrioDe(p,u){ const id=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
+function _pbPrioDe(p,u){ if(u===null) return null; const id=(typeof pxPesoProduto==="function")?pxPesoProduto(p,u):String((p&&p.prioridade)||""); return _PB_PRIOS.find(function(x){return x.id===id;})||null; }
+/* (24/09/2026, Vinicius) Máscara do fone: (DD) NNNNN-NNNN. Só mexe em número que parece
+   brasileiro — 10 ou 11 dígitos, com ou sem o 55 na frente. Qualquer outra coisa volta do jeito
+   que foi digitada: o Paraguai não tem DDD nosso e ramal/0800 não seguem esse formato. */
+function _pbFmtFone(v){
+  const s=String(v==null?"":v);
+  let d=s.replace(/\D/g,"");
+  if(d.length===12||d.length===13){ if(d.slice(0,2)==="55") d=d.slice(2); else return s; }
+  if(d.charAt(0)==="0") return s;   // 0800 e afins não são DDD
+  if(d.length===11) return "("+d.slice(0,2)+") "+d.slice(2,7)+"-"+d.slice(7);
+  if(d.length===10) return "("+d.slice(0,2)+") "+d.slice(2,6)+"-"+d.slice(6);
+  if(d.length>=3&&d.length<=6&&d===s.replace(/[^\d]/g,"")&&/^\d+$/.test(s.replace(/[()\s-]/g,""))) return "("+d.slice(0,2)+") "+d.slice(2);
+  if(d.length===2&&/^\d+$/.test(s.replace(/[()\s-]/g,""))) return "("+d+") ";
+  return s;
+}
+/* (24/09/2026) CNPJ 49.314.364/0001-35 e CEP 89985-000, montados enquanto a pessoa digita.
+   Passou do tamanho, volta como foi digitado — melhor sem máscara do que com máscara errada. */
+function _pbFmtCnpj(v){
+  const s=String(v==null?"":v); const d=s.replace(/\D/g,"");
+  if(!d) return s;
+  if(d.length>14) return s;
+  let o=d.slice(0,2);
+  if(d.length>2) o+="."+d.slice(2,5);
+  if(d.length>5) o+="."+d.slice(5,8);
+  if(d.length>8) o+="/"+d.slice(8,12);
+  if(d.length>12) o+="-"+d.slice(12,14);
+  return o;
+}
+function _pbFmtCep(v){
+  const s=String(v==null?"":v); const d=s.replace(/\D/g,"");
+  if(!d) return s;
+  if(d.length>8) return s;
+  return d.length>5 ? (d.slice(0,5)+"-"+d.slice(5)) : d;
+}
+/* Qual unidade manda no peso NESTA tela: a filtrada; na Bioter sem filtro, nenhuma (null). */
+function _pbUnidadeDoPeso(isBioter,unitId){ return unitId ? unitId : (isBioter ? null : ""); }
 /* (23/09/2026, Vinicius) Texto livre no topo de Produtos/serviços: como a empresa se posiciona —
    carro-chefe, prioridades (🟣 🟢 🟡 🔴), o que faz mas não é foco. Grava em data.produtos_visao
    (Grupo/cliente) e data.produtos_visao_by_unit[unidade] (Bioter com unidade selecionada). Entra no
@@ -107534,7 +107596,7 @@ function _rtUmParagrafo(txt){ return String(txt||"").replace(/\r/g,"").replace(/
 function _rtForaDoPadrao(r){
   const ps=[r&&r.abertura,r&&r.desenvolvimento,r&&r.fechamento].map(function(x){return String(x||"").replace(/\r/g,"").trim();});
   if(ps.filter(Boolean).length!==3) return true;
-  return ps.some(function(p){ return /(^|\n)\s*(?:[-–—•*]|\d+\s*[.)º°]|passo\s*\d|dica\s*\d|t[oó]pico\s*\d|cena\s*\d)/i.test(p); });
+  return ps.some(function(p){ return /(^|\n)\s*(?:[-–—•*]|\d+\s*[.)º°]|(?:passo|dica|t[oó]pico|cena|fala|etapa|bloco|parte|pergunta|resposta)\s*\d)/i.test(p); });
 }
 function _rtTexto(r,semCabecalho,numero){
   const _tit="*ROTEIRO"+(numero?(" "+numero):"")+" — "+String(r.assunto||"Roteiro").toUpperCase()+"*";
@@ -107600,7 +107662,10 @@ function _rtRegras60(){
   const _rtPedidoManda=function(comoChama){ return ""+
     "O "+comoChama+" MANDA NO FORMATO: tudo que está escrito acima sobre formato — 60 segundos, 120 a 150 palavras, três partes, um parágrafo por parte, gancho na primeira frase, CTA no fim — é o PADRÃO de quando ninguém pede nada diferente. Se o "+comoChama+" pedir outra estrutura, outro tamanho, outra divisão, outro tipo de abertura ou nenhum CTA, OBEDEÇA e ignore a regra de formato que ele contrariar. Não avise, não peça licença, não entregue os dois jeitos.\n"+
     "O que continua valendo de qualquer jeito: é fala pra gravar olhando pra câmera, na voz da marca; nunca inventar número, cidade, prazo, garantia nem depoimento; e responder nos rótulos do formato abaixo.\n"+
-    "COMO ENCAIXAR NOS RÓTULOS: ABERTURA, DESENVOLVIMENTO e FECHAMENTO são só as três caixas onde o texto fica guardado na tela — não são obrigação de escrever em três atos. Escreva do jeito pedido e distribua na ordem: o começo em ABERTURA, o miolo em DESENVOLVIMENTO, o final em FECHAMENTO. Se o que foi pedido não se divide em três (uma fala corrida, só um gancho, um texto curto), escreva tudo em ABERTURA e deixe DESENVOLVIMENTO e FECHAMENTO VAZIOS — nunca invente conteúdo só pra encher caixa.\n\n"; };
+    "COMO ENCAIXAR NOS RÓTULOS: ABERTURA, DESENVOLVIMENTO e FECHAMENTO são só as três caixas onde o texto fica guardado na tela — não são obrigação de escrever em três atos.\n"+
+    "REGRA DE OURO: se o "+comoChama+" define a estrutura — falas numeradas (Fala 1, Fala 2…), tópicos, passo a passo, cenas, perguntas e respostas, lista, uma fala corrida, só um gancho — então NÃO reparta em abertura/desenvolvimento/fechamento. Escreva TUDO dentro de ABERTURA, na ordem pedida, UM ITEM POR LINHA, e deixe DESENVOLVIMENTO e FECHAMENTO COMPLETAMENTE VAZIOS. Repartir a estrutura pedida entre as três caixas é justamente o erro: as etiquetas voltam a aparecer na tela e o formato pedido se perde.\n"+
+    "Só use as três caixas quando o próprio "+comoChama+" pedir três partes, ou quando ele não disser nada sobre estrutura.\n"+
+    "Nunca invente conteúdo só pra encher caixa.\n\n"; };
 
 /* ── GERADOR ──
    Devolve [{assunto,abertura,desenvolvimento,fechamento}] × quantos.
