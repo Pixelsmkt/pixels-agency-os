@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 43/43 | Nao editar diretamente
+// Modulos: 44/44 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2057,6 +2057,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.whatsapp",      label:"WhatsApp Pixels",      desc:"Ver e responder as mensagens do Guvi. Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.armazenamento", label:"Armazenamento",        desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.portfolio",     label:"Portfólio",            desc:"Padrão: só sócios", padrao:_pxSocio},
   ]},
@@ -3851,6 +3852,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(id==="gestao_projecao")    return <svg {...p}><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>;
   if(id==="gestao_time")        return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
+  if(id==="gestao_whatsapp")      return <svg {...p}><path d="M21 11.5a8.4 8.4 0 01-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1121 11.5z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
@@ -3922,6 +3924,7 @@ const NAV=[
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
+    {id:"gestao_whatsapp",      icon:"◎", label:"WhatsApp Pixels"}, // (24/09/2026) caixa de entrada do Guvi
     {id:"gestao_armazenamento", icon:"⛃", label:"Armazenamento"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
@@ -58512,6 +58515,7 @@ export default function AgencyOS(){
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
       case "gestao_time":          return _menuBloco("gestao.time",p);           // era só sócio
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",p);// era só sócio
+      case "gestao_whatsapp":      return _menuBloco("gestao.whatsapp",p); // (24/09/2026) WhatsApp Pixels
       case "gestao_armazenamento": return _menuBloco("gestao.armazenamento",p);  // era só sócio
       case "gestao_enps":          return _menuBloco("enps.menu",p);  // todos veem (filtragem dentro); desligável em Acessos › Time
       case "acessos":              return _menuBloco("acessos.menu",p);  // era verAcessos||sócio
@@ -58539,7 +58543,9 @@ export default function AgencyOS(){
   const pendingVideo =_pubAvail.filter(t=> _isVideoTask(t)).length;
   const pendingAprovacoes=pendingCopys+pendingDesign+pendingVideo;
   // Mapa pra render no sidebar: child id → count
+  const _whatsBadge=useWhatsBadge(_menuBloco("gestao.whatsapp",effectivePerms)); // (24/09/2026) nao lidas do WhatsApp Pixels
   const CHILD_BADGES={
+    gestao_whatsapp:_whatsBadge,
     aprovacoes_copys:pendingCopys,
     aprovacoes_publicacao:pendingDesign,
     aprovacoes_video:pendingVideo,
@@ -58619,6 +58625,7 @@ export default function AgencyOS(){
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return _menuBloco("gestao.time",effectivePerms)?<PageGestaoTime {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} onNavTo={nav}/>:<NoPerm/>;
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",effectivePerms)?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
+      case "gestao_whatsapp":       return _menuBloco("gestao.whatsapp",effectivePerms)?<PageWhatsAppPixels isMob={isMob}/>:<NoPerm/>;
       case "gestao_armazenamento":  return _menuBloco("gestao.armazenamento",effectivePerms)?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_enps":           return _menuBloco("enps.menu",effectivePerms)?<PageGestaoENPS {...p}/>:<NoPerm/>;
       case "ia":
@@ -109136,4 +109143,672 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
         }}/>; })}
     </div></div>
   </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   WHATSAPP PIXELS — caixa de entrada do Guvi (Gestão › WhatsApp Pixels)
+   24/09/2026. Módulo NOVO: não altera nenhuma tela existente.
+
+   Backend (tudo com trava "whats_eh_socio" = sócio ou liberado em Acessos › whats.menu):
+     rpc  whats_lista · whats_conversa · whats_badge · whats_buscar
+          whats_nota_criar · whats_respostas · whats_resposta_salvar · whats_resposta_desativar
+          whats_demandas_da_pessoa
+     edge whats-enviar (texto / mídia / citar) · whats-acao (lida / digitando / reagir)
+     storage whats-midia (privado — link temporário; upload só em enviados/)
+   Regras: telefone da equipe nunca aparece; número não cadastrado = "Serviço indisponível"
+   (campo travado, a pessoa não recebe nada); template só pelas automações do Guvi.
+   ═══════════════════════════════════════════════════════════════════ */
+
+const _WZ_TIPO = {
+  socio:        { label:"Sócio",                cor:"#7c3aed", fundo:"#ede9fe" },
+  colaborador:  { label:"Colaborador",          cor:"#1d4ed8", fundo:"#dbeafe" },
+  cliente:      { label:"Cliente",              cor:"#166534", fundo:"#dcfce7" },
+  indisponivel: { label:"Serviço indisponível", cor:"#64748b", fundo:"#f1f5f9" },
+};
+const _WZ_EMOJIS = ["😀","😂","😊","😍","🥰","😉","😎","🤔","😅","😢","😮","🙏","👍","👎","👏","🙌","💪","🔥","🎉","✅","❌","⚠️","❤️","💜","👀","📌","📅","⏰","🚀","💡","📷","🎬"];
+const _WZ_REACOES = ["👍","❤️","😂","😮","😢","🙏"];
+const _WZ_FILTROS = [
+  { id:"todas", label:"Todas" }, { id:"naolidas", label:"Não lidas" }, { id:"socio", label:"Sócios" },
+  { id:"colaborador", label:"Colaboradores" }, { id:"cliente", label:"Clientes" }, { id:"fechando", label:"Janela fechando" },
+];
+
+function _wzF(n, isMob){ try{ return (typeof pxFonte==="function") ? pxFonte(n, isMob) : n; }catch(_){ return n; } }
+function _wzHora(iso){
+  if(!iso) return "";
+  const d = new Date(iso), agora = new Date();
+  const mesmoDia = d.toDateString() === agora.toDateString();
+  const ontem = new Date(agora); ontem.setDate(agora.getDate()-1);
+  if(mesmoDia) return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  if(d.toDateString() === ontem.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+}
+function _wzHoraMin(iso){ return iso ? new Date(iso).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : ""; }
+function _wzDia(iso){
+  const d = new Date(iso), agora = new Date(), ontem = new Date(); ontem.setDate(agora.getDate()-1);
+  if(d.toDateString()===agora.toDateString()) return "Hoje";
+  if(d.toDateString()===ontem.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"});
+}
+function _wzSemAcento(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function _wzTelefone(t){
+  const s = String(t||"").replace(/\D/g,"");
+  const m = s.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : (s ? "+"+s : "Número desconhecido");
+}
+function _wzPrevia(c){
+  const t = c.ultima_mensagem || "";
+  if(t==="[figurinha]"||t==="[sticker]") return "🏷️ Figurinha";
+  if(t==="[imagem]") return "📷 Foto"; if(t==="[audio]") return "🎤 Áudio";
+  if(t==="[video]") return "🎬 Vídeo"; if(t==="[documento]") return "📄 Documento";
+  return t;
+}
+function _wzJanela(c){
+  if(!c) return null;
+  if(c.tipo==="indisponivel") return { cor:"#64748b", txt:"⚪ Serviço indisponível" };
+  if(c.situacao_janela==="aberta") return { cor:"#166534", txt:"🟢 Pode responder até " + (function(){
+    const d=new Date(c.janela_expira), hoje=new Date();
+    const h=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    return d.toDateString()===hoje.toDateString() ? h : "amanhã " + h;
+  })() };
+  if(c.situacao_janela==="expirando"){
+    const min = Math.max(0, Math.round((new Date(c.janela_expira)-new Date())/60000));
+    return { cor:"#b45309", txt:"🟡 Janela fecha em " + (min>=60 ? Math.floor(min/60)+"h"+String(min%60).padStart(2,"0") : min+" min") };
+  }
+  return { cor:"#dc2626", txt:"🔴 Janela fechada — só por template" };
+}
+// Beep curto pra mensagem nova (sem arquivo de som)
+function _wzBeep(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext; if(!Ctx) return;
+    const ctx = new Ctx(), o = ctx.createOscillator(), g = ctx.createGain();
+    o.type="sine"; o.frequency.value=880; g.gain.value=0.06; o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime+0.18); setTimeout(function(){ try{ ctx.close(); }catch(_){} }, 400);
+  }catch(_){}
+}
+function _wzErroAmigavel(e){
+  const m = String((e && (e.erro||e.message)) || e || "");
+  if(m.indexOf("janela_fechada")>=0) return "Faz mais de 24h desde a última mensagem dessa pessoa. Para reabrir a conversa, o Guvi precisa mandar um template.";
+  if(m.indexOf("servico_indisponivel")>=0) return "Serviço indisponível — este número não está cadastrado no Guvi.";
+  if(m.indexOf("sem_permissao")>=0 || m.indexOf("sem permissao")>=0) return "Você não tem acesso ao WhatsApp Pixels. Peça a um sócio para liberar em Acessos.";
+  if(m.indexOf("arquivo_grande")>=0) return "Arquivo maior do que o WhatsApp aceita (foto 5 MB · vídeo e áudio 16 MB · documento 100 MB).";
+  if(m.indexOf("formato_nao_aceito")>=0) return "O WhatsApp não aceita esse formato. Foto: JPG ou PNG · Vídeo: MP4.";
+  return m || "Não foi possível concluir. Tente de novo.";
+}
+async function _wzInvoke(nome, body){
+  const r = await window._sb.functions.invoke(nome, { body: body });
+  if(r.error){
+    let det = null;
+    try{ det = r.error.context && r.error.context.json ? await r.error.context.json() : null; }catch(_){}
+    throw (det || { erro: r.error.message });
+  }
+  if(r.data && r.data.ok===false) throw r.data;
+  return r.data;
+}
+
+/* ─── Contador de não lidas pro menu (Gestão › WhatsApp Pixels) ─── */
+function useWhatsBadge(ativo){
+  const [n, setN] = useState(0);
+  useEffect(function(){
+    if(!ativo || !window._sb) return;
+    let vivo = true;
+    const ler = function(){
+      window._sb.rpc("whats_badge").then(function(r){
+        if(!vivo || r.error) return;
+        const row = Array.isArray(r.data) ? r.data[0] : r.data;
+        setN(Number(row && row.nao_lidas) || 0);
+      }).catch(function(){});
+    };
+    ler(); const t = setInterval(ler, 30000);
+    return function(){ vivo=false; clearInterval(t); };
+  }, [ativo]);
+  return n;
+}
+
+/* ─── Link temporário das mídias (pasta trancada) ─── */
+const _wzUrlCache = {};
+function _WzMidia({ m, isMob }){
+  const [url, setUrl] = useState(_wzUrlCache[m.midia_url] || null);
+  const [falhou, setFalhou] = useState(false);
+  useEffect(function(){
+    if(!m.midia_url || url) return;
+    let vivo = true;
+    window._sb.storage.from("whats-midia").createSignedUrl(m.midia_url, 3600).then(function(r){
+      if(!vivo) return;
+      if(r.error || !r.data){ setFalhou(true); return; }
+      _wzUrlCache[m.midia_url] = r.data.signedUrl; setUrl(r.data.signedUrl);
+    }).catch(function(){ if(vivo) setFalhou(true); });
+    return function(){ vivo=false; };
+  }, [m.midia_url]);
+  if(!m.midia_url) return <div style={{fontSize:_wzF(12,isMob),color:"#64748b",fontStyle:"italic"}}>[{m.tipo} sem arquivo]</div>;
+  if(falhou) return <div style={{fontSize:_wzF(12,isMob),color:"#dc2626"}}>Não foi possível abrir o arquivo.</div>;
+  if(!url) return <div style={{fontSize:_wzF(12,isMob),color:"#94a3b8"}}>carregando…</div>;
+  if(m.tipo==="imagem") return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt="foto" style={{maxWidth:"100%",maxHeight:320,borderRadius:8,display:"block"}}/></a>;
+  if(m.tipo==="figurinha") return <img src={url} alt="figurinha" style={{width:128,height:128,objectFit:"contain",display:"block"}}/>;
+  if(m.tipo==="audio") return <audio controls src={url} style={{width:isMob?220:260,maxWidth:"100%"}}/>;
+  if(m.tipo==="video") return <video controls src={url} style={{maxWidth:"100%",maxHeight:320,borderRadius:8}}/>;
+  return <a href={url} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",color:"#0f172a",textDecoration:"none",fontSize:_wzF(13,isMob)}}>📄 <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.texto || "Documento"}</span></a>;
+}
+
+function _WzChip({ tipo, isMob, curto }){
+  const t = _WZ_TIPO[tipo] || _WZ_TIPO.indisponivel;
+  const label = (curto && tipo==="indisponivel") ? "Indisponível" : t.label;
+  return <span style={{fontSize:_wzF(10.5,isMob),fontWeight:700,borderRadius:999,padding:"1px 7px",marginLeft:6,background:t.fundo,color:t.cor,border:tipo==="indisponivel"?"1px dashed #94a3b8":"none",whiteSpace:"nowrap",verticalAlign:1}}>{label}</span>;
+}
+function _WzAvatar({ c, size }){
+  const cor = c.tipo==="socio" ? "#7c3aed" : c.tipo==="colaborador" ? "#3b82f6" : c.tipo==="cliente" ? "#16a34a" : "#94a3b8";
+  const letra = c.tipo==="indisponivel" ? "?" : (c.foto || (c.nome||"?").slice(0,1)).toUpperCase();
+  return <div style={{width:size||40,height:size||40,borderRadius:"50%",background:cor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,flex:"none",fontSize:(size||40)*0.42}}>{letra}</div>;
+}
+function _WzMarca({ texto, busca }){
+  if(!busca || !texto) return <>{texto}</>;
+  const q = _wzSemAcento(busca), base = _wzSemAcento(texto);
+  const partes = []; let i = 0, k = 0;
+  while(q && (k = base.indexOf(q, i)) >= 0){
+    if(k>i) partes.push(<span key={i}>{texto.slice(i,k)}</span>);
+    partes.push(<mark key={"m"+k} style={{background:"#fde68a",padding:0,borderRadius:2}}>{texto.slice(k,k+q.length)}</mark>);
+    i = k + q.length;
+  }
+  partes.push(<span key={"f"+i}>{texto.slice(i)}</span>);
+  return <>{partes}</>;
+}
+
+/* ═══ Página ═══ */
+function PageWhatsAppPixels({ isMob }){
+  const sb = window._sb;
+  const [lista, setLista] = useState(null);
+  const [erroLista, setErroLista] = useState(null);
+  const [selId, setSelId] = useState(null);
+  const [msgs, setMsgs] = useState([]);
+  const [carregandoMsgs, setCarregandoMsgs] = useState(false);
+  const [filtro, setFiltro] = useState("todas");
+  const [busca, setBusca] = useState("");
+  const [achados, setAchados] = useState([]);
+  const [irPara, setIrPara] = useState(null);           // id da mensagem pra rolar até
+  const [texto, setTexto] = useState("");
+  const [modoNota, setModoNota] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState(null);
+  const [citando, setCitando] = useState(null);
+  const [emojiAberto, setEmojiAberto] = useState(false);
+  const [reagirEm, setReagirEm] = useState(null);
+  const [buscaConv, setBuscaConv] = useState(null);      // null = fechada; string = aberta
+  const [buscaIdx, setBuscaIdx] = useState(0);
+  const [painel, setPainel] = useState(!isMob);          // demandas da pessoa
+  const [demandas, setDemandas] = useState(null);
+  const [respostas, setRespostas] = useState([]);
+  const [gerirRespostas, setGerirRespostas] = useState(false);
+  const [gravando, setGravando] = useState(null);
+  const fimRef = useRef(null), msgRefs = useRef({}), naoLidasRef = useRef(null), digitRef = useRef(0), inputRef = useRef(null), arqRef = useRef(null);
+
+  const sel = useMemo(function(){ return (lista||[]).find(function(c){ return c.id===selId; }) || null; }, [lista, selId]);
+
+  // ── Lista (a cada 10 s) + aviso de mensagem nova (som + número na aba) ──
+  const lerLista = useCallback(function(){
+    if(!sb) return;
+    sb.rpc("whats_lista").then(function(r){
+      if(r.error){ setErroLista(_wzErroAmigavel(r.error.message)); return; }
+      const rows = r.data || [];
+      const total = rows.reduce(function(s,c){ return s + (Number(c.nao_lidas)||0); }, 0);
+      if(naoLidasRef.current!==null && total > naoLidasRef.current) _wzBeep();
+      naoLidasRef.current = total;
+      try{
+        const base = document.title.replace(/^\(\d+\)\s*/,"");
+        document.title = total>0 ? "("+total+") "+base : base;
+      }catch(_){}
+      setErroLista(null); setLista(rows);
+    }).catch(function(e){ setErroLista(_wzErroAmigavel(e)); });
+  }, [sb]);
+  useEffect(function(){
+    lerLista(); const t = setInterval(lerLista, 10000);
+    return function(){ clearInterval(t); try{ document.title = document.title.replace(/^\(\d+\)\s*/,""); }catch(_){} };
+  }, [lerLista]);
+
+  // ── Conversa aberta (a cada 10 s) ──
+  const lerConversa = useCallback(function(id, primeira){
+    if(!sb || !id) return;
+    if(primeira) setCarregandoMsgs(true);
+    sb.rpc("whats_conversa", { p_id:id, p_limite:300 }).then(function(r){
+      setCarregandoMsgs(false);
+      if(r.error) return;
+      setMsgs((r.data||[]).slice().reverse());
+    }).catch(function(){ setCarregandoMsgs(false); });
+  }, [sb]);
+  useEffect(function(){
+    if(!selId) return;
+    setMsgs([]); setCitando(null); setBuscaConv(null); setAviso(null); setDemandas(null);
+    lerConversa(selId, true);
+    _wzInvoke("whats-acao", { acao:"lida", conversa_id:selId }).then(lerLista).catch(function(){});
+    const t = setInterval(function(){ lerConversa(selId, false); }, 10000);
+    return function(){ clearInterval(t); };
+  }, [selId]);
+
+  // ── Demandas da pessoa (painel ao lado) ──
+  useEffect(function(){
+    if(!selId || !painel || !sb) return;
+    sb.rpc("whats_demandas_da_pessoa", { p_conversa:selId }).then(function(r){ setDemandas(r.error ? [] : (r.data||[])); }).catch(function(){ setDemandas([]); });
+  }, [selId, painel]);
+
+  // ── Respostas rápidas ──
+  const lerRespostas = useCallback(function(){
+    if(!sb) return;
+    sb.rpc("whats_respostas").then(function(r){ if(!r.error) setRespostas(r.data||[]); }).catch(function(){});
+  }, [sb]);
+  useEffect(function(){ lerRespostas(); }, [lerRespostas]);
+
+  // ── Lupa da lista: nome (na hora) + texto das mensagens (no banco) ──
+  useEffect(function(){
+    const q = busca.trim();
+    if(q.length < 2 || !sb){ setAchados([]); return; }
+    const t = setTimeout(function(){
+      sb.rpc("whats_buscar", { p_texto:q, p_limite:40 }).then(function(r){ setAchados(r.error ? [] : (r.data||[])); }).catch(function(){ setAchados([]); });
+    }, 350);
+    return function(){ clearTimeout(t); };
+  }, [busca]);
+
+  // Rolar: pro fim quando chega mensagem; ou até a mensagem achada na busca
+  useEffect(function(){
+    if(irPara && msgRefs.current[irPara]){
+      msgRefs.current[irPara].scrollIntoView({ block:"center" });
+      const el = msgRefs.current[irPara]; el.style.transition="box-shadow .3s"; el.style.boxShadow="0 0 0 3px #fde68a";
+      setTimeout(function(){ try{ el.style.boxShadow=""; }catch(_){} }, 1800);
+      setIrPara(null); return;
+    }
+    if(!irPara && buscaConv===null && fimRef.current) fimRef.current.scrollIntoView({ block:"end" });
+  }, [msgs.length, irPara]);
+
+  const listaFiltrada = useMemo(function(){
+    const q = _wzSemAcento(busca.trim());
+    return (lista||[]).filter(function(c){
+      if(filtro==="naolidas" && !(c.nao_lidas>0)) return false;
+      if(["socio","colaborador","cliente"].indexOf(filtro)>=0 && c.tipo!==filtro) return false;
+      if(filtro==="fechando" && c.situacao_janela!=="expirando") return false;
+      if(q && _wzSemAcento((c.nome||"")+" "+(c.telefone||"")).indexOf(q)<0) return false;
+      return true;
+    });
+  }, [lista, filtro, busca]);
+
+  // Lupa dentro da conversa
+  const hitsConv = useMemo(function(){
+    const q = _wzSemAcento((buscaConv||"").trim());
+    if(q.length<2) return [];
+    return msgs.filter(function(m){ return _wzSemAcento((m.texto||"")+" "+(m.transcricao||"")).indexOf(q)>=0; }).map(function(m){ return m.id; });
+  }, [msgs, buscaConv]);
+  useEffect(function(){ setBuscaIdx(0); }, [buscaConv]);
+  useEffect(function(){ if(hitsConv.length) setIrPara(hitsConv[Math.min(buscaIdx, hitsConv.length-1)]); }, [buscaIdx, hitsConv.length]);
+
+  const podeResponder = sel && sel.tipo!=="indisponivel" && sel.situacao_janela!=="fechada";
+  const travaMsg = !sel ? null : sel.tipo==="indisponivel"
+    ? "🔒 Serviço indisponível — este número não está cadastrado no Guvi."
+    : sel.situacao_janela==="fechada"
+      ? "🔒 Faz mais de 24h desde a última mensagem de "+(sel.nome||"")+". Para reabrir a conversa, envie um template."
+      : null;
+
+  // "digitando…" pra pessoa (no máximo 1 vez a cada 20 s)
+  const aoDigitar = function(v){
+    setTexto(v);
+    if(!modoNota && podeResponder && v && Date.now()-digitRef.current > 20000){
+      digitRef.current = Date.now();
+      _wzInvoke("whats-acao", { acao:"digitando", conversa_id:selId }).catch(function(){});
+    }
+  };
+
+  const enviar = async function(){
+    const t = texto.trim(); if(!t || !sel || enviando) return;
+    setEnviando(true); setAviso(null);
+    try{
+      if(modoNota){
+        const r = await sb.rpc("whats_nota_criar", { p_conversa:sel.id, p_texto:t });
+        if(r.error) throw { erro:r.error.message };
+      }else{
+        await _wzInvoke("whats-enviar", { conversa_id:sel.id, texto:t, responder_a:(citando && citando.id>0) ? citando.id : null });
+      }
+      setTexto(""); setCitando(null); digitRef.current = 0;
+      lerConversa(sel.id, false); lerLista();
+    }catch(e){ setAviso(_wzErroAmigavel(e)); }
+    setEnviando(false);
+  };
+
+  const reagir = async function(m, emoji){
+    setReagirEm(null);
+    try{
+      await _wzInvoke("whats-acao", { acao:"reagir", mensagem_id:m.id, emoji:(m.reacao_enviada===emoji ? "" : emoji) });
+      lerConversa(sel.id, false);
+    }catch(e){ setAviso(_wzErroAmigavel(e)); }
+  };
+
+  // Enviar arquivo: sobe na pasta trancada (enviados/) e manda pelo Guvi
+  const enviarArquivo = async function(file, tipoForcado){
+    if(!file || !sel) return;
+    const mime = file.type || "";
+    const tipo = tipoForcado || (mime.indexOf("image/")===0 ? "imagem" : mime.indexOf("video/")===0 ? "video" : mime.indexOf("audio/")===0 ? "audio" : "documento");
+    const ext = (file.name && file.name.indexOf(".")>=0) ? file.name.split(".").pop().toLowerCase() : (mime.split("/")[1]||"bin").split(";")[0];
+    const path = "enviados/" + Date.now() + "-" + Math.random().toString(36).slice(2,8) + "." + ext;
+    setEnviando(true); setAviso(null);
+    try{
+      const up = await sb.storage.from("whats-midia").upload(path, file, { contentType: mime || undefined, upsert:false });
+      if(up.error) throw { erro: up.error.message };
+      await _wzInvoke("whats-enviar", { conversa_id:sel.id, midia_path:path, midia_tipo:tipo,
+        legenda:(tipo!=="audio" && texto.trim()) ? texto.trim() : undefined, nome_arquivo:file.name || undefined,
+        responder_a:(citando && citando.id>0) ? citando.id : null });
+      if(tipo!=="audio") setTexto("");
+      setCitando(null); lerConversa(sel.id, false); lerLista();
+    }catch(e){ setAviso(_wzErroAmigavel(e)); }
+    setEnviando(false);
+  };
+
+  // Gravar áudio (formato que o WhatsApp aceita: MP4/AAC; senão OGG)
+  const formatoAudio = (function(){
+    try{
+      if(typeof MediaRecorder==="undefined") return null;
+      if(MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+      if(MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) return "audio/ogg";
+    }catch(_){}
+    return null;
+  })();
+  const gravar = async function(){
+    if(gravando){ gravando.rec.stop(); return; }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      const rec = new MediaRecorder(stream, { mimeType: formatoAudio==="audio/ogg" ? "audio/ogg;codecs=opus" : formatoAudio });
+      const partes = [];
+      rec.ondataavailable = function(ev){ if(ev.data && ev.data.size) partes.push(ev.data); };
+      rec.onstop = function(){
+        stream.getTracks().forEach(function(t){ t.stop(); });
+        setGravando(null);
+        const blob = new Blob(partes, { type: formatoAudio });
+        if(blob.size < 1200) return; // clique sem fala
+        const f = new File([blob], "audio." + (formatoAudio==="audio/mp4" ? "m4a" : "ogg"), { type: formatoAudio });
+        enviarArquivo(f, "audio");
+      };
+      rec.start(); setGravando({ rec: rec, desde: Date.now() });
+    }catch(e){ setAviso("Não consegui acessar o microfone. Libere o microfone no navegador."); }
+  };
+
+  const respostasFiltradas = texto.indexOf("/")===0
+    ? respostas.filter(function(r){ return ("/"+r.atalho).indexOf(texto.toLowerCase().split(" ")[0])===0; })
+    : [];
+
+  /* ───────── Render ───────── */
+  if(!sb) return <div style={{padding:20,color:"#64748b"}}>Conectando…</div>;
+  if(erroLista && !lista) return <div style={{padding:24,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,color:"#dc2626"}}>{erroLista}</div>;
+
+  const mostrarLista = !isMob || !sel;
+  const mostrarConversa = !isMob || !!sel;
+  const altura = isMob ? "calc(100vh - 150px)" : "calc(100vh - 170px)";
+
+  const colunaLista = (
+    <div style={{width:isMob?"100%":340,borderRight:isMob?undefined:"1px solid #e2e8f0",display:"flex",flexDirection:"column",minHeight:0,background:"#fff"}}>
+      <div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <b style={{fontSize:_wzF(15,isMob)}}>Conversas</b>
+          {(lista||[]).reduce(function(s,c){return s+(c.nao_lidas||0);},0)>0 && <span style={{background:"#16a34a",color:"#fff",fontSize:11,fontWeight:700,borderRadius:999,padding:"1px 8px"}}>{(lista||[]).reduce(function(s,c){return s+(c.nao_lidas||0);},0)}</span>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",borderRadius:10,padding:"7px 10px"}}>
+          <span aria-hidden="true">🔍</span>
+          <input value={busca} onChange={function(e){ setBusca(e.target.value); }} placeholder="Pesquisar nome ou mensagem" aria-label="Pesquisar conversas"
+            style={{border:"none",background:"transparent",outline:"none",flex:1,fontSize:_wzF(13,isMob),color:"#0f172a",minWidth:0}}/>
+          {busca && <button onClick={function(){ setBusca(""); }} aria-label="Limpar busca" style={{border:"none",background:"none",cursor:"pointer",color:"#64748b"}}>✕</button>}
+        </div>
+        <div style={{display:"flex",gap:6,marginTop:8,overflowX:"auto",paddingBottom:2}}>
+          {_WZ_FILTROS.map(function(f){ const on = filtro===f.id; return (
+            <button key={f.id} onClick={function(){ setFiltro(f.id); }} style={{flex:"none",border:"1px solid "+(on?"#7c3aed":"#e2e8f0"),background:on?"#ede9fe":"#fff",color:on?"#7c3aed":"#475569",fontWeight:on?700:500,borderRadius:999,padding:"3px 10px",fontSize:_wzF(11.5,isMob),cursor:"pointer"}}>{f.label}</button>
+          ); })}
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {lista===null && <div style={{padding:16,color:"#94a3b8",fontSize:13}}>carregando…</div>}
+        {lista!==null && listaFiltrada.length===0 && !achados.length && <div style={{padding:16,color:"#94a3b8",fontSize:13}}>Nenhuma conversa aqui.</div>}
+        {listaFiltrada.map(function(c){
+          const on = c.id===selId, nl = c.nao_lidas>0;
+          return (
+            <div key={c.id} onClick={function(){ setSelId(c.id); }} role="button" tabIndex={0}
+              style={{display:"flex",gap:10,padding:"11px 14px",borderBottom:"1px solid #f1f5f9",alignItems:"center",cursor:"pointer",background:on?"#f5f3ff":"#fff"}}>
+              <_WzAvatar c={c}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:6,fontSize:_wzF(14,isMob)}}>
+                  <span style={{fontWeight:nl?700:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {c.tipo==="indisponivel" ? _wzTelefone(c.telefone) : c.nome}<_WzChip tipo={c.tipo} isMob={isMob} curto={true}/>
+                  </span>
+                  <span style={{fontSize:12,color:nl?"#16a34a":"#64748b",fontWeight:nl?700:400,flex:"none"}}>{_wzHora(c.ultima_em)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",gap:6,marginTop:3,fontSize:_wzF(13,isMob),color:nl?"#0f172a":"#64748b"}}>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontWeight:nl?600:400}}>{c.ultima_direcao==="saida"?"Você: ":""}{_wzPrevia(c)}</span>
+                  {nl && <span style={{background:"#16a34a",color:"#fff",fontSize:11,fontWeight:700,borderRadius:999,padding:"1px 7px",flex:"none"}}>{c.nao_lidas}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {achados.length>0 && (
+          <div>
+            <div style={{padding:"10px 14px 4px",fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:".05em"}}>MENSAGENS</div>
+            {achados.map(function(a){ return (
+              <div key={a.mensagem_id} onClick={function(){ setSelId(a.conversa_id); setTimeout(function(){ setIrPara(a.mensagem_id); }, 700); }} role="button" tabIndex={0}
+                style={{padding:"9px 14px",borderBottom:"1px solid #f1f5f9",cursor:"pointer"}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:_wzF(12.5,isMob)}}><b>{a.nome}</b><span style={{color:"#64748b"}}>{_wzHora(a.criada_em)}</span></div>
+                <div style={{fontSize:_wzF(12.5,isMob),color:"#475569",marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {a.direcao==="nota"?"🔒 ":a.direcao==="saida"?"Você: ":""}<_WzMarca texto={a.texto} busca={busca.trim()}/>
+                </div>
+              </div>
+            ); })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  let diaAnterior = null;
+  const colunaConversa = !sel ? (
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc",color:"#94a3b8",fontSize:14}}>Escolha uma conversa</div>
+  ) : (
+    <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:0}}>
+      {/* Cabeçalho */}
+      <div style={{padding:"10px 14px",borderBottom:"1px solid #e2e8f0",display:"flex",gap:10,alignItems:"center",background:"#fff"}}>
+        {isMob && <button onClick={function(){ setSelId(null); }} aria-label="Voltar" style={{border:"none",background:"none",fontSize:20,cursor:"pointer",color:"#475569"}}>‹</button>}
+        <_WzAvatar c={sel} size={36}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:_wzF(15,isMob),overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {sel.tipo==="indisponivel" ? _wzTelefone(sel.telefone) : sel.nome}<_WzChip tipo={sel.tipo} isMob={isMob} curto={isMob}/>
+            {sel.cargo && !isMob && <span style={{fontWeight:400,color:"#64748b",fontSize:13}}> · {sel.cargo}</span>}
+          </div>
+          <div style={{fontSize:_wzF(12.5,isMob),color:(_wzJanela(sel)||{}).cor,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(_wzJanela(sel)||{}).txt}</div>
+        </div>
+        <button onClick={function(){ setBuscaConv(buscaConv===null?"":null); }} title="Pesquisar nesta conversa" aria-label="Pesquisar nesta conversa"
+          style={{border:"1px solid #e2e8f0",background:buscaConv!==null?"#ede9fe":"#fff",borderRadius:8,padding:"6px 9px",cursor:"pointer"}}>🔍</button>
+        {sel.tipo!=="indisponivel" && <button onClick={function(){ setPainel(!painel); }} title="Demandas da pessoa"
+          style={{border:"1px solid #e2e8f0",background:painel?"#ede9fe":"#fff",color:painel?"#7c3aed":"#475569",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:_wzF(12.5,isMob),fontWeight:600,flex:"none"}}>{isMob?"📋":"📋 Demandas"}</button>}
+      </div>
+      {buscaConv!==null && (
+        <div style={{display:"flex",gap:8,alignItems:"center",padding:"8px 14px",background:"#fffbeb",borderBottom:"1px solid #fde68a"}}>
+          <input autoFocus value={buscaConv} onChange={function(e){ setBuscaConv(e.target.value); }} placeholder="Pesquisar nesta conversa…" aria-label="Pesquisar nesta conversa"
+            style={{flex:1,border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:_wzF(13,isMob),outline:"none",minWidth:0}}/>
+          <span style={{fontSize:12,color:"#64748b",flex:"none"}}>{hitsConv.length ? (Math.min(buscaIdx,hitsConv.length-1)+1)+" de "+hitsConv.length : (buscaConv.trim().length>=2?"0":"")}</span>
+          <button aria-label="Anterior" disabled={!hitsConv.length} onClick={function(){ setBuscaIdx(function(i){ return (i-1+hitsConv.length)%hitsConv.length; }); }} style={{border:"1px solid #e2e8f0",background:"#fff",borderRadius:6,padding:"3px 8px",cursor:"pointer"}}>↑</button>
+          <button aria-label="Próxima" disabled={!hitsConv.length} onClick={function(){ setBuscaIdx(function(i){ return (i+1)%hitsConv.length; }); }} style={{border:"1px solid #e2e8f0",background:"#fff",borderRadius:6,padding:"3px 8px",cursor:"pointer"}}>↓</button>
+          <button aria-label="Fechar busca" onClick={function(){ setBuscaConv(null); }} style={{border:"none",background:"none",cursor:"pointer",color:"#64748b"}}>✕</button>
+        </div>
+      )}
+      <div style={{flex:1,display:"flex",minHeight:0,position:"relative"}}>
+        {/* Mensagens */}
+        <div style={{flex:1,overflowY:"auto",background:"#efeae2",padding:isMob?"12px 10px":"16px 28px",display:"flex",flexDirection:"column",gap:6,minWidth:0}} onClick={function(){ setReagirEm(null); setEmojiAberto(false); }}>
+          {carregandoMsgs && <div style={{alignSelf:"center",color:"#64748b",fontSize:12}}>carregando…</div>}
+          {!carregandoMsgs && msgs.length===0 && <div style={{alignSelf:"center",color:"#64748b",fontSize:12,background:"#fff",borderRadius:8,padding:"4px 10px"}}>Nenhuma mensagem ainda.</div>}
+          {msgs.map(function(m){
+            const d = new Date(m.criada_em).toDateString(); const mudaDia = d!==diaAnterior; diaAnterior = d;
+            const saida = m.direcao==="saida", nota = m.direcao==="nota";
+            const q = (buscaConv||"").trim();
+            return (
+              <React.Fragment key={m.id}>
+                {mudaDia && <div style={{alignSelf:"center",background:"#fff",fontSize:11.5,color:"#64748b",padding:"3px 10px",borderRadius:8,margin:"6px 0",textTransform:"capitalize"}}>{_wzDia(m.criada_em)}</div>}
+                <div ref={function(el){ if(el) msgRefs.current[m.id]=el; }}
+                  style={{alignSelf:nota?"center":saida?"flex-end":"flex-start",maxWidth:isMob?"86%":"64%",position:"relative"}}>
+                  <div className="wz-balao" style={{background:nota?"#fef9c3":saida?"#d9fdd3":"#fff",border:nota?"1px dashed #eab308":"none",borderRadius:10,padding:"7px 10px 5px",boxShadow:"0 1px 1px rgba(0,0,0,.06)",fontSize:_wzF(14,isMob),lineHeight:1.38,wordBreak:"break-word"}}>
+                    {nota && <div style={{fontSize:10.5,fontWeight:700,color:"#a16207",marginBottom:3}}>🔒 NOTA INTERNA · só a equipe vê · {m.enviada_por||""}</div>}
+                    {m.tipo==="template" && <div style={{fontSize:10.5,fontWeight:700,color:"#7c3aed",marginBottom:3}}>ENVIADA PELO GUVI</div>}
+                    {saida && m.tipo!=="template" && m.enviada_por && <div style={{fontSize:10.5,fontWeight:700,color:"#166534",marginBottom:2}}>{m.enviada_por}</div>}
+                    {m.responde_a && <div style={{borderLeft:"3px solid #7c3aed",background:"rgba(0,0,0,.04)",borderRadius:6,padding:"4px 8px",marginBottom:5,fontSize:12.5,color:"#475569"}}>{m.responde_texto||"mensagem"}</div>}
+                    {["imagem","figurinha","audio","video","documento"].indexOf(m.tipo)>=0 && <_WzMidia m={m} isMob={isMob}/>}
+                    {m.tipo==="audio" && m.transcricao && <div style={{fontSize:12.5,color:"#475569",marginTop:4,fontStyle:"italic"}}>📝 <_WzMarca texto={m.transcricao} busca={q}/></div>}
+                    {m.tipo!=="documento" && m.tipo!=="figurinha" && m.texto && m.texto!=="[sticker]" && <div style={{whiteSpace:"pre-wrap",marginTop:["imagem","video"].indexOf(m.tipo)>=0?5:0}}><_WzMarca texto={m.texto} busca={q}/></div>}
+                    <div style={{fontSize:11,color:"#64748b",textAlign:"right",marginTop:2,display:"flex",gap:4,justifyContent:"flex-end",alignItems:"center"}}>
+                      {_wzHoraMin(m.criada_em)}
+                      {saida && (m.status==="lida" ? <span style={{color:"#3b82f6",fontWeight:700}} title="Lida">✓✓</span>
+                        : m.status==="entregue" ? <span style={{fontWeight:700}} title="Entregue">✓✓</span>
+                        : m.status==="erro" ? <span style={{color:"#dc2626"}} title="Erro no envio">⚠️</span>
+                        : <span title="Enviada">✓</span>)}
+                    </div>
+                  </div>
+                  {!nota && m.id>0 && (podeResponder || m.reacao_recebida || m.reacao_enviada) && (
+                    <div style={{display:"flex",gap:4,marginTop:3,justifyContent:saida?"flex-end":"flex-start",alignItems:"center"}}>
+                      {(m.reacao_recebida || m.reacao_enviada) && <span title="Reações" style={{background:"#fff",borderRadius:999,padding:"0 6px",fontSize:13,boxShadow:"0 1px 2px rgba(0,0,0,.15)"}}>{m.reacao_recebida}{m.reacao_enviada}</span>}
+                      {podeResponder && !saida && <button onClick={function(e){ e.stopPropagation(); setReagirEm(reagirEm===m.id?null:m.id); }} title="Reagir" style={{border:"none",background:"rgba(255,255,255,.7)",borderRadius:999,cursor:"pointer",fontSize:12,padding:"1px 6px"}}>🙂</button>}
+                      {podeResponder && <button onClick={function(e){ e.stopPropagation(); setCitando(m); if(inputRef.current) inputRef.current.focus(); }} title="Responder citando" style={{border:"none",background:"rgba(255,255,255,.7)",borderRadius:999,cursor:"pointer",fontSize:12,padding:"1px 6px"}}>↩︎</button>}
+                    </div>
+                  )}
+                  {reagirEm===m.id && (
+                    <div onClick={function(e){ e.stopPropagation(); }} style={{display:"flex",gap:2,background:"#fff",borderRadius:999,padding:"3px 6px",boxShadow:"0 2px 8px rgba(0,0,0,.15)",marginTop:4,width:"fit-content"}}>
+                      {_WZ_REACOES.map(function(r){ return <button key={r} onClick={function(){ reagir(m, r); }} style={{border:"none",background:m.reacao_enviada===r?"#ede9fe":"none",borderRadius:999,cursor:"pointer",fontSize:18,padding:"0 3px"}}>{r}</button>; })}
+                    </div>
+                  )}
+                </div>
+              </React.Fragment>
+            );
+          })}
+          <div ref={fimRef}/>
+        </div>
+        {/* Demandas da pessoa */}
+        {painel && sel.tipo!=="indisponivel" && (
+          <div style={isMob ? {position:"absolute",inset:0,zIndex:5,background:"#fff",overflowY:"auto",padding:"12px 14px"} : {width:270,borderLeft:"1px solid #e2e8f0",background:"#fff",overflowY:"auto",padding:"12px 12px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <b style={{fontSize:13}}>Demandas de {sel.nome}</b>
+              {isMob && <button onClick={function(){ setPainel(false); }} aria-label="Fechar demandas" style={{border:"none",background:"none",fontSize:18,cursor:"pointer"}}>✕</button>}
+            </div>
+            {demandas===null && <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>carregando…</div>}
+            {demandas && demandas.length===0 && <div style={{fontSize:12,color:"#94a3b8",marginTop:8}}>Nenhuma demanda em aberto.</div>}
+            {demandas && [["atrasada","Atrasadas","#dc2626"],["hoje","Hoje","#d97706"],["semana","Esta semana","#2563eb"],["depois","Depois","#64748b"],["sem_prazo","Sem prazo","#94a3b8"]].map(function(g){
+              const itens = demandas.filter(function(d){ return d.grupo===g[0]; });
+              if(!itens.length) return null;
+              return (
+                <div key={g[0]} style={{marginTop:10}}>
+                  <div style={{fontSize:11,fontWeight:700,color:g[2],letterSpacing:".04em"}}>{g[1].toUpperCase()} · {itens.length}</div>
+                  {itens.slice(0, g[0]==="depois"||g[0]==="sem_prazo" ? 5 : 20).map(function(d){ return (
+                    <div key={d.task_id} style={{fontSize:12,padding:"5px 0",borderBottom:"1px solid #f1f5f9"}}>
+                      <div style={{fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.titulo}</div>
+                      <div style={{color:"#64748b"}}>{d.cliente}{d.prazo?" · "+new Date(d.prazo+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):""}</div>
+                    </div>
+                  ); })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {/* Campo de envio */}
+      <div style={{borderTop:"1px solid #e2e8f0",background:"#fff",padding:"10px 12px",position:"relative"}}>
+        {aviso && <div style={{background:"#fef2f2",color:"#b91c1c",fontSize:12.5,borderRadius:8,padding:"6px 10px",marginBottom:8,display:"flex",justifyContent:"space-between",gap:8}}><span>{aviso}</span><button onClick={function(){ setAviso(null); }} style={{border:"none",background:"none",cursor:"pointer",color:"#b91c1c"}}>✕</button></div>}
+        {citando && <div style={{display:"flex",gap:8,alignItems:"center",borderLeft:"3px solid #7c3aed",background:"#f5f3ff",borderRadius:6,padding:"5px 8px",marginBottom:8,fontSize:12.5,color:"#475569"}}><span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↩︎ {citando.texto || "["+citando.tipo+"]"}</span><button onClick={function(){ setCitando(null); }} style={{border:"none",background:"none",cursor:"pointer"}}>✕</button></div>}
+        {respostasFiltradas.length>0 && !modoNota && (
+          <div style={{position:"absolute",bottom:"100%",left:12,right:12,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 6px 18px rgba(0,0,0,.1)",maxHeight:220,overflowY:"auto"}}>
+            {respostasFiltradas.map(function(r){ return (
+              <div key={r.id} onClick={function(){ setTexto(r.texto); if(inputRef.current) inputRef.current.focus(); }} role="button" tabIndex={0} style={{padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f1f5f9",fontSize:13}}>
+                <b style={{color:"#7c3aed"}}>/{r.atalho}</b> <span style={{color:"#475569"}}>{r.texto}</span>
+              </div>
+            ); })}
+          </div>
+        )}
+        {emojiAberto && (
+          <div onClick={function(e){ e.stopPropagation(); }} style={{position:"absolute",bottom:"100%",left:12,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,boxShadow:"0 6px 18px rgba(0,0,0,.1)",padding:8,display:"grid",gridTemplateColumns:"repeat(8, 1fr)",gap:2,width:isMob?"calc(100% - 24px)":300}}>
+            {_WZ_EMOJIS.map(function(e){ return <button key={e} onClick={function(){ setTexto(function(t){ return t+e; }); if(inputRef.current) inputRef.current.focus(); }} style={{border:"none",background:"none",fontSize:20,cursor:"pointer",padding:2,borderRadius:6}}>{e}</button>; })}
+          </div>
+        )}
+        {travaMsg && !modoNota ? (
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{flex:1,border:"1px dashed #cbd5e1",background:"#f8fafc",borderRadius:10,padding:"10px 12px",fontSize:_wzF(13,isMob),color:"#475569"}}>{travaMsg}</div>
+            <button onClick={function(){ setModoNota(true); }} title="Escrever nota interna" style={{border:"1px solid #eab308",background:"#fef9c3",color:"#a16207",borderRadius:10,padding:"8px 10px",cursor:"pointer",fontSize:12,fontWeight:700,flex:"none"}}>🔒 Nota</button>
+          </div>
+        ) : (
+          <div style={{display:"flex",gap:6,alignItems:"flex-end"}}>
+            {!modoNota && <button onClick={function(e){ e.stopPropagation(); setEmojiAberto(!emojiAberto); }} title="Emojis" aria-label="Emojis" style={{border:"none",background:"none",fontSize:21,cursor:"pointer",padding:"6px 2px"}}>😀</button>}
+            {!modoNota && <button onClick={function(){ if(arqRef.current) arqRef.current.click(); }} disabled={enviando} title="Enviar foto, vídeo ou documento" aria-label="Anexar" style={{border:"none",background:"none",fontSize:19,cursor:"pointer",padding:"6px 2px"}}>📎</button>}
+            <input ref={arqRef} type="file" style={{display:"none"}} accept="image/jpeg,image/png,video/mp4,video/3gpp,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+              onChange={function(e){ const f = e.target.files && e.target.files[0]; e.target.value=""; if(f) enviarArquivo(f); }}/>
+            <textarea ref={inputRef} value={texto} rows={1} disabled={enviando}
+              onChange={function(e){ aoDigitar(e.target.value); }}
+              onKeyDown={function(e){ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); enviar(); } }}
+              placeholder={modoNota ? (isMob?"Nota interna (só a equipe)":"Nota interna — só a equipe vê, não vai pro WhatsApp") : (isMob?"Mensagem":"Digite uma mensagem… ( / para respostas rápidas)")}
+              style={{flex:1,resize:"none",border:"1px solid "+(modoNota?"#eab308":"#e2e8f0"),background:modoNota?"#fefce8":"#fff",borderRadius:20,padding:"9px 14px",fontSize:_wzF(14,isMob),fontFamily:"inherit",outline:"none",maxHeight:120,minWidth:0}}/>
+            <button onClick={function(){ setModoNota(!modoNota); }} title={modoNota?"Voltar pra mensagem":"Nota interna (só a equipe vê)"}
+              style={{border:"1px solid "+(modoNota?"#eab308":"#e2e8f0"),background:modoNota?"#fef9c3":"#fff",borderRadius:999,width:38,height:38,cursor:"pointer",flex:"none"}}>🔒</button>
+            {!modoNota && !texto.trim() && formatoAudio ? (
+              <button onClick={gravar} disabled={enviando} title={gravando?"Parar e enviar":"Gravar áudio"} aria-label="Gravar áudio"
+                style={{width:40,height:40,borderRadius:"50%",border:"none",background:gravando?"#dc2626":"#16a34a",color:"#fff",fontSize:16,cursor:"pointer",flex:"none"}}>{gravando?"■":"🎤"}</button>
+            ) : (
+              <button onClick={enviar} disabled={enviando || !texto.trim()} aria-label="Enviar"
+                style={{width:40,height:40,borderRadius:"50%",border:"none",background:modoNota?"#eab308":"#16a34a",color:"#fff",fontSize:17,cursor:"pointer",opacity:(enviando||!texto.trim())?.5:1,flex:"none"}}>➤</button>
+            )}
+          </div>
+        )}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:"#94a3b8"}}>
+          <span>{gravando ? "🔴 Gravando… clique em ■ para enviar" : modoNota ? "🔒 Nota interna" : "Enter envia · Shift+Enter quebra linha"}</span>
+          <button onClick={function(){ setGerirRespostas(true); }} style={{border:"none",background:"none",color:"#7c3aed",cursor:"pointer",fontSize:11,fontWeight:600}}>Respostas rápidas</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+        <h2 style={{margin:0,fontSize:_wzF(isMob?18:20,isMob),color:"#0f172a"}}>WhatsApp Pixels</h2>
+        {!isMob && <span style={{fontSize:13,color:"#64748b"}}>Caixa de entrada do Guvi · +55 49 9945-9393</span>}
+      </div>
+      <div style={{display:"flex",height:altura,minHeight:420,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+        {mostrarLista && colunaLista}
+        {mostrarConversa && colunaConversa}
+      </div>
+      {gerirRespostas && <_WzRespostas respostas={respostas} onFechar={function(){ setGerirRespostas(false); }} onMudou={lerRespostas} isMob={isMob}/>}
+    </div>
+  );
+}
+
+/* ─── Gerenciar respostas rápidas ─── */
+function _WzRespostas({ respostas, onFechar, onMudou, isMob }){
+  const [atalho, setAtalho] = useState(""), [texto, setTexto] = useState(""), [editId, setEditId] = useState(null), [erro, setErro] = useState(null);
+  const salvar = function(){
+    setErro(null);
+    window._sb.rpc("whats_resposta_salvar", { p_id:editId, p_atalho:atalho, p_texto:texto }).then(function(r){
+      if(r.error){ setErro(r.error.message.indexOf("duplicate")>=0 ? "Já existe uma resposta com esse atalho." : r.error.message); return; }
+      setAtalho(""); setTexto(""); setEditId(null); onMudou();
+    });
+  };
+  const tirar = function(id){ window._sb.rpc("whats_resposta_desativar", { p_id:id }).then(function(){ onMudou(); }); };
+  return (
+    <div onClick={onFechar} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.35)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",borderRadius:14,width:isMob?"100%":520,maxHeight:"85vh",overflowY:"auto",padding:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <b style={{fontSize:16}}>Respostas rápidas</b>
+          <button onClick={onFechar} aria-label="Fechar" style={{border:"none",background:"none",fontSize:18,cursor:"pointer"}}>✕</button>
+        </div>
+        <div style={{fontSize:12.5,color:"#64748b",marginBottom:12}}>No campo de mensagem, digite <b>/</b> e o atalho para usar.</div>
+        {respostas.length===0 && <div style={{fontSize:13,color:"#94a3b8",marginBottom:12}}>Nenhuma resposta cadastrada ainda.</div>}
+        {respostas.map(function(r){ return (
+          <div key={r.id} style={{display:"flex",gap:8,alignItems:"flex-start",padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{flex:1,fontSize:13}}><b style={{color:"#7c3aed"}}>/{r.atalho}</b><div style={{color:"#475569",whiteSpace:"pre-wrap"}}>{r.texto}</div></div>
+            <button onClick={function(){ setEditId(r.id); setAtalho(r.atalho); setTexto(r.texto); }} style={{border:"1px solid #e2e8f0",background:"#fff",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:12}}>Editar</button>
+            <button onClick={function(){ tirar(r.id); }} style={{border:"1px solid #fecaca",background:"#fff",color:"#dc2626",borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:12}}>Tirar</button>
+          </div>
+        ); })}
+        <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:8}}>
+          <b style={{fontSize:13}}>{editId ? "Editar resposta" : "Nova resposta"}</b>
+          <input value={atalho} onChange={function(e){ setAtalho(e.target.value); }} placeholder="Atalho (ex.: recebido)" style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:13}}/>
+          <textarea value={texto} onChange={function(e){ setTexto(e.target.value); }} rows={3} placeholder="Texto da resposta" style={{border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:13,fontFamily:"inherit",resize:"vertical"}}/>
+          {erro && <div style={{color:"#dc2626",fontSize:12.5}}>{erro}</div>}
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+            {editId && <button onClick={function(){ setEditId(null); setAtalho(""); setTexto(""); }} style={{border:"1px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"7px 12px",cursor:"pointer"}}>Cancelar</button>}
+            <button onClick={salvar} disabled={!atalho.trim()||!texto.trim()} style={{border:"none",background:"#7c3aed",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontWeight:600,opacity:(!atalho.trim()||!texto.trim())?.5:1}}>Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
