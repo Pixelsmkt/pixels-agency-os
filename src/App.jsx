@@ -1922,6 +1922,7 @@ PX_BLOCOS.clientes={label:"Clientes", navIcon:"clientes", color:"#d97706", grupo
     {key:"cli.aba.parcerias",    label:"Parcerias",     desc:""},
     {key:"cli.aba.nps",          label:"NPS",           desc:""},
     {key:"cli.aba.whatsapp",     label:"WhatsApp",      desc:"Contatos do cliente que falam com o Guvi", padrao:(u)=>!!(u&&u.level===1)},   /* 25/09/2026: nasce só para sócios */
+    {key:"cli.senhas",           label:"Senhas dos clientes", desc:"Logins e senhas das redes (Instagram, Google…). O banco obedece esta chave.", padrao:false},   /* 25/09/2026: cofre das senhas — nasce só para sócios */
   ]},
   {id:"porcliente", label:"Por cliente", itens:function(){
     /* a mesma lista que o painel montava antes em PERM_GROUPS.clientes */
@@ -6497,6 +6498,18 @@ function _useBriefing(clientId, unitId){
     const secs = ["identidade","publico","mercado","produtos","marketing","comercial","orcamento","metas","aprovacao","objetivos"];
     return secs.some(function(k){ return obj[k] && typeof obj[k]==="object"; });
   }
+  /* 25/09/2026 — COFRE DAS SENHAS: os logins moram em clients_logins (o banco só entrega pra quem tem a chave
+     "Senhas dos clientes" ou pro próprio cliente). Aqui eles são encaixados de volta no lugar de sempre
+     (data.logins / data[unidade].logins) só pra tela; ao salvar, o gatilho do banco manda de volta pro cofre. */
+  function _pxMergeCofreLogins(base, rows){
+    const out=Object.assign({}, base||{});
+    (rows||[]).forEach(function(r){
+      if(!r||!r.logins||typeof r.logins!=="object") return;
+      if(!r.escopo){ out.logins=Object.assign({}, out.logins||{}, r.logins); }
+      else { const u=Object.assign({}, out[r.escopo]||{}); u.logins=Object.assign({}, u.logins||{}, r.logins); out[r.escopo]=u; }
+    });
+    return out;
+  }
   function _migrateIfNeeded(remote){
     if(!unitId) return remote; // sem unit-scope, mantém plano
     if(!remote || typeof remote!=="object") return {};
@@ -6523,6 +6536,13 @@ function _useBriefing(clientId, unitId){
               }catch(_){}
             }
           }
+          // cofre das senhas (25/09/2026): quem não tem a chave recebe lista vazia do banco
+          try{
+            window._sb.from("clients_logins").select("escopo,logins").eq("client_id",clientId).then(function(q){
+              if(!active||!q||q.error||!Array.isArray(q.data)||!q.data.length) return;
+              setRawData(function(prev){ return _pxMergeCofreLogins(prev, q.data); });
+            }).catch(function(){});
+          }catch(_){}
         })
         .catch(function(e){
           console.warn("[briefing load]", e && e.message ? e.message : e);
@@ -6899,7 +6919,9 @@ function BriefingFormCanonico(props){
     return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontFamily:"'Inter',system-ui,sans-serif"}}>Carregando briefing...</div>;
   }
 
-  const sections = BRIEFING_SECTIONS;
+  // 25/09/2026 — "Logins e acessos" só aparece pra quem tem a chave "Senhas dos clientes" (ou pro cliente no portal)
+  const _podeSenhas = !!props.portal || (typeof pxBloco==="function" ? pxBloco("cli.senhas") : false);
+  const sections = _podeSenhas ? BRIEFING_SECTIONS : BRIEFING_SECTIONS.filter(function(s){ return s.id!=="logins"; });
   const current = sections.find(s=>s.id===activeSection) || sections[0];
 
   return <div style={{display:"flex",gap:14,fontFamily:"'Inter',system-ui,sans-serif",alignItems:"flex-start"}}>
@@ -42853,9 +42875,13 @@ function PageRedesSociais({isMob}){
   const _load=async function(){
     try{
       const sb=window._sb; if(!sb)return;
-      const {data,error}=await sb.from("client_social_accounts").select("*").order("client_id").order("network");
+      // 25/09/2026 — cofre: a tabela só entrega as colunas abertas; login/senha vêm da função rs_contas_segredos
+      // (o banco só devolve pra quem tem a chave "Senhas dos clientes").
+      const {data,error}=await sb.from("client_social_accounts").select("id,client_id,network,handle,unidade,ig_user_id,page_id,updated_by,updated_at,created_at").order("client_id").order("network");
       if(error){console.warn("[redes] load:",error.message);return;}
-      setContas(data||[]);
+      const _seg={};
+      try{ const rs=await sb.rpc("rs_contas_segredos"); if(rs&&!rs.error&&Array.isArray(rs.data)) rs.data.forEach(function(x){ _seg[x.id]=x; }); }catch(_){}
+      setContas((data||[]).map(function(r){ return Object.assign({}, r, _seg[r.id]||{}); }));
     }catch(e){console.warn("[redes]",e);}finally{setLoading(false);}
   };
   // SINCRONIZADO COM O PORTAL (16/09/2026): o Briefing › Logins e acessos do portal e esta tela
@@ -42891,6 +42917,8 @@ function PageRedesSociais({isMob}){
         rec_email:String(form.rec_email||"").trim(),rec_telefone:String(form.rec_telefone||"").trim(),
         unidade:form.client_id==="bioter"?(form.unidade||""):"",obs:form.obs||"",
         updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),updated_at:new Date().toISOString()};
+      // 25/09/2026 — sem a chave "Senhas dos clientes" não mexe em login/senha (o banco também recusa)
+      if(!(typeof pxBloco==="function"&&pxBloco("cli.senhas"))){ ["login","login_telefone","senha","rec_email","rec_telefone","obs"].forEach(function(k){ delete row[k]; }); }
       const r=form.id
         ? await sb.from("client_social_accounts").update(row).eq("id",form.id)
         : await sb.from("client_social_accounts").insert(row);
@@ -75627,7 +75655,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       // Bioter: passa unitId pra isolar briefing por unidade.
       // "_minhas_" (multi-locked) usa o primeiro locked unit como default; "grupo" fica igual.
       const _unitForBriefing = isBioter ? (selUnit==="_minhas_" ? (_unitLocked || "grupo") : (selUnit || "grupo")) : null;
-      return <BriefingFormCanonico key={_unitForBriefing||"root"} cl={cl} canEdit={true} accentColor="#9F43F6" unitId={_unitForBriefing}/>;
+      return <BriefingFormCanonico key={_unitForBriefing||"root"} cl={cl} canEdit={true} accentColor="#9F43F6" unitId={_unitForBriefing} portal={!!lockedClientId}/>;
     })()}
     {tab==="marcos"&&typeof CMarcos==="function"&&(function(){
       // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
