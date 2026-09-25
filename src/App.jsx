@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 44/44 | Nao editar diretamente
+// Modulos: 45/45 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -1921,6 +1921,7 @@ PX_BLOCOS.clientes={label:"Clientes", navIcon:"clientes", color:"#d97706", grupo
     {key:"cli.aba.metas",        label:"Metas",         desc:""},
     {key:"cli.aba.parcerias",    label:"Parcerias",     desc:""},
     {key:"cli.aba.nps",          label:"NPS",           desc:""},
+    {key:"cli.aba.whatsapp",     label:"WhatsApp",      desc:"Contatos do cliente que falam com o Guvi", padrao:(u)=>!!(u&&u.level===1)},   /* 25/09/2026: nasce só para sócios */
   ]},
   {id:"porcliente", label:"Por cliente", itens:function(){
     /* a mesma lista que o painel montava antes em PERM_GROUPS.clientes */
@@ -18606,6 +18607,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,viewUser,onTrocarC
     {id:"metas",         label:"Metas",               ico:"target"},
     {id:"parcerias",     label:"Parcerias",           ico:"users"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
+    {id:"whatsapp",      label:"WhatsApp",            ico:"message"},   /* 25/09/2026: contatos do Guvi */
   ].filter(function(t){ return _blCli("cli.aba."+t.id); });   // 20/09: desligável em Acessos › Time
 
   /* aba desligada: cai na primeira liberada (antes voltava sempre pro Dashboard) */
@@ -18727,6 +18729,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms,viewUser,onTrocarC
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks} onGoTab={setTab}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
+    {tab==="whatsapp"&&typeof CWhatsContatos!=="undefined"&&<CWhatsContatos cl={cl} isMob={isMob}/>}
     {tab==="marcos"&&<CDemandas cl={cl} canEdit={canEditarBriefing} selUnit={cl.id==="bioter"?selUnitBioter:undefined}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
@@ -109847,4 +109850,247 @@ function _WzRespostas({ respostas, onFechar, onMudou, isMob }){
       </div>
     </div>
   );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTATOS DO GUVI — aba "WhatsApp" na ficha do cliente (Clientes › cliente)
+   25/09/2026. Módulo NOVO: não altera nenhuma tela existente.
+
+   Quem do cliente fala com o Guvi pelo WhatsApp e o que cada um pode fazer.
+   Banco: auto.whats_contatos, só pelas funções abaixo (todas checam whats_eh_socio):
+     rpc whats_contatos_listar · whats_contatos_salvar · whats_contatos_bloquear
+         whats_contatos_importar_playbook
+   Regras: nada nasce ligado · não existe apagar (quem sai é desativado, o histórico fica)
+           · bloquear corta na hora · número da equipe não entra aqui
+           · no celular é só ver (mudar, só no computador).
+   ═══════════════════════════════════════════════════════════════════ */
+
+const _WC_UNIDADES = [
+  { id:"",           label:"Grupo (todas)" },
+  { id:"chapeco",    label:"Chapecó" },
+  { id:"toledo",     label:"Toledo" },
+  { id:"castro",     label:"Castro" },
+  { id:"uberlandia", label:"Uberlândia" },
+  { id:"gloria",     label:"Glória de Dourados" },
+  { id:"paraguay",   label:"Paraguay" },
+  { id:"brasil",     label:"Brasil" },
+];
+const _WC_PODE = [
+  { k:"pode_pedir_card", label:"Pedir card" },
+  { k:"pode_pedir_info", label:"Ver os próprios cards" },
+  { k:"pode_arquivo",    label:"Mandar arquivo pro card" },
+];
+
+function _wcFone(t){
+  const s = String(t||"").replace(/\D/g,"");
+  const m = s.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? "("+m[1]+") "+m[2]+"-"+m[3] : (t||"");
+}
+function _wcData(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+}
+function _wcUnidade(id){ const u=_WC_UNIDADES.find(function(x){return x.id===(id||"");}); return u?u.label:id; }
+function _wcErro(e){
+  const m = String((e&&(e.message||e.details))||e||"");
+  if(/sem permissao/i.test(m)) return "Sem acesso: liberar em Acessos › Gestão › WhatsApp Pixels.";
+  if(/ja esta cadastrado/i.test(m)) return "Esse número já está cadastrado em outro contato.";
+  if(/da equipe/i.test(m)) return "Esse número é de alguém da equipe.";
+  if(/telefone invalido/i.test(m)) return "Número inválido. Use DDD + número.";
+  if(/nome obrigatorio/i.test(m)) return "Falta o nome.";
+  if(/unidade invalida/i.test(m)) return "Unidade inválida.";
+  return m || "Não deu certo. Tente de novo.";
+}
+function _wcToast(tipo, msg){
+  try{ if(typeof pixelsToast!=="undefined"&&pixelsToast&&pixelsToast[tipo]) { pixelsToast[tipo](msg); return; } }catch(_){}
+  try{ console.log("[contatos-guvi]", msg); }catch(_){}
+}
+
+function CWhatsContatos({cl, isMob}){
+  const clientId = cl && cl.id;
+  const isBioter = clientId === "bioter";
+  const [lista, setLista]     = useState(null);   // null = carregando
+  const [erro, setErro]       = useState("");
+  const [form, setForm]       = useState(null);   // null = fechado · {} = novo · {...} = editando
+  const [salvando, setSalv]   = useState(false);
+  const [bloq, setBloq]       = useState(null);   // {id, motivo}
+  const [mostraInativos, setMI] = useState(false);
+
+  const carregar = useCallback(function(){
+    if(!clientId||!window._sb) return;
+    window._sb.rpc("whats_contatos_listar", { p_client_id: clientId }).then(function(r){
+      if(r.error){ setErro(_wcErro(r.error)); setLista([]); return; }
+      setErro(""); setLista(r.data||[]);
+    });
+  }, [clientId]);
+  useEffect(function(){ setLista(null); setForm(null); setBloq(null); carregar(); }, [carregar]);
+
+  function salvar(dados){
+    setSalv(true);
+    window._sb.rpc("whats_contatos_salvar", { p: dados }).then(function(r){
+      setSalv(false);
+      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
+      setForm(null); carregar();
+      _wcToast("success", dados.id ? "Contato atualizado." : "Contato cadastrado.");
+    });
+  }
+  function alternar(c, campo){
+    const d = { id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs };
+    d[campo] = !c[campo];
+    salvar(d);
+  }
+  function bloquear(id, sim, motivo){
+    window._sb.rpc("whats_contatos_bloquear", { p_id:id, p_bloquear:sim, p_motivo:motivo||null }).then(function(r){
+      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
+      setBloq(null); carregar();
+      _wcToast("success", sim ? "Número bloqueado." : "Número desbloqueado.");
+    });
+  }
+  function puxarPlaybook(){
+    window._sb.rpc("whats_contatos_importar_playbook", { p_client_id: clientId }).then(function(r){
+      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
+      carregar();
+      _wcToast("success", r.data ? (r.data+" contato(s) trazido(s) do Playbook, todos desligados.") : "Nada novo no Playbook.");
+    });
+  }
+
+  const ativos   = (lista||[]).filter(function(c){ return c.ativo; });
+  const inativos = (lista||[]).filter(function(c){ return !c.ativo; });
+  const visiveis = mostraInativos ? (lista||[]) : ativos;
+
+  const card  = { background:"#fff", border:"1px solid #e9ecf3", borderRadius:12, padding:isMob?12:16 };
+  const btn   = { border:"1px solid #e2e8f0", background:"#fff", color:"#334155", borderRadius:8, padding:"7px 12px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" };
+  const btnPri= Object.assign({}, btn, { background:"#7c3aed", borderColor:"#7c3aed", color:"#fff" });
+
+  return <div style={{ padding:isMob?"12px 0":"18px 0", display:"flex", flexDirection:"column", gap:14, maxWidth:960 }}>
+    <div style={Object.assign({}, card, { display:"flex", flexDirection:isMob?"column":"row", gap:12, alignItems:isMob?"stretch":"center", justifyContent:"space-between" })}>
+      <div>
+        <div style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>Contatos que falam com o Guvi</div>
+        <div style={{ fontSize:12, color:"#64748b", marginTop:3 }}>Nada nasce ligado. Quem não está aqui não é atendido pelo Guvi.</div>
+      </div>
+      {isMob
+        ? <div style={{ fontSize:12, color:"#94a3b8" }}>Para mudar, use o computador.</div>
+        : <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <button style={btn} onClick={puxarPlaybook} disabled={!!erro}>Puxar do Playbook</button>
+            <button style={btnPri} onClick={function(){ setForm({}); }} disabled={!!erro}>+ Contato</button>
+          </div>}
+    </div>
+
+    {erro && <div style={Object.assign({}, card, { borderColor:"#fde68a", background:"#fffbeb", color:"#92400e", fontSize:13 })}>{erro}</div>}
+
+    {form && !isMob && <_WcForm inicial={form} clientId={clientId} isBioter={isBioter} isMob={isMob} salvando={salvando}
+                      onCancelar={function(){ setForm(null); }} onSalvar={salvar}/>}
+
+    {lista===null && <div style={Object.assign({}, card, { color:"#94a3b8", fontSize:13 })}>Carregando…</div>}
+
+    {lista!==null && !erro && ativos.length===0 && !form &&
+      <div style={Object.assign({}, card, { color:"#64748b", fontSize:13, textAlign:"center", padding:24 })}>
+        {isMob ? "Nenhum contato ainda." : <span>Nenhum contato ainda. Use <b>+ Contato</b> ou <b>Puxar do Playbook</b>.</span>}
+      </div>}
+
+    {visiveis.map(function(c){
+      const bloqueado = !!c.bloqueado_em;
+      const status = !c.ativo ? { t:"Desativado", cor:"#64748b", fundo:"#f1f5f9" }
+                   : bloqueado ? { t:"Bloqueado", cor:"#b91c1c", fundo:"#fef2f2" }
+                   : { t:"Ativo", cor:"#15803d", fundo:"#f0fdf4" };
+      return <div key={c.id} style={Object.assign({}, card, { opacity:c.ativo?1:.7 })}>
+        <div style={{ display:"flex", gap:10, alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap" }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>
+              {c.nome}{c.cargo ? <span style={{ fontWeight:500, color:"#64748b" }}> · {c.cargo}</span> : null}
+            </div>
+            <div style={{ fontSize:12, color:"#475569", marginTop:3 }}>
+              {_wcFone(c.telefone)}{isBioter ? " · "+_wcUnidade(c.unidade) : ""}{c.origem==="playbook" ? " · veio do Playbook" : ""}
+            </div>
+          </div>
+          <span style={{ fontSize:11, fontWeight:700, color:status.cor, background:status.fundo, borderRadius:20, padding:"3px 10px" }}>{status.t}</span>
+        </div>
+
+        {bloqueado && <div style={{ marginTop:8, fontSize:12, color:"#b91c1c" }}>
+          Bloqueado por {c.bloqueado_por||"—"} em {_wcData(c.bloqueado_em)}{c.bloqueio_motivo ? ' — "'+c.bloqueio_motivo+'"' : ""}
+        </div>}
+
+        <div style={{ display:"flex", gap:isMob?8:14, flexWrap:"wrap", marginTop:10 }}>
+          {_WC_PODE.map(function(p){
+            return <label key={p.k} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#334155", cursor:(c.ativo&&!isMob)?"pointer":"default" }}>
+              <input type="checkbox" checked={!!c[p.k]} disabled={!c.ativo||salvando||isMob} onChange={function(){ alternar(c, p.k); }}/>
+              {p.label}
+            </label>;
+          })}
+          <span style={{ fontSize:12, color:"#94a3b8" }}>Limite: {c.limite_semana}/semana · alerta em {c.limite_dia}/dia</span>
+        </div>
+
+        {!isMob && bloq && bloq.id===c.id && <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+          <input autoFocus value={bloq.motivo} onChange={function(e){ setBloq({ id:c.id, motivo:e.target.value }); }}
+                 placeholder="Motivo (ex.: saiu da empresa)" style={{ flex:1, minWidth:180, border:"1px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:12, fontFamily:"inherit" }}/>
+          <button style={Object.assign({}, btn, { background:"#dc2626", borderColor:"#dc2626", color:"#fff" })} onClick={function(){ bloquear(c.id, true, bloq.motivo); }}>Bloquear agora</button>
+          <button style={btn} onClick={function(){ setBloq(null); }}>Cancelar</button>
+        </div>}
+
+        <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", fontSize:11, color:"#94a3b8", alignItems:"center" }}>
+          {!isMob && c.ativo && <button style={btn} onClick={function(){ setForm(c); }}>Editar</button>}
+          {!isMob && c.ativo && !bloqueado && <button style={Object.assign({}, btn, { color:"#b91c1c" })} onClick={function(){ setBloq({ id:c.id, motivo:"" }); }}>Bloquear número</button>}
+          {!isMob && c.ativo && bloqueado && <button style={btn} onClick={function(){ bloquear(c.id, false); }}>Desbloquear</button>}
+          {!isMob && <button style={btn} onClick={function(){ const d={ id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs, ativo:!c.ativo }; salvar(d); }}>
+            {c.ativo ? "Desativar" : "Reativar"}
+          </button>}
+          <span>Cadastrado por {c.criado_por||"—"} em {_wcData(c.criado_em)}{c.atualizado_em ? " · alterado por "+(c.atualizado_por||"—")+" em "+_wcData(c.atualizado_em) : ""}</span>
+        </div>
+      </div>;
+    })}
+
+    {inativos.length>0 && <button style={Object.assign({}, btn, { alignSelf:"flex-start" })} onClick={function(){ setMI(!mostraInativos); }}>
+      {mostraInativos ? "Esconder desativados" : "Mostrar desativados ("+inativos.length+")"}
+    </button>}
+  </div>;
+}
+
+function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSalvar}){
+  const [d, setD] = useState({
+    id: inicial.id || null,
+    nome: inicial.nome || "", cargo: inicial.cargo || "",
+    telefone: inicial.telefone ? _wcFone(inicial.telefone) : "",
+    unidade: inicial.unidade || "",
+    pode_pedir_card: !!inicial.pode_pedir_card, pode_pedir_info: !!inicial.pode_pedir_info, pode_arquivo: !!inicial.pode_arquivo,
+    limite_semana: inicial.limite_semana || 10, limite_dia: inicial.limite_dia || 20,
+    obs: inicial.obs || "",
+  });
+  function set(k, v){ setD(function(o){ const n = Object.assign({}, o); n[k] = v; return n; }); }
+  const inp = { border:"1px solid #e2e8f0", borderRadius:8, padding:"8px 10px", fontSize:13, fontFamily:"inherit", width:"100%", boxSizing:"border-box", background:"#fff", color:"#0f172a" };
+  const lab = { fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:.3, marginBottom:4, display:"block" };
+  const grid = { display:"grid", gridTemplateColumns:isMob?"1fr":"1fr 1fr", gap:12 };
+  return <div style={{ background:"#faf5ff", border:"1px solid #ddd6fe", borderRadius:12, padding:isMob?12:16 }}>
+    <div style={{ fontSize:14, fontWeight:700, color:"#5b21b6", marginBottom:12 }}>{d.id ? "Editar contato" : "Novo contato"}</div>
+    <div style={grid}>
+      <div><span style={lab}>Nome</span><input style={inp} value={d.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder="Ex.: Ana"/></div>
+      <div><span style={lab}>Cargo</span><input style={inp} value={d.cargo} onChange={function(e){ set("cargo", e.target.value); }} placeholder="Ex.: Marketing"/></div>
+      <div><span style={lab}>WhatsApp</span><input style={inp} value={d.telefone} inputMode="tel" onChange={function(e){ set("telefone", e.target.value); }} placeholder="(49) 99999-9999"/></div>
+      {isBioter
+        ? <div><span style={lab}>Unidade</span>
+            <select style={inp} value={d.unidade} onChange={function(e){ set("unidade", e.target.value); }}>
+              {_WC_UNIDADES.map(function(u){ return <option key={u.id} value={u.id}>{u.label}</option>; })}
+            </select></div>
+        : <div/>}
+    </div>
+    <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginTop:12 }}>
+      {_WC_PODE.map(function(p){
+        return <label key={p.k} style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:"#334155", cursor:"pointer" }}>
+          <input type="checkbox" checked={!!d[p.k]} onChange={function(){ set(p.k, !d[p.k]); }}/>{p.label}
+        </label>;
+      })}
+    </div>
+    <div style={Object.assign({}, grid, { marginTop:12 })}>
+      <div><span style={lab}>Limite de cards por semana</span><input style={inp} type="number" min="1" inputMode="numeric" value={d.limite_semana} onChange={function(e){ set("limite_semana", e.target.value); }}/></div>
+      <div><span style={lab}>Alerta de abuso (cards por dia)</span><input style={inp} type="number" min="1" inputMode="numeric" value={d.limite_dia} onChange={function(e){ set("limite_dia", e.target.value); }}/></div>
+    </div>
+    <div style={{ marginTop:12 }}><span style={lab}>Observação</span><input style={inp} value={d.obs} onChange={function(e){ set("obs", e.target.value); }} placeholder="Opcional"/></div>
+    <div style={{ display:"flex", gap:8, justifyContent:"flex-end", marginTop:14 }}>
+      <button onClick={onCancelar} style={{ border:"1px solid #e2e8f0", background:"#fff", color:"#334155", borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Cancelar</button>
+      <button disabled={salvando} onClick={function(){ onSalvar(Object.assign({}, d, { client_id: clientId })); }}
+              style={{ border:"1px solid #7c3aed", background:"#7c3aed", color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:13, fontWeight:700, cursor:salvando?"wait":"pointer", fontFamily:"inherit" }}>
+        {salvando ? "Salvando…" : "Salvar"}
+      </button>
+    </div>
+  </div>;
 }
