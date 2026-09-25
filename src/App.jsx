@@ -33283,6 +33283,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      (pxEhFotoDeObra, pxEhShort) e do estilo da copy (pxEstiloCard). */
   const copyQueueTudo=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"));
   const copyQueue=filtroTipo?copyQueueTudo.filter(function(t){ return _pxTipoDaFila(t)===filtroTipo; }):copyQueueTudo;
+  /* (25/09/2026, Vinicius) Filtro (ex.: só Short) acabou e ainda tem copy de outro tipo na fila:
+     tira o filtro sozinho e mostra as outras, em vez de "Nenhuma copy aguarda aprovação". */
+  useEffect(function(){
+    if(filtroTipo&&copyQueue.length===0&&copyQueueTudo.length>0){
+      setFiltroTipo("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Acabaram as copys desse tipo — mostrando a fila inteira.",3500);
+    }
+  },[filtroTipo,copyQueue.length,copyQueueTudo.length]);
   // Ajuste queue: cards marcados para ajuste
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
