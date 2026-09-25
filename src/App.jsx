@@ -4800,8 +4800,11 @@ function pxCtxMateriaisTxt(ctx){
   const _cad=(typeof pxCtxCadastroTxt==="function")?pxCtxCadastroTxt(ctx):"";
   const arr=(ctx&&Array.isArray(ctx.materiais))?ctx.materiais:[];
   if(!arr.length) return _cad;
+  /* (25/09/2026) Ficha que começa com "REUNIÃO —" veio da gravação de uma call com o cliente:
+     é o que ele mesmo disse (decisões, pedidos, termos) — vale como fato, e os pedidos valem como pedido. */
   let u=_cad+"MATERIAIS OFICIAIS DO CLIENTE (folder, manual, catálogo, briefing que a própria empresa "+
-        "passou — é fato conferido, pode usar como verdade; ainda assim, escreva com as suas "+
+        "passou, ou ficha de REUNIÃO gravada com o cliente — é fato conferido, pode usar como verdade; "+
+        "o que o cliente PEDIU numa reunião é pedido a atender; ainda assim, escreva com as suas "+
         "palavras, não copie trecho; endereço/telefone que apareça aqui NÃO vale — só os DADOS CADASTRAIS):\n";
   /* (22/09/2026, Rodrigo) Material do Grupo vale pro Paraguay também, "traduz pra espanhol".
      A ficha fica em português (é uma só pra todas as unidades); a peça do Paraguay sai em
@@ -101974,6 +101977,156 @@ async function pxFichaDoMaterial(file, titulo, clienteNome, url, onProg){
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   REUNIÃO / CALL COM O CLIENTE VIRA MATERIAL (25/09/2026, Vinicius)
+   "gravamos as calls com eles… subir vídeos pra transcrever — só o áudio, converte primeiro,
+    não precisa salvar o vídeo, só o áudio (tudo pra otimizar), aí transcreve e já vira
+    inteligência automaticamente."
+
+   Como funciona:
+   1. o NAVEGADOR tira só o áudio do vídeo (ffmpeg.wasm, baixado do jsdelivr uma vez e
+      guardado em cache — mesmo jeito do pdf.js e do JSZip): mono, 16 kHz, MP3 32 kbps.
+      1 h de reunião ≈ 14 MB. O vídeo nunca sai do PC.
+   2. sobe SÓ o mp3 pro storage (é o "arquivo" do material).
+   3. o áudio vai em partes de 10 min pra Edge Function `transcrever` (OpenAI, chave só no
+      backend) e volta texto. A transcrição inteira fica em claude_materiais.transcricao.
+   4. a transcrição vira FICHA de reunião (decisões, o que o cliente disse, termos) pelo
+      mesmo caminho dos folders — é a ficha que entra no cérebro.
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+const PB_FFMPEG_BASE="https://cdn.jsdelivr.net/npm/";
+const PB_FFMPEG_JS=PB_FFMPEG_BASE+"@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js";
+const PB_FFMPEG_WORKER=PB_FFMPEG_BASE+"@ffmpeg/ffmpeg@0.12.15/dist/umd/814.ffmpeg.js";
+const PB_FFMPEG_CORE=PB_FFMPEG_BASE+"@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js";
+const PB_FFMPEG_WASM=PB_FFMPEG_BASE+"@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm";
+const PB_MAT_MAX_VIDEO=1024*1024*1024;   // o conversor guarda o vídeo inteiro na memória do wasm
+const PB_REUNIAO_PARTE_SEG=600;          // partes de 10 min (≈2,4 MB) — a OpenAI aceita até 25 MB
+function _pbEhMidia(file,url){
+  const n=(String((file&&file.name)||"")+" "+String(url||"").split("?")[0]).toLowerCase().trim();
+  const t=String((file&&file.type)||"").toLowerCase();
+  if(/^(video|audio)\//.test(t)) return t.indexOf("audio/")===0?"audio":"video";
+  if(/\.(mp4|mkv|mov|webm|avi|m4v|wmv|mpe?g|3gp)$/.test(n)) return "video";
+  if(/\.(mp3|m4a|wav|ogg|oga|opus|aac|flac|wma|amr)$/.test(n)) return "audio";
+  return "";
+}
+async function _pbBlobUrl(url,mime){
+  const r=await fetch(url); if(!r.ok) throw new Error("HTTP "+r.status+" ao baixar "+url.split("/").pop());
+  return URL.createObjectURL(new Blob([await r.blob()],{type:mime}));
+}
+async function _pbFFmpeg(onProg){
+  if(window.__pxFF) return window.__pxFF;
+  if(!window.__pxFFP) window.__pxFFP=(async function(){
+    if(!window.FFmpegWASM){
+      await new Promise(function(res,rej){
+        const s=document.createElement("script"); s.src=PB_FFMPEG_JS; s.async=true;
+        s.onload=res; s.onerror=function(){ rej(new Error("Não deu pra baixar o conversor de vídeo (sem internet?)")); };
+        document.head.appendChild(s);
+      });
+    }
+    if(onProg) onProg("baixando o conversor de vídeo (só na primeira vez)");
+    /* O worker e o core vêm de outro domínio (CDN) e o navegador não abre Worker de lá.
+       Baixa os dois e junta num blob só: worker de módulo não tem importScripts, então o
+       core vai colado dentro e exposto em self. O .wasm vira blob também. Testado em
+       Chromium headless com .mkv e .mp4 (25/09/2026). */
+    const _txt=function(u){ return fetch(u).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status+" ao baixar "+u.split("/").pop()); return r.text(); }); };
+    const [wTxt,cTxt,wasm]=await Promise.all([_txt(PB_FFMPEG_WORKER),_txt(PB_FFMPEG_CORE),_pbBlobUrl(PB_FFMPEG_WASM,"application/wasm")]);
+    const worker=URL.createObjectURL(new Blob(["self.importScripts=function(){};\n",cTxt,"\nself.createFFmpegCore=createFFmpegCore;\n",wTxt],{type:"text/javascript"}));
+    const core=URL.createObjectURL(new Blob([cTxt],{type:"text/javascript"}));
+    const ff=new window.FFmpegWASM.FFmpeg();
+    await ff.load({classWorkerURL:worker,coreURL:core,wasmURL:wasm});
+    window.__pxFF=ff; return ff;
+  })().catch(function(e){ window.__pxFFP=null; throw e; });
+  return window.__pxFFP;
+}
+/* Tira só o áudio (vídeo ou áudio de entrada): devolve {mp3, partes[]} — mp3 inteiro pra
+   guardar e partes de 10 min pra transcrever. Tudo no navegador. */
+async function _pbAudioDoVideo(file,onProg){
+  if(file.size>PB_MAT_MAX_VIDEO) throw new Error("passa de 1 GB ("+_pbMatTamanho(file.size)+") — corte o vídeo ou exporte só o áudio");
+  const ff=await _pbFFmpeg(onProg);
+  const ext=(String(file.name||"in").split(".").pop()||"bin").toLowerCase().replace(/[^a-z0-9]/g,"")||"bin";
+  const inName="in."+ext;
+  if(onProg) onProg("lendo o arquivo");
+  await ff.writeFile(inName,new Uint8Array(await file.arrayBuffer()));
+  let pct=-1;
+  const lp=function(e){ const p=Math.max(0,Math.min(100,Math.round(((e&&e.progress)||0)*100))); if(p!==pct){ pct=p; if(onProg) onProg("extraindo o áudio — "+p+"%"); } };
+  ff.on("progress",lp);
+  try{
+    let rc=await ff.exec(["-i",inName,"-vn","-sn","-dn","-ac","1","-ar","16000","-c:a","libmp3lame","-b:a","32k","-y","out.mp3"]);
+    if(rc!==0) throw new Error("o arquivo não tem faixa de áudio que dê pra ler");
+    if(onProg) onProg("dividindo em partes de 10 min");
+    rc=await ff.exec(["-i","out.mp3","-f","segment","-segment_time",String(PB_REUNIAO_PARTE_SEG),"-reset_timestamps","1","-c","copy","-y","parte_%03d.mp3"]);
+    if(rc!==0) throw new Error("não deu pra dividir o áudio");
+  } finally { ff.off("progress",lp); try{ await ff.deleteFile(inName); }catch(_){} }
+  const mp3=await ff.readFile("out.mp3"); try{ await ff.deleteFile("out.mp3"); }catch(_){}
+  const partes=[];
+  for(let i=0;i<999;i++){
+    const n="parte_"+String(i).padStart(3,"0")+".mp3"; let d;
+    try{ d=await ff.readFile(n); }catch(_){ break; }
+    if(d&&d.length>4096) partes.push(new Blob([d],{type:"audio/mpeg"}));   // resto de arredondamento (<4 KB) não é parte
+    try{ await ff.deleteFile(n); }catch(_){}
+  }
+  if(!mp3||!mp3.length||!partes.length) throw new Error("o áudio saiu vazio");
+  return {mp3:new Blob([mp3],{type:"audio/mpeg"}),partes:partes};
+}
+/* Uma parte de áudio → texto, pela Edge Function (a chave da OpenAI fica lá). */
+async function _pbTranscreverParte(blob,nome){
+  const sb=window._sb; if(!sb) throw new Error("Sem conexão com o banco");
+  const fd=new FormData(); fd.append("file",blob,nome||"parte.mp3"); fd.append("idioma","pt");
+  const {data,error}=await sb.functions.invoke("transcrever",{body:fd});
+  if(error){
+    let msg=error.message||String(error);
+    try{ const ctx=error.context; if(ctx&&typeof ctx.json==="function"){ const j=await ctx.json(); if(j&&j.error&&j.error.message) msg=j.error.message; } }catch(_){}
+    throw new Error(msg);
+  }
+  if(data&&data.error) throw new Error(data.error.message||"erro na transcrição");
+  return String((data&&data.text)||"").trim();
+}
+async function _pbTranscrever(partes,onProg){
+  const out=[];
+  for(let i=0;i<partes.length;i++){
+    if(onProg) onProg("transcrevendo — parte "+(i+1)+" de "+partes.length);
+    let txt="",erro=null;
+    for(let tent=0;tent<2;tent++){ try{ txt=await _pbTranscreverParte(partes[i],"parte"+(i+1)+".mp3"); erro=null; break; }catch(e){ erro=e; } }
+    if(erro) throw new Error("parte "+(i+1)+" de "+partes.length+": "+((erro&&erro.message)||erro));
+    if(txt) out.push(txt);
+  }
+  return out.join("\n\n").trim();
+}
+/* A transcrição vira ficha de REUNIÃO — é a ficha que entra no cérebro. */
+async function pxFichaDaReuniao(transcricao,titulo,clienteNome){
+  const sys="Você lê a transcrição de uma reunião (call gravada) entre a Pixels — assessoria de marketing "+
+    "— e um cliente dela, e destila TUDO que serve pra equipe de marketing escrever com precisão sobre "+
+    "esse cliente: fatos, decisões, números, termos, pedidos, limites. NUNCA invente: o que não foi dito, "+
+    "você não escreve. Também não jogue fora o que foi dito: informação perdida aqui é informação que a "+
+    "equipe não vai ter. Transcrição automática tem erro de nome e de termo — quando a grafia parecer "+
+    "errada, escreva a forma mais provável UMA vez e marque com (?). Responda em texto puro, sem "+
+    "markdown, sem comentário antes nem depois.";
+  const pedido="Esta é a transcrição de uma reunião com "+(clienteNome||"um cliente")+(titulo?(' — "'+titulo+'"'):"")+".\n\n"+
+    "Comece com a linha: REUNIÃO — "+(titulo||"sem título")+"\n\n"+
+    "Extraia a FICHA usando as seções abaixo e PULE a que a reunião não tiver:\n"+
+    "SOBRE O QUE FOI A REUNIÃO (2 a 4 linhas)\n"+
+    "O QUE O CLIENTE DISSE SOBRE A EMPRESA DELE (produtos, público, diferenciais, história, região)\n"+
+    "DECISÕES E COMBINADOS (o que ficou decidido, quem faz, prazos)\n"+
+    "PEDIDOS DO CLIENTE (o que ele quer ver nas publicações, formatos, temas)\n"+
+    "NÚMEROS E FATOS CITADOS (copie exatamente como foram ditos)\n"+
+    "TERMOS OFICIAIS (como o cliente chama os produtos, serviços e processos)\n"+
+    "FRASES DO CLIENTE (entre aspas, o jeito dele de falar — serve de tom)\n"+
+    "O QUE NÃO DIZER / CUIDADOS (o que o cliente pediu pra evitar ou corrigiu)\n"+
+    "PENDÊNCIAS (o que ficou em aberto)\n"+
+    "NÃO COBERTO (o que a equipe perguntaria e a reunião não respondeu)\n\n"+
+    "TAMANHO — a ficha acompanha a reunião: reunião curta sai quase inteira; reunião longa é condensada, "+
+    "mas nunca passa de 3.000 palavras, e LISTA (pedidos, decisões, produtos) entra INTEIRA. "+
+    "NÃO EXTRAIA endereço, telefone, WhatsApp, e-mail, CEP nem site — isso mora nos Dados cadastrais. "+
+    "Conversa fiada, saudação e problema técnico da call ficam de fora. Copie número, nome e frase "+
+    "exatamente como estão. Prefira perder elegância a perder informação.";
+  const MAXC=160000;
+  let texto=String(transcricao||"").trim();
+  const cortado=texto.length>MAXC; if(cortado) texto=texto.slice(0,MAXC);
+  const txt=await _pbAskCompleto({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),
+    max_tokens:9000,system:sys,messages:[{role:"user",content:[{type:"text",text:"TRANSCRIÇÃO DA REUNIÃO"+(cortado?" (só o começo — era maior)":"")+":\n\n"+texto},{type:"text",text:pedido}]}]});
+  if(!txt) throw new Error("A IA não devolveu a ficha. Tente de novo.");
+  return String(txt||"").replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"").trim();
+}
+
 function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   const [itens,setItens]=useState(null);
   const [erro,setErro]=useState("");
@@ -102028,9 +102181,32 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
   };
   /* Lê (ou relê) o material. Guarda o arquivo primeiro: ficha é o bônus, o arquivo é o que
      não pode se perder. */
-  const _lerArquivo=async function(m,file){
+  const _lerArquivo=async function(m,file,extra){
     await _patch(m,{ficha_status:"lendo"});
     try{
+      /* (25/09/2026) REUNIÃO: transcreve (se ainda não tem transcrição) e destila a ficha. */
+      if(String(m.tipo||"")==="reuniao"){
+        let transcricao=String(m.transcricao||"").trim();
+        if(!transcricao){
+          let partes=extra&&extra.partes;
+          if(!partes||!partes.length){
+            if(!m.arquivo_url) throw new Error("sem áudio guardado");
+            setSubindo("baixando o áudio de "+(m.titulo||m.arquivo_nome));
+            const r=await fetch(m.arquivo_url); if(!r.ok) throw new Error("não deu pra baixar o áudio (HTTP "+r.status+")");
+            const bl=await r.blob();
+            const out=await _pbAudioDoVideo(new File([bl],m.arquivo_nome||"audio.mp3",{type:bl.type||"audio/mpeg"}),function(msg){ setSubindo(msg+" — "+(m.titulo||m.arquivo_nome)); });
+            partes=out.partes;
+          }
+          transcricao=await _pbTranscrever(partes,function(msg){ setSubindo(msg+" — "+(m.titulo||m.arquivo_nome)); });
+          if(!transcricao) throw new Error("a transcrição veio vazia — o áudio tem fala?");
+          await _patch(m,{transcricao:transcricao});
+        }
+        setSubindo("lendo "+(m.titulo||m.arquivo_nome)+" — IA, ficha da reunião");
+        const fichaR=await pxFichaDaReuniao(transcricao,m.titulo,clienteNome);
+        await _patch(m,{ficha:fichaR,ficha_status:"pronta"});
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Reunião transcrita e ficha pronta — confira antes de confiar nela.",5000);
+        return;
+      }
       const ficha=await pxFichaDoMaterial(file,m.titulo,clienteNome,m.arquivo_url,function(a,b,c){
         try{
           if(a==="ia") setSubindo(c>1?("lendo "+(m.titulo||m.arquivo_nome)+" — IA, parte "+b+" de "+c):("lendo "+(m.titulo||m.arquivo_nome)+" — IA"));
@@ -102072,9 +102248,19 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
     const _passo=function(i,n,verbo,nome){ return (n>1?("("+(i+1)+"/"+n+") "):"")+verbo+" "+nome; };
     const guardados=[];
     for(let i=0;i<lista.length;i++){
-      const file=lista[i];
-      setSubindo(_passo(i,lista.length,"guardando",file.name));
+      setSubindo(_passo(i,lista.length,"guardando",lista[i].name));
       try{
+        /* (25/09/2026) Vídeo ou áudio de reunião: o navegador tira só o áudio (mono, 16 kHz,
+           MP3 32 kbps) e é ISSO que sobe — o vídeo nunca sai do PC. As partes de 10 min ficam
+           na memória pra transcrever na 2ª volta. */
+        let file=lista[i], partes=null, tipoMat="";
+        if(_pbEhMidia(file)){
+          const out=await _pbAudioDoVideo(file,function(msg){ setSubindo(_passo(i,lista.length,msg+" —",file.name)); });
+          const base=String(file.name).replace(/\.[^.]+$/,"");
+          file=new File([out.mp3],base+".mp3",{type:"audio/mpeg"});
+          partes=out.partes; tipoMat="reuniao";
+          setSubindo(_passo(i,lista.length,"guardando o áudio",file.name)+" ("+_pbMatTamanho(file.size)+")");
+        }
         const ext=(String(file.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
         const rnd=Math.random().toString(36).slice(2,9);
         const path="playbook-materiais/"+clientId+"/"+Date.now()+"-"+rnd+"."+ext;
@@ -102094,20 +102280,21 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
           arquivo_url:(pub&&pub.publicUrl)||"",arquivo_nome:file.name,arquivo_tipo:file.type||"",
           arquivo_tamanho:file.size||0,ficha:"",ficha_status:"pendente",ativo:true,
           created_by:(_u&&_u.name)||""};
+        if(tipoMat) row.tipo=tipoMat;
         const ins=await sb.from("claude_materiais").insert(row).select("*").single();
         if(ins.error) throw ins.error;
         const novo=ins.data;
         setItens(function(p){ return [novo].concat(p||[]); });
-        guardados.push({novo:novo,file:file});
+        guardados.push({novo:novo,file:file,partes:partes});
       }catch(e){
-        if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+file.name+": "+((e&&e.message)||e),7000);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Não subiu "+lista[i].name+": "+((e&&e.message)||e),9000);
       }
     }
     // 2ª volta: agora que está tudo guardado, a IA lê um por um.
     for(let i=0;i<guardados.length;i++){
       const g=guardados[i];
       setSubindo(_passo(i,guardados.length,"lendo",g.file.name));
-      try{ await _lerArquivo(g.novo,g.file); }catch(_e){}
+      try{ await _lerArquivo(g.novo,g.file,{partes:g.partes}); }catch(_e){}
     }
     setSubindo("");
     if(guardados.length>1&&typeof pixelsToast!=="undefined")
@@ -102161,7 +102348,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
             <Ico n="upload" size={17} color="currentColor"/>
           </span>}
       <span style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>
-        {subindo ? (/^\(?\d*\/?\d*\)?\s*guardando/i.test(subindo)?"Guardando o arquivo":(/desenhando/i.test(subindo)?"Desenhando as páginas":"A IA está lendo o material"))
+        {subindo ? (/^\(?\d*\/?\d*\)?\s*guardando/i.test(subindo)?"Guardando o arquivo":(/desenhando/i.test(subindo)?"Desenhando as páginas":(/conversor|extraindo|dividindo|lendo o arquivo|baixando o áudio/i.test(subindo)?"Tirando o áudio do vídeo (fica no seu PC)":(/transcrevendo/i.test(subindo)?"Transcrevendo a reunião":"A IA está lendo o material"))))
                  : (arrastando ? "Solta aqui" : "Arraste os arquivos aqui, ou clique pra escolher")}
       </span>
       {subindo && <span style={{color:"#b45309",fontSize:11.5,fontWeight:700,letterSpacing:-.1,wordBreak:"break-word",maxWidth:520}}>{subindo}</span>}
@@ -102169,9 +102356,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         <span style={{position:"absolute",top:0,bottom:0,width:"42%",borderRadius:99,background:"linear-gradient(90deg,#f5b30100,#f5b301,#f5b30100)",animation:"pxIndet 1.4s ease-in-out infinite"}}/>
       </span>}
       <span style={{color:"#94a3b8",fontSize:11,lineHeight:1.5,maxWidth:460}}>
-        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
+        {isBioter?(unitTab?("Vai valer SÓ pra "+_uniLabel(unitTab)+" — troque pra Grupo Bioter no topo se for de todas · "):"Vai valer pra TODAS as unidades, Paraguay recebe traduzido · "):""}Pode soltar vários de uma vez — guarda todos e depois lê um por um · PDF, Word, PowerPoint, Excel, imagem, texto · <b>Gravação de reunião</b> (mp4, mkv, mov, mp3…): só o áudio sobe, a IA transcreve e vira ficha, PowerPoint, Excel, texto e imagem viram ficha · até 1 GB por arquivo · catálogo grande é lido página a página
       </span>
-      <input type="file" multiple accept=".pdf,image/*,.docx,.pptx,.xlsx,.txt,.md,.csv,.json" disabled={!!subindo} style={{display:"none"}}
+      <input type="file" multiple accept=".pdf,image/*,.docx,.pptx,.xlsx,.txt,.md,.csv,.json,video/*,audio/*,.mkv,.mp4,.mov,.webm,.avi,.mp3,.m4a,.wav,.ogg,.aac" disabled={!!subindo} style={{display:"none"}}
         onChange={function(e){ const f=Array.prototype.slice.call(e.target.files||[]); e.target.value=""; _subir(f); }}/>
     </label>}
 
@@ -102188,8 +102375,8 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
         const on=!!m.ativo&&!!String(m.ficha||"").trim();
         const _lendo=String(m.ficha_status||"")==="lendo";
         const _nome=String(m.arquivo_nome||"").toLowerCase();
-        const _ext=/\.pdf$/.test(_nome)?"PDF":/\.docx?$/.test(_nome)?"Word":/\.pptx?$/.test(_nome)?"PowerPoint":/\.xlsx?$/.test(_nome)?"Excel":/\.(png|jpe?g|webp|gif|heic)$/.test(_nome)?"Imagem":/\.(txt|md|csv|json)$/.test(_nome)?"Texto":"Arquivo";
-        const _corExt={PDF:"#dc2626",Word:"#2563eb",PowerPoint:"#ea580c",Excel:"#16a34a",Imagem:"#7c3aed",Texto:"#475569",Arquivo:"#64748b"}[_ext];
+        const _ext=String(m.tipo||"")==="reuniao"?"Reunião":/\.pdf$/.test(_nome)?"PDF":/\.docx?$/.test(_nome)?"Word":/\.pptx?$/.test(_nome)?"PowerPoint":/\.xlsx?$/.test(_nome)?"Excel":/\.(png|jpe?g|webp|gif|heic)$/.test(_nome)?"Imagem":/\.(txt|md|csv|json)$/.test(_nome)?"Texto":/\.(mp3|m4a|wav|ogg|opus|aac)$/.test(_nome)?"Áudio":"Arquivo";
+        const _corExt={PDF:"#dc2626",Word:"#2563eb",PowerPoint:"#ea580c",Excel:"#16a34a",Imagem:"#7c3aed",Texto:"#475569",Arquivo:"#64748b","Reunião":"#0d9488","Áudio":"#0d9488"}[_ext];
         const _ficha=String(m.ficha||"").trim();
         const _resumo=_ficha.replace(/^FICHA[^\n]*\n+/i,"").replace(/^O QUE É\s*\n/i,"").replace(/\s+/g," ").slice(0,140);
         return <div key={m.id} role="button" tabIndex={0} title="Abrir a ficha"
@@ -102250,8 +102437,9 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               </button>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",padding:_isMobM?"10px 14px":"10px 20px",borderBottom:"1px solid "+PB_BORDER2,background:"#fafbfc",flexShrink:0}}>
-              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={_btn}><Ico n="eye" size={12} color="#64748b"/>Abrir arquivo</a>}
-              {isAdmin && m.arquivo_url && <button type="button" disabled={_lendo} onClick={function(){ _relerDoUrl(m); }} style={Object.assign({},_btn,{opacity:_lendo?.5:1})} title="Ler o arquivo de novo e refazer a ficha"><Ico n="refresh" size={12} color="#64748b"/>Reler com a IA</button>}
+              {m.arquivo_url && <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={_btn}><Ico n="eye" size={12} color="#64748b"/>{String(m.tipo||"")==="reuniao"?"Abrir áudio":"Abrir arquivo"}</a>}
+              {isAdmin && String(m.tipo||"")==="reuniao" && String(m.transcricao||"").trim() && <button type="button" disabled={_lendo} onClick={async function(){ if(typeof pixelsConfirm==="function"){ const ok=await pixelsConfirm("Transcrever o áudio de novo? A transcrição atual é substituída (a ficha é refeita depois)."); if(!ok) return; } await _patch(m,{transcricao:""}); _relerDoUrl(Object.assign({},m,{transcricao:""})); }} style={Object.assign({},_btn,{opacity:_lendo?.5:1})} title="Ouvir o áudio de novo e refazer a transcrição"><Ico n="refresh" size={12} color="#64748b"/>Transcrever de novo</button>}
+              {isAdmin && m.arquivo_url && <button type="button" disabled={_lendo} onClick={function(){ _relerDoUrl(m); }} style={Object.assign({},_btn,{opacity:_lendo?.5:1})} title={String(m.tipo||"")==="reuniao"?"Refazer a ficha a partir da transcrição":"Ler o arquivo de novo e refazer a ficha"}><Ico n="refresh" size={12} color="#64748b"/>Reler com a IA</button>}
               {isAdmin && editId!==m.id && <button type="button" onClick={function(){ setEditId(m.id); setRascunho(_ficha); }} style={_btn}><Ico n="edit" size={12} color="#64748b"/>Editar à mão</button>}
               {isAdmin && editId===m.id && <>
                 <button type="button" onClick={function(){ _patch(m,{ficha:String(rascunho||"").trim(),ficha_status:"manual"}); setEditId(null); }} style={Object.assign({},_btn,{background:"#f5b301",border:"none",color:"#fff"})}>Salvar ficha</button>
@@ -102261,6 +102449,7 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
               {isAdmin && <button type="button" onClick={function(){ _apagar(m); _fechar(); }} style={Object.assign({},_btn,{color:"#dc2626"})} title="Apagar este material"><Ico n="trash" size={12} color="#dc2626"/>Apagar</button>}
             </div>
             <div style={{flex:1,overflowY:"auto",padding:_isMobM?"14px":"18px 22px 24px"}}>
+              {String(m.tipo||"")==="reuniao" && m.arquivo_url && <audio controls preload="none" src={m.arquivo_url} style={{width:"100%",marginBottom:14}}/>}
               {editId===m.id
                 ? <_PbAutoTextarea value={rascunho} onChange={function(e){setRascunho(e.target.value);}} rows={16}
                     placeholder="A ficha que a IA lê junto com o resto do cérebro. Escreva fatos, não texto de propaganda."
@@ -102276,6 +102465,11 @@ function _PbMateriais({clientId, clienteNome, isBioter, unitTab, isAdmin}){
                             {[92,78,85,60,70].map(function(w,i){ return <div key={i} style={{height:9,width:w+"%",borderRadius:99,marginBottom:8,background:"linear-gradient(90deg,#e8edf3 0px,#f5f7fa 200px,#e8edf3 400px)",backgroundSize:"800px 100%",animation:"pxShimmer 1.6s linear infinite"}}/>; })}
                           </div>
                         : <div style={{color:"#94a3b8",fontSize:12.5,padding:"24px 0",textAlign:"center"}}>Sem ficha{isAdmin?" — clique em Editar à mão, ou em Reler com a IA.":"."}</div>))}
+              {/* (25/09/2026) Reunião: a transcrição inteira fica aqui, dobrada — a ficha é o que vai pro cérebro */}
+              {String(m.tipo||"")==="reuniao" && String(m.transcricao||"").trim() && editId!==m.id && <details style={{marginTop:14}}>
+                <summary style={{cursor:"pointer",color:"#0d9488",fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>Transcrição completa ({String(m.transcricao).split(/\s+/).length} palavras)</summary>
+                <div style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:12,padding:"14px 16px",color:"#134e4a",fontSize:12.5,lineHeight:1.65,whiteSpace:"pre-wrap",marginTop:8}}>{m.transcricao}</div>
+              </details>}
             </div>
           </div>
         </div>;
