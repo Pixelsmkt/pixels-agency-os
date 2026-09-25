@@ -2061,6 +2061,16 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.armazenamento", label:"Armazenamento",        desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.portfolio",     label:"Portfólio",            desc:"Padrão: só sócios", padrao:_pxSocio},
   ]},
+  /* 25/09/2026 — WhatsApp do Guvi: o que cada pessoa pode fazer PELO WhatsApp (plano aprovado).
+     Nascem fechadas (só sócio). Por enquanto só aparecem aqui: o Guvi passa a ler estas chaves
+     quando a parte de criar card for construída. "Liberar contato" não tem chave: é sempre só sócio. */
+  {id:"whats", label:"WhatsApp do Guvi", itens:[
+    {key:"whats.conversar",  label:"Conversar com o Guvi",    desc:"Tirar dúvidas pelo WhatsApp. Padrão: só sócios", padrao:_pxSocio},
+    {key:"whats.pedir_info", label:"Pedir informação",        desc:"O Guvi responde sobre cards e clientes. Padrão: só sócios", padrao:_pxSocio},
+    {key:"whats.pedir_card", label:"Pedir card",              desc:"Cria card por texto ou áudio. Padrão: só sócios", padrao:_pxSocio},
+    {key:"whats.arquivo",    label:"Mandar arquivo pro card", desc:"Foto, vídeo ou documento vai pro card. Padrão: só sócios", padrao:_pxSocio},
+    {key:"whats.avisar",     label:"Avisar colaborador",      desc:"O Guvi avisa quem vai fazer o card. Padrão: só sócios", padrao:_pxSocio},
+  ]},
 ]};
 PX_BLOCOS.acessos={label:"Acessos", navIcon:"acessos", color:"#475569", grupos:[
   {id:"menu", label:"Menu", itens:[
@@ -20579,7 +20589,8 @@ async function _pxCascataComemorativaViraStory(novo){
     if(!_pxColAlvos(t).some(function(a){ return alvos.indexOf(a)>=0; })) continue;
     const tags=(Array.isArray(t.tags)?t.tags:[]).filter(function(x){ return String(x)!=="Somente story"; }).concat(["Somente story"]);
     const tl=(Array.isArray(t.timeline)?t.timeline:[]).concat([{type:"edit",user:"Claude",atFmt:fmt,label:"Virou Somente story: a feira/evento \""+String(novo.title||"").slice(0,60)+"\" publica no feed neste mesmo dia"}]);
-    const u=await sb.from("tasks").update({somente_story:true,tags:tags,timeline:tl}).eq("id",t.id);
+    // (25/09/2026) story = só o Vinicius responsável, em qualquer status (regra de 17/09)
+    const u=await sb.from("tasks").update({somente_story:true,tags:tags,timeline:tl,assignee:"vinicius",assignees:["vinicius"]}).eq("id",t.id);
     if(u&&u.error){ console.warn("[cascata story]",t.id,u.error.message); continue; }
     n++;
     _pxApRegistrar("Comemorativa virou Somente story: feira/evento no mesmo dia",[],[{id:t.id,antes:{somente_story:false},depois:{somente_story:true}}]);
@@ -25079,6 +25090,25 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                 +(_ct.cota?(" ("+_ct.cota+" previstos no plano"+(_ct.preset?" "+_ct.preset.charAt(0).toUpperCase()+_ct.preset.slice(1):"")+")"):"")
                                 +(_estourou?" — passou da cota do mês":"");
                               return <span title={_ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",height:20,padding:"0 6px",borderRadius:6,background:_estourou?"#f59e0b":"rgba(255,255,255,0.26)",color:"#fff",fontSize:pxFonte(9.5,isMob),fontWeight:800,letterSpacing:.2,lineHeight:1,flexShrink:0,fontVariantNumeric:"tabular-nums",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{_txt}</span>;
+                            })()}
+                            {/* (25/09/2026, Vinicius) Foto de obra e Vídeo short dependem de material que
+                                a equipe/cliente manda. Sem nenhum arquivo dentro do card → triângulo AMARELO,
+                                pra estrategista bater o olho no calendário e ir atrás. Conta como material
+                                qualquer arquivo de verdade (material, referência ou final); anotação, anexo
+                                de "solicitar ajuste" e upload em curso não contam. Pausado/reprovado não avisa. */}
+                            {(function(){
+                              if(t.status==="reprovado"||t.status==="pausado") return null;
+                              const _foto=/foto\s*de\s*obra/i.test(String(t.title||""));   // pelo título: tipo "foto" sozinho é Ajuste de template
+                              const _short=(typeof pxEhShort==="function")&&pxEhShort(t);
+                              if(!_foto&&!_short) return null;
+                              const _tem=(Array.isArray(t.files)?t.files:[]).some(function(f){
+                                return f&&f.url&&!f.uploading&&!f.isAnnotation&&!f.isRef&&(!f.tipo||f.tipo==="material"||f.tipo==="referencia"||f.tipo==="final");
+                              });
+                              if(_tem) return null;
+                              return <span title={_foto?"Foto de obra sem material — nenhuma foto dentro do card":"Vídeo short sem material — nenhum vídeo dentro do card"}
+                                style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:"#facc15",color:"#713f12",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                              </span>;
                             })()}
                             {pxCriadoPeloClaude(t)&&<PxSeloClaude size={20} claro cor={cardColor}/>}
                             {pxMaterialPedido(t)&&<PxSeloMaterialCliente size={20} claro cor={cardColor}/>}
@@ -47131,7 +47161,8 @@ function _cardPodeSerResp(u){
       const nextReferenceMonth = _autoRefMonth;
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
+      const _asFinal=somenteStory?["vinicius"]:assignees;   // (25/09/2026) story = só o Vinicius
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:_asFinal[0],assignees:_asFinal,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,somenteStory:!!somenteStory,naoPublica:!!naoPublica,aguardando_info:_agInfoNext,musica:!!musicaModo,musicaModo:musicaModo||"",slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     });
     });
     // ══ PERSIST DIRETO NO SUPABASE — evita perda de assignees etc quando abre via link ══
@@ -51561,7 +51592,9 @@ function _cardPodeSerResp(u){
               <label style={LB}><span style={LB_DOT}/> Como esta peça sai</label>
               <div style={{border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",background:"#fff"}}>
                 <PxComoSaiLinhas story={somenteStory} musicaModo={musicaModo} naoPublica={naoPublica} folder={_folder} disabled={!canEdit}
-                  onStory={function(){ setSomenteStory(!somenteStory); }}
+                  onStory={function(){ const _on=!somenteStory; setSomenteStory(_on);
+                    /* (25/09/2026, Vinicius) story ligado = só o Vinicius responsável (regra de 17/09). */
+                    if(_on) setAssignees(["vinicius"]); }}
                   onMusica={function(_m){ setMusicaModo(_m||""); }}
                   onNaoPublica={function(){ setNaoPublica(!naoPublica); }}/>
               </div>
@@ -52260,7 +52293,31 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
   })();
   /* (24/09/2026) Contatos, Equipe e Orientações visuais saíram da aba — não contam mais pra
      decidir se a aba tem conteúdo, senão ela abre "cheia" e não mostra nada. */
-  const hasContent=_briefItens.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.site));
+  /* (25/09/2026) Site e redes: mesma fonte do bloco "Site e redes oficiais" do Playbook.
+     Bioter → orientacoes.byUnit[unidade] (a raiz não aparece no Playbook da Bioter e guardava
+     um @bioterchapeco solto que vazava pra todas as unidades). Outros clientes → raiz. */
+  const _siteRedesItens = function(o){
+    const out=[]; o=o||{};
+    if(o.site) out.push({k:"site", v:o.site});
+    if(o.driveUrl) out.push({k:"driveUrl", v:o.driveUrl});
+    if(o.redes) Object.entries(o.redes).filter(function(e){return !!String(e[1]||"").trim();}).forEach(function(e){out.push({k:e[0], v:e[1]});});
+    return out;
+  };
+  const _siteRedesGrupos = (function(){
+    if(clientId!=="bioter") { const it=_siteRedesItens(data); return it.length?[{id:"",label:"",itens:it}]:[]; }
+    const _U=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+    const sel=String(bioterUnit||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+    let ids;
+    if(sel.indexOf("grupo")>=0) ids=_U.map(function(u){return u.id;});
+    else if(sel.indexOf("brasil")>=0) ids=_U.filter(function(u){return u.id!=="paraguay";}).map(function(u){return u.id;});
+    else ids=sel;
+    const bu=(data&&data.byUnit)||{};
+    return ids.map(function(id){
+      const u=_U.find(function(x){return x.id===id;});
+      return {id:id, label:u?(u.pickerLabel||u.label):id, itens:_siteRedesItens(bu[id])};
+    }).filter(function(g){return g.itens.length>0;});
+  })();
+  const hasContent=_briefItens.length>0||_pbMarcacoes.length>0||!!_pbComunicacao||!!_pbInstrDesigner||_bigNumbers.length>0||!!_pbDesignOrient||_pbChamadasOk.length>0||_pbChamadasNo.length>0||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)))||_siteRedesGrupos.length>0;
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -52296,10 +52353,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
   };
 
   // Coleta todos os links pra montar a seção Links (unificada)
-  const _linksItems = [];
-  if(data.site) _linksItems.push({k:"site", v:data.site});
-  if(data.driveUrl) _linksItems.push({k:"driveUrl", v:data.driveUrl});
-  if(data.redes) Object.entries(data.redes).filter(function(e){return !!e[1];}).forEach(function(e){_linksItems.push({k:e[0], v:e[1]});});
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -52326,6 +52379,11 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
+      {/* (25/09/2026) Ordem = ordem do Playbook: Dados cadastrais → Marcar no post → Comunicação
+          da marca → Instruções pro designer → Orientações (logo/paleta/fontes) → Exemplos de
+          chamadas → Site e redes oficiais. Saíram Tom de voz, Hashtags padrão e CTA padrão
+          (clients.orientacoes) — o Playbook tirou os três em 23/09; o tom mora em Comunicação
+          da marca. Os dados continuam no banco: saiu a tela, não o conteúdo. */}
       {/* ═══ Dados cadastrais (Playbook) + o que só o Briefing tem ═══ */}
       {_vis("pb-briefing-auto")&&_briefItens.length>0&&<div>
         <SectionTitle label="Dados cadastrais" sub="Playbook › Dados cadastrais manda; o Briefing completa o que falta — clique pra copiar" icon="fileText" accent="#0d9488"/>
@@ -52341,6 +52399,52 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
+      {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
+      {_vis("pb-marcacoes")&&_pbMarcacoes.length>0&&<div>
+        <SectionTitle label="Marcar no post (@)" sub="Perfis pra marcar na publicação — clique pra copiar o @" icon="tag" accent="#0284c7"/>
+        {/* (22/09/2026, Rodrigo) Era uma nuvem de pílulas em negrito: com 14 perfis virava um
+            bloco azul só e a social media perdia gente no meio. Agora é LISTA VERTICAL — uma
+            linha por perfil, sem negrito, o @ à esquerda e o nome/cargo à direita. */}
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,overflow:"hidden"}}>
+          {_pbMarcacoes.map(function(m,i){
+            const _a=String(m.arroba||"").trim()?("@"+String(m.arroba).trim().replace(/^@+/,"")):"";
+            const _copyVal=_a||m.nome||"";
+            const _feito=copiedHex===_copyVal;
+            return <button key={i} type="button" title="Clique pra copiar o @"
+              onClick={function(){copyHex(_copyVal);}}
+              onMouseEnter={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"#f8fafc"; }}
+              onMouseLeave={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"transparent"; }}
+              style={{display:"flex",alignItems:"center",gap:10,width:"100%",boxSizing:"border-box",textAlign:"left",
+                background:_feito?"#f0fdfa":"transparent",border:"none",borderTop:i===0?"none":"1px solid #f1f5f9",
+                padding:"9px 12px",cursor:"copy",fontFamily:"inherit",transition:"background .12s"}}>
+              <span style={{color:_feito?"#0d9488":"#0284c7",fontSize:12.5,fontWeight:600,letterSpacing:-.1,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_feito?"Copiado ✓":(_a||"—")}</span>
+              {m.nome&&!_feito?<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,flexShrink:0,maxWidth:"46%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</span>:null}
+              <Ico n="copy" size={11} color={_feito?"#0d9488":"#cbd5e1"}/>
+            </button>;
+          })}
+        </div>
+      </div>}
+
+      {/* ═══ Comunicação da marca (Playbook) ═══ */}
+      {_vis("pb-comunicacao")&&_pbComunicacao&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle label="Comunicação da marca" sub="Do Playbook — estilo e linguagem" icon="sparkles" accent="#0ea5e9"/>
+        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbComunicacao}</div>
+        {_pbPilares.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
+          {_pbPilares.map(function(p,i){return <span key={i} style={{background:"#e0f2fe",color:"#075985",border:"1px solid #bae6fd",borderRadius:99,padding:"4px 10px",fontSize:11.5,fontWeight:600}}>{p}</span>;})}
+        </div>}
+      </div>}
+
+      {/* ═══ Instruções pro designer (Playbook) — o que a imagem deste cliente deve mostrar ═══ */}
+      {_vis("pb-designer")&&_pbInstrDesigner&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle label="Instruções pro designer" sub="Do Playbook — foco das imagens e o que evitar" icon="image" accent="#ea580c"/>
+        <div style={{color:"#7c2d12",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbInstrDesigner}</div>
+      </div>}
+
+      {/* ═══ Padrão visual (Playbook › design.orientacoes) ═══ */}
+      {_vis("pb-designer")&&_pbDesignOrient&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle label="Padrão visual" sub="Do Playbook — regras de design deste cliente" icon="palette" accent="#7c3aed"/>
+        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbDesignOrient}</div>
+      </div>}
 
       {/* ═══ Logos ═══ */}
       {_vis("pb-equipe")&&data.logos?.length>0&&<div>
@@ -52405,12 +52509,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-      {/* ═══ Tom de voz ═══ */}
-      {_vis("pb-comunicacao")&&data.tomDeVoz&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-        <SectionTitle label="Tom de voz" icon="mic" accent="#16a34a"/>
-        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{data.tomDeVoz}</div>
-      </div>}
-
       {/* ═══ Big numbers (Briefing › Objetivos e números) — chamadas de impacto pras artes ═══ */}
       {_vis("pb-chamadas")&&_bigNumbers.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
         <SectionTitle label="Big numbers" sub="Do Briefing — números de impacto pra usar como destaque nas artes (clique pra copiar)" icon="chart" accent="#dc2626"/>
@@ -52420,27 +52518,6 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
               style={{background:"linear-gradient(135deg,#fef2f2,#fff)",border:"1px solid #fecaca",borderRadius:10,padding:"8px 13px",fontSize:14,fontWeight:800,color:"#991b1b",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.2}}>{b}</button>;
           })}
         </div>
-      </div>}
-
-      {/* ═══ Instruções pro designer (Playbook) — o que a imagem deste cliente deve mostrar ═══ */}
-      {_vis("pb-designer")&&_pbInstrDesigner&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:14,padding:"16px 18px"}}>
-        <SectionTitle label="Instruções pro designer" sub="Do Playbook — foco das imagens e o que evitar" icon="image" accent="#ea580c"/>
-        <div style={{color:"#7c2d12",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbInstrDesigner}</div>
-      </div>}
-
-      {/* ═══ Comunicação da marca (Playbook) ═══ */}
-      {_vis("pb-comunicacao")&&_pbComunicacao&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-        <SectionTitle label="Comunicação da marca" sub="Do Playbook — estilo e linguagem" icon="sparkles" accent="#0ea5e9"/>
-        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbComunicacao}</div>
-        {_pbPilares.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:12}}>
-          {_pbPilares.map(function(p,i){return <span key={i} style={{background:"#e0f2fe",color:"#075985",border:"1px solid #bae6fd",borderRadius:99,padding:"4px 10px",fontSize:11.5,fontWeight:600}}>{p}</span>;})}
-        </div>}
-      </div>}
-
-      {/* ═══ Padrão visual (Playbook › design.orientacoes) ═══ */}
-      {_vis("pb-designer")&&_pbDesignOrient&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-        <SectionTitle label="Padrão visual" sub="Do Playbook — regras de design deste cliente" icon="palette" accent="#7c3aed"/>
-        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{_pbDesignOrient}</div>
       </div>}
 
       {/* ═══ Chamadas aprovadas / proibidas (Playbook) ═══ */}
@@ -52454,88 +52531,46 @@ function OrientacoesView({clientId, bioterUnit, sector, viewUser, viewPerms}){
         </div>
       </div>}
 
-
-      {/* ═══ Marcar no post (@) — perfis pra marcar na publicação (diferente do GC) ═══ */}
-      {_vis("pb-marcacoes")&&_pbMarcacoes.length>0&&<div>
-        <SectionTitle label="Marcar no post (@)" sub="Perfis pra marcar na publicação — clique pra copiar o @" icon="tag" accent="#0284c7"/>
-        {/* (22/09/2026, Rodrigo) Era uma nuvem de pílulas em negrito: com 14 perfis virava um
-            bloco azul só e a social media perdia gente no meio. Agora é LISTA VERTICAL — uma
-            linha por perfil, sem negrito, o @ à esquerda e o nome/cargo à direita. */}
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,overflow:"hidden"}}>
-          {_pbMarcacoes.map(function(m,i){
-            const _a=String(m.arroba||"").trim()?("@"+String(m.arroba).trim().replace(/^@+/,"")):"";
-            const _copyVal=_a||m.nome||"";
-            const _feito=copiedHex===_copyVal;
-            return <button key={i} type="button" title="Clique pra copiar o @"
-              onClick={function(){copyHex(_copyVal);}}
-              onMouseEnter={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"#f8fafc"; }}
-              onMouseLeave={function(e){ e.currentTarget.style.background=_feito?"#f0fdfa":"transparent"; }}
-              style={{display:"flex",alignItems:"center",gap:10,width:"100%",boxSizing:"border-box",textAlign:"left",
-                background:_feito?"#f0fdfa":"transparent",border:"none",borderTop:i===0?"none":"1px solid #f1f5f9",
-                padding:"9px 12px",cursor:"copy",fontFamily:"inherit",transition:"background .12s"}}>
-              <span style={{color:_feito?"#0d9488":"#0284c7",fontSize:12.5,fontWeight:600,letterSpacing:-.1,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_feito?"Copiado ✓":(_a||"—")}</span>
-              {m.nome&&!_feito?<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,flexShrink:0,maxWidth:"46%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.nome}</span>:null}
-              <Ico n="copy" size={11} color={_feito?"#0d9488":"#cbd5e1"}/>
-            </button>;
-          })}
-        </div>
-      </div>}
-
-
-      {/* ═══ Hashtags ═══ */}
-      {_vis("pb-social")&&data.hashtags?.length>0&&<div>
-        <SectionTitle label="Hashtags padrão" sub="Clique pra copiar" icon="hash" accent="#7c3aed"/>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {data.hashtags.map((t,i)=>(
-            <button key={i} onClick={()=>copyHex(t)}
-              style={{background:copiedHex===t?"#7c3aed":"#f5f3ff",color:copiedHex===t?"#fff":"#7c3aed",border:"1px solid "+(copiedHex===t?"#7c3aed":"#ede9fe"),borderRadius:99,padding:"6px 13px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"all .12s"}}
-              onMouseEnter={function(e){if(copiedHex!==t){e.currentTarget.style.background="#ede9fe";e.currentTarget.style.borderColor="#c4b5fd";}}}
-              onMouseLeave={function(e){if(copiedHex!==t){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#ede9fe";}}}>
-              {copiedHex===t?"copiado!":t}
-            </button>
-          ))}
-        </div>
-      </div>}
-
-      {/* ═══ CTA padrão ═══ */}
-      {_vis("pb-social")&&data.ctaPadrao&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px"}}>
-        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2"/></svg>
-          CTA padrão
-        </div>
-        <div style={{color:"#0f172a",fontSize:13.5,fontWeight:600,letterSpacing:-.15}}>{data.ctaPadrao}</div>
-      </div>}
-
-      {/* ═══ Não fazer ═══ */}
-
-      {/* ═══ Links (renomeado — Contatos agora tem aba própria) ═══ */}
-      {_vis("pb-social")&&_linksItems.length>0&&<div>
-        <SectionTitle label="Links" sub="Perfis oficiais e recursos externos" icon="link" accent="#7c3aed"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
-          {_linksItems.map(function(it){
-            const cfg = _PLAT[it.k] || {label:it.k, color:"#64748b", icon:"link", build:function(s){return s;}};
-            const url = cfg.build(it.v);
-            const displayValue = it.k==="driveUrl" ? "Abrir pasta" : it.v;
-            return <a key={it.k} href={url} target="_blank" rel="noopener noreferrer"
-              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:11,textDecoration:"none",transition:"all .12s"}}
-              onMouseEnter={function(e){e.currentTarget.style.borderColor=cfg.color+"66";e.currentTarget.style.background=cfg.color+"06";e.currentTarget.style.boxShadow="0 3px 10px "+cfg.color+"15";}}
-              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="none";}}>
-              <div style={{width:32,height:32,borderRadius:9,background:cfg.color+"14",color:cfg.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                {cfg.icon==="instagram"
-                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
-                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
-                    </svg>
-                  : <Ico n={cfg.icon} size={14}/>}
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15}}>{cfg.label}</div>
-                <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayValue}</div>
-              </div>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-            </a>;
-          })}
+      {/* ═══ Site e redes oficiais — ÚLTIMO, igual ao Playbook (25/09/2026) ═══
+          Pedido: "por que aparece o link da bioterchapeco no cartão da Bioter Castro?"
+          Era a raiz de clients.orientacoes (site/redes), que o Playbook da Bioter nem mostra —
+          lá cada unidade tem o seu em orientacoes.byUnit. Agora: Bioter lê SÓ a(s) unidade(s)
+          do card (grupo = todas; brasil = todas menos Paraguay); cliente comum lê a raiz.
+          Visível pra quem vê o bloco pb-siteredes no Playbook (Design, Vídeo, Estratégia). */}
+      {_vis("pb-siteredes")&&_siteRedesGrupos.length>0&&<div>
+        <SectionTitle label="Site e redes oficiais" sub={bioterUnit?"Da unidade deste card — do Playbook":"Do Playbook — pra usar em arte, link de bio e post"} icon="globe" accent="#0d9488"/>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {_siteRedesGrupos.map(function(g){
+          return <div key={g.id||"raiz"}>
+            {_siteRedesGrupos.length>1&&<div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>{g.label}</div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+            {g.itens.map(function(it){
+              const cfg = _PLAT[it.k] || {label:it.k, color:"#64748b", icon:"link", build:function(s){return s;}};
+              const url = cfg.build(it.v);
+              const displayValue = it.k==="driveUrl" ? "Abrir pasta" : it.v;
+              return <a key={it.k} href={url} target="_blank" rel="noopener noreferrer"
+                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:11,textDecoration:"none",transition:"all .12s"}}
+                onMouseEnter={function(e){e.currentTarget.style.borderColor=cfg.color+"66";e.currentTarget.style.background=cfg.color+"06";e.currentTarget.style.boxShadow="0 3px 10px "+cfg.color+"15";}}
+                onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="none";}}>
+                <div style={{width:32,height:32,borderRadius:9,background:cfg.color+"14",color:cfg.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {cfg.icon==="instagram"
+                    ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                      </svg>
+                    : <Ico n={cfg.icon} size={14}/>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15}}>{cfg.label}</div>
+                  <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayValue}</div>
+                </div>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+              </a>;
+            })}
+            </div>
+          </div>;
+        })}
         </div>
       </div>}
     </div>
@@ -95008,7 +95043,8 @@ async function pxGerarCardsEventos(opts){
       title:(typeof smartFormatTitle==="function"?smartFormatTitle(c.sl.titulo):c.sl.titulo),
       desc:(typeof _pxTextoParaHtml==="function"?_pxTextoParaHtml(_txt):_txt),
       caption:"",
-      assignee:"ellen", assignees:(ehVideo?["ellen","guilherme"]:["ellen"]), watchers:[],
+      // (25/09/2026) story = só o Vinicius responsável (regra de 17/09)
+      assignee:(c.sl.story?"vinicius":"ellen"), assignees:(c.sl.story?["vinicius"]:(ehVideo?["ellen","guilherme"]:["ellen"])), watchers:[],
       client:c.alvo.client, sector:(ehVideo?"video":"design"), priority:"", status:"rascunhos",
       startDate:_f(now), deadline:c.sl.date,
       publishDate:c.sl.date, publish_date:c.sl.date, publishTime:"11:00",
