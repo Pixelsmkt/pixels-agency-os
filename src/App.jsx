@@ -2530,8 +2530,9 @@ const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
 function pxLoadFreelaAjustes(){
   try{
     var sb=window._sb; if(!sb) return;
-    sb.from("team_data").select("dados").eq("tipo","pagamento_ajustes").maybeSingle().then(function(r){
-      window.__pxFreelaAjustes=(r&&r.data&&r.data.dados&&typeof r.data.dados==="object")?r.data.dados:{};
+    // 25/09/2026 (segurança): o banco devolve TUDO só pra quem tem Financeiro; o freela recebe só os ajustes DELE
+    sb.rpc("pagamento_ajustes_meus").then(function(r){
+      window.__pxFreelaAjustes=(r&&!r.error&&r.data&&typeof r.data==="object")?r.data:{};
       try{window.dispatchEvent(new CustomEvent("pixels:freela-ajustes-updated"));}catch(_){}
     }).catch(function(){});
   }catch(_){}
@@ -6317,15 +6318,25 @@ const BRIEFING_SECTIONS = [
   { id:"publico",         label:"Público-alvo",          icon:"users",        color:"#f59e0b",
     fields:[
       { id:"cliente_ideal", label:"Cliente dos sonhos", help:"descreva o perfil ideal", type:"textarea" },
-      { id:"faixa_etaria", label:"Faixa etária predominante", type:"text" },
-      { id:"sexo", label:"Sexo predominante", type:"radio", options:["Masculino","Feminino","Ambos"] },
-      { id:"localizacao", label:"Localização geográfica principal", type:"textarea" },
       { id:"comportamento", label:"Comportamento digital", help:"o que consome, como busca soluções, quais redes usa", type:"textarea" },
       { id:"dores", label:"3 dores do cliente ideal", type:"textarea" },
       { id:"duvidas", label:"3 dúvidas do cliente ideal", type:"textarea" },
       { id:"desejos", label:"3 desejos do cliente ideal", type:"textarea" },
       { id:"objecoes", label:"3 objeções do cliente ideal", type:"textarea" },
-      { id:"segmentacao", label:"Segmentação específica", help:"renda, interesses, cargo, tipo de cultura", type:"textarea" },
+      /* (25/09/2026, Gustavo) bloco "Para a campanha": respostas diretas pro gestor de mídia montar os
+         anúncios. faixa_etaria/sexo/localizacao/segmentacao são os MESMOS campos de antes (só mudaram de
+         lugar e de rótulo) — nada do que o cliente já respondeu se perde. O que é aberto fica em texto. */
+      { id:"_titulo_campanha", label:"Para a campanha", help:"Respostas diretas que o nosso gestor de mídia usa pra montar os anúncios", type:"titulo" },
+      { id:"faixa_etaria", label:"Idade de quem queremos atingir", help:"de quantos até quantos anos — 65 quer dizer 65 anos ou mais", type:"idade" },
+      { id:"sexo", label:"Sexo predominante", type:"radio", options:["Masculino","Feminino","Ambos"] },
+      { id:"localizacao", label:"Onde anunciar", help:"cidades e regiões, uma por linha — ex.: Chapecó/SC · Oeste de SC · Sudoeste do PR", type:"textarea" },
+      { id:"raio_anuncio", label:"Até quantos km em volta dessas cidades", type:"radio", options:["Até 20 km","Até 40 km","Até 60 km","Até 80 km"] },
+      { id:"nao_anunciar", label:"Onde NÃO anunciar", help:"cidades ou regiões que vocês não atendem ou não interessam (se tiver)", type:"textarea" },
+      { id:"segmentacao", label:"Perfil de quem compra", help:"o que faz, tipo de produção, tamanho, cargo, interesses — ex.: produtor de suínos integrado, de 500 a 2 mil matrizes", type:"textarea" },
+      { id:"porte", label:"Porte do cliente que queremos atingir", type:"multi", options:["Pequeno","Médio","Grande"] },
+      { id:"quem_decide", label:"Quem decide a compra", help:"ex.: o produtor, o filho que está assumindo, o gerente da granja, o técnico da integradora", type:"textarea" },
+      { id:"objetivo_anuncio", label:"O que a pessoa deve fazer ao ver o anúncio", type:"radio", options:["Chamar no WhatsApp","Preencher um cadastro","Visitar o site","Ir até a loja/unidade","Ligar"] },
+      { id:"meses_fortes", label:"Meses mais fortes de venda", type:"multi", options:["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"] },
     ]
   },
   { id:"marketing_atual", label:"Marketing atual",       icon:"chart",        color:"#ca8a04",
@@ -6602,6 +6613,99 @@ function _useBriefing(clientId, unitId){
 }
 
 // Campo de senha: input mascarado com botão de mostrar/ocultar (olhinho) e copiar
+/* (25/09/2026) Idade em duas caixinhas. Grava em TEXTO legível ("25 a 55 anos", "a partir de 30 anos",
+   "até 40 anos") — o mesmo campo faixa_etaria de sempre, que a ficha da Gestão de mídia e a IA já leem.
+   Resposta antiga em texto livre que não dá pra ler vira aviso "resposta anterior" até alguém preencher. */
+function _brIdadeLer(txt){
+  const t=String(txt||"").toLowerCase();
+  const n=(t.match(/\d{2}/g)||[]).map(Number).filter(function(x){return x>=13&&x<=90;});
+  if(!n.length) return null;
+  if(n.length>=2) return [Math.min.apply(null,n),Math.min(65,Math.max.apply(null,n))];
+  if(/acima|mais de|ou mais|\+|a partir/.test(t)) return [n[0],65];
+  if(/at[ée]|abaixo|menos de/.test(t)) return [18,n[0]];
+  return null;
+}
+function _brIdadeTexto(mn,mx){
+  mn=mn?Math.max(13,Math.min(65,Number(mn))):0; mx=mx?Math.max(13,Math.min(65,Number(mx))):0;
+  if(mn&&mx&&mn>mx){ const t=mn; mn=mx; mx=t; }
+  if(mn&&mx) return mx>=65?("a partir de "+mn+" anos"):(mn+" a "+mx+" anos");
+  if(mn) return "a partir de "+mn+" anos";
+  if(mx) return mx>=65?"":("até "+mx+" anos");
+  return "";
+}
+function _BriefIdade({val,canEdit,color,onChange}){
+  const lido=_brIdadeLer(val);
+  const [mn,setMn]=useState(lido?String(lido[0]):"");
+  const [mx,setMx]=useState(lido?(lido[1]>=65?"65":String(lido[1])):"");
+  useEffect(function(){ const l=_brIdadeLer(val); setMn(l?String(l[0]):""); setMx(l?(l[1]>=65?"65":String(l[1])):""); },[val]);
+  const antigo=String(val||"").trim(); const canon=_brIdadeTexto(mn,mx);
+  const mostrarAntigo=antigo&&!lido;
+  const salvar=function(a,b){ const t=_brIdadeTexto(a,b); if(t&&t!==antigo) onChange(t); else if(!t&&lido&&!a&&!b) onChange(""); };
+  const box={width:64,padding:"9px 10px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:14,fontWeight:700,textAlign:"center",fontFamily:"inherit",outline:"none",background:canEdit?"#fff":"#fafbfc",color:"#0f172a"};
+  const so=function(v){ return String(v||"").replace(/\D/g,"").slice(0,2); };
+  return <div>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontSize:13,color:"#475569",fontWeight:600}}>
+      <span>De</span>
+      <input value={mn} disabled={!canEdit} inputMode="numeric" placeholder="18" onChange={function(e){setMn(so(e.target.value));}} onBlur={function(){salvar(mn,mx);}} style={box}/>
+      <span>até</span>
+      <input value={mx} disabled={!canEdit} inputMode="numeric" placeholder="65" onChange={function(e){setMx(so(e.target.value));}} onBlur={function(){salvar(mn,mx);}} style={box}/>
+      <span>anos</span>
+      {canon&&<span style={{marginLeft:6,fontSize:11.5,fontWeight:700,color:color,background:color+"14",borderRadius:99,padding:"3px 10px"}}>{canon}</span>}
+    </div>
+    {mostrarAntigo&&<div style={{marginTop:6,fontSize:11.5,color:"#94a3b8"}}>Resposta anterior: <i>{antigo}</i> — preencha as caixinhas pra ficar certinho pra campanha.</div>}
+  </div>;
+}
+
+/* (25/09/2026) "Sugerir com a IA" no bloco Para a campanha — só pra equipe (não aparece no portal).
+   Lê o que o cliente já respondeu no briefing e preenche APENAS os campos vazios do bloco. Nunca
+   sobrescreve resposta do cliente. Um save só, no fim. */
+const _BR_CAMPANHA_OPC={
+  sexo:["Masculino","Feminino","Ambos"],
+  raio_anuncio:["Até 20 km","Até 40 km","Até 60 km","Até 80 km"],
+  porte:["Pequeno","Médio","Grande"],
+  objetivo_anuncio:["Chamar no WhatsApp","Preencher um cadastro","Visitar o site","Ir até a loja/unidade","Ligar"],
+  meses_fortes:["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"],
+};
+function _BriefCampanhaIA({data,color,onSave}){
+  const [st,setSt]=useState("");
+  const P=(data&&data.publico)||{};
+  const vazio=function(v){ return Array.isArray(v)?!v.length:!String(v||"").trim(); };
+  const campos=["faixa_etaria","sexo","localizacao","raio_anuncio","segmentacao","porte","quem_decide","objetivo_anuncio","meses_fortes"];
+  const faltam=campos.filter(function(k){ return vazio(P[k]); });
+  if(!faltam.length) return null;
+  const rodar=async function(){
+    setSt("lendo o briefing…");
+    try{
+      const base={}; Object.keys(data||{}).forEach(function(k){ if(k!=="logins") base[k]=data[k]; });
+      const sys="Você ajuda o gestor de mídia de uma assessoria de marketing do agro. Recebe o briefing de um cliente (JSON) e sugere respostas para campos de campanha que ainda estão vazios. Use SÓ o que está escrito no briefing — se não der pra deduzir com segurança, devolva vazio. Responda APENAS com JSON, sem comentários, sem aspas duplas dentro dos textos.";
+      const u="Campos vazios a sugerir: "+faltam.join(", ")+"\n\nRegras:\n- faixa_etaria: texto no formato \"25 a 55 anos\" ou \"a partir de 30 anos\".\n- sexo: um de "+_BR_CAMPANHA_OPC.sexo.join(" | ")+".\n- localizacao: cidades/regiões onde anunciar, uma por linha.\n- raio_anuncio: um de "+_BR_CAMPANHA_OPC.raio_anuncio.join(" | ")+".\n- segmentacao: perfil de quem compra (o que faz, tipo de produção, tamanho), 1 a 3 linhas.\n- porte: lista com itens de "+_BR_CAMPANHA_OPC.porte.join(" | ")+".\n- quem_decide: quem decide a compra, 1 a 2 linhas.\n- objetivo_anuncio: um de "+_BR_CAMPANHA_OPC.objetivo_anuncio.join(" | ")+" (olhe funil de vendas e processo comercial).\n- meses_fortes: lista com itens de "+_BR_CAMPANHA_OPC.meses_fortes.join(" | ")+" (olhe a sazonalidade; se não houver sazonalidade, lista vazia).\n\nBriefing:\n"+JSON.stringify(base).slice(0,24000)+"\n\nDevolva: {\"campo\": valor, ...} só com os campos pedidos.";
+      const r=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:undefined),max_tokens:1200,system:sys,messages:[{role:"user",content:u}]});
+      const out=((r&&r.content)||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
+      const i=out.indexOf("{"), j=out.lastIndexOf("}"); if(i<0||j<i) throw new Error("a IA não devolveu as sugestões");
+      const sug=JSON.parse(out.slice(i,j+1));
+      const pub=Object.assign({},P); let n=0;
+      faltam.forEach(function(k){
+        let v=sug[k]; const opc=_BR_CAMPANHA_OPC[k];
+        if(opc&&(k==="porte"||k==="meses_fortes")){ v=(Array.isArray(v)?v:[]).filter(function(x){return opc.indexOf(x)>=0;}); if(!v.length) return; }
+        else if(opc){ if(opc.indexOf(v)<0) return; }
+        else { v=String(v||"").trim(); if(!v) return; if(k==="faixa_etaria"){ const l=_brIdadeLer(v); if(!l) return; v=_brIdadeTexto(l[0],l[1]); if(!v) return; } }
+        pub[k]=v; n++;
+      });
+      if(!n){ setSt("o briefing não tem informação suficiente pra sugerir"); return; }
+      onSave(Object.assign({},data,{publico:pub}));
+      setSt(n+" campo"+(n>1?"s":"")+" sugerido"+(n>1?"s":"")+" — confira e ajuste");
+    }catch(e){ setSt("erro: "+((e&&e.message)||e)); }
+  };
+  const ocupado=st==="lendo o briefing…";
+  return <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    {st&&<span style={{fontSize:11.5,color:"#64748b"}}>{st}</span>}
+    <button type="button" disabled={ocupado} onClick={rodar} title={"Preenche só o que está vazio ("+faltam.length+" campo"+(faltam.length>1?"s":"")+"), a partir do que o cliente já respondeu"}
+      style={{background:color+"14",color:color,border:"1px solid "+color+"55",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:700,cursor:ocupado?"wait":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+      <Ico n="sparkles" size={12} color={color}/> {ocupado?"Sugerindo…":"Sugerir com a IA"}
+    </button>
+  </div>;
+}
+
 function _BriefingPasswordField(props){
   const val = props.val || "";
   const canEdit = !!props.canEdit;
@@ -6976,6 +7080,7 @@ function BriefingFormCanonico(props){
                   const cond = (data[sec.id]||{})[f.showIf.field];
                   if(cond !== f.showIf.value) return;
                 }
+                if(f.type==="titulo"){ lines.push(""); lines.push("── "+f.label.toUpperCase()+" ──"); return; }
                 const v = (data[sec.id]||{})[f.id];
                 lines.push("");
                 lines.push("• "+f.label);
@@ -7040,6 +7145,21 @@ function BriefingFormCanonico(props){
               <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1}}>{f.label}</div>
               {f.help && <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>{f.help}</div>}
             </div>;
+            if(f.type==="titulo"){
+              return <div key={f.id} style={{marginTop:6,paddingTop:16,borderTop:"2px dashed "+current.color+"40",display:"flex",alignItems:"flex-end",gap:10,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{color:current.color,fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>{f.label}</div>
+                  {f.help&&<div style={{color:"#64748b",fontSize:12,marginTop:2}}>{f.help}</div>}
+                </div>
+                {canEdit&&!props.portal&&<_BriefCampanhaIA data={data} color={current.color} onSave={function(next){ briefing.save(next); }}/>}
+              </div>;
+            }
+            if(f.type==="idade"){
+              return <div key={f.id}>
+                {labelDom}
+                <_BriefIdade val={val} canEdit={canEdit} color={current.color} onChange={function(v){ setField(current.id, f.id, v); }}/>
+              </div>;
+            }
             if(f.type==="textarea"){
               // Auto-resize acompanha altura do conteudo (estilo Notion/Docs)
               function _resize(el){
@@ -21181,6 +21301,87 @@ function pxAuditoriaCalendario(tasks, iniIso, fimIso){
       .sort(function(x,y){ return x.dia.localeCompare(y.dia)||x.rotulo.localeCompare(y.rotulo); });
   }catch(e){ console.warn("[auditoria calendário]",e); return []; }
 }
+/* ═══ LACUNA NA SEMANA (25/09/2026, Vinicius) ═══════════════════════════════════════════
+   "eu apaguei um card da Arabutã da semana do dia 5… não deveria ter criado um card novo?"
+   Decisão: o app NÃO cria sozinho (apagar à mão é decisão) e NÃO faz cascata reversa. Só AVISA:
+   aparece um card tracejado no dia livre da semana — "Arabutã · falta 1 vídeo" — com botão
+   "Criar card" (1 clique, já com cliente/unidade, formato e data) e "×" pra ignorar.
+   Regras:
+   - Semana (dom–sáb) abaixo da cadência PX_CASCATA_CAP, contando igual à cascata/auditoria
+     (story, não publica, folder, reprovado e pausado não contam; VetService: 1ª comemorativa é brinde).
+   - Só entre a semana atual e o FIM DO PLANO do cliente (última semana cheia antes de 2 semanas
+     seguidas abaixo da cadência) — o fim da fila e as comemorativas soltas de 2027 não viram aviso.
+   - Respeita o fim do contrato (PX_CASCATA_FIM_CONTRATO).
+   - Formato sugerido (fora da Bioter): o que falta frente ao mix das semanas cheias vizinhas
+     (Arabutã = 1 vídeo + 1 arte). Bioter: "post".
+   - Dia sugerido: dia útil a partir de amanhã, sem post do alvo; prefere não colar em outro post do alvo
+     (dia antes/depois) e o dia preferido do cliente (PX_AUTOPLAN_DIA).                     */
+function pxLacunasCalendario(tasks, iniIso, fimIso, hojeIso){
+  try{
+    const DIA=86400000;
+    const semIni=function(iso){ return _pxApLinha(iso).iniIso; };
+    const addD=function(iso,n){ const d=_pxApData(iso); d.setDate(d.getDate()+n); return _pxApIso(d); };
+    const semHoje=semIni(hojeIso);
+    const desde=addD(semHoje,-42);
+    const rows=(tasks||[]).filter(function(t){
+      if(!t||t.deletedAt||t.deleted_at) return false;
+      const st=String(t.status||""); if(st==="reprovado"||st==="pausado") return false;
+      if(_pxNaoEhPublicacao(t)) return false;
+      const d=String(t.publishDate||t.publish_date||"").slice(0,10);
+      return d&&d>=desde&&PX_COLISAO_CLIENTES.indexOf(String(t.client||""))>=0;
+    }).map(function(t){
+      return {id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:String(t.publishDate||t.publish_date||"").slice(0,10),
+        status:t.status,title:t.title||"",tags:t.tags||[],content_type:t.contentType||t.content_type||null,fromDrive:t.fromDrive||t.from_drive};
+    });
+    const porAlvo={};
+    rows.forEach(function(t){ _pxColAlvos(t).forEach(function(a){ if(PX_CASCATA_CAP[a]) (porAlvo[a]=porAlvo[a]||[]).push(t); }); });
+    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Clem",
+      "bioter:chapeco":"Chapecó","bioter:castro":"Castro","bioter:toledo":"Toledo","bioter:gloria":"Glória","bioter:uberlandia":"Uberlândia","bioter:paraguay":"Paraguay"};
+    const trilha=function(t){ const tr=_pxCasTrilha(t); return tr==="video"?"video":"arte"; };
+    const out=[];
+    Object.keys(porAlvo).forEach(function(a){
+      const cli=a.split(":")[0], cap=PX_CASCATA_CAP[a]; if(!cap) return;
+      const porSem={};
+      porAlvo[a].forEach(function(t){ const w=semIni(t.publish_date); (porSem[w]=porSem[w]||[]).push(t); });
+      const conta=function(w){ return _pxCasBrindeFora(porSem[w]||[],cli); };
+      // fim do plano: última semana cheia antes de 2 semanas vazias seguidas
+      // (duas semanas seguidas abaixo da cadência = acabou o plano; a semana atual já passou em parte)
+      let w=semHoje, horiz=null, abaixo=0;
+      for(let i=0;i<60&&abaixo<2;i++){ const n=conta(w).length; if(n>=cap){ horiz=w; abaixo=0; } else if(w!==semHoje) abaixo++; w=addD(w,7); }
+      if(!horiz) return;
+      const fimContrato=(typeof PX_CASCATA_FIM_CONTRATO!=="undefined"&&PX_CASCATA_FIM_CONTRATO[cli])||"";
+      const diasDoAlvo={}; porAlvo[a].forEach(function(t){ diasDoAlvo[t.publish_date]=true; });
+      const prefer=(typeof PX_AUTOPLAN_DIA!=="undefined"&&PX_AUTOPLAN_DIA[cli])||[];
+      for(let s=semHoje; s<=horiz; s=addD(s,7)){
+        if(s>fimIso||addD(s,6)<iniIso) continue;
+        const g=conta(s); const falta=cap-g.length; if(falta<=0) continue;
+        // dia sugerido
+        let melhor=null, melhorNota=1e9;
+        for(let k=1;k<=5;k++){
+          const d=addD(s,k); if(d<=hojeIso) continue; if(fimContrato&&d>fimContrato) continue;
+          if(diasDoAlvo[d]) continue;
+          let nota=k*0.01;
+          if(diasDoAlvo[addD(d,-1)]||diasDoAlvo[addD(d,1)]) nota+=10;
+          if(prefer.length&&prefer.indexOf(k)<0) nota+=5;
+          if(nota<melhorNota){ melhorNota=nota; melhor=d; }
+        }
+        if(!melhor) continue;
+        // formato: o que falta frente ao mix das semanas cheias vizinhas
+        let formato="post";
+        if(cli!=="bioter"){
+          const viz=[]; for(let j=-6;j<=6;j++){ if(!j) continue; const ww=addD(s,7*j); const gg=conta(ww); if(gg.length===cap) viz.push(gg); }
+          const med=function(tr){ if(!viz.length) return 0; const v=viz.map(function(gg){ return gg.filter(function(t){return trilha(t)===tr;}).length; }).sort(); return v[Math.floor(v.length/2)]; };
+          const tem=function(tr){ return g.filter(function(t){return trilha(t)===tr;}).length; };
+          const fV=med("video")-tem("video"), fA=med("arte")-tem("arte");
+          formato=(fV>0&&fV>=fA)?"video":(fA>0?"arte":(cap>=2&&!tem("video")?"video":"arte"));
+        }
+        out.push({alvo:a,cli:cli,unit:a.indexOf(":")>0?a.split(":")[1]:"",semanaIni:s,dia:melhor,falta:falta,formato:formato,rotulo:NOME[a]||a,
+          texto:(NOME[a]||a)+" · falta "+falta+" "+(formato==="video"?(falta>1?"vídeos":"vídeo"):formato==="arte"?(falta>1?"artes":"arte"):(falta>1?"posts":"post"))+" nesta semana"});
+      }
+    });
+    return out;
+  }catch(e){ console.warn("[lacunas calendário]",e); return []; }
+}
 /* (11/09/2026) Card criado automaticamente pelo Claude (planejamento do calendário até dez/2026):
    id "autoplan-..." ou createdBy "Claude". Mostra o selo roxo com brilho no card do Calendário
    de publicações e no quadro da Linha de produção. */
@@ -23948,7 +24149,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   const _canCreateFromCal=_bl("criar"); // padrão: sócio ou coordenação
   // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
   // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
-  function _createDraftAtDay(dateObj){
+  function _createDraftAtDay(dateObj,pre){
     if(!_canCreateFromCal)return;
     if(typeof mkId!=="function"||typeof smartFormatTitle!=="function"){
       if(typeof pixelsToast!=="undefined")pixelsToast.warning("Setup incompleto pra criar pelo calendário.");
@@ -23984,6 +24185,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
       _isDraft:true
     };
+    // (25/09/2026) veio do card tracejado de lacuna: já nasce com cliente/unidade/formato
+    if(pre&&typeof pre==="object"){ Object.assign(draft,pre); if(draft.timeline&&draft.timeline[0]) draft.timeline[0].label="Demanda criada por "+respName+" pelo Calendário (lacuna da semana)"; }
     if(typeof setTasks==="function"){setTasks(function(p){return [].concat(p||[],[draft]);});}
     setOpenCard(draft);
   }
@@ -24358,6 +24561,28 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
   },[tasks,calMonth,filterClient,filterBioterUnit]);
   const _auditPorDia=React.useMemo(function(){ const o={}; _audit.forEach(function(x){ (o[x.dia]=o[x.dia]||[]).push(x); }); return o; },[_audit]);
   const [auditAberta,setAuditAberta]=useState(false);
+  /* (25/09/2026) LACUNAS — semana abaixo da cadência vira card tracejado com "Criar card".
+     Só avisa; "×" ignora aquela semana daquele cliente (fica guardado neste navegador). */
+  const [lacIgn,setLacIgn]=useState(function(){ try{ return JSON.parse(localStorage.getItem("px_lacunas_ignoradas")||"{}")||{}; }catch(_){ return {}; } });
+  const _lacunasPorDia=React.useMemo(function(){
+    if(typeof pxLacunasCalendario!=="function") return {};
+    const y=calMonth.getFullYear(), m=calMonth.getMonth();
+    const ini=new Date(y,m,1); ini.setDate(ini.getDate()-ini.getDay()-7);
+    const fim=new Date(y,m+1,0); fim.setDate(fim.getDate()+(6-fim.getDay())+7);
+    const iso=function(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    const o={};
+    pxLacunasCalendario(tasks,iso(ini),iso(fim),iso(new Date())).forEach(function(x){
+      if(lacIgn[x.alvo+"|"+x.semanaIni]) return;
+      if(filterClient!=="todos"&&x.cli!==filterClient) return;
+      if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&x.unit!==filterBioterUnit) return;
+      (o[x.dia]=o[x.dia]||[]).push(x);
+    });
+    return o;
+  },[tasks,calMonth,filterClient,filterBioterUnit,lacIgn]);
+  const _ignorarLacuna=function(x){
+    const n=Object.assign({},lacIgn); n[x.alvo+"|"+x.semanaIni]=Date.now(); setLacIgn(n);
+    try{ localStorage.setItem("px_lacunas_ignoradas",JSON.stringify(n)); }catch(_){}
+  };
   /* ══ CELULAR (22/09/2026) ═════════════════════════════════════════════════
      A grade de 7 colunas nao cabe em 390px: cada dia fica com ~50px e o nome do
      cliente sai cortado. No celular o mes vira UMA SEMANA POR VEZ, com as mesmas
@@ -25194,6 +25419,32 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
 
                         </div>
                       );
+                    })}
+                    {_canCreateFromCal&&(_lacunasPorDia[fmtDay(day)]||[]).map(function(x){
+                      const _cl=CLIENTS.find(function(c){return c.id===x.cli;});
+                      const _cor=x.cli==="bioter"?(["gloria","uberlandia","paraguay"].indexOf(x.unit)>=0?"#16a34a":"#166534"):((_cl&&_cl.color)||"#475569");
+                      const _fmt=x.formato==="video"?"vídeo":x.formato==="arte"?"arte":"post";
+                      const _plur=x.falta>1?(x.formato==="video"?"vídeos":x.formato==="arte"?"artes":"posts"):_fmt;
+                      return <div key={"lac-"+x.alvo+"-"+x.dia} data-lacuna onClick={function(e){e.stopPropagation();}}
+                        title={x.rotulo+": a semana está com "+x.falta+" post"+(x.falta>1?"s":"")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
+                        style={{border:"1.5px dashed "+_cor,borderRadius:8,padding:"6px 8px 7px",background:"rgba(255,255,255,0.82)",display:"flex",flexDirection:"column",gap:5,flexShrink:0,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+                          <span style={{width:7,height:7,borderRadius:99,background:_cor,flexShrink:0}}/>
+                          <span style={{flex:1,minWidth:0,fontSize:pxFonte(10.5,isMob),fontWeight:800,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
+                          <button type="button" title="Ignorar esta lacuna" onClick={function(e){e.stopPropagation();_ignorarLacuna(x);}}
+                            style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:0,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </div>
+                        <div style={{fontSize:pxFonte(10.5,isMob),color:"#475569",fontWeight:600,lineHeight:1.3}}>Falta {x.falta} {_plur} nesta semana</div>
+                        <button type="button" onClick={function(e){e.stopPropagation();
+                            const _ct=x.formato==="post"?null:x.formato;
+                            _createDraftAtDay(day,{client:x.cli,bioterUnit:(x.cli==="bioter"?(x.unit||null):null),contentType:_ct,content_type:_ct});}}
+                          style={{alignSelf:"flex-start",background:_cor,color:"#fff",border:"none",borderRadius:6,padding:"4px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          Criar card
+                        </button>
+                      </div>;
                     })}
 
                   </div>
@@ -33358,7 +33609,10 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const _short=(typeof pxEhShort==="function")&&pxEhShort(task);
     const ids=Array.isArray(task.assignees)&&task.assignees.length?task.assignees:(task.assignee?[task.assignee]:[]);
     const temFreela=ids.some(uid=>{const u=(TEAM||[]).find(x=>x.id===uid);return u&&(u.dash==="designer"||u.dash==="editor"||u.dash==="video");});
-    if(!temFreela&&!_short) f.push("freelancer (designer ou editor de vídeo)");
+    /* (25/09/2026, Vinicius) SOMENTE STORY também não precisa de freelancer: é do Vinicius,
+       não passa por design nem edição (regra de 17/09: story = só o Vinicius responsável). */
+    const _story=!!(task.somenteStory||task.somente_story);
+    if(!temFreela&&!_short&&!_story) f.push("freelancer (designer ou editor de vídeo)");
     const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
     /* (25/09/2026, Vinicius) Short também não precisa de TIPO DE CONTEÚDO: não vai pra edição,
        é direto da Hellen pro Gustavo — o tipo só serve pra classificar pagamento de freela. */
@@ -61949,6 +62203,522 @@ function AdsMapaPublico({p,isMob}){
   </div>;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   ONDE PÔR OS PINS — análise geográfica do briefing (25/09/2026, Gustavo/Vinicius)
+   "quero saber os pins aonde vão, pra não ter sobreposição exagerada.. menor número de pins
+    possível pra contemplar todas as áreas que queremos… um mapinha com os pins pro gestor já saber"
+
+   1. lê do Briefing: Objetivos › Cidades de atuação, Público › Localização geográfica e a cidade-sede
+      (Bioter: o briefing da unidade)
+   2. a IA transforma o texto em áreas OFICIAIS do IBGE (município, microrregião, mesorregião,
+      região imediata/intermediária, estado) — separando atuação ATUAL de EXPANSÃO
+   3. geo-sedes devolve cada município dessas áreas com a coordenada da sede
+   4. pxPinsCobertura: menor número de pins com raio que cobre todas as sedes (cobertura gulosa com
+      24 variações de desempate + poda de pin redundante + troca pra reduzir sobreposição)
+   Salva em midia_pins_briefing (áreas + raio), refaz o cálculo na tela.
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+function _pinKm(a,b){
+  const R=6371, r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r;
+  const s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+}
+/* ═══ PINS DE ALCANCE — menor número de pins com raio que cobre as cidades-alvo (25/09/2026) ═══
+   Entrada: alvos = municípios (sede: lat/lng) que o cliente quer atingir; todos = municípios das
+   UFs envolvidas (candidatos a centro do pin e contagem do que "vaza" pra fora); raioKm.
+   Saída: pins [{nome,uf,lat,lng,raio,cobre:[idx alvos],so:[idx alvos só dele]}], descobertos,
+   sobreposicao (alvos cobertos por 2+ pins), vazamento (municípios fora do alvo dentro de algum raio).
+   Método: cobertura gulosa (cada pin pega o máximo de cidades ainda descobertas; empate → o que
+   vaza menos pra fora e sobrepõe menos), depois tira pin redundante e tenta trocar cada pin por
+   outra cidade que cubra o mesmo e sobreponha menos. Distância = haversine entre sedes. */
+/* base comum a todas as tentativas: candidatos, quem cada um cobre, quanto vaza (calcula UMA vez) */
+function _pxPinsBase(alvos,todos,R){
+  const A=(alvos||[]).filter(function(m){ return m&&isFinite(m.lat)&&isFinite(m.lng); });
+  const chaveA={}; A.forEach(function(m,i){ chaveA[m.nome+"|"+m.uf]=i; });
+  const T=(todos||[]).filter(function(m){ return m&&isFinite(m.lat)&&isFinite(m.lng); });
+  /* caixa rápida antes da distância exata */
+  const dLat=R/111, perto=function(a,c){ return Math.abs(a.lat-c.lat)<=dLat*1.05&&Math.abs(a.lng-c.lng)<=dLat*1.05/Math.max(.2,Math.cos(a.lat*Math.PI/180))&&_pinKm(a,c)<=R; };
+  const cand=T.filter(function(c){ return A.some(function(a){ return perto(a,c); }); });
+  if(!cand.length) A.forEach(function(a){ cand.push(a); });
+  const fora=T.filter(function(m){ return chaveA[m.nome+"|"+m.uf]===undefined; });
+  const cobre=cand.map(function(c){ const l=[]; A.forEach(function(a,i){ if(perto(a,c)) l.push(i); }); return l; });
+  const cobreSet=cobre.map(function(l){ const s=new Uint8Array(A.length); l.forEach(function(i){ s[i]=1; }); return s; });
+  const vazaL=cand.map(function(c){ const l=[]; fora.forEach(function(f,fi){ if(perto(f,c)) l.push(fi); }); return l; });
+  const vaza=vazaL.map(function(l){ return l.length; });
+  const dentro=cand.map(function(c){ return chaveA[c.nome+"|"+c.uf]!==undefined?1:0; });
+  return {A:A,cand:cand,fora:fora,cobre:cobre,cobreSet:cobreSet,vaza:vaza,vazaL:vazaL,dentro:dentro,R:R};
+}
+function _pxPinsUmaVez(B,opts){
+  opts=opts||{};
+  const rnd=opts.semente?(function(){ let x=opts.semente; return function(){ x=(x*16807)%2147483647; return x/2147483647; }; })():null;
+  const A=B.A,cand=B.cand,cobre=B.cobre,cobreSet=B.cobreSet,vaza=B.vaza,dentro=B.dentro,R=B.R;
+  if(!A.length) return {pins:[],descobertos:[],sobreposicao:0,vazamento:0,raio:R,alvos:A};
+  const desc=new Uint8Array(A.length).fill(1); let nDesc=A.length;
+  const cont=new Array(A.length).fill(0);
+  let esc=[]; const usado=new Uint8Array(cand.length);
+  while(nDesc>0){
+    let best=-1,bs=null;
+    for(let ci=0;ci<cand.length;ci++){
+      if(usado[ci]) continue;
+      let novo=0,sob=0; const l=cobre[ci]; for(let k=0;k<l.length;k++){ if(desc[l[k]]) novo++; else sob++; }
+      if(!novo) continue;
+      /* score: novo manda; empate → menos vazamento, menos sobreposição, pin dentro do alvo */
+      const s0=rnd?novo+rnd()*0.9:novo;
+      if(!bs||s0>bs[0]||(s0===bs[0]&&(-vaza[ci]>bs[1]||(-vaza[ci]===bs[1]&&(-sob>bs[2]||(-sob===bs[2]&&dentro[ci]>bs[3])))))){ bs=[s0,-vaza[ci],-sob,dentro[ci]]; best=ci; }
+    }
+    if(best<0) break;
+    esc.push(best); usado[best]=1; cobre[best].forEach(function(i){ if(desc[i]){ desc[i]=0; nDesc--; } });
+  }
+  const recalc=function(){ cont.fill(0); esc.forEach(function(ci){ cobre[ci].forEach(function(i){ cont[i]++; }); }); };
+  /* tira pin redundante (tudo que ele cobre outro também cobre) — do que mais vaza pro que menos */
+  const podar=function(){ let mudou=true;
+    while(mudou){ mudou=false; recalc();
+      const ord=esc.slice().sort(function(x,y){ return vaza[y]-vaza[x]; });
+      for(let k=0;k<ord.length;k++){ const ci=ord[k];
+        if(cobre[ci].every(function(i){ return cont[i]>=2; })){ esc=esc.filter(function(x){return x!==ci;}); mudou=true; break; } } } };
+  podar();
+  /* troca: cada pin por outra cidade que mantenha tudo coberto e sobreponha/vaze menos */
+  for(let volta=0;volta<3;volta++){
+    let trocou=false;
+    for(let k=0;k<esc.length;k++){
+      recalc(); const ci=esc[k]; const setCi=cobreSet[ci];
+      const precisa=cobre[ci].filter(function(i){ return cont[i]===1; });
+      const noEsc={}; esc.forEach(function(x){ noEsc[x]=1; });
+      const custo=function(cj){ let sob=0; const l=cobre[cj]; for(let q=0;q<l.length;q++){ if(cont[l[q]]-setCi[l[q]]>=1) sob++; } return sob*3+vaza[cj]-dentro[cj]*0.5; };
+      let melhor=ci, mc=custo(ci);
+      for(let cj=0;cj<cand.length;cj++){
+        if(noEsc[cj]) continue;
+        const s=cobreSet[cj]; let ok=true; for(let q=0;q<precisa.length;q++){ if(!s[precisa[q]]){ ok=false; break; } }
+        if(!ok) continue;
+        const cc=custo(cj); if(cc<mc-1e-9){ mc=cc; melhor=cj; }
+      }
+      if(melhor!==ci){ esc[k]=melhor; trocou=true; }
+    }
+    podar();
+    if(!trocou) break;
+  }
+  recalc();
+  const pins=esc.map(function(ci){ const c=cand[ci]; return {nome:c.nome,uf:c.uf,lat:c.lat,lng:c.lng,raio:R,
+    cobre:cobre[ci].slice(), so:cobre[ci].filter(function(i){return cont[i]===1;}), vaza:vaza[ci], dentro:!!dentro[ci]}; })
+    .sort(function(a,b){ return b.lat-a.lat||a.lng-b.lng; });
+  const vazSet=new Set(); esc.forEach(function(ci){ B.vazaL[ci].forEach(function(fi){ vazSet.add(fi); }); });
+  return {pins:pins, descobertos:A.filter(function(_,i){return cont[i]===0;}), sobreposicao:cont.filter(function(n){return n>=2;}).length,
+    vazamento:vazSet.size, raio:R, alvos:A};
+}
+/* roda a cobertura várias vezes variando o desempate e fica com a melhor:
+   menos pins → menos cidades cobertas por 2+ pins → menos vazamento pra fora */
+function pxPinsCobertura(alvos,todos,raioKm,opts){
+  opts=opts||{};
+  const B=_pxPinsBase(alvos,todos,Number(raioKm)||40);
+  let best=_pxPinsUmaVez(B,{});
+  const n=opts.tentativas===undefined?24:opts.tentativas;
+  const pior=function(a,b){ return a.pins.length!==b.pins.length?a.pins.length>b.pins.length:(a.sobreposicao*2+a.vazamento>b.sobreposicao*2+b.vazamento); };
+  for(let k=1;k<=n;k++){
+    const r=_pxPinsUmaVez(B,{semente:k*7919});
+    if(r.descobertos.length>best.descobertos.length) continue;
+    if(r.descobertos.length<best.descobertos.length||pior(best,r)) best=r;
+  }
+  return best;
+}
+/* mesma análise em vários raios — pro gestor ver quantos pins cada raio pede */
+function pxPinsPorRaio(alvos,todos,raios){
+  return (raios||[20,25,30,40,50,60,80]).map(function(r){ const x=pxPinsCobertura(alvos,todos,r); return {raio:r,pins:x.pins.length,sobreposicao:x.sobreposicao,vazamento:x.vazamento}; });
+}
+const PX_PIN_RAIOS=[20,25,30,40,50,60,80];   // a Meta aceita de 1 a 80 km num pin
+const PX_UF_NOME={AC:"Acre",AL:"Alagoas",AP:"Amapá",AM:"Amazonas",BA:"Bahia",CE:"Ceará",DF:"Distrito Federal",ES:"Espírito Santo",GO:"Goiás",MA:"Maranhão",MT:"Mato Grosso",MS:"Mato Grosso do Sul",MG:"Minas Gerais",PA:"Pará",PB:"Paraíba",PR:"Paraná",PE:"Pernambuco",PI:"Piauí",RJ:"Rio de Janeiro",RN:"Rio Grande do Norte",RS:"Rio Grande do Sul",RO:"Rondônia",RR:"Roraima",SC:"Santa Catarina",SP:"São Paulo",SE:"Sergipe",TO:"Tocantins"};
+const _pinNorm=function(t){ return String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); };
+/* UFs citadas no texto (sigla ou nome), + a da sede */
+function _pinUfsDoTexto(txt){
+  const out=new Set(); const t=" "+String(txt||"")+" ";
+  const tn=" "+_pinNorm(t)+" ";
+  Object.keys(PX_UF_NOME).forEach(function(uf){
+    if(new RegExp("[^A-Za-z]"+uf+"[^A-Za-z]").test(t)) out.add(uf);
+    /* nome do estado como palavra inteira ("acre" não pega "Acreforte"); "Pará" só com "estado do Pará"
+       ou Belém — "para" é preposição */
+    const nn=_pinNorm(PX_UF_NOME[uf]);
+    if(uf==="PA"){ if(/ estado do para | belem /.test(tn)) out.add(uf); }
+    else if(tn.indexOf(" "+nn+" ")>=0) out.add(uf);
+  });
+  /* "gaúcho", "catarinense", "paranaense", "Sul do Brasil" */
+  const n=_pinNorm(t);
+  if(/gauch|rio grandense/.test(n)) out.add("RS");
+  if(/catarinense/.test(n)) out.add("SC");
+  if(/paranaense/.test(n)) out.add("PR");
+  if(/sul do brasil|regiao sul/.test(n)){ out.add("RS"); out.add("SC"); out.add("PR"); }
+  return Array.from(out);
+}
+function _pinHash(s){ let h=5381; s=String(s||""); for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return String(h>>>0); }
+window._pxSedes=window._pxSedes||{};
+async function _pinSedes(ufs){
+  const falta=ufs.filter(function(u){ return !window._pxSedes[u]; });
+  if(falta.length){
+    const {data,error}=await window._sb.functions.invoke("geo-sedes",{body:{ufs:falta}});
+    if(error) throw new Error(error.message||"geo-sedes");
+    const por={}; ((data&&data.municipios)||[]).forEach(function(m){ (por[m.uf]=por[m.uf]||[]).push(m); });
+    falta.forEach(function(u){ window._pxSedes[u]=por[u]||[]; });
+  }
+  let out=[]; ufs.forEach(function(u){ out=out.concat(window._pxSedes[u]||[]); });
+  return out.filter(function(m){ return m&&m.lat!=null&&m.lng!=null; });
+}
+/* área (nível + nome + UF) → municípios */
+function _pinResolveArea(a,todos){
+  const nv=String(a.nivel||"").toLowerCase(), nm=_pinNorm(a.nome), uf=String(a.uf||"").toUpperCase();
+  const campo={municipio:"nome",microrregiao:"micro",mesorregiao:"meso",regiao_imediata:"imediata",regiao_intermediaria:"intermediaria"}[nv];
+  if(nv==="estado") return todos.filter(function(m){ return m.uf===uf; });
+  if(!campo) return [];
+  return todos.filter(function(m){ return (!uf||m.uf===uf)&&_pinNorm(m[campo])===nm; });
+}
+async function pxPinsAreasDoBriefing(texto,clienteNome,todos){
+  if(typeof askClaude!=="function") throw new Error("IA indisponível");
+  const ufs=Array.from(new Set(todos.map(function(m){return m.uf;})));
+  const cat=ufs.map(function(uf){
+    const meso={}; const imed={};
+    todos.forEach(function(m){ if(m.uf!==uf) return; (meso[m.meso]=meso[m.meso]||new Set()).add(m.micro); (imed[m.intermediaria]=imed[m.intermediaria]||new Set()).add(m.imediata); });
+    return uf+"\n  mesorregiões › microrregiões: "+Object.keys(meso).sort().map(function(k){ return k+" ("+Array.from(meso[k]).sort().join(", ")+")"; }).join("; ")+
+      "\n  regiões intermediárias › imediatas: "+Object.keys(imed).sort().map(function(k){ return k+" ("+Array.from(imed[k]).sort().join(", ")+")"; }).join("; ");
+  }).join("\n");
+  const sys="Você é analista de mídia paga. Converte a descrição de área de atuação de um cliente em áreas OFICIAIS do IBGE, "+
+    "pra montar a segmentação geográfica de anúncios da Meta. Responda SÓ com JSON válido, sem markdown.";
+  const pedido="Cliente: "+(clienteNome||"")+"\n\nO QUE O CLIENTE ESCREVEU NO BRIEFING:\n"+texto+"\n\nÁREAS OFICIAIS DISPONÍVEIS (use os nomes EXATAMENTE assim):\n"+cat+
+    "\n\nDevolva {\"areas\":[{\"nivel\":\"municipio|microrregiao|mesorregiao|regiao_imediata|regiao_intermediaria|estado\",\"nome\":\"…\",\"uf\":\"SC\",\"grupo\":\"atual|expansao\",\"trecho\":\"o pedaço do briefing que justifica\"}],\"resumo\":\"uma frase do que entendeu\"}\n\n"+
+    "REGRAS:\n- grupo \"atual\" = onde o cliente JÁ atua/vende hoje (ou região de maior concentração); \"expansao\" = onde ele QUER chegar. Sem distinção no texto → \"atual\".\n"+
+    "- Cidade citada pelo nome → nivel municipio (nome exato do município).\n"+
+    "- Região informal → a área oficial MAIS JUSTA que corresponde, sem inflar: \"Extremo Oeste de SC\" = microrregião São Miguel do Oeste; \"Oeste Catarinense\" = mesorregião Oeste Catarinense; \"Sudoeste do Paraná\" = mesorregião Sudoeste Paranaense; \"Noroeste do RS\" perto da divisa com SC = as microrregiões do norte do Noroeste Rio-grandense, não a mesorregião inteira, a menos que o texto diga o estado/região toda.\n"+
+    "- Cidade de referência entre parênteses (\"Vale gaúcho (Estrela / Carlos Barbosa)\") → a microrregião/região imediata dessas cidades.\n"+
+    "- \"Todo o estado\" → nivel estado. Não repita área já contida em outra do mesmo grupo.\n- Só use nomes da lista acima.\n- No campo trecho NÃO use aspas duplas.";
+  /* até 2 tentativas: JSON quebrado (aspas dentro do "trecho") acontece de vez em quando */
+  let j=null, ultimo="";
+  for(let tent=0;tent<2&&!j;tent++){
+    const resp=await askClaude({model:(typeof PX_IA_MODELO_RAPIDO!=="undefined"?PX_IA_MODELO_RAPIDO:PX_IA_MODELO),max_tokens:2500,system:sys,messages:[{role:"user",content:pedido}]});
+    const txt=((resp&&resp.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
+    const ini=txt.indexOf("{"), fim=txt.lastIndexOf("}");
+    if(ini<0||fim<ini){ ultimo="a IA não devolveu as áreas"; continue; }
+    try{ j=JSON.parse(txt.slice(ini,fim+1)); }catch(e){ ultimo=(e&&e.message)||String(e); }
+  }
+  if(!j) throw new Error(ultimo||"a IA não devolveu as áreas");
+  const areas=(j.areas||[]).map(function(a){ return {nivel:a.nivel,nome:a.nome,uf:String(a.uf||"").toUpperCase(),grupo:a.grupo==="expansao"?"expansao":"atual",trecho:a.trecho||""}; });
+  return {areas:areas,resumo:j.resumo||""};
+}
+function QGPinsBriefing({mc,isMob}){
+  const cid=(mc&&(mc.parent_client||mc.client_id))||""; const un=(mc&&mc.bioter_unit)||"";
+  const [br,setBr]=useState(null);           // {texto, hash, ufs}
+  const [salvo,setSalvo]=useState(undefined); // linha de midia_pins_briefing (null = não tem)
+  const [todos,setTodos]=useState(null);
+  const [lendo,setLendo]=useState("");
+  const [erro,setErro]=useState("");
+  const [raio,setRaio]=useState(40);
+  const [exp,setExp]=useState(false);
+  const [aberto,setAberto]=useState(true);
+  const [copiado,setCopiado]=useState(false);
+  const ref=useRef(null); const mapRef=useRef(null); const voaRef=useRef({});
+  /* briefing */
+  useEffect(function(){ let vivo=true; setBr(null); setSalvo(undefined); setErro("");
+    (async function(){
+      try{
+        const sb=window._sb; if(!sb||!cid) return;
+        const [c,s]=await Promise.all([
+          sb.from("clients").select("briefing_data,name").eq("client_id",cid).maybeSingle(),
+          sb.from("midia_pins_briefing").select("*").eq("client_id",cid).eq("unidade",un).maybeSingle()]);
+        if(!vivo) return;
+        let b=(c.data&&c.data.briefing_data)||{};
+        /* (25/09/2026) unidade da Bioter lê SÓ o briefing dela — nunca cai no do grupo. Mesmo texto
+           da edge function pins-briefing e do gatilho _pins_texto (senão o hash não bate). */
+        if(un) b=(b[un]&&typeof b[un]==="object")?b[un]:{}; else if(b.grupo&&typeof b.grupo==="object"&&!b.objetivos) b=b.grupo;
+        const g=function(sec,f){ return String((b&&b[sec]&&b[sec][f])||"").trim(); };
+        const partes=[];
+        if(g("identidade","cidade")) partes.push("Cidade-sede: "+g("identidade","cidade"));
+        if(g("objetivos","cidades")) partes.push("Cidades de atuação: "+g("objetivos","cidades"));
+        if(g("publico","localizacao")) partes.push("Localização geográfica principal: "+g("publico","localizacao"));
+        const texto=partes.join("\n");
+        setBr({texto:texto,hash:_pinHash(texto),ufs:_pinUfsDoTexto(texto),nome:(c.data&&c.data.name)||mc.name||cid});
+        const row=s.data||null; setSalvo(row);
+        if(row){ setRaio(row.raio_km||40); setExp(!!row.incluir_expansao); }
+        else { const _rb=(g("publico","raio_anuncio").match(/(\d+)/)||[])[1]; setRaio(_rb&&PX_PIN_RAIOS.indexOf(Number(_rb))>=0?Number(_rb):40); } /* (25/09/2026) raio do briefing */
+      }catch(e){ if(vivo) setErro((e&&e.message)||String(e)); }
+    })();
+    return function(){ vivo=false; }; },[cid,un]);
+  /* municípios das UFs (do texto + das áreas salvas) */
+  const ufsNec=useMemo(function(){ const s=new Set((br&&br.ufs)||[]); ((salvo&&salvo.areas)||[]).forEach(function(a){ if(a.uf) s.add(a.uf); }); return Array.from(s).sort(); },[br,salvo]);
+  useEffect(function(){ let vivo=true; if(!ufsNec.length){ setTodos(null); return; }
+    _pinSedes(ufsNec).then(function(t){ if(vivo) setTodos(t); }).catch(function(e){ if(vivo) setErro("Municípios do IBGE: "+((e&&e.message)||e)); });
+    return function(){ vivo=false; }; },[ufsNec.join(",")]);
+  const analisar=async function(){
+    if(!br||!br.texto){ return; }
+    setErro(""); setLendo("lendo o briefing");
+    try{
+      let t=todos; if(!t||!t.length) t=await _pinSedes(br.ufs.length?br.ufs:["SC","PR","RS"]);
+      setLendo("a IA está traduzindo o briefing em regiões do IBGE");
+      const r=await pxPinsAreasDoBriefing(br.texto,br.nome,t);
+      const extra=r.areas.map(function(a){return a.uf;}).filter(function(u){ return u&&!t.some(function(m){return m.uf===u;}); });
+      if(extra.length) t=await _pinSedes(Array.from(new Set(ufsNec.concat(extra))));
+      const row={client_id:cid,unidade:un,areas:r.areas,resumo:r.resumo,raio_km:raio,incluir_expansao:exp,briefing_hash:br.hash,
+        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"",updated_at:new Date().toISOString()};
+      const {data,error}=await window._sb.from("midia_pins_briefing").upsert(row,{onConflict:"client_id,unidade"}).select("*").maybeSingle();
+      if(error) throw error;
+      setSalvo(data||row); setTodos(t);
+    }catch(e){ setErro("Não deu pra analisar: "+((e&&e.message)||e)); }
+    setLendo("");
+  };
+  /* primeira vez: analisa sozinho */
+  const autoFeito=useRef(false);
+  /* primeira vez, ou o briefing mudou desde a última leitura: refaz sozinho (o servidor também refaz
+     em até ~7 min depois que o briefing para de mudar — pins-briefing, fila midia_pins_fila) */
+  useEffect(function(){ if(autoFeito.current||salvo===undefined||!br||!br.texto||!todos||un==="paraguay") return;
+    if(salvo!==null&&salvo.briefing_hash===br.hash) return;
+    autoFeito.current=true; analisar(); },[salvo,br,todos]);
+  const guardar=function(patch){ if(!salvo||!salvo.id) return; setSalvo(Object.assign({},salvo,patch)); window._sb.from("midia_pins_briefing").update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",salvo.id).then(function(){}); };
+  const tiraArea=function(i){ const a=(salvo.areas||[]).slice(); a.splice(i,1); guardar({areas:a}); };
+  /* alvos */
+  const areasUsadas=((salvo&&salvo.areas)||[]).filter(function(a){ return exp||a.grupo!=="expansao"; });
+  const alvos=useMemo(function(){ if(!todos) return []; const vis={}; const out=[];
+    areasUsadas.forEach(function(a){ _pinResolveArea(a,todos).forEach(function(m){ const k=m.nome+"|"+m.uf; if(!vis[k]){ vis[k]=1; out.push(m); } }); }); return out; },[todos,JSON.stringify(areasUsadas)]);
+  const semMatch=areasUsadas.filter(function(a){ return todos&&!_pinResolveArea(a,todos).length; });
+  const R=useMemo(function(){ return alvos.length?pxPinsCobertura(alvos,todos,raio):null; },[alvos,raio]);
+  const porRaio=useMemo(function(){ return alvos.length?PX_PIN_RAIOS.map(function(r){ const x=pxPinsCobertura(alvos,todos,r,{tentativas:6}); return {raio:r,pins:x.pins.length,sob:x.sobreposicao,vaza:x.vazamento}; }):[]; },[alvos]);
+  /* mapa */
+  useEffect(function(){
+    if(!aberto||!R||!ref.current) return; let vivo=true;
+    _pxLeaflet().then(function(L){
+      if(!vivo||!ref.current) return;
+      if(mapRef.current){ mapRef.current.remove(); mapRef.current=null; }
+      const map=L.map(ref.current,{scrollWheelZoom:true,zoomSnap:.5,attributionControl:false}); mapRef.current=map;
+      map.setView([-27,-52],6);   /* círculo precisa do mapa com vista pra calcular limites */
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,opacity:.55}).addTo(map);
+      const tip=function(l,t){ l.bindTooltip(t,{className:"px-mapa-tip",direction:"top",sticky:true}); return l; };
+      const cob=new Set(); R.pins.forEach(function(p){ p.cobre.forEach(function(i){ cob.add(i); }); });
+      const b=[]; voaRef.current={};
+      R.pins.forEach(function(p,i){
+        const c=L.circle([p.lat,p.lng],{radius:p.raio*1000,color:"#7326d6",weight:2,fillColor:"#7326d6",fillOpacity:.12}).addTo(map);
+        tip(c,"<b>Pin "+(i+1)+" · "+p.nome+" – "+p.uf+"</b><br>"+p.raio+" km · cobre "+p.cobre.length+" cidade"+(p.cobre.length>1?"s":"")+(p.so.length<p.cobre.length?" ("+(p.cobre.length-p.so.length)+" também em outro pin)":""));
+        L.marker([p.lat,p.lng],{icon:L.divIcon({className:"",html:'<div style="width:22px;height:22px;border-radius:50%;background:#7326d6;color:#fff;font:800 11px Inter,sans-serif;display:grid;place-items:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">'+(i+1)+'</div>',iconSize:[22,22],iconAnchor:[11,11]})}).addTo(map);
+        b.push(c.getBounds()); voaRef.current[i]=function(){ map.fitBounds(c.getBounds().pad(.15)); };
+      });
+      R.alvos.forEach(function(m,i){
+        const ok=cob.has(i);
+        tip(L.circleMarker([m.lat,m.lng],{radius:4,color:ok?"#12805a":"#c92a2a",weight:1.5,fillColor:ok?"#12805a":"#c92a2a",fillOpacity:.9}).addTo(map),m.nome+" – "+m.uf+(ok?"":" · FORA dos pins"));
+      });
+      if(b.length){ let bb=b[0]; b.forEach(function(x){ bb=bb.extend(x); }); map.fitBounds(bb.pad(.08)); } else map.setView([-27,-52],6);
+    });
+    return function(){ vivo=false; };
+  },[aberto,R]);
+  useEffect(function(){ return function(){ if(mapRef.current){ mapRef.current.remove(); mapRef.current=null; } }; },[]);
+  const copiar=function(){ if(!R) return; const txt=R.pins.map(function(p,i){ return (i+1)+". "+p.nome+", "+(PX_UF_NOME[p.uf]||p.uf)+" — raio de "+p.raio+" km"; }).join("\n");
+    try{ navigator.clipboard.writeText(txt); setCopiado(true); setTimeout(function(){ setCopiado(false); },1800); }catch(_){} };
+  /* ── tela ── */
+  const Chip=function(on,lbl,fn,t){ return <button type="button" onClick={fn} title={t||""} style={{background:on?ADS.accent:"#fff",color:on?"#fff":ADS.ink2,border:"1px solid "+(on?ADS.accent:ADS.line2),borderRadius:99,padding:"4px 11px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT}}>{lbl}</button>; };
+  const mudouBriefing=salvo&&br&&salvo.briefing_hash&&salvo.briefing_hash!==br.hash;
+  const temExp=((salvo&&salvo.areas)||[]).some(function(a){return a.grupo==="expansao";});
+  const cab=<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"12px 16px",borderBottom:aberto?"1px solid "+ADS.line:"none",cursor:"pointer"}} onClick={function(){ setAberto(!aberto); }}>
+    <span style={{width:30,height:30,borderRadius:9,background:ADS.accentSoft,color:ADS.accent,display:"inline-grid",placeItems:"center",flexShrink:0}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+    <div style={{minWidth:0,flex:1}}>
+      <div style={{fontSize:14,fontWeight:800,color:ADS.ink,letterSpacing:"-.2px"}}>Onde pôr os pins <span style={{fontWeight:600,color:ADS.muted,fontSize:12}}>· análise do briefing</span></div>
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:1}}>{R?(R.pins.length+" pin"+(R.pins.length>1?"s":"")+" de "+raio+" km cobrem "+(R.alvos.length-R.descobertos.length)+" de "+R.alvos.length+" cidades-alvo"+(R.sobreposicao?" · "+R.sobreposicao+" em 2+ pins":" · sem sobreposição")):"menor número de pins com raio pra cobrir as áreas do briefing"}</div>
+    </div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ADS.muted} strokeWidth="2.6" style={{transform:aberto?"rotate(180deg)":"none"}}><polyline points="6 9 12 15 18 9"/></svg>
+  </div>;
+  let corpo=null;
+  if(erro) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.crit}}>{erro} <button type="button" onClick={analisar} style={{marginLeft:8,background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer"}}>tentar de novo</button></div>;
+  else if(!br||salvo===undefined) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>Lendo o briefing…</div>;
+  else if(un==="paraguay") corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>Unidade fora do Brasil — a base do IBGE não cobre o Paraguai. Os pins desta unidade ficam a critério do gestor.</div>;
+  else if(!br.texto) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>O briefing{un?" desta unidade":""} não tem <b>Cidades de atuação</b> nem <b>Localização geográfica</b> preenchidas. Preenche lá e a análise aparece aqui.</div>;
+  else if(lendo||!salvo) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.accent,fontWeight:700}}>{lendo||"preparando"}…</div>;
+  else corpo=<div>
+    <div style={{padding:"10px 16px",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",borderBottom:"1px solid "+ADS.line,background:"#fbfaff"}}>
+      <span style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".08em",textTransform:"uppercase"}}>Raio</span>
+      {PX_PIN_RAIOS.map(function(r){ const x=porRaio.find(function(p){return p.raio===r;}); return <span key={r}>{Chip(raio===r,r+" km"+(x?" · "+x.pins+" pin"+(x.pins>1?"s":""):""),function(){ setRaio(r); guardar({raio_km:r}); },x?(x.pins+" pins · "+x.sob+" cidades em 2+ pins · "+x.vaza+" cidades de fora dentro dos raios"):"")}</span>; })}
+      {temExp&&<span style={{marginLeft:isMob?0:"auto",display:"inline-flex",gap:6}}>{Chip(!exp,"Atuação atual",function(){ setExp(false); guardar({incluir_expansao:false}); })}{Chip(exp,"+ expansão",function(){ setExp(true); guardar({incluir_expansao:true}); })}</span>}
+    </div>
+    {mudouBriefing&&<div style={{padding:"8px 16px",background:ADS.warnSoft,color:"#6b4d00",fontSize:12,borderBottom:"1px solid "+ADS.line}}>O briefing mudou depois desta análise. <button type="button" onClick={analisar} style={{background:"none",border:"none",color:ADS.accent,fontWeight:800,cursor:"pointer",padding:0}}>Refazer</button></div>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1.6fr) minmax(260px,1fr)"}}>
+      <div style={{position:"relative"}}>
+        <div ref={ref} style={{height:isMob?340:460,background:"#eef0f4"}}/>
+        <div style={{position:"absolute",left:10,bottom:10,zIndex:500,background:"rgba(255,255,255,.95)",border:"1px solid "+ADS.line,borderRadius:9,padding:"6px 9px",fontSize:11,lineHeight:1.7}}>
+          <div><i style={{display:"inline-block",width:11,height:11,borderRadius:"50%",background:"rgba(115,38,214,.25)",border:"2px solid #7326d6",verticalAlign:-2,marginRight:5}}/>Pin com raio</div>
+          <div><i style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#12805a",verticalAlign:0,marginRight:7,marginLeft:2}}/>Cidade-alvo coberta</div>
+          {R&&R.descobertos.length>0&&<div><i style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:"#c92a2a",verticalAlign:0,marginRight:7,marginLeft:2}}/>Fora dos pins</div>}
+        </div>
+      </div>
+      <div style={{borderLeft:isMob?"none":"1px solid "+ADS.line,borderTop:isMob?"1px solid "+ADS.line:"none",display:"flex",flexDirection:"column",maxHeight:isMob?"none":460}}>
+        <div style={{padding:"10px 12px",borderBottom:"1px solid "+ADS.line,display:"flex",alignItems:"center",gap:8}}>
+          <b style={{fontSize:12.5,color:ADS.ink}}>{R?R.pins.length:0} pins pra colocar na Meta</b>
+          <button type="button" onClick={copiar} style={{marginLeft:"auto",background:copiado?ADS.ok:ADS.accent,color:"#fff",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:ADS_FONT}}>{copiado?"Copiado ✓":"Copiar lista"}</button>
+        </div>
+        <div style={{overflowY:"auto",padding:8,flex:1}}>
+          {R&&R.pins.map(function(p,i){ return <div key={i} onClick={function(){ const f=voaRef.current[i]; if(f) f(); }} style={{display:"flex",gap:9,alignItems:"flex-start",padding:"7px 8px",borderRadius:9,cursor:"pointer"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=ADS.surface2;}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+            <span style={{width:22,height:22,borderRadius:"50%",background:ADS.accent,color:"#fff",fontSize:11,fontWeight:800,display:"grid",placeItems:"center",flexShrink:0}}>{i+1}</span>
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:12.5,fontWeight:800,color:ADS.ink}}>{p.nome} – {p.uf} <span style={{fontWeight:600,color:ADS.muted}}>+{p.raio} km</span></div>
+              <div style={{fontSize:11,color:ADS.muted}}>cobre {p.cobre.length} cidade{p.cobre.length>1?"s":""}{p.so.length<p.cobre.length?" · "+(p.cobre.length-p.so.length)+" também em outro pin":""}{!p.dentro?" · cidade vizinha, fora da área":""}</div>
+            </div>
+          </div>; })}
+          {R&&R.descobertos.length>0&&<div style={{margin:"8px",fontSize:11.5,color:ADS.crit}}>Sem cobertura: {R.descobertos.map(function(m){return m.nome;}).join(", ")}</div>}
+        </div>
+        <div style={{borderTop:"1px solid "+ADS.line,padding:"8px 12px",fontSize:11,color:ADS.muted,lineHeight:1.5}}>
+          {R&&<div>{R.vazamento} cidade{R.vazamento!==1?"s":""} de fora da área ficam dentro de algum raio.</div>}
+          <div>Na Meta: Localizações › <b>Soltar pin</b> na cidade e ajustar o raio (máx. 80 km).</div>
+        </div>
+      </div>
+    </div>
+    <div style={{padding:"10px 16px",borderTop:"1px solid "+ADS.line}}>
+      <div style={{fontSize:11,fontWeight:800,color:ADS.muted,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>O que a IA entendeu do briefing{salvo.resumo?<span style={{textTransform:"none",letterSpacing:0,fontWeight:600}}> — {salvo.resumo}</span>:null}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {(salvo.areas||[]).map(function(a,i){ const n=todos?_pinResolveArea(a,todos).length:0; const off=a.grupo==="expansao"&&!exp;
+          return <span key={i} title={a.trecho||""} style={{display:"inline-flex",alignItems:"center",gap:6,background:off?"#f4f3f8":a.grupo==="expansao"?"#fff7ed":ADS.okSoft,color:off?ADS.muted:a.grupo==="expansao"?"#9a3412":ADS.ok,border:"1px solid "+(off?ADS.line:a.grupo==="expansao"?"#fed7aa":"#bfe6d3"),borderRadius:99,padding:"3px 6px 3px 10px",fontSize:11.5,fontWeight:700,opacity:off?.7:1}}>
+            {a.nome} – {a.uf}<span style={{fontWeight:600,opacity:.75}}>· {String(a.nivel||"").replace("regiao_","região ").replace("microrregiao","microrregião").replace("mesorregiao","mesorregião").replace("municipio","cidade")} · {n} cid.{a.grupo==="expansao"?" · expansão":""}</span>
+            <button type="button" onClick={function(){ tiraArea(i); }} title="Tirar esta área" style={{background:"none",border:"none",color:"inherit",cursor:"pointer",padding:"0 2px",fontSize:13,lineHeight:1}}>×</button>
+          </span>; })}
+        <button type="button" onClick={analisar} style={{background:"none",border:"1px dashed "+ADS.line2,borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:700,color:ADS.accent,cursor:"pointer"}}>↻ ler o briefing de novo</button>
+      </div>
+      {semMatch.length>0&&<div style={{fontSize:11,color:ADS.warn,marginTop:6}}>Não achei no IBGE: {semMatch.map(function(a){return a.nome+" – "+a.uf;}).join(", ")}</div>}
+    </div>
+  </div>;
+  return <section style={{border:"1px solid "+ADS.line,borderRadius:14,overflow:"hidden",background:"#fff",marginBottom:22,fontFamily:ADS_FONT}}>
+    <style>{".px-mapa-tip{background:#0f0d1a;color:#fff;border:0;border-radius:8px;font-size:11.5px;padding:5px 8px;box-shadow:0 6px 16px rgba(0,0,0,.25)} .px-mapa-tip::before{border-top-color:#0f0d1a}"}</style>
+    {cab}{aberto&&corpo}</section>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   FICHA DE MÍDIA DO BRIEFING × QUEM ESTÁ CONVERTENDO (25/09/2026, Vinicius)
+   "sincronizar briefing com Gestão de mídia… público-alvo, faixa etária, cliente dos sonhos,
+    tudo que for relevante" → lê DIRETO do briefing (sem cópia; Bioter: só a unidade), mostra no
+   topo da aba Público e compara com o que a Meta entrega (idade, gênero, estado) no período.
+   Divergência vira aviso. A mesma ficha vai pro analisar-ads (leitura da IA, aba Alertas).
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+const PX_FICHA_MIDIA=[
+  {sec:"publico",   id:"cliente_ideal",        l:"Cliente dos sonhos",            grande:true},
+  {sec:"publico",   id:"faixa_etaria",         l:"Idade"},
+  {sec:"publico",   id:"sexo",                 l:"Sexo"},
+  {sec:"publico",   id:"objetivo_anuncio",     l:"Ação do anúncio"},
+  {sec:"publico",   id:"porte",                l:"Porte"},
+  {sec:"publico",   id:"localizacao",          l:"Onde anunciar"},
+  {sec:"publico",   id:"raio_anuncio",         l:"Raio"},
+  {sec:"publico",   id:"nao_anunciar",         l:"Não anunciar em"},
+  {sec:"objetivos", id:"cidades",              l:"Cidades de atuação"},
+  {sec:"publico",   id:"segmentacao",          l:"Perfil de quem compra",         grande:true},
+  {sec:"publico",   id:"quem_decide",          l:"Quem decide a compra",          grande:true},
+  {sec:"publico",   id:"comportamento",        l:"Comportamento digital",         grande:true},
+  {sec:"publico",   id:"dores",                l:"Dores"},
+  {sec:"publico",   id:"duvidas",              l:"Dúvidas"},
+  {sec:"publico",   id:"desejos",              l:"Desejos"},
+  {sec:"publico",   id:"objecoes",             l:"Objeções"},
+  {sec:"produtos",  id:"foco_campanha",        l:"Produtos pra anunciar",         grupo:"campanha"},
+  {sec:"produtos",  id:"campanha_atual",       l:"Foco de campanha agora",        grupo:"campanha"},
+  {sec:"produtos",  id:"sazonalidade",         l:"Sazonalidade",                  grupo:"campanha"},
+  {sec:"publico",   id:"meses_fortes",         l:"Meses fortes de venda",         grupo:"campanha"},
+  {sec:"objetivos", id:"objetivo_primario",    l:"Objetivo principal",            grupo:"negocio"},
+  {sec:"objetivos", id:"ticket_medio",         l:"Ticket médio",                  grupo:"negocio"},
+  {sec:"objetivos", id:"ciclo_vendas",         l:"Ciclo de vendas",               grupo:"negocio"},
+  {sec:"objetivos", id:"funil_vendas",         l:"Funil de vendas",               grupo:"negocio", grande:true},
+  {sec:"mercado",   id:"concorrentes",         l:"Concorrentes",                  grupo:"negocio", grande:true},
+];
+function _fichaSecao(bd,un){
+  let b=bd||{};
+  if(un) return (b[un]&&typeof b[un]==="object")?b[un]:{};
+  if(b.grupo&&typeof b.grupo==="object"&&!b.objetivos) return b.grupo;
+  return b;
+}
+function _fichaValor(s,f){
+  let v=s&&s[f.sec]&&s[f.sec][f.id];
+  if(Array.isArray(v)) v=v.filter(Boolean).join(", ");
+  if(v&&typeof v==="object") v=Object.values(v).filter(Boolean).join(", ");
+  v=String(v||"").trim();
+  if(f.id==="objetivo_primario"&&v==="Outro"){ const o=String((s.objetivos&&s.objetivos.objetivo_primario_outro)||"").trim(); if(o) v=o; }
+  return v;
+}
+/* "30 a 55", "35-60 anos", "acima de 40", "entre 25 e 45", "40+" → [min,max] */
+function _fichaFaixa(txt){
+  const t=String(txt||"").toLowerCase(); const n=(t.match(/\d{2}/g)||[]).map(Number).filter(function(x){return x>=13&&x<=90;});
+  if(!n.length) return null;
+  if(/acima|mais de|\+|a partir/.test(t)&&n.length===1) return [n[0],90];
+  if(/at[ée]|abaixo|menos de/.test(t)&&n.length===1) return [18,n[0]];
+  if(n.length>=2) return [Math.min.apply(null,n),Math.max.apply(null,n)];
+  return [n[0]-5,n[0]+5];
+}
+/* bucket da Meta "25-34" / "65+" → [min,max] */
+function _fichaBucket(v){ const m=String(v||"").match(/(\d+)\s*[-–]\s*(\d+)/); if(m) return [Number(m[1]),Number(m[2])]; const p=String(v||"").match(/(\d+)\s*\+/); if(p) return [Number(p[1]),90]; return null; }
+const _FICHA_UF_POR_NOME={"Santa Catarina":"SC","Rio Grande do Sul":"RS","Paraná":"PR","Parana":"PR","São Paulo":"SP","Minas Gerais":"MG","Mato Grosso do Sul":"MS","Mato Grosso":"MT","Goiás":"GO","Rio de Janeiro":"RJ","Bahia":"BA","Espírito Santo":"ES","Distrito Federal":"DF","Tocantins":"TO","Pará":"PA","Rondônia":"RO"};
+function QGFichaBriefing({mc,rows,isMob,periodoLbl}){
+  const cid=(mc&&(mc.parent_client||mc.client_id))||""; const un=(mc&&mc.bioter_unit)||"";
+  const [s,setS]=useState(undefined);
+  const [aberto,setAberto]=useState(function(){ try{ return localStorage.getItem("px_ficha_midia_aberta")!=="0"; }catch(_){ return true; } });
+  const [tudo,setTudo]=useState(false);
+  useEffect(function(){ let vivo=true; setS(undefined);
+    const ler=function(){ if(!window._sb||!cid) return; window._sb.from("clients").select("briefing_data").eq("client_id",cid).maybeSingle()
+      .then(function(r){ if(vivo) setS(_fichaSecao((r&&r.data&&r.data.briefing_data)||{},un)); }).catch(function(){ if(vivo) setS({}); }); };
+    ler();
+    /* briefing é realtime em clients — o cliente mexeu no portal, a ficha acompanha */
+    let ch=null; try{ ch=window._sb.channel("ficha-midia-"+cid+"-"+un+"-"+Math.random().toString(36).slice(2,6)).on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients",filter:"client_id=eq."+cid},function(p){ if(vivo&&p&&p.new&&p.new.briefing_data) setS(_fichaSecao(p.new.briefing_data,un)); }).subscribe(); }catch(_){}
+    return function(){ vivo=false; if(ch){ try{ window._sb.removeChannel(ch); }catch(_){} } }; },[cid,un]);
+  const alterna=function(){ const v=!aberto; setAberto(v); try{ localStorage.setItem("px_ficha_midia_aberta",v?"1":"0"); }catch(_){} };
+  const itens=s?PX_FICHA_MIDIA.map(function(f){ return Object.assign({},f,{v:_fichaValor(s,f)}); }).filter(function(f){return f.v;}):[];
+  /* ── comparação com a Meta ── */
+  const R=rows||[];
+  const _conhecido=function(r){ return !/^unknown$/i.test(String(r.valor||"")); };
+  const soma=function(dim){ return R.filter(function(r){return r.dimensao===dim&&_conhecido(r);}).reduce(function(t,r){return t+Number(r.gasto||0);},0); };
+  const avisos=[]; const bate=[];
+  const faixaTxt=s?_fichaValor(s,{sec:"publico",id:"faixa_etaria"}):""; const faixa=_fichaFaixa(faixaTxt);
+  const totIdade=soma("idade");
+  if(faixa&&totIdade>0){
+    let dentro=0; const fora=[];
+    R.filter(function(r){return r.dimensao==="idade";}).forEach(function(r){ const b=_fichaBucket(r.valor); if(!b) return; const ov=Math.max(0,Math.min(b[1],faixa[1])-Math.max(b[0],faixa[0])+1)/(b[1]-b[0]+1); dentro+=Number(r.gasto||0)*ov; if(ov<.5&&Number(r.gasto||0)/totIdade>=.12) fora.push({v:r.valor,p:Number(r.gasto||0)/totIdade*100,res:Number(r.resultados||0)}); });
+    const pct=dentro/totIdade*100;
+    (pct<60?avisos:bate).push({t:"Idade",b:"briefing: "+faixaTxt,m:Math.round(pct)+"% da verba na faixa"+(fora.length?" · fora: "+fora.map(function(f){return f.v+" ("+Math.round(f.p)+"%)";}).join(", "):"")});
+  }
+  const sexo=s?_fichaValor(s,{sec:"publico",id:"sexo"}):""; const totGen=soma("genero");
+  if(/^(Masculino|Feminino)$/.test(sexo)&&totGen>0){
+    const alvo=sexo==="Masculino"?"male":"female";
+    const g=R.filter(function(r){return r.dimensao==="genero"&&String(r.valor).toLowerCase()===alvo;}).reduce(function(t,r){return t+Number(r.gasto||0);},0);
+    const pct=g/totGen*100;
+    (pct<55?avisos:bate).push({t:"Sexo",b:"briefing: "+sexo,m:Math.round(pct)+"% da verba em "+sexo.toLowerCase()});
+  }
+  const locTxt=s?(_fichaValor(s,{sec:"publico",id:"localizacao"})+" "+_fichaValor(s,{sec:"objetivos",id:"cidades"})+" "+String((s.identidade&&s.identidade.cidade)||"")):"";
+  const ufsB=(typeof _pinUfsDoTexto==="function")?_pinUfsDoTexto(locTxt):[]; const totReg=soma("regiao");
+  if(ufsB.length&&totReg>0){
+    let dentro=0; const fora={};
+    R.filter(function(r){return r.dimensao==="regiao"&&_conhecido(r);}).forEach(function(r){ const nm=String(r.valor||"").replace(/\s*\(.+\)$/,"").replace(/^State of /i,"").trim(); const uf=_FICHA_UF_POR_NOME[nm]||(nm.length===2?nm.toUpperCase():null); const g=Number(r.gasto||0); if(uf&&ufsB.indexOf(uf)>=0) dentro+=g; else fora[nm]=(fora[nm]||0)+g; });
+    const pct=dentro/totReg*100; const top=Object.keys(fora).sort(function(a,b){return fora[b]-fora[a];}).slice(0,3).filter(function(k){return fora[k]/totReg>=.05;});
+    (pct<80?avisos:bate).push({t:"Estados",b:"briefing: "+ufsB.join(", "),m:Math.round(pct)+"% da verba nesses estados"+(top.length?" · fora: "+top.map(function(k){return k+" ("+Math.round(fora[k]/totReg*100)+"%)";}).join(", "):"")});
+  }
+  /* ── tela ── */
+  const Bloco=function(f){ return <div key={f.id} style={{gridColumn:f.grande&&!isMob?"span 2":undefined,minWidth:0}}>
+    <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS.muted,marginBottom:3}}>{f.l}</div>
+    <div style={{fontSize:12.5,color:ADS.ink,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{f.v}</div></div>; };
+  const pub=itens.filter(function(f){return !f.grupo;}), camp=itens.filter(function(f){return f.grupo==="campanha";}), neg=itens.filter(function(f){return f.grupo==="negocio";});
+  const cab=<div onClick={alterna} style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"12px 16px",cursor:"pointer",borderBottom:aberto?"1px solid "+ADS.line:"none"}}>
+    <span style={{width:30,height:30,borderRadius:9,background:ADS.accentSoft,color:ADS.accent,display:"inline-grid",placeItems:"center",flexShrink:0}}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></span>
+    <div style={{minWidth:0,flex:1}}>
+      <div style={{fontSize:14,fontWeight:800,color:ADS.ink,letterSpacing:"-.2px"}}>Quem queremos atingir <span style={{fontWeight:600,color:ADS.muted,fontSize:12}}>· do briefing{un?" desta unidade":""}</span></div>
+      <div style={{fontSize:11.5,color:ADS.muted,marginTop:1}}>{s===undefined?"lendo o briefing…":!itens.length?"briefing sem público-alvo preenchido":(avisos.length?avisos.length+" diferença"+(avisos.length>1?"s":"")+" entre o briefing e o que a Meta entrega":(bate.length?"a entrega da Meta bate com o briefing":itens.length+" campos do briefing"))}</div>
+    </div>
+    {avisos.length>0&&<span style={{background:ADS.warnSoft,color:ADS.warn,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>⚠ {avisos.length}</span>}
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ADS.muted} strokeWidth="2.6" style={{transform:aberto?"rotate(180deg)":"none"}}><polyline points="6 9 12 15 18 9"/></svg>
+  </div>;
+  let corpo=null;
+  if(aberto){
+    if(s===undefined) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>Lendo o briefing…</div>;
+    else if(!itens.length) corpo=<div style={{padding:16,fontSize:12.5,color:ADS.muted}}>O briefing{un?" desta unidade":""} ainda não tem Público-alvo preenchido. Quando o cliente preencher (portal ou Estratégia › Briefing), aparece aqui sozinho.</div>;
+    else corpo=<div>
+      {(avisos.length>0||bate.length>0)&&<div style={{padding:"12px 16px",borderBottom:"1px solid "+ADS.line,background:"#fbfaff"}}>
+        <div style={{fontSize:10.5,fontWeight:800,letterSpacing:".08em",textTransform:"uppercase",color:ADS.muted,marginBottom:8}}>Briefing × entrega da Meta{periodoLbl?" · "+periodoLbl:""}</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:8}}>
+          {avisos.map(function(a,i){ return <div key={"a"+i} style={{background:ADS.warnSoft,border:"1px solid #f3d38a",borderRadius:10,padding:"8px 11px"}}><div style={{fontSize:12,fontWeight:800,color:"#6b4d00"}}>⚠ {a.t} fora do briefing</div><div style={{fontSize:11.5,color:"#6b4d00",marginTop:2}}>{a.b}</div><div style={{fontSize:11.5,color:ADS.ink2,marginTop:2}}>{a.m}</div></div>; })}
+          {bate.map(function(a,i){ return <div key={"b"+i} style={{background:ADS.okSoft,border:"1px solid #bfe6d3",borderRadius:10,padding:"8px 11px"}}><div style={{fontSize:12,fontWeight:800,color:ADS.ok}}>✓ {a.t} bate</div><div style={{fontSize:11.5,color:ADS.ok,marginTop:2}}>{a.b}</div><div style={{fontSize:11.5,color:ADS.ink2,marginTop:2}}>{a.m}</div></div>; })}
+        </div>
+        <div style={{fontSize:11,color:ADS.muted,marginTop:6}}>Com Advantage+ ligado a Meta pode ir além do público definido — diferença aqui é pra conferir se o lead dessa faixa vira venda (aba Leads).</div>
+      </div>}
+      <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:"12px 18px"}}>{pub.map(Bloco)}</div>
+      {(camp.length>0||neg.length>0)&&<div style={{borderTop:"1px solid "+ADS.line}}>
+        <div onClick={function(){ setTudo(!tudo); }} style={{padding:"9px 16px",fontSize:12,fontWeight:800,color:ADS.accent,cursor:"pointer"}}>{tudo?"▾":"▸"} Campanha e negócio <span style={{color:ADS.muted,fontWeight:600}}>({camp.length+neg.length} campos: produtos pra anunciar, sazonalidade, ticket, ciclo de vendas…)</span></div>
+        {tudo&&<div style={{padding:"0 16px 14px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:"12px 18px"}}>{camp.concat(neg).map(Bloco)}</div>}
+      </div>}
+    </div>;
+  }
+  return <section style={{border:"1px solid "+ADS.line,borderRadius:14,overflow:"hidden",background:"#fff",marginBottom:14,fontFamily:ADS_FONT}}>{cab}{corpo}</section>;
+}
+
 /* bloco visual do público de um conjunto */
 function AdsPublicoBloco({p,isMob}){
   const d=_adsPublicoDetalhado(p);
@@ -64527,6 +65297,10 @@ function QGAdsPublico({mc,conta,isMob,campId,embutido}){
   const heroi=function(lab,m,bg){ return <AdsSolido bg={bg} eyebrow={lab} big={m?m.lbl:"—"} sub={m?<span><b style={{color:"#fff"}}><AdsNumAnim v={m.cpa} fmt={_adsBRL}/></b> por lead · <AdsNumAnim v={m.res} fmt={_adsNum}/> leads</span>:"nenhum corte com 3+ leads"}/>; };
   const filtroLbl=filtro==="todas"?(temOutras?"campanhas de lead":"toda a conta"):filtro.indexOf("tipo:")===0?((_adsTipo(filtroTipo)||{}).label||filtroTipo):_adsNomeCurto((camps.find(function(c){return c.id===filtro.slice(5);})||{}).nome||"campanha");
   return <AdsWrap>
+    {/* (25/09/2026) onde pôr os pins — análise geográfica do briefing */}
+    {/* (25/09/2026) quem queremos atingir — ficha do briefing × entrega da Meta */}
+    {typeof QGFichaBriefing==="function"&&<QGFichaBriefing mc={mc} rows={rows} isMob={isMob} periodoLbl={(P&&P.ini&&typeof _adsFmtD==="function")?(_adsFmtD(P.ini)+" – "+_adsFmtD(P.fim)):""}/>}
+    {typeof QGPinsBriefing==="function"&&<QGPinsBriefing mc={mc} isMob={isMob}/>}
     {corte&&<AdsCorteModal conta={conta} dim={corte.dim} x={corte.x} campIds={campIds} filtroLbl={filtroLbl} resNome={resNome} resNomePl={resNomePl} isMob={isMob} onClose={function(){setCorte(null);}}/>}
     {!embutido&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14,marginBottom:22}}>
       {heroi("Faixa etária que rende mais",mIdade,ADS_SOL.escuro)}
