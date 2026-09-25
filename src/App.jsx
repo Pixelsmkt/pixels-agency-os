@@ -24962,8 +24962,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
               <span style={{fontSize:pxFonte(10.5,isMob),color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
               <span style={{display:"inline-flex",alignItems:"baseline",gap:8,marginTop:2,whiteSpace:"nowrap"}}>
                 <span style={{fontSize:19,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
-                <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:600,color:"#16a34a"}}>com material</span>
-                <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:700,color:c.falta?"#dc2626":"#94a3b8"}}>{c.falta?("faltam "+c.falta):"nada faltando"}</span>
+                {/* (25/09/2026) etiquetas em pílula — "com material" verde, "faltam N" vermelho */}
+                <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:pxFonte(11,isMob),fontWeight:700,color:"#15803d",background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:99,padding:"2px 8px",alignSelf:"center"}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>com material</span>
+                <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:pxFonte(11,isMob),fontWeight:700,color:c.falta?"#b91c1c":"#64748b",background:c.falta?"#fee2e2":"#f1f5f9",border:"1px solid "+(c.falta?"#fecaca":"#e2e8f0"),borderRadius:99,padding:"2px 8px",alignSelf:"center"}}>
+                  {c.falta?<span style={{width:6,height:6,borderRadius:99,background:"#dc2626"}}/>:null}{c.falta?("faltam "+c.falta):"nada faltando"}</span>
               </span>
             </span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -25032,7 +25035,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                 entram na mesma fileira dos 4 números (quebram de linha só em tela estreita). */}
             {_bl("resumo.contadores")&&_kpiMat("foto","Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
             {_bl("resumo.contadores")&&_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
-          </div>}
+          </div>
           {_bl("resumo.contadores")&&_painelMat()}
           {/* (23/09/2026) PAUTA DO MÊS — um cliente (e uma unidade, na Bioter) de cada vez */}
           {_bl("pauta")&&(function(){
