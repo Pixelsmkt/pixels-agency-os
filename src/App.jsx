@@ -110185,7 +110185,7 @@ function CWhatsContatos({cl, isMob}){
       {isMob
         ? <div style={{ fontSize:12, color:"#94a3b8" }}>Para mudar, use o computador.</div>
         : <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <button style={btn} onClick={puxarPlaybook} disabled={!!erro}>Puxar do Playbook</button>
+            {/* 25/09/2026: "Puxar do Playbook" saiu da tela a pedido do usuario — cadastro so pelo + Contato */}
             <button style={btnPri} onClick={function(){ setForm({}); }} disabled={!!erro}>+ Contato</button>
           </div>}
     </div>
@@ -110199,7 +110199,7 @@ function CWhatsContatos({cl, isMob}){
 
     {lista!==null && !erro && ativos.length===0 && !form &&
       <div style={Object.assign({}, card, { color:"#64748b", fontSize:13, textAlign:"center", padding:24 })}>
-        {isMob ? "Nenhum contato ainda." : <span>Nenhum contato ainda. Use <b>+ Contato</b> ou <b>Puxar do Playbook</b>.</span>}
+        {isMob ? "Nenhum contato ainda." : <span>Nenhum contato ainda. Use <b>+ Contato</b>.</span>}
       </div>}
 
     {visiveis.map(function(c){
