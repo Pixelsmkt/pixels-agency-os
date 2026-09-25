@@ -110096,6 +110096,8 @@ const _WC_PODE = [
 
 function _wcFone(t){
   const s = String(t||"").replace(/\D/g,"");
+  const py = s.match(/^595(\d{3})(\d{3})(\d{3})$/);          // 25/09/2026: Paraguay
+  if(py) return "+595 "+py[1]+" "+py[2]+" "+py[3];
   const m = s.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
   return m ? "("+m[1]+") "+m[2]+"-"+m[3] : (t||"");
 }
@@ -110103,6 +110105,14 @@ function _wcData(iso){
   if(!iso) return "";
   const d = new Date(iso);
   return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+}
+// 25/09/2026: na Bioter a lista vem separada por unidade (Grupo primeiro, depois na ordem de _WC_UNIDADES)
+function _wcGrupos(lista, isBioter){
+  if(!isBioter) return [{ id:"todos", titulo:null, itens:lista }];
+  return _WC_UNIDADES.map(function(u){
+    return { id:u.id||"grupo", titulo:u.label, itens:lista.filter(function(c){ return (c.unidade||"")===u.id; }) };
+  }).concat([{ id:"outras", titulo:"Outras", itens:lista.filter(function(c){ return !_WC_UNIDADES.some(function(u){ return u.id===(c.unidade||""); }); }) }])
+    .filter(function(g){ return g.itens.length>0; });
 }
 function _wcUnidade(id){ const u=_WC_UNIDADES.find(function(x){return x.id===(id||"");}); return u?u.label:id; }
 function _wcErro(e){
@@ -110202,7 +110212,9 @@ function CWhatsContatos({cl, isMob}){
         {isMob ? "Nenhum contato ainda." : <span>Nenhum contato ainda. Use <b>+ Contato</b>.</span>}
       </div>}
 
-    {visiveis.map(function(c){
+    {_wcGrupos(visiveis, isBioter).map(function(g){ return <div key={g.id} style={{ display:"flex", flexDirection:"column", gap:10 }}>
+    {g.titulo && <div style={{ fontSize:12, fontWeight:700, color:"#5b21b6", textTransform:"uppercase", letterSpacing:.4, marginTop:4 }}>{g.titulo} · {g.itens.length}</div>}
+    {g.itens.map(function(c){
       const bloqueado = !!c.bloqueado_em;
       const status = !c.ativo ? { t:"Desativado", cor:"#64748b", fundo:"#f1f5f9" }
                    : bloqueado ? { t:"Bloqueado", cor:"#b91c1c", fundo:"#fef2f2" }
@@ -110252,6 +110264,7 @@ function CWhatsContatos({cl, isMob}){
         </div>
       </div>;
     })}
+    </div>; })}
 
     {inativos.length>0 && <button style={Object.assign({}, btn, { alignSelf:"flex-start" })} onClick={function(){ setMI(!mostraInativos); }}>
       {mostraInativos ? "Esconder desativados" : "Mostrar desativados ("+inativos.length+")"}
@@ -110278,7 +110291,7 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
     <div style={grid}>
       <div><span style={lab}>Nome</span><input style={inp} value={d.nome} onChange={function(e){ set("nome", e.target.value); }} placeholder="Ex.: Ana"/></div>
       <div><span style={lab}>Cargo</span><input style={inp} value={d.cargo} onChange={function(e){ set("cargo", e.target.value); }} placeholder="Ex.: Marketing"/></div>
-      <div><span style={lab}>WhatsApp</span><input style={inp} value={d.telefone} inputMode="tel" onChange={function(e){ set("telefone", e.target.value); }} placeholder="(49) 99999-9999"/></div>
+      <div><span style={lab}>WhatsApp</span><input style={inp} value={d.telefone} inputMode="tel" onChange={function(e){ set("telefone", e.target.value); }} placeholder={isBioter&&d.unidade==="paraguay" ? "0983 123 456" : "(49) 99999-9999"}/></div>
       {isBioter
         ? <div><span style={lab}>Unidade</span>
             <select style={inp} value={d.unidade} onChange={function(e){ set("unidade", e.target.value); }}>
