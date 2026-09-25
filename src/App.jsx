@@ -24703,8 +24703,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         const _kpiMat=function(chave,label,c,color,iconSvg){
           const on=matAberto===chave;
           return <button type="button" onClick={function(){setMatAberto(on?null:chave);}} title={on?"Fechar lista":"Ver quais já estão com material"}
-            style={{flex:"0 0 auto",background:on?"#f8fafc":"#fff",border:"1px solid "+(on?color:"#e2e8f0"),borderRadius:12,padding:"9px 14px 9px 10px",display:"inline-flex",alignItems:"center",gap:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"border-color .15s"}}>
-            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:30,height:30,borderRadius:8,background:color,color:"#fff",flexShrink:0}}>{iconSvg}</span>
+            style={{flex:"0 0 auto",background:on?"#f8fafc":"#fff",border:"1px solid "+(on?color:"#e2e8f0"),borderRadius:12,padding:"12px 14px",display:"inline-flex",alignItems:"center",gap:10,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"border-color .15s"}}>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
             <span style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
               <span style={{fontSize:pxFonte(10.5,isMob),color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
               <span style={{display:"inline-flex",alignItems:"baseline",gap:8,marginTop:2,whiteSpace:"nowrap"}}>
@@ -24775,10 +24775,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             {_kpi("Em produção",_producao,"#06b6d4",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>)}
             {_kpi("Agendar",_agendar,"#ec4899",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
             {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
-          </div>
-          {_bl("resumo.contadores")&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {_kpiMat("foto","Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
-            {_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
+            {/* (25/09/2026, Vinicius) "deixa tudo isso numa linha só" — os contadores de material
+                entram na mesma fileira dos 4 números (quebram de linha só em tela estreita). */}
+            {_bl("resumo.contadores")&&_kpiMat("foto","Fotos de obra",_matFoto,"#0ea5e9",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>)}
+            {_bl("resumo.contadores")&&_kpiMat("short","Vídeos short",_matShort,"#eab308",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>)}
           </div>}
           {_bl("resumo.contadores")&&_painelMat()}
           {/* (23/09/2026) PAUTA DO MÊS — um cliente (e uma unidade, na Bioter) de cada vez */}
