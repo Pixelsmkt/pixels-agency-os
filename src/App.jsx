@@ -33327,7 +33327,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     const temFreela=ids.some(uid=>{const u=(TEAM||[]).find(x=>x.id===uid);return u&&(u.dash==="designer"||u.dash==="editor"||u.dash==="video");});
     if(!temFreela&&!_short) f.push("freelancer (designer ou editor de vídeo)");
     const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
-    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0) f.push("tipo de conteúdo");
+    /* (25/09/2026, Vinicius) Short também não precisa de TIPO DE CONTEÚDO: não vai pra edição,
+       é direto da Hellen pro Gustavo — o tipo só serve pra classificar pagamento de freela. */
+    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short) f.push("tipo de conteúdo");
     if(!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
     return f;
   };
@@ -35287,6 +35289,22 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                  "Briefing pra equipe" (14/09/2026). O gap do container é 14. */}
             <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:23,lineHeight:1.24,letterSpacing:-.5,marginBottom:isMob?4:8}}>{current.title}</div>
 
+            {/* (25/09/2026, Vinicius) SHORT: o vídeo é o que se avalia — vai pro CENTRO, grande,
+                logo abaixo do título (não mais só miniatura na coluna de Referências). */}
+            {(function(){
+              if(!((typeof pxEhShort==="function")&&pxEhShort(current))) return null;
+              const _vids=(allImgs||[]).filter(function(u){ return typeof _isVideoUrl==="function"&&_isVideoUrl(u); });
+              if(!_vids.length) return null;
+              return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {_vids.map(function(u,i){
+                  return <div key={u+"-"+i} style={{borderRadius:14,overflow:"hidden",border:"1px solid "+C.b1,background:"#0f172a",display:"flex",justifyContent:"center"}}>
+                    <PxVideo src={(_prevMap&&_prevMap[u])||u} controls playsInline preload="metadata"
+                      style={{width:"100%",maxHeight:isMob?480:640,display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                  </div>;
+                })}
+              </div>;
+            })()}
+
             {/* ── Claude reescrevendo / versões da copy ──
                  O card não sai da fila: a copy troca aqui mesmo e a anterior fica guardada. */}
             {reescrevendoId===current.id&&(
@@ -35744,11 +35762,12 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
           {/* Referências (imagens + vídeos) — visíveis na sidebar antes de abrir o cartão.
               Empilhadas verticalmente na proporção original. Vídeos com player nativo (play inline).
               Imagens clicáveis pra abrir em nova aba (ver detalhe). */}
-          {tab==="copys"&&allImgs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1}}>
+          {tab==="copys"&&allImgs.filter(function(u){ return !((typeof pxEhShort==="function")&&pxEhShort(current)&&typeof _isVideoUrl==="function"&&_isVideoUrl(u)); }).length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1}}>
             <div style={{color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Referências ({allImgs.length})</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {allImgs.slice(0,4).map(function(src2,i){
                 const _isVid = typeof _isVideoUrl==="function" && _isVideoUrl(src2);
+                if(_isVid&&(typeof pxEhShort==="function")&&pxEhShort(current)) return null;   // (25/09) já está no centro
                 if(_isVid){
                   // Player nativo — controls do browser, roda inline na proporção original
                   return <div key={i} style={{borderRadius:10,overflow:"hidden",border:"1px solid "+C.b1,background:"#0f172a",position:"relative"}}>
