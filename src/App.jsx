@@ -109139,7 +109139,9 @@ function _rtTexto(r,semCabecalho,numero){
   const _corpo=_rtForaDoPadrao(r)
     ? _cru.join("\n\n")
     : _cru.map(function(p){return "• "+_rtUmParagrafo(p);}).join("\n\n");
-  return (semCabecalho?"":(_tit+"\n\n"))+_corpo;
+  /* (26/09/2026) cenas sugeridas vão no fim, separadas da fala */
+  const _cen=String((r&&r.cenas)||"").trim();
+  return (semCabecalho?"":(_tit+"\n\n"))+_corpo+(_cen?("\n\n*"+(String(r.unidade||"")==="paraguay"?"ESCENAS":"CENAS")+"*\n"+_cen):"");
 }
 /* COPIAR TODOS PRO WHATSAPP (Vinicius, 17/09/2026; por produto em 22/09/2026, a pedido do
    Rodrigo: "quero que seja organizado pro whats, separado pelas tags de produtos ali").
@@ -109178,238 +109180,45 @@ function _rtTextoTodos(lista,nome){
 function _rtPalavras(r){ return ((r.abertura||"")+" "+(r.desenvolvimento||"")+" "+(r.fechamento||"")).trim().split(/\s+/).filter(Boolean).length; }
 function _rtCopiar(txt,msg){ try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success(msg||"Copiado!",1800); }catch(_){} }
 
-/* (23/09/2026, Vinicius: "muda de 90 pra 60 segundos o padrão dos textos lá") As regras de fala
-   são as mesmas do card (PX_ROTEIRO_FALA_REGRAS), só o tamanho muda: 60s = 120 a 150 palavras.
-   O card ("Transformar em roteiro", Avaliação de copys) continua em 90s — foi só a aba. */
-function _rtRegras60(){
-  const base=(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined")?PX_ROTEIRO_FALA_REGRAS
-    :"REGRAS DO ROTEIRO (é o texto que o CLIENTE vai FALAR olhando pra câmera):\n- 3 partes contínuas, frases completas, sem marcação de tempo nem instrução de câmera.\n";
-  return base
-    .replace(/90 segundos falados COM CALMA: de 170 a 200 palavras NO TOTAL\. Frases curtas, de falar\. Passou de 200, corta\./,"60 segundos falados COM CALMA: de 120 a 150 palavras NO TOTAL. Frases curtas, de falar. Passou de 150, corta.")
-    .replace(/parágrafos CURTOS separados por linha em branco \(uma ideia por parágrafo; o Desenvolvimento tem 3 a 4\)\. Nunca um bloco só\./,"cada cena é UM parágrafo corrido (o Desenvolvimento com 3 a 4 frases).")
-    .replace(/90 segundos/g,"60 segundos");
+/* ═══ CÉREBRO ÚNICO (26/09/2026) ═══════════════════════════════════════════════════════
+   "Faça do jeito certo… não faça uma cópia da receita para o Guvi."
+   A receita dos roteiros (regras de 60 s, gancho, rodízio de produtos, pedido que manda no
+   formato, leitura da resposta da IA, ajuste do MESMO roteiro) SAIU DA TELA e mora na função
+   do servidor `roteiro-ia`. O botão Gerar, o botão Ajustar e o Guvi (WhatsApp) usam ela.
+   Melhorou a regra lá → melhora pros três. O texto que vai pra IA foi conferido letra por
+   letra contra a receita antiga (idêntico no padrão de 60 s).
+   O servidor também GRAVA: cria as linhas em roteiros_video e guarda o histórico de ajustes.
+   Cópia da receita antiga: backups/2026-09-26_cerebro_roteiros/31_roteiros.jsx
+   ═══════════════════════════════════════════════════════════════════════════════════════ */
+async function _rtCerebro(body){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  if(!sb) throw new Error("Supabase indisponível.");
+  const {data,error}=await sb.functions.invoke("roteiro-ia",{body:body});
+  if(error){
+    let m=(error&&error.message)||"erro";
+    try{ const _r=error.context; if(_r&&typeof _r.json==="function"){ const _j=await _r.json(); if(_j&&_j.error) m=String(_j.error); } }catch(_){}
+    if(/Failed to send a request/i.test(m)) m="Cérebro dos roteiros fora do ar (função roteiro-ia).";
+    throw new Error(m);
+  }
+  if(data&&data.error) throw new Error(String(data.error));
+  return data||{};
 }
-
-  /* (24/09/2026, Vinicius) "se o pedido for fora dessa estrutura de abertura desenvolvimento
-     fechamento, você obedece o que for pedido". As regras de formato viram o PADRÃO; o pedido
-     escrito à mão vence todas elas. Só o que é verdade da marca continua inegociável. */
-  const _rtPedidoManda=function(comoChama){ return ""+
-    "O "+comoChama+" MANDA NO FORMATO: tudo que está escrito acima sobre formato — 60 segundos, 120 a 150 palavras, três partes, um parágrafo por parte, gancho na primeira frase, CTA no fim — é o PADRÃO de quando ninguém pede nada diferente. Se o "+comoChama+" pedir outra estrutura, outro tamanho, outra divisão, outro tipo de abertura ou nenhum CTA, OBEDEÇA e ignore a regra de formato que ele contrariar. Não avise, não peça licença, não entregue os dois jeitos.\n"+
-    "O que continua valendo de qualquer jeito: é fala pra gravar olhando pra câmera, na voz da marca; nunca inventar número, cidade, prazo, garantia nem depoimento; e responder nos rótulos do formato abaixo.\n"+
-    "COMO ENCAIXAR NOS RÓTULOS: ABERTURA, DESENVOLVIMENTO e FECHAMENTO são só as três caixas onde o texto fica guardado na tela — não são obrigação de escrever em três atos.\n"+
-    "REGRA DE OURO: se o "+comoChama+" define a estrutura — falas numeradas (Fala 1, Fala 2…), tópicos, passo a passo, cenas, perguntas e respostas, lista, uma fala corrida, só um gancho — então NÃO reparta em abertura/desenvolvimento/fechamento. Escreva TUDO dentro de ABERTURA, na ordem pedida, UM ITEM POR LINHA, e deixe DESENVOLVIMENTO e FECHAMENTO COMPLETAMENTE VAZIOS. Repartir a estrutura pedida entre as três caixas é justamente o erro: as etiquetas voltam a aparecer na tela e o formato pedido se perde.\n"+
-    "Só use as três caixas quando o próprio "+comoChama+" pedir três partes, ou quando ele não disser nada sobre estrutura.\n"+
-    "Nunca invente conteúdo só pra encher caixa.\n\n"; };
-
-/* ── GERADOR ──
-   Devolve [{assunto,abertura,desenvolvimento,fechamento}] × quantos.
-   trend = {titulo,descricao} quando vem da aba Trends. */
+/* Gera E GRAVA. Devolve as linhas de roteiros_video já salvas. */
 async function pxGerarRoteiros(opts){
-  const client=String((opts&&opts.client)||""), unit=String((opts&&opts.unit)||"");
-  const clienteNome=String((opts&&opts.clienteNome)||client);
-  const trend=(opts&&opts.trend)||null;
-  const jaFeitos=Array.isArray(opts&&opts.jaFeitos)?opts.jaFeitos:[];
-  const produtosFeitos=(opts&&opts.produtosFeitos)||{}; // {produto: quantos roteiros já tem}
-  /* (23/09/2026, Vinicius) quantos=0 = LIVRE: a IA faz quantos o PEDIDO determinar ("3 de cada" pra 4
-     produtos = 12), até 20. Número marcado manda. */
-  const livre=!!(opts&&opts.pedido)&&(opts.quantos===0||opts.quantos==="livre");
-  const quantos=livre?0:Math.max(1,Math.min(20,(opts&&opts.quantos)||5));
-  const _qTxt=livre?"quantos o pedido determinar":String(quantos);
-  /* (22/09/2026) BUG "pedido is not defined": o Roteiro específico (21/09) manda `opts.pedido`,
-     o prompt usa `pedido` em 5 lugares — e a variável nunca foi declarada. Estourava
-     ReferenceError já no bloco de "assuntos que já têm roteiro", ou seja, em QUALQUER geração
-     de cliente que já tivesse roteiro, não só no pedido. */
-  const pedido=String((opts&&opts.pedido)||"").trim();
-  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
-  const py=unit==="paraguay";
-  const fake={id:"roteiros-"+client, client:client, bioterUnit:unit, title:"Roteiro de vídeo", contentType:"video", tags:[]};
-  const ctx=(typeof pxContextoCopy==="function")?await pxContextoCopy(client,unit,fake):null;
-  let ex=[]; try{ if(typeof pxExemplosEstilo==="function") ex=await pxExemplosEstilo(fake,unit); }catch(_){}
-  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[], foco=(ctx&&ctx.foco_do_mes)||[], aprov=(ctx&&ctx.aprovadas)||[], recus=(ctx&&ctx.recusadas)||[];
-
-  const sys="Você escreve roteiros de vídeo pra empresas do agronegócio e da construção no Brasil, na voz de cada marca. "+
-    "O roteiro é a FALA que o dono ou o técnico da empresa vai gravar olhando pra câmera. Escreve como gente que conhece o campo e a obra: "+
-    "direto, concreto, sem jargão de marketing e sem frase de efeito vazia. Nunca inventa número, cidade, prazo, garantia ou depoimento que não tenha sido informado. "+
-    (py?"ESCREVA AS FALAS EM ESPANHOL (é a unidade do Paraguai); os rótulos ficam em português.":"Escreva em português do Brasil.")+
-    " Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
-
-  let u="CLIENTE: "+clienteNome+(unit?(" — unidade "+unit):"")+"\n\n";
-  if(pb.descricao||pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.descricao||pb.sobre)+"\n\n";
-  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
-  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
-  // PRODUTOS (17/09/2026): o briefing do portal é a fonte principal; o playbook complementa.
-  const _bpTxt=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,4200):"";
-  if(_bpTxt) u+=_bpTxt;
-  /* (22/09/2026) A tag de produto sai da LISTA OFICIAL do playbook, não das palavras que a
-     IA inventa lendo a prosa do briefing. Antes isto era `_pxCtxTxt(pb.produtos)` cortado em
-     900 caracteres — o objeto inteiro, com as URLs das fotos. */
-  const _prodOf=(typeof pxProdutosOficiais==="function")?pxProdutosOficiais(ctx,unit):[];
-  if(_prodOf.length){
-    u+="LISTA OFICIAL DE PRODUTOS (é daqui que sai a tag do roteiro — copie o nome EXATAMENTE como está escrito):\n";
-    /* (23/09/2026) o peso vem da tag da ficha do produto; 🔴 inativo nem entra na lista */
-    const _E={prioridade:"[PRIORIDADE]",importante:"[IMPORTANTE]",complementar:"[COMPLEMENTAR]"};
-    _prodOf.forEach(function(pr){ if(pr.prioridade==="inativo") return; u+="- "+pr.nome+(_E[pr.prioridade]?(" "+_E[pr.prioridade]):"")+(pr.daUnidade?"":" (não é desta unidade — só use se o roteiro for mesmo sobre isso)")+"\n"; });
-    if(_prodOf.some(function(pr){return pr.prioridade==="inativo";})) u+="(fora da lista, NUNCA use: "+_prodOf.filter(function(pr){return pr.prioridade==="inativo";}).map(function(pr){return pr.nome;}).join(", ")+")\n";
-    u+="\n";
-  }
-  const _temProdutos=!!_bpTxt||_prodOf.length>0;
-  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
-  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
-  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
-  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
-  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
-  if(foco.length){
-    u+="FOCO DO MÊS / TRIMESTRE (Planejamento com o cliente):\n";
-    foco.slice(0,3).forEach(function(f){ const p=[]; if(f.objetivo)p.push("objetivo: "+f.objetivo); if(_pxCtxTxt(f.produtos_foco))p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco)); if(_pxCtxTxt(f.campanhas))p.push("campanhas: "+_pxCtxTxt(f.campanhas)); if(p.length) u+="- "+(f.mes||"?")+"/"+(f.ano||"?")+" — "+p.join("; ")+"\n"; });
-    u+="\n";
-  }
-  if(ex.length){
-    u+="VÍDEOS JÁ APROVADOS DESTE CLIENTE (é este o padrão que a agência aprova — siga o molde, não o conteúdo):\n";
-    ex.filter(function(e){return e.mesmo_cliente;}).slice(0,3).forEach(function(e){ u+="--- "+e.titulo+"\n"+String(e.briefing||"").slice(0,600)+"\n"; });
-    u+="\n";
-  }
-  if(aprov.length){ u+="LEGENDAS JÁ APROVADAS (o tom que funciona):\n"; aprov.slice(0,4).forEach(function(a){ u+="---\n"+_pxHtmlParaTexto(a.legenda).slice(0,400)+"\n"; }); u+="\n"; }
-  if(recus.length){ u+="RECUSADAS E O MOTIVO (não repetir o erro):\n"; recus.slice(0,4).forEach(function(r){ if(r.feedback) u+="- "+(r.titulo||"")+": "+r.feedback+"\n"; }); u+="\n"; }
-  const _pf=Object.keys(produtosFeitos).filter(Boolean);
-  if(_pf.length){ u+="PRODUTOS QUE JÁ TÊM ROTEIRO (quantos) — dê preferência aos que ainda não têm ou têm menos:\n"; _pf.sort(function(a,b){return produtosFeitos[b]-produtosFeitos[a];}).slice(0,30).forEach(function(k){ u+="- "+k+" ("+produtosFeitos[k]+")\n"; }); u+="\n"; }
-  if(jaFeitos.length){
-    u+=pedido?("ASSUNTOS QUE JÁ TÊM ROTEIRO (o PEDIDO abaixo manda; se ele bater com algum destes, escreva por um ÂNGULO diferente do que já existe):\n")
-             :("⛔ ASSUNTOS QUE JÁ TÊM ROTEIRO (NÃO repita nem chegue perto):\n");
-    jaFeitos.slice(0,40).forEach(function(a){ u+="- "+a+"\n"; }); u+="\n";
-  }
-  if(trend){
-    u+="TREND DO MOMENTO (a social media explicou):\n"+"Título: "+(trend.titulo||"")+"\n"+"Do que se trata: "+(trend.descricao||"")+"\n\n";
-    u+="TAREFA: escreva "+quantos+" IDEIAS DE ROTEIRO que adaptem ESSA TREND pra "+clienteNome+" — cada uma encaixa a trend num assunto diferente do negócio do cliente (produto, rotina, bastidor, dúvida do cliente, resultado). A trend é o formato/gancho; o conteúdo é da marca. Nunca invente que a marca fez algo que não fez.\n";
-  }else if(pedido){
-    u+="PEDIDO DA AGÊNCIA (é ISTO que manda — acima do rodízio de produtos e da regra de assunto inédito):\n"+pedido+"\n\n";
-    u+="TAREFA: escreva "+(livre?"EXATAMENTE A QUANTIDADE DE ROTEIROS QUE O PEDIDO DETERMINA (some tudo: \"3 de cada\" pra 4 produtos são 12 roteiros; se o pedido não diz quantos, faça 1 por assunto/produto citado; nunca menos do que o pedido soma; máximo 20)":(quantos+" ROTEIRO"+(quantos>1?"S":"")))+" atendendo EXATAMENTE esse pedido pra "+clienteNome+". "+
-       "Se o pedido nomeia um produto, um assunto ou um ângulo, é sobre isso que "+((livre||quantos>1)?"os roteiros falam":"o roteiro fala")+". "+
-       ((livre||quantos>1)?"Sendo mais de um, cada roteiro entra por um ÂNGULO diferente dentro do que foi pedido (dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega) — nunca o mesmo texto com outras palavras. Se o pedido diz o tipo de abordagem de cada um (comercial, técnico, topo de funil…), siga à risca. ":"")+
-       "O que o pedido não disser, você completa com o playbook, o briefing do cliente e o foco do mês. Nunca invente número, cidade, prazo, garantia nem depoimento.\n";
-  }else{
-    u+="TAREFA: escreva "+quantos+" ROTEIROS sobre "+quantos+" ASSUNTOS TOTALMENTE DIFERENTES entre si pra "+clienteNome+" (ex.: um produto específico, uma dúvida frequente do cliente, um bastidor da rotina, um erro comum no campo/obra, um resultado que o serviço entrega). Nada de dois roteiros sobre a mesma coisa com outras palavras.\n";
-  }
-  if(_temProdutos&&pedido){
-    u+="PRODUTO: marque cada roteiro com o produto ou serviço da lista acima que ele trata (se o pedido não cita nenhum, use o que mais se aproxima). O pedido pode pedir vários roteiros do MESMO produto — nesse caso, cada um por um ângulo diferente.\n\n";
-  }
-  if(_temProdutos&&!pedido){
-    u+="RODÍZIO DE PRODUTOS (obrigatório): cada "+(trend?"ideia":"roteiro")+" fala de um PRODUTO OU SERVIÇO DIFERENTE da lista acima — nunca dois sobre o mesmo produto, e nada genérico sobre \"a empresa\" sem produto. Priorize [PRIORIDADE] (ou 🟣 no briefing), depois [IMPORTANTE] (🟢); [COMPLEMENTAR] (🟡) só de vez em quando; [INATIVO] (🔴) NUNCA. Entre produtos do MESMO peso, rodízio: quantidades parecidas, o que tem menos roteiros vem primeiro. Se a lista não tem marcação de prioridade, siga a ordem em que o cliente escreveu (os primeiros são os mais importantes) e o foco do mês/campanha atual. Respeite os avisos do cliente (ex.: qual é o carro-chefe e o que não é o foco). Se a empresa tiver menos produtos do que "+quantos+", aí sim repita o produto, mas com ângulo totalmente diferente. "+
-       "MARCA (23/09/2026): quando forem 4 ou mais, UM deles pode ser institucional — qualidade do serviço, como o trabalho é feito, o posicionamento da VISÃO GERAL (ex.: por que o carro-chefe é o carro-chefe), equipe ou prova social — tirado dos pilares, do Sobre a empresa, dos feedbacks e dos materiais; esse conta como 'sem produto' e não quebra o rodízio dos outros. Se o pedido nomeia os assuntos, o pedido manda.\n";
-    u+="Dentro do produto o ângulo varia: dúvida frequente, erro comum, bastidor, como funciona, resultado que entrega.\n\n";
-  }
-  u+=_rtRegras60();
-  u+="- PARÁGRAFOS: cada parte é UM parágrafo (vai pro cliente com um \"•\" na frente): abertura 1 a 2 frases, desenvolvimento 3 a 4 frases, fechamento 2 a 3 frases com o CTA.\n";
-  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos falados com calma). Frases curtas, de falar — nada de período longo cheio de vírgula. Se passar de 150 palavras, corte.\n";
-  u+="- A ABERTURA prende em uma ou duas frases e apresenta o assunto. O DESENVOLVIMENTO é o complemento: explica com fatos reais da empresa. O FECHAMENTO amarra a ideia e termina com o CTA — convida a chamar a empresa.\n";
-  /* (23/09/2026, Vinicius) "senti falta de ganchos fortes que prendam a atenção" */
-  u+="- GANCHO (obrigatório): a PRIMEIRA FRASE da abertura existe pra parar o dedo em 2 segundos. Nunca comece apresentando o produto ('A cisterna inflada é…', 'O reservatório serve pra…') nem com 'Você sabia' ou 'Hoje vamos falar'. Comece por UMA destas portas: uma dor real do público dita como ele diz ('Perdeu produção na estiagem e o vizinho não?'); uma pergunta que ele já se faz; um erro comum que custa caro; um contraste ou quebra de expectativa ('Não é o tamanho da lagoa que decide a safra'); uma consequência concreta ('Cada dia sem água na granja é dinheiro que não volta'). Frase curta, direta, na voz de quem grava. Sem clickbait: o gancho promete só o que o roteiro entrega, e nunca inventa número, cidade, prazo ou depoimento.\n";
-  u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
-
-  u+="- Se algum exemplo acima contrariar as REGRAS, valem as REGRAS.\n\n";
-  if(pedido) u+=_rtPedidoManda("PEDIDO DA AGÊNCIA");
-  const _bloco=function(i){ return "===ROTEIRO "+i+"===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL — é o título que o cliente do Paraguai vê":"em português")+")\n"+(_temProdutos?"PRODUTO: (copie EXATAMENTE um nome da LISTA OFICIAL DE PRODUTOS; se nenhum servir, escreva —)\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n"; };
-  if(livre){
-    u+="FORMATO EXATO DA RESPOSTA (um bloco por roteiro, numerados 1, 2, 3… — repita o bloco quantas vezes o pedido pedir, até 20):\n"+_bloco(1)+_bloco(2)+"(…e assim por diante)\n";
-  } else {
-    u+="FORMATO EXATO DA RESPOSTA ("+quantos+" blocos):\n";
-    for(let i=1;i<=quantos;i++){ u+=_bloco(i); }
-  }
-
-  /* (22/09/2026) O teto de tokens acompanha a quantidade: 10 roteiros de 170-200 palavras
-     estouram os 4200 antigos e a resposta vinha cortada no meio do último bloco. */
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:livre?16000:Math.min(16000,1400+quantos*760),system:sys,messages:[{role:"user",content:u}]});
-  const out=_rtParseResposta(data, !!pedido);
-  if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  const lista=out.slice(0,livre?20:quantos);
-  /* A tag só existe se bater com o cadastro. Nome que a IA inventou não vira etiqueta. */
-  if(_prodOf.length&&typeof pxProdutoOficial==="function"){
-    lista.forEach(function(r){ r.produto=pxProdutoOficial(r.produto,_prodOf)||"";
-      /* (23/09/2026, Vinicius) Paraguay: a tag sai com o "Nombre principal (ES)" da ficha */
-      if(py&&r.produto){ const _o=_prodOf.find(function(p){return p.nome===r.produto;}); if(_o&&_o.nomeEs) r.produto=_o.nomeEs; } });
-  }
-  return lista;
+  const o=opts||{};
+  const d=await _rtCerebro({acao:"gerar",client:o.client,unit:o.unit,clienteNome:o.clienteNome,trend_id:o.trend_id||null,
+    pedido:o.pedido||"",quantos:o.quantos,duracao:o.duracao||null,idioma:o.idioma||null,cenas:o.cenas||null});
+  const rows=Array.isArray(d.roteiros)?d.roteiros:[];
+  if(!rows.length) throw new Error("A IA não devolveu nenhum roteiro. Tente de novo.");
+  return rows;
 }
-
-/* Lê os blocos ===ROTEIRO n=== da resposta da IA. Um lugar só: o gerador e o AJUSTE
-   pedem o mesmo formato, então não pode existir um segundo parser. */
-function _rtParseResposta(data, formatoLivre){
-  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("").trim();
-  txt=txt.replace(/^```(?:text)?\s*/i,"").replace(/```\s*$/,"").replace(/\*\*/g,"");
-  const blocos=txt.split(/===\s*ROTEIRO\s*\d+\s*===/i).map(function(b){return b.trim();}).filter(Boolean);
-  const out=[];
-  blocos.forEach(function(b){
-    const pega=function(rot,prox){ const re=new RegExp("(?:"+rot+")\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*(?:"+prox+")\\s*:|$)","i"); const m=b.match(re); return m?m[1].trim():""; };
-    const r={assunto:pega("ASSUNTO","PRODUTO|PRODUCTO|ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,""),
-      produto:pega("PRODUTO|PRODUCTO","ABERTURA|APERTURA").replace(/^["“]|["”]$/g,"").replace(/\.$/,"").slice(0,60),
-      abertura:pega("ABERTURA|APERTURA","DESENVOLVIMENTO|DESARROLLO"),
-      desenvolvimento:pega("DESENVOLVIMENTO|DESARROLLO","FECHAMENTO|CIERRE"),
-      fechamento:pega("FECHAMENTO|CIERRE","NUNCA_ACHA_ISSO_AQUI")};
-    /* (24/09/2026) Com pedido à mão, o roteiro pode vir numa parte só — a exigência das três
-       caixas cheias iria jogar fora exatamente o que o Vinicius pediu. Sem pedido, a regra
-       estrita continua: bloco faltando é resposta cortada no meio, não formato novo. */
-    if(formatoLivre ? !!r.abertura : (r.abertura&&r.desenvolvimento&&r.fechamento)) out.push(r);
-  });
-  return out;
-}
-
-/* ── AJUSTAR UM ROTEIRO (22/09/2026, Rodrigo) ─────────────────────────────────────
-   "deve ter um botão de ajustar copy, tal qual lá na avaliação de copys, aí dá pra ser
-    ajustado algo que não gostou sem ter que reescrever outro, porque pode ter ficado bom,
-    só precisa de alguns ajustes."
-   A IA recebe o roteiro INTEIRO + o que a agência pediu e devolve O MESMO roteiro com o
-   ajuste feito. O que não foi criticado volta igual — não é "gerar outro". */
+/* Ajusta O MESMO roteiro e GRAVA (com o pedido no histórico `ajustes`). Devolve a linha salva. */
 async function pxAjustarRoteiro(r,feedback){
   const fb=String(feedback||"").trim();
   if(!fb) throw new Error("Escreve o que você quer mudar.");
-  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
-  const client=String((r&&r.client_id)||""), unit=String((r&&r.unidade)||"");
-  const py=unit==="paraguay";
-  const fake={id:"roteiros-"+client,client:client,bioterUnit:unit,title:(r&&r.assunto)||"Roteiro de vídeo",contentType:"video",tags:[]};
-  let ctx=null; try{ if(typeof pxContextoCopy==="function") ctx=await pxContextoCopy(client,unit,fake); }
-  catch(e){ console.warn("[ajustar roteiro] contexto falhou:",e&&e.message); }
-  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[];
-
-  const sys="Você escreve roteiros de vídeo pra empresas do agronegócio e da construção no Brasil, na voz de cada marca. "+
-    "O roteiro é a FALA que o dono ou o técnico da empresa vai gravar olhando pra câmera. "+
-    "Agora você NÃO está criando um roteiro novo: está AJUSTANDO um que já existe, atendendo o pedido da agência. "+
-    (py?"ESCREVA AS FALAS EM ESPANHOL (é a unidade do Paraguai); os rótulos ficam em português.":"Escreva em português do Brasil.")+
-    " Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
-
-  let u="CLIENTE: "+String((r&&r.cliente_nome)||client)+(unit?(" — unidade "+unit):"")+"\n\n";
-  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
-  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
-  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
-  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
-  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
-  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
-  u+="ROTEIRO ATUAL (é ESTE que você vai ajustar):\n";
-  u+="ASSUNTO: "+String((r&&r.assunto)||"")+"\n";
-  if(r&&r.produto) u+="PRODUTO: "+String(r.produto)+"\n";
-  u+="ABERTURA:\n"+String((r&&r.abertura)||"")+"\n\nDESENVOLVIMENTO:\n"+String((r&&r.desenvolvimento)||"")+"\n\nFECHAMENTO:\n"+String((r&&r.fechamento)||"")+"\n\n";
-  u+="O QUE A AGÊNCIA PEDIU PRA AJUSTAR:\n"+fb+"\n\n";
-  u+="TAREFA: devolva o MESMO roteiro com esse ajuste feito. MANTENHA tudo que não foi criticado — o assunto, o produto, a ordem das ideias e as frases que já estão boas. "+
-     "Não reescreva do zero, não troque de tema e nunca invente número, cidade, prazo, garantia nem depoimento. "+
-     "Se o pedido fala só de uma parte (a abertura, por exemplo), as outras voltam praticamente iguais.\n";
-  u+=_rtRegras60();
-  u+="- PARÁGRAFOS: cada parte é UM parágrafo.\n";
-  u+="- TAMANHO: 120 a 150 palavras NO TOTAL (60 segundos).\n";
-  /* (23/09/2026, Vinicius) "senti falta de ganchos fortes que prendam a atenção" */
-  u+="- GANCHO (vale sempre que a abertura for tocada): a PRIMEIRA FRASE da abertura existe pra parar o dedo em 2 segundos. Nunca comece apresentando o produto ('A cisterna inflada é…', 'O reservatório serve pra…') nem com 'Você sabia' ou 'Hoje vamos falar'. Comece por UMA destas portas: uma dor real do público dita como ele diz ('Perdeu produção na estiagem e o vizinho não?'); uma pergunta que ele já se faz; um erro comum que custa caro; um contraste ou quebra de expectativa ('Não é o tamanho da lagoa que decide a safra'); uma consequência concreta ('Cada dia sem água na granja é dinheiro que não volta'). Frase curta, direta, na voz de quem grava. Sem clickbait: o gancho promete só o que o roteiro entrega, e nunca inventa número, cidade, prazo ou depoimento.\n";
-  u+="- CADA FASE SEGURA A ATENÇÃO: a abertura termina abrindo uma curiosidade ('e o problema quase nunca está onde o produtor olha'); o desenvolvimento entrega o 'por quê' concreto e faz ponte pra próxima ideia (uma frase puxa a outra, sem lista de características); o fechamento diz o que a pessoa ganha antes do CTA — o convite vem por último e é um só.\n";
-  u+=_rtPedidoManda("QUE A AGÊNCIA PEDIU");
-  u+="\n";
-  u+="FORMATO EXATO DA RESPOSTA (um bloco só):\n===ROTEIRO 1===\nASSUNTO: (3 a 7 palavras, "+(py?"EM ESPANHOL":"em português")+")\n"+
-     ((r&&r.produto)?"PRODUTO: "+String(r.produto)+"\n":"")+"ABERTURA:\n(fala)\nDESENVOLVIMENTO:\n(fala)\nFECHAMENTO:\n(fala)\n";
-
-  const data=await askIA({model:PX_IA_MODELO,max_tokens:2400,system:sys,messages:[{role:"user",content:u}]});
-  const out=_rtParseResposta(data, true);
-  if(!out.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
-  const _novo=out[0];
-  if(typeof pxProdutosOficiais==="function"&&typeof pxProdutoOficial==="function"){
-    const _lst=pxProdutosOficiais(ctx,unit);
-    if(_lst.length) _novo.produto=pxProdutoOficial(_novo.produto,_lst)||"";
-  }
-  return _novo;
+  const d=await _rtCerebro({acao:"ajustar",id:r&&r.id,feedback:fb,clienteNome:(r&&r.cliente_nome)||""});
+  if(!d.roteiro) throw new Error("Não voltou o roteiro ajustado. Tente de novo.");
+  return d.roteiro;
 }
 
 /* Ícone diferente em cada roteiro (16/09/2026): os 1-2-3 das seções confundiam; o que
@@ -109468,6 +109277,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           <span style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.3,lineHeight:1.25}}>{r.assunto||"Roteiro"}</span>
           {r.produto&&<span title="Produto/serviço deste roteiro" style={{background:_c+"14",color:_c,border:"1px solid "+_c+"44",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",lineHeight:1.4,maxWidth:"100%",whiteSpace:"normal",wordBreak:"break-word"}}>{r.produto_tag||r.produto}</span>}
           {r.origem==="trend"&&<span style={{background:"#fdf2f8",color:"#be185d",border:"1px solid #fbcfe8",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Trend</span>}
+          {agencia&&r.origem==="guvi"&&<span title={"Pedido pelo WhatsApp"+(r.created_by?(" — "+r.created_by):"")} style={{background:"#f0fdf4",color:"#15803d",border:"1px solid #bbf7d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Guvi</span>}
           {r.status==="enviado"&&<span style={{background:"#ecfdf5",color:"#047857",border:"1px solid #a7f3d0",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Enviado</span>}
           {r.gravado_em&&<span title={"Gravado"+(r.gravado_por?(" por "+r.gravado_por):"")+" em "+new Date(r.gravado_em).toLocaleDateString("pt-BR")} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:4}}>
             <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Gravado {new Date(r.gravado_em).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>}
@@ -109475,7 +109285,7 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
             style={{background:"#fffbeb",color:"#b45309",border:"1px solid #fde68a",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
             Ajustado{r.ajustes.length>1?(" "+r.ajustes.length+"x"):""}</span>}
         </div>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~60 segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>~{r.duracao_seg||60} segundos · {_rtPalavras(r)} palavras{dt?(" · "+dt.toLocaleDateString("pt-BR")):""}{r.trend_titulo?(" · trend: "+r.trend_titulo):""}</div>
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",width:"100%"}}>
         <button type="button" onClick={function(){_rtCopiar(_rtTexto(r),"Roteiro copiado — é só colar no WhatsApp");}} style={_pill(true,"#16a34a")}>
@@ -109546,6 +109356,14 @@ function RoteiroCard({r, cor, agencia, onPortal, onEnviado, onExcluir, onAjustar
           <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{_rtParagrafos(p[2])}</div>
         </div>;
       })}
+      {/* (26/09/2026) Sugestão de cenas: fica FORA da fala (onde e como gravar cada parte) */}
+      {String(r.cenas||"").trim()&&<div style={{background:"#f0f9ff",border:"1px solid #e0f2fe",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{width:3,height:12,borderRadius:2,background:"#0ea5e9",flexShrink:0}}/>
+          <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{py?"Escenas":"Cenas"}</span>
+        </div>
+        <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{String(r.cenas).trim()}</div>
+      </div>}
     </div>}
   </div>;
 }
@@ -109652,14 +109470,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
     const chave=trend?trend.id:(_ped?"pedido":"ia");
     setGerando(chave);
     try{
-      const ja=roteiros.filter(function(r){return r.client_id===cId&&String(r.unidade||"")===uId;}).map(function(r){return r.assunto;}).filter(Boolean);
-      const pf={}; roteiros.forEach(function(r){ if(r.client_id===cId&&String(r.unidade||"")===uId&&r.produto){ pf[r.produto]=(pf[r.produto]||0)+1; } });
-      const lista=await pxGerarRoteiros({produtosFeitos:pf,client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend:trend?{titulo:trend.titulo,descricao:trend.descricao}:null,jaFeitos:ja,pedido:_ped,quantos:_qtd});
-      const lote=Date.now().toString(36);
-      const rows=lista.map(function(r){ return {client_id:cId,unidade:uId,origem:trend?"trend":"ia",trend_id:trend?trend.id:null,lote:lote,assunto:r.assunto,produto:r.produto||null,abertura:r.abertura,desenvolvimento:r.desenvolvimento,fechamento:r.fechamento,status:"sugestao",visivel_portal:false,created_by:(_u&&_u.name)||""}; });
-      const ins=await sb.from("roteiros_video").insert(rows).select("*");
-      if(ins.error) throw ins.error;
-      setRoteiros(function(p){ return (ins.data||[]).concat(p); });
+      /* (26/09/2026) Cérebro único: o servidor lê o que já existe, gera e grava. */
+      const lista=await pxGerarRoteiros({client:cId,unit:uId,clienteNome:_nomeCl(cId,uId),trend_id:trend?trend.id:null,pedido:_ped,quantos:_qtd});
+      setRoteiros(function(p){ const ids={}; lista.forEach(function(x){ ids[x.id]=1; }); return lista.concat(p.filter(function(x){ return !ids[x.id]; })); });
       pixelsToast.success(lista.length+(lista.length===1?" roteiro pronto":" roteiros prontos")+" pra "+_nomeCl(cId,uId)+".",3000);
       if(_ped) setPedidoForm(null);
       if(trend){ setAba("roteiros"); setClId(cId); if(cId==="bioter") setUnit(uId); }
@@ -109715,10 +109528,9 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const _ajustar=async function(r,texto){
     const fb=String(texto||"").trim(); if(!fb||!sb) return;
     try{
+      /* (26/09/2026) Cérebro único: o servidor ajusta O MESMO roteiro e grava o histórico. */
       const novo=await pxAjustarRoteiro(Object.assign({},r,{cliente_nome:_nomeCl(r.client_id,r.unidade)}),fb);
-      const hist=(Array.isArray(r.ajustes)?r.ajustes:[]).concat([{feedback:fb,at:new Date().toISOString(),por:(_u&&_u.name)||""}]);
-      await _patch(r,{assunto:novo.assunto||r.assunto,produto:r.produto||novo.produto||null,
-        abertura:novo.abertura,desenvolvimento:novo.desenvolvimento,fechamento:novo.fechamento,ajustes:hist});
+      setRoteiros(function(p){ return p.map(function(x){ return x.id===novo.id?novo:x; }); });
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Roteiro ajustado.",2500);
     }catch(e){
       if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra ajustar: "+((e&&e.message)||e),6000);
@@ -110889,6 +110701,8 @@ function _WzRespostas({ respostas, onFechar, onMudou, isMob }){
    Regras: nada nasce ligado · não existe apagar (quem sai é desativado, o histórico fica)
            · bloquear corta na hora · número da equipe não entra aqui
            · no celular é só ver (mudar, só no computador).
+   26/09/2026: chave "Pedir roteiro de vídeo" (auto.whats_contatos.pode_pedir_roteiro), por funções NOVAS:
+     rpc whats_contatos_roteiro (lê) · whats_contatos_marcar_roteiro (liga/desliga). Limite: 5 roteiros por semana.
    ═══════════════════════════════════════════════════════════════════ */
 
 const _WC_UNIDADES = [
@@ -110952,6 +110766,7 @@ function CWhatsContatos({cl, isMob}){
   const [salvando, setSalv]   = useState(false);
   const [bloq, setBloq]       = useState(null);   // {id, motivo}
   const [mostraInativos, setMI] = useState(false);
+  const [rot, setRot]         = useState({});     // 26/09/2026: {id_do_contato: pode_pedir_roteiro}
 
   const carregar = useCallback(function(){
     if(!clientId||!window._sb) return;
@@ -110959,14 +110774,23 @@ function CWhatsContatos({cl, isMob}){
       if(r.error){ setErro(_wcErro(r.error)); setLista([]); return; }
       setErro(""); setLista(r.data||[]);
     });
+    window._sb.rpc("whats_contatos_roteiro", { p_client_id: clientId }).then(function(r){
+      if(r.error) return;
+      const m = {}; (r.data||[]).forEach(function(x){ m[x.id] = !!x.pode_pedir_roteiro; }); setRot(m);
+    });
   }, [clientId]);
   useEffect(function(){ setLista(null); setForm(null); setBloq(null); carregar(); }, [carregar]);
 
   function salvar(dados){
     setSalv(true);
-    window._sb.rpc("whats_contatos_salvar", { p: dados }).then(function(r){
+    window._sb.rpc("whats_contatos_salvar", { p: dados }).then(async function(r){
+      if(r.error){ setSalv(false); _wcToast("error", _wcErro(r.error)); return; }
+      // 26/09/2026: a chave de roteiro vai pela função própria, depois que o contato existe
+      if(typeof dados.pode_pedir_roteiro === "boolean" && r.data){
+        const r2 = await window._sb.rpc("whats_contatos_marcar_roteiro", { p_id: r.data, p_valor: dados.pode_pedir_roteiro });
+        if(r2.error) _wcToast("error", _wcErro(r2.error));
+      }
       setSalv(false);
-      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
       setForm(null); carregar();
       _wcToast("success", dados.id ? "Contato atualizado." : "Contato cadastrado.");
     });
@@ -110975,6 +110799,16 @@ function CWhatsContatos({cl, isMob}){
     const d = { id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs };
     d[campo] = !c[campo];
     salvar(d);
+  }
+  function marcarRoteiro(c){
+    const novo = !rot[c.id];
+    setSalv(true);
+    window._sb.rpc("whats_contatos_marcar_roteiro", { p_id: c.id, p_valor: novo }).then(function(r){
+      setSalv(false);
+      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
+      setRot(function(o){ const n = Object.assign({}, o); n[c.id] = novo; return n; });
+      _wcToast("success", novo ? "Pode pedir roteiro (até 5 por semana)." : "Pedir roteiro desligado.");
+    });
   }
   function bloquear(id, sim, motivo){
     window._sb.rpc("whats_contatos_bloquear", { p_id:id, p_bloquear:sim, p_motivo:motivo||null }).then(function(r){
@@ -111056,6 +110890,10 @@ function CWhatsContatos({cl, isMob}){
               {p.label}
             </label>;
           })}
+          <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#334155", cursor:(c.ativo&&!isMob)?"pointer":"default" }}>
+            <input type="checkbox" checked={!!rot[c.id]} disabled={!c.ativo||salvando||isMob} onChange={function(){ marcarRoteiro(c); }}/>
+            Pedir roteiro de vídeo
+          </label>
           <span style={{ fontSize:12, color:"#94a3b8" }}>Limite: {c.limite_semana}/semana · alerta em {c.limite_dia}/dia</span>
         </div>
 
@@ -111067,7 +110905,7 @@ function CWhatsContatos({cl, isMob}){
         </div>}
 
         <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", fontSize:11, color:"#94a3b8", alignItems:"center" }}>
-          {!isMob && c.ativo && <button style={btn} onClick={function(){ setForm(c); }}>Editar</button>}
+          {!isMob && c.ativo && <button style={btn} onClick={function(){ setForm(Object.assign({}, c, { pode_pedir_roteiro: !!rot[c.id] })); }}>Editar</button>}
           {!isMob && c.ativo && !bloqueado && <button style={Object.assign({}, btn, { color:"#b91c1c" })} onClick={function(){ setBloq({ id:c.id, motivo:"" }); }}>Bloquear número</button>}
           {!isMob && c.ativo && bloqueado && <button style={btn} onClick={function(){ bloquear(c.id, false); }}>Desbloquear</button>}
           {!isMob && <button style={btn} onClick={function(){ const d={ id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs, ativo:!c.ativo }; salvar(d); }}>
@@ -111092,6 +110930,7 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
     telefone: inicial.telefone ? _wcFone(inicial.telefone) : "",
     unidade: inicial.unidade || "",
     pode_pedir_card: !!inicial.pode_pedir_card, pode_pedir_info: !!inicial.pode_pedir_info, pode_arquivo: !!inicial.pode_arquivo,
+    pode_pedir_roteiro: !!inicial.pode_pedir_roteiro,
     limite_semana: inicial.limite_semana || 10, limite_dia: inicial.limite_dia || 20,
     obs: inicial.obs || "",
   });
@@ -111118,6 +110957,9 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
           <input type="checkbox" checked={!!d[p.k]} onChange={function(){ set(p.k, !d[p.k]); }}/>{p.label}
         </label>;
       })}
+      <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, color:"#334155", cursor:"pointer" }}>
+        <input type="checkbox" checked={!!d.pode_pedir_roteiro} onChange={function(){ set("pode_pedir_roteiro", !d.pode_pedir_roteiro); }}/>Pedir roteiro de vídeo
+      </label>
     </div>
     <div style={Object.assign({}, grid, { marginTop:12 })}>
       <div><span style={lab}>Limite de cards por semana</span><input style={inp} type="number" min="1" inputMode="numeric" value={d.limite_semana} onChange={function(e){ set("limite_semana", e.target.value); }}/></div>
