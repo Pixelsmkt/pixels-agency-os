@@ -110661,8 +110661,11 @@ function PageWhatsAppPixels({ isMob }){
    com a página oficial e a data da conferência). A Meta cobra na ENTREGA. Regra de 01/10/2026:
    respostas comuns passam a ser cobradas. RPC whats_gasto: só sócio ou chave "Gasto do WhatsApp" em Acessos.
    Atualiza sozinho a cada 1 minuto enquanto a tela está aberta. */
-const _WZG_QUEM = { socio:"Sócios", colaborador:"Colaboradores", cliente:"Clientes", sem_cadastro:"Sem cadastro" };
-const _WZG_ORIGEM = { resposta_guvi:"Resposta do Guvi", resposta_equipe:"Resposta da equipe", disparo:"Disparo (mensagem pronta)" };
+const _WZG_QUEM = { socio:"Sócios", colaborador:"Colaboradores", cliente:"Clientes", sem_cadastro:"Sem cadastro", fora_app:"Enviadas fora do app (Meta)" };
+const _WZG_ORIGEM = { resposta_guvi:"Resposta do Guvi", resposta_equipe:"Resposta da equipe", disparo:"Disparo (mensagem pronta)", fora_app:"Enviadas fora do app (Meta)" };
+// 26/09/2026: nos dias que a Meta ja fechou, o total e o valor OFICIAL dela (pricing_analytics); o dia aberto fica estimado
+function _wzgOficial(d){ if(!d||!d.oficial) return null; const o=d.oficial; const ate=new Date(o.ate+"T12:00:00Z").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+  const em=o.puxado_em?new Date(o.puxado_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):""; return { ate:ate, em:em, o:o }; }
 const _WZG_CAT = { marketing:"Marketing (mensagem pronta)", utility:"Utilidade", authentication:"Autenticação", service:"Resposta comum (serviço)" };
 function _wzgR(v){ const n = Number(v||0); return "R$ " + n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:n>0&&n<0.1?4:2}); }
 function _wzgPeriodo(k){
@@ -110701,7 +110704,7 @@ function _WzGastoCard({ isMob, onAbrir }){
       <span style={{display:"flex",flexDirection:"column",lineHeight:1.2}}>
         <span style={{fontSize:11,color:"#64748b"}}>Gasto do WhatsApp · {_wzgMes()}</span>
         <span style={{fontSize:isMob?15:17,fontWeight:700,color:"#0f172a"}}>{erro ? "—" : dados ? _wzgR(dados.total) : "…"}</span>
-        {dados && !isMob && <span style={{fontSize:11,color:"#94a3b8"}}>{dados.cobradas} cobradas de {dados.enviadas} enviadas</span>}
+        {dados && !isMob && <span style={{fontSize:11,color:dados.fonte==="meta"?"#15803d":"#94a3b8"}}>{dados.fonte==="meta" ? ("✅ valor da Meta até "+_wzgOficial(dados).ate) : "estimativa"}</span>}
       </span>
     </button>
   );
@@ -110768,11 +110771,19 @@ function _WzGastoJanela({ onFechar, isMob }){
             <div style={{display:"flex",gap:18,marginTop:12,flexWrap:"wrap"}}>
               <div><div style={{fontSize:12,color:"#64748b"}}>Gasto no período</div><div style={{fontSize:22,fontWeight:700,color:"#0f172a"}}>{_wzgR(dados.total)}</div></div>
               <div><div style={{fontSize:12,color:"#64748b"}}>Mensagens</div><div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginTop:4}}>{dados.cobradas} cobradas de {dados.enviadas}</div></div>
-              {dados.ate < "2026-10-01" && Number(dados.simulacao_outubro) > Number(dados.total) && (
-                <div><div style={{fontSize:12,color:"#64748b"}}>Com a regra de 01/10</div><div style={{fontSize:15,fontWeight:600,color:"#b45309",marginTop:4}}>{_wzgR(dados.simulacao_outubro)}</div></div>
+              {dados.ate < "2026-10-01" && (Number(dados.simulacao_outubro) + Number((dados.oficial&&dados.oficial.fora_do_app)||0)) > Number(dados.total) && (
+                <div><div style={{fontSize:12,color:"#64748b"}}>Com a regra de 01/10</div><div style={{fontSize:15,fontWeight:600,color:"#b45309",marginTop:4}}>{_wzgR(Number(dados.simulacao_outubro) + Number((dados.oficial&&dados.oficial.fora_do_app)||0))}</div></div>
               )}
             </div>
           )}
+          {dados && _wzgOficial(dados) && (function(){ const of=_wzgOficial(dados), o=of.o; return (
+            <div style={{marginTop:10,padding:"8px 10px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,fontSize:12,color:"#166534",lineHeight:1.5}}>
+              ✅ <b>Valor oficial da Meta até {of.ate}</b> (conferido às {of.em}): <b>{_wzgR(o.total)}</b>.
+              {" "}Nossa conta dos mesmos dias: {_wzgR(o.estimativa_mesmos_dias)}.
+              {Number(o.fora_do_app) > 0.005 && <span> A diferença de <b>{_wzgR(o.fora_do_app)}</b> são {o.fora_do_app_msgs||"algumas"} mensagem(ns) cobrada(s) que saíram <b>fora do app</b>.</span>}
+              {Number(o.hoje_estimado) > 0 && <span> Depois de {of.ate}: + {_wzgR(o.hoje_estimado)} estimado.</span>}
+            </div>
+          ); })()}
           {hoje < "2026-10-15" && (
             <div style={{marginTop:10,padding:"8px 10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,fontSize:12,color:"#92400e"}}>
               ⚠️ A partir de <b>01/10/2026</b> a Meta passa a cobrar também as <b>respostas comuns</b> (Guvi e equipe): R$ 0,035 cada. Antes eram grátis.
@@ -110788,7 +110799,7 @@ function _WzGastoJanela({ onFechar, isMob }){
           {erro && <div style={{padding:16,color:"#b91c1c",fontSize:13}}>{erro}</div>}
           {!erro && !dados && <div style={{padding:16,color:"#64748b",fontSize:13}}>Carregando…</div>}
           {corpo}
-          {dados && aba!=="precos" && <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>Estimativa pela regra oficial da Meta. Atualiza sozinho a cada 1 minuto.</div>}
+          {dados && aba!=="precos" && <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{dados.fonte==="meta" ? "Dias já fechados: valor oficial da Meta. Dia aberto: estimativa." : "Estimativa pela regra oficial da Meta."} Atualiza sozinho a cada 1 minuto.</div>}
         </div>
       </div>
     </div>
