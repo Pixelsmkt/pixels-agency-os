@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 45/45 | Nao editar diretamente
+// Modulos: 46/46 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2057,6 +2057,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.projecao",      label:"Projeção financeira",  desc:"Padrão: chave Financeiro ou sócio",
       padrao:(u,p)=>!!(p&&p.verFinanceiro)||_pxSocio(u)},
     {key:"gestao.operacao",      label:"Operação",             desc:"Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.eficiencia",    label:"Eficiência e Resultados", desc:"Reels de cada cliente com números, leitura da IA e marcações da equipe. Padrão: fechado (só sócios)", padrao:false}, // 27/09/2026
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.whatsapp",      label:"WhatsApp Pixels",      desc:"Ver e responder as mensagens do Guvi. Padrão: só sócios", padrao:_pxSocio},
@@ -3869,6 +3870,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_whatsapp")      return <svg {...p}><path d="M21 11.5a8.4 8.4 0 01-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1121 11.5z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+  if(id==="gestao_eficiencia")  return <svg {...p}><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>; // 27/09/2026
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   if(id==="gestao_enps")        return <svg {...p}><path d="M3 12a9 9 0 1118 0"/><line x1="12" y1="12" x2="16" y2="8"/><circle cx="12" cy="12" r="1.5"/></svg>;
@@ -3936,6 +3938,7 @@ const NAV=[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_projecao",      icon:"▥", label:"Projeção financeira"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
+    {id:"gestao_eficiencia",    icon:"▶", label:"Eficiência e Resultados"}, // (27/09/2026) Reels + leitura da IA + marcações
     {id:"gestao_time",          icon:"◉", label:"Time"},
     {id:"gestao_administrativo", icon:"▤", label:"Administrativo"},
     {id:"gestao_whatsapp",      icon:"◎", label:"WhatsApp Pixels"}, // (24/09/2026) caixa de entrada do Guvi
@@ -58866,6 +58869,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":    return _menuBloco("gestao.financeiro",p);     // era verFinanceiro||sócio
       case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
+      case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
       case "gestao_time":          return _menuBloco("gestao.time",p);           // era só sócio
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",p);// era só sócio
@@ -58976,6 +58980,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":     return _menuBloco("gestao.financeiro",effectivePerms)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
+      case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return _menuBloco("gestao.time",effectivePerms)?<PageGestaoTime {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} onNavTo={nav}/>:<NoPerm/>;
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",effectivePerms)?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
@@ -111218,4 +111223,464 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
       </button>
     </div>
   </div>;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   EFICIÊNCIA E RESULTADOS — Gestão › Eficiência e Resultados (27/09/2026)
+   Módulo NOVO: não altera nenhuma tela existente.
+
+   Reels de cada cliente com os números reais do Instagram (social_posts), a leitura da IA
+   (video_leituras, motor "leitura_videos.py" + função video-ler) e as marcações da equipe
+   (video_marcacoes: "aqui tem efeito sonoro", "aqui entra texto destacando o número", com print).
+
+   Backend (trava _efic_pode = nível 1 ou chave Acessos › gestao.eficiencia):
+     rpc efic_videos · efic_video · efic_marcar · efic_desmarcar
+     storage video-marcacoes (privado — link temporário)
+   Regras: só dado real (sem leitura = "ainda não lido"); celular só vê (não marca);
+   tirar marcação só esconde (fica no histórico).
+   ══════════════════════════════════════════════════════════════════ */
+
+const _EF = { roxo:"#7c3aed", roxoClaro:"#f5f3ff", roxoBorda:"#ddd6fe", texto:"#0f172a", sub:"#64748b", fraco:"#94a3b8",
+              linha:"#eef2f7", fundo:"#f8fafc", verde:"#15803d", verdeClaro:"#f0fdf4", amarelo:"#a16207", amareloClaro:"#fefce8" };
+const _EF_TIPOS = [
+  { id:"efeito_sonoro", label:"Efeito sonoro", cor:"#db2777" },
+  { id:"texto_tela",    label:"Texto na tela", cor:"#2563eb" },
+  { id:"corte",         label:"Corte",         cor:"#0f766e" },
+  { id:"musica",        label:"Música",        cor:"#7c3aed" },
+  { id:"cena",          label:"Cena",          cor:"#ea580c" },
+  { id:"fala",          label:"Fala",          cor:"#334155" },
+  { id:"outro",         label:"Outro",         cor:"#64748b" },
+];
+const _EF_CENA_COR = { "depoimento":"#7c3aed", "pessoa falando":"#8b5cf6", "produto":"#ea580c", "obra":"#b45309", "fábrica":"#0f766e",
+                       "drone":"#0284c7", "animais":"#16a34a", "equipe":"#2563eb", "evento":"#db2777", "logo":"#94a3b8", "arte":"#a855f7", "outro":"#64748b" };
+
+function _efTipo(id){ return _EF_TIPOS.find(function(t){ return t.id===id; }) || _EF_TIPOS[_EF_TIPOS.length-1]; }
+function _efTempo(s){ s = Math.max(0, Math.round(Number(s)||0)); return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); }
+function _efNum(n){ return n==null ? "—" : Number(n).toLocaleString("pt-BR"); }
+function _efSeg(ms){ return ms==null ? "—" : (Math.round(Number(ms)/100)/10).toLocaleString("pt-BR") + " s"; }
+function _efData(iso){ return iso ? new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",timeZone:"America/Sao_Paulo"}) : ""; }
+function _efMediana(arr){
+  const a = arr.filter(function(x){ return x!=null && !isNaN(x); }).map(Number).sort(function(x,y){ return x-y; });
+  if(!a.length) return null;
+  const m = Math.floor(a.length/2);
+  return a.length%2 ? a[m] : (a[m-1]+a[m])/2;
+}
+function _efF(n, isMob){ try{ return (typeof pxFonte==="function") ? pxFonte(n, isMob) : n; }catch(_){ return n; } }
+
+/* ── Tela ─────────────────────────────────────────────────────────── */
+function PageEficiencia({ isMob }){
+  const [meses, setMeses] = useState(12);
+  const [cliente, setCliente] = useState("");
+  const [ordem, setOrdem] = useState("alcance");
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [aberto, setAberto] = useState(null);
+  const [recarregar, setRecarregar] = useState(0);
+
+  useEffect(function(){
+    if(!window._sb) return;
+    let vivo = true;
+    setDados(null); setErro(null);
+    window._sb.rpc("efic_videos", { p_client:null, p_meses:meses }).then(function(r){
+      if(!vivo) return;
+      if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso a esta tela." : "Não consegui carregar os vídeos agora."); return; }
+      setDados(r.data || { clientes:[], videos:[] });
+    }).catch(function(){ if(vivo) setErro("Não consegui carregar os vídeos agora."); });
+    return function(){ vivo = false; };
+  }, [meses, recarregar]);
+
+  const nomes = useMemo(function(){
+    const m = {}; ((dados&&dados.clientes)||[]).forEach(function(c){ m[c.client_id] = c.nome; }); return m;
+  }, [dados]);
+
+  const videos = useMemo(function(){
+    const v = ((dados&&dados.videos)||[]).filter(function(x){ return !cliente || x.client_id===cliente; });
+    const ord = v.slice();
+    if(ordem==="alcance")   ord.sort(function(a,b){ return (b.alcance||0)-(a.alcance||0); });
+    if(ordem==="assistido") ord.sort(function(a,b){ return (b.assistido_ms==null?-1:b.assistido_ms)-(a.assistido_ms==null?-1:a.assistido_ms); });
+    if(ordem==="recentes")  ord.sort(function(a,b){ return String(b.publicado_em).localeCompare(String(a.publicado_em)); });
+    return ord;
+  }, [dados, cliente, ordem]);
+
+  const kpi = useMemo(function(){
+    const comAssist = videos.filter(function(v){ return v.assistido_ms!=null; });
+    return {
+      n: videos.length,
+      alcance: _efMediana(videos.map(function(v){ return v.alcance; })),
+      assistido: _efMediana(comAssist.map(function(v){ return v.assistido_ms; })),
+      nAssist: comAssist.length,
+      compart: _efMediana(videos.map(function(v){ return v.compart; })),
+      lidos: videos.filter(function(v){ return v.leitura==="lido"; }).length,
+    };
+  }, [videos]);
+
+  const pill = function(ativo){
+    return { padding: isMob ? "7px 12px" : "7px 14px", borderRadius:999, border:"1px solid "+(ativo?_EF.roxo:"#e2e8f0"),
+             background: ativo?_EF.roxo:"#fff", color: ativo?"#fff":_EF.texto, fontSize:_efF(13,isMob), fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" };
+  };
+  const sel = { padding:"8px 10px", borderRadius:10, border:"1px solid #e2e8f0", background:"#fff", color:_EF.texto, fontSize:_efF(13,isMob), fontWeight:500, maxWidth:"100%" };
+
+  return (
+    <div style={{padding: isMob ? "14px 12px 90px" : "22px 28px 40px", maxWidth:1280, margin:"0 auto", color:_EF.texto}}>
+      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:16}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:_efF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3}}>Eficiência e Resultados</div>
+          <div style={{fontSize:_efF(13,isMob),color:_EF.sub,marginTop:4}}>Os Reels de cada cliente: números reais, leitura da IA e marcações da equipe.</div>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          {[3,6,12].map(function(m){ return <button key={m} onClick={function(){ setMeses(m); }} style={pill(meses===m)}>{m} meses</button>; })}
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:16}}>
+        <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {minWidth: isMob?0:220, flex: isMob?"1 1 100%":"0 0 auto"})}>
+          <option value="">Todos os clientes</option>
+          {((dados&&dados.clientes)||[]).map(function(c){ return <option key={c.client_id} value={c.client_id}>{c.nome} ({c.reels})</option>; })}
+        </select>
+        <select value={ordem} onChange={function(e){ setOrdem(e.target.value); }} style={Object.assign({}, sel, {flex: isMob?"1 1 100%":"0 0 auto"})}>
+          <option value="alcance">Maior alcance primeiro</option>
+          <option value="assistido">Mais tempo assistido primeiro</option>
+          <option value="recentes">Mais recentes primeiro</option>
+        </select>
+      </div>
+
+      {erro && <div style={{padding:16,borderRadius:12,background:"#fef2f2",color:"#b91c1c",fontSize:_efF(14,isMob)}}>{erro}</div>}
+      {!erro && !dados && <div style={{padding:30,textAlign:"center",color:_EF.sub,fontSize:_efF(14,isMob)}}>Carregando…</div>}
+
+      {dados && (
+        <div>
+          <div style={{display:"grid",gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(4, 1fr)",gap: isMob?8:12,marginBottom:18}}>
+            {[
+              { r:"Reels no período", v:_efNum(kpi.n) },
+              { r:"Alcance (mediana)", v:_efNum(kpi.alcance==null?null:Math.round(kpi.alcance)) },
+              { r:"Tempo assistido (mediana)", v:_efSeg(kpi.assistido), d: kpi.n && kpi.nAssist<kpi.n ? (kpi.nAssist+" de "+kpi.n+" com esse dado") : null },
+              { r:"Lidos pela IA", v:kpi.lidos + " de " + kpi.n },
+            ].map(function(k){
+              return (
+                <div key={k.r} style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding: isMob?"10px 12px":"14px 16px"}}>
+                  <div style={{fontSize:_efF(12,isMob),color:_EF.sub,fontWeight:600}}>{k.r}</div>
+                  <div style={{fontSize:_efF(isMob?18:22,isMob),fontWeight:800,marginTop:4}}>{k.v}</div>
+                  {k.d && <div style={{fontSize:_efF(11,isMob),color:_EF.fraco,marginTop:2}}>{k.d}</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {!videos.length && <div style={{padding:30,textAlign:"center",color:_EF.sub,fontSize:_efF(14,isMob)}}>Nenhum Reel neste período.</div>}
+
+          <div style={{display:"grid",gridTemplateColumns: isMob ? "1fr 1fr" : "repeat(auto-fill, minmax(200px, 1fr))",gap: isMob?10:14}}>
+            {videos.map(function(v){ return <_EfCard key={v.id} v={v} nome={cliente?null:(nomes[v.client_id]||v.client_id)} isMob={isMob} onAbrir={function(){ setAberto(v.id); }}/>; })}
+          </div>
+        </div>
+      )}
+
+      {aberto && <_EfVideo id={aberto} isMob={isMob} onFechar={function(mudou){ setAberto(null); if(mudou) setRecarregar(function(x){ return x+1; }); }}/>}
+    </div>
+  );
+}
+
+function _EfCard({ v, nome, isMob, onAbrir }){
+  const [semFoto, setSemFoto] = useState(false);
+  const lido = v.leitura==="lido";
+  return (
+    <button onClick={onAbrir} style={{textAlign:"left",background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:0,cursor:"pointer",overflow:"hidden",display:"flex",flexDirection:"column",minWidth:0}}>
+      <div style={{position:"relative",width:"100%",aspectRatio:"4 / 5",background:"#f1f5f9"}}>
+        {v.thumbnail_url && !semFoto
+          ? <img src={v.thumbnail_url} alt="" loading="lazy" onError={function(){ setSemFoto(true); }} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+          : <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:_EF.fraco,fontSize:30}}>▶</div>}
+        <div style={{position:"absolute",left:8,top:8,padding:"3px 8px",borderRadius:999,fontSize:11,fontWeight:700,
+                     background: lido?_EF.verdeClaro:"rgba(255,255,255,.92)", color: lido?_EF.verde:_EF.sub, border:"1px solid "+(lido?"#bbf7d0":"#e2e8f0")}}>
+          {lido ? "✓ Lido pela IA" : "Não lido"}
+        </div>
+        {v.marcacoes>0 && <div style={{position:"absolute",right:8,top:8,padding:"3px 8px",borderRadius:999,fontSize:11,fontWeight:700,background:_EF.roxoClaro,color:_EF.roxo,border:"1px solid "+_EF.roxoBorda}}>📍 {v.marcacoes}</div>}
+      </div>
+      <div style={{padding: isMob?"8px 10px 10px":"10px 12px 12px"}}>
+        <div style={{fontSize:_efF(11.5,isMob),color:_EF.sub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+          {nome ? (nome + (v.unidade?(" · "+v.unidade):"") + " · ") : (v.unidade?(v.unidade+" · "):"")}{_efData(v.publicado_em)}
+        </div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:4}}>
+          <div style={{fontSize:_efF(isMob?17:20,isMob),fontWeight:800,color:_EF.texto}}>{_efNum(v.alcance)}</div>
+          <div style={{fontSize:_efF(12,isMob),color:_EF.sub}}>alcance</div>
+        </div>
+        <div style={{fontSize:_efF(12,isMob),color:_EF.sub,marginTop:2}}>
+          {v.assistido_ms!=null ? ("⏱ " + _efSeg(v.assistido_ms)) : "⏱ —"}{" · "}↗ {_efNum(v.compart)}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ── Um vídeo: player + linha do tempo + marcações ─────────────────── */
+function _EfVideo({ id, isMob, onFechar }){
+  const [d, setD] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [agora, setAgora] = useState(0);
+  const [durVideo, setDurVideo] = useState(null);
+  const [videoFalhou, setVideoFalhou] = useState(false);
+  const [tipo, setTipo] = useState("efeito_sonoro");
+  const [texto, setTexto] = useState("");
+  const [print, setPrint] = useState(null);           // File
+  const [printPrev, setPrintPrev] = useState(null);   // URL local
+  const [salvando, setSalvando] = useState(false);
+  const [aviso, setAviso] = useState(null);
+  const [links, setLinks] = useState({});             // imagem_path → link temporário
+  const [mudou, setMudou] = useState(false);
+  const [verFala, setVerFala] = useState(false);
+  const vRef = useRef(null), arqRef = useRef(null);
+  const podeMarcar = !isMob;
+
+  const carregar = function(){
+    window._sb.rpc("efic_video", { p_post_id:id }).then(function(r){
+      if(r.error){ setErro("Não consegui abrir este vídeo."); return; }
+      setD(r.data);
+    }).catch(function(){ setErro("Não consegui abrir este vídeo."); });
+  };
+  useEffect(function(){ if(window._sb) carregar(); }, [id]);
+
+  useEffect(function(){
+    if(!d || !window._sb) return;
+    const faltam = (d.marcacoes||[]).map(function(m){ return m.imagem_path; }).filter(function(p){ return p && !links[p]; });
+    faltam.forEach(function(p){
+      window._sb.storage.from("video-marcacoes").createSignedUrl(p, 3600).then(function(r){
+        if(r && r.data && r.data.signedUrl) setLinks(function(x){ const n = Object.assign({}, x); n[p] = r.data.signedUrl; return n; });
+      }).catch(function(){});
+    });
+  }, [d]);
+
+  useEffect(function(){
+    const esc = function(e){ if(e.key==="Escape") onFechar(mudou); };
+    window.addEventListener("keydown", esc);
+    return function(){ window.removeEventListener("keydown", esc); };
+  }, [mudou]);
+
+  useEffect(function(){ return function(){ if(printPrev) URL.revokeObjectURL(printPrev); }; }, [printPrev]);
+
+  const irPara = function(t){ const v = vRef.current; if(v){ try{ v.currentTime = Math.max(0, Number(t)||0); v.play && v.play().catch(function(){}); }catch(_){} } setAgora(Number(t)||0); };
+
+  const escolherPrint = function(f){
+    if(!f) return;
+    if(!/^image\/(jpeg|png|webp)$/.test(f.type)){ setAviso("O print precisa ser imagem (JPG, PNG ou WEBP)."); return; }
+    if(f.size > 5*1024*1024){ setAviso("Print acima de 5 MB. Tire um print menor."); return; }
+    if(printPrev) URL.revokeObjectURL(printPrev);
+    setPrint(f); setPrintPrev(URL.createObjectURL(f)); setAviso(null);
+  };
+  const colar = function(e){
+    const it = e.clipboardData && Array.from(e.clipboardData.items||[]).find(function(x){ return x.type && x.type.indexOf("image/")===0; });
+    if(it){ e.preventDefault(); escolherPrint(it.getAsFile()); }
+  };
+
+  const marcar = async function(){
+    if(salvando) return;
+    if(!texto.trim() && !print){ setAviso("Escreva o que tem nesse ponto ou cole um print."); return; }
+    setSalvando(true); setAviso(null);
+    try{
+      let path = null;
+      if(print){
+        const ext = print.type==="image/png" ? "png" : print.type==="image/webp" ? "webp" : "jpg";
+        path = id + "/" + Date.now() + "." + ext;
+        const up = await window._sb.storage.from("video-marcacoes").upload(path, print, { contentType:print.type, upsert:false });
+        if(up.error) throw new Error("print");
+      }
+      const r = await window._sb.rpc("efic_marcar", { p_post_id:id, p_t:Math.round(agora*10)/10, p_tipo:tipo, p_texto:texto, p_imagem_path:path });
+      if(r.error) throw new Error(r.error.message||"");
+      setTexto(""); setPrint(null); if(printPrev) URL.revokeObjectURL(printPrev); setPrintPrev(null); setMudou(true);
+      carregar();
+    }catch(e){
+      setAviso(String(e.message)==="print" ? "Não consegui guardar o print. Tente de novo." : "Não consegui salvar a marcação. Tente de novo.");
+    }
+    setSalvando(false);
+  };
+  const tirar = function(m){
+    window._sb.rpc("efic_desmarcar", { p_id:m.id }).then(function(r){ if(!r.error){ setMudou(true); carregar(); } });
+  };
+
+  const L = d && d.leitura;
+  const ia = (L && L.ia && !L.ia.bruto) ? L.ia : null;
+  const segs = (L && L.fala && Array.isArray(L.fala.segmentos)) ? L.fala.segmentos.filter(function(s){ return s.texto; }) : [];
+  const dur = Number((L && L.duracao) || durVideo || 0) || Math.max(10, ((d&&d.marcacoes)||[]).reduce(function(a,m){ return Math.max(a, Number(m.t)+5); }, 0));
+  const pct = function(t){ return Math.max(0, Math.min(100, (Number(t)||0) / dur * 100)); };
+
+  const faixa = function(rotulo, filhos, cor){
+    return (
+      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+        <div style={{width: isMob?62:78,flexShrink:0,fontSize:_efF(11.5,isMob),color:_EF.sub,fontWeight:600,textAlign:"right"}}>{rotulo}</div>
+        <div onClick={function(e){ const b = e.currentTarget.getBoundingClientRect(); irPara((e.clientX-b.left)/b.width*dur); }}
+             style={{position:"relative",flex:1,height:22,background:_EF.fundo,borderRadius:6,cursor:"pointer",overflow:"hidden",border:"1px solid "+_EF.linha}}>
+          {filhos}
+          <div style={{position:"absolute",top:0,bottom:0,left:pct(agora)+"%",width:2,background:"#ef4444",pointerEvents:"none"}}/>
+        </div>
+      </div>
+    );
+  };
+  const bloco = function(k, ini, fim, cor, titulo){
+    return <div key={k} title={titulo} style={{position:"absolute",top:3,bottom:3,left:pct(ini)+"%",width:Math.max(0.6, pct(fim)-pct(ini))+"%",background:cor,borderRadius:4,opacity:.85}}/>;
+  };
+  const ponto = function(k, t, cor, titulo){
+    return <div key={k} title={titulo} style={{position:"absolute",top:4,bottom:4,left:"calc("+pct(t)+"% - 3px)",width:6,background:cor,borderRadius:3}}/>;
+  };
+
+  const caixa = { background:"#fff", border:"1px solid "+_EF.linha, borderRadius:14, padding: isMob?"12px":"14px 16px" };
+  const titulo = { fontSize:_efF(13,isMob), fontWeight:800, color:_EF.texto, marginBottom:8 };
+
+  return (
+    <div onClick={function(){ onFechar(mudou); }} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:1000,display:"flex",alignItems: isMob?"stretch":"center",justifyContent:"center",padding: isMob?0:24}}>
+      <div onClick={function(e){ e.stopPropagation(); }} onPaste={podeMarcar?colar:undefined}
+           style={{background:_EF.fundo,width: isMob?"100%":"min(1180px, 100%)",maxHeight: isMob?"100%":"92vh",height: isMob?"100%":"auto",borderRadius: isMob?0:18,overflow:"auto",boxShadow:"0 20px 60px rgba(15,23,42,.25)"}}>
+        <div style={{position:"sticky",top:0,zIndex:2,background:"#fff",borderBottom:"1px solid "+_EF.linha,padding: isMob?"12px":"14px 18px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:_efF(15,isMob),fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d ? (d.cliente + (d.unidade?(" · "+d.unidade):"")) : "Vídeo"}</div>
+            <div style={{fontSize:_efF(12,isMob),color:_EF.sub}}>{d ? ("Publicado em " + _efData(d.publicado_em)) : ""}</div>
+          </div>
+          {d && d.permalink && <a href={d.permalink} target="_blank" rel="noopener noreferrer" style={{fontSize:_efF(12.5,isMob),color:_EF.roxo,fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>Ver no Instagram ↗</a>}
+          <button onClick={function(){ onFechar(mudou); }} aria-label="Fechar" style={{border:"none",background:"#f1f5f9",borderRadius:10,width:34,height:34,fontSize:18,cursor:"pointer",color:_EF.texto}}>×</button>
+        </div>
+
+        {erro && <div style={{margin:16,padding:16,borderRadius:12,background:"#fef2f2",color:"#b91c1c"}}>{erro}</div>}
+        {!erro && !d && <div style={{padding:40,textAlign:"center",color:_EF.sub}}>Carregando…</div>}
+
+        {d && (
+          <div style={{display:"flex",flexDirection: isMob?"column":"row",gap: isMob?12:18,padding: isMob?12:18,alignItems:"flex-start"}}>
+            <div style={{width: isMob?"100%":340,flexShrink:0,position: isMob?"static":"sticky",top:78}}>
+              <div style={{background:"#0f172a",borderRadius:14,overflow:"hidden",aspectRatio:"9 / 16",maxHeight: isMob?"62vh":"70vh",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {d.media_url && !videoFalhou
+                  ? <video ref={vRef} src={d.media_url} poster={d.thumbnail_url||undefined} controls playsInline preload="metadata"
+                           onTimeUpdate={function(e){ setAgora(e.currentTarget.currentTime||0); }}
+                           onLoadedMetadata={function(e){ if(isFinite(e.currentTarget.duration)) setDurVideo(e.currentTarget.duration); }}
+                           onError={function(){ setVideoFalhou(true); }}
+                           style={{width:"100%",height:"100%",objectFit:"contain",background:"#0f172a"}}/>
+                  : <div style={{position:"relative",width:"100%",height:"100%"}}>
+                      {d.thumbnail_url && <img src={d.thumbnail_url} alt="" style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",opacity:.45}}/>}
+                      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",color:"#fff",textAlign:"center",padding:20,fontSize:13,fontWeight:600,textShadow:"0 1px 3px rgba(0,0,0,.6)"}}>
+                        O vídeo não abriu aqui.
+                        {d.permalink && <a href={d.permalink} target="_blank" rel="noopener noreferrer" style={{marginTop:10,background:"#fff",color:_EF.roxo,borderRadius:999,padding:"7px 14px",fontWeight:800,textDecoration:"none",textShadow:"none"}}>Abrir no Instagram ↗</a>}
+                      </div>
+                    </div>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:8,marginTop:10}}>
+                {[["Alcance",_efNum(d.alcance)],["Assistido",_efSeg(d.assistido_ms)],["Compart.",_efNum(d.compart)],
+                  ["Visualiz.",_efNum(d.views)],["Salvos",_efNum(d.salvos)],["Curtidas",_efNum(d.curtidas)]].map(function(x){
+                  return <div key={x[0]} style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:10,padding:"8px 10px"}}>
+                    <div style={{fontSize:_efF(11,isMob),color:_EF.sub,fontWeight:600}}>{x[0]}</div>
+                    <div style={{fontSize:_efF(15,isMob),fontWeight:800}}>{x[1]}</div>
+                  </div>;
+                })}
+              </div>
+            </div>
+
+            <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:12,width: isMob?"100%":"auto"}}>
+              <div style={caixa}>
+                <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8}}>
+                  <div style={titulo}>Linha do tempo</div>
+                  <div style={{fontSize:_efF(12,isMob),color:_EF.sub,fontVariantNumeric:"tabular-nums"}}>{_efTempo(agora)} / {_efTempo(dur)}</div>
+                </div>
+                {!L && <div style={{padding:"10px 12px",borderRadius:10,background:_EF.amareloClaro,color:_EF.amarelo,fontSize:_efF(12.5,isMob),marginBottom:4}}>
+                  Este vídeo ainda não foi lido pela IA. As marcações da equipe já funcionam.
+                </div>}
+                {L && faixa("Fala", segs.map(function(s,i){ return bloco("f"+i, s.ini, s.fim, "#334155", _efTempo(s.ini)+" "+s.texto); }))}
+                {ia && Array.isArray(ia.cenas) && ia.cenas.length>0 && faixa("Cenas", ia.cenas.map(function(c,i){ return bloco("c"+i, c.ini, c.fim, _EF_CENA_COR[c.tipo]||"#64748b", _efTempo(c.ini)+" "+(c.tipo||"")+": "+(c.descricao||"")); }))}
+                {L && Array.isArray(L.musica) && faixa("Música", L.musica.map(function(t,i){ return bloco("m"+i, t, Number(t)+2, "#a78bfa", "Música de fundo em "+_efTempo(t)); }))}
+                {L && Array.isArray(L.cortes) && faixa("Cortes", L.cortes.map(function(t,i){ return ponto("k"+i, t, "#0f766e", "Corte em "+_efTempo(t)); }))}
+                {ia && Array.isArray(ia.textos_extras) && ia.textos_extras.length>0 && faixa("Textos", ia.textos_extras.map(function(x,i){ return ponto("t"+i, x.t, "#2563eb", _efTempo(x.t)+" "+(x.texto||"")); }))}
+                {faixa("Equipe", (d.marcacoes||[]).map(function(m){ return ponto("e"+m.id, m.t, _efTipo(m.tipo).cor, _efTempo(m.t)+" "+_efTipo(m.tipo).label+(m.texto?(": "+m.texto):"")); }))}
+                <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:8}}>Clique numa faixa para ir àquele ponto do vídeo.</div>
+              </div>
+
+              {ia && (
+                <div style={caixa}>
+                  <div style={titulo}>O que a IA leu</div>
+                  {[
+                    ["Primeira frase", ia.abertura && ia.abertura.primeira_frase],
+                    ["Primeira imagem", ia.abertura && ia.abertura.primeira_imagem],
+                    ["Texto na tela no início", ia.abertura && ia.abertura.texto_na_tela_inicio],
+                    ["Produto aparece", Array.isArray(ia.produto_aparece) && ia.produto_aparece.length ? ia.produto_aparece.map(function(p){ return _efTempo(p.t)+" "+(p.como||""); }).join(" · ") : ""],
+                    ["Números citados", Array.isArray(ia.numeros_citados) ? ia.numeros_citados.filter(Boolean).join(" · ") : ""],
+                    ["Chamada final", ia.chamada_final],
+                  ].filter(function(x){ return x[1]; }).map(function(x){
+                    return <div key={x[0]} style={{display:"flex",gap:10,padding:"7px 0",borderTop:"1px solid "+_EF.linha,fontSize:_efF(13,isMob)}}>
+                      <div style={{width: isMob?110:150,flexShrink:0,color:_EF.sub,fontWeight:600}}>{x[0]}</div>
+                      <div style={{flex:1,minWidth:0}}>{x[1]}</div>
+                    </div>;
+                  })}
+                  {segs.length>0 && (
+                    <div style={{borderTop:"1px solid "+_EF.linha,paddingTop:8}}>
+                      <button onClick={function(){ setVerFala(!verFala); }} style={{border:"none",background:"none",color:_EF.roxo,fontWeight:700,cursor:"pointer",padding:0,fontSize:_efF(13,isMob)}}>
+                        {verFala ? "Esconder a fala ▲" : "Ver a fala completa ▼"}
+                      </button>
+                      {verFala && segs.map(function(s,i){
+                        return <div key={i} onClick={function(){ irPara(s.ini); }} style={{display:"flex",gap:10,padding:"6px 0",cursor:"pointer",fontSize:_efF(13,isMob)}}>
+                          <div style={{width:44,flexShrink:0,color:_EF.roxo,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{_efTempo(s.ini)}</div>
+                          <div style={{flex:1,minWidth:0,color:_EF.texto}}>{s.texto}</div>
+                        </div>;
+                      })}
+                    </div>
+                  )}
+                  <div style={{fontSize:_efF(11,isMob),color:_EF.fraco,marginTop:8}}>Lido em {_efData(L.lido_em)}{L.custo_brl!=null ? (" · custo R$ " + Number(L.custo_brl).toLocaleString("pt-BR",{minimumFractionDigits:2})) : ""}. A fala é transcrição automática.</div>
+                </div>
+              )}
+              {L && !ia && (
+                <div style={Object.assign({}, caixa, {color:_EF.sub,fontSize:_efF(13,isMob)})}>A IA leu este vídeo, mas a resposta veio fora do formato. As faixas de fala, música e cortes acima continuam valendo.</div>
+              )}
+
+              <div style={caixa}>
+                <div style={titulo}>Marcações da equipe ({(d.marcacoes||[]).length})</div>
+                {podeMarcar && (
+                  <div style={{border:"1px dashed "+_EF.roxoBorda,background:_EF.roxoClaro,borderRadius:12,padding:12,marginBottom:10}}>
+                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                      <select value={tipo} onChange={function(e){ setTipo(e.target.value); }} style={{padding:"8px 10px",borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",fontSize:13,fontWeight:600}}>
+                        {_EF_TIPOS.map(function(t){ return <option key={t.id} value={t.id}>{t.label}</option>; })}
+                      </select>
+                      <input value={texto} onChange={function(e){ setTexto(e.target.value); }} maxLength={600}
+                             onKeyDown={function(e){ if(e.key==="Enter"){ e.preventDefault(); marcar(); } }}
+                             placeholder="O que tem aqui? Ex.: efeito de whoosh na troca de cena"
+                             style={{flex:"1 1 260px",minWidth:0,padding:"8px 10px",borderRadius:10,border:"1px solid #e2e8f0",fontSize:13}}/>
+                      <input ref={arqRef} type="file" accept="image/jpeg,image/png,image/webp" style={{display:"none"}} onChange={function(e){ escolherPrint(e.target.files && e.target.files[0]); e.target.value=""; }}/>
+                      <button onClick={function(){ arqRef.current && arqRef.current.click(); }} style={{padding:"8px 12px",borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",fontSize:13,fontWeight:600,cursor:"pointer"}}>📎 Print</button>
+                      <button onClick={marcar} disabled={salvando} style={{padding:"8px 14px",borderRadius:10,border:"none",background:_EF.roxo,color:"#fff",fontSize:13,fontWeight:700,cursor: salvando?"default":"pointer",opacity: salvando?.6:1,whiteSpace:"nowrap"}}>
+                        {salvando ? "Salvando…" : ("Marcar em " + _efTempo(agora))}
+                      </button>
+                    </div>
+                    {printPrev && (
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}>
+                        <img src={printPrev} alt="" style={{height:54,borderRadius:8,border:"1px solid #e2e8f0"}}/>
+                        <button onClick={function(){ setPrint(null); URL.revokeObjectURL(printPrev); setPrintPrev(null); }} style={{border:"none",background:"none",color:_EF.sub,cursor:"pointer",fontSize:12}}>tirar print</button>
+                      </div>
+                    )}
+                    <div style={{fontSize:11.5,color:_EF.sub,marginTop:6}}>Pause o vídeo no ponto certo. Dá para colar um print com Ctrl+V.</div>
+                    {aviso && <div style={{fontSize:12.5,color:"#b91c1c",marginTop:6}}>{aviso}</div>}
+                  </div>
+                )}
+                {!(d.marcacoes||[]).length && <div style={{fontSize:_efF(13,isMob),color:_EF.sub}}>Nenhuma marcação ainda.</div>}
+                {(d.marcacoes||[]).map(function(m){
+                  const tp = _efTipo(m.tipo);
+                  return (
+                    <div key={m.id} style={{display:"flex",gap:10,padding:"9px 0",borderTop:"1px solid "+_EF.linha,alignItems:"flex-start"}}>
+                      <button onClick={function(){ irPara(m.t); }} style={{border:"none",background:_EF.roxoClaro,color:_EF.roxo,fontWeight:800,borderRadius:8,padding:"3px 8px",cursor:"pointer",fontVariantNumeric:"tabular-nums",fontSize:_efF(12.5,isMob)}}>{_efTempo(m.t)}</button>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{fontSize:11,fontWeight:700,color:tp.cor,border:"1px solid "+tp.cor,borderRadius:999,padding:"1px 7px"}}>{tp.label}</span>
+                          <span style={{fontSize:_efF(11.5,isMob),color:_EF.fraco}}>{m.autor_nome||""} · {_efData(m.criado_em)}</span>
+                        </div>
+                        {m.texto && <div style={{fontSize:_efF(13,isMob),color:_EF.texto,marginTop:4}}>{m.texto}</div>}
+                        {m.imagem_path && (links[m.imagem_path]
+                          ? <a href={links[m.imagem_path]} target="_blank" rel="noopener noreferrer"><img src={links[m.imagem_path]} alt="" style={{maxHeight:110,maxWidth:"100%",borderRadius:8,border:"1px solid #e2e8f0",marginTop:6,display:"block"}}/></a>
+                          : <div style={{fontSize:12,color:_EF.fraco,marginTop:4}}>carregando o print…</div>)}
+                      </div>
+                      {podeMarcar && m.minha && <button onClick={function(){ tirar(m); }} title="Tirar da tela (fica guardado no histórico)" style={{border:"none",background:"none",color:_EF.fraco,cursor:"pointer",fontSize:12}}>tirar</button>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {d.legenda && (
+                <div style={caixa}>
+                  <div style={titulo}>Legenda do post</div>
+                  <div style={{fontSize:_efF(13,isMob),color:_EF.texto,whiteSpace:"pre-wrap",lineHeight:1.5}}>{d.legenda}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
