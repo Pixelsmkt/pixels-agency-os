@@ -110710,96 +110710,144 @@ function _WzGastoCard({ isMob, onAbrir }){
   );
 }
 function _WzGastoJanela({ onFechar, isMob }){
+  /* 27/09/2026 (Vinicius): "deixa essa janela mais bonita, está muito feia e difícil de entender".
+     Um número grande, 3 números de apoio, e uma lista com barras mostrando pra onde foi o dinheiro.
+     O que saiu fora do app entra na conta e nas listas, pra soma sempre fechar com o total. */
   const [periodo, setPeriodo] = useState("mes");
-  const [aba, setAba] = useState("quem");
+  const [aba, setAba] = useState("origem");
   const { dados, erro } = useWhatsGasto(true, periodo);
-  const linha = function(rotulo, sub, x, chave){
+  const of = dados ? _wzgOficial(dados) : null;
+  const foraR = of ? Number(of.o.fora_do_app||0) : 0, foraN = of ? Number(of.o.fora_do_app_msgs||0) : 0;
+  const pagas = dados ? Number(dados.cobradas||0) + foraN : 0;
+  const enviadas = dados ? Number(dados.enviadas||0) + foraN : 0;
+  const outubro = dados ? Number(dados.simulacao_outubro||0) + foraR : 0;
+  const hoje = new Date(Date.now()-3*3600*1000).toISOString().slice(0,10);
+  const nomePeriodo = periodo==="mes" ? ("Gasto em " + _wzgMes() + " até hoje") : periodo==="mes_passado" ? "Gasto no mês passado" : "Gasto nos últimos 7 dias";
+  const ROT_ORIGEM = { resposta_guvi:"Respostas do Guvi", resposta_equipe:"Respostas da equipe", disparo:"Mensagens prontas (disparos)", fora_app:"Enviadas fora do app" };
+  const ROT_QUEM = { socio:"Sócios", colaborador:"Colaboradores", cliente:"Clientes", sem_cadastro:"Número sem cadastro", fora_app:"Enviadas fora do app" };
+  const DICA = { fora_app:"Mandadas direto pelo painel da Meta", disparo:"Mensagem pronta: a Meta cobra sempre", resposta_guvi:"Grátis até 30/09", resposta_equipe:"Grátis até 30/09" };
+  const cor = { roxo:"#7c3aed", roxoClaro:"#f5f3ff", texto:"#0f172a", sub:"#64748b", fraco:"#94a3b8", linha:"#eef2f7", verde:"#15803d", verdeClaro:"#f0fdf4" };
+
+  const lista = function(itens){
+    const max = Math.max.apply(null, itens.map(function(x){ return Number(x.total||0); }).concat([0.0001]));
+    const ord = itens.slice().sort(function(a,b){ return Number(b.total||0)-Number(a.total||0) || Number(b.msgs||0)-Number(a.msgs||0); });
     return (
-      <div key={chave} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 4px",borderBottom:"1px solid #f1f5f9"}}>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotulo}</div>
-          {sub && <div style={{fontSize:12,color:"#64748b"}}>{sub}</div>}
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontWeight:700,color:"#0f172a"}}>{_wzgR(x.total)}</div>
-          <div style={{fontSize:12,color:"#94a3b8"}}>{x.cobradas!=null ? (x.cobradas+" cobradas · ") : ""}{x.msgs} enviadas</div>
-        </div>
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {ord.map(function(x,i){
+          const v = Number(x.total||0), n = Number(x.msgs||0), c = Number(x.cobradas!=null?x.cobradas:(v>0?n:0));
+          return (
+            <div key={x.k+"-"+i} style={{padding:"12px 2px",borderBottom:"1px solid "+cor.linha}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontWeight:600,color:cor.texto,fontSize:14,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</div>
+                  <div style={{fontSize:12,color:cor.sub,marginTop:2}}>{n} {n===1?"mensagem":"mensagens"}{c>0 && c<n ? (" · "+c+" paga"+(c===1?"":"s")) : ""}{x.dica ? (" · "+x.dica) : ""}</div>
+                </div>
+                {v>0.00001
+                  ? <div style={{fontWeight:700,color:cor.texto,fontSize:15,whiteSpace:"nowrap"}}>{_wzgR(v)}</div>
+                  : <span style={{fontSize:11,fontWeight:700,color:cor.verde,background:cor.verdeClaro,border:"1px solid #bbf7d0",borderRadius:999,padding:"2px 8px",whiteSpace:"nowrap"}}>grátis</span>}
+              </div>
+              {v>0.00001 && <div style={{height:6,background:"#f1f5f9",borderRadius:999,marginTop:8,overflow:"hidden"}}>
+                <div style={{width:Math.max(3,Math.round(v/max*100))+"%",height:"100%",background:cor.roxo,borderRadius:999}}/>
+              </div>}
+            </div>
+          );
+        })}
       </div>
     );
   };
-  const abas = [["quem","Sócios · Colab. · Clientes"],["pessoa","Por pessoa"],["cliente","Por cliente"],["origem","Por tipo de mensagem"],["precos","Preços"]];
+
   let corpo = null;
   if(dados){
-    if(aba==="quem") corpo = (dados.por_quem_tipo||[]).map(function(x){ return linha(_WZG_QUEM[x.chave]||x.chave, null, x, x.chave); });
-    if(aba==="pessoa") corpo = (dados.por_pessoa||[]).map(function(x,i){ return linha(x.nome, (_WZG_QUEM[x.tipo]||x.tipo)+(x.cliente?(" · "+x.cliente):""), x, "p"+i); });
-    if(aba==="cliente") corpo = (dados.por_cliente||[]).length ? dados.por_cliente.map(function(x,i){ return linha(x.cliente, null, x, "c"+i); })
-      : <div style={{padding:16,color:"#64748b",fontSize:13}}>Nenhuma mensagem com cliente neste período. O atendimento de clientes pelo Guvi ainda está desligado.</div>;
-    if(aba==="origem") corpo = (dados.por_origem||[]).map(function(x){ return linha(_WZG_ORIGEM[x.chave]||x.chave, null, x, x.chave); });
+    const foraLinha = foraN>0 ? [{ k:"fora", rotulo:"Enviadas fora do app", dica:"quem mandou não aparece no app", total:foraR, msgs:foraN, cobradas:foraN }] : [];
+    if(aba==="origem") corpo = lista((dados.por_origem||[]).map(function(x){ return { k:x.chave, rotulo:ROT_ORIGEM[x.chave]||x.chave, dica:DICA[x.chave], total:x.total, msgs:x.msgs, cobradas:x.cobradas }; }));
+    if(aba==="quem") corpo = lista((dados.por_quem_tipo||[]).map(function(x){ return { k:x.chave, rotulo:ROT_QUEM[x.chave]||x.chave, dica:x.chave==="fora_app"?DICA.fora_app:null, total:x.total, msgs:x.msgs, cobradas:x.cobradas }; }));
+    if(aba==="pessoa") corpo = lista((dados.por_pessoa||[]).map(function(x,i){ return { k:"p"+i, rotulo:x.nome, dica:(ROT_QUEM[x.tipo]||x.tipo)+(x.cliente?(" · "+x.cliente):""), total:x.total, msgs:x.msgs, cobradas:x.cobradas }; }).concat(foraLinha));
+    if(aba==="cliente") corpo = (dados.por_cliente||[]).length ? lista(dados.por_cliente.map(function(x,i){ return { k:"c"+i, rotulo:x.cliente, total:x.total, msgs:x.msgs, cobradas:x.cobradas }; }))
+      : <div style={{padding:"28px 8px",textAlign:"center",color:cor.sub,fontSize:13}}>Nenhuma mensagem com cliente neste período.</div>;
     if(aba==="precos") corpo = (
-      <div style={{display:"flex",flexDirection:"column",gap:8,paddingTop:8}}>
-        {(dados.precos||[]).map(function(p,i){ return (
-          <div key={"pr"+i} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
-              <b style={{color:"#0f172a"}}>{_WZG_CAT[p.categoria]||p.categoria}</b>
-              <b style={{color:"#0f172a"}}>{"R$ " + Number(p.preco||0).toLocaleString("pt-BR",{minimumFractionDigits:4,maximumFractionDigits:4})} <span style={{fontWeight:400,color:"#64748b",fontSize:12}}>por mensagem</span></b>
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {(dados.precos||[]).slice().sort(function(a,b){ return Number(b.preco)-Number(a.preco); }).map(function(p,i){ const futuro = p.desde > hoje; return (
+          <div key={"pr"+i} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 2px",borderBottom:"1px solid "+cor.linha}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,color:cor.texto,fontSize:14}}>{_WZG_CAT[p.categoria]||p.categoria}</div>
+              <div style={{fontSize:12,color:cor.sub,marginTop:2}}>{futuro ? ("A partir de " + new Date(p.desde+"T12:00:00Z").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) + " · ") : ""}conferido em {new Date(p.conferido_em).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})} · <a href={p.fonte} target="_blank" rel="noreferrer" style={{color:cor.roxo}}>fonte da Meta</a></div>
             </div>
-            <div style={{fontSize:12,color:"#64748b",marginTop:4}}>
-              {p.desde > String(p.conferido_em).slice(0,10) ? ("Passa a valer em " + new Date(p.desde+"T12:00:00Z").toLocaleDateString("pt-BR") + " · ") : ""}Preço conferido em {new Date(p.conferido_em).toLocaleDateString("pt-BR")} ·{" "}
-              <a href={p.fonte} target="_blank" rel="noreferrer" style={{color:"#7c3aed"}}>fonte oficial da Meta</a>
+            <div style={{textAlign:"right",whiteSpace:"nowrap"}}>
+              <div style={{fontWeight:700,color:cor.texto,fontSize:15}}>{"R$ " + Number(p.preco||0).toLocaleString("pt-BR",{minimumFractionDigits:4,maximumFractionDigits:4})}</div>
+              <div style={{fontSize:11,color:cor.fraco}}>por mensagem</div>
             </div>
           </div>
         ); })}
-        <div style={{fontSize:12,color:"#64748b"}}>A Meta cobra quando a mensagem é <b>entregue</b>. Mensagem que falhou não conta.</div>
+        <div style={{fontSize:12,color:cor.sub,marginTop:10}}>A Meta cobra quando a mensagem é <b>entregue</b>. Mensagem que falhou não conta.</div>
       </div>
     );
   }
-  const hoje = new Date(Date.now()-3*3600*1000).toISOString().slice(0,10);
+
+  const abas = [["origem","Tipo de mensagem"],["quem","Quem enviou"],["pessoa","Por pessoa"],["cliente","Por cliente"],["precos","Preços"]];
+  const numero = function(rotulo, valor, destaque){ return (
+    <div style={{flex:1,minWidth:isMob?"30%":110,background:"#f8fafc",border:"1px solid #eef2f7",borderRadius:12,padding:"10px 12px"}}>
+      <div style={{fontSize:11,color:cor.sub}}>{rotulo}</div>
+      <div style={{fontSize:16,fontWeight:700,color:destaque||cor.texto,marginTop:2,whiteSpace:"nowrap"}}>{valor}</div>
+    </div>
+  ); };
+
   return (
     <div onClick={onFechar} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.35)",zIndex:1000,display:"flex",alignItems:isMob?"flex-end":"center",justifyContent:"center"}}>
-      <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",width:isMob?"100%":620,maxHeight:isMob?"88vh":"82vh",borderRadius:isMob?"16px 16px 0 0":16,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 50px rgba(15,23,42,.25)"}}>
-        <div style={{padding:"16px 18px 10px",borderBottom:"1px solid #e2e8f0"}}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",width:isMob?"100%":560,maxHeight:isMob?"90vh":"86vh",borderRadius:isMob?"18px 18px 0 0":18,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(15,23,42,.25)"}}>
+        {/* topo */}
+        <div style={{padding:"16px 20px 0"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <b style={{fontSize:17,color:"#0f172a"}}>💰 Gasto do WhatsApp</b>
-            <button onClick={onFechar} style={{marginLeft:"auto",border:"none",background:"none",fontSize:20,color:"#64748b",cursor:"pointer"}}>×</button>
+            <span style={{width:32,height:32,borderRadius:10,background:cor.roxoClaro,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💰</span>
+            <b style={{fontSize:16,color:cor.texto}}>Gasto do WhatsApp</b>
+            <button onClick={onFechar} aria-label="Fechar" style={{marginLeft:"auto",width:32,height:32,borderRadius:10,border:"none",background:"#f1f5f9",fontSize:18,color:cor.sub,cursor:"pointer"}}>×</button>
           </div>
-          <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
-            {[["mes","Este mês"],["mes_passado","Mês passado"],["7d","Últimos 7 dias"]].map(function(p){ return (
-              <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }} style={{padding:"5px 10px",borderRadius:999,border:"1px solid "+(periodo===p[0]?"#7c3aed":"#e2e8f0"),background:periodo===p[0]?"#f5f3ff":"#fff",color:periodo===p[0]?"#6d28d9":"#475569",fontSize:12,cursor:"pointer"}}>{p[1]}</button>
-            ); })}
-          </div>
-          {dados && (
-            <div style={{display:"flex",gap:18,marginTop:12,flexWrap:"wrap"}}>
-              <div><div style={{fontSize:12,color:"#64748b"}}>Gasto no período</div><div style={{fontSize:22,fontWeight:700,color:"#0f172a"}}>{_wzgR(dados.total)}</div></div>
-              <div><div style={{fontSize:12,color:"#64748b"}}>Mensagens</div><div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginTop:4}}>{dados.cobradas} cobradas de {dados.enviadas}</div></div>
-              {dados.ate < "2026-10-01" && (Number(dados.simulacao_outubro) + Number((dados.oficial&&dados.oficial.fora_do_app)||0)) > Number(dados.total) && (
-                <div><div style={{fontSize:12,color:"#64748b"}}>Com a regra de 01/10</div><div style={{fontSize:15,fontWeight:600,color:"#b45309",marginTop:4}}>{_wzgR(Number(dados.simulacao_outubro) + Number((dados.oficial&&dados.oficial.fora_do_app)||0))}</div></div>
-              )}
-            </div>
-          )}
-          {dados && _wzgOficial(dados) && (function(){ const of=_wzgOficial(dados), o=of.o; return (
-            <div style={{marginTop:10,padding:"8px 10px",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,fontSize:12,color:"#166534",lineHeight:1.5}}>
-              ✅ <b>Valor oficial da Meta até {of.ate}</b> (conferido às {of.em}): <b>{_wzgR(o.total)}</b>.
-              {" "}Nossa conta dos mesmos dias: {_wzgR(o.estimativa_mesmos_dias)}.
-              {Number(o.fora_do_app) > 0.005 && <span> A diferença de <b>{_wzgR(o.fora_do_app)}</b> são {o.fora_do_app_msgs||"algumas"} mensagem(ns) cobrada(s) que saíram <b>fora do app</b>.</span>}
-              {Number(o.hoje_estimado) > 0 && <span> Depois de {of.ate}: + {_wzgR(o.hoje_estimado)} estimado.</span>}
-            </div>
-          ); })()}
-          {hoje < "2026-10-15" && (
-            <div style={{marginTop:10,padding:"8px 10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,fontSize:12,color:"#92400e"}}>
-              ⚠️ A partir de <b>01/10/2026</b> a Meta passa a cobrar também as <b>respostas comuns</b> (Guvi e equipe): R$ 0,035 cada. Antes eram grátis.
-            </div>
-          )}
-          <div style={{display:"flex",gap:4,marginTop:12,overflowX:"auto"}}>
-            {abas.map(function(a){ return (
-              <button key={a[0]} onClick={function(){ setAba(a[0]); }} style={{padding:"6px 10px",border:"none",borderBottom:"2px solid "+(aba===a[0]?"#7c3aed":"transparent"),background:"none",color:aba===a[0]?"#6d28d9":"#64748b",fontWeight:aba===a[0]?700:500,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>{a[1]}</button>
+          <div style={{display:"inline-flex",gap:2,marginTop:14,padding:3,background:"#f1f5f9",borderRadius:10}}>
+            {[["mes","Este mês"],["mes_passado","Mês passado"],["7d","7 dias"]].map(function(p){ const on = periodo===p[0]; return (
+              <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }} style={{padding:"6px 12px",borderRadius:8,border:"none",background:on?"#fff":"transparent",boxShadow:on?"0 1px 3px rgba(15,23,42,.12)":"none",color:on?cor.texto:cor.sub,fontWeight:on?700:500,fontSize:12,cursor:"pointer"}}>{p[1]}</button>
             ); })}
           </div>
         </div>
-        <div style={{padding:"4px 18px 16px",overflowY:"auto"}}>
+
+        <div style={{padding:"14px 20px 18px",overflowY:"auto"}}>
           {erro && <div style={{padding:16,color:"#b91c1c",fontSize:13}}>{erro}</div>}
-          {!erro && !dados && <div style={{padding:16,color:"#64748b",fontSize:13}}>Carregando…</div>}
-          {corpo}
-          {dados && aba!=="precos" && <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>{dados.fonte==="meta" ? "Dias já fechados: valor oficial da Meta. Dia aberto: estimativa." : "Estimativa pela regra oficial da Meta."} Atualiza sozinho a cada 1 minuto.</div>}
+          {!erro && !dados && <div style={{padding:16,color:cor.sub,fontSize:13}}>Carregando…</div>}
+          {dados && <>
+            {/* número principal */}
+            <div style={{fontSize:12,color:cor.sub}}>{nomePeriodo}</div>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:2}}>
+              <div style={{fontSize:34,fontWeight:800,color:cor.texto,letterSpacing:-.5}}>{_wzgR(dados.total)}</div>
+              {dados.fonte==="meta" && of
+                ? <span style={{fontSize:11,fontWeight:700,color:cor.verde,background:cor.verdeClaro,border:"1px solid #bbf7d0",borderRadius:999,padding:"3px 10px"}}>✅ Valor oficial da Meta até {of.ate}</span>
+                : <span style={{fontSize:11,fontWeight:600,color:cor.sub,background:"#f1f5f9",borderRadius:999,padding:"3px 10px"}}>estimativa</span>}
+            </div>
+
+            {/* números de apoio */}
+            <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
+              {numero("Mensagens pagas", pagas)}
+              {numero("Mensagens grátis", Math.max(0, enviadas - pagas))}
+              {dados.ate < "2026-10-01" && outubro > Number(dados.total) + 0.005 && numero("Se fosse a partir de 01/10", _wzgR(outubro), "#b45309")}
+            </div>
+
+            {/* avisos curtos */}
+            {foraN>0 && <div style={{marginTop:10,fontSize:12,color:cor.sub,lineHeight:1.5}}>
+              <b style={{color:cor.texto}}>{_wzgR(foraR)}</b> {foraN===1?"é de 1 mensagem enviada":"são de "+foraN+" mensagens enviadas"} fora do app (direto no painel da Meta).
+            </div>}
+            {hoje < "2026-10-15" && <div style={{marginTop:10,display:"flex",gap:8,alignItems:"flex-start",padding:"9px 12px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:12,fontSize:12,color:"#92400e",lineHeight:1.45}}>
+              <span>⚠️</span><span>A partir de <b>01/10</b> as respostas do Guvi e da equipe também pagam: <b>R$ 0,035</b> cada.</span>
+            </div>}
+
+            {/* abas */}
+            <div style={{display:"flex",gap:6,marginTop:18,overflowX:"auto",paddingBottom:2}}>
+              {abas.map(function(a){ const on = aba===a[0]; return (
+                <button key={a[0]} onClick={function(){ setAba(a[0]); }} style={{padding:"6px 12px",borderRadius:999,border:"1px solid "+(on?cor.roxo:"#e2e8f0"),background:on?cor.roxoClaro:"#fff",color:on?"#6d28d9":cor.sub,fontWeight:on?700:500,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{a[1]}</button>
+              ); })}
+            </div>
+            <div style={{marginTop:6}}>{corpo}</div>
+
+            <div style={{fontSize:11,color:cor.fraco,marginTop:12}}>
+              {dados.fonte==="meta" && of ? ("Até " + of.ate + ": valor da Meta (conferido às " + of.em + "). Depois: estimativa. ") : "Estimativa pela regra oficial da Meta. "}Atualiza sozinho a cada 1 minuto.
+            </div>
+          </>}
         </div>
       </div>
     </div>
