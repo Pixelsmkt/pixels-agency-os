@@ -110850,8 +110850,8 @@ function _WzRespostas({ respostas, onFechar, onMudou, isMob }){
            · no celular é só ver (mudar, só no computador).
    26/09/2026: chave "Pedir roteiro de vídeo" (auto.whats_contatos.pode_pedir_roteiro), por funções NOVAS:
      rpc whats_contatos_roteiro (lê) · whats_contatos_marcar_roteiro (liga/desliga). Limite: 5 roteiros por semana.
-   26/09/2026: "Pausar agente" (auto.whats_contatos.agente_pausado_em): o agente fica calado só pra essa pessoa,
-     a equipe continua falando normal. rpc whats_contatos_agente (lê) · whats_contatos_pausar_agente (pausa/retoma).
+   26/09/2026: chave "Agente ON/OFF" em cada cartão (auto.whats_contatos.agente_pausado_em): OFF = o agente fica
+     calado só pra essa pessoa, a equipe continua falando normal. rpc whats_contatos_agente (lê) · whats_contatos_pausar_agente.
    ═══════════════════════════════════════════════════════════════════ */
 
 const _WC_UNIDADES = [
@@ -110970,7 +110970,7 @@ function CWhatsContatos({cl, isMob}){
       setSalv(false);
       if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
       carregar();
-      _wcToast("success", sim ? "Agente pausado para "+c.nome+". A equipe continua falando normal." : "Agente retomado para "+c.nome+".");
+      _wcToast("success", sim ? "Agente desligado para "+c.nome+". A equipe continua falando normal." : "Agente ligado para "+c.nome+".");
     });
   }
   function bloquear(id, sim, motivo){
@@ -110996,7 +110996,7 @@ function CWhatsContatos({cl, isMob}){
   const btn   = { border:"1px solid #e2e8f0", background:"#fff", color:"#334155", borderRadius:8, padding:"7px 12px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" };
   const btnPri= Object.assign({}, btn, { background:"#7c3aed", borderColor:"#7c3aed", color:"#fff" });
 
-  return <div style={{ padding:isMob?"12px 0":"18px 0", display:"flex", flexDirection:"column", gap:14, maxWidth:960 }}>
+  return <div style={{ padding:isMob?"12px 0":"18px 0", display:"flex", flexDirection:"column", gap:14, maxWidth:1000 }}>
     <div style={Object.assign({}, card, { display:"flex", flexDirection:isMob?"column":"row", gap:12, alignItems:isMob?"stretch":"center", justifyContent:"space-between" })}>
       <div>
         <div style={{ fontSize:15, fontWeight:700, color:"#0f172a" }}>Contatos que falam com o Guvi</div>
@@ -111024,67 +111024,82 @@ function CWhatsContatos({cl, isMob}){
 
     {_wcGrupos(visiveis, isBioter).map(function(g){ return <div key={g.id} style={{ display:"flex", flexDirection:"column", gap:10 }}>
     {g.titulo && <div style={{ fontSize:12, fontWeight:700, color:"#5b21b6", textTransform:"uppercase", letterSpacing:.4, marginTop:4 }}>{g.titulo} · {g.itens.length}</div>}
+    {/* 26/09/2026: cartões compactos em grade (pedido do usuário: "mais bonitos", "não quero espichados") */}
+    <div style={{ display:"grid", gridTemplateColumns:isMob?"1fr":"repeat(auto-fill, minmax(290px, 1fr))", gap:12, alignItems:"start" }}>
     {g.itens.map(function(c){
       const bloqueado = !!c.bloqueado_em;
       const pausado = pausa[c.id] || null;   // 26/09/2026
-      const status = !c.ativo ? { t:"Desativado", cor:"#64748b", fundo:"#f1f5f9" }
-                   : bloqueado ? { t:"Bloqueado", cor:"#b91c1c", fundo:"#fef2f2" }
-                   : pausado ? { t:"Agente pausado", cor:"#b45309", fundo:"#fffbeb" }
-                   : { t:"Ativo", cor:"#15803d", fundo:"#f0fdf4" };
-      return <div key={c.id} style={Object.assign({}, card, { opacity:c.ativo?1:.7 })}>
-        <div style={{ display:"flex", gap:10, alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap" }}>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>
-              {c.nome}{c.cargo ? <span style={{ fontWeight:500, color:"#64748b" }}> · {c.cargo}</span> : null}
+      const podeMexer = c.ativo && !isMob && !salvando;
+      const selo = !c.ativo ? { t:"Desativado", cor:"#64748b", fundo:"#f1f5f9" }
+                 : bloqueado ? { t:"Bloqueado", cor:"#b91c1c", fundo:"#fef2f2" } : null;
+      const chaves = _WC_PODE.map(function(p){ return { k:p.k, label:p.label, on:!!c[p.k], fn:function(){ alternar(c, p.k); } }; })
+        .concat([{ k:"roteiro", label:"Pedir roteiro de vídeo", on:!!rot[c.id], fn:function(){ marcarRoteiro(c); } }]);
+      const inicial = String(c.nome||"?").trim().charAt(0).toUpperCase();
+      const acao = { border:"none", background:"none", padding:"4px 6px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", borderRadius:6 };
+      return <div key={c.id} title={"Cadastrado por "+(c.criado_por||"—")+" em "+_wcData(c.criado_em)+(c.atualizado_em ? " · alterado por "+(c.atualizado_por||"—")+" em "+_wcData(c.atualizado_em) : "")}
+        style={{ background:"#fff", border:"1px solid #e9ecf3", borderRadius:14, padding:14, display:"flex", flexDirection:"column", gap:10,
+                 boxShadow:"0 1px 2px rgba(15,23,42,.04)", opacity:c.ativo?1:.65 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <div style={{ width:36, height:36, borderRadius:"50%", background: pausado||!c.ativo||bloqueado ? "#f1f5f9" : "#f3e8ff", color: pausado||!c.ativo||bloqueado ? "#94a3b8" : "#7c3aed",
+                        display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:15, flex:"none" }}>{inicial}</div>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#0f172a", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {c.nome}{c.cargo ? <span style={{ fontWeight:500, fontSize:12, color:"#94a3b8" }}> · {c.cargo}</span> : null}
             </div>
-            <div style={{ fontSize:12, color:"#475569", marginTop:3 }}>
-              {_wcFone(c.telefone)}{isBioter ? " · "+_wcUnidade(c.unidade) : ""}{c.origem==="playbook" ? " · veio do Playbook" : ""}
+            <div style={{ fontSize:12, color:"#64748b", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+              {_wcFone(c.telefone)}{isBioter ? " · "+_wcUnidade(c.unidade) : ""}
             </div>
           </div>
-          <span style={{ fontSize:11, fontWeight:700, color:status.cor, background:status.fundo, borderRadius:20, padding:"3px 10px" }}>{status.t}</span>
+          {selo && <span style={{ fontSize:11, fontWeight:700, color:selo.cor, background:selo.fundo, borderRadius:20, padding:"3px 9px", flex:"none" }}>{selo.t}</span>}
+          {c.ativo && !bloqueado && <button type="button" role="switch" aria-checked={!pausado} disabled={salvando||isMob}
+              title={isMob ? "" : (pausado ? "Ligar o agente para esta pessoa" : "Desligar o agente só para esta pessoa (a equipe continua falando)")}
+              onClick={function(){ pausarAgente(c, !pausado); }}
+              style={{ display:"flex", alignItems:"center", gap:6, border:"none", background:"none", padding:0, cursor:(salvando||isMob)?"default":"pointer", fontFamily:"inherit", flex:"none" }}>
+              <span style={{ fontSize:11, fontWeight:700, color: pausado ? "#94a3b8" : "#15803d" }}>Agente {pausado ? "OFF" : "ON"}</span>
+              <span style={{ position:"relative", width:32, height:18, borderRadius:999, background: pausado ? "#cbd5e1" : "#16a34a", transition:"background .15s", flex:"none" }}>
+                <span style={{ position:"absolute", top:2, left: pausado ? 2 : 16, width:14, height:14, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 2px rgba(0,0,0,.2)", transition:"left .15s" }}/>
+              </span>
+          </button>}
         </div>
 
-        {pausado && !bloqueado && <div style={{ marginTop:8, fontSize:12, color:"#b45309" }}>
-          Agente pausado por {pausado.por||"—"} em {_wcData(pausado.em)}. A equipe continua falando normal pelo WhatsApp Pixels.
+        {pausado && !bloqueado && <div style={{ fontSize:12, color:"#92400e", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8, padding:"6px 9px" }}>
+          Agente desligado por {pausado.por||"—"} em {_wcData(pausado.em)}. A equipe continua falando normal.
         </div>}
-        {bloqueado && <div style={{ marginTop:8, fontSize:12, color:"#b91c1c" }}>
+        {bloqueado && <div style={{ fontSize:12, color:"#b91c1c", background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"6px 9px" }}>
           Bloqueado por {c.bloqueado_por||"—"} em {_wcData(c.bloqueado_em)}{c.bloqueio_motivo ? ' — "'+c.bloqueio_motivo+'"' : ""}
         </div>}
 
-        <div style={{ display:"flex", gap:isMob?8:14, flexWrap:"wrap", marginTop:10 }}>
-          {_WC_PODE.map(function(p){
-            return <label key={p.k} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#334155", cursor:(c.ativo&&!isMob)?"pointer":"default" }}>
-              <input type="checkbox" checked={!!c[p.k]} disabled={!c.ativo||salvando||isMob} onChange={function(){ alternar(c, p.k); }}/>
-              {p.label}
-            </label>;
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {chaves.map(function(k){
+            return <button key={k.k} type="button" aria-pressed={k.on} disabled={!podeMexer} onClick={k.fn}
+              style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, fontWeight:600, fontFamily:"inherit", borderRadius:999, padding:"4px 10px",
+                       border:"1px solid "+(k.on ? "#bbf7d0" : "#e2e8f0"), background: k.on ? "#f0fdf4" : "#f8fafc", color: k.on ? "#15803d" : "#94a3b8",
+                       cursor: podeMexer ? "pointer" : "default" }}>
+              <span style={{ fontSize:11 }}>{k.on ? "✓" : "○"}</span>{k.label}
+            </button>;
           })}
-          <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#334155", cursor:(c.ativo&&!isMob)?"pointer":"default" }}>
-            <input type="checkbox" checked={!!rot[c.id]} disabled={!c.ativo||salvando||isMob} onChange={function(){ marcarRoteiro(c); }}/>
-            Pedir roteiro de vídeo
-          </label>
-          <span style={{ fontSize:12, color:"#94a3b8" }}>Limite: {c.limite_semana}/semana · alerta em {c.limite_dia}/dia</span>
         </div>
 
-        {!isMob && bloq && bloq.id===c.id && <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+        {!isMob && bloq && bloq.id===c.id && <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
           <input autoFocus value={bloq.motivo} onChange={function(e){ setBloq({ id:c.id, motivo:e.target.value }); }}
-                 placeholder="Motivo (ex.: saiu da empresa)" style={{ flex:1, minWidth:180, border:"1px solid #e2e8f0", borderRadius:8, padding:"7px 10px", fontSize:12, fontFamily:"inherit" }}/>
-          <button style={Object.assign({}, btn, { background:"#dc2626", borderColor:"#dc2626", color:"#fff" })} onClick={function(){ bloquear(c.id, true, bloq.motivo); }}>Bloquear agora</button>
-          <button style={btn} onClick={function(){ setBloq(null); }}>Cancelar</button>
+                 placeholder="Motivo (ex.: saiu da empresa)" style={{ flex:1, minWidth:140, border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 9px", fontSize:12, fontFamily:"inherit" }}/>
+          <button style={Object.assign({}, btn, { background:"#dc2626", borderColor:"#dc2626", color:"#fff", padding:"6px 10px" })} onClick={function(){ bloquear(c.id, true, bloq.motivo); }}>Bloquear</button>
+          <button style={Object.assign({}, btn, { padding:"6px 10px" })} onClick={function(){ setBloq(null); }}>Cancelar</button>
         </div>}
 
-        <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", fontSize:11, color:"#94a3b8", alignItems:"center" }}>
-          {!isMob && c.ativo && <button style={btn} onClick={function(){ setForm(Object.assign({}, c, { pode_pedir_roteiro: !!rot[c.id] })); }}>Editar</button>}
-          {!isMob && c.ativo && !bloqueado && !pausado && <button style={Object.assign({}, btn, { color:"#b45309" })} disabled={salvando} onClick={function(){ pausarAgente(c, true); }}>Pausar agente</button>}
-          {!isMob && c.ativo && !bloqueado && pausado && <button style={Object.assign({}, btn, { color:"#15803d" })} disabled={salvando} onClick={function(){ pausarAgente(c, false); }}>Retomar agente</button>}
-          {!isMob && c.ativo && !bloqueado && <button style={Object.assign({}, btn, { color:"#b91c1c" })} onClick={function(){ setBloq({ id:c.id, motivo:"" }); }}>Bloquear número</button>}
-          {!isMob && c.ativo && bloqueado && <button style={btn} onClick={function(){ bloquear(c.id, false); }}>Desbloquear</button>}
-          {!isMob && <button style={btn} onClick={function(){ const d={ id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs, ativo:!c.ativo }; salvar(d); }}>
+        <div style={{ fontSize:11, color:"#94a3b8" }}>Até {c.limite_semana} cards por semana · alerta com {c.limite_dia} num dia</div>
+
+        {!isMob && <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", gap:2, borderTop:"1px solid #f1f5f9", paddingTop:6 }}>
+          {!isMob && c.ativo && <button style={Object.assign({}, acao, { color:"#475569" })} onClick={function(){ setForm(Object.assign({}, c, { pode_pedir_roteiro: !!rot[c.id] })); }}>Editar</button>}
+          {!isMob && c.ativo && !bloqueado && <button style={Object.assign({}, acao, { color:"#b91c1c" })} onClick={function(){ setBloq({ id:c.id, motivo:"" }); }}>Bloquear</button>}
+          {!isMob && c.ativo && bloqueado && <button style={Object.assign({}, acao, { color:"#475569" })} onClick={function(){ bloquear(c.id, false); }}>Desbloquear</button>}
+          {!isMob && <button style={Object.assign({}, acao, { color:"#64748b" })} onClick={function(){ const d={ id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs, ativo:!c.ativo }; salvar(d); }}>
             {c.ativo ? "Desativar" : "Reativar"}
           </button>}
-          <span>Cadastrado por {c.criado_por||"—"} em {_wcData(c.criado_em)}{c.atualizado_em ? " · alterado por "+(c.atualizado_por||"—")+" em "+_wcData(c.atualizado_em) : ""}</span>
-        </div>
+        </div>}
       </div>;
     })}
+    </div>
     </div>; })}
 
     {inativos.length>0 && <button style={Object.assign({}, btn, { alignSelf:"flex-start" })} onClick={function(){ setMI(!mostraInativos); }}>
