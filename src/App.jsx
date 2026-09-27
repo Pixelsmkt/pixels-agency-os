@@ -111231,6 +111231,8 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
    EFICIÊNCIA E RESULTADOS — Gestão › Eficiência e Resultados
    v1 (27/09/2026, tarde): grade de Reels com player. Recusada pelo usuário ("só tem vídeo").
    v2 (27/09/2026, noite): o PLACAR DA IA, do jeito do rascunho 2 aprovado ("Pode fazer!").
+   v2.1 (27/09/2026, noite): filtro de verdade (select de cliente + setas ‹ ›), unidades da Bioter,
+        benchmark da Pixels mês a mês e cada número comparado com a média da Pixels.
 
    A tela responde 3 perguntas, com número real:
      1) Estamos trabalhando menos?  copy aprovada de primeira · arte que volta para ajuste
@@ -111242,7 +111244,7 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
    Ponte: EfPonteReel mostra "✓ Lido pela IA · Ver análise →" dentro do Reel em Gestão de redes.
 
    Backend (trava _efic_pode = nível 1 ou chave Acessos › gestao.eficiencia):
-     rpc efic_placar · efic_lidos · efic_video · efic_padroes · efic_padrao_decidir (só nível 1)
+     rpc efic_placar · efic_unidades · efic_benchmark · efic_lidos · efic_video · efic_padroes · efic_padrao_decidir (só nível 1)
          efic_marcar · efic_desmarcar · efic_lido_media (ponte; sem acesso → não mostra nada)
    Regras: só dado real ("ainda não medido" quando não existe); seta só com base para comparar;
    celular só vê (não aprova, não marca); descartar/tirar só esconde (fica no histórico).
@@ -111316,49 +111318,134 @@ function _efSeta(atual, antes, maiorMelhor, isMob){
   return <span style={{color:bom?_EF.verde:_EF.verm,fontSize:_efF(16,isMob),fontWeight:800,marginLeft:6}}>{v>0?"↑":"↓"} {Math.abs(v)}%</span>;
 }
 
+/* ── nomes das unidades (Bioter) ─────────────────────────────────── */
+function _efNomeUnidade(u){
+  const m = { castro:"Castro", chapeco:"Chapecó", toledo:"Toledo", uberlandia:"Uberlândia", gloria:"Glória de Dourados",
+              paraguay:"Paraguay", brasil:"Brasil", grupo:"Grupo (institucional)" };
+  return m[u] || (u ? u.charAt(0).toUpperCase()+u.slice(1) : "");
+}
+/* Anúncios da Bioter: a conta 03 (Toledo) cobre Toledo, Uberlândia, Glória e Paraguay (mesmo mapa da Gestão de mídia). */
+function _efNotaAdsUnidade(clientId, u){
+  if(clientId!=="bioter") return null;
+  if(u==="toledo") return "Conta 03: inclui Uberlândia, Glória e Paraguay.";
+  if(u==="uberlandia"||u==="gloria"||u==="paraguay") return "Os anúncios desta unidade saem na conta 03, junto com Toledo.";
+  if(u==="brasil"||u==="grupo") return "Esta unidade não tem conta de anúncio própria.";
+  return null;
+}
+
+/* ── comparação com a média da Pixels ────────────────────────────── */
+function _efCompara(val, ref, maiorMelhor){
+  if(val==null || ref==null || isNaN(val) || isNaN(ref)) return null;
+  if(Math.abs(val-ref) < 1e-9) return 0;
+  return (maiorMelhor ? val>ref : val<ref) ? 1 : -1;
+}
+function _EfVsPixels({ val, base, maiorMelhor, fmt, isMob }){
+  const c = _efCompara(val, base, maiorMelhor);
+  if(c===null) return null;
+  const cor = c>0 ? _EF.verde : c<0 ? _EF.verm : _EF.sub;
+  const txt = c>0 ? "melhor que a Pixels" : c<0 ? "pior que a Pixels" : "igual à Pixels";
+  return (
+    <div style={{marginTop:6,fontSize:_efF(12,isMob),color:_EF.sub}}>
+      Média da Pixels: <b style={{color:_EF.texto}}>{fmt(base)}</b> · <b style={{color:cor}}>{c>0?"▲ ":c<0?"▼ ":""}{txt}</b>
+    </div>
+  );
+}
+
 /* ── TELA ────────────────────────────────────────────────────────── */
 function PageEficiencia({ isMob }){
   const [dias, setDias] = useState(60);
   const [cliente, setCliente] = useState("");
+  const [unidade, setUnidade] = useState("");
   const [placar, setPlacar] = useState(null);
+  const [unid, setUnid] = useState(null);
+  const [bench, setBench] = useState(null);
   const [erro, setErro] = useState(null);
   const [recarregar, setRecarregar] = useState(0);
 
   useEffect(function(){
     if(!window._sb) return;
     let vivo = true;
-    setPlacar(null); setErro(null);
-    window._sb.rpc("efic_placar", { p_dias:dias }).then(function(r){
+    setPlacar(null); setUnid(null); setErro(null);
+    Promise.all([
+      window._sb.rpc("efic_placar", { p_dias:dias }),
+      window._sb.rpc("efic_unidades", { p_dias:dias }),
+    ]).then(function(rs){
       if(!vivo) return;
-      if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso a esta tela." : "Não consegui carregar o placar agora."); return; }
-      setPlacar(r.data || null);
+      const e = rs[0].error || rs[1].error;
+      if(e){ setErro(/permiss/i.test(e.message||"") ? "Você não tem acesso a esta tela." : "Não consegui carregar o placar agora."); return; }
+      setPlacar(rs[0].data || null); setUnid((rs[1].data && rs[1].data.unidades) || {});
     }).catch(function(){ if(vivo) setErro("Não consegui carregar o placar agora."); });
     return function(){ vivo = false; };
   }, [dias, recarregar]);
 
-  const clientes = useMemo(function(){ return ((placar&&placar.clientes)||[]).filter(_efTemDado); }, [placar]);
-  const foco = useMemo(function(){
-    if(!placar) return null;
-    if(!cliente) return placar.geral;
-    return clientes.find(function(c){ return c.client_id===cliente; }) || null;
-  }, [placar, cliente, clientes]);
-  const nomeCliente = cliente ? ((clientes.find(function(c){ return c.client_id===cliente; })||{}).nome || cliente) : "";
+  useEffect(function(){
+    if(!window._sb) return;
+    let vivo = true;
+    window._sb.rpc("efic_benchmark").then(function(r){ if(vivo && !r.error) setBench(r.data || null); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [recarregar]);
 
-  const chip = function(ativo, texto, onClick, key){
-    return <button key={key} onClick={onClick} style={{padding:isMob?"7px 12px":"7px 14px",borderRadius:999,border:"1px solid "+(ativo?_EF.roxo:_EF.linha),
-      background:ativo?_EF.roxo:"#fff",color:ativo?"#fff":_EF.texto,fontSize:_efF(13,isMob),fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{texto}</button>;
+  const clientes = useMemo(function(){
+    return ((placar&&placar.clientes)||[]).filter(_efTemDado).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),"pt-BR"); });
+  }, [placar]);
+  const unidades = (cliente && unid && unid[cliente]) || [];
+  useEffect(function(){ setUnidade(""); }, [cliente]);
+
+  const cli = cliente ? (clientes.find(function(c){ return c.client_id===cliente; }) || null) : null;
+  const uni = (cli && unidade) ? (unidades.find(function(u){ return u.unidade===unidade; }) || null) : null;
+  const foco = !placar ? null : (uni || cli || (cliente ? null : placar.geral));
+  const geral = placar ? placar.geral : null;
+  const nomeFoco = !cliente ? "Todos os clientes" : (cli ? cli.nome : cliente) + (unidade ? " · "+_efNomeUnidade(unidade) : "");
+
+  const ordem = [""].concat(clientes.map(function(c){ return c.client_id; }));
+  const pos = Math.max(0, ordem.indexOf(cliente));
+  const ir = function(passo){ const n = ordem.length; if(!n) return; setCliente(ordem[(pos + passo + n) % n]); };
+
+  const sel = { font:"inherit", padding:isMob?"9px 10px":"9px 12px", borderRadius:10, border:"1px solid "+_EF.linha, background:"#fff",
+                color:_EF.texto, fontSize:_efF(14,isMob), fontWeight:600, minWidth:0, cursor:"pointer" };
+  const seta = function(txt, passo, titulo){
+    return <button title={titulo} onClick={function(){ ir(passo); }} style={{font:"inherit",width:38,height:38,borderRadius:10,border:"1px solid "+_EF.linha,background:"#fff",
+      color:_EF.roxo,fontSize:18,fontWeight:800,cursor:"pointer",flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{txt}</button>;
   };
+  const rot = function(t){ return <div style={{fontSize:_efF(11.5,isMob),color:_EF.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>{t}</div>; };
 
   return (
     <div style={{padding:isMob?"14px 12px 90px":"22px 28px 40px",maxWidth:1180,margin:"0 auto",color:_EF.texto,background:_EF.fundo,minHeight:"100%"}}>
       <div style={{fontSize:_efF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3}}>Eficiência e Resultados</div>
       <div style={{fontSize:_efF(13,isMob),color:_EF.sub,marginTop:4}}>O placar da IA: estamos trabalhando menos e entregando mais?</div>
 
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",margin:"14px 0 4px",alignItems:"center"}}>
-        {chip(!cliente, "Todos os clientes", function(){ setCliente(""); }, "_todos")}
-        {clientes.map(function(c){ return chip(cliente===c.client_id, c.nome, function(){ setCliente(c.client_id); }, c.client_id); })}
-        <div style={{display:"flex",gap:6,marginLeft:isMob?0:"auto"}}>
-          {[30,60,90].map(function(d){ return chip(dias===d, d+" dias", function(){ setDias(d); }, "d"+d); })}
+      {/* ── FILTRO ── */}
+      <div style={{display:"flex",gap:isMob?10:14,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?10:12}}>
+        <div style={{flex:isMob?"1 1 100%":"1 1 340px",minWidth:0}}>
+          {rot("Cliente")}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {seta("‹", -1, "Cliente anterior")}
+            <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {flex:1})}>
+              <option value="">Todos os clientes (Pixels no geral)</option>
+              {clientes.map(function(c){ return <option key={c.client_id} value={c.client_id}>{c.nome}</option>; })}
+            </select>
+            {seta("›", 1, "Próximo cliente")}
+          </div>
+          {ordem.length>1 && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>{pos===0?"Visão geral":(pos+" de "+(ordem.length-1)+" clientes")}</div>}
+        </div>
+        {unidades.length>0 && (
+          <div style={{flex:isMob?"1 1 100%":"0 1 260px",minWidth:0}}>
+            {rot("Unidade")}
+            <select value={unidade} onChange={function(e){ setUnidade(e.target.value); }} style={Object.assign({}, sel, {width:"100%"})}>
+              <option value="">Todas as unidades</option>
+              {unidades.map(function(u){ return <option key={u.unidade} value={u.unidade}>{_efNomeUnidade(u.unidade)}</option>; })}
+            </select>
+            <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>{unidades.length} unidades</div>
+          </div>
+        )}
+        <div style={{flex:isMob?"1 1 100%":"0 0 190px"}}>
+          {rot("Período")}
+          <select value={dias} onChange={function(e){ setDias(Number(e.target.value)); }} style={Object.assign({}, sel, {width:"100%"})}>
+            <option value={30}>Últimos 30 dias</option>
+            <option value={60}>Últimos 60 dias</option>
+            <option value={90}>Últimos 90 dias</option>
+          </select>
+          <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>comparado com os {dias} dias anteriores</div>
         </div>
       </div>
 
@@ -111366,32 +111453,55 @@ function PageEficiencia({ isMob }){
       {!erro && !placar && <div style={{padding:30,textAlign:"center",color:_EF.sub,fontSize:_efF(14,isMob)}}>Carregando…</div>}
       {placar && !foco && <div style={{marginTop:14,padding:16,borderRadius:12,background:"#fff",border:"1px solid "+_EF.linha,color:_EF.sub}}>Sem dados deste cliente no período.</div>}
 
-      {placar && foco && <_EfPlacar foco={foco} ia={placar.ia||{}} dias={placar.dias||dias} isMob={isMob}/>}
+      {placar && foco && (
+        <div style={{marginTop:16,fontSize:_efF(13,isMob),color:_EF.sub}}>Vendo: <b style={{color:_EF.texto}}>{nomeFoco}</b>{cliente?" · comparado com a média da Pixels":""}</div>
+      )}
+      {placar && foco && <_EfPlacar foco={foco} geral={cliente?geral:null} ia={placar.ia||{}} dias={placar.dias||dias} isMob={isMob}
+                                     notaAds={cliente&&unidade?_efNotaAdsUnidade(cliente, unidade):null} ehUnidade={!!unidade}/>}
+
+      {placar && !cliente && bench && <_EfBenchmark meses={bench.meses||[]} isMob={isMob}/>}
 
       {placar && !cliente && clientes.length>0 && (
         <div>
-          <_EfTitulo n={4} isMob={isMob}>Cada cliente</_EfTitulo>
+          <_EfTitulo n={5} isMob={isMob}>Cada cliente × média da Pixels</_EfTitulo>
           <div style={_efGrade(isMob, 215)}>
-            {clientes.map(function(c){ return <_EfCliente key={c.client_id} c={c} isMob={isMob} onAbrir={function(){ setCliente(c.client_id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} }}/>; })}
+            {clientes.map(function(c){ return <_EfCliente key={c.client_id} c={c} titulo={c.nome} geral={geral} isMob={isMob} onAbrir={function(){ setCliente(c.client_id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} }}/>; })}
           </div>
-          <div style={{fontSize:_efF(12,isMob),color:_EF.fraco,marginTop:8}}>Toque em um cliente para ver só os números dele e os vídeos lidos pela IA.</div>
+          <_EfLegendaCores isMob={isMob}/>
+        </div>
+      )}
+
+      {placar && cli && !unidade && unidades.length>0 && (
+        <div>
+          <_EfTitulo n={4} isMob={isMob}>Cada unidade × média da Pixels</_EfTitulo>
+          <div style={_efGrade(isMob, 215)}>
+            {unidades.map(function(u){ return <_EfCliente key={u.unidade} c={u} titulo={_efNomeUnidade(u.unidade)} geral={geral} isMob={isMob}
+                                                  nota={_efNotaAdsUnidade(cliente, u.unidade)} onAbrir={function(){ setUnidade(u.unidade); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} }}/>; })}
+          </div>
+          <_EfLegendaCores isMob={isMob}/>
         </div>
       )}
 
       {placar && (
         <div>
-          <_EfTitulo n={cliente?4:5} isMob={isMob}>Vídeos lidos pela IA{cliente?(" · "+nomeCliente):""}</_EfTitulo>
+          <_EfTitulo n={cliente?(unidades.length&&!unidade?5:4):6} isMob={isMob}>Vídeos lidos pela IA{cliente?(" · "+nomeFoco):""}</_EfTitulo>
           {!cliente
             ? <_EfEscolha clientes={clientes} isMob={isMob} onEscolher={setCliente}/>
-            : <_EfLidos key={cliente} clientId={cliente} isMob={isMob} onMudou={function(){ setRecarregar(function(x){ return x+1; }); }}/>}
+            : <_EfLidos key={cliente} clientId={cliente} unidade={unidade} isMob={isMob} onMudou={function(){ setRecarregar(function(x){ return x+1; }); }}/>}
         </div>
       )}
     </div>
   );
 }
 
+function _EfLegendaCores({ isMob }){
+  return <div style={{fontSize:_efF(12,isMob),color:_EF.fraco,marginTop:8}}>
+    <b style={{color:_EF.verde}}>▲ verde</b> = melhor que a média da Pixels · <b style={{color:_EF.verm}}>▼ vermelho</b> = pior · toque no cartão para abrir.
+  </div>;
+}
+
 /* ── os 3 blocos do placar ───────────────────────────────────────── */
-function _EfPlacar({ foco, ia, dias, isMob }){
+function _EfPlacar({ foco, geral, ia, dias, isMob, notaAds, ehUnidade }){
   const cp = foco.copy || { n:0, ok:0, serie:[] };
   const ar = foco.arte || { n:0, voltou:0 };
   const al = foco.alcance || {};
@@ -111406,6 +111516,11 @@ function _EfPlacar({ foco, ia, dias, isMob }){
   const lidos = foco.lidos || { n:0, n_teste:0 };
   const pad = foco.padroes || { aprovados:0, pendentes:0 };
   const ante = "Antes: ";
+  const G = geral || null;
+  const gCopy = G ? _efPct(G.copy.ok, G.copy.n) : null;
+  const gArte = G ? _efPct(G.arte.voltou, G.arte.n) : null;
+  const gAds = G && _efTemVal(G.ads) ? G.ads : null;
+  const pct = function(v){ return v+"%"; };
 
   return (
     <div>
@@ -111414,6 +111529,7 @@ function _EfPlacar({ foco, ia, dias, isMob }){
         <_EfCardNum isMob={isMob} rot="Copy aprovada de primeira" num={pCopy==null?"sem dado":pCopy+"%"} vazio={pCopy==null}
           det={cp.n ? (cp.ok+" de "+cp.n+" copies · últimos "+dias+" dias") : "Nenhuma copy avaliada no período."}
           tag={pCopy==null?null:(pCopy>=85?<_EfTag tipo="bom" isMob={isMob}>✓ bom</_EfTag>:pCopy>=60?<_EfTag tipo="atc" isMob={isMob}>⚠ atenção</_EfTag>:<_EfTag tipo="ruim" isMob={isMob}>✕ muita copy voltando</_EfTag>)}>
+          {G && <_EfVsPixels val={pCopy} base={gCopy} maiorMelhor fmt={pct} isMob={isMob}/>}
           {serie.length>1 && (
             <div style={{display:"flex",gap:5,alignItems:"flex-end",height:52,marginTop:10}} title="Por mês (primeira avaliação de cada copy)">
               {serie.map(function(s){
@@ -111430,7 +111546,9 @@ function _EfPlacar({ foco, ia, dias, isMob }){
         </_EfCardNum>
         <_EfCardNum isMob={isMob} rot="Arte que volta para ajuste" num={pArte==null?"sem dado":pArte+"%"} vazio={pArte==null}
           det={ar.n ? (ar.voltou+" de "+ar.n+" artes voltaram da avaliação") : "Nenhuma arte avaliada no período."}
-          tag={pArte==null?null:(pArte<=25?<_EfTag tipo="bom" isMob={isMob}>✓ bom</_EfTag>:pArte<=40?<_EfTag tipo="atc" isMob={isMob}>⚠ atenção</_EfTag>:<_EfTag tipo="ruim" isMob={isMob}>✕ {pArte>=45&&pArte<=55?"quase metade volta":"muita arte voltando"}</_EfTag>)}/>
+          tag={pArte==null?null:(pArte<=25?<_EfTag tipo="bom" isMob={isMob}>✓ bom</_EfTag>:pArte<=40?<_EfTag tipo="atc" isMob={isMob}>⚠ atenção</_EfTag>:<_EfTag tipo="ruim" isMob={isMob}>✕ {pArte>=45&&pArte<=55?"quase metade volta":"muita arte voltando"}</_EfTag>)}>
+          {G && <_EfVsPixels val={pArte} base={gArte} maiorMelhor={false} fmt={pct} isMob={isMob}/>}
+        </_EfCardNum>
         <_EfCardNum isMob={isMob} rot="Dias do pedido até publicar" num="ainda não medido" vazio det="Dá para medir com os cards. Precisa construir."/>
         <_EfCardNum isMob={isMob} rot="Pedidos resolvidos pelo Guvi" num="ainda não medido" vazio det="Dá para contar pelas conversas. Precisa construir."/>
       </div>
@@ -111439,15 +111557,21 @@ function _EfPlacar({ foco, ia, dias, isMob }){
       <div style={_efGrade(isMob)}>
         <_EfCardNum isMob={isMob} rot="Alcance mediano por post" vazio={al.atual==null}
           num={al.atual==null ? "sem dado" : <span>{_efNum(al.atual)}{alSeta}</span>}
-          det={al.atual==null ? "Nenhum post no período." : (al.antes!=null && al.n_antes>=5 ? (ante+_efNum(al.antes)+" nos "+dias+" dias anteriores") : "Sem base para comparar com o período anterior.") + " · "+al.n+" posts"}/>
+          det={al.atual==null ? "Nenhum post no período." : (al.antes!=null && al.n_antes>=5 ? (ante+_efNum(al.antes)+" nos "+dias+" dias anteriores") : "Sem base para comparar com o período anterior.") + " · "+al.n+" posts"}>
+          {G && <_EfVsPixels val={al.atual} base={G.alcance.atual} maiorMelhor fmt={_efNum} isMob={isMob}/>}
+        </_EfCardNum>
         <_EfCardNum isMob={isMob} rot="Tempo assistido nos Reels (mediana)" vazio={as.atual_ms==null}
           num={as.atual_ms==null ? "sem dado" : <span>{_efSeg(as.atual_ms)}{asSeta}</span>}
-          det={as.atual_ms==null ? "A Meta não mandou esse número para os Reels do período." : ((asSeta ? (ante+_efSeg(as.antes_ms)) : "Pouca base para comparar") + " · "+as.n+" Reels com esse dado")}/>
+          det={as.atual_ms==null ? "A Meta não mandou esse número para os Reels do período." : ((asSeta ? (ante+_efSeg(as.antes_ms)) : "Pouca base para comparar") + " · "+as.n+" Reels com esse dado")}>
+          {G && <_EfVsPixels val={as.atual_ms} base={G.assistido.atual_ms} maiorMelhor fmt={_efSeg} isMob={isMob}/>}
+        </_EfCardNum>
         <_EfCardNum isMob={isMob} rot="Anúncios: custo por conversa" vazio={!ads || ads.custo==null}
           num={!ads ? "sem anúncios" : ads.custo==null ? "sem conversas" : <span>{_efReais2(ads.custo)}{adSeta}</span>}
-          det={!ads ? "Nenhum gasto de anúncio no período." :
+          det={!ads ? (notaAds || "Nenhum gasto de anúncio no período.") :
                (_efReais(ads.gasto)+" · "+_efNum(ads.conversas)+" conversas · " +
-                (adSeta ? (ante+_efReais2(ads.custo_antes)) : "Ainda não há histórico de anúncios suficiente para comparar este período."))}/>
+                (adSeta ? (ante+_efReais2(ads.custo_antes)) : "Ainda não há histórico de anúncios suficiente para comparar este período.") + (notaAds?(" "+notaAds):""))}>
+          {G && ads && <_EfVsPixels val={ads.custo} base={gAds?gAds.custo:null} maiorMelhor={false} fmt={_efReais2} isMob={isMob}/>}
+        </_EfCardNum>
       </div>
 
       <_EfTitulo n={3} isMob={isMob}>A IA está aprendendo? Quanto custa?</_EfTitulo>
@@ -111457,30 +111581,96 @@ function _EfPlacar({ foco, ia, dias, isMob }){
         <_EfCardNum isMob={isMob} rot="Gasto da IA de vídeo no mês"
           num={<span>{_efReais2(ia.gasto_mes_brl)} <span style={{fontSize:_efF(14,isMob),color:_EF.sub,fontWeight:600}}>de {_efReais(ia.limite_mes_brl)}</span></span>}
           det={"Todos os clientes juntos · leitura automática: "+(ia.modo==="sim"?"ligada":ia.modo==="teste"?"em teste":"desligada")}/>
-        <_EfCardNum isMob={isMob} rot="Padrões aprovados" num={_efNum(pad.aprovados)}
-          det={pad.pendentes ? (pad.pendentes+(pad.pendentes===1?" esperando o seu \"sim\"":" esperando o seu \"sim\"")) : "Nenhum esperando decisão."}/>
+        {!ehUnidade && <_EfCardNum isMob={isMob} rot="Padrões aprovados" num={_efNum(pad.aprovados)}
+          det={pad.pendentes ? (pad.pendentes+" esperando o seu \"sim\"") : "Nenhum esperando decisão."}/>}
       </div>
     </div>
   );
 }
 
-/* ── cartão de um cliente (visão "Todos") ────────────────────────── */
-function _EfCliente({ c, isMob, onAbrir }){
+/* ── BENCHMARK: a Pixels inteira, mês a mês ──────────────────────── */
+function _EfBenchmark({ meses, isMob }){
+  if(!meses || !meses.length) return null;
+  const mesNome = function(m){ return _EF_MESES[Number(String(m).slice(5,7))-1] || m; };
+  const linhas = [
+    { rot:"Copy aprovada de primeira", v:function(x){ return _efPct(x.copy.ok, x.copy.n); }, fmt:function(v){ return v+"%"; }, maior:true, base:function(x){ return x.copy.n+" copies"; } },
+    { rot:"Arte que volta para ajuste", v:function(x){ return _efPct(x.arte.voltou, x.arte.n); }, fmt:function(v){ return v+"%"; }, maior:false, base:function(x){ return x.arte.n+" artes"; } },
+    { rot:"Posts publicados", v:function(x){ return x.posts||null; }, fmt:_efNum, maior:true, base:function(){ return null; } },
+    { rot:"Alcance mediano por post", v:function(x){ return x.alcance; }, fmt:_efNum, maior:true, base:function(x){ return x.posts+" posts"; } },
+    { rot:"Tempo assistido nos Reels", v:function(x){ return x.assistido_ms; }, fmt:_efSeg, maior:true, base:function(x){ return x.n_assistido+" Reels com esse dado"; } },
+    { rot:"Anúncios: custo por conversa", v:function(x){ return x.ads?x.ads.custo:null; }, fmt:_efReais2, maior:false,
+      base:function(x){ return x.ads ? (_efReais(x.ads.gasto)+" · "+_efNum(x.ads.conversas)+" conversas") : null; } },
+    { rot:"Vídeos lidos pela IA", v:function(x){ return x.ia?x.ia.lidos:0; }, fmt:_efNum, maior:true,
+      base:function(x){ return x.ia ? ("gasto da IA "+_efReais2(x.ia.custo_brl)) : null; } },
+  ];
+  const parcial = meses.some(function(x){ return x.parcial; });
+  return (
+    <div>
+      <_EfTitulo n={4} isMob={isMob}>Benchmark: a Pixels mês a mês</_EfTitulo>
+      <div style={{fontSize:_efF(12.5,isMob),color:_EF.sub,margin:"-4px 0 10px"}}>Todos os clientes somados, nos últimos 6 meses. Passe o dedo ou o mouse na barra para ver o número.</div>
+      <div style={_efGrade(isMob, 250)}>
+        {linhas.map(function(L){
+          const vals = meses.map(function(x){ const v = L.v(x); return (v==null||isNaN(v)) ? null : Number(v); });
+          const com = meses.map(function(x,i){ return { x:x, v:vals[i] }; }).filter(function(o){ return o.v!=null; });
+          const fechados = com.filter(function(o){ return !o.x.parcial; });
+          const ult = fechados.length ? fechados[fechados.length-1] : null;
+          const pri = fechados.length>1 ? fechados[0] : null;
+          const max = Math.max.apply(null, com.map(function(o){ return o.v; }).concat([0])) || 1;
+          let tend = null;
+          if(ult && pri && pri.v){
+            const c = _efCompara(ult.v, pri.v, L.maior);
+            tend = <span style={{color:c>0?_EF.verde:c<0?_EF.verm:_EF.sub,fontWeight:700}}>{mesNome(pri.x.m)} {L.fmt(pri.v)} → {mesNome(ult.x.m)} {L.fmt(ult.v)} {c>0?"▲ melhorou":c<0?"▼ piorou":"= igual"}</span>;
+          }
+          return (
+            <div key={L.rot} style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?12:14,minWidth:0}}>
+              <div style={{color:_EF.sub,fontSize:_efF(12.5,isMob),fontWeight:600}}>{L.rot}</div>
+              <div style={{fontSize:_efF(12,isMob),marginTop:4,minHeight:18}}>{tend || <span style={{color:_EF.fraco}}>Pouca base para comparar meses.</span>}</div>
+              <div style={{display:"flex",gap:5,alignItems:"flex-end",height:82,marginTop:10}}>
+                {meses.map(function(x,i){
+                  const v = vals[i]; const b = L.base(x);
+                  const tip = mesNome(x.m)+(x.parcial?" (em andamento)":"")+": "+(v==null?"sem dado":L.fmt(v))+(b&&v!=null?(" · "+b):"");
+                  return (
+                    <div key={x.m} title={tip} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:3,height:"100%",minWidth:0}}>
+                      <span style={{fontSize:9.5,color:_EF.sub,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{v==null?"—":L.fmt(v)}</span>
+                      <i style={{display:"block",width:"100%",height:v==null?2:Math.max(4,Math.round(46*v/max)),background:v==null?_EF.linha:_EF.roxo,
+                                 opacity:x.parcial?.4:.85,borderRadius:"4px 4px 0 0"}}/>
+                      <span style={{fontSize:10,color:_EF.sub}}>{mesNome(x.m)}{x.parcial?"*":""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {parcial && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:8}}>* mês em andamento (barra clara): ainda vai mudar, por isso não entra na comparação.</div>}
+    </div>
+  );
+}
+
+/* ── cartão de um cliente ou unidade, comparado com a média da Pixels ── */
+function _EfCliente({ c, titulo, geral, nota, isMob, onAbrir }){
   const pCopy = _efPct(c.copy.ok, c.copy.n);
   const pArte = _efPct(c.arte.voltou, c.arte.n);
   const ads = _efTemVal(c.ads) ? c.ads : null;
-  const lin = function(rot, val, cor){
+  const G = geral || null;
+  const gAds = G && _efTemVal(G.ads) ? G.ads : null;
+  const cor = function(val, ref, maior){ const k = _efCompara(val, ref, maior); return k>0?_EF.verde:k<0?_EF.verm:null; };
+  const marca = function(val, ref, maior){ const k = _efCompara(val, ref, maior); return k>0?"▲ ":k<0?"▼ ":""; };
+  const lin = function(rot, val, cr, mk){
     return <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:_efF(13,isMob),padding:"6px 0",borderTop:"1px solid "+_EF.linha2}}>
-      <span style={{color:_EF.sub}}>{rot}</span><b style={{color:cor||_EF.texto,textAlign:"right"}}>{val}</b></div>;
+      <span style={{color:_EF.sub}}>{rot}</span><b style={{color:cr||_EF.texto,textAlign:"right"}}>{mk||""}{val}</b></div>;
   };
+  const gc = G ? _efPct(G.copy.ok, G.copy.n) : null, ga = G ? _efPct(G.arte.voltou, G.arte.n) : null;
   return (
     <button onClick={onAbrir} style={{font:"inherit",textAlign:"left",background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?12:14,cursor:"pointer",minWidth:0,color:_EF.texto,display:"flex",flexDirection:"column",justifyContent:"flex-start",alignItems:"stretch"}}>
-      <div style={{fontWeight:800,fontSize:_efF(14.5,isMob),marginBottom:6}}>{c.nome}</div>
-      {lin("Copy de primeira", pCopy==null?"—":pCopy+"%", pCopy!=null&&pCopy<60?_EF.verm:null)}
-      {lin("Arte que voltou", c.arte.n?(c.arte.voltou+" de "+c.arte.n):"—", pArte!=null&&pArte>40?_EF.verm:null)}
-      {lin("Alcance mediano", c.alcance.atual==null?"—":_efNum(c.alcance.atual))}
-      {lin("Anúncios", !ads?"—":(_efReais(ads.gasto)+" · "+_efNum(ads.conversas)+" conversas"), ads&&!(ads.conversas>0)?_EF.verm:null)}
+      <div style={{fontWeight:800,fontSize:_efF(14.5,isMob),marginBottom:6}}>{titulo}</div>
+      {lin("Copy de primeira", pCopy==null?"—":pCopy+"%", cor(pCopy,gc,true), marca(pCopy,gc,true))}
+      {lin("Arte que voltou", c.arte.n?(c.arte.voltou+" de "+c.arte.n):"—", cor(pArte,ga,false), marca(pArte,ga,false))}
+      {lin("Alcance mediano", c.alcance.atual==null?"—":_efNum(c.alcance.atual), cor(c.alcance.atual,G&&G.alcance.atual,true), marca(c.alcance.atual,G&&G.alcance.atual,true))}
+      {lin("Custo por conversa", !ads?"—":(ads.custo==null?"sem conversas":_efReais2(ads.custo)), ads&&ads.custo!=null?cor(ads.custo,gAds&&gAds.custo,false):null, ads&&ads.custo!=null?marca(ads.custo,gAds&&gAds.custo,false):"")}
       {c.lidos && c.lidos.n>0 && lin("Vídeos lidos pela IA", _efNum(c.lidos.n))}
+      {nota && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:6,lineHeight:1.4}}>{nota}</div>}
     </button>
   );
 }
@@ -111490,7 +111680,7 @@ function _EfEscolha({ clientes, isMob, onEscolher }){
   const com = clientes.filter(function(c){ return c.lidos && c.lidos.n>0; });
   return (
     <div style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?12:16}}>
-      <div style={{fontSize:_efF(13.5,isMob),color:_EF.sub}}>Os vídeos ficam separados por cliente. Escolha um:</div>
+      <div style={{fontSize:_efF(13.5,isMob),color:_EF.sub}}>Os vídeos ficam separados por cliente. Escolha um no filtro lá em cima, ou aqui:</div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
         {com.map(function(c){
           return <button key={c.client_id} onClick={function(){ onEscolher(c.client_id); try{ window.scrollTo({top:0,behavior:"smooth"}); }catch(_){} }}
@@ -111504,7 +111694,7 @@ function _EfEscolha({ clientes, isMob, onEscolher }){
 }
 
 /* ── vídeos lidos de UM cliente + padrões ─────────────────────────── */
-function _EfLidos({ clientId, isMob, onMudou }){
+function _EfLidos({ clientId, unidade, isMob, onMudou }){
   const [d, setD] = useState(null);
   const [pad, setPad] = useState(null);
   const [erro, setErro] = useState(null);
@@ -111538,7 +111728,8 @@ function _EfLidos({ clientId, isMob, onMudou }){
 
   const med = d.mediana_alcance;
   const podeDecidir = !!pad.pode_decidir && !isMob;
-  const videos = d.videos || [];
+  const todos = d.videos || [];
+  const videos = unidade ? todos.filter(function(v){ return v.unidade===unidade; }) : todos;
 
   return (
     <div>
@@ -111568,7 +111759,7 @@ function _EfLidos({ clientId, isMob, onMudou }){
         );
       })}
 
-      {!videos.length && <div style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:16,color:_EF.sub,fontSize:_efF(13.5,isMob)}}>Nenhum vídeo deste cliente foi lido pela IA ainda.</div>}
+      {!videos.length && <div style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:16,color:_EF.sub,fontSize:_efF(13.5,isMob)}}>{unidade?"Nenhum vídeo desta unidade foi lido pela IA ainda.":"Nenhum vídeo deste cliente foi lido pela IA ainda."}</div>}
 
       {videos.map(function(v){
         const aberta = aberto===v.id;
