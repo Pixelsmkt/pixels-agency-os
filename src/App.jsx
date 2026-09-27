@@ -111233,6 +111233,7 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
    v2 (27/09/2026, noite): o PLACAR DA IA, do jeito do rascunho 2 aprovado ("Pode fazer!").
    v2.1 (27/09/2026, noite): filtro de verdade (select de cliente + setas ‹ ›), unidades da Bioter,
         benchmark da Pixels mês a mês e cada número comparado com a média da Pixels.
+   v2.2 (27/09/2026, noite): unidades em ordem: Todas, Brasil, Paraguay e as outras em ordem alfabética.
 
    A tela responde 3 perguntas, com número real:
      1) Estamos trabalhando menos?  copy aprovada de primeira · arte que volta para ajuste
@@ -111333,6 +111334,16 @@ function _efNotaAdsUnidade(clientId, u){
   return null;
 }
 
+/* Ordem das unidades (pedido do usuário 27/09): Brasil, Paraguay e depois as outras em ordem alfabética. */
+function _efOrdenaUnidades(lista){
+  const primeiro = { brasil:0, paraguay:1 };
+  return (lista||[]).slice().sort(function(a,b){
+    const pa = a.unidade in primeiro ? primeiro[a.unidade] : 9, pb = b.unidade in primeiro ? primeiro[b.unidade] : 9;
+    if(pa!==pb) return pa-pb;
+    return _efNomeUnidade(a.unidade).localeCompare(_efNomeUnidade(b.unidade), "pt-BR");
+  });
+}
+
 /* ── comparação com a média da Pixels ────────────────────────────── */
 function _efCompara(val, ref, maiorMelhor){
   if(val==null || ref==null || isNaN(val) || isNaN(ref)) return null;
@@ -111388,7 +111399,7 @@ function PageEficiencia({ isMob }){
   const clientes = useMemo(function(){
     return ((placar&&placar.clientes)||[]).filter(_efTemDado).slice().sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),"pt-BR"); });
   }, [placar]);
-  const unidades = (cliente && unid && unid[cliente]) || [];
+  const unidades = _efOrdenaUnidades((cliente && unid && unid[cliente]) || []);
   useEffect(function(){ setUnidade(""); }, [cliente]);
 
   const cli = cliente ? (clientes.find(function(c){ return c.client_id===cliente; }) || null) : null;
