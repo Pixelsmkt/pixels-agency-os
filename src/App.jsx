@@ -110850,6 +110850,8 @@ function _WzRespostas({ respostas, onFechar, onMudou, isMob }){
            · no celular é só ver (mudar, só no computador).
    26/09/2026: chave "Pedir roteiro de vídeo" (auto.whats_contatos.pode_pedir_roteiro), por funções NOVAS:
      rpc whats_contatos_roteiro (lê) · whats_contatos_marcar_roteiro (liga/desliga). Limite: 5 roteiros por semana.
+   26/09/2026: "Pausar agente" (auto.whats_contatos.agente_pausado_em): o agente fica calado só pra essa pessoa,
+     a equipe continua falando normal. rpc whats_contatos_agente (lê) · whats_contatos_pausar_agente (pausa/retoma).
    ═══════════════════════════════════════════════════════════════════ */
 
 const _WC_UNIDADES = [
@@ -110914,6 +110916,7 @@ function CWhatsContatos({cl, isMob}){
   const [bloq, setBloq]       = useState(null);   // {id, motivo}
   const [mostraInativos, setMI] = useState(false);
   const [rot, setRot]         = useState({});     // 26/09/2026: {id_do_contato: pode_pedir_roteiro}
+  const [pausa, setPausa]     = useState({});     // 26/09/2026: {id_do_contato: {em, por}} — agente pausado
 
   const carregar = useCallback(function(){
     if(!clientId||!window._sb) return;
@@ -110924,6 +110927,10 @@ function CWhatsContatos({cl, isMob}){
     window._sb.rpc("whats_contatos_roteiro", { p_client_id: clientId }).then(function(r){
       if(r.error) return;
       const m = {}; (r.data||[]).forEach(function(x){ m[x.id] = !!x.pode_pedir_roteiro; }); setRot(m);
+    });
+    window._sb.rpc("whats_contatos_agente", { p_client_id: clientId }).then(function(r){
+      if(r.error) return;
+      const m = {}; (r.data||[]).forEach(function(x){ if(x.agente_pausado_em) m[x.id] = { em:x.agente_pausado_em, por:x.agente_pausado_por }; }); setPausa(m);
     });
   }, [clientId]);
   useEffect(function(){ setLista(null); setForm(null); setBloq(null); carregar(); }, [carregar]);
@@ -110955,6 +110962,15 @@ function CWhatsContatos({cl, isMob}){
       if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
       setRot(function(o){ const n = Object.assign({}, o); n[c.id] = novo; return n; });
       _wcToast("success", novo ? "Pode pedir roteiro (até 5 por semana)." : "Pedir roteiro desligado.");
+    });
+  }
+  function pausarAgente(c, sim){
+    setSalv(true);
+    window._sb.rpc("whats_contatos_pausar_agente", { p_id: c.id, p_pausar: sim }).then(function(r){
+      setSalv(false);
+      if(r.error){ _wcToast("error", _wcErro(r.error)); return; }
+      carregar();
+      _wcToast("success", sim ? "Agente pausado para "+c.nome+". A equipe continua falando normal." : "Agente retomado para "+c.nome+".");
     });
   }
   function bloquear(id, sim, motivo){
@@ -111010,8 +111026,10 @@ function CWhatsContatos({cl, isMob}){
     {g.titulo && <div style={{ fontSize:12, fontWeight:700, color:"#5b21b6", textTransform:"uppercase", letterSpacing:.4, marginTop:4 }}>{g.titulo} · {g.itens.length}</div>}
     {g.itens.map(function(c){
       const bloqueado = !!c.bloqueado_em;
+      const pausado = pausa[c.id] || null;   // 26/09/2026
       const status = !c.ativo ? { t:"Desativado", cor:"#64748b", fundo:"#f1f5f9" }
                    : bloqueado ? { t:"Bloqueado", cor:"#b91c1c", fundo:"#fef2f2" }
+                   : pausado ? { t:"Agente pausado", cor:"#b45309", fundo:"#fffbeb" }
                    : { t:"Ativo", cor:"#15803d", fundo:"#f0fdf4" };
       return <div key={c.id} style={Object.assign({}, card, { opacity:c.ativo?1:.7 })}>
         <div style={{ display:"flex", gap:10, alignItems:"flex-start", justifyContent:"space-between", flexWrap:"wrap" }}>
@@ -111026,6 +111044,9 @@ function CWhatsContatos({cl, isMob}){
           <span style={{ fontSize:11, fontWeight:700, color:status.cor, background:status.fundo, borderRadius:20, padding:"3px 10px" }}>{status.t}</span>
         </div>
 
+        {pausado && !bloqueado && <div style={{ marginTop:8, fontSize:12, color:"#b45309" }}>
+          Agente pausado por {pausado.por||"—"} em {_wcData(pausado.em)}. A equipe continua falando normal pelo WhatsApp Pixels.
+        </div>}
         {bloqueado && <div style={{ marginTop:8, fontSize:12, color:"#b91c1c" }}>
           Bloqueado por {c.bloqueado_por||"—"} em {_wcData(c.bloqueado_em)}{c.bloqueio_motivo ? ' — "'+c.bloqueio_motivo+'"' : ""}
         </div>}
@@ -111053,6 +111074,8 @@ function CWhatsContatos({cl, isMob}){
 
         <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap", fontSize:11, color:"#94a3b8", alignItems:"center" }}>
           {!isMob && c.ativo && <button style={btn} onClick={function(){ setForm(Object.assign({}, c, { pode_pedir_roteiro: !!rot[c.id] })); }}>Editar</button>}
+          {!isMob && c.ativo && !bloqueado && !pausado && <button style={Object.assign({}, btn, { color:"#b45309" })} disabled={salvando} onClick={function(){ pausarAgente(c, true); }}>Pausar agente</button>}
+          {!isMob && c.ativo && !bloqueado && pausado && <button style={Object.assign({}, btn, { color:"#15803d" })} disabled={salvando} onClick={function(){ pausarAgente(c, false); }}>Retomar agente</button>}
           {!isMob && c.ativo && !bloqueado && <button style={Object.assign({}, btn, { color:"#b91c1c" })} onClick={function(){ setBloq({ id:c.id, motivo:"" }); }}>Bloquear número</button>}
           {!isMob && c.ativo && bloqueado && <button style={btn} onClick={function(){ bloquear(c.id, false); }}>Desbloquear</button>}
           {!isMob && <button style={btn} onClick={function(){ const d={ id:c.id, nome:c.nome, cargo:c.cargo, telefone:c.telefone, client_id:c.client_id, unidade:c.unidade||"", obs:c.obs, ativo:!c.ativo }; salvar(d); }}>
