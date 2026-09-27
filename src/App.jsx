@@ -2060,6 +2060,7 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"gestao.time",          label:"Time",                 desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.administrativo",label:"Administrativo",       desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.whatsapp",      label:"WhatsApp Pixels",      desc:"Ver e responder as mensagens do Guvi. Padrão: só sócios", padrao:_pxSocio},
+    {key:"gestao.whatsapp_gasto",label:"Gasto do WhatsApp",    desc:"Ver quanto a Meta cobra pelas mensagens (quadradinho no WhatsApp Pixels). Padrão: só sócios", padrao:_pxSocio}, // 26/09/2026
     {key:"gestao.armazenamento", label:"Armazenamento",        desc:"Padrão: só sócios", padrao:_pxSocio},
     {key:"gestao.portfolio",     label:"Portfólio",            desc:"Padrão: só sócios", padrao:_pxSocio},
   ]},
@@ -110034,6 +110035,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
      storage whats-midia (privado — link temporário; upload só em enviados/)
    Regras: telefone da equipe nunca aparece; número não cadastrado = "Serviço indisponível"
    (campo travado, a pessoa não recebe nada); template só pelas automações do Guvi.
+   26/09/2026: quadradinho "Gasto do WhatsApp" no topo (rpc whats_gasto; chave Acessos › gestao.whatsapp_gasto).
    ═══════════════════════════════════════════════════════════════════ */
 
 const _WZ_TIPO = {
@@ -110215,6 +110217,8 @@ function PageWhatsAppPixels({ isMob }){
   const [respostas, setRespostas] = useState([]);
   const [gerirRespostas, setGerirRespostas] = useState(false);
   const [gravando, setGravando] = useState(null);
+  const [verGasto, setVerGasto] = useState(false);   // 26/09/2026: janela do gasto do WhatsApp
+  const podeGasto = (typeof pxBloco==="function") ? pxBloco("gestao.whatsapp_gasto") : false;
   const fimRef = useRef(null), msgRefs = useRef({}), naoLidasRef = useRef(null), digitRef = useRef(0), inputRef = useRef(null), arqRef = useRef(null);
 
   const sel = useMemo(function(){ return (lista||[]).find(function(c){ return c.id===selId; }) || null; }, [lista, selId]);
@@ -110635,15 +110639,158 @@ function PageWhatsAppPixels({ isMob }){
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <h2 style={{margin:0,fontSize:_wzF(isMob?18:20,isMob),color:"#0f172a"}}>WhatsApp Pixels</h2>
         {!isMob && <span style={{fontSize:13,color:"#64748b"}}>Caixa de entrada do Guvi · +55 49 9945-9393</span>}
+        {podeGasto && <_WzGastoCard isMob={isMob} onAbrir={function(){ setVerGasto(true); }}/>}
       </div>
       <div style={{display:"flex",height:altura,minHeight:420,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
         {mostrarLista && colunaLista}
         {mostrarConversa && colunaConversa}
       </div>
       {gerirRespostas && <_WzRespostas respostas={respostas} onFechar={function(){ setGerirRespostas(false); }} onMudou={lerRespostas} isMob={isMob}/>}
+      {verGasto && <_WzGastoJanela onFechar={function(){ setVerGasto(false); }} isMob={isMob}/>}
+    </div>
+  );
+}
+
+/* ─── Gasto do WhatsApp (26/09/2026) ───
+   Pedido do usuário: "um quadradinho em cima… gasto com o WhatsApp… quando clicar abre uma janela:
+   gasto com colaboradores, sócios, clientes… por cliente, por solicitação, por disparo".
+   Dado real: cada mensagem ENVIADA (auto.whats_mensagens) × preço oficial da Meta (auto.whats_precos,
+   com a página oficial e a data da conferência). A Meta cobra na ENTREGA. Regra de 01/10/2026:
+   respostas comuns passam a ser cobradas. RPC whats_gasto: só sócio ou chave "Gasto do WhatsApp" em Acessos.
+   Atualiza sozinho a cada 1 minuto enquanto a tela está aberta. */
+const _WZG_QUEM = { socio:"Sócios", colaborador:"Colaboradores", cliente:"Clientes", sem_cadastro:"Sem cadastro" };
+const _WZG_ORIGEM = { resposta_guvi:"Resposta do Guvi", resposta_equipe:"Resposta da equipe", disparo:"Disparo (mensagem pronta)" };
+const _WZG_CAT = { marketing:"Marketing (mensagem pronta)", utility:"Utilidade", authentication:"Autenticação", service:"Resposta comum (serviço)" };
+function _wzgR(v){ const n = Number(v||0); return "R$ " + n.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:n>0&&n<0.1?4:2}); }
+function _wzgPeriodo(k){
+  const h = new Date(Date.now() - 3*3600*1000); const y = h.getUTCFullYear(), m = h.getUTCMonth(), d = h.getUTCDate();
+  const iso = function(dt){ return dt.toISOString().slice(0,10); };
+  if(k==="mes_passado") return { de: iso(new Date(Date.UTC(y,m-1,1))), ate: iso(new Date(Date.UTC(y,m,0))) };
+  if(k==="7d") return { de: iso(new Date(Date.UTC(y,m,d-6))), ate: iso(new Date(Date.UTC(y,m,d))) };
+  return { de: iso(new Date(Date.UTC(y,m,1))), ate: iso(new Date(Date.UTC(y,m,d))) };
+}
+function _wzgMes(){ return new Date(Date.now()-3*3600*1000).toLocaleDateString("pt-BR",{month:"long",timeZone:"UTC"}); }
+function useWhatsGasto(ativo, periodo){
+  const [dados, setDados] = useState(null), [erro, setErro] = useState(null);
+  useEffect(function(){
+    if(!ativo || !window._sb) return;
+    let vivo = true;
+    const ler = function(){
+      const p = _wzgPeriodo(periodo);
+      window._sb.rpc("whats_gasto", { p_de:p.de, p_ate:p.ate }).then(function(r){
+        if(!vivo) return;
+        if(r.error){ setErro("Não consegui ler o gasto agora."); return; }
+        setErro(null); setDados(r.data);
+      }).catch(function(){ if(vivo) setErro("Não consegui ler o gasto agora."); });
+    };
+    ler();
+    const t = setInterval(ler, 60000);
+    return function(){ vivo = false; clearInterval(t); };
+  }, [ativo, periodo]);
+  return { dados, erro };
+}
+function _WzGastoCard({ isMob, onAbrir }){
+  const { dados, erro } = useWhatsGasto(true, "mes");
+  return (
+    <button onClick={onAbrir} title="Gasto do WhatsApp — clique para ver os detalhes"
+      style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10,padding:isMob?"6px 10px":"8px 14px",background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,cursor:"pointer",textAlign:"left"}}>
+      <span style={{fontSize:isMob?16:18}}>💰</span>
+      <span style={{display:"flex",flexDirection:"column",lineHeight:1.2}}>
+        <span style={{fontSize:11,color:"#64748b"}}>Gasto do WhatsApp · {_wzgMes()}</span>
+        <span style={{fontSize:isMob?15:17,fontWeight:700,color:"#0f172a"}}>{erro ? "—" : dados ? _wzgR(dados.total) : "…"}</span>
+        {dados && !isMob && <span style={{fontSize:11,color:"#94a3b8"}}>{dados.cobradas} cobradas de {dados.enviadas} enviadas</span>}
+      </span>
+    </button>
+  );
+}
+function _WzGastoJanela({ onFechar, isMob }){
+  const [periodo, setPeriodo] = useState("mes");
+  const [aba, setAba] = useState("quem");
+  const { dados, erro } = useWhatsGasto(true, periodo);
+  const linha = function(rotulo, sub, x, chave){
+    return (
+      <div key={chave} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 4px",borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotulo}</div>
+          {sub && <div style={{fontSize:12,color:"#64748b"}}>{sub}</div>}
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontWeight:700,color:"#0f172a"}}>{_wzgR(x.total)}</div>
+          <div style={{fontSize:12,color:"#94a3b8"}}>{x.cobradas!=null ? (x.cobradas+" cobradas · ") : ""}{x.msgs} enviadas</div>
+        </div>
+      </div>
+    );
+  };
+  const abas = [["quem","Sócios · Colab. · Clientes"],["pessoa","Por pessoa"],["cliente","Por cliente"],["origem","Por tipo de mensagem"],["precos","Preços"]];
+  let corpo = null;
+  if(dados){
+    if(aba==="quem") corpo = (dados.por_quem_tipo||[]).map(function(x){ return linha(_WZG_QUEM[x.chave]||x.chave, null, x, x.chave); });
+    if(aba==="pessoa") corpo = (dados.por_pessoa||[]).map(function(x,i){ return linha(x.nome, (_WZG_QUEM[x.tipo]||x.tipo)+(x.cliente?(" · "+x.cliente):""), x, "p"+i); });
+    if(aba==="cliente") corpo = (dados.por_cliente||[]).length ? dados.por_cliente.map(function(x,i){ return linha(x.cliente, null, x, "c"+i); })
+      : <div style={{padding:16,color:"#64748b",fontSize:13}}>Nenhuma mensagem com cliente neste período. O atendimento de clientes pelo Guvi ainda está desligado.</div>;
+    if(aba==="origem") corpo = (dados.por_origem||[]).map(function(x){ return linha(_WZG_ORIGEM[x.chave]||x.chave, null, x, x.chave); });
+    if(aba==="precos") corpo = (
+      <div style={{display:"flex",flexDirection:"column",gap:8,paddingTop:8}}>
+        {(dados.precos||[]).map(function(p,i){ return (
+          <div key={"pr"+i} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+              <b style={{color:"#0f172a"}}>{_WZG_CAT[p.categoria]||p.categoria}</b>
+              <b style={{color:"#0f172a"}}>{"R$ " + Number(p.preco||0).toLocaleString("pt-BR",{minimumFractionDigits:4,maximumFractionDigits:4})} <span style={{fontWeight:400,color:"#64748b",fontSize:12}}>por mensagem</span></b>
+            </div>
+            <div style={{fontSize:12,color:"#64748b",marginTop:4}}>
+              {p.desde > String(p.conferido_em).slice(0,10) ? ("Passa a valer em " + new Date(p.desde+"T12:00:00Z").toLocaleDateString("pt-BR") + " · ") : ""}Preço conferido em {new Date(p.conferido_em).toLocaleDateString("pt-BR")} ·{" "}
+              <a href={p.fonte} target="_blank" rel="noreferrer" style={{color:"#7c3aed"}}>fonte oficial da Meta</a>
+            </div>
+          </div>
+        ); })}
+        <div style={{fontSize:12,color:"#64748b"}}>A Meta cobra quando a mensagem é <b>entregue</b>. Mensagem que falhou não conta.</div>
+      </div>
+    );
+  }
+  const hoje = new Date(Date.now()-3*3600*1000).toISOString().slice(0,10);
+  return (
+    <div onClick={onFechar} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.35)",zIndex:1000,display:"flex",alignItems:isMob?"flex-end":"center",justifyContent:"center"}}>
+      <div onClick={function(e){ e.stopPropagation(); }} style={{background:"#fff",width:isMob?"100%":620,maxHeight:isMob?"88vh":"82vh",borderRadius:isMob?"16px 16px 0 0":16,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 50px rgba(15,23,42,.25)"}}>
+        <div style={{padding:"16px 18px 10px",borderBottom:"1px solid #e2e8f0"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <b style={{fontSize:17,color:"#0f172a"}}>💰 Gasto do WhatsApp</b>
+            <button onClick={onFechar} style={{marginLeft:"auto",border:"none",background:"none",fontSize:20,color:"#64748b",cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{display:"flex",gap:6,marginTop:10,flexWrap:"wrap"}}>
+            {[["mes","Este mês"],["mes_passado","Mês passado"],["7d","Últimos 7 dias"]].map(function(p){ return (
+              <button key={p[0]} onClick={function(){ setPeriodo(p[0]); }} style={{padding:"5px 10px",borderRadius:999,border:"1px solid "+(periodo===p[0]?"#7c3aed":"#e2e8f0"),background:periodo===p[0]?"#f5f3ff":"#fff",color:periodo===p[0]?"#6d28d9":"#475569",fontSize:12,cursor:"pointer"}}>{p[1]}</button>
+            ); })}
+          </div>
+          {dados && (
+            <div style={{display:"flex",gap:18,marginTop:12,flexWrap:"wrap"}}>
+              <div><div style={{fontSize:12,color:"#64748b"}}>Gasto no período</div><div style={{fontSize:22,fontWeight:700,color:"#0f172a"}}>{_wzgR(dados.total)}</div></div>
+              <div><div style={{fontSize:12,color:"#64748b"}}>Mensagens</div><div style={{fontSize:15,fontWeight:600,color:"#0f172a",marginTop:4}}>{dados.cobradas} cobradas de {dados.enviadas}</div></div>
+              {dados.ate < "2026-10-01" && Number(dados.simulacao_outubro) > Number(dados.total) && (
+                <div><div style={{fontSize:12,color:"#64748b"}}>Com a regra de 01/10</div><div style={{fontSize:15,fontWeight:600,color:"#b45309",marginTop:4}}>{_wzgR(dados.simulacao_outubro)}</div></div>
+              )}
+            </div>
+          )}
+          {hoje < "2026-10-15" && (
+            <div style={{marginTop:10,padding:"8px 10px",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,fontSize:12,color:"#92400e"}}>
+              ⚠️ A partir de <b>01/10/2026</b> a Meta passa a cobrar também as <b>respostas comuns</b> (Guvi e equipe): R$ 0,035 cada. Antes eram grátis.
+            </div>
+          )}
+          <div style={{display:"flex",gap:4,marginTop:12,overflowX:"auto"}}>
+            {abas.map(function(a){ return (
+              <button key={a[0]} onClick={function(){ setAba(a[0]); }} style={{padding:"6px 10px",border:"none",borderBottom:"2px solid "+(aba===a[0]?"#7c3aed":"transparent"),background:"none",color:aba===a[0]?"#6d28d9":"#64748b",fontWeight:aba===a[0]?700:500,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>{a[1]}</button>
+            ); })}
+          </div>
+        </div>
+        <div style={{padding:"4px 18px 16px",overflowY:"auto"}}>
+          {erro && <div style={{padding:16,color:"#b91c1c",fontSize:13}}>{erro}</div>}
+          {!erro && !dados && <div style={{padding:16,color:"#64748b",fontSize:13}}>Carregando…</div>}
+          {corpo}
+          {dados && aba!=="precos" && <div style={{fontSize:11,color:"#94a3b8",marginTop:10}}>Estimativa pela regra oficial da Meta. Atualiza sozinho a cada 1 minuto.</div>}
+        </div>
+      </div>
     </div>
   );
 }
