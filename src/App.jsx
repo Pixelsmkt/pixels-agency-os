@@ -110079,7 +110079,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
         <div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
           {doG.map(function(p){
             const ab=!!abertoP[p.id];
-            const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"")+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
+            const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim()+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
@@ -110129,19 +110129,26 @@ function _swBlocos(txt){
   linhas.forEach(function(l){
     const t=l.trim(); let m;
     if(/^[•*-]?\s*ROTEIRO\b/i.test(t)&&!cur){ cab=t.replace(/^[•*-]\s*/,""); return; }
-    if((m=t.match(/^[•*-]?\s*(Cena\s*\d+)\s*[—–:-]\s*(.*)$/i))){ novo(m[1]+(m[2]?" — "+m[2]:""),""); return; }
+    /* v6: igual Roteiros — o rótulo é só "Abertura", "Desenvolvimento", "Fechamento" */
+    if((m=t.match(/^[•*-]?\s*(Cena\s*\d+)\s*[—–:-]\s*(.*)$/i))){ novo(m[2]?m[2].replace(/\s*\(.*\)\s*$/,""):m[1],""); return; }
     if((m=t.match(/^[•*-]?\s*(L[âa]mina\s*\d+)\s*[—–:-]\s*(.*)$/i))){ novo(m[1].replace(/^l/,"L"),m[2]); return; }
     if((m=t.match(/^[•*]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ \/()0-9-]{2,40}?)\s*:?\s*$/))){ novo(m[1].trim(),""); return; }
     if((m=t.match(/^[•*]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ \/()0-9-]{2,40}?)\s*:\s*(.+)$/))){ novo(m[1].trim(),m[2]); return; }
     if(!cur) novo("",""); cur.txt.push(l);
   });
-  return {cab:cab,blocos:out.map(function(b){ return {rot:b.rot,txt:b.txt.join("\n").replace(/^\n+|\n+$/g,"").replace(/\n{3,}/g,"\n\n")}; }).filter(function(b){ return b.rot||b.txt.trim(); })};
+  /* v6: "O QUE PRECISAMOS" nunca aparece (nem nas propostas antigas) */
+  const _fora=function(b){ return /^o que precisamos/i.test(String(b.rot||"").trim()); };
+  return {cab:cab,blocos:out.filter(function(b){ return !_fora(b); }).map(function(b){ return {rot:b.rot,txt:b.txt.join("\n").replace(/^\n+|\n+$/g,"").replace(/\n{3,}/g,"\n\n")}; }).filter(function(b){ return b.rot||b.txt.trim(); })};
 }
 function SwBriefing({txt,cor}){
   const r=_swBlocos(txt);
   if(!r.blocos.length&&!r.cab) return <div style={{color:"#94a3b8",fontSize:12.5}}>—</div>;
   return <div style={{display:"flex",flexDirection:"column",gap:7}}>
-    {r.cab&&<div style={{color:cor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{r.cab}</div>}
+    {r.cab&&(function(){
+      const fala=r.blocos.map(function(b){return b.txt;}).join(" ").trim();
+      const nPal=fala?fala.split(/\s+/).length:0;
+      return <div style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>~{Math.max(15,Math.round(nPal/2.4))} segundos · {nPal} palavras</div>;
+    })()}
     {r.blocos.map(function(b,i){
       return <div key={i} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
         {b.rot&&<div style={{display:"flex",alignItems:"center",gap:7}}>
@@ -110266,7 +110273,7 @@ async function pxPropostasDaSolicitacao(opts){
     "transformar o pedido em cards prontos pra produção: título, briefing pra equipe e legenda de Instagram. "+
     "O pedido do cliente manda: tudo parte do que ele pediu e do assunto que ele trouxe — não troque o assunto nem invente outro tema. "+
     "NUNCA invente número, medida, cidade, prazo, preço, garantia, depoimento nem nome que não esteja no pedido ou no material do cliente — "+
-    "se faltar dado, escreva sem ele e ponha em \"• O QUE PRECISAMOS\". Transcrição automática erra nome e termo técnico: "+
+    "se faltar dado, escreva sem ele. Transcrição automática erra nome e termo técnico: "+
     "use a grafia do playbook/materiais quando bater. "+
     (py?"O cliente é a unidade do Paraguai: TÍTULO, texto da peça, fala do roteiro e LEGENDA em ESPANHOL; rótulos do briefing e DE_ONDE_VEIO em português. "
        :"Escreva em português do Brasil. ")+
@@ -110322,10 +110329,12 @@ async function pxPropostasDaSolicitacao(opts){
   if(!G||grupo==="video") u+="- VÍDEO DE 60 SEGUNDOS → roteiro de FALA pro cliente gravar (ele fala pra câmera):\n"+
      String(typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"• ROTEIRO (vídeo de 60s — o cliente grava)\nCena 1 — Abertura\nCena 2 — Desenvolvimento\nCena 3 — Fechamento\n").replace(/90\s*s\b/g,"60s")+
      String(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"").replace(/90 segundos/g,"60 segundos").replace(/de 170 a 200 palavras/g,"de 130 a 150 palavras").replace(/Passou de 200/g,"Passou de 150")+
-     "- O vídeo tem 60 SEGUNDOS: de 130 a 150 palavras de fala no total (nunca mais de 150). O título do briefing é \"• ROTEIRO (vídeo de 60s — o cliente grava)\".\n\n";
+     "- O vídeo tem 60 SEGUNDOS: de 130 a 150 palavras de fala no total (nunca mais de 150). O título do briefing é \"• ROTEIRO (vídeo de 60s — o cliente grava)\".\n"+
+     "- SEMPRE as 3 cenas com FALA: \"Cena 1 — Abertura\", \"Cena 2 — Desenvolvimento\", \"Cena 3 — Fechamento\". NUNCA vídeo sem fala, NUNCA \"o que aparece\", NUNCA \"vídeo simples\", NUNCA texto de tela ou instrução de imagem — só o que o cliente vai falar.\n\n";
   if(!G||grupo==="arte") u+="- ARTE ESTÁTICA → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
   if(!G||grupo==="carrossel") u+="- CARROSSEL → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
-  u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO, • O QUE PRECISAMOS. Termine TODO briefing com \"• O QUE PRECISAMOS\" em tópicos (foto da obra, take gravado, dado técnico…) ou \"nada além do que já está no card\".\n\n";
+  /* v6 (28/09, Gustavo): "tira essa merda o que precisamos" — em vídeo, arte e carrossel */
+  u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO. PROIBIDO escrever \"• O QUE PRECISAMOS\", lista de materiais, fotos ou takes necessários — o briefing termina no conteúdo.\n\n";
 
   u+="LEGENDA DE INSTAGRAM (uma por proposta):\n"+
      "- 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.\n"+
@@ -110593,6 +110602,15 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     }catch(e){ _toast("error","Não deu pra refazer: "+((e&&e.message)||e),7000); }
     setOcupado(""); _carregarAberta(aberta.id);
   };
+  /* v6: vídeo fora do padrão (sem fala, "o que aparece", 90s, "vídeo simples") → refaz no roteiro de 60s */
+  const _swForaPadrao=function(p){ return _swGrupoDe(p.content_type)==="video"&&p.status==="proposta"&&/o que aparece|v[íi]deo simples|90\s*s\b|90 segundos|15 a 30\s*s/i.test(String(p.briefing||"")); };
+  const _refazerForaPadrao=async function(lista){
+    for(let i=0;i<lista.length;i++){
+      setPasso("Refazendo vídeo "+(i+1)+" de "+lista.length+" no roteiro de 60 segundos…");
+      await _refazer(lista[i],"Reescreva no padrão dos Roteiros: roteiro de FALA de 60 segundos (130 a 150 palavras) que o cliente grava olhando pra câmera, com Cena 1 — Abertura, Cena 2 — Desenvolvimento e Cena 3 — Fechamento. Nada de \"o que aparece\", texto de tela nem lista do que precisamos. Mesmo assunto.");
+    }
+    setPasso("");
+  };
   const _descartar=async function(p){
     try{ await _upd("pauta_propostas",p.id,{status:"descartada",visivel_portal:false}); setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; }); _carregarAberta(aberta.id); }
     catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
@@ -110647,6 +110665,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   };
 
   /* ACEITAR → card em Copys. Hellen (gestora) em todos; vídeo leva o editor; design, o designer. */
+  const _semPrecisamos=function(t){ return String(t||"").replace(/\n*[ \t]*[•*-]?[ \t]*O QUE PRECISAMOS[\s\S]*$/i,"").trim(); };
   const _aceitar=async function(){
     const ids=Object.keys(sel).filter(function(k){return sel[k];});
     const alvo=propostas.filter(function(p){ return ids.indexOf(p.id)>=0&&p.status==="proposta"&&!p.task_id; });
@@ -110665,7 +110684,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       const extra=video?padrao.editor_video:padrao.designer;
       const assignees=[padrao.gestora].concat(extra&&extra!==padrao.gestora?[extra]:[]).filter(Boolean);
       const tags=["Pedido do cliente"];
-      const payload={id:id,title:p.titulo,status:"demanda",description:_pxTextoParaHtml(p.briefing||""),caption:_pxTextoParaHtml(p.legenda||""),
+      const payload={id:id,title:p.titulo,status:"demanda",description:_pxTextoParaHtml(_semPrecisamos(p.briefing)),caption:_pxTextoParaHtml(p.legenda||""),
         priority:"normal",client:clId,bioter_unit:isBioter?String(unit||""):"",origem:"pauta",content_type:p.content_type||"arte",
         assignee:padrao.gestora||"",assignees:assignees,checklist:[],tags:tags,
         timeline:[{type:"created",from:"",to:"demanda",fromLabel:"",toLabel:"Copys",at:now,atFmt:new Date().toLocaleDateString("pt-BR"),user:quem,
@@ -110918,6 +110937,9 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
                   <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>{g.sub}</span>
                 </span>
                 <span style={{flex:1}}/>
+                {g.id==="video"&&_bl("solic.nova")&&(function(){ const fp=doG.filter(_swForaPadrao); return fp.length?<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _refazerForaPadrao(fp); }}
+                  title="Esses vídeos foram escritos antes do padrão de 60 segundos (sem fala, 'o que aparece' ou 90s). Refaz cada um no roteiro de fala; os antigos ficam nas descartadas."
+                  style={Object.assign({},_mini,{background:"rgba(255,255,255,.18)",color:"#fff",borderColor:"rgba(255,255,255,.6)"})}>Refazer {fp.length} fora do padrão</button>:null; })()}
                 {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(g.id,falta||_SW_POR_LINHA); }}
                   title={falta?("Completa esta linha até "+_SW_POR_LINHA):("Mais "+_SW_POR_LINHA+" "+g.titulo.toLowerCase())}
                   style={Object.assign({},_mini,{background:"#fff",color:g.cor,borderColor:"#fff",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.6:1})}>{busyG?<><Spin/> Gerando…</>:(falta?("Completar "+_SW_POR_LINHA+" (+"+falta+")"):("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase()))}</button>}
