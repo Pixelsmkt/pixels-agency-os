@@ -21237,7 +21237,7 @@ function pxAuditoriaCalendario(tasks, iniIso, fimIso){
       return {id:t.id,client:t.client,bioter_unit:t.bioterUnit||t.bioter_unit||"",publish_date:String(t.publishDate||t.publish_date||"").slice(0,10),
         status:t.status,title:t.title||"",tags:t.tags||[],content_type:t.contentType||t.content_type||null,somente_story:false,nao_publica:false};
     });
-    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Clem",
+    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Construções Clem",
       "bioter:chapeco":"Chapecó","bioter:castro":"Castro","bioter:toledo":"Toledo","bioter:gloria":"Glória","bioter:uberlandia":"Uberlândia","bioter:paraguay":"Paraguay"};
     const rot=function(a){ return NOME[a]||a; };
     const br=function(iso){ return iso.slice(8,10)+"/"+iso.slice(5,7); };
@@ -21340,7 +21340,7 @@ function pxLacunasCalendario(tasks, iniIso, fimIso, hojeIso){
     });
     const porAlvo={};
     rows.forEach(function(t){ _pxColAlvos(t).forEach(function(a){ if(PX_CASCATA_CAP[a]) (porAlvo[a]=porAlvo[a]||[]).push(t); }); });
-    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Clem",
+    const NOME={construschorr:"Construschorr",climaves:"Climaves",arabuta:"Arabutã",pixels:"Pixels",vetservice:"VetService",acreforte:"Acreforte",construesclem:"Construções Clem",
       "bioter:chapeco":"Chapecó","bioter:castro":"Castro","bioter:toledo":"Toledo","bioter:gloria":"Glória","bioter:uberlandia":"Uberlândia","bioter:paraguay":"Paraguay"};
     const trilha=function(t){ const tr=_pxCasTrilha(t); return tr==="video"?"video":"arte"; };
     const out=[];
