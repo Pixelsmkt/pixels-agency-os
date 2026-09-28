@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 46/46 | Nao editar diretamente
+// Modulos: 47/47 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import React from 'react';
@@ -2077,6 +2077,12 @@ PX_BLOCOS.gestao={label:"Gestão", navIcon:"gestao", color:"#dc2626", grupos:[
     {key:"whats.avisar",     label:"Avisar colaborador",      desc:"O Guvi avisa quem vai fazer o card. Padrão: só sócios", padrao:_pxSocio},
   ]},
 ]};
+/* 28/09/2026 — CRIAÇÃO › Edição de vídeo. Tela nova: nasce FECHADA (padrao:false → só sócios). */
+PX_BLOCOS.criacao={label:"Criação", navIcon:"edicao_video", color:"#db2777", grupos:[
+  {id:"menu", label:"Menu", itens:[
+    {key:"criacao.edicao_video", label:"Edição de vídeo", desc:"Fila dos vídeos para editar e o Kit de cada cliente (cores, fonte, legenda, tarja, logo e tela final). Padrão: fechado (só sócios)", padrao:false},
+  ]},
+]};
 PX_BLOCOS.acessos={label:"Acessos", navIcon:"acessos", color:"#475569", grupos:[
   {id:"menu", label:"Menu", itens:[
     {key:"acessos.menu", label:"Acessar Acessos", desc:"Padrão: a chave abaixo ou sócio",
@@ -3871,6 +3877,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_whatsapp")      return <svg {...p}><path d="M21 11.5a8.4 8.4 0 01-12.3 7.4L3 21l2.1-5.6A8.4 8.4 0 1121 11.5z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>;
   if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
+  if(id==="edicao_video")       return <svg {...p}><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 9.5h18M7.5 5l2 4.5M12.5 5l2 4.5M17.5 5l2 4.5"/><path d="M10.5 12.5v4l3.5-2z"/></svg>; // 28/09/2026
   if(id==="gestao_eficiencia")  return <svg {...p}><path d="M4 20h16"/><rect x="5" y="12" width="3.5" height="6" rx="1"/><rect x="10.25" y="7" width="3.5" height="11" rx="1"/><rect x="15.5" y="10" width="3.5" height="8" rx="1"/></svg>; // 27/09/2026 (v2: placar)
   if(id==="gestao_administrativo") return <svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
@@ -3932,6 +3939,9 @@ const NAV=[
   //  {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
   //  {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
   //]},
+  // 28/09/2026 — categoria CRIAÇÃO (abaixo de ESTRATÉGIA). Nasce fechada: Acessos › Criação.
+  {type:"divider",label:"CRIAÇÃO"},
+  {id:"edicao_video", icon:"edicao_video", label:"Edição de vídeo"},
   {type:"divider",label:"PORTAL"},
   {id:"portal",     icon:"◯", label:"Portal do cliente"},
   {type:"divider",label:"ADMIN"},
@@ -39476,6 +39486,7 @@ const PERM_TABS=[
   {id:"scripts",      navIcon:"scripts",    label:"Scripts",            color:"#7c3aed", tela:"scripts"},       // árvore (20/09/2026)
   {id:"matriz",       navIcon:"matriz",     label:"Matriz",             color:"#059669", tela:"matriz"},        // árvore (20/09/2026)
   {id:"playbooks",    navIcon:"playbooks",  label:"Playbooks",          color:"#7c3aed", arvore:true}, // permissões por bloco (17/09/2026)
+  {id:"criacao",      navIcon:"edicao_video",label:"Criação",           color:"#db2777", tela:"criacao"},     // árvore (28/09/2026) — Edição de vídeo, nasce fechada
   {id:"comercial",    navIcon:"comercial",  label:"Comercial",          color:"#0d9488", tela:"comercial"},
   {id:"ia",           navIcon:"ia",         label:"Ferramentas",        color:"#f97316"},
   {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488", tela:"portal"},     // árvore (20/09/2026)
@@ -58871,6 +58882,7 @@ export default function AgencyOS(){
       case "gestao_projecao":      return _menuBloco("gestao.projecao",p);       // era verFinanceiro||sócio
       case "gestao_operacional":   return _menuBloco("gestao.operacao",p);       // era só sócio
       case "gestao_eficiencia":    return _menuBloco("gestao.eficiencia",p);     // (27/09/2026) nasce fechada
+      case "edicao_video":         return _menuBloco("criacao.edicao_video",p);  // (28/09/2026) Criação › Edição de vídeo — nasce fechada
       case "gestao_portfolio":     return _menuBloco("gestao.portfolio",p);      // era só sócio
       case "gestao_time":          return _menuBloco("gestao.time",p);           // era só sócio
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",p);// era só sócio
@@ -58982,6 +58994,7 @@ export default function AgencyOS(){
       case "gestao_projecao":       return _menuBloco("gestao.projecao",effectivePerms)?<PageGestaoProjecao {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return _menuBloco("gestao.operacao",effectivePerms)?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_eficiencia":     return _menuBloco("gestao.eficiencia",effectivePerms)?<PageEficiencia isMob={isMob}/>:<NoPerm/>; // (27/09/2026)
+      case "edicao_video":          return _menuBloco("criacao.edicao_video",effectivePerms)?<PageEdicaoVideo isMob={isMob} tasks={tasks} onAbrirCard={setGlobalCard}/>:<NoPerm/>; // (28/09/2026)
       case "gestao_portfolio":      return _menuBloco("gestao.portfolio",effectivePerms)?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return _menuBloco("gestao.time",effectivePerms)?<PageGestaoTime {...p} currentUser={CURRENT_USER} viewUser={effectiveUser} onNavTo={nav}/>:<NoPerm/>;
       case "gestao_administrativo": return _menuBloco("gestao.administrativo",effectivePerms)?<PageAdministrativo isMob={isMob}/>:<NoPerm/>;
@@ -112547,6 +112560,518 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
           {erro && <div style={{fontSize:_efF(12.5,isMob),color:_EF.verm,marginTop:8}}>❌ {erro}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   CRIAÇÃO › EDIÇÃO DE VÍDEO
+   v1 (28/09/2026): categoria nova "CRIAÇÃO" na barra lateral (abaixo de ESTRATÉGIA), pedida pelo usuário:
+     "preciso que tenha um menu de edição de vídeo dentro do APP".
+   Decisões: nasce fechada (só sócios; Acessos › Criação › "criacao.edicao_video"); começa por
+   Menu + Fila + Kit do cliente. O Estúdio (edição com IA) entra depois da prova do motor (HyperFrames).
+
+   Guias:
+     • Fila — cards de VÍDEO em Demanda / Em execução / Ajustes (dado real: os mesmos cards da Linha de produção),
+       com quantos vídeos brutos ("Material") já estão no card, prazo e há quantos dias está na coluna.
+       "Abrir card" abre o mesmo card da Linha de produção.
+     • Kit do cliente — o que a IA vai seguir para editar os vídeos de cada cliente (e de cada unidade):
+       cores, fonte, legenda, tarja (GC), logo e tela final. O que vem do cadastro (nome, cidade, WhatsApp,
+       site, @instagram) só é mostrado aqui — muda no cadastro. Salvar guarda uma versão nova e o
+       histórico nunca é apagado (tabela video_kits, só pelas funções criacao_*).
+   Backend (trava _criacao_pode = nível 1 ou chave criacao.edicao_video):
+     rpc criacao_kit(p_client, p_unidade) · criacao_kit_salvar(p_client, p_unidade, p_dados) · criacao_kits_resumo()
+   Regras: só dado real; celular só vê (não salva); sem tema escuro.
+   ══════════════════════════════════════════════════════════════════ */
+
+const _EV = { roxo:"#7c3aed", roxoClaro:"#f5f3ff", roxoBorda:"#ddd6fe", rosa:"#db2777", texto:"#0f172a", sub:"#64748b", fraco:"#94a3b8",
+              linha:"#e8edf3", linha2:"#f1f5f9", fundo:"#f8fafc",
+              verde:"#15803d", verdeClaro:"#f0fdf4", amarelo:"#a16207", amareloClaro:"#fefce8", verm:"#b91c1c", vermClaro:"#fef2f2" };
+
+const _EV_COLUNAS = [
+  { id:"recebida", label:"Demanda" },
+  { id:"execucao", label:"Em execução" },
+  { id:"ajustes",  label:"Ajustes" },
+];
+const _EV_FONTES = ["Montserrat","Poppins","Inter","Roboto","Open Sans","Lato","Raleway","Oswald","Bebas Neue","Anton"];
+const _EV_LEGENDA = [
+  { id:"palavra", label:"Palavra por palavra" },
+  { id:"frase",   label:"Frase inteira" },
+  { id:"sem",     label:"Sem legenda" },
+];
+const _EV_LEG_POS = [ { id:"baixo", label:"Embaixo" }, { id:"centro", label:"No meio" } ];
+const _EV_TARJA = [
+  { id:"barra",    label:"Barra (faixa colorida)" },
+  { id:"etiqueta", label:"Etiqueta (arredondada)" },
+  { id:"discreta", label:"Discreta (só texto com traço)" },
+];
+const _EV_LOGO = [
+  { id:"sup_dir", label:"Em cima, à direita" },
+  { id:"sup_esq", label:"Em cima, à esquerda" },
+  { id:"inf_dir", label:"Embaixo, à direita" },
+  { id:"nenhum",  label:"Sem logo" },
+];
+const _EV_GC = [
+  { id:"whatsapp",  label:"WhatsApp" },
+  { id:"instagram", label:"@Instagram" },
+  { id:"site",      label:"Site" },
+  { id:"endereco",  label:"Endereço" },
+];
+
+function _evF(n, isMob){ try{ return (typeof pxFonte==="function") ? pxFonte(n, isMob) : n; }catch(_){ return n; } }
+function _evNomeUnidade(u){
+  const m = { castro:"Castro", chapeco:"Chapecó", toledo:"Toledo", uberlandia:"Uberlândia", gloria:"Glória de Dourados",
+              paraguay:"Paraguay", brasil:"Brasil", grupo:"Grupo (institucional)" };
+  return m[u] || (u ? u.charAt(0).toUpperCase()+u.slice(1) : "");
+}
+function _evCliente(id){
+  try{ const c = (typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS)) ? CLIENTS.find(function(x){ return x && x.id===id; }) : null; return c || null; }catch(_){ return null; }
+}
+function _evNomeCliente(id){ const c = _evCliente(id); return (c && c.name) || id || "—"; }
+function _evCorCliente(id){ const c = _evCliente(id); return (c && c.color) || _EV.roxo; }
+function _evLogo(id){ try{ return (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS && CLIENT_LOGOS[id]) || null; }catch(_){ return null; } }
+function _evPessoa(id){
+  try{ const t = (typeof TEAM!=="undefined" && Array.isArray(TEAM)) ? TEAM.find(function(x){ return x && x.id===id; }) : null; return (t && t.name) || id; }catch(_){ return id; }
+}
+function _evEhVideoArquivo(f){
+  if(!f || f.isAnnotation===true) return false;
+  if(String(f.type||"").toLowerCase().indexOf("video/")===0) return true;
+  return typeof f.url==="string" && /\.(mp4|m4v|mov|webm|mkv|avi)(\?|#|$)/i.test(f.url);
+}
+function _evHojeIso(){ try{ return new Date().toLocaleDateString("en-CA",{timeZone:"America/Sao_Paulo"}); }catch(_){ return new Date().toISOString().slice(0,10); } }
+function _evDataBR(iso){ const s = String(iso||"").slice(0,10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8,10)+"/"+s.slice(5,7) : ""; }
+function _evDiasDesde(ts){
+  if(!ts) return null; const d = new Date(ts); if(isNaN(d.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+}
+function _evCarregarFonte(nome){
+  try{
+    if(!nome || typeof document==="undefined") return;
+    const id = "ev-fonte-" + nome.replace(/\s+/g,"-").toLowerCase();
+    if(document.getElementById(id)) return;
+    const l = document.createElement("link"); l.id = id; l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(nome).replace(/%20/g,"+") + ":wght@600;800&display=swap";
+    document.head.appendChild(l);
+  }catch(_){}
+}
+function _evKitPadrao(base){
+  return { cor_principal:(base&&base.cor)||_EV.roxo, cor_secundaria:"#ffffff", cor_texto:"#ffffff", fonte:"Montserrat",
+           legenda_estilo:"palavra", legenda_posicao:"baixo", tarja_modelo:"barra", logo_posicao:"sup_dir",
+           gc_final:["whatsapp","instagram"], cta_final:"Chame no WhatsApp", observacoes:"" };
+}
+
+/* ═══ PÁGINA ═══ */
+function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
+  const [aba, setAba] = useState("fila");   // fila | kit
+  return (
+    <div style={{padding:isMob?"14px 12px 90px":"22px 28px 40px",maxWidth:1180,margin:"0 auto",color:_EV.texto,background:_EV.fundo,minHeight:"100%"}}>
+      <div style={{fontSize:_evF(11.5,isMob),fontWeight:800,color:_EV.rosa,letterSpacing:".08em",textTransform:"uppercase"}}>Criação</div>
+      <div style={{fontSize:_evF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3,marginTop:2}}>Edição de vídeo</div>
+      <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>Os vídeos esperando edição e o kit que a IA vai seguir para editar cada cliente.</div>
+
+      <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EV.linha,overflowX:"auto"}}>
+        {[["fila","Fila"],["kit","Kit do cliente"]].map(function(g){ const on = aba===g[0];
+          return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
+            borderBottom:"2px solid "+(on?_EV.roxo:"transparent"),color:on?_EV.roxo:_EV.sub,fontWeight:on?800:600,fontSize:_evF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
+      </div>
+
+      {aba==="fila" && <_EvFila tasks={tasks||[]} isMob={isMob} onAbrirCard={onAbrirCard}/>}
+      {aba==="kit"  && <_EvKit isMob={isMob}/>}
+    </div>
+  );
+}
+
+/* ═══ FILA ═══ */
+function _EvFila({ tasks, isMob, onAbrirCard }){
+  const [cliente, setCliente] = useState("");
+  const hoje = _evHojeIso();
+
+  const todos = useMemo(function(){
+    const ids = _EV_COLUNAS.map(function(c){ return c.id; });
+    return (tasks||[]).filter(function(t){
+      return t && !t.deletedAt && ids.indexOf(String(t.status||""))>=0 && (typeof pxIsVideoTask==="function" ? pxIsVideoTask(t) : false);
+    }).map(function(t){
+      const files = Array.isArray(t.files) ? t.files : [];
+      const brutos = files.filter(function(f){ return f && f.tipo==="material" && _evEhVideoArquivo(f); }).length;
+      const refs = files.filter(function(f){ return f && f.tipo==="referencia"; }).length;
+      const pub = String(t.publishDate||"").slice(0,10);
+      return { t:t, brutos:brutos, refs:refs, pub:pub, atrasado: !!(pub && pub < hoje), dias:_evDiasDesde(t.colEnteredAt) };
+    }).sort(function(a,b){
+      if(!a.pub && b.pub) return 1; if(a.pub && !b.pub) return -1;
+      return a.pub < b.pub ? -1 : a.pub > b.pub ? 1 : 0;
+    });
+  }, [tasks, hoje]);
+
+  const clientes = useMemo(function(){
+    const m = {}; todos.forEach(function(x){ const id = x.t.client||""; if(id) m[id] = (m[id]||0) + 1; });
+    return Object.keys(m).map(function(id){ return { id:id, nome:_evNomeCliente(id), n:m[id] }; })
+      .sort(function(a,b){ return a.nome.localeCompare(b.nome,"pt-BR"); });
+  }, [todos]);
+  const lista = cliente ? todos.filter(function(x){ return x.t.client===cliente; }) : todos;
+
+  const ordem = [""].concat(clientes.map(function(c){ return c.id; }));
+  const pos = Math.max(0, ordem.indexOf(cliente));
+  const ir = function(passo){ const n = ordem.length; if(!n) return; setCliente(ordem[(pos + passo + n) % n]); };
+  const sel = { font:"inherit", padding:isMob?"9px 10px":"9px 12px", borderRadius:10, border:"1px solid "+_EV.linha, background:"#fff",
+                color:_EV.texto, fontSize:_evF(14,isMob), fontWeight:600, minWidth:0, cursor:"pointer" };
+  const seta = function(txt, passo, titulo){
+    return <button title={titulo} onClick={function(){ ir(passo); }} style={{font:"inherit",width:38,height:38,borderRadius:10,border:"1px solid "+_EV.linha,background:"#fff",
+      color:_EV.roxo,fontSize:18,fontWeight:800,cursor:"pointer",flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{txt}</button>;
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:isMob?10:14,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EV.linha,borderRadius:14,padding:isMob?10:12}}>
+        <div style={{flex:isMob?"1 1 100%":"1 1 340px",minWidth:0}}>
+          <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>Cliente</div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {seta("‹", -1, "Cliente anterior")}
+            <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {flex:1})}>
+              <option value="">Todos os clientes</option>
+              {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.nome + " (" + c.n + ")"}</option>; })}
+            </select>
+            {seta("›", 1, "Próximo cliente")}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {_EV_COLUNAS.map(function(c){ const n = lista.filter(function(x){ return x.t.status===c.id; }).length;
+            return <div key={c.id} style={{padding:"8px 12px",borderRadius:10,background:_EV.fundo,border:"1px solid "+_EV.linha2,fontSize:_evF(13,isMob)}}>
+              <span style={{color:_EV.sub}}>{c.label} </span><b>{n}</b></div>; })}
+        </div>
+      </div>
+
+      {lista.length===0 && (
+        <div style={{marginTop:14,padding:"26px 16px",borderRadius:14,background:"#fff",border:"1px solid "+_EV.linha,textAlign:"center",color:_EV.sub,fontSize:_evF(14,isMob)}}>
+          Nenhum vídeo esperando edição{cliente?" deste cliente":""} agora.
+        </div>
+      )}
+
+      {_EV_COLUNAS.map(function(col){
+        const itens = lista.filter(function(x){ return x.t.status===col.id; });
+        if(!itens.length) return null;
+        return (
+          <div key={col.id} style={{marginTop:18}}>
+            <div style={{fontSize:_evF(13,isMob),fontWeight:800,color:_EV.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>{col.label} · {itens.length}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {itens.map(function(x){ return <_EvFilaItem key={x.t.id} x={x} isMob={isMob} onAbrirCard={onAbrirCard}/>; })}
+            </div>
+          </div>
+        );
+      })}
+
+      <div style={{marginTop:16,fontSize:_evF(12,isMob),color:_EV.fraco}}>
+        Mostra os cards de vídeo das colunas Demanda, Em execução e Ajustes da Linha de produção. "Brutos" são os vídeos anexados no card como Material.
+      </div>
+    </div>
+  );
+}
+
+function _EvFilaItem({ x, isMob, onAbrirCard }){
+  const t = x.t;
+  const cor = _evCorCliente(t.client);
+  const pessoas = (Array.isArray(t.assignees) && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : []))
+                    .map(function(p){ return _evPessoa(typeof p==="object" && p ? (p.id||p.name) : p); }).filter(Boolean);
+  const chip = function(txt, cores){
+    return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:99,fontSize:_evF(12,isMob),fontWeight:700,
+      background:cores[0],color:cores[1],whiteSpace:"nowrap"}}>{txt}</span>;
+  };
+  return (
+    <div style={{background:"#fff",border:"1px solid "+_EV.linha,borderLeft:"4px solid "+cor,borderRadius:12,padding:isMob?"10px 12px":"12px 14px",
+                 display:"flex",gap:12,alignItems:isMob?"flex-start":"center",flexDirection:isMob?"column":"row"}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:_evF(12,isMob),color:_EV.sub,fontWeight:700}}>
+          {_evNomeCliente(t.client)}{t.bioterUnit ? " · " + _evNomeUnidade(t.bioterUnit) : ""}
+        </div>
+        <div style={{fontSize:_evF(15,isMob),fontWeight:700,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:isMob?"normal":"nowrap"}}>{t.title||"(sem título)"}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:7}}>
+          {x.pub ? chip((x.atrasado ? "Atrasado · " : "Publica ") + _evDataBR(x.pub), x.atrasado ? [_EV.vermClaro,_EV.verm] : [_EV.fundo,_EV.texto])
+                 : chip("Sem data de publicação", [_EV.fundo,_EV.sub])}
+          {x.brutos>0 ? chip("🎞 " + x.brutos + (x.brutos===1 ? " bruto no card" : " brutos no card"), [_EV.verdeClaro,_EV.verde])
+                      : chip("Sem bruto no card", [_EV.amareloClaro,_EV.amarelo])}
+          {x.refs>0 && chip(x.refs + (x.refs===1 ? " referência" : " referências"), [_EV.roxoClaro,_EV.roxo])}
+          {x.dias!=null && chip(x.dias===0 ? "Entrou hoje nesta coluna" : ("Há " + x.dias + (x.dias===1 ? " dia" : " dias") + " nesta coluna"), [_EV.fundo,_EV.sub])}
+        </div>
+        {pessoas.length>0 && <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:6}}>Com: {pessoas.join(", ")}</div>}
+      </div>
+      {typeof onAbrirCard==="function" && (
+        <button onClick={function(){ onAbrirCard(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:"1px solid "+_EV.roxoBorda,
+          background:_EV.roxoClaro,color:_EV.roxo,fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>Abrir card</button>
+      )}
+    </div>
+  );
+}
+
+/* ═══ KIT DO CLIENTE ═══ */
+function _EvKit({ isMob }){
+  const clientes = useMemo(function(){
+    try{
+      return ((typeof CLIENTS!=="undefined" && Array.isArray(CLIENTS)) ? CLIENTS : [])
+        .filter(function(c){ return c && c.id && (!c.status || c.status==="ativo"); })
+        .map(function(c){ return { id:c.id, nome:c.name||c.id }; })
+        .sort(function(a,b){ return a.nome.localeCompare(b.nome,"pt-BR"); });
+    }catch(_){ return []; }
+  }, []);
+  const [cliente, setCliente] = useState(function(){ return (clientes[0] && clientes[0].id) || ""; });
+  const [unidade, setUnidade] = useState("");
+  const [dado, setDado] = useState(null);
+  const [f, setF] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [resumo, setResumo] = useState([]);
+  const [recarregar, setRecarregar] = useState(0);
+
+  useEffect(function(){ setUnidade(""); }, [cliente]);
+
+  useEffect(function(){
+    if(!window._sb) return;
+    let vivo = true;
+    window._sb.rpc("criacao_kits_resumo").then(function(r){ if(vivo && !r.error) setResumo(Array.isArray(r.data) ? r.data : []); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [recarregar]);
+
+  useEffect(function(){
+    if(!window._sb || !cliente) return;
+    let vivo = true;
+    setDado(null); setF(null); setErro(null);
+    window._sb.rpc("criacao_kit", { p_client:cliente, p_unidade:unidade||"" }).then(function(r){
+      if(!vivo) return;
+      if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso a esta tela." : "Não consegui carregar o kit agora."); return; }
+      const d = r.data || {};
+      setDado(d);
+      setF(Object.assign({}, _evKitPadrao(d.base||{}), d.kit||{}));
+    }).catch(function(){ if(vivo) setErro("Não consegui carregar o kit agora."); });
+    return function(){ vivo = false; };
+  }, [cliente, unidade, recarregar]);
+
+  useEffect(function(){ if(f && f.fonte) _evCarregarFonte(f.fonte); }, [f && f.fonte]);
+
+  const configurado = function(id){ return resumo.some(function(k){ return k.client_id===id; }); };
+  const set = function(k, v){ setF(function(p){ const n = Object.assign({}, p); n[k] = v; return n; }); };
+  const toggleGc = function(id){ setF(function(p){ const a = Array.isArray(p.gc_final) ? p.gc_final.slice() : [];
+    const i = a.indexOf(id); if(i>=0) a.splice(i,1); else a.push(id); return Object.assign({}, p, { gc_final:a }); }); };
+
+  const salvar = function(){
+    if(!f || !cliente || salvando || !window._sb) return;
+    setSalvando(true);
+    window._sb.rpc("criacao_kit_salvar", { p_client:cliente, p_unidade:unidade||"", p_dados:f }).then(function(r){
+      setSalvando(false);
+      if(r.error){ try{ pixelsToast && pixelsToast.error("Não salvou: " + (r.error.message||"erro")); }catch(_){} return; }
+      try{ pixelsToast && pixelsToast.success("Kit salvo"); }catch(_){}
+      setRecarregar(function(n){ return n+1; });
+    }).catch(function(){ setSalvando(false); try{ pixelsToast && pixelsToast.error("Não salvou. Tente de novo."); }catch(_){} });
+  };
+
+  const sel = { font:"inherit", padding:isMob?"9px 10px":"9px 12px", borderRadius:10, border:"1px solid "+_EV.linha, background:"#fff",
+                color:_EV.texto, fontSize:_evF(14,isMob), fontWeight:600, minWidth:0, width:"100%", boxSizing:"border-box", cursor:isMob?"default":"pointer" };
+  const rot = function(t){ return <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:5}}>{t}</div>; };
+  const caixa = { background:"#fff", border:"1px solid "+_EV.linha, borderRadius:14, padding:isMob?12:16, marginTop:14 };
+  const unidades = (dado && Array.isArray(dado.unidades)) ? dado.unidades : [];
+  const base = (dado && dado.base) || {};
+  const soVer = !!isMob;
+
+  const ordem = clientes.map(function(c){ return c.id; });
+  const pos = Math.max(0, ordem.indexOf(cliente));
+  const ir = function(passo){ const n = ordem.length; if(!n) return; setCliente(ordem[(pos + passo + n) % n]); };
+  const seta = function(txt, passo, titulo){
+    return <button title={titulo} onClick={function(){ ir(passo); }} style={{font:"inherit",width:38,height:38,borderRadius:10,border:"1px solid "+_EV.linha,background:"#fff",
+      color:_EV.roxo,fontSize:18,fontWeight:800,cursor:"pointer",flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{txt}</button>;
+  };
+
+  const linhaBase = function(rotulo, valor){
+    return <div style={{display:"flex",gap:10,padding:"7px 0",borderTop:"1px solid "+_EV.linha2,fontSize:_evF(13.5,isMob)}}>
+      <div style={{width:isMob?92:110,color:_EV.sub,flexShrink:0}}>{rotulo}</div>
+      <div style={{fontWeight:600,color:valor?_EV.texto:_EV.fraco,minWidth:0,wordBreak:"break-word"}}>{valor || "não preenchido"}</div>
+    </div>;
+  };
+  const cor = function(k, rotulo){
+    return <div style={{flex:"1 1 120px",minWidth:0}}>
+      {rot(rotulo)}
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input type="color" value={(f&&f[k])||"#ffffff"} disabled={soVer} onChange={function(e){ set(k, e.target.value); }}
+          style={{width:42,height:38,padding:2,border:"1px solid "+_EV.linha,borderRadius:10,background:"#fff",cursor:soVer?"default":"pointer"}}/>
+        <span style={{fontSize:_evF(13,isMob),color:_EV.sub,fontFamily:"monospace"}}>{(f&&f[k])||""}</span>
+      </div>
+    </div>;
+  };
+  const escolha = function(k, rotulo, opcoes){
+    return <div style={{flex:isMob?"1 1 100%":"1 1 240px",minWidth:0}}>
+      {rot(rotulo)}
+      <select value={(f&&f[k])||""} disabled={soVer} onChange={function(e){ set(k, e.target.value); }} style={sel}>
+        {opcoes.map(function(o){ const id = typeof o==="string" ? o : o.id; const lb = typeof o==="string" ? o : o.label;
+          return <option key={id} value={id}>{lb}</option>; })}
+      </select>
+    </div>;
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:isMob?10:14,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EV.linha,borderRadius:14,padding:isMob?10:12}}>
+        <div style={{flex:isMob?"1 1 100%":"1 1 340px",minWidth:0}}>
+          {rot("Cliente")}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            {seta("‹", -1, "Cliente anterior")}
+            <select value={cliente} onChange={function(e){ setCliente(e.target.value); }} style={Object.assign({}, sel, {flex:1,width:"auto",cursor:"pointer"})}>
+              {clientes.map(function(c){ return <option key={c.id} value={c.id}>{c.nome + (configurado(c.id) ? " ✓" : "")}</option>; })}
+            </select>
+            {seta("›", 1, "Próximo cliente")}
+          </div>
+          <div style={{fontSize:_evF(11.5,isMob),color:_EV.fraco,marginTop:4}}>✓ = kit já configurado · {resumo.length} {resumo.length===1?"kit salvo":"kits salvos"}</div>
+        </div>
+        {unidades.length>0 && (
+          <div style={{flex:isMob?"1 1 100%":"0 1 260px",minWidth:0}}>
+            {rot("Unidade")}
+            <select value={unidade} onChange={function(e){ setUnidade(e.target.value); }} style={Object.assign({}, sel, {cursor:"pointer"})}>
+              <option value="">Geral (vale para todas)</option>
+              {unidades.map(function(u){ return <option key={u} value={u}>{_evNomeUnidade(u)}</option>; })}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {erro && <div style={{marginTop:14,padding:16,borderRadius:12,background:_EV.vermClaro,color:_EV.verm,fontSize:_evF(14,isMob)}}>{erro}</div>}
+      {!erro && !f && <div style={{padding:30,textAlign:"center",color:_EV.sub,fontSize:_evF(14,isMob)}}>Carregando…</div>}
+
+      {f && dado && (
+        <div style={{display:"flex",gap:16,flexDirection:isMob?"column":"row",alignItems:"flex-start"}}>
+          <div style={{flex:1,minWidth:0,width:isMob?"100%":"auto"}}>
+            {!dado.versoes && (
+              <div style={{marginTop:14,padding:"10px 14px",borderRadius:12,background:_EV.amareloClaro,color:_EV.amarelo,fontSize:_evF(13,isMob),fontWeight:600}}>
+                Este kit ainda não foi salvo. O que está abaixo é só uma sugestão inicial{soVer ? "." : " — ajuste e clique em Salvar."}
+              </div>
+            )}
+
+            <div style={caixa}>
+              <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Vem do cadastro</div>
+              <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:8}}>Só aparece aqui. Para mudar, edite o cadastro do cliente.</div>
+              {linhaBase("Nome", base.nome)}
+              {linhaBase("Cidade", base.cidade)}
+              {linhaBase("WhatsApp", base.whatsapp)}
+              {linhaBase("Instagram", base.instagram ? "@" + base.instagram : "")}
+              {linhaBase("Site", base.site)}
+              {linhaBase("Endereço", base.endereco)}
+              {linhaBase("Logo", base.tem_logo ? "✓ cadastrada" : "")}
+            </div>
+
+            <div style={caixa}>
+              <div style={{fontSize:_evF(15,isMob),fontWeight:800,marginBottom:12}}>Cores e fonte</div>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                {cor("cor_principal","Cor principal")}
+                {cor("cor_secundaria","Cor de apoio")}
+                {cor("cor_texto","Cor do texto")}
+              </div>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap",marginTop:14}}>
+                {escolha("fonte","Fonte", _EV_FONTES)}
+              </div>
+            </div>
+
+            <div style={caixa}>
+              <div style={{fontSize:_evF(15,isMob),fontWeight:800,marginBottom:12}}>Legenda, tarja e logo</div>
+              <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                {escolha("legenda_estilo","Legenda", _EV_LEGENDA)}
+                {escolha("legenda_posicao","Posição da legenda", _EV_LEG_POS)}
+                {escolha("tarja_modelo","Tarja (nome e cidade)", _EV_TARJA)}
+                {escolha("logo_posicao","Logo no vídeo", _EV_LOGO)}
+              </div>
+            </div>
+
+            <div style={caixa}>
+              <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Tela final</div>
+              <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:10}}>O que aparece no fim do vídeo.</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {_EV_GC.map(function(g){ const on = Array.isArray(f.gc_final) && f.gc_final.indexOf(g.id)>=0; const tem = !!base[g.id];
+                  return <button key={g.id} disabled={soVer} onClick={function(){ toggleGc(g.id); }} title={tem?"":"Não está no cadastro"}
+                    style={{font:"inherit",padding:"7px 12px",borderRadius:99,border:"1px solid "+(on?_EV.roxo:_EV.linha),background:on?_EV.roxoClaro:"#fff",
+                            color:on?_EV.roxo:_EV.sub,fontWeight:700,fontSize:_evF(13,isMob),cursor:soVer?"default":"pointer",opacity:tem?1:0.55}}>
+                    {(on?"✓ ":"") + g.label + (tem?"":" (vazio)")}</button>; })}
+              </div>
+              <div style={{marginTop:12}}>
+                {rot("Frase de chamada")}
+                <input value={f.cta_final||""} maxLength={120} disabled={soVer} onChange={function(e){ set("cta_final", e.target.value); }}
+                  style={Object.assign({}, sel, {cursor:"text"})} placeholder="Ex.: Chame no WhatsApp"/>
+              </div>
+              <div style={{marginTop:12}}>
+                {rot("Observações para a edição")}
+                <textarea value={f.observacoes||""} maxLength={2000} disabled={soVer} onChange={function(e){ set("observacoes", e.target.value); }} rows={3}
+                  style={Object.assign({}, sel, {cursor:"text",resize:"vertical",fontWeight:500})} placeholder="Ex.: sempre mostrar a obra pronta no começo; evitar música agitada"/>
+              </div>
+            </div>
+
+            {!soVer && (
+              <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",marginTop:14}}>
+                <button onClick={salvar} disabled={salvando} style={{font:"inherit",padding:"11px 20px",borderRadius:12,border:0,background:_EV.roxo,color:"#fff",
+                  fontWeight:800,fontSize:_evF(14,isMob),cursor:salvando?"wait":"pointer",opacity:salvando?0.7:1}}>{salvando ? "Salvando…" : "Salvar kit"}</button>
+                <span style={{fontSize:_evF(12.5,isMob),color:_EV.sub}}>
+                  {dado.atualizado_em ? ("Salvo por " + (dado.atualizado_por||"—") + " em " + new Date(dado.atualizado_em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"})
+                                         + (dado.versoes>1 ? " · " + dado.versoes + " versões guardadas" : "")) : "Ainda não salvo"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div style={{width:isMob?"100%":260,flexShrink:0,position:isMob?"static":"sticky",top:16}}>
+            <_EvPrevia cliente={cliente} base={base} f={f} isMob={isMob}/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══ PRÉVIA DO ESTILO (exemplo, não é vídeo de verdade) ═══ */
+function _EvPrevia({ cliente, base, f, isMob }){
+  const logo = _evLogo(cliente);
+  const fonte = "'" + (f.fonte||"Montserrat") + "', system-ui, sans-serif";
+  const pri = f.cor_principal || "#7c3aed", sec = f.cor_secundaria || "#ffffff", txt = f.cor_texto || "#ffffff";
+  const W = isMob ? 220 : 236, H = Math.round(W * 16 / 9);
+  const posLogo = { sup_dir:{top:10,right:10}, sup_esq:{top:10,left:10}, inf_dir:{bottom:10,right:10} }[f.logo_posicao];
+  const cidade = base.cidade || "Cidade/UF";
+  const legTop = f.legenda_posicao==="centro" ? "46%" : "80%";
+  const palavras = ["Veja","como","ficou","o","resultado"];
+
+  const tarja = (function(){
+    const nome = "Nome da pessoa", linha2 = cidade;
+    if(f.tarja_modelo==="etiqueta") return (
+      <div style={{position:"absolute",left:12,top:"63%",background:pri,color:txt,borderRadius:12,padding:"6px 11px",boxShadow:"0 2px 8px rgba(0,0,0,.18)"}}>
+        <div style={{fontWeight:800,fontSize:12}}>{nome}</div><div style={{fontSize:10,opacity:.9}}>{linha2}</div></div>);
+    if(f.tarja_modelo==="discreta") return (
+      <div style={{position:"absolute",left:12,top:"63%",borderLeft:"3px solid "+pri,paddingLeft:8,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,.6)"}}>
+        <div style={{fontWeight:800,fontSize:12}}>{nome}</div><div style={{fontSize:10}}>{linha2}</div></div>);
+    return (
+      <div style={{position:"absolute",left:0,top:"63%",display:"flex",maxWidth:"calc(100% - 10px)",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,.18)"}}>
+        <div style={{background:pri,color:txt,padding:"6px 10px",whiteSpace:"nowrap"}}><div style={{fontWeight:800,fontSize:12}}>{nome}</div></div>
+        <div style={{background:sec,color:pri,padding:"6px 8px",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{linha2}</div>
+      </div>);
+  })();
+
+  const gcTexto = { whatsapp: base.whatsapp, instagram: base.instagram ? "@" + base.instagram : "", site: base.site, endereco: base.endereco };
+  const gcItens = (Array.isArray(f.gc_final) ? f.gc_final : []).map(function(id){ return gcTexto[id]; }).filter(Boolean);
+
+  return (
+    <div style={{marginTop:14}}>
+      <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:6}}>Prévia do estilo</div>
+      <div style={{width:W,height:H,margin:isMob?"0 auto":0,position:"relative",borderRadius:16,overflow:"hidden",fontFamily:fonte,
+                   background:"linear-gradient(170deg,#cbd5e1 0%,#94a3b8 55%,#64748b 100%)",border:"1px solid "+_EV.linha}}>
+        <div style={{position:"absolute",left:"50%",top:"30%",transform:"translateX(-50%)",width:W*0.42,height:W*0.42,borderRadius:"50%",background:"rgba(255,255,255,.35)"}}/>
+        <div style={{position:"absolute",left:"50%",top:"52%",transform:"translateX(-50%)",width:W*0.7,height:H*0.5,borderRadius:"48% 48% 0 0",background:"rgba(255,255,255,.28)"}}/>
+        {posLogo && logo && <img src={logo} alt="" style={Object.assign({position:"absolute",width:38,height:38,objectFit:"contain",background:"#fff",borderRadius:9,padding:3}, posLogo)}/>}
+        {posLogo && !logo && <div style={Object.assign({position:"absolute",padding:"4px 7px",background:"#fff",borderRadius:8,fontSize:9,fontWeight:800,color:pri}, posLogo)}>LOGO</div>}
+        {tarja}
+        {f.legenda_estilo!=="sem" && (
+          <div style={{position:"absolute",left:10,right:10,top:legTop,textAlign:"center",fontWeight:800,fontSize:15,lineHeight:1.25,color:"#fff",
+                       textShadow:"0 2px 6px rgba(0,0,0,.55)"}}>
+            {f.legenda_estilo==="palavra"
+              ? palavras.map(function(p,i){ const on = i===2;
+                  return <span key={i} style={{display:"inline-block",margin:"0 2px",padding:on?"0 5px":0,borderRadius:5,background:on?pri:"transparent",color:on?txt:"#fff",textShadow:on?"none":undefined}}>{p}</span>; })
+              : palavras.join(" ")}
+          </div>
+        )}
+      </div>
+      <div style={{width:W,boxSizing:"border-box",margin:isMob?"10px auto 0":"10px 0 0",borderRadius:12,background:pri,color:txt,padding:"10px 12px",fontFamily:fonte,textAlign:"center"}}>
+        <div style={{fontSize:10,opacity:.85,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}}>Tela final</div>
+        <div style={{fontWeight:800,fontSize:14,marginTop:3}}>{f.cta_final || "—"}</div>
+        {gcItens.map(function(s,i){ return <div key={i} style={{fontSize:11,marginTop:3,wordBreak:"break-word"}}>{s}</div>; })}
+      </div>
+      <div style={{fontSize:_evF(11.5,isMob),color:_EV.fraco,marginTop:8,maxWidth:W,margin:isMob?"8px auto 0":"8px 0 0"}}>Exemplo para ver cores, fonte e posições. A tarja usa "Nome da pessoa" e a cidade do cadastro.</div>
     </div>
   );
 }
