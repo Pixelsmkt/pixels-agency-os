@@ -110060,8 +110060,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
    e devolve ATÉ 10 PROPOSTAS DE CARD com briefing e legenda. A equipe escolhe quais aceitar
    e as aceitas viram card em Copys (status "demanda", sem data de publicação — entram na
    fila "sem data" da Avaliação de copys).
-   • Foco é o pedido do cliente (1 card por ideia dele). A IA pode completar com ideias
-     próprias, marcadas "Sugestão da Pixels", sempre DEPOIS das do cliente.
+   • Propostas em 3 linhas de 5: vídeos (roteiro de fala), artes estáticas e carrosséis (v2).
    • Responsáveis vêm de team_data tipo "pautas_padrao" ({gestora, editor_video, designer}):
      gestora em todos; vídeo leva o editor; design leva o designer. Nenhum nome no código.
    • Tudo que sobe aqui entra em Materiais do cliente (claude_materiais, tipo "pedido",
@@ -110071,6 +110070,17 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
    ═══════════════════════════════════════════════════════════════════════ */
 const _SW_AC="#16a34a";            // verde WhatsApp — distingue a aba das outras (roxo)
 const _SW_MAX_PROPOSTAS=10;
+/* v2 (28/09/2026, 18h40, Gustavo): "não precisa ter essa distinção Sugestão da Pixels e cliente,
+   é tudo uma coisa só — categorizar por tipo: 5 vídeos (com roteiro pra eles gravarem), 5 artes
+   estáticas e 5 carrosséis. Três linhas de 5 cards." E o cliente escolhido pelas logos, como em Roteiros.
+   Cada linha é gerada numa chamada própria (em paralelo) e tem o seu "+5". */
+const _SW_POR_LINHA=5;
+const _SW_GRUPOS=[
+  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"com roteiro de fala pro cliente gravar", cor:"#dc2626"},
+  {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#2563eb"},
+  {id:"carrossel", tipo:"carrossel", titulo:"Carrosséis",      sub:"até 5 lâminas",                          cor:"#d97706"},
+];
+function _swGrupoDe(ct){ const c=String(ct||""); if(c==="carrossel") return "carrossel"; if(_swEhVideo(c)) return "video"; return "arte"; }
 const _SW_PADRAO_FALLBACK={gestora:"ellen",editor_video:"guilherme",designer:"andre"};
 const _SW_STATUS={
   rascunho:{t:"rascunho",c:"#64748b",b:"#f1f5f9"},
@@ -110153,14 +110163,17 @@ async function pxPropostasDaSolicitacao(opts){
   const client=String(opts.client||""), unit=String(opts.unit||""), py=unit==="paraguay";
   const clienteNome=String(opts.clienteNome||client);
   const refazer=opts.refazer||null;
-  const quantos=refazer?1:Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(opts.quantos)||_SW_MAX_PROPOSTAS));
+  const quantos=refazer?1:Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(opts.quantos)||_SW_POR_LINHA));
+  /* v2: cada chamada escreve UMA linha — só vídeos, só artes ou só carrosséis */
+  const grupo=(refazer&&refazer.proposta)?_swGrupoDe(refazer.proposta.content_type):(opts.grupo||"");
+  const G=_SW_GRUPOS.find(function(x){return x.id===grupo;})||null;
   const ctx=await pxContextoCopy(client,unit,null);
   const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[], foco=(ctx&&ctx.foco_do_mes)||[];
 
   const sys="Você é o estrategista de conteúdo de uma assessoria de marketing (Pixels) que atende agronegócio e construção. "+
     "O cliente mandou um pedido pelo WhatsApp — quase sempre um áudio — com ideias de publicação. Seu trabalho é "+
-    "transformar CADA ideia que ele pediu num card pronto pra produção: tipo, título, briefing pra equipe e legenda de Instagram. "+
-    "O pedido do cliente manda: não troque o assunto que ele pediu, não junte duas ideias diferentes num card só e não pule nenhuma. "+
+    "transformar o pedido em cards prontos pra produção: título, briefing pra equipe e legenda de Instagram. "+
+    "O pedido do cliente manda: tudo parte do que ele pediu e do assunto que ele trouxe — não troque o assunto nem invente outro tema. "+
     "NUNCA invente número, medida, cidade, prazo, preço, garantia, depoimento nem nome que não esteja no pedido ou no material do cliente — "+
     "se faltar dado, escreva sem ele e ponha em \"• O QUE PRECISAMOS\". Transcrição automática erra nome e termo técnico: "+
     "use a grafia do playbook/materiais quando bater. "+
@@ -110198,32 +110211,26 @@ async function pxPropostasDaSolicitacao(opts){
     u+=String(refazer.pedido||"").trim()
       ?("O QUE A EQUIPE QUER DIFERENTE (manda acima de tudo):\n"+String(refazer.pedido).trim()+"\n\n")
       :"A equipe não disse o que mudar: mantenha a MESMA ideia do cliente e escreva com outro ângulo, outro título e outra abertura.\n\n";
-    u+="TAREFA: devolva UMA proposta (===PROPOSTA 1===), sobre a mesma ideia"+(p.origem==="pixels"?" (é uma sugestão da Pixels — ORIGEM: pixels)":" do cliente (ORIGEM: cliente)")+".\n\n";
+    u+="TAREFA: devolva UMA proposta (===PROPOSTA 1===), sobre a mesma ideia e do mesmo formato ("+(G?G.titulo.toLowerCase():"mesmo tipo")+").\n\n";
   }else{
     const ex=(opts.existentes||[]).filter(Boolean);
     if(ex.length){
-      u+="PROPOSTAS QUE JÁ EXISTEM PARA ESTE PEDIDO (NÃO repita nenhuma, nem com outro título):\n";
-      ex.slice(0,40).forEach(function(t){ u+="- "+t+"\n"; });
+      u+="PROPOSTAS QUE JÁ EXISTEM PARA ESTE PEDIDO (NÃO repita nenhuma, nem com outro título — traga ângulos NOVOS):\n";
+      ex.slice(0,60).forEach(function(t){ u+="- "+t+"\n"; });
       u+="\n";
     }
-    u+="TAREFA: escreva no máximo "+quantos+" propostas.\n"+
-       "1) PRIMEIRO, uma proposta pra CADA ideia/pedido do cliente"+(ex.length?" que ainda não tenha proposta acima":"")+", na ordem em que ele falou — ORIGEM: cliente. "+
-       "Se ele pediu \"um vídeo\" ou \"um carrossel\", o TIPO é esse. Se não disse formato, escolha o que melhor serve.\n"+
-       "2) SÓ DEPOIS, se sobrar espaço até "+quantos+", complete com ideias da Pixels que conversam com o pedido (mesmo tema, desdobramento, outro ângulo útil) — ORIGEM: pixels. "+
-       "Sugestão da Pixels nunca vem antes das do cliente, e é melhor devolver menos propostas boas do que completar com ideia fraca.\n"+
-       "3) Se o pedido não tiver nenhuma ideia de conteúdo aproveitável, devolva só sugestões da Pixels ligadas ao que o cliente falou.\n\n";
+    u+="TAREFA: escreva EXATAMENTE "+quantos+" propostas de "+(G?G.titulo.toUpperCase()+" ("+G.sub+")":"conteúdo")+" — todas desse formato, nenhum outro.\n"+
+       "- Comece pelo que o cliente pediu explicitamente e cubra cada ideia dele que caiba neste formato. Depois complete até "+quantos+" com desdobramentos do MESMO assunto: outro ângulo, dúvida do público, bastidor, passo a passo, mito x verdade, prova/resultado, chamada pra ação.\n"+
+       "- As "+quantos+" têm que ser diferentes entre si (assunto ou ângulo) — nada de variação do mesmo título.\n\n";
   }
 
-  u+="TIPOS POSSÍVEIS (TIPO = só o id):\n";
-  (typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).forEach(function(t){ u+="- "+t.id+" ("+t.label+"): "+t.quando+"\n"; });
-  u+="Na dúvida entre arte única e carrossel, arte única. Na dúvida entre vídeo e vídeo dinâmico, vídeo.\n\n";
+  u+="TIPO (só o id): "+(grupo==="video"?"video":grupo==="carrossel"?"carrossel":grupo==="arte"?"arte":"o id do formato")+".\n\n";
 
-  u+="FORMATO DO BRIEFING, conforme o tipo:\n";
-  u+="- vídeo em que o cliente grava falando (corte, video_feira, video, video_complexo) → roteiro de FALA:\n"+
-     (typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"")+(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+
-     "  (se o cliente pediu vídeo SEM fala — registro, bastidor, takes que ele já tem — use: "+(typeof PX_ROTEIRO_SIMPLES_FORMATO!=="undefined"?PX_ROTEIRO_SIMPLES_FORMATO.replace(/\n/g," "):"Cena 1, Cena 2, Cena 3 com o que aparece")+")\n";
-  u+="- design que não é carrossel (foto, arte, folder) → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
-  u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
+  u+="FORMATO DO BRIEFING:\n";
+  if(!G||grupo==="video") u+="- VÍDEO → roteiro de FALA pro cliente gravar (ele fala pra câmera):\n"+
+     (typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"• ROTEIRO\nCena 1 — Abertura (gancho)\nCena 2 — Desenvolvimento\nCena 3 — Fechamento com CTA\n")+(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+"\n";
+  if(!G||grupo==="arte") u+="- ARTE ESTÁTICA → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
+  if(!G||grupo==="carrossel") u+="- CARROSSEL → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
   u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO, • O QUE PRECISAMOS. Termine TODO briefing com \"• O QUE PRECISAMOS\" em tópicos (foto da obra, take gravado, dado técnico…) ou \"nada além do que já está no card\".\n\n";
 
   u+="LEGENDA DE INSTAGRAM (uma por proposta):\n"+
@@ -110232,12 +110239,12 @@ async function pxPropostasDaSolicitacao(opts){
   if(typeof _pxRegrasLegenda==="function") u+=_pxRegrasLegenda(pb,unit,false,client);
   u+="\n";
 
-  u+="DE_ONDE_VEIO: 1 linha. Proposta do cliente → o trecho do áudio/mensagem em que ele pediu (entre aspas, curto). Sugestão da Pixels → por que ela conversa com o pedido.\n"+
+  u+="DE_ONDE_VEIO: 1 linha curta ligando a proposta ao pedido (o trecho do áudio/mensagem entre aspas, ou de qual parte do assunto ela sai).\n"+
      "TITULO: 3 a 8 palavras, só a primeira letra maiúscula, sem ponto final, sem o nome da empresa.\n\n";
   u+="FORMATO EXATO DA RESPOSTA (repita o bloco pra cada proposta, numerando 1, 2, 3…):\n"+
-     "===PROPOSTA 1===\nORIGEM: cliente\nTIPO: (id)\nTITULO: …\nDE_ONDE_VEIO: …\n===BRIEFING===\n(o briefing)\n===LEGENDA===\n(a legenda)\n";
+     "===PROPOSTA 1===\nTIPO: (id)\nTITULO: …\nDE_ONDE_VEIO: …\n===BRIEFING===\n(o briefing)\n===LEGENDA===\n(a legenda)\n";
 
-  const args={model:PX_IA_MODELO,max_tokens:refazer?3500:Math.min(16000,1400+quantos*1400),system:sys,messages:[{role:"user",content:u}]};
+  const args={model:PX_IA_MODELO,max_tokens:refazer?3500:Math.min(16000,1400+quantos*1500),system:sys,messages:[{role:"user",content:u}]};
   let data=await askIA(args);
   let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
   // parou por limite? pede pra continuar (até 2 vezes), como a leitura de materiais faz
@@ -110245,7 +110252,10 @@ async function pxPropostasDaSolicitacao(opts){
     data=await askIA(Object.assign({},args,{messages:args.messages.concat([{role:"assistant",content:txt},{role:"user",content:"Continue EXATAMENTE de onde parou, sem repetir nada e sem comentário. Termine todas as propostas no mesmo formato."}])}));
     txt+=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
   }
-  const lista=_swParsePropostas(txt).slice(0,quantos);
+  let lista=_swParsePropostas(txt).slice(0,quantos);
+  // a linha manda no formato: vídeo fica vídeo, carrossel fica carrossel (refazer mantém o tipo que já tinha)
+  if(G) lista=lista.map(function(p){ return Object.assign({},p,{origem:"cliente",
+    content_type:(refazer&&refazer.proposta&&_swGrupoDe(refazer.proposta.content_type)===grupo)?refazer.proposta.content_type:(_swGrupoDe(p.content_type)===grupo?p.content_type:G.tipo)}); });
   if(!lista.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
   return lista;
 }
@@ -110269,6 +110279,8 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   const [ocupado,setOcupado]=useState("");       // id da proposta em trabalho | "aceitar" | "mais"
   const [verDescartadas,setVerDescartadas]=useState(false);
   const [verTranscricao,setVerTranscricao]=useState(false);
+  const [tituloEd,setTituloEd]=useState(null);   // v2: título do pedido em edição
+  const [confLimpar,setConfLimpar]=useState(false);
   const fileRef=useRef(null);
 
   const _carregarPautas=async function(){
@@ -110288,7 +110300,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     if(!b.error) setMateriais(b.data||[]);
   };
   useEffect(function(){ setAbertaId(null); setForm(null); _carregarPautas(); },[clId,unit]);
-  useEffect(function(){ setSel({}); setEditando(null); setRefazendo(null); setVerTranscricao(false); _carregarAberta(abertaId); },[abertaId]);
+  useEffect(function(){ setSel({}); setEditando(null); setRefazendo(null); setVerTranscricao(false); setTituloEd(null); setConfLimpar(false); _carregarAberta(abertaId); },[abertaId]);
   const _abertaRef=useRef(null); _abertaRef.current=abertaId;
   useEffect(function(){
     if(!sb) return;
@@ -110382,14 +110394,29 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     if(r.error) throw r.error;
     return r.data||[];
   };
-  const _gerarPara=async function(pauta,pedido,rodada){
+  /* v2: uma chamada por linha (vídeos, artes, carrosséis), em paralelo. grupos = ids de _SW_GRUPOS.
+     Se uma linha falhar, as outras ficam; só dá erro se nenhuma vier. */
+  const _gerarPara=async function(pauta,pedido,rodada,grupos){
+    const gs=(grupos&&grupos.length)?grupos:_SW_GRUPOS.map(function(g){return g.id;});
     await _upd("pautas",pauta.id,{status:"gerando",erro:null});
-    setPasso("IA escrevendo as propostas pra "+_nome()+"…");
-    const existentes=propostas.filter(function(p){return p.pauta_id===pauta.id;});
-    const listaP=await pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:pauta.contexto,
-      transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:_SW_MAX_PROPOSTAS});
-    const ordemIni=existentes.reduce(function(a,p){return Math.max(a,Number(p.ordem)||0);},0);
-    const novas=await _gravarPropostas(pauta,listaP,rodada||1,ordemIni);
+    const nomesG=gs.map(function(id){ const g=_SW_GRUPOS.find(function(x){return x.id===id;}); return g?g.titulo.toLowerCase():id; });
+    setPasso("IA escrevendo "+(gs.length>1?(gs.length*_SW_POR_LINHA)+" propostas ("+nomesG.join(", ")+")":("mais "+_SW_POR_LINHA+" "+nomesG[0]))+" pra "+_nome()+"…");
+    const rEx=await sb.from("pauta_propostas").select("titulo,ordem").eq("pauta_id",pauta.id);
+    const existentes=(rEx.data||[]);
+    let ordemIni=existentes.reduce(function(a,p){return Math.max(a,Number(p.ordem)||0);},0);
+    const res=await Promise.allSettled(gs.map(function(g){
+      return pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:pauta.contexto,
+        transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:_SW_POR_LINHA,grupo:g});
+    }));
+    const novas=[], erros=[];
+    for(let i=0;i<res.length;i++){
+      if(res[i].status!=="fulfilled"){ erros.push(nomesG[i]+": "+((res[i].reason&&res[i].reason.message)||res[i].reason)); continue; }
+      const gravadas=await _gravarPropostas(pauta,res[i].value,rodada||1,ordemIni);
+      ordemIni+=res[i].value.length;
+      novas.push.apply(novas,gravadas);
+    }
+    if(!novas.length) throw new Error(erros.join(" · ")||"a IA não devolveu propostas");
+    if(erros.length) _toast("warning","Não veio: "+erros.join(" · ")+". Use o \"+5\" da linha pra tentar de novo.",8000);
     await _upd("pautas",pauta.id,{status:"pronta",erro:null});
     return novas;
   };
@@ -110440,13 +110467,14 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     setPasso(""); _carregarPautas(); if(pauta) _carregarAberta(pauta.id);
   };
   /* Tentar de novo (pauta com erro) ou "Gerar mais" (nova rodada, sem repetir as que existem). */
-  const _gerarDeNovo=async function(maisUma){
+  /* grupo = "video" | "arte" | "carrossel" → +5 só daquela linha; vazio → as três linhas */
+  const _gerarDeNovo=async function(grupo){
     if(!aberta) return;
-    setOcupado("mais");
+    setOcupado(grupo?("mais:"+grupo):"mais");
     try{
       const pedido=await _pedidoDoBanco(aberta);
       const rodada=propostas.reduce(function(a,p){return Math.max(a,Number(p.rodada)||1);},0)+(propostas.length?1:0)||1;
-      const novas=await _gerarPara(aberta,pedido,rodada);
+      const novas=await _gerarPara(aberta,pedido,rodada,grupo?[grupo]:null);
       _toast("success",novas.length+(novas.length===1?" proposta nova.":" propostas novas."),3000);
     }catch(e){
       try{ await _upd("pautas",aberta.id,{status:propostas.length?"pronta":"erro",erro:String((e&&e.message)||e).slice(0,500)}); }catch(_){}
@@ -110462,7 +110490,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       const pedido=await _pedidoDoBanco(aberta);
       const r=await pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:aberta.contexto,
         transcricao:pedido.transcricao,fichas:pedido.fichas,refazer:{proposta:p,pedido:pedidoTxt}});
-      const nova=Object.assign({},r[0],{origem:p.origem});
+      const nova=Object.assign({},r[0],{origem:p.origem||"cliente"});
       await _gravarPropostas(aberta,[nova],Number(p.rodada)||1,(Number(p.ordem)||1)-1);
       await _upd("pauta_propostas",p.id,{status:"descartada"});
       setRefazendo(null);
@@ -110484,6 +110512,29 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       await _upd("pauta_propostas",e.id,{titulo:String(e.titulo).trim(),content_type:e.content_type,briefing:String(e.briefing||"").trim(),legenda:String(e.legenda||"").trim()});
       setEditando(null); _carregarAberta(aberta.id); _toast("success","Proposta salva.",1800);
     }catch(err){ _toast("error","Não salvou: "+((err&&err.message)||err)); }
+  };
+  const _salvarTitulo=async function(){
+    const t=String(tituloEd||"").trim();
+    if(!t){ _toast("warning","O pedido precisa de um título."); return; }
+    try{
+      await _upd("pautas",aberta.id,{titulo:t.slice(0,160)});
+      setPautas(function(p){ return p.map(function(x){ return x.id===aberta.id?Object.assign({},x,{titulo:t.slice(0,160)}):x; }); });
+      setTituloEd(null);
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  /* v2: "Limpar propostas" — tira da tela todas as que não viraram card. Regra do app: nada é
+     apagado do banco; elas vão pra "descartadas" (dá pra ver e voltar). As aceitas ficam. */
+  const _limparTodas=async function(){
+    const alvo=propostas.filter(function(p){return p.status==="proposta";});
+    if(!alvo.length) return;
+    setOcupado("limpar");
+    try{
+      const r=await sb.from("pauta_propostas").update({status:"descartada",updated_at:new Date().toISOString()}).in("id",alvo.map(function(p){return p.id;}));
+      if(r.error) throw r.error;
+      setSel({});
+      _toast("success",alvo.length+(alvo.length===1?" proposta limpa":" propostas limpas")+". Ficam guardadas em \"Ver descartadas\".",3500);
+    }catch(e){ _toast("error","Não limpou: "+((e&&e.message)||e)); }
+    setOcupado(""); _carregarAberta(aberta.id);
   };
   const _toggleCerebro=async function(m){
     try{
@@ -110511,12 +110562,12 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       const video=_swEhVideo(p.content_type);
       const extra=video?padrao.editor_video:padrao.designer;
       const assignees=[padrao.gestora].concat(extra&&extra!==padrao.gestora?[extra]:[]).filter(Boolean);
-      const tags=["Pedido do cliente"].concat(p.origem==="pixels"?["Sugestão da Pixels"]:[]);
+      const tags=["Pedido do cliente"];
       const payload={id:id,title:p.titulo,status:"demanda",description:_pxTextoParaHtml(p.briefing||""),caption:_pxTextoParaHtml(p.legenda||""),
         priority:"normal",client:clId,bioter_unit:isBioter?String(unit||""):"",origem:"pauta",content_type:p.content_type||"arte",
         assignee:padrao.gestora||"",assignees:assignees,checklist:[],tags:tags,
         timeline:[{type:"created",from:"",to:"demanda",fromLabel:"",toLabel:"Copys",at:now,atFmt:new Date().toLocaleDateString("pt-BR"),user:quem,
-          label:"Card criado a partir da solicitação por WhatsApp de "+dataPedido+" (por "+quem+")"+(p.origem==="pixels"?" — sugestão da Pixels":"")}],
+          label:"Card criado a partir da solicitação por WhatsApp de "+dataPedido+" (por "+quem+")"}],
         created_by:(u&&u.id)||"",created_at:now,col_entered_at:now,comments:[],files:[],watchers:[],cover:null,ajustar:false,is_alteracao:false,score:null,
         publish_date:null,publish_time:"09:00",deadline_time:"",deleted_at:null};
       const r=await sb.from("tasks").insert(payload);
@@ -110550,14 +110601,14 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     const ed=editando&&editando.id===p.id?editando:null;
     const rf=refazendo&&refazendo.id===p.id?refazendo:null;
     const busy=ocupado===p.id;
-    const corOrig=p.origem==="pixels"?"#7c3aed":_SW_AC;
-    return <div key={p.id} style={{background:"#fff",border:"1px solid "+(sel[p.id]?_SW_AC:"#e8ebf0"),borderTop:"4px solid "+(desc?"#cbd5e1":corOrig),borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,opacity:desc?.65:1,boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+    const _g=_SW_GRUPOS.find(function(x){return x.id===_swGrupoDe(p.content_type);})||_SW_GRUPOS[1];
+    const corOrig=_g.cor;
+    return <div key={p.id} style={{background:"#fff",border:"1px solid "+(sel[p.id]?corOrig:"#e8ebf0"),borderTop:"4px solid "+(desc?"#cbd5e1":corOrig),borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,opacity:desc?.65:1,boxShadow:sel[p.id]?("0 0 0 2px "+corOrig+"33"):"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-        {!aceita&&!desc&&_bl("solic.aceitar")&&<input type="checkbox" checked={!!sel[p.id]} onChange={function(e){ const v=e.target.checked; setSel(function(s){ return Object.assign({},s,{[p.id]:v}); }); }} style={{width:18,height:18,marginTop:2,accentColor:_SW_AC,cursor:"pointer",flexShrink:0}}/>}
+        {!aceita&&!desc&&_bl("solic.aceitar")&&<input type="checkbox" checked={!!sel[p.id]} onChange={function(e){ const v=e.target.checked; setSel(function(s){ return Object.assign({},s,{[p.id]:v}); }); }} style={{width:18,height:18,marginTop:2,accentColor:corOrig,cursor:"pointer",flexShrink:0}}/>}
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:5}}>
-            <span style={{background:p.origem==="pixels"?"#f5f3ff":"#ecfdf5",color:corOrig,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.origem==="pixels"?"Sugestão da Pixels":"Cliente"}</span>
-            <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:700}}>{_swTipoLabel(p.content_type)}</span>
+            <span style={{background:corOrig+"14",color:corOrig,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{_swTipoLabel(p.content_type)}</span>
             {aceita&&<span style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>✓ virou card em Copys</span>}
             {desc&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>descartada</span>}
           </div>
@@ -110600,17 +110651,28 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Cliente + nova solicitação */}
-    <div style={Object.assign({},_card,{display:"flex",alignItems:isMob?"stretch":"flex-end",flexDirection:isMob?"column":undefined,gap:10,flexWrap:"wrap"})}>
-      <div style={{flex:1,minWidth:isMob?0:200}}><div style={_lbl}>Cliente</div>
-        <select value={clId} onChange={function(e){ setClId(e.target.value); }} style={_inp}>
-          {lista.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
-        </select></div>
-      {isBioter&&<div style={{flex:1,minWidth:isMob?0:180}}><div style={_lbl}>Unidade</div>
-        <select value={unit||""} onChange={function(e){ setUnit(e.target.value); }} style={_inp}>
-          <option value="">Grupo Bioter</option>{unidades.map(function(u){ return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>; })}
-        </select></div>}
+    {/* v2: clientes pelas logos, igual Roteiros (no celular a fileira rola pro lado) */}
+    <div style={Object.assign({},_card,{display:"flex",alignItems:isMob?"stretch":"center",flexDirection:isMob?"column":undefined,gap:10,flexWrap:"wrap"})}>
+      <div style={{display:"flex",gap:6,flexWrap:isMob?"nowrap":"wrap",overflowX:isMob?"auto":undefined,alignItems:"center",flex:1,minWidth:0,paddingBottom:isMob?4:0}}>
+        {lista.map(function(c){
+          const on=c.id===clId;
+          const cc=/^#[0-9a-f]{6}$/i.test(c.color||"")?c.color:_RT_AC;
+          const lg=(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[c.id])||c.logoUrl||null;
+          return <button key={c.id} type="button" onClick={function(){ setClId(c.id); setUnit(""); }} title={c.name}
+            style={{display:"inline-flex",alignItems:"center",gap:7,background:on?cc:"#fff",color:on?"#fff":"#334155",border:"1px solid "+(on?cc:"#e2e8f0"),borderRadius:99,padding:"5px 12px 5px 5px",fontSize:12,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?("0 4px 12px "+cc+"55"):"none",transition:"all .12s",whiteSpace:"nowrap",flexShrink:0}}
+            onMouseEnter={function(e){if(!on){e.currentTarget.style.borderColor=cc;e.currentTarget.style.color=cc;}}} onMouseLeave={function(e){if(!on){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#334155";}}}>
+            <span style={{width:24,height:24,borderRadius:"50%",background:"#fff",border:"1px solid "+(on?"rgba(255,255,255,.6)":"#eef0f3"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+              {lg?<img src={lg} alt="" style={{width:"78%",height:"78%",objectFit:"contain"}}/>:<span style={{color:cc,fontSize:pxFonte(9,isMob),fontWeight:900}}>{String(c.name||"?").slice(0,2).toUpperCase()}</span>}
+            </span>
+            {c.name}
+          </button>;
+        })}
+      </div>
       {_bl("solic.nova")&&<button type="button" disabled={!!passo} onClick={function(){ setForm(form?null:{titulo:"",texto:"",files:[]}); }} style={_btn(!!passo)}>
         <Ico n="sparkles" size={14} color="#fff"/> {form?"Fechar":"Nova solicitação"}</button>}
+      {isBioter&&<div style={{display:"flex",gap:5,flexWrap:isMob?"nowrap":"wrap",overflowX:isMob?"auto":undefined,width:"100%",alignItems:"center"}}><span style={{color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginRight:4,flexShrink:0}}>Unidade</span>
+        {[{id:"",label:"Grupo"}].concat(unidades.map(function(u){return {id:u.id,label:u.pickerLabel||u.label};})).map(function(u){ const on=(unit||"")===u.id; return <button key={u.id||"g"} type="button" onClick={function(){setUnit(u.id);}} style={{background:on?"#0f172a":"#fff",color:on?"#fff":"#475569",border:"1px solid "+(on?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 12px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,flexShrink:0,whiteSpace:"nowrap"}}>{u.label}</button>; })}
+      </div>}
     </div>
 
     {form&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#bbf7d0"})}>
@@ -110643,7 +110705,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
 
     <div style={{display:"flex",flexDirection:isMob?"column":"row",gap:14,alignItems:"flex-start"}}>
       {/* Histórico */}
-      <div style={{width:isMob?"100%":300,flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{width:isMob?"100%":240,flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
         <div style={_lbl}>Solicitações de {_nome()}</div>
         {!pautas.length&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Nenhuma ainda. Clique em "Nova solicitação" e suba o áudio do cliente.</div>}
         {pautas.map(function(pt){
@@ -110666,10 +110728,25 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           <div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:10})}>
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>{aberta.titulo||"Pedido"}</div>
+                {tituloEd!==null
+                  ?<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <input autoFocus value={tituloEd} onChange={function(e){ setTituloEd(e.target.value); }}
+                      onKeyDown={function(e){ if(e.key==="Enter") _salvarTitulo(); if(e.key==="Escape") setTituloEd(null); }}
+                      style={Object.assign({},_inp,{fontWeight:800,fontSize:15,padding:"7px 11px",maxWidth:460})}/>
+                    <button type="button" onClick={_salvarTitulo} style={Object.assign({},_mini,{background:_SW_AC,color:"#fff",borderColor:_SW_AC})}>Salvar</button>
+                    <button type="button" onClick={function(){ setTituloEd(null); }} style={_mini}>Cancelar</button>
+                  </div>
+                  :<div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>{aberta.titulo||"Pedido"}</div>
+                    {_bl("solic.nova")&&<button type="button" title="Editar o título do pedido" onClick={function(){ setTituloEd(aberta.titulo||""); }}
+                      style={{background:"none",border:"none",cursor:"pointer",padding:3,color:"#94a3b8",display:"inline-flex"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                    </button>}
+                  </div>}
                 <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{_swDataHora(aberta.created_at)}{aberta.created_by?(" · subido por "+aberta.created_by):""} · {vivas.filter(function(p){return p.status==="aceita";}).length} aceitas de {vivas.length}</div>
               </div>
-              {aberta.status==="erro"&&!trabalhando&&<button type="button" onClick={function(){ _gerarDeNovo(false); }} style={_btn(false,"#b91c1c")}>Tentar de novo</button>}
+              {aberta.status==="erro"&&!trabalhando&&<button type="button" onClick={function(){ _gerarDeNovo(""); }} style={_btn(false,"#b91c1c")}>Tentar de novo</button>}
             </div>
             {aberta.status==="erro"&&aberta.erro&&<div style={{background:"#fef2f2",color:"#b91c1c",borderRadius:10,padding:"8px 11px",fontSize:12.5}}>{aberta.erro}</div>}
             {String(aberta.contexto||"").trim()&&<div><div style={_lbl}>Mensagem / anotação</div><div style={{color:"#334155",fontSize:13,whiteSpace:"pre-wrap"}}>{aberta.contexto}</div></div>}
@@ -110683,25 +110760,55 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
                   <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700,textDecoration:"none"}}>{m.arquivo_nome||m.titulo}</a>
                   {m.ficha_status==="erro"&&<span style={{color:"#b91c1c",fontWeight:700}}>não deu pra ler</span>}
                   {m.ficha_status==="lendo"&&<span style={{color:"#b45309",fontWeight:700}}>lendo…</span>}
-                  {_bl("solic.cerebro")
-                    ?<button type="button" onClick={function(){ _toggleCerebro(m); }} title="Liga/desliga este material no cérebro da IA do cliente"
-                        style={{background:m.ativo?"#dcfce7":"#f1f5f9",color:m.ativo?"#166534":"#64748b",border:"none",borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:800,cursor:"pointer"}}>{m.ativo?"🧠 no cérebro":"cérebro desligado"}</button>
-                    :<span style={{color:"#64748b",fontSize:11.5}}>{m.ativo?"no cérebro":"cérebro desligado"}</span>}
+                  {/* v2: interruptor moderno (liga/desliga no cérebro da IA do cliente) */}
+                  <button type="button" role="switch" aria-checked={!!m.ativo} disabled={!_bl("solic.cerebro")}
+                    onClick={function(){ if(_bl("solic.cerebro")) _toggleCerebro(m); }}
+                    title={m.ativo?"No cérebro: a IA usa este material nas copys do cliente. Clique pra desligar.":"Fora do cérebro: só guardado em Materiais. Clique pra ligar."}
+                    style={{display:"inline-flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"2px 0",cursor:_bl("solic.cerebro")?"pointer":"default",fontFamily:_RT_FF,flexShrink:0}}>
+                    <span style={{fontSize:11.5,fontWeight:700,color:m.ativo?"#0f172a":"#94a3b8"}}>Cérebro</span>
+                    <span aria-hidden="true" style={{width:34,height:20,borderRadius:99,background:m.ativo?_SW_AC:"#e2e8f0",position:"relative",transition:"background .16s",flexShrink:0}}>
+                      <span style={{position:"absolute",top:2,left:m.ativo?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
+                    </span>
+                  </button>
                 </div>; })}
               </div></div>}
           </div>
 
           {vivas.length>0&&<div style={Object.assign({},_card,{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",position:isMob?"sticky":undefined,top:isMob?0:undefined,zIndex:2})}>
             <div style={{flex:1,minWidth:isMob?"100%":0,color:"#334155",fontSize:13,fontWeight:700}}>{nSel?(nSel+(nSel===1?" marcada":" marcadas")):"Marque as que viram card"}</div>
+            {_bl("solic.nova")&&vivas.some(function(p){return p.status==="proposta";})&&(confLimpar
+              ?<span style={{display:"inline-flex",alignItems:"center",gap:6,flexWrap:"wrap",width:isMob?"100%":undefined}}>
+                <span style={{color:"#b91c1c",fontSize:12.5,fontWeight:700}}>Limpar as {vivas.filter(function(p){return p.status==="proposta";}).length} que não viraram card?</span>
+                <button type="button" onClick={function(){ setConfLimpar(false); _limparTodas(); }} style={Object.assign({},_mini,{background:"#b91c1c",color:"#fff",borderColor:"#b91c1c"})}>Sim, limpar</button>
+                <button type="button" onClick={function(){ setConfLimpar(false); }} style={_mini}>Não</button>
+              </span>
+              :<button type="button" disabled={!!ocupado} onClick={function(){ setConfLimpar(true); }} title="Tira da tela todas as propostas que não viraram card (ficam guardadas em Ver descartadas)"
+                style={Object.assign({},_btnSec,{color:"#b91c1c",flex:isMob?1:undefined})}>{ocupado==="limpar"?<><Spin/> Limpando…</>:"Limpar propostas"}</button>)}
             {_bl("solic.aceitar")&&<button type="button" disabled={!nSel||!!ocupado} onClick={_aceitar} style={Object.assign({},_btn(!nSel||!!ocupado),{flex:isMob?1:undefined})}>{ocupado==="aceitar"?<><Spin/> Criando cards…</>:"Aceitar selecionadas"}</button>}
-            {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(true); }} style={Object.assign({},_btnSec,{flex:isMob?1:undefined})}>{ocupado==="mais"?<><Spin/> Gerando…</>:"Gerar mais"}</button>}
           </div>}
 
-          {!vivas.length&&!trabalhando&&aberta.status!=="erro"&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Sem propostas ainda.{_bl("solic.nova")?<> <button type="button" onClick={function(){ _gerarDeNovo(false); }} style={_mini}>Gerar propostas</button></>:null}</div>}
+          {!vivas.length&&!trabalhando&&aberta.status!=="erro"&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Sem propostas ainda.{_bl("solic.nova")?<> <button type="button" onClick={function(){ _gerarDeNovo(""); }} style={_mini}>Gerar propostas</button></>:null}</div>}
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
-            {vivas.map(function(p){ return _renderProposta(p); })}
-          </div>
+          {/* v2: três linhas — Vídeos, Artes estáticas, Carrosséis — de 5 cards (rola pro lado se tiver mais) */}
+          {vivas.length>0&&_SW_GRUPOS.map(function(g){
+            const doG=vivas.filter(function(p){return _swGrupoDe(p.content_type)===g.id;});
+            const busyG=ocupado==="mais:"+g.id;
+            return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{width:10,height:10,borderRadius:99,background:g.cor,flexShrink:0}}/>
+                <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo}</span>
+                <span style={{color:"#94a3b8",fontSize:12.5,fontWeight:600}}>{doG.length} · {g.sub}</span>
+                <span style={{flex:1}}/>
+                {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(g.id); }}
+                  style={Object.assign({},_mini,{color:g.cor,borderColor:g.cor+"55",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.5:1})}>{busyG?<><Spin/> Gerando…</>:("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase())}</button>}
+              </div>
+              {doG.length
+                ?<div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(300px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
+                  {doG.map(function(p){ return _renderProposta(p); })}
+                </div>
+                :<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:12.5,borderStyle:"dashed"})}>Nenhuma proposta de {g.titulo.toLowerCase()} neste pedido ainda{_bl("solic.nova")?" — use o \"+"+_SW_POR_LINHA+"\" acima.":"."}</div>}
+            </div>;
+          })}
 
           {descartadas.length>0&&<div>
             <button type="button" onClick={function(){ setVerDescartadas(!verDescartadas); }} style={_mini}>{verDescartadas?"Esconder descartadas":"Ver descartadas ("+descartadas.length+")"}</button>
