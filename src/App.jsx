@@ -1970,6 +1970,7 @@ PX_BLOCOS.midia={label:"Gestão de mídia", navIcon:"gestaomidia", color:"#9F43F
     {key:"midia.nova_demanda", label:"Nova demanda de mídia",    desc:""},
     {key:"midia.relatorio",    label:"Relatório geral",          desc:""},
     {key:"midia.cerebro",      label:"Registrar o que o cliente falou", desc:"O campo de texto do Diagnóstico"},
+    {key:"midia.video_ia",     label:"Subir vídeo do anúncio para a IA", desc:"Botão 📤 no anúncio (Criativo › Vídeo). Padrão: fechado (só sócios)", padrao:(u)=>!!(u&&u.level===1)}, // 27/09/2026
   ]},
 ]};
 /* TELA NOVA — nasce fechada (regra do Rodrigo, 20/09/2026).
@@ -64521,6 +64522,8 @@ function AdsLightbox({a,conta,P,mediaCtr,onClose,cfg,mediaG,todos}){
                 return <AdsNumeros isMob={isMobLb} itens={cels}/>;
               })()}
             </div>
+            {/* (27/09/2026) o que a IA leu neste vídeo: botão Subir vídeo (componente em 51_eficiencia.jsx; só aparece para quem tem a chave) */}
+            {cr.video_id&&typeof VideoAnuncioIA==="function"&&<div style={{marginTop:26}}><VideoAnuncioIA videoId={String(cr.video_id)} segundos={cr.video_segundos} curva={Vd&&Vd.curva} isMob={isMobLb} videoUrl={mp4}/></div>}
           </div>}
             {subAtual("criativo")==="textos"&&<div>
             {(function(){
@@ -111234,6 +111237,9 @@ function _WcForm({inicial, clientId, isBioter, isMob, salvando, onCancelar, onSa
    v2.1 (27/09/2026, noite): filtro de verdade (select de cliente + setas ‹ ›), unidades da Bioter,
         benchmark da Pixels mês a mês e cada número comparado com a média da Pixels.
    v2.2 (27/09/2026, noite): unidades em ordem: Todas, Brasil, Paraguay e as outras em ordem alfabética.
+   v2.3 (27/09/2026, noite): guia "Prazos, Guvi e metas" (efic_tempo · efic_guvi · efic_metas_lista/efic_meta_salvar ·
+        efic_cardpost/efic_cardpost_ligar), padrões que valem para todos os clientes, fala no formato do motor,
+        e VideoAnuncioIA (botão "Subir vídeo" do anúncio: o navegador desmonta o vídeo e a função video-ler v2 lê).
 
    A tela responde 3 perguntas, com número real:
      1) Estamos trabalhando menos?  copy aprovada de primeira · arte que volta para ajuste
@@ -111372,6 +111378,7 @@ function PageEficiencia({ isMob }){
   const [bench, setBench] = useState(null);
   const [erro, setErro] = useState(null);
   const [recarregar, setRecarregar] = useState(0);
+  const [aba, setAba] = useState("placar");   // placar | prazos
 
   useEffect(function(){
     if(!window._sb) return;
@@ -111425,6 +111432,13 @@ function PageEficiencia({ isMob }){
       <div style={{fontSize:_efF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3}}>Eficiência e Resultados</div>
       <div style={{fontSize:_efF(13,isMob),color:_EF.sub,marginTop:4}}>O placar da IA: estamos trabalhando menos e entregando mais?</div>
 
+      {/* ── GUIAS ── */}
+      <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EF.linha,overflowX:"auto"}}>
+        {[["placar","Placar da IA"],["prazos","Prazos, Guvi e metas"]].map(function(g){ const on = aba===g[0];
+          return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
+            borderBottom:"2px solid "+(on?_EF.roxo:"transparent"),color:on?_EF.roxo:_EF.sub,fontWeight:on?800:600,fontSize:_efF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
+      </div>
+
       {/* ── FILTRO ── */}
       <div style={{display:"flex",gap:isMob?10:14,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?10:12}}>
         <div style={{flex:isMob?"1 1 100%":"1 1 340px",minWidth:0}}>
@@ -111439,7 +111453,7 @@ function PageEficiencia({ isMob }){
           </div>
           {ordem.length>1 && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>{pos===0?"Visão geral":(pos+" de "+(ordem.length-1)+" clientes")}</div>}
         </div>
-        {unidades.length>0 && (
+        {aba==="placar" && unidades.length>0 && (
           <div style={{flex:isMob?"1 1 100%":"0 1 260px",minWidth:0}}>
             {rot("Unidade")}
             <select value={unidade} onChange={function(e){ setUnidade(e.target.value); }} style={Object.assign({}, sel, {width:"100%"})}>
@@ -111462,6 +111476,9 @@ function PageEficiencia({ isMob }){
 
       {erro && <div style={{marginTop:14,padding:16,borderRadius:12,background:_EF.vermClaro,color:_EF.verm,fontSize:_efF(14,isMob)}}>{erro}</div>}
       {!erro && !placar && <div style={{padding:30,textAlign:"center",color:_EF.sub,fontSize:_efF(14,isMob)}}>Carregando…</div>}
+      {placar && aba==="prazos" && <_EfAbaPrazos dias={placar.dias||dias} cliente={cliente} nomeCliente={cli?cli.nome:""} geral={geral} focoPlacar={cli||geral} isMob={isMob}/>}
+
+      {aba==="placar" && <div>
       {placar && !foco && <div style={{marginTop:14,padding:16,borderRadius:12,background:"#fff",border:"1px solid "+_EF.linha,color:_EF.sub}}>Sem dados deste cliente no período.</div>}
 
       {placar && foco && (
@@ -111501,6 +111518,7 @@ function PageEficiencia({ isMob }){
             : <_EfLidos key={cliente} clientId={cliente} unidade={unidade} isMob={isMob} onMudou={function(){ setRecarregar(function(x){ return x+1; }); }}/>}
         </div>
       )}
+      </div>}
     </div>
   );
 }
@@ -111753,9 +111771,10 @@ function _EfLidos({ clientId, unidade, isMob, onMudou }){
         const aprovado = p.status==="aprovado";
         return (
           <div key={p.id} style={{background:"#fff",border:"1.5px solid "+(aprovado?"#bbf7d0":_EF.roxo),borderRadius:14,padding:isMob?12:14,marginBottom:10}}>
-            <div style={{fontSize:_efF(12.5,isMob),fontWeight:700,color:aprovado?_EF.verde:_EF.roxo}}>{aprovado?"✓ Padrão aprovado":"💡 Padrão que a IA encontrou"}</div>
+            <div style={{fontSize:_efF(12.5,isMob),fontWeight:700,color:aprovado?_EF.verde:_EF.roxo}}>{aprovado?"✓ Padrão aprovado":"💡 Padrão que a IA encontrou"}{p.escopo==="geral"?(" · vale para todos os clientes"+(p.tipo_video?(" ("+p.tipo_video+")"):"")):""}</div>
             <div style={{fontWeight:800,marginTop:4,fontSize:_efF(14.5,isMob)}}>{p.titulo}</div>
             {p.evidencia && <div style={{fontSize:_efF(13,isMob),color:_EF.sub,marginTop:4,lineHeight:1.5}}>{p.evidencia}</div>}
+            {aprovado && p.regra && <div style={{fontSize:_efF(12.5,isMob),color:_EF.texto,marginTop:8,background:_EF.verdeClaro,borderRadius:10,padding:"8px 10px",lineHeight:1.5}}><b>Regra que o gerador de roteiro e o Guvi seguem:</b> {p.regra}</div>}
             {p.detalhe && p.detalhe.cuidado && <div style={{fontSize:_efF(12.5,isMob),color:_EF.amarelo,marginTop:6}}>⚠ {p.detalhe.cuidado}</div>}
             {p.detalhe && p.detalhe.amostra && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>Base: {p.detalhe.amostra}</div>}
             {aprovado && <div style={{fontSize:_efF(12,isMob),color:_EF.sub,marginTop:6}}>Aprovado por {p.decidido_nome||"—"} em {_efData(p.decidido_em)}</div>}
@@ -111803,6 +111822,12 @@ function _EfLidos({ clientId, unidade, isMob, onMudou }){
 }
 
 /* ── o que a IA leu de UM vídeo (usado na lista e na ponte) ──────── */
+/* a fala vem como lista (teste de 27/09) ou como {segmentos:[…]} (função video-ler) */
+function _efSegmentos(fala){
+  if(Array.isArray(fala)) return fala.filter(function(f){ return f && f.texto; });
+  if(fala && Array.isArray(fala.segmentos)) return fala.segmentos.filter(function(f){ return f && f.texto; });
+  return [];
+}
 function _efResumoIA(leitura){
   const ia = (leitura && leitura.ia) || {};
   const dur = Number(leitura && leitura.duracao) || 0;
@@ -111895,12 +111920,12 @@ function _EfDetalhe({ postId, isMob, semCabecalho, onDados }){
       {linha("Resumo", R.resumo)}
       {R.incertezas && <div style={{marginTop:10,fontSize:_efF(12,isMob),color:_EF.fraco,lineHeight:1.5}}>O que a IA não teve certeza: {R.incertezas}</div>}
 
-      {Array.isArray(d.leitura.fala) && d.leitura.fala.length>0 && (
+      {_efSegmentos(d.leitura.fala).length>0 && (
         <div style={{marginTop:10}}>
           <button onClick={function(){ setVerFala(!verFala); }} style={{background:"none",border:0,padding:0,color:_EF.roxo,fontWeight:700,fontSize:_efF(12.5,isMob),cursor:"pointer"}}>{verFala?"Esconder a fala":"Ver a fala completa"}</button>
           {verFala && (
             <div style={{marginTop:8,background:_EF.fundo,borderRadius:10,padding:10,maxHeight:260,overflow:"auto"}}>
-              {d.leitura.fala.map(function(f,i){
+              {_efSegmentos(d.leitura.fala).map(function(f,i){
                 return <div key={i} style={{fontSize:_efF(12.5,isMob),lineHeight:1.55,marginBottom:6}}><b style={{color:_EF.sub}}>{_efTempo(f.ini)}</b> {f.texto}</div>;
               })}
               <div style={{fontSize:11,color:_EF.fraco}}>Transcrição automática: nomes podem vir com erro de escrita.</div>
@@ -111986,5 +112011,542 @@ function EfPonteReel({ mediaId, isMob }){
       </button>
       {aberta && <EfAnaliseModal postId={postId} isMob={isMob} onFechar={function(){ setAberta(false); }}/>}
     </span>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GUIA "PRAZOS, GUVI E METAS" (v2.3 — 27/09/2026, noite)
+   ══════════════════════════════════════════════════════════════════ */
+const _EF_IND = {
+  arte_volta:      { rot:"Arte que volta para ajuste",          un:"%",     menor:true  },
+  copy_primeira:   { rot:"Copy aprovada de primeira",           un:"%",     menor:false },
+  dias_publicar:   { rot:"Dias do card criado até publicar",    un:" dias", menor:true  },
+  no_prazo:        { rot:"Publicados até a data prevista",      un:"%",     menor:false },
+  guvi_resolveu:   { rot:"Pedidos que o Guvi resolveu sozinho", un:"%",     menor:false },
+  alcance_mediano: { rot:"Alcance mediano por post",            un:"",      menor:false },
+  assistido:       { rot:"Tempo assistido nos Reels",           un:" s",    menor:false },
+  custo_conversa:  { rot:"Custo por conversa (anúncios)",       un:"R$",    menor:true  },
+};
+function _efFmtInd(k, v){
+  if(v==null || isNaN(v)) return "—";
+  const d = _EF_IND[k] || { un:"" };
+  if(d.un==="R$") return _efReais2(v);
+  if(d.un==="%") return Math.round(Number(v)) + "%";
+  if(d.un===" s") return (Math.round(Number(v)*10)/10).toLocaleString("pt-BR") + " s";
+  if(d.un===" dias") return (Math.round(Number(v)*10)/10).toLocaleString("pt-BR") + " dias";
+  return _efNum(v);
+}
+function _efAtualInd(k, g, tempo, guvi){
+  if(!g) g = {};
+  if(k==="arte_volta")      return g.arte ? _efPct(g.arte.voltou, g.arte.n) : null;
+  if(k==="copy_primeira")   return g.copy ? _efPct(g.copy.ok, g.copy.n) : null;
+  if(k==="alcance_mediano") return g.alcance ? g.alcance.atual : null;
+  if(k==="assistido")       return g.assistido && g.assistido.atual_ms!=null ? g.assistido.atual_ms/1000 : null;
+  if(k==="custo_conversa")  return _efTemVal(g.ads) ? g.ads.custo : null;
+  if(k==="dias_publicar")   return tempo ? tempo.total : null;
+  if(k==="no_prazo")        return tempo ? _efPct(tempo.no_prazo, tempo.com_data) : null;
+  if(k==="guvi_resolveu")   return guvi ? _efPct(guvi.resolvidos, guvi.total) : null;
+  return null;
+}
+
+function _EfAbaPrazos({ dias, cliente, nomeCliente, geral, focoPlacar, isMob }){
+  const [tempo, setTempo] = useState(null);
+  const [guvi, setGuvi] = useState(null);
+  const [metas, setMetas] = useState(null);
+  const [cp, setCp] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [rec, setRec] = useState(0);
+
+  useEffect(function(){
+    if(!window._sb) return;
+    let vivo = true; setErro(null);
+    Promise.all([
+      window._sb.rpc("efic_tempo", { p_dias:dias }),
+      window._sb.rpc("efic_guvi", { p_dias:dias }),
+      window._sb.rpc("efic_metas_lista"),
+    ]).then(function(rs){
+      if(!vivo) return;
+      if(rs[0].error || rs[1].error || rs[2].error){ setErro("Não consegui carregar esta guia agora."); return; }
+      setTempo(rs[0].data); setGuvi(rs[1].data); setMetas(rs[2].data);
+    }).catch(function(){ if(vivo) setErro("Não consegui carregar esta guia agora."); });
+    return function(){ vivo = false; };
+  }, [dias, rec]);
+
+  useEffect(function(){
+    if(!window._sb) return;
+    let vivo = true; setCp(null);
+    window._sb.rpc("efic_cardpost", { p_dias:dias, p_client:cliente||null }).then(function(r){ if(vivo && !r.error) setCp(r.data); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [dias, cliente, rec]);
+
+  if(erro) return <div style={{marginTop:14,padding:16,borderRadius:12,background:_EF.vermClaro,color:_EF.verm,fontSize:_efF(14,isMob)}}>{erro}</div>;
+  if(!tempo || !guvi || !metas) return <div style={{padding:30,textAlign:"center",color:_EF.sub,fontSize:_efF(14,isMob)}}>Carregando…</div>;
+
+  const tCli = cliente ? ((tempo.clientes||[]).find(function(c){ return c.client_id===cliente; }) || null) : null;
+  const t = cliente ? tCli : tempo.geral;
+
+  return (
+    <div>
+      <div style={{marginTop:16,fontSize:_efF(13,isMob),color:_EF.sub}}>Vendo: <b style={{color:_EF.texto}}>{cliente ? nomeCliente : "Todos os clientes"}</b> · últimos {dias} dias</div>
+      <_EfMetas metas={metas} geral={geral} tempo={tempo.geral} guvi={guvi} isMob={isMob} onMudou={function(){ setRec(function(x){ return x+1; }); }}/>
+      <_EfTempo t={t} geralT={cliente?tempo.geral:null} meses={cliente?null:tempo.meses} dias={dias} isMob={isMob}/>
+      {!cliente && <_EfGuvi g={guvi} isMob={isMob}/>}
+      <_EfCardPost cp={cp} cliente={cliente} isMob={isMob} onMudou={function(){ setRec(function(x){ return x+1; }); }}/>
+    </div>
+  );
+}
+
+/* ── metas (editáveis pelos sócios, no computador) ─────────────────── */
+function _EfMetas({ metas, geral, tempo, guvi, isMob, onMudou }){
+  const [edit, setEdit] = useState(null);   // {id?, indicador, base, meta, prazo}
+  const [salvando, setSalvando] = useState(false);
+  const [aviso, setAviso] = useState(null);
+  const lista = (metas && metas.metas) || [];
+  const pode = !!(metas && metas.pode_editar) && !isMob;
+  const campo = { font:"inherit", padding:"8px 10px", borderRadius:9, border:"1px solid "+_EF.linha, fontSize:13, color:_EF.texto, background:"#fff" };
+
+  const salvar = function(ativo){
+    if(!edit) return;
+    const meta = Number(String(edit.meta).replace(",", "."));
+    const base = edit.base===""||edit.base==null ? null : Number(String(edit.base).replace(",", "."));
+    if(isNaN(meta)){ setAviso("Escreva o número da meta."); return; }
+    setSalvando(true); setAviso(null);
+    window._sb.rpc("efic_meta_salvar", { p_id:edit.id||null, p_indicador:edit.indicador, p_client:null, p_base:base, p_meta:meta,
+                                        p_prazo:edit.prazo||null, p_ativo:ativo!==false }).then(function(r){
+      setSalvando(false);
+      if(r.error){ setAviso("Não consegui salvar a meta."); return; }
+      setEdit(null); if(onMudou) onMudou();
+    }).catch(function(){ setSalvando(false); setAviso("Não consegui salvar a meta."); });
+  };
+  const livres = Object.keys(_EF_IND).filter(function(k){ return !lista.some(function(m){ return m.indicador===k && !m.client_id; }); });
+
+  return (
+    <div>
+      <_EfTitulo n={1} isMob={isMob}>Metas da Pixels</_EfTitulo>
+      <div style={_efGrade(isMob, 300)}>
+        {lista.map(function(m){
+          const d = _EF_IND[m.indicador] || { rot:m.indicador, menor:true };
+          const atual = _efAtualInd(m.indicador, geral, tempo, guvi);
+          const B = m.valor_base!=null ? Number(m.valor_base) : null, M = Number(m.valor_meta);
+          let prog = null, chegou = false;
+          if(atual!=null && B!=null && B!==M){
+            prog = d.menor ? (B-atual)/(B-M) : (atual-B)/(M-B);
+            prog = Math.max(0, Math.min(1, prog));
+          }
+          if(atual!=null) chegou = d.menor ? atual<=M : atual>=M;
+          return (
+            <div key={m.id} style={{background:"#fff",border:"1px solid "+(chegou?"#bbf7d0":_EF.linha),borderRadius:14,padding:isMob?12:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"flex-start"}}>
+                <div style={{color:_EF.sub,fontSize:_efF(12.5,isMob),fontWeight:600}}>{d.rot}</div>
+                {pode && <button onClick={function(){ setEdit({ id:m.id, indicador:m.indicador, base:m.valor_base==null?"":m.valor_base, meta:m.valor_meta, prazo:m.prazo||"" }); setAviso(null); }}
+                  style={{border:0,background:"none",color:_EF.roxo,fontWeight:700,cursor:"pointer",fontSize:12}}>editar</button>}
+              </div>
+              <div style={{display:"flex",alignItems:"baseline",gap:10,marginTop:6,flexWrap:"wrap"}}>
+                <div style={{fontSize:_efF(isMob?24:28,isMob),fontWeight:800}}>{_efFmtInd(m.indicador, atual)}</div>
+                <div style={{fontSize:_efF(13,isMob),color:_EF.sub}}>hoje · meta <b style={{color:_EF.roxo}}>{_efFmtInd(m.indicador, M)}</b>{m.prazo?(" até "+_efData(m.prazo+"T12:00:00")):""}</div>
+              </div>
+              {prog!=null && (
+                <div style={{marginTop:10}}>
+                  <div style={{height:8,background:_EF.linha2,borderRadius:99,overflow:"hidden"}}><div style={{height:"100%",width:Math.round(prog*100)+"%",background:chegou?_EF.verde:_EF.roxo,borderRadius:99}}/></div>
+                  <div style={{fontSize:_efF(12,isMob),color:_EF.sub,marginTop:6}}>
+                    Partimos de {_efFmtInd(m.indicador, B)} · {chegou ? <b style={{color:_EF.verde}}>✓ meta alcançada</b> : <span>já andamos <b>{Math.round(prog*100)}%</b> do caminho</span>}
+                  </div>
+                </div>
+              )}
+              {m.base_obs && <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:6}}>Base: {m.base_obs}</div>}
+            </div>
+          );
+        })}
+      </div>
+      {!lista.length && <div style={{fontSize:_efF(13,isMob),color:_EF.fraco}}>Nenhuma meta ainda.</div>}
+      {pode && !edit && livres.length>0 && (
+        <button onClick={function(){ const k = livres[0]; setEdit({ id:null, indicador:k, base:_efAtualInd(k, geral, tempo, guvi) ?? "", meta:"", prazo:"" }); setAviso(null); }}
+          style={{marginTop:10,border:"1px dashed "+_EF.roxoBorda,background:_EF.roxoClaro,color:_EF.roxo,borderRadius:10,padding:"8px 14px",fontWeight:700,cursor:"pointer",fontSize:13}}>+ Nova meta</button>
+      )}
+      {pode && edit && (
+        <div style={{marginTop:10,background:"#fff",border:"1px solid "+_EF.roxoBorda,borderRadius:14,padding:14}}>
+          <div style={{fontWeight:800,fontSize:14,marginBottom:10}}>{edit.id ? "Editar meta" : "Nova meta"}</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
+            <label style={{fontSize:12,color:_EF.sub}}>Indicador<br/>
+              <select disabled={!!edit.id} value={edit.indicador} onChange={function(e){ const k=e.target.value; setEdit(Object.assign({}, edit, { indicador:k, base:_efAtualInd(k, geral, tempo, guvi) ?? "" })); }} style={campo}>
+                {(edit.id ? [edit.indicador] : livres).map(function(k){ return <option key={k} value={k}>{(_EF_IND[k]||{}).rot||k}</option>; })}
+              </select></label>
+            <label style={{fontSize:12,color:_EF.sub}}>Partimos de<br/><input value={edit.base} onChange={function(e){ setEdit(Object.assign({}, edit, { base:e.target.value })); }} style={Object.assign({}, campo, {width:100})}/></label>
+            <label style={{fontSize:12,color:_EF.sub}}>Meta<br/><input value={edit.meta} onChange={function(e){ setEdit(Object.assign({}, edit, { meta:e.target.value })); }} style={Object.assign({}, campo, {width:100})}/></label>
+            <label style={{fontSize:12,color:_EF.sub}}>Até<br/><input type="date" value={edit.prazo||""} onChange={function(e){ setEdit(Object.assign({}, edit, { prazo:e.target.value })); }} style={campo}/></label>
+            <button disabled={salvando} onClick={function(){ salvar(true); }} style={{border:0,borderRadius:9,padding:"9px 16px",fontWeight:700,fontSize:13,cursor:"pointer",background:_EF.roxo,color:"#fff"}}>{salvando?"Salvando…":"Salvar"}</button>
+            <button onClick={function(){ setEdit(null); }} style={{border:0,borderRadius:9,padding:"9px 14px",fontWeight:700,fontSize:13,cursor:"pointer",background:"#f1f5f9",color:_EF.texto}}>Cancelar</button>
+            {edit.id && <button disabled={salvando} onClick={function(){ salvar(false); }} style={{border:0,background:"none",color:_EF.fraco,cursor:"pointer",fontSize:12,marginLeft:"auto"}}>tirar esta meta da tela</button>}
+          </div>
+          <div style={{fontSize:11.5,color:_EF.fraco,marginTop:8}}>Porcentagem em número inteiro (ex.: 35). Tudo o que muda fica no histórico da meta.</div>
+          {aviso && <div style={{fontSize:12,color:_EF.verm,marginTop:6}}>{aviso}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── do card criado até publicar ─────────────────────────────────── */
+function _EfTempo({ t, geralT, meses, dias, isMob }){
+  const dia = function(v){ return v==null ? "—" : (Math.round(Number(v)*10)/10).toLocaleString("pt-BR") + (Number(v)===1?" dia":" dias"); };
+  const pz = t ? _efPct(t.no_prazo, t.com_data) : null;
+  const gpz = geralT ? _efPct(geralT.no_prazo, geralT.com_data) : null;
+  const mesNome = function(m){ return _EF_MESES[Number(String(m).slice(5,7))-1] || m; };
+  const Barras = function(titulo, vals, fmt, maior, baseN){
+    const nOk = function(x){ return (baseN ? baseN(x) : (x.n||0)) >= 20; };
+    const fech = (meses||[]).filter(function(x){ return x.mes < new Date().toISOString().slice(0,7); });
+    const max = Math.max.apply(null, (meses||[]).map(function(x){ return Number(vals(x))||0; }).concat([1]));
+    const pri = fech.find(function(x){ return vals(x)!=null && nOk(x); }), ult = fech.slice().reverse().find(function(x){ return vals(x)!=null && nOk(x); });
+    let tend = null;
+    if(pri && ult && pri!==ult){ const c = _efCompara(vals(ult), vals(pri), maior);
+      tend = <span style={{color:c>0?_EF.verde:c<0?_EF.verm:_EF.sub,fontWeight:700}}>{mesNome(pri.mes)} {fmt(vals(pri))} → {mesNome(ult.mes)} {fmt(vals(ult))} {c>0?"▲ melhorou":c<0?"▼ piorou":"= igual"}</span>; }
+    return (
+      <div style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?12:14,minWidth:0}}>
+        <div style={{color:_EF.sub,fontSize:_efF(12.5,isMob),fontWeight:600}}>{titulo}</div>
+        <div style={{fontSize:_efF(12,isMob),marginTop:4,minHeight:18}}>{tend || <span style={{color:_EF.fraco}}>Pouca base para comparar meses.</span>}</div>
+        <div style={{display:"flex",gap:5,alignItems:"flex-end",height:82,marginTop:10}}>
+          {(meses||[]).map(function(x){ const v = vals(x); const parc = x.mes >= new Date().toISOString().slice(0,7);
+            return <div key={x.mes} title={mesNome(x.mes)+": "+(v==null?"sem dado":fmt(v))+" · "+x.n+" cards"} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",gap:3,height:"100%",minWidth:0}}>
+              <span style={{fontSize:9.5,color:_EF.sub,whiteSpace:"nowrap"}}>{v==null?"—":fmt(v)}</span>
+              <i style={{display:"block",width:"100%",height:v==null?2:Math.max(4,Math.round(46*Number(v)/max)),background:_EF.roxo,opacity:parc?.4:.85,borderRadius:"4px 4px 0 0"}}/>
+              <span style={{fontSize:10,color:_EF.sub}}>{mesNome(x.mes)}{parc?"*":""}</span>
+            </div>; })}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <_EfTitulo n={2} isMob={isMob}>Do card criado até publicar</_EfTitulo>
+      {!t && <div style={{fontSize:_efF(13,isMob),color:_EF.fraco}}>Nenhum card publicado no período.</div>}
+      {t && (
+        <div style={_efGrade(isMob)}>
+          <_EfCardNum isMob={isMob} rot="Total: do card criado até publicar" num={dia(t.total)} det={"Metade dos "+t.n+" cards publicados levou até isso. Inclui o tempo em que o card espera no calendário."}>
+            {geralT && <_EfVsPixels val={t.total} base={geralT.total} maiorMelhor={false} fmt={dia} isMob={isMob}/>}
+          </_EfCardNum>
+          <_EfCardNum isMob={isMob} rot="1. Copy" num={dia(t.copy)} det="Do card criado até a copy aprovada."/>
+          <_EfCardNum isMob={isMob} rot="2. Produção" num={dia(t.producao)} det="Da copy aprovada até a arte ou o vídeo aprovado (com os ajustes)."/>
+          <_EfCardNum isMob={isMob} rot="3. Espera para publicar" num={dia(t.espera)} det="Da arte aprovada até ir ao ar."/>
+          <_EfCardNum isMob={isMob} rot="Publicados até a data prevista" num={pz==null?"sem dado":pz+"%"} vazio={pz==null}
+            det={t.com_data ? (t.no_prazo+" de "+t.com_data+" cards com data") : null}
+            tag={pz==null?null:(pz>=95?<_EfTag tipo="bom" isMob={isMob}>✓ bom</_EfTag>:pz>=85?<_EfTag tipo="atc" isMob={isMob}>⚠ atenção</_EfTag>:<_EfTag tipo="ruim" isMob={isMob}>✕ muito atraso</_EfTag>)}>
+            {geralT && <_EfVsPixels val={pz} base={gpz} maiorMelhor fmt={function(v){ return v+"%"; }} isMob={isMob}/>}
+          </_EfCardNum>
+        </div>
+      )}
+      <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:8}}>As etapas não somam o total: cada número é a mediana (metade dos cards leva menos, metade leva mais).</div>
+      {meses && meses.length>0 && (
+        <div style={Object.assign({}, _efGrade(isMob, 300), {marginTop:12})}>
+          {Barras("Dias até publicar, mês a mês", function(x){ return x.total; }, function(v){ return (Math.round(v*10)/10).toLocaleString("pt-BR")+"d"; }, false)}
+          {Barras("Produção (copy aprovada → arte aprovada), mês a mês", function(x){ return x.producao; }, function(v){ return (Math.round(v*10)/10).toLocaleString("pt-BR")+"d"; }, false)}
+          {Barras("Publicados até a data prevista, mês a mês", function(x){ return x.com_data ? _efPct(x.no_prazo, x.com_data) : null; }, function(v){ return v+"%"; }, true, function(x){ return x.com_data||0; })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Guvi ─────────────────────────────────────────────────────────── */
+function _EfGuvi({ g, isMob }){
+  const pct = _efPct(g.resolvidos, g.total);
+  const tipos = g.por_tipo || {};
+  const nomes = { card:"cards pedidos", consulta:"perguntas sobre o quadro", mover:"cards movidos", roteiro:"roteiros", conversa:"conversas", outro:"outros" };
+  return (
+    <div>
+      <_EfTitulo n={3} isMob={isMob}>Pedidos resolvidos pelo Guvi</_EfTitulo>
+      <div style={_efGrade(isMob)}>
+        <_EfCardNum isMob={isMob} rot="Resolveu sozinho" num={pct==null?"sem pedidos":pct+"%"} vazio={pct==null}
+          det={g.total ? (g.resolvidos+" de "+g.total+" pedidos, sem precisar de alguém da equipe") : "Nenhum pedido no período."}/>
+        <_EfCardNum isMob={isMob} rot="Passou para a equipe" num={_efNum(g.passou_equipe)} det="Quando ele não sabe ou não pode, oferece passar para a equipe."/>
+        <_EfCardNum isMob={isMob} rot="Deu erro" num={_efNum(g.com_erro)} det="A pessoa recebe resposta e a equipe é avisada."/>
+      </div>
+      {Object.keys(tipos).length>0 && <div style={{fontSize:_efF(12.5,isMob),color:_EF.sub,marginTop:8}}>
+        O que ele resolveu: {Object.keys(tipos).map(function(k){ return tipos[k]+" "+(nomes[k]||k); }).join(" · ")}.</div>}
+      <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:4}}>Hoje só os sócios falam com o Guvi (os clientes estão desligados), por isso a base ainda é pequena. Ensaios do "modo cliente" não entram na conta.</div>
+    </div>
+  );
+}
+
+/* ── card × post ──────────────────────────────────────────────────── */
+function _EfCardPost({ cp, cliente, isMob, onMudou }){
+  const [escolha, setEscolha] = useState({});
+  const [salvando, setSalvando] = useState(null);
+  if(!cp) return <div><_EfTitulo n={cliente?3:4} isMob={isMob}>Card × post</_EfTitulo><div style={{fontSize:_efF(13,isMob),color:_EF.sub}}>Carregando…</div></div>;
+  const ligar = function(postId, taskId, semCard){
+    setSalvando(postId);
+    window._sb.rpc("efic_cardpost_ligar", { p_post:postId, p_task:taskId||null, p_sem_card:!!semCard }).then(function(){ setSalvando(null); if(onMudou) onMudou(); })
+      .catch(function(){ setSalvando(null); });
+  };
+  const pc = _efPct(cp.ligados, cp.total);
+  const cmp = function(titulo, a, b, ra, rb){
+    if(!a || !b || !a.n || !b.n) return null;
+    return (
+      <div style={{background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?12:14}}>
+        <div style={{color:_EF.sub,fontSize:_efF(12.5,isMob),fontWeight:600}}>{titulo}</div>
+        <div style={{display:"flex",gap:14,marginTop:8,flexWrap:"wrap"}}>
+          <div><div style={{fontSize:_efF(22,isMob),fontWeight:800}}>{_efNum(a.alcance)}</div><div style={{fontSize:_efF(12,isMob),color:_EF.sub}}>{ra} · {a.n} posts</div></div>
+          <div><div style={{fontSize:_efF(22,isMob),fontWeight:800}}>{_efNum(b.alcance)}</div><div style={{fontSize:_efF(12,isMob),color:_EF.sub}}>{rb} · {b.n} posts</div></div>
+        </div>
+        <div style={{fontSize:_efF(11.5,isMob),color:_EF.fraco,marginTop:6}}>Alcance mediano do post.{!cliente?" Mistura clientes de tamanhos diferentes: escolha um cliente no filtro para comparar direito.":""}</div>
+      </div>
+    );
+  };
+  return (
+    <div>
+      <_EfTitulo n={cliente?3:4} isMob={isMob}>Card × post</_EfTitulo>
+      <div style={{fontSize:_efF(13,isMob),color:_EF.sub,margin:"-4px 0 10px"}}>Qual card do quadro virou qual post do Instagram. O app liga sozinho quando a legenda bate; o resto dá para ligar aqui.</div>
+      <div style={_efGrade(isMob)}>
+        <_EfCardNum isMob={isMob} rot="Posts ligados a um card" num={pc==null?"—":pc+"%"} det={cp.ligados+" de "+cp.total+" posts do período"+(cp.sem_card?(" · "+cp.sem_card+" marcados como \"não veio de card\""):"")}/>
+        {cmp("Copy aprovada de primeira × com ajuste", cp.copy_primeira_alcance&&cp.copy_primeira_alcance.de_primeira, cp.copy_primeira_alcance&&cp.copy_primeira_alcance.com_ajuste, "de primeira", "com ajuste")}
+        {cmp("Arte sem ajuste × arte que voltou", cp.arte_alcance&&cp.arte_alcance.sem_ajuste, cp.arte_alcance&&cp.arte_alcance.voltou, "sem ajuste", "voltou")}
+      </div>
+      {(cp.lista||[]).length>0 && (
+        <div style={{marginTop:12,background:"#fff",border:"1px solid "+_EF.linha,borderRadius:14,padding:isMob?10:14}}>
+          <div style={{fontWeight:800,fontSize:_efF(13.5,isMob)}}>Posts sem card ({cp.pendentes}{cp.pendentes>(cp.lista||[]).length?(", mostrando os "+(cp.lista||[]).length+" mais recentes"):""})</div>
+          {(cp.lista||[]).map(function(p){
+            const cands = p.candidatos || [];
+            const val = escolha[p.post_id] || (cands[0] ? cands[0].task_id : "");
+            return (
+              <div key={p.post_id} style={{borderTop:"1px solid "+_EF.linha2,padding:"10px 0",display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                <div style={{flex:"1 1 260px",minWidth:0}}>
+                  <div style={{fontSize:_efF(12,isMob),color:_EF.sub}}>{p.client_id}{p.unidade?(" · "+p.unidade):""} · {_efData(p.publicado_em)} · {String(p.tipo||"").toLowerCase()}</div>
+                  <div style={{fontSize:_efF(13,isMob),marginTop:2,wordBreak:"break-word"}}>{String(p.legenda||"(sem legenda)").split("\n")[0]}</div>
+                  {p.permalink && <a href={p.permalink} target="_blank" rel="noreferrer" style={{color:_EF.roxo,fontWeight:700,fontSize:12,textDecoration:"none"}}>Ver no Instagram ↗</a>}
+                </div>
+                {!isMob && (
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                    <select value={val} onChange={function(e){ const v=e.target.value; setEscolha(function(x){ const n=Object.assign({}, x); n[p.post_id]=v; return n; }); }}
+                      style={{font:"inherit",padding:"7px 8px",borderRadius:9,border:"1px solid "+_EF.linha,fontSize:12.5,maxWidth:280}}>
+                      {!cands.length && <option value="">nenhum card perto dessa data</option>}
+                      {cands.map(function(c){ return <option key={c.task_id} value={c.task_id}>{(c.titulo||"(sem título)").slice(0,40)} · {c.publish_date ? c.publish_date.slice(8,10)+"/"+c.publish_date.slice(5,7) : ""}{c.score!=null?(" · "+Math.round(c.score*100)+"% igual"):""}</option>; })}
+                    </select>
+                    <button disabled={!val||salvando===p.post_id} onClick={function(){ ligar(p.post_id, val, false); }} style={{border:0,borderRadius:9,padding:"7px 12px",fontWeight:700,fontSize:12.5,cursor:"pointer",background:_EF.roxo,color:"#fff",opacity:(!val||salvando===p.post_id)?.5:1}}>Ligar</button>
+                    <button disabled={salvando===p.post_id} onClick={function(){ ligar(p.post_id, null, true); }} style={{border:0,borderRadius:9,padding:"7px 10px",fontWeight:700,fontSize:12,cursor:"pointer",background:"#f1f5f9",color:_EF.texto}}>Não veio de card</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {isMob && <div style={{fontSize:_efF(12,isMob),color:_EF.fraco,marginTop:6}}>Ligar card e post: pelo computador.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   VÍDEO DO ANÚNCIO → IA (v2.3 — 27/09/2026, noite)
+   Usado dentro do anúncio (Gestão de mídia › anúncio › Criativo › Vídeo).
+   O navegador desmonta o vídeo (1 quadro a cada 2 s em folhas de 12 + áudio WAV 16 kHz),
+   sobe só os pedaços (video-leituras/anuncio/<uuid>/…) e chama a função video-ler.
+   O arquivo grande não é guardado. Lê 1 vez por vídeo. Celular só vê.
+   ══════════════════════════════════════════════════════════════════ */
+function _efEsperar(video, evento, ms){
+  return new Promise(function(res, rej){
+    const t = setTimeout(function(){ fim(); rej(new Error("o navegador demorou demais para abrir o vídeo")); }, ms);
+    function ok(){ fim(); res(); } function er(){ fim(); rej(new Error("o navegador não abre este formato de vídeo — exporte em MP4 (H.264)")); }
+    function fim(){ clearTimeout(t); video.removeEventListener(evento, ok); video.removeEventListener("error", er); }
+    video.addEventListener(evento, ok); video.addEventListener("error", er);
+  });
+}
+function _efWav(f32, sr){
+  const n = f32.length, buf = new ArrayBuffer(44 + n*2), v = new DataView(buf);
+  const w = function(o, s){ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4, 36 + n*2, true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr*2, true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40, n*2, true);
+  for(let i=0;i<n;i++){ const s = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i*2, s<0 ? s*0x8000 : s*0x7FFF, true); }
+  return new Blob([buf], { type:"audio/wav" });
+}
+async function _efDesmontarVideo(file, prog){
+  const url = URL.createObjectURL(file);
+  try{
+    const video = document.createElement("video"); video.muted = true; video.preload = "auto"; video.playsInline = true; video.src = url;
+    await _efEsperar(video, "loadedmetadata", 30000);
+    const dur = video.duration;
+    if(!isFinite(dur) || dur<=0) throw new Error("não consegui ler a duração do vídeo");
+    if(!video.videoWidth) throw new Error("o navegador não mostra a imagem deste formato — exporte em MP4 (H.264)");
+    const tempos = []; for(let s=0; s<dur; s+=2) tempos.push(s);
+    if(tempos.length > 240) throw new Error("vídeo longo demais (máximo 8 minutos)");
+    // folhas 4×3 de 270×480, fundo branco (o mesmo formato do motor do PC)
+    const CW=270, CH=480, G=4, COLS=4, ROWS=3, POR=COLS*ROWS;
+    const W = COLS*CW + (COLS+1)*G, H = ROWS*CH + (ROWS+1)*G;
+    const folhas = []; let cv = null, cx = null, escuros = 0;
+    for(let i=0; i<tempos.length; i++){
+      if(i % POR === 0){ cv = document.createElement("canvas"); cv.width = W; cv.height = H; cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0,0,W,H); }
+      video.currentTime = Math.min(tempos[i], Math.max(0, dur-0.05));
+      await _efEsperar(video, "seeked", 20000);
+      const k = i % POR, col = k % COLS, row = Math.floor(k / COLS);
+      const esc = Math.min(CW/video.videoWidth, CH/video.videoHeight), w = video.videoWidth*esc, h = video.videoHeight*esc;
+      const x0 = G + col*(CW+G), y0 = G + row*(CH+G);
+      cx.drawImage(video, x0 + (CW-w)/2, y0 + (CH-h)/2, w, h);
+      const px = cx.getImageData(Math.round(x0+CW/2), Math.round(y0+CH/2), 1, 1).data; if(px[0]+px[1]+px[2] < 8) escuros++;
+      if(k === POR-1 || i === tempos.length-1){
+        folhas.push(await new Promise(function(r){ cv.toBlob(r, "image/jpeg", 0.8); }));
+      }
+      if(prog) prog("Tirando os quadros… " + (i+1) + " de " + tempos.length);
+    }
+    if(escuros === tempos.length) throw new Error("os quadros saíram todos pretos — o navegador não desenha este formato; exporte em MP4 (H.264)");
+    // áudio → 16 kHz mono → pedaços de 12 a 30 s cortados no trecho mais silencioso
+    if(prog) prog("Lendo o áudio…");
+    const pedacos = [];
+    let audio = null;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC();
+      audio = await ac.decodeAudioData(await file.arrayBuffer()); try{ ac.close(); }catch(_){}
+    }catch(_){ audio = null; }
+    if(audio){
+      const SR = 16000;
+      const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(audio.duration*SR)), SR);
+      const src = off.createBufferSource(); src.buffer = audio; src.connect(off.destination); src.start();
+      const pcm = (await off.startRendering()).getChannelData(0);
+      const B = SR/10;   // blocos de 0,1 s
+      const rms = function(a, b){ let s=0; for(let i=a;i<b;i++) s += pcm[i]*pcm[i]; return Math.sqrt(s/Math.max(1,b-a)); };
+      let pos = 0;
+      while(pos < pcm.length){
+        let fim;
+        if(pcm.length - pos <= 30*SR) fim = pcm.length;
+        else {
+          let melhor = pos + 30*SR, menor = Infinity;
+          for(let c = pos + 12*SR; c + B <= pos + 30*SR; c += B){ const r = rms(c, c+B); if(r < menor){ menor = r; melhor = c; } }
+          fim = melhor;
+        }
+        pedacos.push({ ini: Math.round(pos/SR*100)/100, fim: Math.round(fim/SR*100)/100, blob: _efWav(pcm.subarray(pos, fim), SR) });
+        pos = fim;
+        if(pedacos.length >= 40) break;
+      }
+    }
+    return { duracao: Math.round(dur*100)/100, folhas: folhas, pedacos: pedacos, semAudio: !audio };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function _EfLeituraBloco({ leitura, curva, isMob }){
+  const R = _efResumoIA(leitura);
+  const ia = (leitura && leitura.ia) || {};
+  const segs = _efSegmentos(leitura && leitura.fala);
+  const linha = function(rot, val){ if(!val) return null;
+    return <div style={{display:isMob?"block":"flex",gap:12,marginTop:8,fontSize:_efF(13,isMob),lineHeight:1.5}}>
+      <div style={{color:_EF.sub,fontWeight:600,minWidth:isMob?0:128,flexShrink:0}}>{rot}</div><div style={{minWidth:0,wordBreak:"break-word"}}>{val}</div></div>; };
+  // cruzamento com a retenção: as 2 maiores quedas e o que acontecia naquele segundo
+  const quedas = [];
+  const c = Array.isArray(curva) ? curva.map(Number) : [];
+  if(c.length >= 3){
+    const d = []; for(let i=1;i<c.length;i++) d.push({ s:i, q:c[i-1]-c[i] });
+    d.sort(function(a,b){ return b.q-a.q; });
+    d.slice(0,2).forEach(function(x){ if(x.q < 5) return;
+      const cena = (ia.cenas||[]).find(function(k){ return Number(k.ini)<=x.s && x.s<Number(k.fim); });
+      const fala = segs.find(function(f){ return Number(f.ini)<=x.s && x.s<=Number(f.fim); });
+      const tela = (ia.textos_extras||[]).find(function(k){ return Math.abs(Number(k.t)-x.s)<=1; });
+      quedas.push({ s:x.s, q:Math.round(x.q), cena:cena&&cena.descricao, tela:tela&&tela.texto, fala:fala&&fala.texto });
+    });
+  }
+  return (
+    <div>
+      {quedas.length>0 && (
+        <div style={{background:_EF.amareloClaro,borderRadius:12,padding:"10px 12px",marginBottom:10}}>
+          <div style={{fontWeight:800,fontSize:_efF(13,isMob),color:_EF.amarelo}}>Onde as pessoas saem, e o que aparecia naquele momento</div>
+          {quedas.map(function(x){ return <div key={x.s} style={{fontSize:_efF(12.5,isMob),marginTop:6,lineHeight:1.5}}>
+            <b>Segundo {x.s}: saíram {x.q}%</b>{x.cena?(" · na tela: "+x.cena):""}{x.tela?(" · texto: \""+x.tela+"\""):""}{x.fala?(" · falando: \""+String(x.fala).slice(0,90)+(String(x.fala).length>90?"…":"")+"\""):""}</div>; })}
+        </div>
+      )}
+      {linha("Abertura", R.abertura ? <span>"{R.abertura}"{R.telaInicio?<span style={{color:_EF.sub}}> · na tela: {R.telaInicio}</span>:null}</span> : R.telaInicio)}
+      {linha("O que a IA viu", R.viu.join(" · "))}
+      {linha("Números citados", R.numeros.join(" · "))}
+      {linha("Fechamento", R.fechamento)}
+      {linha("Resumo", R.resumo)}
+      {segs.length>0 && <details style={{marginTop:8}}><summary style={{cursor:"pointer",color:_EF.roxo,fontWeight:700,fontSize:_efF(12.5,isMob)}}>Ver a fala completa</summary>
+        <div style={{marginTop:6,background:_EF.fundo,borderRadius:10,padding:10,maxHeight:240,overflow:"auto"}}>
+          {segs.map(function(f,i){ return <div key={i} style={{fontSize:_efF(12.5,isMob),lineHeight:1.55,marginBottom:6}}><b style={{color:_EF.sub}}>{_efTempo(f.ini)}</b> {f.texto}</div>; })}
+          <div style={{fontSize:11,color:_EF.fraco}}>Transcrição automática: nomes podem vir com erro de escrita.</div>
+        </div></details>}
+    </div>
+  );
+}
+
+function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
+  const [st, setSt] = useState(null);
+  const [passo, setPasso] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [rec, setRec] = useState(0);
+  const inp = useRef(null);
+
+  useEffect(function(){
+    if(!window._sb || !videoId) return;
+    let vivo = true;
+    window._sb.rpc("video_anuncio_leitura", { p_video_id:String(videoId) }).then(function(r){ if(vivo && !r.error) setSt(r.data || null); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [videoId, rec]);
+
+  if(!st || !st.pode) return null;
+
+  const subir = async function(file){
+    if(!file) return;
+    setErro(null);
+    try{
+      setPasso("Abrindo o vídeo…");
+      const r = await _efDesmontarVideo(file, setPasso);
+      const seg = Number(segundos||0);
+      if(seg>0 && Math.abs(seg - r.duracao) > Math.max(2, seg*0.05))
+        throw new Error("Este arquivo tem " + (Math.round(r.duracao*10)/10).toLocaleString("pt-BR") + " s e o vídeo do anúncio tem " + (Math.round(seg*10)/10).toLocaleString("pt-BR") + " s. Confira se é o vídeo certo.");
+      const pasta = "anuncio/" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : ("00000000-0000-4000-8000-" + String(Date.now()).padStart(12,"0").slice(-12))) + "/";
+      const bk = window._sb.storage.from("video-leituras");
+      const folhas = [], audio = [];
+      for(let i=0;i<r.folhas.length;i++){
+        setPasso("Enviando os quadros… " + (i+1) + " de " + r.folhas.length);
+        const p = pasta + "folha_" + String(i+1).padStart(2,"0") + ".jpg";
+        const u = await bk.upload(p, r.folhas[i], { contentType:"image/jpeg", upsert:false });
+        if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
+        folhas.push(p);
+      }
+      for(let i=0;i<r.pedacos.length;i++){
+        setPasso("Enviando o áudio… " + (i+1) + " de " + r.pedacos.length);
+        const p = pasta + "fala_" + String(i+1).padStart(2,"0") + ".wav";
+        const u = await bk.upload(p, r.pedacos[i].blob, { contentType:"audio/wav", upsert:false });
+        if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
+        audio.push({ path:p, ini:r.pedacos[i].ini, fim:r.pedacos[i].fim });
+      }
+      setPasso("A IA está lendo o vídeo… leva em torno de 1 minuto.");
+      const res = await window._sb.functions.invoke("video-ler", { body:{ origem:"anuncio", video_id:String(videoId), folhas:folhas, audio:audio,
+        medicoes:{ duracao:r.duracao, cortes:[], musica:null }, quadro_seg:2, quadros_por_folha:12 } });
+      if(res.error){
+        let msg = res.error.message || "erro";
+        try{ const j = await res.error.context.json(); if(j && j.erro) msg = j.erro; }catch(_){}
+        throw new Error(msg);
+      }
+      if(res.data && res.data.pulado) throw new Error("A leitura parou: o limite do mês da IA de vídeo foi atingido.");
+      setPasso(null); setRec(function(x){ return x+1; });
+    }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(x){ return x+1; }); }
+  };
+
+  const caixa = { background:"#fff", border:"1px solid "+_EF.roxoBorda, borderRadius:14, padding:isMob?12:16 };
+  return (
+    <div style={caixa}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{fontWeight:800,fontSize:_efF(14,isMob)}}>🎬 O que a IA leu neste vídeo</div>
+        {st.status==="lido" && <_EfTag tipo="bom" isMob={isMob}>✓ lido pela IA{st.lido_em?(" em "+_efData(st.lido_em)):""}</_EfTag>}
+      </div>
+      {st.status==="lido" && st.leitura && <div style={{marginTop:10}}><_EfLeituraBloco leitura={st.leitura} curva={curva} isMob={isMob}/></div>}
+      {st.status!=="lido" && (
+        <div style={{marginTop:8}}>
+          {st.ligado==="nao" && <div style={{fontSize:_efF(13,isMob),color:_EF.sub}}>A leitura de vídeo está desligada.</div>}
+          {st.ligado!=="nao" && isMob && <div style={{fontSize:_efF(13,isMob),color:_EF.sub}}>Ainda não lido. Subir o vídeo: pelo computador.</div>}
+          {st.ligado!=="nao" && !isMob && !passo && (
+            <div>
+              <div style={{fontSize:_efF(13,isMob),color:_EF.sub,lineHeight:1.5}}>
+                Escolha o arquivo do vídeo (o mesmo que foi para a Meta). O navegador separa só os quadros e o áudio e manda para a IA; o vídeo inteiro não sobe.
+                Custa em torno de R$ 0,22 por vídeo de até 2 minutos (medido em 27/09) e entra no limite de R$ 30 por mês.
+              </div>
+              {st.status==="erro" && st.erro && <div style={{fontSize:12,color:_EF.verm,marginTop:6}}>Última tentativa deu erro: {st.erro}</div>}
+              <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
+                <button onClick={function(){ if(inp.current) inp.current.click(); }} style={{border:0,borderRadius:10,padding:"9px 16px",fontWeight:800,fontSize:13.5,cursor:"pointer",background:_EF.roxo,color:"#fff"}}>📤 Subir vídeo</button>
+                {videoUrl && <a href={videoUrl} target="_blank" rel="noreferrer" style={{color:_EF.roxo,fontWeight:700,fontSize:12.5,textDecoration:"none"}}>Não tem o arquivo? Abrir o vídeo da Meta ↗</a>}
+                <input ref={inp} type="file" accept="video/*,.mp4,.mov,.m4v" style={{display:"none"}} onChange={function(e){ const f = e.target.files && e.target.files[0]; e.target.value = ""; subir(f); }}/>
+              </div>
+            </div>
+          )}
+          {passo && <div style={{fontSize:_efF(13,isMob),color:_EF.roxo,fontWeight:700,marginTop:6}}>⏳ {passo}</div>}
+          {erro && <div style={{fontSize:_efF(12.5,isMob),color:_EF.verm,marginTop:8}}>❌ {erro}</div>}
+        </div>
+      )}
+    </div>
   );
 }
