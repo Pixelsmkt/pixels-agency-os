@@ -100732,15 +100732,18 @@ function _pbProdutoUploadImg(pi, updFn){
    Estratégia. Quem executa (social, design, vídeo, mídia) lê o playbook; quem ensina a IA
    é a estratégia. Tirar daqui já esconde o bloco E o atalho na barra — a mesma lista
    manda nos dois. */
+/* (28/09/2026, Gustavo) "por que não tá aparecendo os dados cadastrais pro designer? e pro editor de
+   vídeo?" — Dados cadastrais (pb-briefing-auto: endereço, telefone, WhatsApp, site pra pôr na arte e
+   no vídeo) entram nas cadeiras Design e Edição de vídeo. Vale no Playbook e na aba Orientações do card. */
 const PB_CADEIRAS = [
   {id:"estrategia", label:"Estratégia",   icon:"target",      color:"#7c3aed",
    blocos:null}, // null = TODOS os blocos (a estrategista vê o playbook inteiro)
   {id:"social", label:"Social media",     icon:"users",       color:"#ec4899",
    blocos:["pb-sobre","pb-comunicacao","pb-marcacoes","pb-chamadas","pb-produtos","pb-briefing-auto"]},
   {id:"design", label:"Design",           icon:"image",       color:"#9F43F6",
-   blocos:["pb-sobre","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos","pb-siteredes"]},
+   blocos:["pb-sobre","pb-briefing-auto","pb-designer","pb-equipe","pb-templates","pb-chamadas","pb-produtos","pb-siteredes"]},
   {id:"video",  label:"Edição de vídeo",  icon:"play",        color:"#0ea5e9",
-   blocos:["pb-sobre","pb-processos","pb-equipe","pb-produtos","pb-siteredes"]},
+   blocos:["pb-sobre","pb-briefing-auto","pb-processos","pb-equipe","pb-produtos","pb-siteredes"]},
   {id:"midia",  label:"Gestão de mídia",  icon:"trending-up", color:"#16a34a",
    blocos:["pb-sobre","pb-comunicacao","pb-produtos","pb-chamadas","pb-briefing-auto"]},
 ];
