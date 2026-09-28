@@ -110029,16 +110029,31 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
     return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
   },[cid]);
   const vis=(lista||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
+  /* v4 (28/09, Gustavo): também as propostas de "Solicitações por WhatsApp" marcadas com o olho,
+     em 3 linhas (vídeos, artes, carrosséis). Leitura por rpc portal_pauta_propostas (security definer). */
+  const [props,setProps]=useState(null);
+  const _carregarProps=async function(){
+    if(!sb||!cid){ setProps([]); return; }
+    try{ const r=await sb.rpc("portal_pauta_propostas",{p_client:cid}); setProps(r.error?[]:(r.data||[])); }catch(_){ setProps([]); }
+  };
+  useEffect(function(){
+    _carregarProps();
+    let ch=null,t=null; const rec=function(){ clearTimeout(t); t=setTimeout(_carregarProps,500); };
+    try{ if(sb) ch=sb.channel("portal-propostas-"+cid).on("postgres_changes",{event:"*",schema:"public",table:"pauta_propostas"},rec).subscribe(); }catch(_){}
+    return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[cid]);
+  const visP=(props||[]).filter(function(r){ if(cid!=="bioter") return true; if(!unitFiltro||unitFiltro==="grupo"||unitFiltro==="_minhas_") return true; return String(r.unidade||"")===unitFiltro||!r.unidade; });
+  const [abertoP,setAbertoP]=useState({});
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_RT_FF}}>
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
       <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="video" size={20} color="#fff"/></div>
       <div style={{flex:1,minWidth:200}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>Sugestões de conteúdo</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos e ideias de posts pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
       </div>
     </div>
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
-    {lista!==null&&vis.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
+    {lista!==null&&vis.length===0&&visP.length===0&&<div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:16,padding:"40px 24px",textAlign:"center",color:"#64748b",fontSize:13}}>Em breve a equipe da Pixels publica aqui as sugestões de vídeo pra sua empresa.</div>}
     <div style={{overflowX:isMob?"visible":"auto"}}><div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(vis.length>=5?"repeat(5,minmax(0,1fr))":"repeat(auto-fill,minmax(300px,1fr))"),gap:12,alignItems:"start"}}>
       {vis.map(function(r){ return <RoteiroCard key={r.id} r={Object.assign({},r,{produto_tag:_rtTagProduto(r,mapaEs)})} cor={_cor} agencia={false} isMob={isMob}
         onGravado={async function(){
@@ -110050,6 +110065,36 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
           }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra marcar: "+((e&&e.message)||e),5000); }
         }}/>; })}
     </div></div>
+    {visP.length>0&&(typeof _SW_GRUPOS!=="undefined"?_SW_GRUPOS:[]).map(function(g){
+      const doG=visP.filter(function(p){ return _swGrupoDe(p.content_type)===g.id; });
+      if(!doG.length) return null;
+      return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #eef0f3",borderTop:"4px solid "+g.cor,borderRadius:14,padding:"10px 14px"}}>
+          <span style={{width:34,height:34,borderRadius:10,background:g.cor+"14",color:g.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
+          <span style={{display:"flex",flexDirection:"column"}}>
+            <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo} <span style={{color:g.cor}}>· {doG.length}</span></span>
+            <span style={{color:"#94a3b8",fontSize:12,fontWeight:600}}>{g.id==="video"?"roteiro de 60 segundos pra você gravar":g.sub}</span>
+          </span>
+        </div>
+        <div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
+          {doG.map(function(p){
+            const ab=!!abertoP[p.id];
+            const _copiar=function(){ const t=p.titulo+"\n\n"+String(p.briefing||"")+(String(p.legenda||"").trim()?("\n\nLegenda:\n"+p.legenda):""); if(typeof _rtCopiar==="function") _rtCopiar(t,"Copiado — é só colar no WhatsApp"); };
+            return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
+              <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:ab?"none":220,overflow:"hidden",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.briefing||"—"}</div>
+              {ab&&String(p.legenda||"").trim()&&<div><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6}}>Legenda</div>
+                <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.legenda}</div></div>}
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
+                <button type="button" onClick={function(){ setAbertoP(function(o){ return Object.assign({},o,{[p.id]:!ab}); }); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{ab?"Ver menos":"Ver tudo"}</button>
+                <button type="button" onClick={_copiar} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>;
+    })}
   </div>;
 }
 
@@ -110076,9 +110121,12 @@ const _SW_MAX_PROPOSTAS=10;
    Cada linha é gerada numa chamada própria (em paralelo) e tem o seu "+5". */
 const _SW_POR_LINHA=5;
 const _SW_GRUPOS=[
-  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"com roteiro de fala pro cliente gravar", cor:"#dc2626"},
-  {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#2563eb"},
-  {id:"carrossel", tipo:"carrossel", titulo:"Carrosséis",      sub:"até 5 lâminas",                          cor:"#d97706"},
+  {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#dc2626",
+   icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="M16.5 10.2l5-3v9.6l-5-3z"/></svg>},
+  {id:"arte",      tipo:"arte",      titulo:"Artes estáticas", sub:"título + texto na arte",                  cor:"#2563eb",
+   icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15.5l-5-5L5 21"/></svg>},
+  {id:"carrossel", tipo:"carrossel", titulo:"Carrosséis",      sub:"até 5 lâminas",                          cor:"#d97706",
+   icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M3 7v10M21 7v10"/></svg>},
 ];
 function _swGrupoDe(ct){ const c=String(ct||""); if(c==="carrossel") return "carrossel"; if(_swEhVideo(c)) return "video"; return "arte"; }
 const _SW_PADRAO_FALLBACK={gestora:"ellen",editor_video:"guilherme",designer:"andre"};
@@ -110227,8 +110275,11 @@ async function pxPropostasDaSolicitacao(opts){
   u+="TIPO (só o id): "+(grupo==="video"?"video":grupo==="carrossel"?"carrossel":grupo==="arte"?"arte":"o id do formato")+".\n\n";
 
   u+="FORMATO DO BRIEFING:\n";
-  if(!G||grupo==="video") u+="- VÍDEO → roteiro de FALA pro cliente gravar (ele fala pra câmera):\n"+
-     (typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"• ROTEIRO\nCena 1 — Abertura (gancho)\nCena 2 — Desenvolvimento\nCena 3 — Fechamento com CTA\n")+(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+"\n";
+  /* v3 (28/09, Gustavo): "esses vídeos devem ser de 60 segundos" — mesmo formato de Roteiros, com o tempo trocado */
+  if(!G||grupo==="video") u+="- VÍDEO DE 60 SEGUNDOS → roteiro de FALA pro cliente gravar (ele fala pra câmera):\n"+
+     String(typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"• ROTEIRO (vídeo de 60s — o cliente grava)\nCena 1 — Abertura\nCena 2 — Desenvolvimento\nCena 3 — Fechamento\n").replace(/90\s*s\b/g,"60s")+
+     String(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"").replace(/90 segundos/g,"60 segundos").replace(/de 170 a 200 palavras/g,"de 130 a 150 palavras").replace(/Passou de 200/g,"Passou de 150")+
+     "- O vídeo tem 60 SEGUNDOS: de 130 a 150 palavras de fala no total (nunca mais de 150). O título do briefing é \"• ROTEIRO (vídeo de 60s — o cliente grava)\".\n\n";
   if(!G||grupo==="arte") u+="- ARTE ESTÁTICA → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
   if(!G||grupo==="carrossel") u+="- CARROSSEL → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
   u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO, • O QUE PRECISAMOS. Termine TODO briefing com \"• O QUE PRECISAMOS\" em tópicos (foto da obra, take gravado, dado técnico…) ou \"nada além do que já está no card\".\n\n";
@@ -110396,17 +110447,18 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   };
   /* v2: uma chamada por linha (vídeos, artes, carrosséis), em paralelo. grupos = ids de _SW_GRUPOS.
      Se uma linha falhar, as outras ficam; só dá erro se nenhuma vier. */
-  const _gerarPara=async function(pauta,pedido,rodada,grupos){
+  const _gerarPara=async function(pauta,pedido,rodada,grupos,qtd){
+    const n=Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(qtd)||_SW_POR_LINHA));
     const gs=(grupos&&grupos.length)?grupos:_SW_GRUPOS.map(function(g){return g.id;});
     await _upd("pautas",pauta.id,{status:"gerando",erro:null});
     const nomesG=gs.map(function(id){ const g=_SW_GRUPOS.find(function(x){return x.id===id;}); return g?g.titulo.toLowerCase():id; });
-    setPasso("IA escrevendo "+(gs.length>1?(gs.length*_SW_POR_LINHA)+" propostas ("+nomesG.join(", ")+")":("mais "+_SW_POR_LINHA+" "+nomesG[0]))+" pra "+_nome()+"…");
+    setPasso("IA escrevendo "+(gs.length>1?(gs.length*_SW_POR_LINHA)+" propostas ("+nomesG.join(", ")+")":("mais "+n+" "+nomesG[0]))+" pra "+_nome()+"…");
     const rEx=await sb.from("pauta_propostas").select("titulo,ordem").eq("pauta_id",pauta.id);
     const existentes=(rEx.data||[]);
     let ordemIni=existentes.reduce(function(a,p){return Math.max(a,Number(p.ordem)||0);},0);
     const res=await Promise.allSettled(gs.map(function(g){
       return pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:pauta.contexto,
-        transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:_SW_POR_LINHA,grupo:g});
+        transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:n,grupo:g});
     }));
     const novas=[], erros=[];
     for(let i=0;i<res.length;i++){
@@ -110468,13 +110520,13 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
   };
   /* Tentar de novo (pauta com erro) ou "Gerar mais" (nova rodada, sem repetir as que existem). */
   /* grupo = "video" | "arte" | "carrossel" → +5 só daquela linha; vazio → as três linhas */
-  const _gerarDeNovo=async function(grupo){
+  const _gerarDeNovo=async function(grupo,qtd){
     if(!aberta) return;
     setOcupado(grupo?("mais:"+grupo):"mais");
     try{
       const pedido=await _pedidoDoBanco(aberta);
       const rodada=propostas.reduce(function(a,p){return Math.max(a,Number(p.rodada)||1);},0)+(propostas.length?1:0)||1;
-      const novas=await _gerarPara(aberta,pedido,rodada,grupo?[grupo]:null);
+      const novas=await _gerarPara(aberta,pedido,rodada,grupo?[grupo]:null,qtd);
       _toast("success",novas.length+(novas.length===1?" proposta nova.":" propostas novas."),3000);
     }catch(e){
       try{ await _upd("pautas",aberta.id,{status:propostas.length?"pronta":"erro",erro:String((e&&e.message)||e).slice(0,500)}); }catch(_){}
@@ -110499,7 +110551,7 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     setOcupado(""); _carregarAberta(aberta.id);
   };
   const _descartar=async function(p){
-    try{ await _upd("pauta_propostas",p.id,{status:"descartada"}); setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; }); _carregarAberta(aberta.id); }
+    try{ await _upd("pauta_propostas",p.id,{status:"descartada",visivel_portal:false}); setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; }); _carregarAberta(aberta.id); }
     catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
   };
   const _voltar=async function(p){
@@ -110529,12 +110581,19 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
     if(!alvo.length) return;
     setOcupado("limpar");
     try{
-      const r=await sb.from("pauta_propostas").update({status:"descartada",updated_at:new Date().toISOString()}).in("id",alvo.map(function(p){return p.id;}));
+      const r=await sb.from("pauta_propostas").update({status:"descartada",visivel_portal:false,updated_at:new Date().toISOString()}).in("id",alvo.map(function(p){return p.id;}));
       if(r.error) throw r.error;
       setSel({});
       _toast("success",alvo.length+(alvo.length===1?" proposta limpa":" propostas limpas")+". Ficam guardadas em \"Ver descartadas\".",3500);
     }catch(e){ _toast("error","Não limpou: "+((e&&e.message)||e)); }
     setOcupado(""); _carregarAberta(aberta.id);
+  };
+  const _togglePortal=async function(p){
+    try{
+      await _upd("pauta_propostas",p.id,{visivel_portal:!p.visivel_portal});
+      setPropostas(function(l){ return l.map(function(x){ return x.id===p.id?Object.assign({},x,{visivel_portal:!p.visivel_portal}):x; }); });
+      _toast("success",!p.visivel_portal?"No portal do cliente, em Sugestões de conteúdo.":"Tirado do portal.",2500);
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
   };
   const _toggleCerebro=async function(m){
     try{
@@ -110639,8 +110698,21 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           <button type="button" disabled={busy} onClick={function(){ _refazer(p,rf.pedido); }} style={Object.assign({},_mini,{background:"#7c3aed",color:"#fff",borderColor:"#7c3aed"})}>{busy?"Refazendo…":"Refazer"}</button>
         </div>
       </div>}
+      {!ed&&!rf&&aceita&&_bl("solic.nova")&&<div style={{display:"flex",gap:6,borderTop:"1px solid #f1f5f9",paddingTop:10}}>
+        <button type="button" onClick={function(){ _togglePortal(p); }}
+          title={p.visivel_portal?"Está no portal do cliente (Sugestões de conteúdo). Clique pra tirar.":"Mostrar no portal do cliente, em Sugestões de conteúdo"}
+          style={Object.assign({},_mini,{display:"inline-flex",alignItems:"center",gap:5,background:p.visivel_portal?corOrig:"#fff",color:p.visivel_portal?"#fff":"#475569",borderColor:p.visivel_portal?corOrig:"#e2e8f0"})}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          {p.visivel_portal?"No portal":"Portal"}</button>
+      </div>}
       {!ed&&!rf&&!aceita&&<div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
         {desc?<button type="button" onClick={function(){ _voltar(p); }} style={_mini}>Voltar pra lista</button>:<>
+          {/* v4 (28/09): olho = aparece no portal do cliente, em Sugestões de conteúdo (igual Roteiros) */}
+          {_bl("solic.nova")&&<button type="button" onClick={function(){ _togglePortal(p); }}
+            title={p.visivel_portal?"Está no portal do cliente (Sugestões de conteúdo). Clique pra tirar.":"Mostrar no portal do cliente, em Sugestões de conteúdo"}
+            style={Object.assign({},_mini,{display:"inline-flex",alignItems:"center",gap:5,marginRight:"auto",background:p.visivel_portal?corOrig:"#fff",color:p.visivel_portal?"#fff":"#475569",borderColor:p.visivel_portal?corOrig:"#e2e8f0"})}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            {p.visivel_portal?"No portal":"Portal"}</button>}
           <button type="button" disabled={!!ocupado} onClick={function(){ setEditando({id:p.id,titulo:p.titulo,content_type:p.content_type||"arte",briefing:p.briefing||"",legenda:p.legenda||""}); }} style={_mini}>Editar</button>
           <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>{busy?"Refazendo…":"Refazer essa"}</button>
           <button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>
@@ -110757,19 +110829,19 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
             {materiais.length>0&&<div><div style={_lbl}>Arquivos (em Materiais do cliente)</div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {materiais.map(function(m){ return <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",borderRadius:10,padding:"7px 10px",fontSize:12.5,flexWrap:"wrap"}}>
-                  <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700,textDecoration:"none"}}>{m.arquivo_nome||m.titulo}</a>
-                  {m.ficha_status==="erro"&&<span style={{color:"#b91c1c",fontWeight:700}}>não deu pra ler</span>}
-                  {m.ficha_status==="lendo"&&<span style={{color:"#b45309",fontWeight:700}}>lendo…</span>}
-                  {/* v2: interruptor moderno (liga/desliga no cérebro da IA do cliente) */}
+                  {/* v3: interruptor à ESQUERDA, perto do nome (Gustavo) — v2: interruptor moderno (liga/desliga no cérebro da IA do cliente) */}
                   <button type="button" role="switch" aria-checked={!!m.ativo} disabled={!_bl("solic.cerebro")}
                     onClick={function(){ if(_bl("solic.cerebro")) _toggleCerebro(m); }}
                     title={m.ativo?"No cérebro: a IA usa este material nas copys do cliente. Clique pra desligar.":"Fora do cérebro: só guardado em Materiais. Clique pra ligar."}
                     style={{display:"inline-flex",alignItems:"center",gap:8,background:"none",border:"none",padding:"2px 0",cursor:_bl("solic.cerebro")?"pointer":"default",fontFamily:_RT_FF,flexShrink:0}}>
-                    <span style={{fontSize:11.5,fontWeight:700,color:m.ativo?"#0f172a":"#94a3b8"}}>Cérebro</span>
                     <span aria-hidden="true" style={{width:34,height:20,borderRadius:99,background:m.ativo?_SW_AC:"#e2e8f0",position:"relative",transition:"background .16s",flexShrink:0}}>
                       <span style={{position:"absolute",top:2,left:m.ativo?16:2,width:16,height:16,borderRadius:"50%",background:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,.28)",transition:"left .16s"}}/>
                     </span>
+                    <span style={{fontSize:11.5,fontWeight:700,color:m.ativo?"#166534":"#94a3b8",width:112,textAlign:"left",whiteSpace:"nowrap"}}>{m.ativo?"No cérebro":"Cérebro desligado"}</span>
                   </button>
+                  <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700,textDecoration:"none",marginLeft:4}}>{m.arquivo_nome||m.titulo}</a>
+                  {m.ficha_status==="erro"&&<span style={{color:"#b91c1c",fontWeight:700}}>não deu pra ler</span>}
+                  {m.ficha_status==="lendo"&&<span style={{color:"#b45309",fontWeight:700}}>lendo…</span>}
                 </div>; })}
               </div></div>}
           </div>
@@ -110793,14 +110865,19 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           {vivas.length>0&&_SW_GRUPOS.map(function(g){
             const doG=vivas.filter(function(p){return _swGrupoDe(p.content_type)===g.id;});
             const busyG=ocupado==="mais:"+g.id;
-            return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                <span style={{width:10,height:10,borderRadius:99,background:g.cor,flexShrink:0}}/>
-                <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo}</span>
-                <span style={{color:"#94a3b8",fontSize:12.5,fontWeight:600}}>{doG.length} · {g.sub}</span>
+            const falta=Math.max(0,_SW_POR_LINHA-doG.length);
+            return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:10,marginTop:6}}>
+              {/* v3: barra colorida no topo de cada seção + ícone do formato */}
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fff",border:"1px solid #eef0f3",borderTop:"4px solid "+g.cor,borderRadius:14,padding:isMob?"10px 12px":"10px 14px"}}>
+                <span style={{width:34,height:34,borderRadius:10,background:g.cor+"14",color:g.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
+                <span style={{display:"flex",flexDirection:"column",minWidth:0}}>
+                  <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo} <span style={{color:g.cor}}>· {doG.length}</span></span>
+                  <span style={{color:"#94a3b8",fontSize:12,fontWeight:600}}>{g.sub}</span>
+                </span>
                 <span style={{flex:1}}/>
-                {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(g.id); }}
-                  style={Object.assign({},_mini,{color:g.cor,borderColor:g.cor+"55",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.5:1})}>{busyG?<><Spin/> Gerando…</>:("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase())}</button>}
+                {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(g.id,falta||_SW_POR_LINHA); }}
+                  title={falta?("Completa esta linha até "+_SW_POR_LINHA):("Mais "+_SW_POR_LINHA+" "+g.titulo.toLowerCase())}
+                  style={Object.assign({},_mini,{background:falta?g.cor:"#fff",color:falta?"#fff":g.cor,borderColor:falta?g.cor:g.cor+"55",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.5:1})}>{busyG?<><Spin/> Gerando…</>:(falta?("Completar "+_SW_POR_LINHA+" (+"+falta+")"):("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase()))}</button>}
               </div>
               {doG.length
                 ?<div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(300px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
