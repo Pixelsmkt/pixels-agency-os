@@ -1823,15 +1823,16 @@ PX_BLOCOS.calendario={label:"Calendário de publicações", navIcon:"demandas", 
       padrao:(u)=>!!(u&&(u.level===1||u.dash==="coordinator"))},
   ]},
 ]};
-PX_BLOCOS.roteiros={label:"Roteiros", navIcon:"roteiros", color:"#db2777", grupos:[
+PX_BLOCOS.roteiros={label:"Conteúdos", navIcon:"roteiros", color:"#db2777", grupos:[
   {id:"menu", label:"Menu", itens:[
-    {key:"rot.menu", label:"Acessar Roteiros", desc:"Padrão: sócio, Hellen, coordenação, social media e gestor de mídia",
+    {key:"rot.menu", label:"Acessar Conteúdos", desc:"Padrão: sócio, Hellen, coordenação, social media e gestor de mídia",
       padrao:(u)=>!!(u&&(u.level===1||u.id==="ellen"||u.dash==="coordinator"||u.dash==="social"||u.dash==="gestor"))},
   ]},
   {id:"abas", label:"Abas", itens:[
     {key:"rot.aba.roteiros", label:"Roteiros",          desc:""},
     {key:"rot.aba.trends",   label:"Trends",            desc:""},
     {key:"rot.aba.ideias",   label:"Ideias pro cliente", desc:"O que a Pixels mandou pro portal e as respostas"},
+    {key:"rot.aba.solicitacoes", label:"Solicitações por WhatsApp", desc:"Áudio/material do cliente vira proposta de card (28/09/2026)"},
   ]},
   {id:"roteiros", label:"Roteiros › botões", itens:[
     {key:"rot.roteiros.gerar",        label:"Gerar roteiros",    desc:"IA: os 5 do botão e o Roteiro específico"},
@@ -1849,6 +1850,11 @@ PX_BLOCOS.roteiros={label:"Roteiros", navIcon:"roteiros", color:"#db2777", grupo
     {key:"rot.ideias.nova",       label:"Nova ideia",       desc:""},
     {key:"rot.ideias.arquivar",   label:"Tirar do portal",  desc:""},
     {key:"rot.ideias.virar_card", label:"Virar card",       desc:"Ideia aprovada → card em Rascunhos"},
+  ]},
+  {id:"solicitacoes", label:"Solicitações por WhatsApp › botões", itens:[
+    {key:"rot.solic.nova",    label:"Nova solicitação / gerar", desc:"Subir o pedido do cliente, Gerar mais, Refazer"},
+    {key:"rot.solic.aceitar", label:"Aceitar propostas",        desc:"Vira card em Copys (sem data)"},
+    {key:"rot.solic.cerebro", label:"Ligar/desligar no cérebro", desc:"Material do pedido entra ou não na IA do cliente"},
   ]},
 ]};
 PX_BLOCOS.dashboard={label:"Meu Dashboard", navIcon:"meudash", color:"#7c3aed", grupos:[
@@ -3911,7 +3917,7 @@ const NAV=[
   // "Demandas" categoria pai REMOVIDA — só tinha 2 filhos, promovidos pra top-level.
   {id:"demandas_kanban",  icon:"demandas_kanban", label:"Linha de produção"},
   {id:"demandas_cal_pub", icon:"demandas_cal_pub", label:"Calendário de publicações"},
-  {id:"roteiros",   icon:"roteiros", label:"Roteiros"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends — abaixo do Calendário
+  {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends — abaixo do Calendário
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
@@ -39477,7 +39483,7 @@ const PERM_TABS=[
   {id:"demandas",     navIcon:"demandas",   label:"Linha de produção",  color:"#2563eb", tela:"demandas"}, // árvore (PX_BLOCOS.demandas, 18/09/2026)
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
   {id:"calendario",   navIcon:"demandas",   label:"Calendário de publicações", color:"#0ea5e9", tela:"calendario"},
-  {id:"roteiros",     navIcon:"roteiros",   label:"Roteiros",           color:"#db2777", tela:"roteiros"},
+  {id:"roteiros",     navIcon:"roteiros",   label:"Conteúdos",          color:"#db2777", tela:"roteiros"},
   {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a", tela:"aprovacoes"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706", tela:"clientes"},      // árvore (20/09/2026)
   {id:"midia",        navIcon:"gestaomidia",label:"Gestão de mídia",    color:"#9F43F6", tela:"midia"},         // árvore (20/09/2026)
@@ -109405,7 +109411,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
   const [clId,setClId]=useState(function(){ try{ const s=localStorage.getItem("pixels-roteiros-cliente"); if(s&&_lista.some(function(c){return c.id===s;})) return s; }catch(_){} return _lista[0]?_lista[0].id:""; });
   const [unit,setUnit]=useState(function(){ try{ return localStorage.getItem("pixels-roteiros-unidade")||""; }catch(_){ return ""; } });
   const [aba,setAba]=useState("roteiros");
-  useEffect(function(){ if(!_bl("aba."+aba)){ const f=["roteiros","trends","ideias"].find(function(a){return _bl("aba."+a);}); if(f) setAba(f); } },[aba]);
+  useEffect(function(){ if(!_bl("aba."+aba)){ const f=["roteiros","trends","ideias","solicitacoes"].find(function(a){return _bl("aba."+a);}); if(f) setAba(f); } },[aba]);
   const [roteiros,setRoteiros]=useState([]);
   const [mapaEs,setMapaEs]=useState(null);
   const [trends,setTrends]=useState([]);
@@ -109596,14 +109602,14 @@ function PageRoteiros({isMob, perms, viewingAs}){
       <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
       <div style={{width:isMob?38:46,height:isMob?38:46,borderRadius:isMob?11:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}><Ico n="video" size={22} color="#fff"/></div>
       <div style={{flex:1,minWidth:isMob?0:220}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.5}}>Roteiros</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:21,letterSpacing:-.5}}>Conteúdos</div>
         {/* Celular: a frase que explica a tela sai — quem abre no celular já sabe o que é
             e ela sozinha come 2 linhas do alto. No computador continua igual. */}
-        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>Roteiros de vídeo de 60 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo.</div>
+        <div style={{display:isMob?"none":undefined,color:"#64748b",fontSize:13,marginTop:3}}>{aba==="solicitacoes"?"O áudio (ou a mensagem) que o cliente mandou no WhatsApp vira propostas de card com briefing e legenda. As aceitas vão pra Copys.":"Roteiros de vídeo de 60 segundos pro cliente gravar — abertura, desenvolvimento e fechamento com CTA. O que for marcado com o olho aparece no portal, em Sugestões de conteúdo."}</div>
       </div>
       {/* Celular: as 3 abas ocupam a largura, uma do lado da outra */}
       <div style={{display:isMob?"flex":"inline-flex",width:isMob?"100%":undefined,background:"#f1f5f9",borderRadius:11,padding:3,gap:2}}>
-        {[{id:"roteiros",l:isMob?"Roteiros":"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:isMob?"Ideias":"Ideias pro cliente"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
+        {[{id:"roteiros",l:isMob?"Roteiros":"Roteiros"},{id:"trends",l:"Trends"},{id:"ideias",l:isMob?"Ideias":"Ideias pro cliente"},{id:"solicitacoes",l:isMob?"WhatsApp":"Solicitações por WhatsApp"}].filter(function(v){return _bl("aba."+v.id);}).map(function(v){ const on=aba===v.id; return <button key={v.id} type="button" onClick={function(){setAba(v.id);}} style={{flex:isMob?1:undefined,background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:9,padding:isMob?"8px 6px":"8px 16px",fontSize:12.5,fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF,boxShadow:on?"0 1px 3px rgba(15,23,42,.08)":"none"}}>{v.l}{v.id==="trends"&&trends.length?(" · "+trends.length):""}{v.id==="ideias"&&ideiasNovas>0?<span style={{marginLeft:6,background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:pxFonte(10,isMob),fontWeight:800}}>{ideiasNovas}</span>:null}</button>; })}
       </div>
     </div>
 
@@ -109831,6 +109837,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
       })}
     </>}
 
+    {aba==="solicitacoes"&&<SolicitacoesWhatsapp isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
     {aba==="ideias"&&<>
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Operação › Ideias da Pixels</b>. O que ele aprova vira card com um clique.</div>
@@ -110043,6 +110050,668 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
           }catch(e){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não deu pra marcar: "+((e&&e.message)||e),5000); }
         }}/>; })}
     </div></div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SOLICITAÇÕES POR WHATSAPP — 4ª aba de Conteúdos (ex-Roteiros), 28/09/2026 (Gustavo)
+   O cliente manda áudio no WhatsApp (.ogg) com ideias de conteúdo, às vezes com mais
+   material (texto, vídeo, imagem, PDF). A equipe sobe tudo aqui, a IA transcreve e entende,
+   e devolve ATÉ 10 PROPOSTAS DE CARD com briefing e legenda. A equipe escolhe quais aceitar
+   e as aceitas viram card em Copys (status "demanda", sem data de publicação — entram na
+   fila "sem data" da Avaliação de copys).
+   • Foco é o pedido do cliente (1 card por ideia dele). A IA pode completar com ideias
+     próprias, marcadas "Sugestão da Pixels", sempre DEPOIS das do cliente.
+   • Responsáveis vêm de team_data tipo "pautas_padrao" ({gestora, editor_video, designer}):
+     gestora em todos; vídeo leva o editor; design leva o designer. Nenhum nome no código.
+   • Tudo que sobe aqui entra em Materiais do cliente (claude_materiais, tipo "pedido",
+     pauta_id preenchido) com o cérebro DESLIGADO (ativo=false). Liga/desliga aqui ou em Materiais.
+   • Nada é apagado: proposta descartada ou refeita fica guardada com status "descartada".
+   Tabelas: pautas, pauta_propostas (RLS agência, realtime) — migration pautas_solicitacoes_whatsapp.
+   ═══════════════════════════════════════════════════════════════════════ */
+const _SW_AC="#16a34a";            // verde WhatsApp — distingue a aba das outras (roxo)
+const _SW_MAX_PROPOSTAS=10;
+const _SW_PADRAO_FALLBACK={gestora:"ellen",editor_video:"guilherme",designer:"andre"};
+const _SW_STATUS={
+  rascunho:{t:"rascunho",c:"#64748b",b:"#f1f5f9"},
+  lendo:{t:"lendo o material…",c:"#b45309",b:"#fffbeb"},
+  gerando:{t:"escrevendo propostas…",c:"#7c3aed",b:"#f5f3ff"},
+  pronta:{t:"propostas prontas",c:"#047857",b:"#ecfdf5"},
+  erro:{t:"deu erro",c:"#b91c1c",b:"#fef2f2"},
+};
+
+function _swDataCurta(iso){ try{ return new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"America/Sao_Paulo"}); }catch(_){ return ""; } }
+function _swDataHora(iso){ try{ return new Date(iso).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:"America/Sao_Paulo"}); }catch(_){ return ""; } }
+function _swTipoLabel(id){ const t=(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).find(function(x){return x.id===String(id||"");}); return t?t.label:(id||"—"); }
+function _swEhVideo(id){ return (typeof pxTipoEhVideo==="function")?pxTipoEhVideo(id):/^(video|corte)/.test(String(id||"")); }
+function _swEhTexto(file){ const n=String((file&&file.name)||"").toLowerCase(); const t=String((file&&file.type)||"").toLowerCase(); return t.indexOf("text/")===0||/\.(txt|md|csv)$/.test(n); }
+function _swUser(){ return (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER:null; }
+
+/* Tipo que a IA escreveu → id de PX_TIPOS_CONTEUDO (id > rótulo > apelido). */
+function _swNormTipo(bruto, briefing){
+  const lista=(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]);
+  const b=String(bruto||"").toLowerCase().trim();
+  const id=b.replace(/[^a-z_]/g,"");
+  let a=lista.find(function(x){return x.id===id;});
+  if(!a) a=lista.slice().sort(function(x,y){return y.label.length-x.label.length;}).find(function(x){return b.indexOf(x.label.toLowerCase())>=0;});
+  if(!a){
+    const ap=[[/dinamic|dinâmic|motion|anima/,"video_complexo"],[/corte|recorte/,"corte"],[/feira|bastidor|simples|b[áa]sico/,"video_feira"],[/v[íi]deo|reels?|grava/,"video"],
+              [/carrossel|l[âa]mina/,"carrossel"],[/folder|panfleto|flyer/,"folder"],[/template|trocar\s+(a\s+)?foto/,"foto"],[/arte|post|est[áa]tic/,"arte"]];
+    for(let i=0;i<ap.length&&!a;i++) if(ap[i][0].test(b)) a=lista.find(function(x){return x.id===ap[i][1];});
+  }
+  if(!a){
+    const br=String(briefing||"").toLowerCase();
+    const g=/(^|\n)\s*(•\s*)?roteiro|cena\s*1\b/.test(br)?"video":/(^|\n)\s*l[âa]mina\s*1/.test(br)?"carrossel":"arte";
+    a=lista.find(function(x){return x.id===g;});
+  }
+  return a?a.id:"arte";
+}
+
+/* Resposta da IA → [{ordem, origem, titulo, content_type, de_onde_veio, briefing, legenda}]
+   Formato pedido:
+     ===PROPOSTA 1===
+     ORIGEM: cliente | pixels
+     TIPO: video
+     TITULO: …
+     DE_ONDE_VEIO: …
+     ===BRIEFING===
+     …
+     ===LEGENDA===
+     …                                                                       */
+function _swParsePropostas(txt){
+  let t=String(txt||"").replace(/\r/g,"").replace(/\*\*/g,"");
+  t=t.replace(/^```[a-z]*\s*/i,"").replace(/```\s*$/,"");
+  // aceita "=== PROPOSTA 1 ===", "### PROPOSTA 1", "PROPOSTA 1:" numa linha só
+  t=t.replace(/^[ \t#>=*_-]*PROPOSTA\s*(\d+)[ \t=:#*_-]*$/gim,"===PROPOSTA $1===");
+  t=t.replace(/^[ \t#>=*_-]*(BRIEFING|LEGENDA)[ \t=:#*_-]*$/gim,function(_m,k){ return "==="+k.toUpperCase()+"==="; });
+  const partes=t.split(/===PROPOSTA\s*(\d+)\s*===/);
+  const out=[];
+  for(let i=1;i<partes.length;i+=2){
+    const n=Number(partes[i])||out.length+1, corpo=partes[i+1]||"";
+    const iB=corpo.indexOf("===BRIEFING==="), iL=corpo.indexOf("===LEGENDA===");
+    const cab=iB>=0?corpo.slice(0,iB):(iL>=0?corpo.slice(0,iL):corpo);
+    const briefing=iB>=0?corpo.slice(iB+14,iL>iB?iL:undefined).trim():"";
+    const legenda=iL>=0?corpo.slice(iL+13).trim():"";
+    const g=function(k){ const m=cab.match(new RegExp("^\\s*(?:"+k+")\\s*:\\s*(.*)$","im")); return m?String(m[1]).trim():""; };
+    const titulo=g("T[ÍI]TULO").replace(/[.。]$/,"").trim();
+    if(!titulo&&!briefing) continue;
+    const orig=g("ORIGEM").toLowerCase();
+    out.push({ordem:n,origem:/pixels|sugest/.test(orig)?"pixels":"cliente",titulo:titulo||"Proposta "+n,
+      content_type:_swNormTipo(g("TIPO"),briefing),de_onde_veio:g("DE_ONDE_VEIO|DE ONDE VEIO|DE_ONDE|FONTE"),
+      briefing:briefing,legenda:legenda});
+  }
+  // do cliente primeiro, sugestões da Pixels depois — mesmo que a IA misture a ordem
+  return out.filter(function(p){return p.origem==="cliente";}).concat(out.filter(function(p){return p.origem!=="cliente";}));
+}
+
+/* A IA lê o pedido do cliente (texto + transcrição + fichas dos arquivos) com o cérebro do
+   cliente (playbook, regras, materiais ativos, produtos, foco do mês) e escreve as propostas.
+   opts: {client, unit, clienteNome, contexto, transcricao, fichas:[{titulo,ficha}], existentes:[títulos],
+          quantos (máx.), refazer:{proposta, pedido} (1 proposta, reescrita) }                      */
+async function pxPropostasDaSolicitacao(opts){
+  if(typeof askIA!=="function") throw new Error("Pixels IA indisponível neste ambiente.");
+  const client=String(opts.client||""), unit=String(opts.unit||""), py=unit==="paraguay";
+  const clienteNome=String(opts.clienteNome||client);
+  const refazer=opts.refazer||null;
+  const quantos=refazer?1:Math.max(1,Math.min(_SW_MAX_PROPOSTAS,Number(opts.quantos)||_SW_MAX_PROPOSTAS));
+  const ctx=await pxContextoCopy(client,unit,null);
+  const pb=(ctx&&ctx.playbook)||{}, regras=(ctx&&ctx.regras)||[], foco=(ctx&&ctx.foco_do_mes)||[];
+
+  const sys="Você é o estrategista de conteúdo de uma assessoria de marketing (Pixels) que atende agronegócio e construção. "+
+    "O cliente mandou um pedido pelo WhatsApp — quase sempre um áudio — com ideias de publicação. Seu trabalho é "+
+    "transformar CADA ideia que ele pediu num card pronto pra produção: tipo, título, briefing pra equipe e legenda de Instagram. "+
+    "O pedido do cliente manda: não troque o assunto que ele pediu, não junte duas ideias diferentes num card só e não pule nenhuma. "+
+    "NUNCA invente número, medida, cidade, prazo, preço, garantia, depoimento nem nome que não esteja no pedido ou no material do cliente — "+
+    "se faltar dado, escreva sem ele e ponha em \"• O QUE PRECISAMOS\". Transcrição automática erra nome e termo técnico: "+
+    "use a grafia do playbook/materiais quando bater. "+
+    (py?"O cliente é a unidade do Paraguai: TÍTULO, texto da peça, fala do roteiro e LEGENDA em ESPANHOL; rótulos do briefing e DE_ONDE_VEIO em português. "
+       :"Escreva em português do Brasil. ")+
+    "Responda EXATAMENTE no formato pedido, texto puro, sem markdown, sem comentário antes nem depois.";
+
+  let u="CLIENTE: "+clienteNome+(unit?(" — unidade "+unit):"")+"\n\n";
+  if(pb.descricao||pb.sobre) u+="SOBRE A EMPRESA:\n"+_pxCtxTxt(pb.descricao||pb.sobre)+"\n\n";
+  if(pb.comunicacao) u+="TOM DE VOZ DA MARCA:\n"+_pxCtxTxt(pb.comunicacao)+"\n\n";
+  if(pb.pilares&&pb.pilares.length) u+="PILARES DE CONTEÚDO: "+_pxCtxTxt(pb.pilares)+"\n\n";
+  if(pb.chamadas_proibidas&&pb.chamadas_proibidas.length) u+="⛔ CHAMADAS PROIBIDAS (nunca usar, nem parecido): "+_pxCtxTxt(pb.chamadas_proibidas)+"\n\n";
+  { const _bp=(typeof pxBriefingProdutosTxt==="function")?pxBriefingProdutosTxt(ctx,2500):""; if(_bp) u+=_bp+"\n"; }
+  u+=(typeof pxCtxFichasProdutosTxt==="function")?pxCtxFichasProdutosTxt(ctx):"";
+  u+=(typeof pxCtxRegrasTxt==="function")?pxCtxRegrasTxt(regras):"";
+  u+=(typeof pxCtxMateriaisTxt==="function")?pxCtxMateriaisTxt(ctx):"";
+  u+=(typeof pxCtxProdutosFbTxt==="function")?pxCtxProdutosFbTxt(ctx):"";
+  if(foco.length){
+    const f=foco[0], p=[];
+    if(f.objetivo) p.push("objetivo: "+f.objetivo);
+    if(_pxCtxTxt(f.produtos_foco)) p.push("produtos em foco: "+_pxCtxTxt(f.produtos_foco));
+    if(p.length) u+="FOCO DO MÊS: "+p.join("; ")+"\n\n";
+  }
+
+  u+="════════ O PEDIDO DO CLIENTE (é daqui que saem as propostas) ════════\n";
+  if(String(opts.contexto||"").trim()) u+="MENSAGEM / ANOTAÇÃO DA EQUIPE:\n"+String(opts.contexto).trim()+"\n\n";
+  if(String(opts.transcricao||"").trim()) u+="TRANSCRIÇÃO DO ÁUDIO DO CLIENTE:\n"+String(opts.transcricao).trim().slice(0,60000)+"\n\n";
+  (opts.fichas||[]).forEach(function(f){ if(f&&String(f.ficha||"").trim()) u+="ARQUIVO QUE O CLIENTE MANDOU — "+(f.titulo||"sem nome")+":\n"+String(f.ficha).trim().slice(0,12000)+"\n\n"; });
+  u+="════════════════════════════════════════════════════════════════\n\n";
+
+  if(refazer){
+    const p=refazer.proposta||{};
+    u+="ESTA PROPOSTA JÁ FOI ESCRITA E A EQUIPE PEDIU PRA REFAZER:\n"+
+       "TIPO: "+(p.content_type||"")+"\nTITULO: "+(p.titulo||"")+"\nDE_ONDE_VEIO: "+(p.de_onde_veio||"")+"\nBRIEFING:\n"+(p.briefing||"")+"\nLEGENDA:\n"+(p.legenda||"")+"\n\n";
+    u+=String(refazer.pedido||"").trim()
+      ?("O QUE A EQUIPE QUER DIFERENTE (manda acima de tudo):\n"+String(refazer.pedido).trim()+"\n\n")
+      :"A equipe não disse o que mudar: mantenha a MESMA ideia do cliente e escreva com outro ângulo, outro título e outra abertura.\n\n";
+    u+="TAREFA: devolva UMA proposta (===PROPOSTA 1===), sobre a mesma ideia"+(p.origem==="pixels"?" (é uma sugestão da Pixels — ORIGEM: pixels)":" do cliente (ORIGEM: cliente)")+".\n\n";
+  }else{
+    const ex=(opts.existentes||[]).filter(Boolean);
+    if(ex.length){
+      u+="PROPOSTAS QUE JÁ EXISTEM PARA ESTE PEDIDO (NÃO repita nenhuma, nem com outro título):\n";
+      ex.slice(0,40).forEach(function(t){ u+="- "+t+"\n"; });
+      u+="\n";
+    }
+    u+="TAREFA: escreva no máximo "+quantos+" propostas.\n"+
+       "1) PRIMEIRO, uma proposta pra CADA ideia/pedido do cliente"+(ex.length?" que ainda não tenha proposta acima":"")+", na ordem em que ele falou — ORIGEM: cliente. "+
+       "Se ele pediu \"um vídeo\" ou \"um carrossel\", o TIPO é esse. Se não disse formato, escolha o que melhor serve.\n"+
+       "2) SÓ DEPOIS, se sobrar espaço até "+quantos+", complete com ideias da Pixels que conversam com o pedido (mesmo tema, desdobramento, outro ângulo útil) — ORIGEM: pixels. "+
+       "Sugestão da Pixels nunca vem antes das do cliente, e é melhor devolver menos propostas boas do que completar com ideia fraca.\n"+
+       "3) Se o pedido não tiver nenhuma ideia de conteúdo aproveitável, devolva só sugestões da Pixels ligadas ao que o cliente falou.\n\n";
+  }
+
+  u+="TIPOS POSSÍVEIS (TIPO = só o id):\n";
+  (typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).forEach(function(t){ u+="- "+t.id+" ("+t.label+"): "+t.quando+"\n"; });
+  u+="Na dúvida entre arte única e carrossel, arte única. Na dúvida entre vídeo e vídeo dinâmico, vídeo.\n\n";
+
+  u+="FORMATO DO BRIEFING, conforme o tipo:\n";
+  u+="- vídeo em que o cliente grava falando (corte, video_feira, video, video_complexo) → roteiro de FALA:\n"+
+     (typeof PX_ROTEIRO_FALA_FORMATO!=="undefined"?PX_ROTEIRO_FALA_FORMATO:"")+(typeof PX_ROTEIRO_FALA_REGRAS!=="undefined"?PX_ROTEIRO_FALA_REGRAS:"")+
+     "  (se o cliente pediu vídeo SEM fala — registro, bastidor, takes que ele já tem — use: "+(typeof PX_ROTEIRO_SIMPLES_FORMATO!=="undefined"?PX_ROTEIRO_SIMPLES_FORMATO.replace(/\n/g," "):"Cena 1, Cena 2, Cena 3 com o que aparece")+")\n";
+  u+="- design que não é carrossel (foto, arte, folder) → \"• TÍTULO\" (headline da peça, em caixa alta) e \"• TEXTO NA ARTE\" (NÃO repete o título; 2 frases de apoio, linha em branco, fecho — 260 a 480 caracteres).\n";
+  u+="- carrossel → \"Lâmina 1 — …\" até no máximo \"Lâmina 5 — …\"; a 5 é o CTA.\n";
+  u+="- Rótulos SEMPRE em maiúsculo: • TÍTULO, • TEXTO NA ARTE, • ROTEIRO, • O QUE PRECISAMOS. Termine TODO briefing com \"• O QUE PRECISAMOS\" em tópicos (foto da obra, take gravado, dado técnico…) ou \"nada além do que já está no card\".\n\n";
+
+  u+="LEGENDA DE INSTAGRAM (uma por proposta):\n"+
+     "- 400 a 750 caracteres, em blocos separados por linha em branco — abertura, desenvolvimento, a marca entra na história, fecho com CTA e contato, e a linha de hashtags. NO MÁXIMO 5 HASHTAGS.\n"+
+     "- Sem markdown, sem aspas em volta, sem título antes.\n";
+  if(typeof _pxRegrasLegenda==="function") u+=_pxRegrasLegenda(pb,unit,false,client);
+  u+="\n";
+
+  u+="DE_ONDE_VEIO: 1 linha. Proposta do cliente → o trecho do áudio/mensagem em que ele pediu (entre aspas, curto). Sugestão da Pixels → por que ela conversa com o pedido.\n"+
+     "TITULO: 3 a 8 palavras, só a primeira letra maiúscula, sem ponto final, sem o nome da empresa.\n\n";
+  u+="FORMATO EXATO DA RESPOSTA (repita o bloco pra cada proposta, numerando 1, 2, 3…):\n"+
+     "===PROPOSTA 1===\nORIGEM: cliente\nTIPO: (id)\nTITULO: …\nDE_ONDE_VEIO: …\n===BRIEFING===\n(o briefing)\n===LEGENDA===\n(a legenda)\n";
+
+  const args={model:PX_IA_MODELO,max_tokens:refazer?3500:Math.min(16000,1400+quantos*1400),system:sys,messages:[{role:"user",content:u}]};
+  let data=await askIA(args);
+  let txt=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
+  // parou por limite? pede pra continuar (até 2 vezes), como a leitura de materiais faz
+  for(let v=0;v<2&&data&&data.stop_reason==="max_tokens";v++){
+    data=await askIA(Object.assign({},args,{messages:args.messages.concat([{role:"assistant",content:txt},{role:"user",content:"Continue EXATAMENTE de onde parou, sem repetir nada e sem comentário. Termine todas as propostas no mesmo formato."}])}));
+    txt+=((data&&data.content)||[]).map(function(b){return (b&&b.text)||"";}).join("");
+  }
+  const lista=_swParsePropostas(txt).slice(0,quantos);
+  if(!lista.length) throw new Error("A IA respondeu num formato inesperado. Tente de novo.");
+  return lista;
+}
+if(typeof window!=="undefined"){ window.pxPropostasDaSolicitacao=pxPropostasDaSolicitacao; }
+
+/* ─── A ABA ───────────────────────────────────────────────────────────── */
+function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setUnit, nomeCl, bl}){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  const _bl=bl||function(){ return true; };
+  const isBioter=clId==="bioter";
+  const [pautas,setPautas]=useState([]);
+  const [propostas,setPropostas]=useState([]);   // da pauta aberta
+  const [materiais,setMateriais]=useState([]);   // da pauta aberta
+  const [abertaId,setAbertaId]=useState(null);
+  const [form,setForm]=useState(null);           // {titulo, texto, files:[]}
+  const [arrastando,setArrastando]=useState(false);
+  const [passo,setPasso]=useState("");           // texto do andamento (upload/leitura/IA)
+  const [sel,setSel]=useState({});               // propostaId -> true
+  const [editando,setEditando]=useState(null);   // {id, titulo, content_type, briefing, legenda}
+  const [refazendo,setRefazendo]=useState(null); // {id, pedido}
+  const [ocupado,setOcupado]=useState("");       // id da proposta em trabalho | "aceitar" | "mais"
+  const [verDescartadas,setVerDescartadas]=useState(false);
+  const [verTranscricao,setVerTranscricao]=useState(false);
+  const fileRef=useRef(null);
+
+  const _carregarPautas=async function(){
+    if(!sb||!clId) return;
+    let q=sb.from("pautas").select("*").eq("client_id",clId).order("created_at",{ascending:false}).limit(200);
+    if(isBioter) q=q.eq("unidade",String(unit||""));
+    const r=await q;
+    if(!r.error) setPautas(r.data||[]);
+  };
+  const _carregarAberta=async function(id){
+    if(!sb||!id){ setPropostas([]); setMateriais([]); return; }
+    const [a,b]=await Promise.all([
+      sb.from("pauta_propostas").select("*").eq("pauta_id",id).order("rodada",{ascending:true}).order("ordem",{ascending:true}),
+      sb.from("claude_materiais").select("id,titulo,arquivo_url,arquivo_nome,arquivo_tipo,arquivo_tamanho,ficha,ficha_status,ativo,transcricao,tipo,created_at").eq("pauta_id",id).order("created_at",{ascending:true}),
+    ]);
+    if(!a.error) setPropostas(a.data||[]);
+    if(!b.error) setMateriais(b.data||[]);
+  };
+  useEffect(function(){ setAbertaId(null); setForm(null); _carregarPautas(); },[clId,unit]);
+  useEffect(function(){ setSel({}); setEditando(null); setRefazendo(null); setVerTranscricao(false); _carregarAberta(abertaId); },[abertaId]);
+  const _abertaRef=useRef(null); _abertaRef.current=abertaId;
+  useEffect(function(){
+    if(!sb) return;
+    let ch=null,t=null;
+    const rec=function(){ clearTimeout(t); t=setTimeout(function(){ _carregarPautas(); _carregarAberta(_abertaRef.current); },400); };
+    try{ ch=sb.channel("solicitacoes-whats-rt").on("postgres_changes",{event:"*",schema:"public",table:"pautas"},rec).on("postgres_changes",{event:"*",schema:"public",table:"pauta_propostas"},rec).subscribe(); }catch(_){}
+    return function(){ clearTimeout(t); try{ if(ch) sb.removeChannel(ch); }catch(_){} };
+  },[clId,unit]);
+
+  const aberta=pautas.find(function(p){return p.id===abertaId;})||null;
+  const _nome=function(){ return nomeCl?nomeCl(clId,isBioter?unit:""):clId; };
+  const _toast=function(tipo,msg,ms){ try{ if(typeof pixelsToast!=="undefined") pixelsToast[tipo](msg,ms); }catch(_){} };
+  const _upd=async function(tabela,id,patch){
+    const r=await sb.from(tabela).update(Object.assign({},patch,{updated_at:new Date().toISOString()})).eq("id",id);
+    if(r.error) throw r.error;
+  };
+
+  /* Guarda o arquivo (vídeo/áudio vira só o mp3) e cria o material, com o cérebro DESLIGADO. */
+  const _guardarArquivo=async function(pauta,file,pfx){
+    let arq=file, partes=null, midia=(typeof _pbEhMidia==="function")?_pbEhMidia(file):"";
+    if(midia){
+      const out=await _pbAudioDoVideo(file,function(m){ setPasso(pfx+m+" — "+file.name); });
+      arq=new File([out.mp3],String(file.name).replace(/\.[^.]+$/,"")+".mp3",{type:"audio/mpeg"});
+      partes=out.partes;
+    }
+    if(arq.size>PB_MAT_MAX_ARQUIVO) throw new Error("passa de 1 GB ("+_pbMatTamanho(arq.size)+")");
+    setPasso(pfx+"guardando "+arq.name);
+    const ext=(String(arq.name).split(".").pop()||"bin").toLowerCase().slice(0,8);
+    const path="playbook-materiais/"+clId+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+"."+ext;
+    if(arq.size>40*1024*1024&&typeof pxUploadResumable==="function"){
+      await pxUploadResumable(arq,path,function(pct){ setPasso(pfx+"guardando "+arq.name+" — "+pct+"%"); });
+    }else{
+      const up=await sb.storage.from("agency-files").upload(path,arq,{cacheControl:"3600",upsert:false,contentType:arq.type||"application/octet-stream"});
+      if(up.error) throw up.error;
+    }
+    const pub=sb.storage.from("agency-files").getPublicUrl(path);
+    const u=_swUser();
+    const row={client_id:clId,unidade:isBioter?String(unit||""):"",titulo:("Pedido do cliente — "+String(file.name).replace(/\.[^.]+$/,"")).slice(0,120),
+      tipo:"pedido",pauta_id:pauta.id,arquivo_url:(pub&&pub.data&&pub.data.publicUrl)||"",arquivo_nome:arq.name,arquivo_tipo:arq.type||"",
+      arquivo_tamanho:arq.size||0,ficha:"",ficha_status:"pendente",ativo:false,origem:"agencia",created_by:(u&&u.name)||""};
+    const ins=await sb.from("claude_materiais").insert(row).select("*").single();
+    if(ins.error) throw ins.error;
+    return {mat:ins.data,file:arq,original:file,partes:partes,midia:midia};
+  };
+  /* Lê um material guardado: áudio → transcrição; texto → o próprio texto; resto → ficha. */
+  const _lerMaterial=async function(g,pfx){
+    const m=g.mat;
+    await _upd("claude_materiais",m.id,{ficha_status:"lendo"});
+    try{
+      if(g.midia){
+        let partes=g.partes;
+        if(!partes||!partes.length){
+          const r=await fetch(m.arquivo_url); if(!r.ok) throw new Error("não deu pra baixar o áudio (HTTP "+r.status+")");
+          const bl=await r.blob();
+          partes=(await _pbAudioDoVideo(new File([bl],m.arquivo_nome||"audio.mp3",{type:bl.type||"audio/mpeg"}),function(x){ setPasso(pfx+x); })).partes;
+        }
+        const tr=await _pbTranscrever(partes,function(x){ setPasso(pfx+x+" — "+(g.original?g.original.name:m.arquivo_nome)); });
+        if(!tr) throw new Error("a transcrição veio vazia — o áudio tem fala?");
+        const ficha="PEDIDO DO CLIENTE POR WHATSAPP (áudio de "+_swDataCurta(new Date().toISOString())+")\n\n"+tr;
+        await _upd("claude_materiais",m.id,{transcricao:tr,ficha:ficha,ficha_status:"pronta"});
+        return {tipo:"audio",titulo:m.titulo,texto:tr};
+      }
+      if(g.file&&_swEhTexto(g.file)){
+        const tx=String(await g.file.text()).trim().slice(0,60000);
+        await _upd("claude_materiais",m.id,{ficha:tx,ficha_status:"manual"});
+        return {tipo:"ficha",titulo:m.titulo,texto:tx};
+      }
+      setPasso(pfx+"IA lendo "+(g.original?g.original.name:m.arquivo_nome));
+      const f={name:m.arquivo_nome||"material",type:m.arquivo_tipo||"",size:Number(m.arquivo_tamanho)||0};
+      const ficha=await pxFichaDoMaterial(g.file||f,m.titulo,_nome(),m.arquivo_url,function(){});
+      await _upd("claude_materiais",m.id,{ficha:ficha,ficha_status:"pronta"});
+      return {tipo:"ficha",titulo:m.titulo,texto:ficha};
+    }catch(e){
+      try{ await _upd("claude_materiais",m.id,{ficha_status:"erro"}); }catch(_){}
+      _toast("error","Não deu pra ler "+(m.arquivo_nome||"o arquivo")+": "+((e&&e.message)||e)+" — sigo com o resto.",7000);
+      return null;
+    }
+  };
+  /* Monta o pedido (texto + transcrições + fichas) a partir do que está no banco. */
+  const _pedidoDoBanco=async function(pauta){
+    const r=await sb.from("claude_materiais").select("titulo,ficha,transcricao,tipo,ficha_status").eq("pauta_id",pauta.id).order("created_at",{ascending:true});
+    const mats=(r.data||[]);
+    const trs=mats.filter(function(m){return String(m.transcricao||"").trim();}).map(function(m){return "["+m.titulo+"]\n"+m.transcricao;});
+    const fichas=mats.filter(function(m){return !String(m.transcricao||"").trim()&&String(m.ficha||"").trim();}).map(function(m){return {titulo:m.titulo,ficha:m.ficha};});
+    return {transcricao:String(pauta.transcricao||"").trim()||trs.join("\n\n"),fichas:fichas};
+  };
+  const _gravarPropostas=async function(pauta,listaP,rodada,ordemIni){
+    const rows=listaP.map(function(p,i){ return {pauta_id:pauta.id,ordem:(ordemIni||0)+i+1,origem:p.origem,titulo:p.titulo,content_type:p.content_type,
+      briefing:p.briefing,legenda:p.legenda,de_onde_veio:p.de_onde_veio||"",status:"proposta",rodada:rodada||1}; });
+    const r=await sb.from("pauta_propostas").insert(rows).select("*");
+    if(r.error) throw r.error;
+    return r.data||[];
+  };
+  const _gerarPara=async function(pauta,pedido,rodada){
+    await _upd("pautas",pauta.id,{status:"gerando",erro:null});
+    setPasso("IA escrevendo as propostas pra "+_nome()+"…");
+    const existentes=propostas.filter(function(p){return p.pauta_id===pauta.id;});
+    const listaP=await pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:pauta.contexto,
+      transcricao:pedido.transcricao,fichas:pedido.fichas,existentes:existentes.map(function(p){return p.titulo;}),quantos:_SW_MAX_PROPOSTAS});
+    const ordemIni=existentes.reduce(function(a,p){return Math.max(a,Number(p.ordem)||0);},0);
+    const novas=await _gravarPropostas(pauta,listaP,rodada||1,ordemIni);
+    await _upd("pautas",pauta.id,{status:"pronta",erro:null});
+    return novas;
+  };
+
+  /* NOVA SOLICITAÇÃO: guarda tudo primeiro (o que não pode se perder), depois lê, depois gera. */
+  const _criar=async function(){
+    if(!sb) return;
+    const f=form||{}; const files=(f.files||[]);
+    const texto=String(f.texto||"").trim();
+    if(!clId){ _toast("warning","Escolhe o cliente."); return; }
+    if(!files.length&&texto.length<10){ _toast("warning","Sobe o áudio do cliente ou cola a mensagem dele."); return; }
+    const u=_swUser();
+    setPasso("criando a solicitação…");
+    let pauta=null;
+    try{
+      const ins=await sb.from("pautas").insert({client_id:clId,unidade:isBioter?String(unit||""):"",titulo:String(f.titulo||"").trim()||("Pedido de "+_swDataCurta(new Date().toISOString())),
+        contexto:texto,status:"lendo",created_by:(u&&u.name)||""}).select("*").single();
+      if(ins.error) throw ins.error;
+      pauta=ins.data;
+      setPautas(function(p){ return [pauta].concat(p); });
+      setAbertaId(pauta.id); setForm(null);
+      const guard=[];
+      for(let i=0;i<files.length;i++){
+        const pfx=files.length>1?("("+(i+1)+"/"+files.length+") "):"";
+        try{ guard.push(await _guardarArquivo(pauta,files[i],pfx)); }
+        catch(e){ _toast("error","Não subiu "+files[i].name+": "+((e&&e.message)||e),8000); }
+      }
+      const trs=[], fichas=[];
+      for(let i=0;i<guard.length;i++){
+        const pfx=guard.length>1?("("+(i+1)+"/"+guard.length+") "):"";
+        setPasso(pfx+"lendo "+guard[i].original.name);
+        const r=await _lerMaterial(guard[i],pfx);
+        if(!r) continue;
+        if(r.tipo==="audio") trs.push((guard.length>1?("["+guard[i].original.name+"]\n"):"")+r.texto);
+        else fichas.push({titulo:r.titulo,ficha:r.texto});
+      }
+      if(!trs.length&&!fichas.length&&texto.length<10) throw new Error("não sobrou nada legível do pedido — confira os arquivos e tente de novo");
+      const transcricao=trs.join("\n\n");
+      await _upd("pautas",pauta.id,{transcricao:transcricao});
+      pauta=Object.assign({},pauta,{transcricao:transcricao});
+      const novas=await _gerarPara(pauta,{transcricao:transcricao,fichas:fichas},1);
+      setPropostas(novas);
+      _toast("success",novas.length+(novas.length===1?" proposta pronta":" propostas prontas")+" pra "+_nome()+". Escolha as que viram card.",4000);
+    }catch(e){
+      if(pauta){ try{ await _upd("pautas",pauta.id,{status:"erro",erro:String((e&&e.message)||e).slice(0,500)}); }catch(_){} }
+      _toast("error","Não deu: "+((e&&e.message)||e),7000);
+    }
+    setPasso(""); _carregarPautas(); if(pauta) _carregarAberta(pauta.id);
+  };
+  /* Tentar de novo (pauta com erro) ou "Gerar mais" (nova rodada, sem repetir as que existem). */
+  const _gerarDeNovo=async function(maisUma){
+    if(!aberta) return;
+    setOcupado("mais");
+    try{
+      const pedido=await _pedidoDoBanco(aberta);
+      const rodada=propostas.reduce(function(a,p){return Math.max(a,Number(p.rodada)||1);},0)+(propostas.length?1:0)||1;
+      const novas=await _gerarPara(aberta,pedido,rodada);
+      _toast("success",novas.length+(novas.length===1?" proposta nova.":" propostas novas."),3000);
+    }catch(e){
+      try{ await _upd("pautas",aberta.id,{status:propostas.length?"pronta":"erro",erro:String((e&&e.message)||e).slice(0,500)}); }catch(_){}
+      _toast("error","Não deu: "+((e&&e.message)||e),7000);
+    }
+    setPasso(""); setOcupado(""); _carregarPautas(); _carregarAberta(aberta.id);
+  };
+  /* Refazer UMA: a antiga fica guardada como descartada; a nova entra no mesmo lugar. */
+  const _refazer=async function(p,pedidoTxt){
+    if(!aberta) return;
+    setOcupado(p.id);
+    try{
+      const pedido=await _pedidoDoBanco(aberta);
+      const r=await pxPropostasDaSolicitacao({client:clId,unit:isBioter?String(unit||""):"",clienteNome:_nome(),contexto:aberta.contexto,
+        transcricao:pedido.transcricao,fichas:pedido.fichas,refazer:{proposta:p,pedido:pedidoTxt}});
+      const nova=Object.assign({},r[0],{origem:p.origem});
+      await _gravarPropostas(aberta,[nova],Number(p.rodada)||1,(Number(p.ordem)||1)-1);
+      await _upd("pauta_propostas",p.id,{status:"descartada"});
+      setRefazendo(null);
+      _toast("success","Proposta refeita. A anterior ficou guardada nas descartadas.",3000);
+    }catch(e){ _toast("error","Não deu pra refazer: "+((e&&e.message)||e),7000); }
+    setOcupado(""); _carregarAberta(aberta.id);
+  };
+  const _descartar=async function(p){
+    try{ await _upd("pauta_propostas",p.id,{status:"descartada"}); setSel(function(s){ const n=Object.assign({},s); delete n[p.id]; return n; }); _carregarAberta(aberta.id); }
+    catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  const _voltar=async function(p){
+    try{ await _upd("pauta_propostas",p.id,{status:"proposta"}); _carregarAberta(aberta.id); }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+  const _salvarEdicao=async function(){
+    const e=editando; if(!e) return;
+    if(!String(e.titulo||"").trim()){ _toast("warning","A proposta precisa de um título."); return; }
+    try{
+      await _upd("pauta_propostas",e.id,{titulo:String(e.titulo).trim(),content_type:e.content_type,briefing:String(e.briefing||"").trim(),legenda:String(e.legenda||"").trim()});
+      setEditando(null); _carregarAberta(aberta.id); _toast("success","Proposta salva.",1800);
+    }catch(err){ _toast("error","Não salvou: "+((err&&err.message)||err)); }
+  };
+  const _toggleCerebro=async function(m){
+    try{
+      await _upd("claude_materiais",m.id,{ativo:!m.ativo});
+      setMateriais(function(p){ return p.map(function(x){ return x.id===m.id?Object.assign({},x,{ativo:!m.ativo}):x; }); });
+      _toast("success",!m.ativo?"Ligado: a IA passa a usar este material nas copys de "+_nome()+".":"Desligado: fica só guardado em Materiais.",3000);
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+  };
+
+  /* ACEITAR → card em Copys. Hellen (gestora) em todos; vídeo leva o editor; design, o designer. */
+  const _aceitar=async function(){
+    const ids=Object.keys(sel).filter(function(k){return sel[k];});
+    const alvo=propostas.filter(function(p){ return ids.indexOf(p.id)>=0&&p.status==="proposta"&&!p.task_id; });
+    if(!alvo.length){ _toast("warning","Marque pelo menos uma proposta."); return; }
+    setOcupado("aceitar");
+    let padrao=_SW_PADRAO_FALLBACK;
+    try{ const r=await sb.from("team_data").select("dados").eq("tipo","pautas_padrao").maybeSingle(); if(r.data&&r.data.dados) padrao=Object.assign({},_SW_PADRAO_FALLBACK,r.data.dados); }catch(_){}
+    const u=_swUser(); const quem=(u&&u.name)||"Pixels";
+    const dataPedido=_swDataCurta(aberta.created_at);
+    let ok=0;
+    for(let i=0;i<alvo.length;i++){
+      const p=alvo[i];
+      const id="pauta-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
+      const now=new Date().toISOString();
+      const video=_swEhVideo(p.content_type);
+      const extra=video?padrao.editor_video:padrao.designer;
+      const assignees=[padrao.gestora].concat(extra&&extra!==padrao.gestora?[extra]:[]).filter(Boolean);
+      const tags=["Pedido do cliente"].concat(p.origem==="pixels"?["Sugestão da Pixels"]:[]);
+      const payload={id:id,title:p.titulo,status:"demanda",description:_pxTextoParaHtml(p.briefing||""),caption:_pxTextoParaHtml(p.legenda||""),
+        priority:"normal",client:clId,bioter_unit:isBioter?String(unit||""):"",origem:"pauta",content_type:p.content_type||"arte",
+        assignee:padrao.gestora||"",assignees:assignees,checklist:[],tags:tags,
+        timeline:[{type:"created",from:"",to:"demanda",fromLabel:"",toLabel:"Copys",at:now,atFmt:new Date().toLocaleDateString("pt-BR"),user:quem,
+          label:"Card criado a partir da solicitação por WhatsApp de "+dataPedido+" (por "+quem+")"+(p.origem==="pixels"?" — sugestão da Pixels":"")}],
+        created_by:(u&&u.id)||"",created_at:now,col_entered_at:now,comments:[],files:[],watchers:[],cover:null,ajustar:false,is_alteracao:false,score:null,
+        publish_date:null,publish_time:"09:00",deadline_time:"",deleted_at:null};
+      const r=await sb.from("tasks").insert(payload);
+      if(r.error){ _toast("error","Não criou \""+p.titulo+"\": "+r.error.message,7000); continue; }
+      try{ await _upd("pauta_propostas",p.id,{status:"aceita",task_id:id}); }catch(e){ _toast("error","Card criado, mas a proposta não foi marcada: "+((e&&e.message)||e),7000); }
+      ok++;
+    }
+    setSel({}); setOcupado(""); _carregarAberta(aberta.id);
+    if(ok) _toast("success",ok+(ok===1?" card criado":" cards criados")+" em Copys pra "+_nome()+" — sem data, na fila da Avaliação de copys.",4500);
+  };
+
+  /* ─── estilos (mesmo padrão da tela) ─── */
+  const _inp={width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",fontSize:13,color:"#0f172a",outline:"none",boxSizing:"border-box",fontFamily:_RT_FF};
+  const _lbl={color:"#94a3b8",fontSize:pxFonte(10.5,isMob),fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6};
+  const _btn=function(busy,cor){ return {background:busy?"#e2e8f0":(cor||_SW_AC),color:busy?"#94a3b8":"#fff",border:"1px solid "+(busy?"#e2e8f0":(cor||_SW_AC)),borderRadius:12,height:40,padding:"0 18px",fontSize:12.5,fontWeight:800,cursor:busy?"default":"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,whiteSpace:"nowrap",boxSizing:"border-box"}; };
+  const _btnSec={background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:12,height:40,padding:"0 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,whiteSpace:"nowrap",boxSizing:"border-box"};
+  const _mini={background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF};
+  const Spin=function(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" style={{animation:"pxspin 1s linear infinite"}}><path d="M21 12a9 9 0 11-6.2-8.56"/></svg>; };
+  const _card={background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"12px":"14px 16px"};
+
+  const vivas=propostas.filter(function(p){return p.status!=="descartada";});
+  const descartadas=propostas.filter(function(p){return p.status==="descartada";});
+  const nSel=Object.keys(sel).filter(function(k){ return sel[k]&&vivas.some(function(p){return p.id===k&&p.status==="proposta";}); }).length;
+  const trabalhando=!!passo||(aberta&&(aberta.status==="lendo"||aberta.status==="gerando"));
+
+  const _addFiles=function(fl){ const arr=Array.prototype.slice.call(fl||[]); if(!arr.length) return; setForm(function(f){ const b=f||{titulo:"",texto:"",files:[]}; return Object.assign({},b,{files:(b.files||[]).concat(arr)}); }); };
+
+  /* função que devolve JSX (não componente): assim o campo em edição não perde o foco a cada tecla */
+  const _renderProposta=function(p){
+    const aceita=p.status==="aceita", desc=p.status==="descartada";
+    const ed=editando&&editando.id===p.id?editando:null;
+    const rf=refazendo&&refazendo.id===p.id?refazendo:null;
+    const busy=ocupado===p.id;
+    const corOrig=p.origem==="pixels"?"#7c3aed":_SW_AC;
+    return <div key={p.id} style={{background:"#fff",border:"1px solid "+(sel[p.id]?_SW_AC:"#e8ebf0"),borderTop:"4px solid "+(desc?"#cbd5e1":corOrig),borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,opacity:desc?.65:1,boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        {!aceita&&!desc&&_bl("solic.aceitar")&&<input type="checkbox" checked={!!sel[p.id]} onChange={function(e){ const v=e.target.checked; setSel(function(s){ return Object.assign({},s,{[p.id]:v}); }); }} style={{width:18,height:18,marginTop:2,accentColor:_SW_AC,cursor:"pointer",flexShrink:0}}/>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:5}}>
+            <span style={{background:p.origem==="pixels"?"#f5f3ff":"#ecfdf5",color:corOrig,borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{p.origem==="pixels"?"Sugestão da Pixels":"Cliente"}</span>
+            <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:700}}>{_swTipoLabel(p.content_type)}</span>
+            {aceita&&<span style={{background:"#dcfce7",color:"#166534",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>✓ virou card em Copys</span>}
+            {desc&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:99,padding:"2px 9px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>descartada</span>}
+          </div>
+          {ed?<input value={ed.titulo} onChange={function(e){ setEditando(Object.assign({},ed,{titulo:e.target.value})); }} style={Object.assign({},_inp,{fontWeight:800})}/>
+             :<div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>}
+          {p.de_onde_veio&&!ed&&<div style={{color:"#64748b",fontSize:12,marginTop:4,fontStyle:"italic"}}>{p.de_onde_veio}</div>}
+        </div>
+      </div>
+      {ed?<>
+        <div><div style={_lbl}>Tipo</div>
+          <select value={ed.content_type||"arte"} onChange={function(e){ setEditando(Object.assign({},ed,{content_type:e.target.value})); }} style={_inp}>
+            {(typeof PX_TIPOS_CONTEUDO!=="undefined"?PX_TIPOS_CONTEUDO:[]).map(function(t){ return <option key={t.id} value={t.id}>{t.label}</option>; })}
+          </select></div>
+        <div><div style={_lbl}>Briefing</div><textarea value={ed.briefing} onChange={function(e){ setEditando(Object.assign({},ed,{briefing:e.target.value})); }} rows={10} style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/></div>
+        <div><div style={_lbl}>Legenda</div><textarea value={ed.legenda} onChange={function(e){ setEditando(Object.assign({},ed,{legenda:e.target.value})); }} rows={8} style={Object.assign({},_inp,{resize:"vertical",lineHeight:1.5})}/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button type="button" onClick={function(){ setEditando(null); }} style={_mini}>Cancelar</button>
+          <button type="button" onClick={_salvarEdicao} style={Object.assign({},_mini,{background:_SW_AC,color:"#fff",borderColor:_SW_AC})}>Salvar</button>
+        </div>
+      </>:<>
+        <div><div style={_lbl}>Briefing</div><div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:260,overflow:"auto",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.briefing||"—"}</div></div>
+        <div><div style={_lbl}>Legenda</div><div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.legenda||"—"}</div></div>
+      </>}
+      {rf&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <textarea autoFocus value={rf.pedido} onChange={function(e){ setRefazendo({id:p.id,pedido:e.target.value}); }} rows={3} placeholder="O que mudar? (opcional — em branco, a IA escreve a mesma ideia com outro ângulo)" style={Object.assign({},_inp,{resize:"vertical"})}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button type="button" onClick={function(){ setRefazendo(null); }} style={_mini}>Cancelar</button>
+          <button type="button" disabled={busy} onClick={function(){ _refazer(p,rf.pedido); }} style={Object.assign({},_mini,{background:"#7c3aed",color:"#fff",borderColor:"#7c3aed"})}>{busy?"Refazendo…":"Refazer"}</button>
+        </div>
+      </div>}
+      {!ed&&!rf&&!aceita&&<div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
+        {desc?<button type="button" onClick={function(){ _voltar(p); }} style={_mini}>Voltar pra lista</button>:<>
+          <button type="button" disabled={!!ocupado} onClick={function(){ setEditando({id:p.id,titulo:p.titulo,content_type:p.content_type||"arte",briefing:p.briefing||"",legenda:p.legenda||""}); }} style={_mini}>Editar</button>
+          <button type="button" disabled={!!ocupado} onClick={function(){ setRefazendo({id:p.id,pedido:""}); }} style={_mini}>{busy?"Refazendo…":"Refazer essa"}</button>
+          <button type="button" disabled={!!ocupado} onClick={function(){ _descartar(p); }} style={Object.assign({},_mini,{color:"#b91c1c"})}>Descartar</button>
+        </>}
+      </div>}
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Cliente + nova solicitação */}
+    <div style={Object.assign({},_card,{display:"flex",alignItems:isMob?"stretch":"flex-end",flexDirection:isMob?"column":undefined,gap:10,flexWrap:"wrap"})}>
+      <div style={{flex:1,minWidth:isMob?0:200}}><div style={_lbl}>Cliente</div>
+        <select value={clId} onChange={function(e){ setClId(e.target.value); }} style={_inp}>
+          {lista.map(function(c){ return <option key={c.id} value={c.id}>{c.name}</option>; })}
+        </select></div>
+      {isBioter&&<div style={{flex:1,minWidth:isMob?0:180}}><div style={_lbl}>Unidade</div>
+        <select value={unit||""} onChange={function(e){ setUnit(e.target.value); }} style={_inp}>
+          <option value="">Grupo Bioter</option>{unidades.map(function(u){ return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>; })}
+        </select></div>}
+      {_bl("solic.nova")&&<button type="button" disabled={!!passo} onClick={function(){ setForm(form?null:{titulo:"",texto:"",files:[]}); }} style={_btn(!!passo)}>
+        <Ico n="sparkles" size={14} color="#fff"/> {form?"Fechar":"Nova solicitação"}</button>}
+    </div>
+
+    {form&&<div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:12,borderColor:"#bbf7d0"})}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15}}>Nova solicitação — {_nome()}</div>
+      <div><div style={_lbl}>Título (opcional)</div><input value={form.titulo} onChange={function(e){ setForm(Object.assign({},form,{titulo:e.target.value})); }} placeholder={"Pedido de "+_swDataCurta(new Date().toISOString())} style={_inp}/></div>
+      <div><div style={_lbl}>Mensagem do cliente / anotação</div><textarea value={form.texto} onChange={function(e){ setForm(Object.assign({},form,{texto:e.target.value})); }} rows={4} placeholder="Cole aqui o que ele escreveu no WhatsApp, ou anote o que precisa saber junto com o áudio." style={Object.assign({},_inp,{resize:"vertical"})}/></div>
+      <div onDragOver={function(e){ e.preventDefault(); setArrastando(true); }} onDragLeave={function(){ setArrastando(false); }}
+        onDrop={function(e){ e.preventDefault(); setArrastando(false); _addFiles(e.dataTransfer&&e.dataTransfer.files); }}
+        onClick={function(){ if(fileRef.current) fileRef.current.click(); }}
+        style={{border:"2px dashed "+(arrastando?_SW_AC:"#cbd5e1"),background:arrastando?"#f0fdf4":"#f8fafc",borderRadius:14,padding:isMob?"18px 12px":"22px 16px",textAlign:"center",cursor:"pointer"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>Solte aqui o áudio do WhatsApp e o que mais o cliente mandou</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Áudio (.ogg, .opus, .mp3, .m4a), vídeo, imagem, PDF, Word ou texto. Vídeo vira só o áudio — o vídeo não sai do PC.</div>
+        <input ref={fileRef} type="file" multiple style={{display:"none"}} onChange={function(e){ _addFiles(e.target.files); e.target.value=""; }}/>
+      </div>
+      {(form.files||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {form.files.map(function(f,i){ return <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",borderRadius:10,padding:"7px 10px",fontSize:12.5}}>
+          <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700}}>{f.name}</span>
+          <span style={{color:"#94a3b8"}}>{_pbMatTamanho(f.size)}</span>
+          <button type="button" onClick={function(){ setForm(Object.assign({},form,{files:form.files.filter(function(_x,j){return j!==i;})})); }} style={{background:"none",border:"none",color:"#b91c1c",cursor:"pointer",fontWeight:800}}>tirar</button>
+        </div>; })}
+      </div>}
+      <div style={{color:"#64748b",fontSize:12}}>Tudo que subir aqui fica em <b>Materiais do cliente</b> como "Pedido do cliente", com o cérebro <b>desligado</b>. Dá pra ligar depois.</div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+        <button type="button" onClick={function(){ setForm(null); }} style={_btnSec}>Cancelar</button>
+        <button type="button" disabled={!!passo} onClick={_criar} style={_btn(!!passo)}><Ico n="sparkles" size={14} color="#fff"/> Ler e gerar propostas</button>
+      </div>
+    </div>}
+
+    {passo&&<div style={Object.assign({},_card,{display:"flex",alignItems:"center",gap:10,color:"#b45309",background:"#fffbeb",borderColor:"#fde68a",fontSize:13,fontWeight:700})}><Spin/> {passo}</div>}
+
+    <div style={{display:"flex",flexDirection:isMob?"column":"row",gap:14,alignItems:"flex-start"}}>
+      {/* Histórico */}
+      <div style={{width:isMob?"100%":300,flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={_lbl}>Solicitações de {_nome()}</div>
+        {!pautas.length&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Nenhuma ainda. Clique em "Nova solicitação" e suba o áudio do cliente.</div>}
+        {pautas.map(function(pt){
+          const st=_SW_STATUS[pt.status]||_SW_STATUS.rascunho; const on=pt.id===abertaId;
+          return <button key={pt.id} type="button" onClick={function(){ setAbertaId(on?null:pt.id); }}
+            style={{textAlign:"left",background:on?"#f0fdf4":"#fff",border:"1px solid "+(on?_SW_AC:"#eef0f3"),borderRadius:14,padding:"11px 13px",cursor:"pointer",fontFamily:_RT_FF}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>{pt.titulo||"Pedido"}</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",marginTop:5,flexWrap:"wrap"}}>
+              <span style={{background:st.b,color:st.c,borderRadius:99,padding:"1px 8px",fontSize:pxFonte(10.5,isMob),fontWeight:800}}>{st.t}</span>
+              <span style={{color:"#94a3b8",fontSize:11.5}}>{_swDataHora(pt.created_at)}{pt.created_by?(" · "+pt.created_by):""}</span>
+            </div>
+          </button>;
+        })}
+      </div>
+
+      {/* Solicitação aberta */}
+      <div style={{flex:1,minWidth:0,width:isMob?"100%":undefined,display:"flex",flexDirection:"column",gap:12}}>
+        {!aberta&&pautas.length>0&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Escolha uma solicitação ao lado pra ver as propostas.</div>}
+        {aberta&&<>
+          <div style={Object.assign({},_card,{display:"flex",flexDirection:"column",gap:10})}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>{aberta.titulo||"Pedido"}</div>
+                <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{_swDataHora(aberta.created_at)}{aberta.created_by?(" · subido por "+aberta.created_by):""} · {vivas.filter(function(p){return p.status==="aceita";}).length} aceitas de {vivas.length}</div>
+              </div>
+              {aberta.status==="erro"&&!trabalhando&&<button type="button" onClick={function(){ _gerarDeNovo(false); }} style={_btn(false,"#b91c1c")}>Tentar de novo</button>}
+            </div>
+            {aberta.status==="erro"&&aberta.erro&&<div style={{background:"#fef2f2",color:"#b91c1c",borderRadius:10,padding:"8px 11px",fontSize:12.5}}>{aberta.erro}</div>}
+            {String(aberta.contexto||"").trim()&&<div><div style={_lbl}>Mensagem / anotação</div><div style={{color:"#334155",fontSize:13,whiteSpace:"pre-wrap"}}>{aberta.contexto}</div></div>}
+            {String(aberta.transcricao||"").trim()&&<div>
+              <button type="button" onClick={function(){ setVerTranscricao(!verTranscricao); }} style={Object.assign({},_mini,{padding:"5px 10px"})}>{verTranscricao?"Esconder transcrição do áudio":"Ver transcrição do áudio"}</button>
+              {verTranscricao&&<div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#f8fafc",borderRadius:10,padding:"10px 12px",marginTop:8,maxHeight:320,overflow:"auto"}}>{aberta.transcricao}</div>}
+            </div>}
+            {materiais.length>0&&<div><div style={_lbl}>Arquivos (em Materiais do cliente)</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {materiais.map(function(m){ return <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",borderRadius:10,padding:"7px 10px",fontSize:12.5,flexWrap:"wrap"}}>
+                  <a href={m.arquivo_url} target="_blank" rel="noreferrer" style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#0f172a",fontWeight:700,textDecoration:"none"}}>{m.arquivo_nome||m.titulo}</a>
+                  {m.ficha_status==="erro"&&<span style={{color:"#b91c1c",fontWeight:700}}>não deu pra ler</span>}
+                  {m.ficha_status==="lendo"&&<span style={{color:"#b45309",fontWeight:700}}>lendo…</span>}
+                  {_bl("solic.cerebro")
+                    ?<button type="button" onClick={function(){ _toggleCerebro(m); }} title="Liga/desliga este material no cérebro da IA do cliente"
+                        style={{background:m.ativo?"#dcfce7":"#f1f5f9",color:m.ativo?"#166534":"#64748b",border:"none",borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:800,cursor:"pointer"}}>{m.ativo?"🧠 no cérebro":"cérebro desligado"}</button>
+                    :<span style={{color:"#64748b",fontSize:11.5}}>{m.ativo?"no cérebro":"cérebro desligado"}</span>}
+                </div>; })}
+              </div></div>}
+          </div>
+
+          {vivas.length>0&&<div style={Object.assign({},_card,{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",position:isMob?"sticky":undefined,top:isMob?0:undefined,zIndex:2})}>
+            <div style={{flex:1,minWidth:isMob?"100%":0,color:"#334155",fontSize:13,fontWeight:700}}>{nSel?(nSel+(nSel===1?" marcada":" marcadas")):"Marque as que viram card"}</div>
+            {_bl("solic.aceitar")&&<button type="button" disabled={!nSel||!!ocupado} onClick={_aceitar} style={Object.assign({},_btn(!nSel||!!ocupado),{flex:isMob?1:undefined})}>{ocupado==="aceitar"?<><Spin/> Criando cards…</>:"Aceitar selecionadas"}</button>}
+            {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(true); }} style={Object.assign({},_btnSec,{flex:isMob?1:undefined})}>{ocupado==="mais"?<><Spin/> Gerando…</>:"Gerar mais"}</button>}
+          </div>}
+
+          {!vivas.length&&!trabalhando&&aberta.status!=="erro"&&<div style={Object.assign({},_card,{color:"#94a3b8",fontSize:13})}>Sem propostas ainda.{_bl("solic.nova")?<> <button type="button" onClick={function(){ _gerarDeNovo(false); }} style={_mini}>Gerar propostas</button></>:null}</div>}
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+            {vivas.map(function(p){ return _renderProposta(p); })}
+          </div>
+
+          {descartadas.length>0&&<div>
+            <button type="button" onClick={function(){ setVerDescartadas(!verDescartadas); }} style={_mini}>{verDescartadas?"Esconder descartadas":"Ver descartadas ("+descartadas.length+")"}</button>
+            {verDescartadas&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:12,marginTop:10}}>
+              {descartadas.map(function(p){ return _renderProposta(p); })}
+            </div>}
+          </div>}
+        </>}
+      </div>
+    </div>
   </div>;
 }
 
