@@ -112569,7 +112569,16 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
    v1 (28/09/2026): categoria nova "CRIAÇÃO" na barra lateral (abaixo de ESTRATÉGIA), pedida pelo usuário:
      "preciso que tenha um menu de edição de vídeo dentro do APP".
    Decisões: nasce fechada (só sócios; Acessos › Criação › "criacao.edicao_video"); começa por
-   Menu + Fila + Kit do cliente. O Estúdio (edição com IA) entra depois da prova do motor (HyperFrames).
+   Menu + Fila + Kit do cliente.
+   v2 (28/09/2026, noite): ESTÚDIO — pedido do usuário: "o menu de edição de vídeo não tem um editor…
+     quero algo completo, inclusive com um visualizador". Decisões dele: a IA edita sozinha (a pessoa só
+     vê, pede ajuste por escrito e aprova); o MP4 é gerado no navegador; já com cortes, legenda automática,
+     textos/logo/tela final, música e transições. Guia MÚSICAS (biblioteca com clima e licença).
+     Motor: o navegador desmonta os brutos do card (quadros + áudio 16 kHz) → Edge Function video-editar
+     (fala palavra por palavra + Claude) devolve a RECEITA → o player desenha a receita num canvas 1080×1920
+     (o mesmo desenho do Exportar, que grava o canvas + o áudio em tempo real e anexa o MP4 no card como final).
+     Backend: rpc criacao_edicao · criacao_edicao_versao · criacao_edicao_final · criacao_musicas ·
+     criacao_musica_salvar · criacao_musica_tirar; tabela video_edicoes (versões nunca apagadas).
 
    Guias:
      • Fila — cards de VÍDEO em Demanda / Em execução / Ajustes (dado real: os mesmos cards da Linha de produção),
@@ -112662,27 +112671,31 @@ function _evKitPadrao(base){
 
 /* ═══ PÁGINA ═══ */
 function PageEdicaoVideo({ isMob, tasks, onAbrirCard }){
-  const [aba, setAba] = useState("fila");   // fila | kit
+  const [aba, setAba] = useState("fila");   // fila | estudio | kit | musicas
+  const [taskEstudio, setTaskEstudio] = useState(null);
+  const abrirEstudio = function(t){ setTaskEstudio(t ? t.id : null); setAba("estudio"); };
   return (
     <div style={{padding:isMob?"14px 12px 90px":"22px 28px 40px",maxWidth:1180,margin:"0 auto",color:_EV.texto,background:_EV.fundo,minHeight:"100%"}}>
       <div style={{fontSize:_evF(11.5,isMob),fontWeight:800,color:_EV.rosa,letterSpacing:".08em",textTransform:"uppercase"}}>Criação</div>
       <div style={{fontSize:_evF(isMob?20:24,isMob),fontWeight:800,letterSpacing:-0.3,marginTop:2}}>Edição de vídeo</div>
-      <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>Os vídeos esperando edição e o kit que a IA vai seguir para editar cada cliente.</div>
+      <div style={{fontSize:_evF(13,isMob),color:_EV.sub,marginTop:4}}>A IA edita os vídeos brutos do card seguindo o kit de cada cliente. Você assiste, pede ajuste e exporta.</div>
 
       <div style={{display:"flex",gap:isMob?14:22,marginTop:14,borderBottom:"1px solid "+_EV.linha,overflowX:"auto"}}>
-        {[["fila","Fila"],["kit","Kit do cliente"]].map(function(g){ const on = aba===g[0];
+        {[["fila","Fila"],["estudio","Estúdio"],["kit","Kit do cliente"],["musicas","Músicas"]].map(function(g){ const on = aba===g[0];
           return <button key={g[0]} onClick={function(){ setAba(g[0]); }} style={{font:"inherit",border:0,background:"none",cursor:"pointer",padding:"0 0 10px",margin:"0 0 -1px",
             borderBottom:"2px solid "+(on?_EV.roxo:"transparent"),color:on?_EV.roxo:_EV.sub,fontWeight:on?800:600,fontSize:_evF(14,isMob),whiteSpace:"nowrap"}}>{g[1]}</button>; })}
       </div>
 
-      {aba==="fila" && <_EvFila tasks={tasks||[]} isMob={isMob} onAbrirCard={onAbrirCard}/>}
+      {aba==="fila" && <_EvFila tasks={tasks||[]} isMob={isMob} onAbrirCard={onAbrirCard} onEstudio={abrirEstudio}/>}
+      {aba==="estudio" && <_EvEstudio tasks={tasks||[]} isMob={isMob} taskId={taskEstudio} setTaskId={setTaskEstudio} onAbrirCard={onAbrirCard}/>}
       {aba==="kit"  && <_EvKit isMob={isMob}/>}
+      {aba==="musicas" && <_EvMusicas isMob={isMob}/>}
     </div>
   );
 }
 
 /* ═══ FILA ═══ */
-function _EvFila({ tasks, isMob, onAbrirCard }){
+function _EvFila({ tasks, isMob, onAbrirCard, onEstudio }){
   const [cliente, setCliente] = useState("");
   const hoje = _evHojeIso();
 
@@ -112753,7 +112766,7 @@ function _EvFila({ tasks, isMob, onAbrirCard }){
           <div key={col.id} style={{marginTop:18}}>
             <div style={{fontSize:_evF(13,isMob),fontWeight:800,color:_EV.sub,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>{col.label} · {itens.length}</div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {itens.map(function(x){ return <_EvFilaItem key={x.t.id} x={x} isMob={isMob} onAbrirCard={onAbrirCard}/>; })}
+              {itens.map(function(x){ return <_EvFilaItem key={x.t.id} x={x} isMob={isMob} onAbrirCard={onAbrirCard} onEstudio={onEstudio}/>; })}
             </div>
           </div>
         );
@@ -112766,7 +112779,7 @@ function _EvFila({ tasks, isMob, onAbrirCard }){
   );
 }
 
-function _EvFilaItem({ x, isMob, onAbrirCard }){
+function _EvFilaItem({ x, isMob, onAbrirCard, onEstudio }){
   const t = x.t;
   const cor = _evCorCliente(t.client);
   const pessoas = (Array.isArray(t.assignees) && t.assignees.length ? t.assignees : (t.assignee ? [t.assignee] : []))
@@ -112793,10 +112806,16 @@ function _EvFilaItem({ x, isMob, onAbrirCard }){
         </div>
         {pessoas.length>0 && <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:6}}>Com: {pessoas.join(", ")}</div>}
       </div>
-      {typeof onAbrirCard==="function" && (
-        <button onClick={function(){ onAbrirCard(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:"1px solid "+_EV.roxoBorda,
-          background:_EV.roxoClaro,color:_EV.roxo,fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>Abrir card</button>
-      )}
+      <div style={{display:"flex",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+        {typeof onEstudio==="function" && x.brutos>0 && (
+          <button onClick={function(){ onEstudio(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:0,
+            background:_EV.roxo,color:"#fff",fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap"}}>🎬 Estúdio</button>
+        )}
+        {typeof onAbrirCard==="function" && (
+          <button onClick={function(){ onAbrirCard(t); }} style={{font:"inherit",padding:"9px 14px",borderRadius:10,border:"1px solid "+_EV.roxoBorda,
+            background:_EV.roxoClaro,color:_EV.roxo,fontWeight:800,fontSize:_evF(13,isMob),cursor:"pointer",whiteSpace:"nowrap"}}>Abrir card</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -113072,6 +113091,876 @@ function _EvPrevia({ cliente, base, f, isMob }){
         {gcItens.map(function(s,i){ return <div key={i} style={{fontSize:11,marginTop:3,wordBreak:"break-word"}}>{s}</div>; })}
       </div>
       <div style={{fontSize:_evF(11.5,isMob),color:_EV.fraco,marginTop:8,maxWidth:W,margin:isMob?"8px auto 0":"8px 0 0"}}>Exemplo para ver cores, fonte e posições. A tarja usa "Nome da pessoa" e a cidade do cadastro.</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ESTÚDIO (v2 — 28/09/2026, noite)
+   A IA edita sozinha a partir dos vídeos brutos do card (Material). A pessoa assiste no player,
+   pede ajuste por escrito, volta versões e exporta o MP4 (gerado no navegador), que vai para o
+   card como arquivo final. Celular só assiste.
+   ═══════════════════════════════════════════════════════════════════ */
+const _EV_W = 1080, _EV_H = 1920;
+const _EV_CLIMAS = [
+  { id:"animada", label:"Animada" }, { id:"calma", label:"Calma" }, { id:"inspiradora", label:"Inspiradora" },
+  { id:"corporativa", label:"Corporativa" }, { id:"emocionante", label:"Emocionante" },
+];
+const _EV_CORES_CLIPE = ["#7c3aed","#0891b2","#db2777","#ea580c","#16a34a","#2563eb","#9333ea","#ca8a04","#0d9488","#dc2626","#4f46e5","#65a30d"];
+
+function _evTempo(s){ s = Math.max(0, Number(s)||0); const m = Math.floor(s/60), r = s - m*60; return m + ":" + (r<10?"0":"") + r.toFixed(1); }
+function _evBrutos(t){ return (Array.isArray(t && t.files) ? t.files : []).filter(function(f){ return f && f.id && f.url && f.tipo==="material" && _evEhVideoArquivo(f); }); }
+function _evUuid(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(_){}
+  const h = "0123456789abcdef"; let s = ""; for(let i=0;i<32;i++) s += h[Math.floor(Math.random()*16)];
+  return s.slice(0,8)+"-"+s.slice(8,12)+"-4"+s.slice(13,16)+"-8"+s.slice(17,20)+"-"+s.slice(20,32); }
+function _evToast(tipo, msg){ try{ if(typeof pixelsToast!=="undefined" && pixelsToast && pixelsToast[tipo]) pixelsToast[tipo](msg); }catch(_){} }
+function _evErroFn(res){ // mensagem de erro de functions.invoke
+  return (async function(){
+    let msg = (res && res.error && res.error.message) || "erro";
+    try{ const j = await res.error.context.json(); if(j && j.erro) msg = j.erro; }catch(_){}
+    return msg;
+  })();
+}
+function _evNorm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,""); }
+function _evClamp(x, a, b){ return x < a ? a : x > b ? b : x; }
+
+/* ── receita → linha do tempo (segundos do vídeo final) ── */
+function _evLinha(receita, fala, kit){
+  const r = receita || {};
+  const segs = []; let t = 0;
+  (Array.isArray(r.cortes) ? r.cortes : []).forEach(function(c){
+    const d = Number(c.fim) - Number(c.ini); if(!(d > 0.05)) return;
+    segs.push({ i:segs.length, clipe:c.clipe, ini:Number(c.ini), fim:Number(c.fim), t0:t, t1:t+d }); t += d;
+  });
+  const fimCortes = t;
+  const total = t + Math.max(0, Number((r.tela_final||{}).dur)||0);
+  const mapa = function(clipe, tc){
+    for(let k=0;k<segs.length;k++){ const s = segs[k]; if(s.clipe===clipe && tc >= s.ini-0.05 && tc <= s.fim) return s.t0 + Math.max(0, tc - s.ini); }
+    return null;
+  };
+  const destaques = (Array.isArray(r.destaques) ? r.destaques : []).map(function(d){
+    const a = mapa(d.clipe, Number(d.t)); if(a==null) return null;
+    return { a:a, b:Math.min(a + (Number(d.dur)||2.2), fimCortes), texto:String(d.texto||""), pos:d.pos==="meio" ? "meio" : "topo" };
+  }).filter(Boolean);
+  let tarja = null;
+  if(r.tarja){ const a = mapa(r.tarja.clipe, Number(r.tarja.t)); if(a!=null) tarja = { a:a, b:Math.min(a + (Number(r.tarja.dur)||4), fimCortes), nome:r.tarja.nome||"", linha2:r.tarja.linha2||"" }; }
+  // legenda: palavras do clipe → tempo final, com as correções de grafia
+  const corr = {}; (Array.isArray(r.correcoes) ? r.correcoes : []).forEach(function(c){ if(c && c.de && c.para && String(c.de).indexOf(" ")<0) corr[_evNorm(c.de)] = String(c.para); });
+  const fixa = function(p){ const k = _evNorm(p); if(!k || !corr[k]) return p; const m = String(p).match(/[.,!?;:…]+$/); return corr[k] + (m ? m[0] : ""); };
+  const porBloco = (kit && kit.legenda_estilo==="frase") ? 7 : 3;
+  const blocos = [];
+  segs.forEach(function(s){
+    const ws = ((fala && fala[s.clipe]) || []).filter(function(w){ return Number(w.i) >= s.ini-0.05 && Number(w.i) < s.fim-0.05; });
+    let atual = null;
+    ws.forEach(function(w){
+      const a = s.t0 + Math.max(0, Number(w.i) - s.ini), b = s.t0 + Math.min(s.fim, Number(w.f)) - s.ini;
+      const ult = atual && atual.words[atual.words.length-1];
+      if(!atual || atual.words.length >= porBloco || (ult && a - ult.b > 0.35) || (ult && /[.!?]$/.test(ult.p))){
+        atual = { words:[], a:a, b:b }; blocos.push(atual);
+      }
+      atual.words.push({ p:fixa(w.p), a:a, b:Math.max(a+0.05, b) }); atual.b = Math.max(atual.b, b);
+    });
+  });
+  for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
+  return { segs:segs, fimCortes:fimCortes, total:total, destaques:destaques, tarja:tarja, blocos:blocos, transicao:r.transicao||"corte" };
+}
+
+/* ── desenho (o mesmo no player e no Exportar) ── */
+function _evRet(cx, x, y, w, h, r){
+  cx.beginPath();
+  if(cx.roundRect){ cx.roundRect(x, y, w, h, r); return; }
+  cx.moveTo(x+r, y); cx.arcTo(x+w, y, x+w, y+h, r); cx.arcTo(x+w, y+h, x, y+h, r); cx.arcTo(x, y+h, x, y, r); cx.arcTo(x, y, x+w, y, r); cx.closePath();
+}
+function _evQuebra(cx, palavras, maxW){
+  const out = []; let l = [], w = 0; const sp = cx.measureText(" ").width;
+  palavras.forEach(function(p){ const pw = cx.measureText(p.p!=null ? p.p : p).width;
+    if(l.length && w + sp + pw > maxW){ out.push(l); l = []; w = 0; }
+    if(l.length) w += sp; l.push(p); w += pw; });
+  if(l.length) out.push(l);
+  return out;
+}
+function _evEaseBack(x){ const c1 = 1.70158, c3 = c1 + 1; return 1 + c3*Math.pow(x-1,3) + c1*Math.pow(x-1,2); }
+
+function _evMotor(canvas, o){
+  const W = _EV_W, H = _EV_H, cx = canvas.getContext("2d");
+  const L = o.linha, segs = L.segs, kit = o.kit || {}, base = o.base || {};
+  const pri = kit.cor_principal || "#7c3aed", sec = kit.cor_secundaria || "#ffffff", txt = kit.cor_texto || "#ffffff";
+  const F = "\"" + (kit.fonte||"Montserrat") + "\", Montserrat, system-ui, sans-serif";
+  const urlDe = {}; (o.clipes||[]).forEach(function(c){ urlDe[c.id] = o.original ? c.url : (c.preview_url || c.url); });
+  const els = []; let vivo = true, tocando = false, t = 0, cur = 0, finalIni = 0, raf = 0, esperando = false;
+  let logo = null, mus = null, musGain = null;
+
+  function criar(i){
+    if(!segs[i]) return null;
+    if(els[i]) return els[i];
+    const v = document.createElement("video");
+    v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = false;
+    if(o.audio){ try{ o.audio.ctx.createMediaElementSource(v).connect(o.audio.dest); }catch(_){} }
+    v._alvo = segs[i].ini;
+    v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} });
+    v.src = urlDe[segs[i].clipe];
+    els[i] = v; return v;
+  }
+  function alvo(i, tc){ const v = criar(i); if(!v) return; v._alvo = tc; if(v.readyState >= 1){ try{ v.currentTime = tc; }catch(_){} } }
+  function soltar(){
+    for(let i=0;i<els.length;i++){ const v = els[i];
+      if(v && (i < cur-1 || i > cur+3)){ try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} els[i] = null; } }
+  }
+  function idx(tt){ for(let i=0;i<segs.length;i++){ if(tt < segs[i].t1) return i; } return Math.max(0, segs.length-1); }
+  function prepararVizinhos(){ if(segs[cur+1]) alvo(cur+1, segs[cur+1].ini); if(segs[cur+2]) alvo(cur+2, segs[cur+2].ini); }
+
+  if(o.musica && o.musica.url){
+    mus = new Audio(); mus.crossOrigin = "anonymous"; mus.loop = true; mus.preload = "auto"; mus.src = o.musica.url;
+    if(o.audio){ try{ const s = o.audio.ctx.createMediaElementSource(mus); musGain = o.audio.ctx.createGain(); s.connect(musGain); musGain.connect(o.audio.dest); }catch(_){ musGain = null; } }
+  }
+  const volMus = function(){ const v = Number(o.musica && o.musica.volume) || 0.15; const fade = _evClamp((L.total - t)/1.2, 0, 1); return v*fade; };
+
+  const pronto = new Promise(function(res){
+    let falta = 3; const um = function(){ falta--; if(falta<=0) res(); };
+    try{ _evCarregarFonte(kit.fonte||"Montserrat"); }catch(_){}
+    const fnt = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load("800 70px " + F), document.fonts.load("900 88px " + F)]) : Promise.resolve();
+    fnt.then(um, um); setTimeout(um, 4000);
+    if(o.logoUrl && kit.logo_posicao!=="nenhum"){
+      const im = new Image(); if(!/^data:/.test(o.logoUrl)) im.crossOrigin = "anonymous";
+      im.onload = function(){ logo = im; um(); }; im.onerror = um; im.src = o.logoUrl;
+    } else um();
+    const v0 = criar(0);
+    if(v0){ const ok = function(){ um(); }; v0.addEventListener("canplay", ok, { once:true }); v0.addEventListener("error", ok, { once:true }); setTimeout(ok, 15000); } else um();
+    // um() pode ser chamado mais de 3 vezes (timeouts) — res() só vale na primeira
+  });
+  prepararVizinhos();
+
+  function desenharVideo(v, zoom){
+    const vw = v.videoWidth, vh = v.videoHeight; if(!vw || !vh) return;
+    if(vw > vh*1.05){ // horizontal: fundo desfocado + vídeo inteiro no meio
+      const sc = Math.max(W/vw, H/vh);
+      cx.save(); cx.filter = "blur(40px) brightness(0.6)"; cx.drawImage(v, (W-vw*sc)/2, (H-vh*sc)/2, vw*sc, vh*sc); cx.restore();
+      const sc2 = (W/vw)*zoom; cx.drawImage(v, (W-vw*sc2)/2, (H-vh*sc2)/2, vw*sc2, vh*sc2);
+    } else {
+      const sc = Math.max(W/vw, H/vh)*zoom; cx.drawImage(v, (W-vw*sc)/2, (H-vh*sc)/2, vw*sc, vh*sc);
+    }
+  }
+  function desenharLogo(){
+    if(!logo || kit.logo_posicao==="nenhum") return;
+    const S = 150, P = 16, M = 44;
+    const pos = { sup_dir:[W-M-S, M], sup_esq:[M, M], inf_dir:[W-M-S, H-M-S-160] }[kit.logo_posicao||"sup_dir"] || [W-M-S, M];
+    cx.save(); cx.fillStyle = "rgba(255,255,255,0.95)"; _evRet(cx, pos[0], pos[1], S, S, 26); cx.fill();
+    const r = Math.min((S-2*P)/logo.width, (S-2*P)/logo.height), w = logo.width*r, h = logo.height*r;
+    cx.drawImage(logo, pos[0] + (S-w)/2, pos[1] + (S-h)/2, w, h); cx.restore();
+  }
+  function desenharTarja(){
+    const tj = L.tarja; if(!tj || t < tj.a || t > tj.b) return;
+    const pin = _evClamp((t - tj.a)/0.35, 0, 1), pout = _evClamp((tj.b - t)/0.3, 0, 1), k = Math.min(1 - Math.pow(1-pin,3), pout);
+    const y = H*0.62, dx = -(1-k)*W*0.6, modelo = kit.tarja_modelo || "barra";
+    cx.save(); cx.globalAlpha = Math.max(0, Math.min(1, k*1.3));
+    cx.font = "800 50px " + F; const wn = cx.measureText(tj.nome).width;
+    cx.font = "600 36px " + F; const w2 = tj.linha2 ? cx.measureText(tj.linha2).width : 0;
+    if(modelo==="etiqueta"){
+      const w = Math.max(wn, w2) + 64, h = tj.linha2 ? 138 : 92;
+      cx.fillStyle = pri; _evRet(cx, 60+dx, y, w, h, 28); cx.fill();
+      cx.fillStyle = txt; cx.textBaseline = "top"; cx.font = "800 50px " + F; cx.fillText(tj.nome, 92+dx, y+20);
+      if(tj.linha2){ cx.font = "600 36px " + F; cx.globalAlpha *= 0.92; cx.fillText(tj.linha2, 92+dx, y+80); }
+    } else if(modelo==="discreta"){
+      cx.fillStyle = pri; cx.fillRect(60+dx, y, 10, tj.linha2 ? 120 : 70);
+      cx.shadowColor = "rgba(0,0,0,.7)"; cx.shadowBlur = 12; cx.fillStyle = "#fff"; cx.textBaseline = "top";
+      cx.font = "800 50px " + F; cx.fillText(tj.nome, 92+dx, y+4);
+      if(tj.linha2){ cx.font = "600 36px " + F; cx.fillText(tj.linha2, 92+dx, y+70); }
+    } else {
+      const h = 96; cx.fillStyle = pri; cx.fillRect(0+dx, y, wn + 90, h);
+      cx.fillStyle = txt; cx.textBaseline = "middle"; cx.font = "800 50px " + F; cx.fillText(tj.nome, 50+dx, y+h/2);
+      if(tj.linha2){ cx.fillStyle = sec; cx.fillRect(wn + 90 + dx, y + 14, w2 + 60, h - 28); cx.fillStyle = pri; cx.font = "700 36px " + F; cx.fillText(tj.linha2, wn + 120 + dx, y + h/2); }
+    }
+    cx.restore();
+  }
+  function desenharDestaques(){
+    L.destaques.forEach(function(d){
+      if(t < d.a || t > d.b) return;
+      const p = _evClamp((t - d.a)/0.22, 0, 1), sc = 0.6 + 0.4*_evEaseBack(p), al = _evClamp((d.b - t)/0.2, 0, 1);
+      cx.save(); cx.globalAlpha = al; cx.font = "900 86px " + F; cx.textBaseline = "middle";
+      const linhas = _evQuebra(cx, String(d.texto).toUpperCase().split(/\s+/).filter(Boolean), W*0.78);
+      const lh = 100, bw = Math.max.apply(null, linhas.map(function(l){ return cx.measureText(l.join(" ")).width; })) + 70, bh = linhas.length*lh + 40;
+      const cy = d.pos==="meio" ? H*0.45 : H*0.2;
+      cx.translate(W/2, cy); cx.scale(sc, sc); cx.rotate(-0.02);
+      cx.fillStyle = pri; cx.shadowColor = "rgba(0,0,0,.35)"; cx.shadowBlur = 24; _evRet(cx, -bw/2, -bh/2, bw, bh, 24); cx.fill(); cx.shadowBlur = 0;
+      cx.fillStyle = txt; cx.textAlign = "center";
+      linhas.forEach(function(l, k){ cx.fillText(l.join(" "), 0, -bh/2 + 20 + lh/2 + k*lh); });
+      cx.restore();
+    });
+  }
+  function desenharLegenda(){
+    if(kit.legenda_estilo==="sem") return;
+    let b = null; for(let k=0;k<L.blocos.length;k++){ const x = L.blocos[k]; if(t >= x.a && t < x.b){ b = x; break; } }
+    if(!b) return;
+    const fs = 70; cx.save(); cx.font = "800 " + fs + "px " + F; cx.textBaseline = "middle"; cx.lineJoin = "round";
+    const linhas = _evQuebra(cx, b.words, W*0.84), lh = fs*1.3;
+    const yc = kit.legenda_posicao==="centro" ? H*0.52 : H*0.75;
+    let ativa = -1; b.words.forEach(function(w, k){ if(t >= w.a) ativa = k; });
+    const sp = cx.measureText(" ").width; let n = 0;
+    linhas.forEach(function(l, li){
+      const lw = l.reduce(function(s, w, k){ return s + cx.measureText(w.p).width + (k ? sp : 0); }, 0);
+      let x = (W - lw)/2; const y = yc - (linhas.length*lh)/2 + lh/2 + li*lh;
+      l.forEach(function(w){
+        const ww = cx.measureText(w.p).width, on = kit.legenda_estilo!=="frase" && n===ativa;
+        if(on){ cx.fillStyle = pri; _evRet(cx, x-14, y-fs*0.62, ww+28, fs*1.24, 16); cx.fill(); cx.fillStyle = txt; cx.fillText(w.p, x, y); }
+        else { cx.strokeStyle = "rgba(0,0,0,.85)"; cx.lineWidth = 12; cx.strokeText(w.p, x, y); cx.fillStyle = "#fff"; cx.fillText(w.p, x, y); }
+        x += ww + sp; n++;
+      });
+    });
+    cx.restore();
+  }
+  function desenharFinal(al){
+    cx.save(); cx.globalAlpha = al;
+    cx.fillStyle = pri; cx.fillRect(0, 0, W, H);
+    const g = cx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(255,255,255,0.10)"); g.addColorStop(1, "rgba(0,0,0,0.22)"); cx.fillStyle = g; cx.fillRect(0, 0, W, H);
+    let y = H*0.2;
+    if(logo){ const S = 300; cx.fillStyle = "#fff"; _evRet(cx, (W-S)/2, y, S, S, 48); cx.fill();
+      const r = Math.min((S-50)/logo.width, (S-50)/logo.height); cx.drawImage(logo, (W-logo.width*r)/2, y + (S-logo.height*r)/2, logo.width*r, logo.height*r); y += S + 90; }
+    else y = H*0.36;
+    cx.fillStyle = txt; cx.textAlign = "center"; cx.textBaseline = "middle"; cx.font = "800 84px " + F;
+    _evQuebra(cx, String(kit.cta_final||"").split(/\s+/).filter(Boolean), W*0.84).forEach(function(l){ cx.fillText(l.join(" "), W/2, y); y += 100; });
+    y += 30; cx.font = "600 50px " + F;
+    const gc = { whatsapp: base.whatsapp ? "WhatsApp " + base.whatsapp : "", instagram: base.instagram ? "@" + base.instagram : "", site: base.site || "", endereco: base.endereco || "" };
+    (Array.isArray(kit.gc_final) ? kit.gc_final : []).forEach(function(id){ const s = gc[id]; if(!s) return;
+      _evQuebra(cx, s.split(/\s+/), W*0.86).forEach(function(l){ cx.fillText(l.join(" "), W/2, y); y += 66; }); y += 14; });
+    cx.restore();
+  }
+  function desenhar(){
+    cx.save(); cx.fillStyle = "#000"; cx.fillRect(0, 0, W, H); cx.restore();
+    if(segs.length && t < L.fimCortes){
+      const i = idx(t), s = segs[i], v = els[i];
+      let zoom = 1; if(L.transicao==="zoom" && i>0) zoom = 1 + 0.08*Math.max(0, 1 - (t - s.t0)/0.35);
+      if(v && v.readyState >= 2) desenharVideo(v, zoom);
+      if(L.transicao==="fade"){ const d = 0.2; let a = 0;
+        if(i>0 && t - s.t0 < d) a = 1 - (t - s.t0)/d;
+        if(i<segs.length-1 && s.t1 - t < d) a = Math.max(a, 1 - (s.t1 - t)/d);
+        if(a>0){ cx.fillStyle = "rgba(0,0,0," + a.toFixed(3) + ")"; cx.fillRect(0, 0, W, H); } }
+      desenharLogo(); desenharTarja(); desenharDestaques(); desenharLegenda();
+      if(esperando && !o.original){ cx.save(); cx.fillStyle = "rgba(0,0,0,.35)"; _evRet(cx, W/2-70, H/2-70, 140, 140, 70); cx.fill(); cx.restore(); }
+    }
+    if(L.total > L.fimCortes && t >= L.fimCortes - 0.3) desenharFinal(_evClamp((t - (L.fimCortes - 0.3))/0.3, 0, 1));
+  }
+  function tick(){
+    if(!vivo) return;
+    esperando = false;
+    if(tocando){
+      if(segs.length && t < L.fimCortes){
+        const s = segs[cur], v = criar(cur);
+        if(v && v.readyState >= 2 && !v.seeking){
+          if(v.paused){ const p = v.play(); if(p && p.catch) p.catch(function(){}); }
+          const nt = s.t0 + (v.currentTime - s.ini);
+          if(nt >= t - 0.5) t = Math.max(t, Math.min(nt, s.t1));
+          if(v.currentTime >= s.fim - 0.03 || v.ended){
+            v.pause();
+            if(cur < segs.length-1){
+              cur++; t = segs[cur].t0; const n = criar(cur);
+              if(Math.abs(n.currentTime - segs[cur].ini) > 0.08){ n._alvo = segs[cur].ini; try{ n.currentTime = segs[cur].ini; }catch(_){} }
+              const p2 = n.play(); if(p2 && p2.catch) p2.catch(function(){});
+              prepararVizinhos(); soltar();
+            } else { t = L.fimCortes; finalIni = performance.now(); }
+          }
+        } else esperando = true;
+      } else {
+        t = L.fimCortes + (performance.now() - finalIni)/1000;
+        if(t >= L.total){ t = L.total; tocando = false; if(mus) mus.pause(); if(o.onFim) o.onFim(); }
+      }
+      if(mus && tocando){
+        const d = mus.duration, am = (d && isFinite(d)) ? (t % d) : t;
+        if(Math.abs(mus.currentTime - am) > 0.4){ try{ mus.currentTime = am; }catch(_){} }
+        if(musGain) musGain.gain.value = volMus(); else mus.volume = _evClamp(volMus(), 0, 1);
+        if(mus.paused && !esperando){ const p = mus.play(); if(p && p.catch) p.catch(function(){}); }
+        if(esperando && !mus.paused) mus.pause();
+      }
+    }
+    desenhar();
+    if(o.onTempo) o.onTempo(t, tocando);
+    raf = requestAnimationFrame(tick);
+  }
+  raf = requestAnimationFrame(tick);
+
+  return {
+    pronto: pronto,
+    get tempo(){ return t; },
+    get tocando(){ return tocando; },
+    play: function(){
+      if(!segs.length) return;
+      if(t >= L.total - 0.02) this.seek(0);
+      if(o.audio && o.audio.ctx.state==="suspended") o.audio.ctx.resume();
+      tocando = true;
+      if(t >= L.fimCortes) finalIni = performance.now() - (t - L.fimCortes)*1000;
+    },
+    pause: function(){ tocando = false; els.forEach(function(v){ if(v) try{ v.pause(); }catch(_){} }); if(mus) mus.pause(); },
+    seek: function(nt){
+      t = _evClamp(Number(nt)||0, 0, L.total);
+      if(t < L.fimCortes && segs.length){
+        const i = idx(t); if(i !== cur && els[cur]) try{ els[cur].pause(); }catch(_){}
+        cur = i; alvo(i, segs[i].ini + (t - segs[i].t0)); prepararVizinhos(); soltar();
+      } else { els.forEach(function(v){ if(v) try{ v.pause(); }catch(_){} }); finalIni = performance.now() - (t - L.fimCortes)*1000; }
+    },
+    destruir: function(){
+      vivo = false; cancelAnimationFrame(raf);
+      els.forEach(function(v){ if(v) try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
+      if(mus) try{ mus.pause(); mus.removeAttribute("src"); mus.load(); }catch(_){}
+    },
+  };
+}
+
+/* ── desmontar um bruto para a IA: quadros em folhas (4×3) + áudio WAV 16 kHz em pedaços ── */
+function _evWav(f32, sr){
+  const n = f32.length, buf = new ArrayBuffer(44 + n*2), v = new DataView(buf);
+  const w = function(o, s){ for(let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  w(0,"RIFF"); v.setUint32(4, 36 + n*2, true); w(8,"WAVE"); w(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr*2, true); v.setUint16(32,2,true); v.setUint16(34,16,true); w(36,"data"); v.setUint32(40, n*2, true);
+  for(let i=0;i<n;i++){ const s = Math.max(-1, Math.min(1, f32[i])); v.setInt16(44 + i*2, s<0 ? s*0x8000 : s*0x7FFF, true); }
+  return new Blob([buf], { type:"audio/wav" });
+}
+function _evEsperar(el, evento, ms){
+  return new Promise(function(res, rej){
+    const tm = setTimeout(function(){ fim(); rej(new Error("o navegador demorou demais para abrir o vídeo")); }, ms);
+    function ok(){ fim(); res(); } function er(){ fim(); rej(new Error("o navegador não abre este vídeo — precisa ser MP4 (H.264)")); }
+    function fim(){ clearTimeout(tm); el.removeEventListener(evento, ok); el.removeEventListener("error", er); }
+    el.addEventListener(evento, ok); el.addEventListener("error", er);
+  });
+}
+function _evDuracao(url){
+  return new Promise(function(res){
+    const v = document.createElement("video"); v.preload = "metadata"; v.crossOrigin = "anonymous";
+    const fim = function(d){ try{ v.removeAttribute("src"); v.load(); }catch(_){} res(d); };
+    v.onloadedmetadata = function(){ fim(isFinite(v.duration) ? v.duration : 0); }; v.onerror = function(){ fim(0); };
+    setTimeout(function(){ fim(0); }, 20000); v.src = url;
+  });
+}
+async function _evBaixar(url, prog){
+  const r = await fetch(url); if(!r.ok) throw new Error("não consegui baixar o vídeo (HTTP " + r.status + ")");
+  const tot = Number(r.headers.get("content-length")) || 0;
+  if(!r.body || !tot) return await r.blob();
+  const rd = r.body.getReader(); const partes = []; let n = 0, ult = 0;
+  for(;;){ const x = await rd.read(); if(x.done) break; partes.push(x.value); n += x.value.length;
+    if(prog && Date.now() - ult > 300){ ult = Date.now(); prog(Math.round(n*100/tot)); } }
+  return new Blob(partes, { type:r.headers.get("content-type") || "video/mp4" });
+}
+async function _evDesmontar(blob, quadroSeg, prog){
+  const url = URL.createObjectURL(blob);
+  try{
+    const video = document.createElement("video"); video.muted = true; video.preload = "auto"; video.playsInline = true; video.src = url;
+    await _evEsperar(video, "loadedmetadata", 30000);
+    const dur = video.duration;
+    if(!isFinite(dur) || dur <= 0) throw new Error("não consegui ler a duração do vídeo");
+    if(!video.videoWidth) throw new Error("o navegador não mostra a imagem deste vídeo — precisa ser MP4 (H.264)");
+    const tempos = []; for(let s=0; s<dur && tempos.length<144; s+=quadroSeg) tempos.push(s);
+    const CW=270, CH=480, G=4, COLS=4, ROWS=3, POR=COLS*ROWS;
+    const W = COLS*CW + (COLS+1)*G, H = ROWS*CH + (ROWS+1)*G;
+    const folhas = []; let cv = null, cx = null;
+    for(let i=0; i<tempos.length; i++){
+      if(i % POR === 0){ cv = document.createElement("canvas"); cv.width = W; cv.height = H; cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0,0,W,H); }
+      video.currentTime = Math.min(tempos[i], Math.max(0, dur-0.05));
+      await _evEsperar(video, "seeked", 20000);
+      const k = i % POR, col = k % COLS, row = Math.floor(k / COLS);
+      const esc = Math.min(CW/video.videoWidth, CH/video.videoHeight), w = video.videoWidth*esc, h = video.videoHeight*esc;
+      const x0 = G + col*(CW+G), y0 = G + row*(CH+G);
+      cx.drawImage(video, x0 + (CW-w)/2, y0 + (CH-h)/2, w, h);
+      cx.fillStyle = "rgba(0,0,0,.6)"; cx.fillRect(x0, y0, 64, 28); cx.fillStyle = "#fff"; cx.font = "bold 18px sans-serif"; cx.fillText(Math.round(tempos[i]) + "s", x0 + 6, y0 + 21);
+      if(k === POR-1 || i === tempos.length-1) folhas.push(await new Promise(function(r){ cv.toBlob(r, "image/jpeg", 0.78); }));
+      if(prog) prog("Tirando os quadros… " + (i+1) + " de " + tempos.length);
+    }
+    if(prog) prog("Lendo o áudio…");
+    const pedacos = []; let audio = null;
+    try{ const AC = window.AudioContext || window.webkitAudioContext; const ac = new AC(); audio = await ac.decodeAudioData(await blob.arrayBuffer()); try{ ac.close(); }catch(_){} }catch(_){ audio = null; }
+    if(audio){
+      const SR = 16000;
+      const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(audio.duration*SR)), SR);
+      const src = off.createBufferSource(); src.buffer = audio; src.connect(off.destination); src.start();
+      const pcm = (await off.startRendering()).getChannelData(0);
+      const B = SR/10;
+      const rms = function(a, b){ let s=0; for(let i=a;i<b;i++) s += pcm[i]*pcm[i]; return Math.sqrt(s/Math.max(1,b-a)); };
+      let pos = 0;
+      while(pos < pcm.length && pedacos.length < 40){
+        let fim;
+        if(pcm.length - pos <= 30*SR) fim = pcm.length;
+        else { let melhor = pos + 30*SR, menor = Infinity;
+          for(let c = pos + 12*SR; c + B <= pos + 30*SR; c += B){ const r = rms(c, c+B); if(r < menor){ menor = r; melhor = c; } }
+          fim = melhor; }
+        pedacos.push({ ini: Math.round(pos/SR*100)/100, fim: Math.round(fim/SR*100)/100, blob: _evWav(pcm.subarray(pos, fim), SR) });
+        pos = fim;
+      }
+    }
+    return { duracao: Math.round(dur*100)/100, folhas: folhas, pedacos: pedacos };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/* ── ESTÚDIO: tela ── */
+function _EvEstudio({ tasks, isMob, taskId, setTaskId, onAbrirCard }){
+  const cards = useMemo(function(){
+    const cols = ["recebida","execucao","ajustes","avaliacao"];
+    return (tasks||[]).filter(function(t){ return t && !t.deletedAt && cols.indexOf(String(t.status||""))>=0 &&
+      (typeof pxIsVideoTask==="function" ? pxIsVideoTask(t) : false) && _evBrutos(t).length>0; })
+      .sort(function(a,b){ return String(a.publishDate||"9").localeCompare(String(b.publishDate||"9")); });
+  }, [tasks]);
+  const t = useMemo(function(){ return (tasks||[]).find(function(x){ return x && x.id===taskId; }) || null; }, [tasks, taskId]);
+  const [ed, setEd] = useState(null);
+  const [kit, setKit] = useState(null);
+  const [base, setBase] = useState({});
+  const [musicas, setMusicas] = useState([]);
+  const [erro, setErro] = useState(null);
+  const [passo, setPasso] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [pedido, setPedido] = useState("");
+  const [ajustando, setAjustando] = useState(false);
+  const [exp, setExp] = useState(null);       // { fase, pct, msg, url }
+  const soVer = !!isMob;
+
+  useEffect(function(){ setEd(null); setErro(null); setPedido(""); setExp(null); }, [taskId]);
+  useEffect(function(){
+    if(!window._sb || !t) return; let vivo = true;
+    window._sb.rpc("criacao_edicao", { p_task:t.id }).then(function(r){
+      if(!vivo) return;
+      if(r.error){ setErro(/permiss/i.test(r.error.message||"") ? "Você não tem acesso ao Estúdio." : "Não consegui carregar a edição agora."); return; }
+      setEd(r.data || { existe:false });
+    }).catch(function(){ if(vivo) setErro("Não consegui carregar a edição agora."); });
+    return function(){ vivo = false; };
+  }, [t && t.id, rec]);
+  useEffect(function(){
+    if(!window._sb || !t || !t.client) return; let vivo = true;
+    const un = t.bioterUnit || "";
+    const pega = function(u){ return window._sb.rpc("criacao_kit", { p_client:t.client, p_unidade:u }); };
+    pega(un).then(function(r){
+      if(!vivo || r.error) return; const d = r.data || {};
+      if(un && !d.versoes){ return pega("").then(function(g){ if(!vivo) return; const gd = (g && g.data) || {}; setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), gd.kit||{})); }); }
+      setBase(d.base||{}); setKit(Object.assign({}, _evKitPadrao(d.base||{}), d.kit||{}));
+    }).catch(function(){});
+    window._sb.rpc("criacao_musicas").then(function(r){ if(vivo && !r.error) setMusicas(Array.isArray(r.data) ? r.data : []); }).catch(function(){});
+    return function(){ vivo = false; };
+  }, [t && t.id]);
+
+  // ainda montando (outra aba / outra pessoa) → confere de novo a cada 8 s
+  useEffect(function(){
+    if(!ed || ed.status!=="processando") return;
+    const iv = setInterval(function(){ setRec(function(n){ return n+1; }); }, 8000);
+    return function(){ clearInterval(iv); };
+  }, [ed && ed.status]);
+
+  const montar = async function(){
+    if(!t || passo) return;
+    setErro(null);
+    try{
+      const brutos = _evBrutos(t).slice(0, 12);
+      if(!brutos.length) throw new Error("O card não tem vídeo bruto anexado como Material.");
+      setPasso("Medindo os vídeos…");
+      const durs = []; for(let i=0;i<brutos.length;i++) durs.push(await _evDuracao(brutos[i].previewUrl || brutos[i].url));
+      const total = durs.reduce(function(s,x){ return s+x; }, 0);
+      if(total > 20*60) throw new Error("Os brutos somam mais de 20 minutos. Deixe no card só o material deste vídeo.");
+      const quadroSeg = Math.max(2, Math.ceil(total/150));
+      const pasta = "edicao/" + _evUuid() + "/";
+      const bk = window._sb.storage.from("video-leituras");
+      const clipes = [];
+      for(let i=0;i<brutos.length;i++){
+        const f = brutos[i], nome = "vídeo " + (i+1) + " de " + brutos.length;
+        const src = f.previewUrl || f.url;
+        if(!f.previewUrl && Number(f.size||0) > 700*1024*1024) throw new Error("\"" + (f.name||"vídeo") + "\" é grande demais para abrir no navegador (mais de 700 MB).");
+        setPasso("Baixando o " + nome + "…");
+        const blob = await _evBaixar(src, function(p){ setPasso("Baixando o " + nome + "… " + p + "%"); });
+        const r = await _evDesmontar(blob, quadroSeg, function(m){ setPasso(nome.charAt(0).toUpperCase() + nome.slice(1) + ": " + m); });
+        const folhas = [], audio = [];
+        for(let k=0;k<r.folhas.length;k++){
+          setPasso("Enviando os quadros do " + nome + "… " + (k+1) + " de " + r.folhas.length);
+          const p = pasta + "c" + (i+1) + "_folha_" + String(k+1).padStart(2,"0") + ".jpg";
+          const u = await bk.upload(p, r.folhas[k], { contentType:"image/jpeg", upsert:false });
+          if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
+          folhas.push(p);
+        }
+        for(let k=0;k<r.pedacos.length;k++){
+          setPasso("Enviando o áudio do " + nome + "… " + (k+1) + " de " + r.pedacos.length);
+          const p = pasta + "c" + (i+1) + "_fala_" + String(k+1).padStart(2,"0") + ".wav";
+          const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
+          if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
+          audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
+        }
+        clipes.push({ id:f.id, nome:f.name||("Bruto " + (i+1)), url:f.url, preview_url:f.previewUrl||null, duracao:r.duracao, audio:audio, folhas:folhas, quadro_seg:quadroSeg });
+      }
+      setPasso("A IA está assistindo e editando… leva de 1 a 3 minutos. Pode continuar usando o app.");
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"montar", task_id:t.id, clipes:clipes } });
+      if(res.error) throw new Error(await _evErroFn(res));
+      setPasso(null); _evToast("success", "Vídeo editado pela IA. Dê o play!"); setRec(function(n){ return n+1; });
+    }catch(e){ setPasso(null); setErro(String((e && e.message) || e)); setRec(function(n){ return n+1; }); }
+  };
+
+  const ajustar = async function(){
+    const p = pedido.trim(); if(!p || !ed || !ed.id || ajustando) return;
+    setAjustando(true); setErro(null);
+    try{
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"ajustar", id:ed.id, pedido:p } });
+      if(res.error) throw new Error(await _evErroFn(res));
+      setPedido(""); _evToast("success", "Ajuste feito — versão " + ((res.data && res.data.versao) || "nova")); setRec(function(n){ return n+1; });
+    }catch(e){ setErro(String((e && e.message) || e)); }
+    setAjustando(false);
+  };
+  const voltarVersao = function(n){
+    if(!ed || !ed.id) return;
+    window._sb.rpc("criacao_edicao_versao", { p_id:ed.id, p_n:n }).then(function(r){
+      if(r.error){ _evToast("error", "Não voltou: " + (r.error.message||"erro")); return; }
+      _evToast("success", "Voltou para a versão " + n); setRec(function(x){ return x+1; });
+    });
+  };
+
+  const linha = useMemo(function(){ return (ed && ed.receita && kit) ? _evLinha(ed.receita, ed.fala, kit) : null; }, [ed, kit]);
+  const musica = useMemo(function(){
+    const id = ed && ed.receita && ed.receita.musica && ed.receita.musica.id; if(!id) return null;
+    const m = musicas.find(function(x){ return x.id===id; }); return m ? { url:m.url, volume:ed.receita.musica.volume, nome:m.nome, clima:m.clima } : null;
+  }, [ed, musicas]);
+
+  const caixa = { background:"#fff", border:"1px solid "+_EV.linha, borderRadius:14, padding:isMob?12:16, marginTop:14 };
+  const btn = function(cor){ return { font:"inherit", padding:"10px 16px", borderRadius:11, border:0, background:cor||_EV.roxo, color:"#fff", fontWeight:800, fontSize:_evF(13.5,isMob), cursor:"pointer" }; };
+  const btn2 = { font:"inherit", padding:"9px 14px", borderRadius:10, border:"1px solid "+_EV.roxoBorda, background:_EV.roxoClaro, color:_EV.roxo, fontWeight:800, fontSize:_evF(13,isMob), cursor:"pointer" };
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginTop:14,background:"#fff",border:"1px solid "+_EV.linha,borderRadius:14,padding:isMob?10:12}}>
+        <div style={{flex:"1 1 360px",minWidth:0}}>
+          <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:4}}>Card de vídeo</div>
+          <select value={taskId||""} onChange={function(e){ setTaskId(e.target.value||null); }}
+            style={{font:"inherit",padding:"9px 12px",borderRadius:10,border:"1px solid "+_EV.linha,background:"#fff",fontSize:_evF(14,isMob),fontWeight:600,width:"100%",boxSizing:"border-box"}}>
+            <option value="">Escolha um card com vídeo bruto…</option>
+            {t && cards.indexOf(t)<0 && <option value={t.id}>{_evNomeCliente(t.client) + " · " + (t.title||"")}</option>}
+            {cards.map(function(c){ return <option key={c.id} value={c.id}>{_evNomeCliente(c.client) + (c.bioterUnit ? " (" + _evNomeUnidade(c.bioterUnit) + ")" : "") + " · " + (c.title||"(sem título)") + " · " + _evBrutos(c).length + " bruto" + (_evBrutos(c).length>1?"s":"")}</option>; })}
+          </select>
+        </div>
+        {t && typeof onAbrirCard==="function" && <button onClick={function(){ onAbrirCard(t); }} style={btn2}>Abrir card</button>}
+      </div>
+
+      {!t && (
+        <div style={Object.assign({}, caixa, {textAlign:"center",color:_EV.sub,fontSize:_evF(14,isMob),padding:"28px 16px"})}>
+          {cards.length ? "Escolha um card acima (ou clique em 🎬 Estúdio na Fila)." : "Nenhum card de vídeo com bruto anexado agora. Anexe o vídeo bruto no card como Material."}
+        </div>
+      )}
+
+      {t && erro && <div style={{marginTop:14,padding:"12px 14px",borderRadius:12,background:_EV.vermClaro,color:_EV.verm,fontSize:_evF(13.5,isMob),fontWeight:600}}>{erro}</div>}
+      {t && !ed && !erro && <div style={{padding:30,textAlign:"center",color:_EV.sub}}>Carregando…</div>}
+
+      {t && ed && passo && (
+        <div style={Object.assign({}, caixa, {borderColor:_EV.roxoBorda,background:_EV.roxoClaro})}>
+          <div style={{fontWeight:800,color:_EV.roxo,fontSize:_evF(14,isMob)}}>🎬 Editando com IA</div>
+          <div style={{marginTop:6,fontSize:_evF(13.5,isMob)}}>{passo}</div>
+          <div style={{marginTop:6,fontSize:_evF(12,isMob),color:_EV.sub}}>Não feche esta aba enquanto os vídeos estão sendo preparados.</div>
+        </div>
+      )}
+
+      {t && ed && !passo && (!ed.existe || ed.status==="erro" || (ed.status==="processando" && ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() > 12*60000)) && (
+        <div style={caixa}>
+          <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>{ed.existe ? "A última edição não terminou" : "Este vídeo ainda não foi editado"}</div>
+          {ed.existe && ed.erro && <div style={{marginTop:6,fontSize:_evF(13,isMob),color:_EV.verm}}>Motivo: {ed.erro}</div>}
+          <div style={{marginTop:8,fontSize:_evF(13,isMob),color:_EV.sub,lineHeight:1.55}}>
+            A IA assiste {_evBrutos(t).length===1 ? "o vídeo bruto" : "os " + _evBrutos(t).length + " vídeos brutos"} do card, lê a fala e monta o Reels no estilo do Kit do cliente:
+            cortes (tira silêncios e erros), legenda, textos de destaque, tarja, logo, música, transições e tela final.
+          </div>
+          <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:4}}>
+            {_evBrutos(t).map(function(f, i){ return <div key={f.id} style={{fontSize:_evF(12.5,isMob),color:_EV.texto}}>
+              <span style={{display:"inline-block",width:10,height:10,borderRadius:3,background:_EV_CORES_CLIPE[i%12],marginRight:8}}/>{f.name||("Bruto " + (i+1))}
+              <span style={{color:_EV.fraco}}>{f.size ? " · " + Math.round(Number(f.size)/1048576) + " MB" : ""}</span></div>; })}
+          </div>
+          {!kit || !musicas ? null : (
+            <div style={{marginTop:10,fontSize:_evF(12,isMob),color:_EV.sub}}>
+              {musicas.length ? musicas.length + " música" + (musicas.length>1?"s":"") + " liberada" + (musicas.length>1?"s":"") + " na biblioteca." : "Sem músicas na biblioteca (guia Músicas): o vídeo sai sem trilha."}
+              {ed.limite_brl ? " · Gasto da IA no mês: R$ " + Number(ed.gasto_mes_brl||0).toLocaleString("pt-BR",{minimumFractionDigits:2}) + " de R$ " + Number(ed.limite_brl).toLocaleString("pt-BR") : ""}
+            </div>
+          )}
+          {soVer ? <div style={{marginTop:12,fontSize:_evF(13,isMob),color:_EV.sub}}>Para editar, use o computador.</div>
+                 : <button onClick={montar} style={Object.assign(btn(), {marginTop:14})}>✨ Editar com IA</button>}
+        </div>
+      )}
+
+      {t && ed && !passo && ed.existe && ed.status==="processando" && !(ed.criado_em && Date.now() - new Date(ed.criado_em).getTime() > 12*60000) && (
+        <div style={Object.assign({}, caixa, {borderColor:_EV.roxoBorda,background:_EV.roxoClaro})}>
+          <div style={{fontWeight:800,color:_EV.roxo}}>A IA está editando este vídeo…</div>
+          <div style={{marginTop:4,fontSize:_evF(13,isMob),color:_EV.sub}}>Começou com {ed.criado_por||"alguém"}. Esta tela atualiza sozinha.</div>
+        </div>
+      )}
+
+      {t && ed && ed.existe && ed.receita && linha && kit && (ed.status==="pronto" || ed.status==="exportado" || ed.status==="aprovado") && !passo && (
+        <div style={{display:"flex",gap:18,flexDirection:isMob?"column":"row",alignItems:"flex-start",marginTop:14}}>
+          <div style={{width:isMob?"100%":372,flexShrink:0}}>
+            <_EvPlayer key={ed.id + "-" + (ed.atualizado_em||"")} linha={linha} kit={kit} base={base} clipes={ed.clipes||[]} musica={musica}
+              logoUrl={_evLogo(t.client)} isMob={isMob}/>
+          </div>
+          <div style={{flex:1,minWidth:0,width:isMob?"100%":"auto"}}>
+            <div style={Object.assign({}, caixa, {marginTop:0})}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>O que a IA fez</div>
+                <span style={{padding:"3px 9px",borderRadius:99,background:_EV.fundo,fontSize:_evF(12,isMob),fontWeight:700,color:_EV.sub}}>
+                  {_evTempo(linha.total)} · {linha.segs.length} corte{linha.segs.length===1?"":"s"}</span>
+                {ed.status==="exportado" && <span style={{padding:"3px 9px",borderRadius:99,background:_EV.verdeClaro,fontSize:_evF(12,isMob),fontWeight:800,color:_EV.verde}}>✓ exportado no card</span>}
+              </div>
+              <div style={{marginTop:8,fontSize:_evF(13.5,isMob),lineHeight:1.55}}>{ed.receita.explicacao || "—"}</div>
+              <div style={{marginTop:10,display:"flex",gap:6,flexWrap:"wrap"}}>
+                {linha.destaques.length>0 && <span style={{padding:"3px 9px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(12,isMob),fontWeight:700}}>{linha.destaques.length} destaque{linha.destaques.length>1?"s":""}</span>}
+                {linha.tarja && <span style={{padding:"3px 9px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(12,isMob),fontWeight:700}}>Tarja: {linha.tarja.nome}</span>}
+                <span style={{padding:"3px 9px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(12,isMob),fontWeight:700}}>Transição: {({corte:"corte seco",fade:"escurecer",zoom:"zoom"})[linha.transicao]||linha.transicao}</span>
+                <span style={{padding:"3px 9px",borderRadius:99,background:musica?_EV.roxoClaro:_EV.fundo,color:musica?_EV.roxo:_EV.sub,fontSize:_evF(12,isMob),fontWeight:700}}>{musica ? "♪ " + musica.nome : "Sem música"}</span>
+              </div>
+              <div style={{marginTop:10,fontSize:_evF(11.5,isMob),color:_EV.fraco}}>
+                Versão {(ed.versoes||[]).length} · por {ed.atualizado_por||ed.criado_por||"—"} · custo da IA neste vídeo: R$ {Number(ed.custo_brl||0).toLocaleString("pt-BR",{minimumFractionDigits:2})}
+              </div>
+            </div>
+
+            {!soVer && (
+              <div style={caixa}>
+                <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Pedir ajuste</div>
+                <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:8}}>Escreva como falaria com o editor. A IA refaz e guarda uma versão nova.</div>
+                <textarea value={pedido} onChange={function(e){ setPedido(e.target.value); }} rows={3} maxLength={1500} disabled={ajustando}
+                  placeholder={"Ex.: começa pela parte do resultado; tira o trecho em que ele erra o nome; deixa com 30 segundos; destaque o \"30% mais produção\""}
+                  style={{font:"inherit",width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:10,border:"1px solid "+_EV.linha,fontSize:_evF(14,isMob),resize:"vertical"}}/>
+                <div style={{display:"flex",gap:10,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
+                  <button onClick={ajustar} disabled={ajustando || !pedido.trim()} style={Object.assign(btn(), {opacity:(ajustando||!pedido.trim())?0.6:1,cursor:ajustando?"wait":"pointer"})}>{ajustando ? "A IA está ajustando…" : "Ajustar"}</button>
+                  <button onClick={montar} style={btn2} title="Assiste os brutos de novo e faz uma edição nova (guarda a atual)">Refazer do zero</button>
+                </div>
+              </div>
+            )}
+
+            {(ed.versoes||[]).length>1 && (
+              <div style={caixa}>
+                <div style={{fontSize:_evF(15,isMob),fontWeight:800,marginBottom:6}}>Versões</div>
+                {(ed.versoes||[]).slice().reverse().map(function(v){
+                  return <div key={v.n} style={{display:"flex",gap:10,alignItems:"center",padding:"7px 0",borderTop:"1px solid "+_EV.linha2,fontSize:_evF(13,isMob)}}>
+                    <b style={{minWidth:26}}>v{v.n}</b>
+                    <div style={{flex:1,minWidth:0,color:_EV.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={v.pedido||""}>{v.pedido ? "\"" + v.pedido + "\"" : "Primeira edição da IA"} · {v.por||""}</div>
+                    {!soVer && <button onClick={function(){ voltarVersao(v.n); }} style={Object.assign({}, btn2, {padding:"5px 10px",fontSize:_evF(12,isMob)})}>Usar esta</button>}
+                  </div>; })}
+              </div>
+            )}
+
+            {!soVer && <_EvExportar t={t} ed={ed} linha={linha} kit={kit} base={base} musica={musica} logoUrl={_evLogo(t.client)} exp={exp} setExp={setExp}
+                          onFeito={function(){ setRec(function(n){ return n+1; }); }} isMob={isMob}/>}
+            {ed.final && ed.final.url && (
+              <div style={Object.assign({}, caixa, {background:_EV.verdeClaro,borderColor:"#bbf7d0"})}>
+                <div style={{fontWeight:800,color:_EV.verde}}>✓ Vídeo final no card</div>
+                <div style={{fontSize:_evF(12.5,isMob),marginTop:4}}>{ed.final.name} · {ed.final.addedBy} · {ed.final.addedAt}</div>
+                <a href={ed.final.url} target="_blank" rel="noreferrer" style={{display:"inline-block",marginTop:8,color:_EV.verde,fontWeight:800,fontSize:_evF(13,isMob)}}>Abrir o MP4</a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── PLAYER (visualizador) ── */
+function _EvPlayer({ linha, kit, base, clipes, musica, logoUrl, isMob }){
+  const cvRef = useRef(null), motorRef = useRef(null);
+  const [tempo, setTempo] = useState(0);
+  const [tocando, setTocando] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+  const ultRef = useRef(0);
+  useEffect(function(){
+    const cv = cvRef.current; if(!cv) return;
+    const m = _evMotor(cv, { linha:linha, kit:kit, base:base, clipes:clipes, musica:musica, logoUrl:logoUrl, original:false,
+      onTempo:function(tt, toc){ const n = performance.now(); if(n - ultRef.current > 120 || !toc){ ultRef.current = n; setTempo(tt); setTocando(toc); } },
+      onFim:function(){ setTocando(false); } });
+    motorRef.current = m;
+    m.pronto.then(function(){ setCarregando(false); });
+    return function(){ m.destruir(); motorRef.current = null; };
+  }, [linha, kit, base, clipes, musica, logoUrl]);
+  const alternar = function(){ const m = motorRef.current; if(!m) return; if(m.tocando){ m.pause(); setTocando(false); } else { m.play(); setTocando(true); } };
+  const ir = function(x){ const m = motorRef.current; if(m) m.seek(x); setTempo(x); };
+  const W = isMob ? Math.min(330, (typeof window!=="undefined" ? window.innerWidth : 360) - 40) : 372;
+  const coresClipe = {}; clipes.forEach(function(c, i){ coresClipe[c.id] = _EV_CORES_CLIPE[i%12]; });
+  const nomeClipe = {}; clipes.forEach(function(c, i){ nomeClipe[c.id] = c.nome || ("Bruto " + (i+1)); });
+  const tot = linha.total || 1;
+  return (
+    <div>
+      <div style={{position:"relative",width:W,height:Math.round(W*16/9),margin:isMob?"0 auto":0,borderRadius:18,overflow:"hidden",background:"#000",boxShadow:"0 10px 30px rgba(15,23,42,.18)",cursor:"pointer"}} onClick={alternar}>
+        <canvas ref={cvRef} width={_EV_W} height={_EV_H} style={{width:"100%",height:"100%",display:"block"}}/>
+        {(!tocando || carregando) && (
+          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+            <div style={{width:70,height:70,borderRadius:"50%",background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:28}}>
+              {carregando ? "…" : "▶"}</div>
+          </div>
+        )}
+      </div>
+      <div style={{width:W,margin:isMob?"10px auto 0":"10px 0 0"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={alternar} style={{font:"inherit",width:42,height:42,borderRadius:12,border:0,background:_EV.roxo,color:"#fff",fontSize:18,fontWeight:800,cursor:"pointer",flexShrink:0}}>{tocando ? "❚❚" : "▶"}</button>
+          <input type="range" min={0} max={tot} step={0.05} value={Math.min(tempo, tot)} onChange={function(e){ ir(Number(e.target.value)); }} style={{flex:1,accentColor:_EV.roxo}}/>
+          <span style={{fontSize:_evF(12.5,isMob),fontWeight:700,color:_EV.sub,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{_evTempo(tempo)} / {_evTempo(linha.total)}</span>
+        </div>
+        {/* linha do tempo: cortes (cor = qual bruto), destaques, tarja e tela final */}
+        <div style={{position:"relative",height:34,marginTop:10,borderRadius:8,overflow:"hidden",background:_EV.linha2}}>
+          {linha.segs.map(function(s){ return <div key={s.i} title={nomeClipe[s.clipe] + " · " + _evTempo(s.ini) + "–" + _evTempo(s.fim)} onClick={function(){ ir(s.t0 + 0.01); }}
+            style={{position:"absolute",left:(s.t0/tot*100)+"%",width:"calc("+((s.t1-s.t0)/tot*100)+"% - 2px)",top:0,bottom:0,background:coresClipe[s.clipe]||_EV.roxo,opacity:.85,cursor:"pointer",borderRadius:4}}/>; })}
+          {linha.total>linha.fimCortes && <div title="Tela final" onClick={function(){ ir(linha.fimCortes + 0.01); }} style={{position:"absolute",left:(linha.fimCortes/tot*100)+"%",right:0,top:0,bottom:0,
+            background:(kit.cor_principal||_EV.roxo),opacity:.45,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,color:"#fff"}}>FIM</div>}
+          {linha.destaques.map(function(d, k){ return <div key={"d"+k} title={"Destaque: " + d.texto} style={{position:"absolute",left:(d.a/tot*100)+"%",width:Math.max(0.6,(d.b-d.a)/tot*100)+"%",top:3,height:6,background:"#fde047",borderRadius:3,pointerEvents:"none"}}/>; })}
+          {linha.tarja && <div title={"Tarja: " + linha.tarja.nome} style={{position:"absolute",left:(linha.tarja.a/tot*100)+"%",width:Math.max(0.6,(linha.tarja.b-linha.tarja.a)/tot*100)+"%",bottom:3,height:6,background:"#fff",borderRadius:3,pointerEvents:"none"}}/>}
+          <div style={{position:"absolute",left:(Math.min(tempo,tot)/tot*100)+"%",top:0,bottom:0,width:2,background:"#0f172a",pointerEvents:"none"}}/>
+        </div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:6,fontSize:_evF(11,isMob),color:_EV.sub}}>
+          {clipes.map(function(c){ return <span key={c.id}><span style={{display:"inline-block",width:9,height:9,borderRadius:2,background:coresClipe[c.id],marginRight:4}}/>{nomeClipe[c.id]}</span>; })}
+          <span><span style={{display:"inline-block",width:9,height:4,borderRadius:2,background:"#fde047",marginRight:4,verticalAlign:"middle"}}/>destaque</span>
+        </div>
+        <div style={{fontSize:_evF(11,isMob),color:_EV.fraco,marginTop:6}}>Prévia em qualidade leve. O Exportar usa os vídeos originais.</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── EXPORTAR: grava o canvas + o áudio em tempo real e anexa no card ── */
+function _evMimeGravacao(){
+  const op = ["video/mp4;codecs=avc1.640028,mp4a.40.2","video/mp4;codecs=avc1,mp4a","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
+  try{ for(let i=0;i<op.length;i++){ if(window.MediaRecorder && MediaRecorder.isTypeSupported(op[i])) return op[i]; } }catch(_){}
+  return "";
+}
+function _EvExportar({ t, ed, linha, kit, base, musica, logoUrl, exp, setExp, onFeito, isMob }){
+  const cvRef = useRef(null);
+  const parar = useRef(null);
+  const exportar = async function(){
+    if(exp && exp.fase && exp.fase!=="feito" && exp.fase!=="erro") return;
+    const mime = _evMimeGravacao();
+    if(!mime || !HTMLCanvasElement.prototype.captureStream){ setExp({ fase:"erro", msg:"Este navegador não grava vídeo. Use o Google Chrome no computador." }); return; }
+    setExp({ fase:"preparando", pct:0, msg:"Abrindo os vídeos originais…" });
+    await new Promise(function(r){ setTimeout(r, 50); });
+    const cv = cvRef.current; if(!cv){ setExp({ fase:"erro", msg:"Não consegui abrir a tela de gravação." }); return; }
+    let motor = null, ac = null;
+    try{
+      const AC = window.AudioContext || window.webkitAudioContext; ac = new AC(); const dest = ac.createMediaStreamDestination();
+      motor = _evMotor(cv, { linha:linha, kit:kit, base:base, clipes:ed.clipes||[], musica:musica, logoUrl:logoUrl, original:true, audio:{ ctx:ac, dest:dest },
+        onTempo:function(tt){ const p = Math.round(tt/Math.max(0.1,linha.total)*100); setExp(function(x){ return (x && x.fase==="gravando" && x.pct!==p) ? Object.assign({}, x, { pct:p }) : x; }); } });
+      await motor.pronto;
+      await ac.resume();
+      const stream = new MediaStream([].concat(cv.captureStream(30).getVideoTracks(), dest.stream.getAudioTracks()));
+      const rec = new MediaRecorder(stream, { mimeType:mime, videoBitsPerSecond:9000000, audioBitsPerSecond:160000 });
+      const partes = [];
+      rec.ondataavailable = function(e){ if(e.data && e.data.size) partes.push(e.data); };
+      const acabou = new Promise(function(res){ rec.onstop = res; });
+      let cancelado = false;
+      parar.current = function(){ cancelado = true; try{ motor.pause(); }catch(_){} try{ rec.stop(); }catch(_){} };
+      const fimMotor = new Promise(function(res){ const iv = setInterval(function(){ if(cancelado || (!motor.tocando && motor.tempo >= linha.total - 0.01)){ clearInterval(iv); res(); } }, 100); });
+      setExp({ fase:"gravando", pct:0, msg:"Gravando o vídeo em tempo real (" + _evTempo(linha.total) + "). Não troque de aba." });
+      motor.seek(0); rec.start(1000); motor.play();
+      await fimMotor; await new Promise(function(r){ setTimeout(r, 350); });
+      if(rec.state!=="inactive") rec.stop();
+      await acabou;
+      parar.current = null;
+      motor.destruir(); motor = null; try{ ac.close(); }catch(_){}
+      if(cancelado){ setExp(null); return; }
+      const tipo = mime.split(";")[0], ext = tipo.indexOf("mp4")>=0 ? "mp4" : "webm";
+      const blob = new Blob(partes, { type:tipo });
+      const nome = String((t.title||"video") + "-editado").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9-]+/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"").slice(0,80) + "." + ext;
+      const local = URL.createObjectURL(blob);
+      setExp({ fase:"enviando", pct:0, msg:"Enviando para o card… (" + Math.round(blob.size/1048576) + " MB)", url:local, nome:nome });
+      const path = "tasks/" + t.id + "/" + Date.now() + "-estudio-" + Math.random().toString(36).slice(2,10) + "." + ext;
+      const file = new File([blob], nome, { type:tipo });
+      await pxUploadResumable(file, path, function(p){ setExp(function(x){ return Object.assign({}, x, { pct:p }); }); });
+      const pub = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      const r = await window._sb.rpc("criacao_edicao_final", { p_id:ed.id, p_file:{ url:pub, storagePath:path, name:nome, type:tipo, size:blob.size } });
+      if(r.error) throw new Error("o vídeo subiu, mas não entrou no card: " + (r.error.message||""));
+      setExp({ fase:"feito", msg:"Pronto! O vídeo está no card como arquivo final" + (ext==="webm" ? " (formato WebM: este navegador não grava MP4)" : "") + ".", url:local, nome:nome });
+      _evToast("success", "Vídeo exportado e anexado no card");
+      if(onFeito) onFeito();
+    }catch(e){
+      try{ if(motor) motor.destruir(); }catch(_){} try{ if(ac) ac.close(); }catch(_){}
+      parar.current = null;
+      setExp({ fase:"erro", msg:String((e && e.message) || e) });
+    }
+  };
+  const ativo = exp && (exp.fase==="preparando" || exp.fase==="gravando" || exp.fase==="enviando");
+  const caixa = { background:"#fff", border:"1px solid "+_EV.linha, borderRadius:14, padding:16, marginTop:14 };
+  return (
+    <div style={caixa}>
+      <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Exportar</div>
+      <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,lineHeight:1.5}}>
+        Gera o vídeo final em 1080×1920 com os brutos originais e anexa no card como arquivo final. A gravação leva o tempo do vídeo ({_evTempo(linha.total)}) — deixe esta aba aberta na frente.
+      </div>
+      <div style={{display:ativo?"flex":"none",gap:14,alignItems:"center",marginTop:12}}>
+        <canvas ref={cvRef} width={_EV_W} height={_EV_H} style={{width:90,height:160,borderRadius:10,background:"#000",flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:_evF(13,isMob),fontWeight:700}}>{exp && exp.msg}</div>
+          {exp && exp.fase!=="preparando" && <div style={{height:8,borderRadius:99,background:_EV.linha2,marginTop:8,overflow:"hidden"}}>
+            <div style={{height:"100%",width:(exp.pct||0)+"%",background:_EV.roxo,transition:"width .3s"}}/></div>}
+          {exp && exp.fase==="gravando" && <button onClick={function(){ if(parar.current) parar.current(); }} style={{font:"inherit",marginTop:10,padding:"6px 12px",borderRadius:9,border:"1px solid "+_EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,cursor:"pointer"}}>Cancelar</button>}
+        </div>
+      </div>
+      {!ativo && <button onClick={exportar} style={{font:"inherit",marginTop:12,padding:"11px 18px",borderRadius:12,border:0,background:_EV.verde,color:"#fff",fontWeight:800,fontSize:_evF(14,isMob),cursor:"pointer"}}>
+        ⬇ {ed.final ? "Exportar de novo e anexar no card" : "Aprovar, exportar e anexar no card"}</button>}
+      {exp && exp.fase==="erro" && <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:_EV.vermClaro,color:_EV.verm,fontSize:_evF(13,isMob),fontWeight:600}}>Não exportou: {exp.msg}</div>}
+      {exp && exp.fase==="feito" && <div style={{marginTop:10,padding:"10px 12px",borderRadius:10,background:_EV.verdeClaro,color:_EV.verde,fontSize:_evF(13,isMob),fontWeight:700}}>
+        {exp.msg} {exp.url && <a href={exp.url} download={exp.nome} style={{color:_EV.verde,marginLeft:6}}>Baixar cópia</a>}</div>}
+    </div>
+  );
+}
+
+/* ═══ MÚSICAS (biblioteca que a IA usa) ═══ */
+function _EvMusicas({ isMob }){
+  const [lista, setLista] = useState(null);
+  const [rec, setRec] = useState(0);
+  const [arq, setArq] = useState(null);
+  const [nome, setNome] = useState("");
+  const [clima, setClima] = useState("calma");
+  const [licenca, setLicenca] = useState("");
+  const [subindo, setSubindo] = useState(null);
+  const [tirar, setTirar] = useState(null);
+  const inp = useRef(null);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true;
+    window._sb.rpc("criacao_musicas").then(function(r){ if(vivo) setLista(r.error ? [] : (Array.isArray(r.data) ? r.data : [])); }).catch(function(){ if(vivo) setLista([]); });
+    return function(){ vivo = false; };
+  }, [rec]);
+  const escolher = function(f){ if(!f) return; setArq(f); if(!nome) setNome(String(f.name||"").replace(/\.[^.]+$/,"").replace(/[_-]+/g," ").slice(0,120)); };
+  const subir = async function(){
+    if(!arq || subindo) return;
+    if(!/\.(mp3|m4a|aac|wav)$/i.test(arq.name||"")){ _evToast("error","Use MP3, M4A ou WAV."); return; }
+    if(arq.size > 40*1024*1024){ _evToast("error","Arquivo acima de 40 MB."); return; }
+    if(!licenca.trim()){ _evToast("warning","Diga de onde veio a música (a licença)."); return; }
+    setSubindo(0);
+    try{
+      const dur = await new Promise(function(res){ const a = new Audio(); const u = URL.createObjectURL(arq);
+        a.onloadedmetadata = function(){ URL.revokeObjectURL(u); res(isFinite(a.duration) ? Math.round(a.duration) : null); }; a.onerror = function(){ URL.revokeObjectURL(u); res(null); }; a.src = u; });
+      const ext = (arq.name.split(".").pop()||"mp3").toLowerCase();
+      const path = "musicas/" + Date.now() + "-" + Math.random().toString(36).slice(2,10) + "." + ext;
+      await pxUploadResumable(arq, path, function(p){ setSubindo(p); });
+      const url = window._sb.storage.from("agency-files").getPublicUrl(path).data.publicUrl;
+      const r = await window._sb.rpc("criacao_musica_salvar", { p_nome:nome.trim()||arq.name, p_clima:clima, p_url:url, p_path:path, p_duracao:dur, p_licenca:licenca.trim() });
+      if(r.error) throw new Error(r.error.message);
+      _evToast("success","Música na biblioteca"); setArq(null); setNome(""); setLicenca(""); if(inp.current) inp.current.value = "";
+      setRec(function(n){ return n+1; });
+    }catch(e){ _evToast("error","Não subiu: " + ((e && e.message) || e)); }
+    setSubindo(null);
+  };
+  const confirmarTirar = function(id){
+    window._sb.rpc("criacao_musica_tirar", { p_id:id }).then(function(r){ if(r.error) _evToast("error", r.error.message); setTirar(null); setRec(function(n){ return n+1; }); });
+  };
+  const caixa = { background:"#fff", border:"1px solid "+_EV.linha, borderRadius:14, padding:isMob?12:16, marginTop:14 };
+  const campo = { font:"inherit", padding:"9px 12px", borderRadius:10, border:"1px solid "+_EV.linha, background:"#fff", fontSize:_evF(14,isMob), width:"100%", boxSizing:"border-box" };
+  const rot = function(x){ return <div style={{fontSize:_evF(11.5,isMob),color:_EV.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:".04em",marginBottom:5}}>{x}</div>; };
+  return (
+    <div>
+      {!isMob && (
+        <div style={caixa}>
+          <div style={{fontSize:_evF(15,isMob),fontWeight:800}}>Adicionar música</div>
+          <div style={{fontSize:_evF(12.5,isMob),color:_EV.sub,marginTop:2,marginBottom:12}}>Só músicas com licença para uso comercial (ex.: YouTube Audio Library, Pixabay, música comprada). A IA escolhe pelo clima.</div>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:"1 1 260px",minWidth:0}}>{rot("Arquivo")}<input ref={inp} type="file" accept=".mp3,.m4a,.aac,.wav,audio/*" onChange={function(e){ escolher(e.target.files && e.target.files[0]); }} style={campo}/></div>
+            <div style={{flex:"1 1 220px",minWidth:0}}>{rot("Nome")}<input value={nome} maxLength={120} onChange={function(e){ setNome(e.target.value); }} style={campo}/></div>
+            <div style={{flex:"0 1 180px",minWidth:0}}>{rot("Clima")}<select value={clima} onChange={function(e){ setClima(e.target.value); }} style={campo}>{_EV_CLIMAS.map(function(c){ return <option key={c.id} value={c.id}>{c.label}</option>; })}</select></div>
+            <div style={{flex:"1 1 260px",minWidth:0}}>{rot("De onde veio (licença)")}<input value={licenca} maxLength={300} placeholder="Ex.: YouTube Audio Library — sem atribuição" onChange={function(e){ setLicenca(e.target.value); }} style={campo}/></div>
+          </div>
+          <button onClick={subir} disabled={!arq || subindo!=null} style={{font:"inherit",marginTop:12,padding:"10px 18px",borderRadius:11,border:0,background:_EV.roxo,color:"#fff",fontWeight:800,cursor:(!arq||subindo!=null)?"default":"pointer",opacity:(!arq||subindo!=null)?0.6:1}}>
+            {subindo!=null ? "Enviando… " + subindo + "%" : "Subir música"}</button>
+        </div>
+      )}
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15,isMob),fontWeight:800,marginBottom:8}}>Biblioteca {lista ? "(" + lista.length + ")" : ""}</div>
+        {lista===null && <div style={{color:_EV.sub}}>Carregando…</div>}
+        {lista && lista.length===0 && <div style={{color:_EV.sub,fontSize:_evF(13.5,isMob)}}>Nenhuma música ainda. Sem música, a IA entrega o vídeo só com a fala.</div>}
+        {lista && lista.map(function(m){ const c = _EV_CLIMAS.find(function(x){ return x.id===m.clima; });
+          return <div key={m.id} style={{display:"flex",gap:12,alignItems:isMob?"flex-start":"center",flexDirection:isMob?"column":"row",padding:"10px 0",borderTop:"1px solid "+_EV.linha2}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:_evF(14,isMob)}}>{m.nome} <span style={{marginLeft:6,padding:"2px 8px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(11.5,isMob),fontWeight:700}}>{c ? c.label : m.clima}</span></div>
+              <div style={{fontSize:_evF(12,isMob),color:_EV.sub,marginTop:2}}>{m.duracao ? _evTempo(m.duracao).replace(/\.\d$/,"") + " · " : ""}{m.licenca} · {m.criado_por}</div>
+            </div>
+            <audio controls preload="none" src={m.url} style={{height:34,maxWidth:"100%"}}/>
+            {!isMob && (tirar===m.id
+              ? <button onClick={function(){ confirmarTirar(m.id); }} style={{font:"inherit",padding:"6px 12px",borderRadius:9,border:0,background:_EV.verm,color:"#fff",fontWeight:800,cursor:"pointer"}}>Confirmar</button>
+              : <button onClick={function(){ setTirar(m.id); }} style={{font:"inherit",padding:"6px 12px",borderRadius:9,border:"1px solid "+_EV.linha,background:"#fff",color:_EV.sub,fontWeight:700,cursor:"pointer"}}>Tirar</button>)}
+          </div>; })}
+      </div>
     </div>
   );
 }
