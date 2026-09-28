@@ -110069,11 +110069,11 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
       const doG=visP.filter(function(p){ return _swGrupoDe(p.content_type)===g.id; });
       if(!doG.length) return null;
       return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #eef0f3",borderTop:"4px solid "+g.cor,borderRadius:14,padding:"10px 14px"}}>
-          <span style={{width:34,height:34,borderRadius:10,background:g.cor+"14",color:g.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
+        <div style={{display:"flex",alignItems:"center",gap:10,background:g.cor,borderRadius:14,padding:"11px 14px",boxShadow:"0 6px 16px "+g.cor+"33"}}>
+          <span style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.2)",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
           <span style={{display:"flex",flexDirection:"column"}}>
-            <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo} <span style={{color:g.cor}}>· {doG.length}</span></span>
-            <span style={{color:"#94a3b8",fontSize:12,fontWeight:600}}>{g.id==="video"?"roteiro de 60 segundos pra você gravar":g.sub}</span>
+            <span style={{color:"#fff",fontWeight:800,fontSize:15}}>{g.titulo} · {doG.length}</span>
+            <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>{g.id==="video"?"roteiro de 60 segundos pra você gravar":g.sub}</span>
           </span>
         </div>
         <div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(280px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
@@ -110083,9 +110083,8 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
             return <div key={p.id} style={{background:"#fff",border:"1px solid #e8ebf0",borderTop:"4px solid "+g.cor,borderRadius:16,padding:14,display:"flex",flexDirection:"column",gap:10,boxShadow:"0 2px 8px rgba(15,23,42,.04)",minWidth:0}}>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}><span style={{background:g.cor+"14",color:g.cor,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:800}}>{_swTipoLabel(p.content_type)}</span></div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{p.titulo}</div>
-              <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:ab?"none":220,overflow:"hidden",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.briefing||"—"}</div>
-              {ab&&String(p.legenda||"").trim()&&<div><div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6}}>Legenda</div>
-                <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.legenda}</div></div>}
+              <div style={{maxHeight:ab?"none":420,overflow:"hidden",position:"relative"}}><SwBriefing txt={p.briefing} cor={g.cor}/>{!ab&&<div style={{position:"absolute",left:0,right:0,bottom:0,height:40,background:"linear-gradient(rgba(255,255,255,0),#fff)"}}/>}</div>
+              {ab&&<SwLegenda txt={p.legenda} cor={g.cor}/>}
               <div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid #f1f5f9",paddingTop:10}}>
                 <button type="button" onClick={function(){ setAbertoP(function(o){ return Object.assign({},o,{[p.id]:!ab}); }); }} style={{background:"#fff",color:"#334155",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>{ab?"Ver menos":"Ver tudo"}</button>
                 <button type="button" onClick={_copiar} style={{background:"#16a34a",color:"#fff",border:"1px solid #16a34a",borderRadius:9,padding:"6px 11px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_RT_FF}}>Copiar</button>
@@ -110120,6 +110119,50 @@ const _SW_MAX_PROPOSTAS=10;
    estáticas e 5 carrosséis. Três linhas de 5 cards." E o cliente escolhido pelas logos, como em Roteiros.
    Cada linha é gerada numa chamada própria (em paralelo) e tem o seu "+5". */
 const _SW_POR_LINHA=5;
+/* v5 (28/09, Gustavo): "o roteiro do vídeo tá sem os negritos, é pra seguir o mesmo estilo de Roteiros".
+   O briefing vira blocos com rótulo em negrito (Cena 1 — Abertura, • TÍTULO, Lâmina 2, • O QUE PRECISAMOS),
+   cada um numa caixinha igual às partes do card de Roteiros. */
+function _swBlocos(txt){
+  const linhas=String(txt||"").replace(/\r/g,"").split("\n");
+  const out=[]; let cab=null, cur=null;
+  const novo=function(rot,resto){ cur={rot:rot,txt:resto?[resto]:[]}; out.push(cur); };
+  linhas.forEach(function(l){
+    const t=l.trim(); let m;
+    if(/^[•*-]?\s*ROTEIRO\b/i.test(t)&&!cur){ cab=t.replace(/^[•*-]\s*/,""); return; }
+    if((m=t.match(/^[•*-]?\s*(Cena\s*\d+)\s*[—–:-]\s*(.*)$/i))){ novo(m[1]+(m[2]?" — "+m[2]:""),""); return; }
+    if((m=t.match(/^[•*-]?\s*(L[âa]mina\s*\d+)\s*[—–:-]\s*(.*)$/i))){ novo(m[1].replace(/^l/,"L"),m[2]); return; }
+    if((m=t.match(/^[•*]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ \/()0-9-]{2,40}?)\s*:?\s*$/))){ novo(m[1].trim(),""); return; }
+    if((m=t.match(/^[•*]\s*([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇ \/()0-9-]{2,40}?)\s*:\s*(.+)$/))){ novo(m[1].trim(),m[2]); return; }
+    if(!cur) novo("",""); cur.txt.push(l);
+  });
+  return {cab:cab,blocos:out.map(function(b){ return {rot:b.rot,txt:b.txt.join("\n").replace(/^\n+|\n+$/g,"").replace(/\n{3,}/g,"\n\n")}; }).filter(function(b){ return b.rot||b.txt.trim(); })};
+}
+function SwBriefing({txt,cor}){
+  const r=_swBlocos(txt);
+  if(!r.blocos.length&&!r.cab) return <div style={{color:"#94a3b8",fontSize:12.5}}>—</div>;
+  return <div style={{display:"flex",flexDirection:"column",gap:7}}>
+    {r.cab&&<div style={{color:cor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{r.cab}</div>}
+    {r.blocos.map(function(b,i){
+      return <div key={i} style={{background:"#f8fafc",border:"1px solid #eef1f5",borderRadius:11,padding:"10px 12px",display:"flex",flexDirection:"column",gap:5,minWidth:0}}>
+        {b.rot&&<div style={{display:"flex",alignItems:"center",gap:7}}>
+          <span style={{width:3,height:12,borderRadius:2,background:cor,flexShrink:0}}/>
+          <span style={{color:"#0f172a",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>{b.rot}</span>
+        </div>}
+        {b.txt.trim()&&<div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{(typeof _rtParagrafos==="function"&&!/^\s*[-•*]/m.test(b.txt))?_rtParagrafos(b.txt):b.txt}</div>}
+      </div>;
+    })}
+  </div>;
+}
+/* Legenda separada do briefing: caixa com a cor da linha e rótulo "Legenda do post" (v5) */
+function SwLegenda({txt,cor}){
+  if(!String(txt||"").trim()) return null;
+  return <div style={{background:cor+"0d",border:"1px solid "+cor+"33",borderRadius:12,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,color:cor,fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>
+      Legenda do post</div>
+    <div style={{color:"#334155",fontSize:12.5,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{txt}</div>
+  </div>;
+}
 const _SW_GRUPOS=[
   {id:"video",     tipo:"video",     titulo:"Vídeos",          sub:"60 segundos · roteiro de fala pro cliente gravar", cor:"#dc2626",
    icone:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="M16.5 10.2l5-3v9.6l-5-3z"/></svg>},
@@ -110688,8 +110731,8 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
           <button type="button" onClick={_salvarEdicao} style={Object.assign({},_mini,{background:_SW_AC,color:"#fff",borderColor:_SW_AC})}>Salvar</button>
         </div>
       </>:<>
-        <div><div style={_lbl}>Briefing</div><div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:260,overflow:"auto",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.briefing||"—"}</div></div>
-        <div><div style={_lbl}>Legenda</div><div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap",maxHeight:220,overflow:"auto",background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>{p.legenda||"—"}</div></div>
+        <SwBriefing txt={p.briefing} cor={corOrig}/>
+        <SwLegenda txt={p.legenda} cor={corOrig}/>
       </>}
       {rf&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
         <textarea autoFocus value={rf.pedido} onChange={function(e){ setRefazendo({id:p.id,pedido:e.target.value}); }} rows={3} placeholder="O que mudar? (opcional — em branco, a IA escreve a mesma ideia com outro ângulo)" style={Object.assign({},_inp,{resize:"vertical"})}/>
@@ -110868,16 +110911,16 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
             const falta=Math.max(0,_SW_POR_LINHA-doG.length);
             return <div key={g.id} style={{display:"flex",flexDirection:"column",gap:10,marginTop:6}}>
               {/* v3: barra colorida no topo de cada seção + ícone do formato */}
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fff",border:"1px solid #eef0f3",borderTop:"4px solid "+g.cor,borderRadius:14,padding:isMob?"10px 12px":"10px 14px"}}>
-                <span style={{width:34,height:34,borderRadius:10,background:g.cor+"14",color:g.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:g.cor,borderRadius:14,padding:isMob?"10px 12px":"11px 14px",boxShadow:"0 6px 16px "+g.cor+"33"}}>
+                <span style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.2)",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{g.icone}</span>
                 <span style={{display:"flex",flexDirection:"column",minWidth:0}}>
-                  <span style={{color:"#0f172a",fontWeight:800,fontSize:15}}>{g.titulo} <span style={{color:g.cor}}>· {doG.length}</span></span>
-                  <span style={{color:"#94a3b8",fontSize:12,fontWeight:600}}>{g.sub}</span>
+                  <span style={{color:"#fff",fontWeight:800,fontSize:15}}>{g.titulo} · {doG.length}</span>
+                  <span style={{color:"rgba(255,255,255,.85)",fontSize:12,fontWeight:600}}>{g.sub}</span>
                 </span>
                 <span style={{flex:1}}/>
                 {_bl("solic.nova")&&<button type="button" disabled={!!ocupado||trabalhando} onClick={function(){ _gerarDeNovo(g.id,falta||_SW_POR_LINHA); }}
                   title={falta?("Completa esta linha até "+_SW_POR_LINHA):("Mais "+_SW_POR_LINHA+" "+g.titulo.toLowerCase())}
-                  style={Object.assign({},_mini,{background:falta?g.cor:"#fff",color:falta?"#fff":g.cor,borderColor:falta?g.cor:g.cor+"55",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.5:1})}>{busyG?<><Spin/> Gerando…</>:(falta?("Completar "+_SW_POR_LINHA+" (+"+falta+")"):("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase()))}</button>}
+                  style={Object.assign({},_mini,{background:"#fff",color:g.cor,borderColor:"#fff",display:"inline-flex",alignItems:"center",gap:6,opacity:(!!ocupado||trabalhando)&&!busyG?.6:1})}>{busyG?<><Spin/> Gerando…</>:(falta?("Completar "+_SW_POR_LINHA+" (+"+falta+")"):("+"+_SW_POR_LINHA+" "+g.titulo.toLowerCase()))}</button>}
               </div>
               {doG.length
                 ?<div style={isMob?{display:"grid",gridTemplateColumns:"1fr",gap:12}:{display:"grid",gridAutoFlow:"column",gridAutoColumns:"minmax(300px,calc((100% - 48px) / 5))",gap:12,overflowX:"auto",paddingBottom:6,alignItems:"start"}}>
