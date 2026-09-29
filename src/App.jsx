@@ -115181,15 +115181,17 @@ async function _evpTratar(clipe, opcoes){
     try{
       if(sr !== 48000) throw new Error("taxa");
       const rn = await _evpRnnoise(); const st = rn.createDenoiseState(); const F = rn.frameSize || 480; const fr = new Float32Array(F);
+      let desde = performance.now();
       for(let i=0; i + F <= x.length; i += F){
         for(let k=0;k<F;k++) fr[k] = x[i+k] * 32768;
         st.processFrame(fr);
         for(let k=0;k<F;k++) x[i+k] = fr[k] / 32768;
+        if(performance.now() - desde > 30){ await new Promise(function(r){ setTimeout(r, 0); }); desde = performance.now(); }   // não trava a tela
       }
       st.destroy(); metodoRuido = "rnnoise";
     }catch(_){ _evpPortaRuido(x, sr); metodoRuido = "porta"; }
   }
-  if(opcoes.eco) _evpReduzirEco(x, sr);
+  if(opcoes.eco){ await new Promise(function(r){ setTimeout(r, 0); }); _evpReduzirEco(x, sr); }
   let y = x;
   if(opcoes.voz || opcoes.nivelar){
     const oc = new OfflineAudioContext(1, x.length, sr);
@@ -115614,6 +115616,19 @@ function _evpMotor(canvas, o){
   const els2 = {};            // vídeos por cima (vídeo sobre vídeo)
   const pessoa = document.createElement("canvas"); pessoa.width = W; pessoa.height = H; const px2 = pessoa.getContext("2d");   // recorte da pessoa (fundo / texto atrás)
   let mascara = null, mascaraDe = -1, segOcupado = false;
+  /* DESEMPENHO (29/09): parado, só redesenha quando algo muda (e 4×/s de reserva para imagens/fontes que chegam);
+     o fundo desfocado e os desfoques são feitos numa cópia pequena (o blur em 1080×1920 era o que travava a aba) */
+  let sujo = 30, ultDesenho = 0, ultTempo = -1, ultToc = null, ultEsp = null;
+  const marcar = function(n){ sujo = Math.max(sujo, n || 12); };
+  const mini2 = document.createElement("canvas"); const mn2 = mini2.getContext("2d");
+  /* desfoque barato: reduz, borra pouco e amplia (mesmo efeito visual de um blur grande) */
+  function borrar(ctx, fonte, sx0, sy0, sw, sh, dx, dy, dw, dh, raio, brilho){
+    const k = Math.max(2, raio / 3), mw = Math.max(4, Math.round(dw / k)), mh = Math.max(4, Math.round(dh / k));
+    if(mini2.width !== mw) mini2.width = mw; if(mini2.height !== mh) mini2.height = mh;
+    mn2.save(); mn2.clearRect(0, 0, mw, mh); mn2.filter = "blur(1.5px)" + (brilho != null && brilho !== 1 ? " brightness(" + brilho + ")" : "");
+    mn2.drawImage(fonte, sx0, sy0, sw, sh, 0, 0, mw, mh); mn2.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(mini2, 0, 0, mw, mh, dx, dy, dw, dh); ctx.restore();
+  }
 
   function urlClipe(id){ const c = (o.clipes||[]).find(function(x){ return x.id===id; }) || {};
     if(o.tratados && o.tratados[id]) return o.tratados[id];
@@ -115622,7 +115637,8 @@ function _evpMotor(canvas, o){
     if(els[c.id] && els[c.id]._src === urlClipe(c.clipe)) return els[c.id];
     const v = document.createElement("video"); v.crossOrigin = "anonymous"; v.playsInline = true; v.preload = "auto"; v.muted = true;
     v._src = urlClipe(c.clipe); v.src = v._src; v._alvo = c.ini;
-    v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} });
+    v.addEventListener("loadedmetadata", function(){ try{ v.currentTime = v._alvo; }catch(_){} marcar(); });
+    v.addEventListener("seeked", function(){ marcar(6); }); v.addEventListener("loadeddata", function(){ marcar(6); });
     els[c.id] = v; return v;
   }
   function soltar(){
@@ -115772,7 +115788,8 @@ function _evpMotor(canvas, o){
     ctx.save(); ctx.filter = filtroCor(c);
     if(modo === "encaixar"){
       const sc = Math.max(W/vw, H/vh);
-      ctx.save(); ctx.filter = "blur(40px) brightness(0.6)"; ctx.drawImage(v, rx, ry, vw, vh, (W-vw*sc)/2, (H-vh*sc)/2, vw*sc, vh*sc); ctx.restore();
+      const bw = vw * sc, bh = vh * sc, fx0 = (bw - W) / 2 / sc, fy0 = (bh - H) / 2 / sc;     // pedaço do vídeo que cobre a tela
+      borrar(ctx, v, rx + Math.max(0, fx0), ry + Math.max(0, fy0), Math.min(vw, W / sc), Math.min(vh, H / sc), 0, 0, W, H, 40, 0.6);
       ctx.filter = filtroCor(c);
     }
     const s0 = modo === "encaixar" ? Math.min(W/vw, H/vh) : Math.max(W/vw, H/vh);
@@ -115955,7 +115972,9 @@ function _evpMotor(canvas, o){
         const w = W * _evpNum(x.escala, 0.3), h = H * _evpNum(x.alt, 0.12), cxX = W * _evpNum(x.x, 0.5), cyY = H * _evpNum(x.y, 0.3);
         caixas.push({ id:x.id, tipo:"imagem", x:cxX - w/2, y:cyY - h/2, w:w, h:h });
         cx.save(); cx.beginPath(); if(x.oval) cx.ellipse(cxX, cyY, w/2, h/2, 0, 0, Math.PI*2); else _evRet(cx, cxX - w/2, cyY - h/2, w, h, Math.min(w, h) * 0.12); cx.clip();
-        cx.filter = "blur(" + Math.round(_evpNum(x.forca, 28)) + "px)"; cx.drawImage(canvas, 0, 0); cx.drawImage(canvas, 0, 0); cx.restore();
+        const fz = _evpNum(x.forca, 28), mg = fz * 1.5, x0 = Math.max(0, cxX - w/2 - mg), y0 = Math.max(0, cyY - h/2 - mg), x1 = Math.min(W, cxX + w/2 + mg), y1 = Math.min(H, cyY + h/2 + mg);
+        if(x1 - x0 > 2 && y1 - y0 > 2){ borrar(cx, canvas, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0, fz * 2.4); }
+        cx.restore();
         return;
       }
       if(x.camada === "video"){              // vídeo sobre vídeo
@@ -116035,7 +116054,7 @@ function _evpMotor(canvas, o){
       if(fundo || atras){ _evpSegCarregar(); pedirMascara(); }
       if(fundo && recortarPessoa()){      // troca o fundo: desfocado, cor ou imagem
         cx.save();
-        if(fundo.modo === "desfocar"){ cx.filter = "blur(28px) brightness(0.85)"; cx.drawImage(vl, 0, 0); }
+        if(fundo.modo === "desfocar"){ borrar(cx, vl, 0, 0, W, H, 0, 0, W, H, 28, 0.85); }
         else if(fundo.modo === "imagem" && fundo.url){ const im = imagem(fundo.url); if(im.complete && im.naturalWidth){ const sc = Math.max(W/im.naturalWidth, H/im.naturalHeight); cx.drawImage(im, (W - im.naturalWidth*sc)/2, (H - im.naturalHeight*sc)/2, im.naturalWidth*sc, im.naturalHeight*sc); } else { cx.fillStyle = fundo.cor || "#0f172a"; cx.fillRect(0,0,W,H); } }
         else { cx.fillStyle = fundo.cor || "#0f172a"; cx.fillRect(0, 0, W, H); }
         cx.restore(); cx.drawImage(pessoa, 0, 0);
@@ -116096,8 +116115,13 @@ function _evpMotor(canvas, o){
       const nx = calc.clips[cur+1]; if(nx){ const vn = el(nx); if(vn.readyState >= 1 && vn.paused && Math.abs(vn.currentTime - nx.ini) > 0.05 && !vn.seeking){ try{ vn.currentTime = nx.ini; }catch(_){} } }
     } else if(tocando) segurar(!!document.hidden);
     sincronizarSobre();
-    desenhar();
-    if(o.onTempo) o.onTempo(t, tocando, esperando);
+    const agora = performance.now();
+    const vAt = c && els[c.id], mexendo = !!(vAt && (vAt.seeking || vAt.readyState < 2)) || Object.keys(els2).some(function(k){ return els2[k].seeking; });
+    if(tocando || o.pausarAoEsperar || sujo > 0 || mexendo || t !== ultTempo || agora - ultDesenho > 250){
+      desenhar(); ultDesenho = agora; if(sujo > 0) sujo--;
+    }
+    if(o.onTempo && (t !== ultTempo || tocando !== ultToc || esperando !== ultEsp)){ o.onTempo(t, tocando, esperando); }
+    ultTempo = t; ultToc = tocando; ultEsp = esperando;
     raf = requestAnimationFrame(tick);
   }
   raf = requestAnimationFrame(tick);
@@ -116107,9 +116131,9 @@ function _evpMotor(canvas, o){
     get tempo(){ return t; }, get tocando(){ return tocando; }, get caixas(){ return caixas; },
     play: function(){ if(!calc.clips.length) return; if(t >= calc.total - 0.02) t = 0; if(ac.state === "suspended") ac.resume(); agendar(); tocando = true; },
     pause: function(){ segurar(false); tocando = false; pararAudio(); Object.keys(els).forEach(function(k){ try{ els[k].pause(); }catch(_){} }); Object.keys(els2).forEach(function(k){ try{ els2[k].pause(); }catch(_){} }); },
-    seek: function(nt){ t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
-    atualizar: function(novoCalc, novoProj, vozes, narr){ calc = novoCalc; proj = novoProj; if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
-    setTratados: function(tr){ o.tratados = tr; },
+    seek: function(nt){ marcar(); t = _evClamp(Number(nt)||0, 0, calc.total); const i = _evpClipEm(calc, Math.min(t, Math.max(0, calc.fimCortes - 0.001))); if(calc.clips[i]) mirar(calc.clips[i], t); if(tocando) agendar(); },
+    atualizar: function(novoCalc, novoProj, vozes, narr){ marcar(); calc = novoCalc; proj = novoProj; if(vozes) o.vozes = vozes; if(narr) o.narr = narr; calc.clips.forEach(function(c){ c._zt = 0; }); if(tocando) agendar(); else { const i = _evpClipEm(calc, t); if(calc.clips[i]) mirar(calc.clips[i], t); } },
+    setTratados: function(tr){ o.tratados = tr; marcar(); },
     volumeGeral: function(v){ try{ master.gain.setValueAtTime(v, ac.currentTime); }catch(_){ master.gain.value = v; } },   // 0 = mudo (gravando narração)
     destruir: function(){ vivo = false; cancelAnimationFrame(raf); pararAudio(); document.removeEventListener("visibilitychange", aoSumir);
       Object.keys(els).forEach(function(k){ const v = els[k]; try{ v.pause(); v.removeAttribute("src"); v.load(); }catch(_){} });
@@ -116334,7 +116358,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const [avisoRasc, setAvisoRasc] = useState(temRasc && JSON.stringify(inicial) !== JSON.stringify(salvo) ? { em:ed.rascunho_em, por:ed.rascunho_por } : null);
   const [pedido, setPedido] = useState("");
   const [exp, setExp] = useState(null);
-  const cvRef = useRef(null), motorRef = useRef(null), pRef = useRef(p), copiaRef = useRef(null), expRef = useRef(null);
+  const cvRef = useRef(null), motorRef = useRef(null), pRef = useRef(p), copiaRef = useRef(null), expRef = useRef(null), tempoUi = useRef({ em:0, toc:false, esp:false });
   pRef.current = p;
   const soVer = !!isMob;
 
@@ -116344,7 +116368,8 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
     if(j === JSON.stringify(pRef.current)) return;     // acabou de salvar: mantém o desfazer
     setP(inicial); setDesf([]); setRefaz([]); setSel(null);
   }, [inicial]);
-  const alterado = JSON.stringify(p) !== salvoJson;
+  const pJson = useMemo(function(){ return JSON.stringify(p); }, [p]);
+  const alterado = pJson !== salvoJson;
 
   /* SALVAR SOZINHO: 2,5 s depois da última mudança grava o rascunho no banco (não vira versão) */
   useEffect(function(){
@@ -116482,7 +116507,10 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   useEffect(function(){
     const cv = cvRef.current; if(!cv) return;
     const m = _evpMotor(cv, { calc:calc, projeto:p, kit:kit, base:base, clipes:clipes, original:false, logoUrl:_evLogo(t.client), musicaUrl:musicaUrl, vozes:vozes, narr:narr, tratados:tratados,
-      onTempo:function(tt, toc, esp){ setTempo(tt); setTocando(toc); setEsperando(!!esp); }, onFim:function(){ setTocando(false); } });
+      onTempo:function(tt, toc, esp){       // tocando: a tela (linha do tempo, painéis) atualiza 20×/s — o vídeo continua a 60
+        const agora = performance.now(), ult = tempoUi.current;
+        if(!toc || !ult.toc || agora - ult.em > 50 || !!esp !== ult.esp){ tempoUi.current = { em:agora, toc:toc, esp:!!esp }; setTempo(tt); setTocando(toc); setEsperando(!!esp); } },
+      onFim:function(){ setTocando(false); } });
     motorRef.current = m; m.seek(tempo);
     return function(){ m.destruir(); motorRef.current = null; };
   }, [chaveMotor, kit]);
