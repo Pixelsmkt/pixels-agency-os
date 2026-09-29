@@ -113675,6 +113675,9 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v9 (29/09/2026) — CÉREBRO da edição: guia "IA que aprende" com "O que mais fez reeditar" e "O revisor corrigiu sozinho"
+     (rpc criacao_reedicao_motivos), selo "entrou sozinha" nas regras técnicas (aprovação híbrida), link da fonte das regras
+     do manual e "Estudar um vídeo de referência" (a IA estuda a técnica e propõe regras; edge video-editar acao "referencia").
 
    Guias:
      • Fila — cards de VÍDEO em Demanda / Em execução / Ajustes (dado real: os mesmos cards da Linha de produção),
@@ -119208,6 +119211,15 @@ function _EvAprende({ isMob }){
   const [ocupado, setOcupado] = useState(null);        // id da regra em decisão
   const [nova, setNova] = useState({ cliente:"", area:"musica", texto:"" });
   const [criando, setCriando] = useState(false);
+  const [motivos, setMotivos] = useState(null);         // v13 (Cérebro): o que mais fez reeditar
+  const [ref, setRef] = useState({ arquivo:null, cliente:"", nota:"" });   // v13: vídeo de referência
+  const [refPasso, setRefPasso] = useState(null);
+  const [refRes, setRefRes] = useState(null);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true;
+    window._sb.rpc("criacao_reedicao_motivos", { p_client:cli || null }).then(function(r){ if(vivo) setMotivos(r.error ? null : (r.data || null)); }).catch(function(){ if(vivo) setMotivos(null); });
+    return function(){ vivo = false; };
+  }, [cli, rec]);
   useEffect(function(){
     if(!window._sb) return; let vivo = true; setErro(null);
     window._sb.rpc("criacao_aprendizado", { p_client:cli || null }).then(function(r){
@@ -119232,6 +119244,45 @@ function _EvAprende({ isMob }){
       if(x.error){ _evToast("error", "Não criou: " + (x.error.message || "erro")); return; }
       _evToast("success", "Regra criada e aprovada."); setNova({ cliente:nova.cliente, area:nova.area, texto:"" }); setRec(function(n){ return n + 1; });
     }).catch(function(e){ setCriando(false); _evToast("error", String((e && e.message) || e)); });
+  };
+
+  const estudarRef = async function(){
+    const f = ref.arquivo; if(!f || refPasso) return;
+    setRefRes(null);
+    try{
+      if(f.size > 300*1024*1024) throw new Error("Arquivo grande demais (máximo 300 MB).");
+      const url0 = URL.createObjectURL(f); let dur = 0;
+      try{ dur = await _evDuracao(url0); } finally { URL.revokeObjectURL(url0); }
+      if(!(dur > 0)) throw new Error("Não consegui ler a duração do vídeo.");
+      if(dur > 300) throw new Error("Use um vídeo de até 5 minutos.");
+      const quadroSeg = Math.max(1, Math.ceil(dur / 100));
+      setRefPasso("Tirando os quadros…");
+      const r = await _evDesmontar(f, quadroSeg, function(m){ setRefPasso(m); });
+      const pasta = "edicao/" + _evUuid() + "/", bk = window._sb.storage.from("video-leituras");
+      const folhas = [], audio = [];
+      for(let k=0;k<r.folhas.length;k++){
+        setRefPasso("Enviando os quadros… " + (k+1) + " de " + r.folhas.length);
+        const p = pasta + "ref_folha_" + String(k+1).padStart(2,"0") + ".jpg";
+        const u = await bk.upload(p, r.folhas[k], { contentType:"image/jpeg", upsert:false });
+        if(u.error) throw new Error("não consegui enviar os quadros (" + (u.error.message||"") + ")");
+        folhas.push(p);
+      }
+      for(let k=0;k<r.pedacos.length;k++){
+        setRefPasso("Enviando o áudio… " + (k+1) + " de " + r.pedacos.length);
+        const p = pasta + "ref_fala_" + String(k+1).padStart(2,"0") + ".wav";
+        const u = await bk.upload(p, r.pedacos[k].blob, { contentType:"audio/wav", upsert:false });
+        if(u.error) throw new Error("não consegui enviar o áudio (" + (u.error.message||"") + ")");
+        audio.push({ path:p, ini:r.pedacos[k].ini, fim:r.pedacos[k].fim });
+      }
+      setRefPasso("A IA está estudando a técnica do vídeo… leva de 30 s a 1 minuto.");
+      const res = await window._sb.functions.invoke("video-editar", { body:{ acao:"referencia", nome:f.name || "vídeo de referência", nota:ref.nota, client:ref.cliente || null,
+        duracao:r.duracao, quadro_seg:quadroSeg, folhas:folhas, audio:audio } });
+      if(res.error) throw new Error(await _evErroFn(res));
+      const d2 = res.data || {};
+      setRefRes(d2); setRef({ arquivo:null, cliente:ref.cliente, nota:"" }); setRefPasso(null);
+      _evToast("success", (d2.regras || 0) + (d2.regras === 1 ? " regra proposta" : " regras propostas") + " — um sócio aprova aqui em cima.");
+      setRec(function(n){ return n + 1; });
+    }catch(e){ setRefPasso(null); _evToast("error", String((e && e.message) || e)); }
   };
 
   const caixa = { background:"#fff", border:"1px solid " + _EV.linha, borderRadius:14, padding:isMob ? 12 : 16, marginTop:14 };
@@ -119260,13 +119311,15 @@ function _EvAprende({ isMob }){
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:5}}>
         <span style={{padding:"2px 8px",borderRadius:99,background:_EV.roxoClaro,color:_EV.roxo,fontSize:_evF(11.5, isMob),fontWeight:800}}>{_evAreaNome(r.area)}</span>
         <span style={{padding:"2px 8px",borderRadius:99,background:_EV.linha2,color:_EV.sub,fontSize:_evF(11.5, isMob),fontWeight:700}}>{esc}</span>
-        {r.status === "aprovado" && r.decidido_nome && <span style={{fontSize:_evF(11.5, isMob),color:_EV.fraco}}>aprovada por {r.decidido_nome}{r.decidido_em ? " em " + _evDataBR(r.decidido_em) : ""}</span>}
+        {r.status === "aprovado" && r.decidido_nome === "IA (entrou sozinha)" && <span title="Regra técnica (qualidade): entrou valendo sozinha. Um sócio pode editar ou desligar." style={{padding:"2px 8px",borderRadius:99,background:_EV.verdeClaro,color:_EV.verde,fontSize:_evF(11.5, isMob),fontWeight:800}}>entrou sozinha{r.decidido_em ? " · " + _evDataBR(r.decidido_em) : ""}</span>}
+        {r.status === "aprovado" && r.decidido_nome && r.decidido_nome !== "IA (entrou sozinha)" && <span style={{fontSize:_evF(11.5, isMob),color:_EV.fraco}}>aprovada por {r.decidido_nome}{r.decidido_em ? " em " + _evDataBR(r.decidido_em) : ""}</span>}
         {r.status === "pendente" && <span style={{fontSize:_evF(11.5, isMob),color:_EV.amarelo,fontWeight:700}}>esperando um sócio{r.criado_em ? " · desde " + _evDataBR(r.criado_em) : ""}</span>}
       </div>
       {ed
         ? <textarea value={editando.texto} maxLength={400} rows={2} onChange={function(e){ setEditando({ id:r.id, texto:e.target.value }); }} style={Object.assign({}, campo, { width:"100%", resize:"vertical" })}/>
         : <div style={{fontSize:_evF(14, isMob),fontWeight:600,lineHeight:1.45}}>{r.regra}</div>}
-      {r.evidencia && !ed && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:3}}>De onde veio: {r.evidencia}</div>}
+      {r.evidencia && !ed && (function(){ const ev = String(r.evidencia), m = ev.match(/https?:\/\/\S+/);
+        return <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:3,overflowWrap:"anywhere"}}>De onde veio: {m ? <>{ev.slice(0, m.index)}<a href={m[0]} target="_blank" rel="noopener noreferrer" style={{color:_EV.roxo}}>{m[0].replace(/^https?:\/\/(www\.)?/, "").split("/")[0]}</a>{ev.slice(m.index + m[0].length)}</> : ev}</div>; })()}
       {podeDecidir && (
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:8}}>
           {ed ? <>
@@ -119286,7 +119339,7 @@ function _EvAprende({ isMob }){
       <div style={Object.assign({}, caixa, { display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" })}>
         <div style={{flex:"1 1 320px",minWidth:0}}>
           <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>A IA aprende com o que a equipe corrige</div>
-          <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,marginTop:2,lineHeight:1.5}}>Quando um vídeo é aprovado (ou alguém clica em "Ensinar a IA com este vídeo" no Estúdio), a IA lê os pedidos, as mudanças feitas à mão e os comentários do cliente e propõe regras. Uma regra só vale depois que um sócio aprova.</div>
+          <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,marginTop:2,lineHeight:1.5}}>Quando um vídeo é aprovado (ou alguém clica em "Ensinar a IA com este vídeo" no Estúdio), a IA lê os pedidos, as mudanças feitas à mão e os comentários do cliente e propõe regras. Regra técnica (qualidade: cortes, som, legenda, tempo, área segura) já entra valendo e o sócio pode desligar; regra de estilo espera um sócio aprovar.</div>
         </div>
         <select value={cli} onChange={function(e){ setCli(e.target.value); }} aria-label="Cliente" style={Object.assign({}, campo, { minWidth:200 })}>
           <option value="">Todos os clientes</option>
@@ -119309,6 +119362,25 @@ function _EvAprende({ isMob }){
           </div>
         )}
         <div style={{fontSize:_evF(11.5, isMob),color:_EV.fraco,marginTop:8}}>Contas feitas direto do banco (sem IA). Regras valendo: {Number(pl.regras_aprovadas) || 0} · esperando sócio: {Number(pl.regras_pendentes) || 0}.</div>
+        {motivos && (function(){ const ped = Array.isArray(motivos.pedidos) ? motivos.pedidos : [], rv = motivos.revisor || {};
+          const fix = [["cortes_no_meio_da_palavra","corte no meio de palavra acertado","cortes no meio de palavra acertados"],["falas_repetidas","fala repetida tirada","falas repetidas tiradas"],["nomes_recusados","troca de nome errada recusada","trocas de nome erradas recusadas"],["encurtados","vídeo encurtado para o tempo do formato","vídeos encurtados para o tempo do formato"]]
+            .filter(function(q){ return Number(rv[q[0]]) > 0; });
+          return <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:12}}>
+            <div style={{flex:"1 1 300px",minWidth:0,border:"1px solid " + _EV.linha2,borderRadius:12,padding:"10px 12px",background:_EV.fundo}}>
+              <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,fontWeight:700}}>O que mais fez reeditar (pedidos à IA)</div>
+              {!ped.length ? <div style={{fontSize:_evF(13, isMob),color:_EV.fraco,marginTop:4}}>Nenhum pedido de ajuste ainda.</div>
+                : ped.slice(0, 5).map(function(q){ const max = Number(ped[0].vezes) || 1; return <div key={q.motivo} style={{display:"flex",alignItems:"center",gap:8,marginTop:5,fontSize:_evF(12.5, isMob)}}>
+                    <span style={{flex:"0 0 130px",fontWeight:700}}>{q.motivo}</span>
+                    <span style={{flex:1,height:8,borderRadius:99,background:_EV.linha2,overflow:"hidden"}}><span style={{display:"block",height:"100%",width:Math.max(6, Number(q.vezes) / max * 100) + "%",background:_EV.roxo,borderRadius:99}}/></span>
+                    <span style={{fontVariantNumeric:"tabular-nums",color:_EV.sub}}>{q.vezes}×</span></div>; })}
+            </div>
+            <div style={{flex:"1 1 260px",minWidth:0,border:"1px solid " + _EV.linha2,borderRadius:12,padding:"10px 12px",background:_EV.fundo}}>
+              <div style={{fontSize:_evF(11.5, isMob),color:_EV.sub,fontWeight:700}}>O revisor corrigiu sozinho{Number(rv.edicoes) ? " (" + rv.edicoes + (Number(rv.edicoes) === 1 ? " edição" : " edições") + ")" : ""}</div>
+              {!fix.length ? <div style={{fontSize:_evF(13, isMob),color:_EV.fraco,marginTop:4}}>Aparece aqui a partir das próximas edições da IA.</div>
+                : fix.map(function(q){ return <div key={q[0]} style={{fontSize:_evF(12.5, isMob),marginTop:5}}><b style={{fontVariantNumeric:"tabular-nums"}}>{rv[q[0]]}</b> {Number(rv[q[0]]) === 1 ? q[1] : q[2]}</div>; })}
+              {Number(motivos.referencias) > 0 && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:6}}>{motivos.referencias} vídeo{Number(motivos.referencias) === 1 ? "" : "s"} de referência estudado{Number(motivos.referencias) === 1 ? "" : "s"}.</div>}
+            </div>
+          </div>; })()}
       </div>
 
       <div style={caixa}>
@@ -119338,6 +119410,31 @@ function _EvAprende({ isMob }){
         {!apr.length && <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob),marginTop:6}}>Nenhuma regra aprovada ainda.</div>}
         {apr.map(linhaRegra)}
       </div>
+
+      {!isMob && (
+        <div style={caixa}>
+          <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>Estudar um vídeo de referência</div>
+          <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,margin:"2px 0 10px",lineHeight:1.5}}>Suba um vídeo que a equipe admira (MP4, até 5 minutos). A IA estuda só a técnica — ritmo, gancho, textos, legenda, música, transições — e propõe regras que esperam um sócio. Não copia o conteúdo. Custa em torno de R$ 0,10 a R$ 0,40 por vídeo (entra no teto do cérebro aprendendo).</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            <label style={Object.assign({}, btn("claro"), { display:"inline-flex", alignItems:"center", gap:6 })}>
+              <input type="file" accept="video/mp4,video/quicktime,video/*" style={{display:"none"}} disabled={!!refPasso}
+                onChange={function(e){ const f = e.target.files && e.target.files[0]; setRef(Object.assign({}, ref, { arquivo:f || null })); setRefRes(null); e.target.value = ""; }}/>
+              {ref.arquivo ? "Trocar vídeo" : "Escolher vídeo"}
+            </label>
+            {ref.arquivo && <span style={{fontSize:_evF(12.5, isMob),color:_EV.sub,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ref.arquivo.name}</span>}
+            <select value={ref.cliente} onChange={function(e){ setRef(Object.assign({}, ref, { cliente:e.target.value })); }} aria-label="Vale para" style={Object.assign({}, campo, { flex:"0 1 220px" })}>
+              <option value="">Vale para todos os clientes</option>
+              {(typeof CLIENTS !== "undefined" && Array.isArray(CLIENTS) ? CLIENTS : []).filter(function(c){ return c && c.id; }).map(function(c){ return <option key={c.id} value={c.id}>{c.name || c.id}</option>; })}
+            </select>
+            <input value={ref.nota} maxLength={600} placeholder="O que vocês gostaram nele? (opcional)" onChange={function(e){ setRef(Object.assign({}, ref, { nota:e.target.value })); }}
+              style={Object.assign({}, campo, { flex:"1 1 260px", minWidth:0 })}/>
+            <button onClick={estudarRef} disabled={!ref.arquivo || !!refPasso} style={btn("roxo", !!ref.arquivo && !refPasso)}>{refPasso ? "Estudando…" : "Estudar vídeo"}</button>
+          </div>
+          {refPasso && <div style={{fontSize:_evF(12.5, isMob),color:_EV.roxo,marginTop:8,fontWeight:700}}>{refPasso}</div>}
+          {refRes && <div style={{fontSize:_evF(12.5, isMob),marginTop:8,padding:"8px 10px",borderRadius:10,background:_EV.roxoClaro,color:_EV.texto,lineHeight:1.5}}>
+            <b>{refRes.regras || 0} regra{refRes.regras === 1 ? "" : "s"} proposta{refRes.regras === 1 ? "" : "s"}</b>{refRes.custo_brl != null ? " · custo " + _evBrl(refRes.custo_brl) : ""}{refRes.resumo ? " — " + refRes.resumo : ""}</div>}
+        </div>
+      )}
 
       {podeDecidir && (
         <div style={caixa}>
