@@ -33838,7 +33838,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     /* (25/09/2026, Vinicius) Short também não precisa de TIPO DE CONTEÚDO: não vai pra edição,
        é direto da Hellen pro Gustavo — o tipo só serve pra classificar pagamento de freela. */
     if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short&&!_story&&!_soVini) f.push("tipo de conteúdo");
-    if(!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
+    /* (29/09, Gustavo) só o Vinicius / story: sem mês de pagamento também — não é peça paga a freelancer */
+    if(!_story&&!_soVini&&!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
     return f;
   };
   const approveCopy=(task,destino)=>{
@@ -35709,7 +35710,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 ...(_matPed?[{key:"mat",icon:"clock",rot:"Material",val:_matVal,color:"#f59e0b"}]:[]),
               ].filter(l=>podeEditar||l.val)
                /* (29/09, Gustavo) story / só o Vinicius: não tem tipo de conteúdo — o bloco vazio "definir" nem aparece */
-               .filter(l=>!(l.key==="ct"&&!l.val&&(!!(current.somenteStory||current.somente_story)||_pxSoVinicius(current))));
+               .filter(l=>!((l.key==="ct"||l.key==="ref")&&!l.val&&(!!(current.somenteStory||current.somente_story)||_pxSoVinicius(current))));
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
               const ID=(k)=>"pxmeta-"+k+"-"+current.id;
