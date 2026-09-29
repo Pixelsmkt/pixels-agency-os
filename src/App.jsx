@@ -113740,6 +113740,13 @@ function VideoAnuncioIA({ videoId, segundos, curva, isMob, videoUrl }){
      este vídeo" (em Versões) e a guia "IA que aprende" (placar sem IA, o que a IA observou, regras que só valem depois que
      um sócio aprova; sócio edita, recusa ou cria). Edge video-editar v8 (ajuste devolve só o que mudou, custo com cache).
      Banco: estudio_aprende_v1 (video_edicao_regras, video_edicao_eventos, criacao_aprendizado, criacao_regra_*).
+   v10c (30/09/2026) — MÚSICA E EFEITOS VOLTARAM: "musica, sfx, audio" tinham ficado dentro de um comentário no cálculo do vídeo
+     (desde a mudança da legenda na área segura) — a música de fundo e os efeitos sonoros não tocavam nem no navegador nem no PC.
+   v10b (30/09/2026) — SOM NO PC: o Exportar automático do PC começava antes de carregar o áudio da fala (tratandoAudio nascia "false")
+     e o vídeo saía sem som. Agora nasce "true" e o PC só grava depois que a fala foi carregada e tratada.
+   v10 (30/09/2026) — APOIO (B-roll): camada "Vídeo por cima"/imagem com cheia:true = imagem de apoio em TELA CHEIA por cima do principal
+     (sem moldura, sem som; foto com zoom lento). Faixa mostra "Apoio · …"; interruptor "Apoio em tela cheia" no Tamanho. Edge video-editar v20
+     monta o apoio sozinho (na batida da música, mínimo 2 s, ~60% mesclado).
    v9 (29/09/2026) — CÉREBRO da edição: guia "IA que aprende" com "O que mais fez reeditar" e "O revisor corrigiu sozinho"
      (rpc criacao_reedicao_motivos), selo "entrou sozinha" nas regras técnicas (aprovação híbrida), link da fonte das regras
      do manual e "Estudar um vídeo de referência" (a IA estuda a técnica e propõe regras; edge video-editar acao "referencia").
@@ -115265,6 +115272,9 @@ function _evpNormalizar(p, clipes){
       o.anim = o.anim === "pop" ? "aparecer" : o.anim;
     }
     if(o.camada === "desfoque"){ o.alt = Math.max(0.03, Math.min(1, _evpNum(o.alt, 0.12))); o.forca = Math.max(4, Math.min(80, _evpNum(o.forca, 28))); o.oval = !!o.oval; o.anim = "nenhuma"; }
+    // v10 (30/09): APOIO em tela cheia (B-roll) — cobre a tela toda por cima do principal, sem moldura e sem som; foto com zoom lento
+    if(o.cheia === true && o.camada !== "desfoque"){ o.x = 0.5; o.y = 0.5; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; } if(o.camada === "imagem") o.kb = o.kb !== false; }
+    else delete o.cheia;
     return o; });
   p.narracoes = (p.narracoes||[]).filter(function(x){ return x && x.url; }).map(function(x){ const o = Object.assign({ id:_evpId(), t0:0, vol:1, nome:"Narração", dur:1, ia:false }, x);
     o.t0 = Math.max(0, _evpNum(o.t0, 0)); o.vol = Math.max(0, Math.min(3, _evpNum(o.vol, 1))); o.dur = Math.max(0.1, _evpNum(o.dur, 1)); return o; });
@@ -115312,7 +115322,8 @@ function _evpCalcular(p, fala, kit){
     for(let k=0;k<blocos.length-1;k++){ if(blocos[k+1].a - blocos[k].b < 0.3) blocos[k].b = blocos[k+1].a; }
   }
   return { clips:clips, fimCortes:fimCortes, total:total, textos:p.textos, blocos:blocos, estiloLegenda:estilo,
-           posLegenda:(p.legenda && p.legenda.posicao) || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura"),   // v10: padrão = área segura do Reels musica:p.musica, sfx:p.sfx, audio:p.audio,
+           posLegenda:(p.legenda && p.legenda.posicao) || ((kit && kit.legenda_posicao) === "centro" ? "centro" : "segura"),   // v10: padrão = área segura do Reels
+           musica:p.musica, sfx:p.sfx, audio:p.audio,   // v10c (30/09): estas 3 estavam presas no comentário da linha de cima — a música e os efeitos não tocavam
            faixas:p.faixas || { textos:{}, video:{ vol:1 }, sfx:{ vol:1 } }, imagens:p.imagens || [], abertura:p.abertura || {}, legenda:p.legenda || {},
            narracoes:p.narracoes || [], formato:p.formato || "9x16" };
 }
@@ -116237,6 +116248,13 @@ function _evpMotor(canvas, o){
         cx.restore();
         return;
       }
+      if(x.camada === "video" && x.cheia){   // v10: APOIO em tela cheia — preenche a tela (corta as sobras), sem moldura
+        const v = els2[x.id]; if(!v || v.readyState < 2 || !v.videoWidth) return;
+        const s = Math.max(W / v.videoWidth, H / v.videoHeight), w = v.videoWidth * s, h = v.videoHeight * s;
+        caixas.push({ id:x.id, tipo:"imagem", x:0, y:0, w:W, h:H });
+        cx.drawImage(v, (W - w) / 2, (H - h) / 2, w, h);
+        return;
+      }
       if(x.camada === "video"){              // vídeo sobre vídeo
         const v = els2[x.id]; if(!v || v.readyState < 2 || !v.videoWidth) return;
         const k = animK(x, t), w = W * _evpNum(x.escala, 0.35), h = w * v.videoHeight / v.videoWidth;
@@ -116248,6 +116266,13 @@ function _evpMotor(canvas, o){
         return;
       }
       const im = imagem(x.url); if(!im.complete || !im.naturalWidth) return;
+      if(x.cheia){                           // v10: FOTO de apoio em tela cheia com zoom lento (Ken Burns)
+        const kz = x.kb === false ? 1 : 1 + 0.08 * Math.max(0, Math.min(1, (t - x.t0) / Math.max(0.1, x.t1 - x.t0)));
+        const s = Math.max(W / im.naturalWidth, H / im.naturalHeight) * kz, w = im.naturalWidth * s, h = im.naturalHeight * s;
+        caixas.push({ id:x.id, tipo:"imagem", x:0, y:0, w:W, h:H });
+        cx.drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+        return;
+      }
       const k = animK(x, t), w = W * _evpNum(x.escala, 0.35), h = w * im.naturalHeight / im.naturalWidth;
       let sc = 1, al = k.pout;
       if(x.anim === "pop") sc = 0.6 + 0.4 * _evEaseBack(k.pin); else if(x.anim === "aparecer") al *= k.pin;
@@ -116721,7 +116746,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   /* mídia: miniaturas + áudio (tratado conforme as opções) */
   useEffect(function(){ clipes.forEach(function(c){ const u = c.preview_url || c.url; _evpMiniaturas(c.id, u); _evpAudio(c.id, u); }); }, [ed.id]);
   const audioKey = (p.audio.ruido?"r":"") + (p.audio.eco?"e":"") + (p.audio.voz?"v":"") + (p.audio.nivelar?"n":"") + (p.audio.estudio ? "|pc:" + Object.keys(vozesPC).sort().join(",") : "");
-  const [tratandoAudio, setTratandoAudio] = useState(false);
+  const [tratandoAudio, setTratandoAudio] = useState(true);   // v10b (30/09): começa "tratando" — o PC não pode gravar antes de carregar a fala (saía sem som)
   const [metodoRuido, setMetodoRuido] = useState(null);
   useEffect(function(){
     let vivo = true; setTratandoAudio(true);
@@ -117242,7 +117267,7 @@ function _EvEditor({ t, ed, kit, base, musicas, isMob, onRecarregar, onAjustar, 
   const nomeItem = !sel || !selObj ? "" : sel.tipo === "clip" ? "Clipe " + ((infoClipe[selObj.clipe] || {}).n || "") + " · " + ((infoClipe[selObj.clipe] || {}).nome || "")
     : sel.tipo === "texto" ? (selObj.tipo === "tarja" ? "Tarja" : selObj.tipo === "destaque" ? "Destaque" : "Texto") + " · " + String(selObj.texto || "").slice(0, 24)
     : sel.tipo === "musica" ? "Música · " + ((musInfo && musInfo.nome) || "") : sel.tipo === "sfx" ? "Efeito · " + (((_EVP_SFX.find(function(q){ return q.id === selObj.tipo; })) || {}).label || "")
-    : sel.tipo === "legenda" ? "Legenda" : sel.tipo === "final" ? "Tela final" : sel.tipo === "imagem" ? (selObj.camada === "video" ? "Vídeo por cima · " : selObj.camada === "desfoque" ? "Desfoque · " : "Imagem · ") + (selObj.nome || "")
+    : sel.tipo === "legenda" ? "Legenda" : sel.tipo === "final" ? "Tela final" : sel.tipo === "imagem" ? (selObj.cheia ? "Apoio (tela cheia) · " : selObj.camada === "video" ? "Vídeo por cima · " : selObj.camada === "desfoque" ? "Desfoque · " : "Imagem · ") + (selObj.nome || "")
     : sel.tipo === "narracao" ? (selObj.ia ? "Locução IA" : "Narração") + " · " + (selObj.nome || "") : "";
 
   const iAg = _evpClipEm(calc, Math.min(tempo, Math.max(0, calc.fimCortes - 0.001))), clipAg = calc.clips[iAg];
@@ -118518,7 +118543,7 @@ function _EvpTimeline({ p, calc, sel, setSel, selecionar, tempo, irPara, pxs, se
                   {x.camada === "video" ? (function(){ const u = _evpThumbEm(x.clipe, _evpNum(x.ini, 0) + 0.5); return u ? <span style={{height:14,width:14,flexShrink:0,borderRadius:3,background:"#000 url(" + u + ") center/cover"}}/> : <_EvpIco n="camadas" s={12}/>; })()
                     : x.camada === "desfoque" ? <_EvpIco n="desfocar" s={12}/>
                     : <img src={x.url} alt="" style={{height:14,width:14,objectFit:"contain",flexShrink:0}}/>}
-                  {x.camada === "video" ? "Por cima · " : x.camada === "desfoque" ? "Desfoque" : ""}{x.camada === "desfoque" ? "" : (x.nome || "Imagem")}
+                  {x.cheia ? "Apoio · " : x.camada === "video" ? "Por cima · " : x.camada === "desfoque" ? "Desfoque" : ""}{x.camada === "desfoque" ? "" : (x.nome || "Imagem")}
                   <div onPointerDown={function(e){ moverImagem(e, x, "fim"); }} style={alca("right")}/>
                 </div>; })}
             </div>
@@ -119010,7 +119035,12 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
     return (
       <div style={caixa}>{cab}
         {(x.camada || "imagem") === "imagem" && <img src={x.url} alt="" style={{display:"block",maxWidth:"100%",maxHeight:90,margin:"0 auto 10px",borderRadius:8,background:"repeating-conic-gradient(#f1f2f8 0% 25%, #fff 0% 50%) 50% / 12px 12px"}}/>}
-        {x.camada === "video" && ferr === "tamanho" && (<div style={{marginBottom:6}}>
+        {(x.camada || "imagem") !== "desfoque" && ferr === "tamanho" && (<div style={{marginBottom:6}}>
+          <_EvpInterruptor on={!!x.cheia} onChange={function(v){ mudar(ni(function(o){ if(v){ o.cheia = true; o.x = 0.5; o.y = 0.5; o.escala = 1; o.rot = 0; o.anim = "nenhuma"; if(o.camada === "video"){ o.borda = false; o.cantos = 0; o.mudo = true; } } else { delete o.cheia; o.escala = 0.35; o.y = 0.3; } })); }}
+            label="Apoio em tela cheia" dica="Imagem de apoio (B-roll): cobre a tela toda por cima do vídeo principal; a fala continua por baixo"/>
+          {x.cheia && x.t1 - x.t0 < 2 && <div style={{fontSize:11.5,color:_EV.amarelo,fontWeight:700,marginTop:4}}>Imagem de apoio com menos de 2 s — o ideal é 2 s ou mais.</div>}
+        </div>)}
+        {x.camada === "video" && ferr === "tamanho" && !x.cheia && (<div style={{marginBottom:6}}>
           <_EvpInterruptor on={!x.mudo} onChange={function(v){ mudar(ni(function(o){ o.mudo = !v; })); }} label="Com o som deste vídeo"/>
           {!x.mudo && <_EvpSlider ctl={ctl} rotulo="Volume" v={_evpNum(x.vol, 1)} min={0} max={2} step={0.05} fmt={pct} padrao={1} aplicar={ni(function(o, v){ o.vol = v; })}/>}
           <_EvpInterruptor on={x.borda !== false} onChange={function(v){ mudar(ni(function(o){ o.borda = v; })); }} label="Moldura branca"/>
@@ -119022,7 +119052,7 @@ function _EvpInspetor({ p, calc, sel, selObj, ferr, nomeItem, mudar, setP, pRef,
           <_EvpSlider ctl={ctl} rotulo="Altura" v={_evpNum(x.alt, 0.12)} min={0.03} max={1} step={0.005} fmt={pct} padrao={0.12} aplicar={ni(function(o, v){ o.alt = v; })}/>
           <_EvpInterruptor on={!!x.oval} onChange={function(v){ mudar(ni(function(o){ o.oval = v; })); }} label="Formato oval" dica="Bom para rosto"/>
         </div>)}
-        {ferr === "tamanho" && (<div>
+        {ferr === "tamanho" && !x.cheia && (<div>
           <_EvpSlider ctl={ctl} rotulo="Tamanho" v={_evpNum(x.escala, 0.35)} min={0.05} max={1.5} step={0.01} fmt={pct} padrao={0.35} aplicar={ni(function(o, v){ o.escala = v; })}/>
           <_EvpSlider ctl={ctl} rotulo="Horizontal" v={_evpNum(x.x, 0.5)} min={0} max={1} step={0.005} fmt={pct} padrao={0.5} aplicar={ni(function(o, v){ o.x = v; })}/>
           <_EvpSlider ctl={ctl} rotulo="Vertical" v={_evpNum(x.y, 0.3)} min={0} max={1} step={0.005} fmt={pct} aplicar={ni(function(o, v){ o.y = v; })}/>
