@@ -33816,6 +33816,8 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
      CONTEÚDO e sem MÊS DE PAGAMENTO. Card sem isso chegava na produção sem dono e sem mês
      pra entrar no pagamento. */
   const _PX_TIPOS_VALIDOS=["arte","carrossel","foto","folder","video","video_complexo","video_feira","video_short","corte"];
+  /* Só o Vinicius como responsável (29/09/2026) — peça dele, sem produção nem tipo de conteúdo. */
+  const _pxSoVinicius=(task)=>{ const ids=Array.isArray(task&&task.assignees)&&task.assignees.length?task.assignees:((task&&task.assignee)?[task.assignee]:[]); return ids.length>0&&ids.every(function(u){return u==="vinicius";}); };
   const _faltasParaAprovar=(task)=>{
     const f=[];
     /* (22/09/2026, Rodrigo) SHORT não passa por edição nem por design: a Hellen pega o vídeo
@@ -33828,11 +33830,14 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
     /* (25/09/2026, Vinicius) SOMENTE STORY também não precisa de freelancer: é do Vinicius,
        não passa por design nem edição (regra de 17/09: story = só o Vinicius responsável). */
     const _story=!!(task.somenteStory||task.somente_story);
-    if(!temFreela&&!_short&&!_story) f.push("freelancer (designer ou editor de vídeo)");
+    /* (29/09/2026, Gustavo) SÓ O VINICIUS marcado = peça do Vinicius (story): não tem freelancer
+       nem TIPO DE CONTEÚDO — "não precisa ter tipo marcado, inclusive não deve". */
+    const _soVini=_pxSoVinicius(task);
+    if(!temFreela&&!_short&&!_story&&!_soVini) f.push("freelancer (designer ou editor de vídeo)");
     const ct=String(task.contentType||task.content_type||task.tipo||"").toLowerCase();
     /* (25/09/2026, Vinicius) Short também não precisa de TIPO DE CONTEÚDO: não vai pra edição,
        é direto da Hellen pro Gustavo — o tipo só serve pra classificar pagamento de freela. */
-    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short) f.push("tipo de conteúdo");
+    if(_PX_TIPOS_VALIDOS.indexOf(ct)<0&&!_short&&!_story&&!_soVini) f.push("tipo de conteúdo");
     if(!/^\d{4}-\d{2}/.test(String(task.referenceMonth||task.reference_month||""))) f.push("mês de pagamento");
     return f;
   };
@@ -35702,7 +35707,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 {key:"ref",icon:"dollar",rot:"Pagamento",val:fmtMes(refMes),color:"#16a34a"},
                 {key:"saida",icon:_musModo?"music":"send",rot:"Como esta peça sai",val:_saidaVal,color:"#db2777"},
                 ...(_matPed?[{key:"mat",icon:"clock",rot:"Material",val:_matVal,color:"#f59e0b"}]:[]),
-              ].filter(l=>podeEditar||l.val);
+              ].filter(l=>podeEditar||l.val)
+               /* (29/09, Gustavo) story / só o Vinicius: não tem tipo de conteúdo — o bloco vazio "definir" nem aparece */
+               .filter(l=>!(l.key==="ct"&&!l.val&&(!!(current.somenteStory||current.somente_story)||_pxSoVinicius(current))));
               if(linhas.length===0)return null;
               const aberto=(podeEditar&&metaAberto&&metaAberto.id===current.id)?metaAberto.campo:"";
               const ID=(k)=>"pxmeta-"+k+"-"+current.id;
