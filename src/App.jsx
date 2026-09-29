@@ -8747,8 +8747,27 @@ function pxBaixarAlvos(task){
   if(typeof pxOrdenarFeedStory==="function"){ try{ fs=pxOrdenarFeedStory(fs); }catch(_){} }
   return {tipo:"arte", itens:fs};
 }
-async function pxBaixarArquivo(url, storagePath, nome){
+async function _pxBxBlob(url, nome){
+  const resp=await fetch(url); if(!resp.ok) throw new Error("HTTP "+resp.status);
+  const b=await resp.blob(); const u=URL.createObjectURL(b);
+  const a=document.createElement("a"); a.href=u; a.download=nome; a.style.display="none";
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); },1500);
+  return true;
+}
+/* viaBlob=true (várias lâminas): baixa cada arquivo inteiro e salva com a.download, um de cada vez.
+   Link assinado em sequência NÃO serve pra vários: cada clique é uma navegação e o navegador
+   cancela a anterior se a próxima começa antes da resposta — foi assim que o slide 2 do
+   carrossel da VetService sumiu (29/09). Arte é leve, blob resolve; vídeo único segue no link. */
+async function pxBaixarArquivo(url, storagePath, nome, viaBlob){
   const sb=(typeof window!=="undefined")?window._sb:null;
+  if(viaBlob){
+    try{ return await _pxBxBlob(url,nome); }catch(e){ console.warn("[pxBaixarArquivo] blob direto falhou:",(e&&e.message)||e); }
+    if(storagePath&&sb&&sb.storage){
+      try{ const r=await sb.storage.from("agency-files").createSignedUrl(storagePath,600); if(r&&!r.error&&r.data&&r.data.signedUrl) return await _pxBxBlob(r.data.signedUrl,nome); }
+      catch(e){ console.warn("[pxBaixarArquivo] blob assinado falhou:",(e&&e.message)||e); }
+    }
+    return false;
+  }
   if(storagePath&&sb&&sb.storage){
     try{
       const r=await sb.storage.from("agency-files").createSignedUrl(storagePath,600,{download:nome});
@@ -8791,9 +8810,9 @@ async function pxBaixarEntrega(task, qual){
   let ok=0;
   for(let i=0;i<n;i++){
     const f=al.itens[i];
-    const nome=base+(n>1?("_lamina_"+(i+1)):"")+"."+_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png");
-    if(await pxBaixarArquivo(f.url, f.storagePath, nome)) ok++;
-    if(i<n-1) await new Promise(function(r){ setTimeout(r,450); });
+    const nome=base+(n>1?("_lamina_"+String(i+1).padStart(2,"0")):"")+"."+_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png");
+    if(await pxBaixarArquivo(f.url, f.storagePath, nome, n>1)) ok++;   // várias = uma de cada vez, na ordem do carrossel
+    if(i<n-1) await new Promise(function(r){ setTimeout(r,350); });
   }
   if(_t){ if(ok===n) _t.success(n>1?("Baixados "+n+" arquivos ✓"):"Baixado ✓",3000); else if(ok>0) _t.warning("Baixados "+ok+"/"+n,4000); else _t.error("Falha no download",4000); }
 }
@@ -8803,8 +8822,8 @@ function PxIcoBaixar({qual, size}){
   /* v2 (29/09, Gustavo: "ícones de vídeo ficaram horríveis"): Full = seta de download (o arquivo inteiro);
      Comprimido = pena (versão leve). Os cantos pra fora/pra dentro da v1 saíram. */
   /* v4 (29/09, 11h04, Gustavo escolheu a opção B): comprimido = arquivo com seta pra baixo. */
-  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
-  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  if(qual==="leve") return <svg width={s} height={s} style={{display:"block",flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><path d="M12 11v6"/><path d="m9 14 3 3 3-3"/></svg>;
+  return <svg width={s} height={s} style={{display:"block",flexShrink:0}} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
 function PxBaixarEntrega({task, variante, cor}){
   const [ocup,setOcup]=useState("");
@@ -8837,7 +8856,7 @@ function PxBaixarEntrega({task, variante, cor}){
         ?{width:20,height:20,borderRadius:6,border:"1px solid rgba(255,255,255,0.18)",background:(typeof pxEscurecerCor==="function"?pxEscurecerCor(_cor,.42):"rgba(0,0,0,0.28)"),color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.15)",opacity:b.off?.45:(busy?.6:1)}
         :{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",color:b.off?"#cbd5e1":"#64748b"};
       return <button key={b.qual||"arte"} type="button" title={b.title} aria-label={b.title} onClick={clique(b.qual)}
-        style={Object.assign({display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,cursor:b.off?"help":"pointer",position:"relative",flexShrink:0,transition:"all .15s",opacity:busy?.6:1},st)}
+        style={Object.assign({display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,lineHeight:0,fontSize:0,boxSizing:"border-box",verticalAlign:"middle",cursor:b.off?"help":"pointer",position:"relative",flexShrink:0,transition:"all .15s",opacity:busy?.6:1},st)}
         onMouseEnter={function(e){ if(b.off) return; if(capa){ e.currentTarget.style.transform="scale(1.1)"; } else { e.currentTarget.style.background="#f8fafc"; e.currentTarget.style.color="#0f172a"; } }}
         onMouseLeave={function(e){ if(capa){ e.currentTarget.style.transform=""; } else { e.currentTarget.style.background="#fff"; e.currentTarget.style.color=b.off?"#cbd5e1":"#64748b"; } }}>
         <PxIcoBaixar qual={b.qual} size={capa?13:16}/>
