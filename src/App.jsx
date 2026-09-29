@@ -8800,8 +8800,9 @@ async function pxBaixarEntrega(task, qual){
 /* Ícones — os mesmos na capa e no card */
 function PxIcoBaixar({qual, size}){
   const s=size||16;
-  if(qual==="full") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8V3h5"/><path d="M16 3h5v5"/><path d="M21 16v5h-5"/><path d="M8 21H3v-5"/><path d="M12 7v9"/><polyline points="8.5 12.5 12 16 15.5 12.5"/></svg>;
-  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v5H3"/><path d="M21 8h-5V3"/><path d="M16 21v-5h5"/><path d="M3 16h5v5"/><path d="M12 8.5v6.5"/><polyline points="9.5 12.5 12 15 14.5 12.5"/></svg>;
+  /* v2 (29/09, Gustavo: "ícones de vídeo ficaram horríveis"): Full = seta de download (o arquivo inteiro);
+     Comprimido = pena (versão leve). Os cantos pra fora/pra dentro da v1 saíram. */
+  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/></svg>;
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 }
 function PxBaixarEntrega({task, variante, cor}){
@@ -8823,7 +8824,7 @@ function PxBaixarEntrega({task, variante, cor}){
     botoes.push({qual:"leve", off:!al.leve, title:al.leve?("Baixar vídeo comprimido (leve"+(ls?(" · "+_pxBxMB(ls)):"")+")"):"Vídeo comprimido ainda não existe — dá pra gerar na Avaliação de vídeo"});
   } else {
     const n=al.itens.length;
-    botoes.push({qual:"", badge:n>1?n:0, title:n>1?("Baixar as "+n+" lâminas/arquivos da entrega"):"Baixar a arte"});
+    botoes.push({qual:"", title:n>1?("Baixar as "+n+" lâminas/arquivos da entrega"):"Baixar a arte"});
   }
   const _cor=cor||"#475569";
   return <span onMouseDown={_parar} onPointerDown={_parar} onDragStart={function(e){ e.preventDefault(); e.stopPropagation(); }} draggable={false}
@@ -8831,7 +8832,7 @@ function PxBaixarEntrega({task, variante, cor}){
     {botoes.map(function(b){
       const busy=ocup===(b.qual||"arte");
       const st=capa
-        ?{width:20,height:20,borderRadius:6,border:"none",background:b.off?"rgba(255,255,255,0.45)":"#fff",color:_cor,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}
+        ?{width:20,height:20,borderRadius:6,border:"1px solid rgba(255,255,255,0.18)",background:(typeof pxEscurecerCor==="function"?pxEscurecerCor(_cor,.42):"rgba(0,0,0,0.28)"),color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.15)",opacity:b.off?.45:(busy?.6:1)}
         :{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",color:b.off?"#cbd5e1":"#64748b"};
       return <button key={b.qual||"arte"} type="button" title={b.title} aria-label={b.title} onClick={clique(b.qual)}
         style={Object.assign({display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,cursor:b.off?"help":"pointer",position:"relative",flexShrink:0,transition:"all .15s",opacity:busy?.6:1},st)}
@@ -25072,7 +25073,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
         // quantos cards dessas duas categorias já têm material anexado e quantos faltam.
         // Escopo: pipeline não aprovado de todos os meses (ver _pipelineMat). "Tem material" = qualquer arquivo real
         // (material, referência ou final); anotação, anexo de ajuste e upload em curso não contam.
-        const _ehFotoObraCal=function(t){return t.contentType==="foto"||/foto\s*de\s*obra/i.test(String(t.title||""));};
+        // (29/09/2026, Gustavo) só pelo TÍTULO "foto de obra" — o tipo "foto" sozinho é Ajuste de template (pode ser outra coisa).
+        //   Mesmo critério do triângulo amarelo da capa. Antes: t.contentType==="foto" || título.
+        const _ehFotoObraCal=function(t){return /foto\s*de\s*obra/i.test(String(t.title||""));};
         const _ehShortCal=function(t){
           const _ct=String(t.contentType||t.tipo||"");
           return _ct==="video_short"||_ct==="short"||!!t.fromDrive||/^short-/i.test(String(t.id||""))||/^\s*short\b/i.test(String(t.title||""));
@@ -25118,13 +25121,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
             <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
             <span style={{display:"flex",flexDirection:"column",lineHeight:1.1}}>
               <span style={{fontSize:pxFonte(10.5,isMob),color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
-              <span style={{display:"inline-flex",alignItems:"baseline",gap:8,marginTop:2,whiteSpace:"nowrap"}}>
-                <span style={{fontSize:19,fontWeight:800,color:"#0f172a"}}>{c.com}<span style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>/{c.total}</span></span>
-                {/* (25/09/2026) etiquetas em pílula — "com material" verde, "faltam N" vermelho */}
-                <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:pxFonte(11,isMob),fontWeight:700,color:"#15803d",background:"#dcfce7",border:"1px solid #bbf7d0",borderRadius:99,padding:"2px 8px",alignSelf:"center"}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>com material</span>
-                <span style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:pxFonte(11,isMob),fontWeight:700,color:c.falta?"#b91c1c":"#64748b",background:c.falta?"#fee2e2":"#f1f5f9",border:"1px solid "+(c.falta?"#fecaca":"#e2e8f0"),borderRadius:99,padding:"2px 8px",alignSelf:"center"}}>
-                  {c.falta?<span style={{width:6,height:6,borderRadius:99,background:"#dc2626"}}/>:null}{c.falta?("faltam "+c.falta):"nada faltando"}</span>
+              {/* (29/09/2026, Gustavo: "tá coisa horrível") — saíram as duas pílulas coloridas. Agora é uma linha
+                  de texto limpa: 15/43 com material │ ▲ 28 sem material (ou ✓ tudo com material). */}
+              <span style={{display:"inline-flex",alignItems:"center",gap:10,marginTop:4,whiteSpace:"nowrap"}}>
+                <span style={{display:"inline-flex",alignItems:"baseline",gap:5}}>
+                  <span style={{fontSize:20,fontWeight:800,color:"#0f172a",letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{c.com}<span style={{fontSize:13,fontWeight:700,color:"#cbd5e1"}}>/{c.total}</span></span>
+                  <span style={{fontSize:pxFonte(11.5,isMob),fontWeight:600,color:"#64748b"}}>com material</span>
+                </span>
+                <span style={{width:1,height:18,background:"#e2e8f0"}}/>
+                {c.falta
+                  ?<span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:pxFonte(11.5,isMob),fontWeight:600,color:"#64748b"}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="#fef3c7" stroke="#d97706" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <b style={{color:"#b45309",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{c.falta}</b>sem material</span>
+                  :<span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:pxFonte(11.5,isMob),fontWeight:700,color:"#15803d"}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>tudo com material</span>}
               </span>
             </span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2,transform:on?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -25593,7 +25603,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                         title={x.rotulo+": a semana está com "+x.falta+" post"+(x.falta>1?"s":"")+" a menos que a cadência. Nada é criado sozinho — clique em Criar card se quiser preencher."}
                         style={{border:"1.5px dashed "+_cor,borderRadius:8,padding:"6px 8px 7px",background:"rgba(255,255,255,0.82)",display:"flex",flexDirection:"column",gap:5,flexShrink:0,fontFamily:"'Inter',system-ui,sans-serif"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-                          <span style={{width:7,height:7,borderRadius:99,background:_cor,flexShrink:0}}/>
+                          {/* (29/09/2026, Gustavo) triângulo de alerta no lugar da bolinha — mesmo selo amarelo do "sem material" */}
+                          <span aria-hidden="true" style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#facc15",color:"#713f12",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                           <span style={{flex:1,minWidth:0,fontSize:pxFonte(10.5,isMob),fontWeight:800,color:_cor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.rotulo}</span>
                           <button type="button" title="Ignorar esta lacuna" onClick={function(e){e.stopPropagation();_ignorarLacuna(x);}}
                             style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:0,width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
