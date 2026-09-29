@@ -3919,7 +3919,6 @@ const NAV=[
   // "Demandas" categoria pai REMOVIDA — só tinha 2 filhos, promovidos pra top-level.
   {id:"demandas_kanban",  icon:"demandas_kanban", label:"Linha de produção"},
   {id:"demandas_cal_pub", icon:"demandas_cal_pub", label:"Calendário de publicações"},
-  {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (16/09/2026) criador de roteiros de vídeo de 90s + trends — abaixo do Calendário
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
@@ -3940,6 +3939,7 @@ const NAV=[
   {id:"scripts",icon:"◇", label:"Scripts"},
   {id:"matriz",icon:"▦", label:"Matriz de Responsabilidades"},
   {id:"playbooks",icon:"◇", label:"Playbooks"},
+  {id:"roteiros",   icon:"roteiros", label:"Conteúdos"}, // (29/09/2026) saiu de cima de Avaliações e veio pro fim de ESTRATÉGIA (Gustavo)
   // Pixels IA DESLIGADA por enquanto (26/08 — "tá super fraca") — religa descomentando
   //{id:"ia",         icon:"◎", label:"Pixels IA",children:[
   //  {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
@@ -70211,7 +70211,8 @@ const PORTAL_ALL_TABS=[
   {id:"marcos",      ico:"flame",       label:"Checkpoints",  sec:"Operação"},
   {id:"calendario",  ico:"calendar",    label:"Calendário",   sec:"Operação"},
   {id:"publicacoes", ico:"check",       label:"Publicações",  sec:"Operação"},
-  {id:"ideias",      ico:"sparkles",    label:"Ideias da Pixels", sec:"Operação"}, // (17/09/2026) trends/referências pro cliente aprovar
+  // {id:"ideias",      ico:"sparkles",    label:"Ideias da Pixels", sec:"Operação"}, // (17/09/2026) trends/referências pro cliente aprovar
+  // ↑ 29/09/2026 (Gustavo): saiu do menu do portal — as ideias agora aparecem dentro de Sugestões de conteúdo (junto com Roteiros e Solicitações por WhatsApp)
   // {id:"analises",    ico:"chart",       label:"Análises"}, // DESATIVADA por enquanto (pedido 2026-08-31) — automação do Reportei ainda não resolve pro cliente
   {id:"nps",         ico:"sparkles",    label:"NPS",          sec:"Relacionamento"},
 ];
@@ -70237,7 +70238,7 @@ const PORTAL_PERM_GRUPOS=[
     {key:"parcerias",   label:"Parcerias",    desc:"Parcerias e collabs"},
     {key:"concorrencia",label:"Concorrência", desc:"Concorrentes acompanhados"},
     {key:"playbook",    label:"Playbook",     desc:"Tom de voz, pilares, chamadas"},
-    {key:"sugestoes",   label:"Sugestões de conteúdo", desc:"Roteiros de vídeo marcados pra ele gravar"},
+    {key:"sugestoes",   label:"Sugestões de conteúdo", desc:"Tudo de Conteúdos marcado pro cliente: roteiros pra gravar, propostas do WhatsApp e trends/referências pra aprovar"},
     {key:"produtos",    label:"Produtos e serviços", desc:"Fichas dos produtos do Playbook: o cliente marca o peso de cada um (vale na hora) e conta o que mudou"},
   ]},
   {id:"operacao", label:"Operação", cor:"#16a34a", itens:[
@@ -70246,7 +70247,7 @@ const PORTAL_PERM_GRUPOS=[
     {key:"marcos",      label:"Checkpoints",  desc:"Marcos do projeto"},
     {key:"calendario",  label:"Calendário",   desc:"Calendário de publicações"},
     {key:"publicacoes", label:"Publicações",  desc:"O que já foi publicado (depende de Demandas)", dependeDe:"demandas"},
-    {key:"ideias",      label:"Ideias da Pixels", desc:"Trends e referências que a Pixels sugere e o cliente aprova"},
+    // {key:"ideias",      label:"Ideias da Pixels", desc:"Trends e referências que a Pixels sugere e o cliente aprova"}, // 29/09/2026: foi pra dentro de Sugestões de conteúdo
   ]},
   {id:"relacionamento", label:"Relacionamento", cor:"#ec4899", itens:[
     {key:"nps",         label:"NPS",          desc:"Pesquisa de satisfação"},
@@ -76487,7 +76488,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
       return <CConquistasAlbum cl={cl} canEdit={!!_socio} selUnit={selUnit} isMob={isMob}/>;
     })()}
     {tab==="ideias"&&typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!lockedClientId}/>}
-    {tab==="sugestoes"&&typeof PortalSugestoesConteudo==="function"&&<PortalSugestoesConteudo cl={cl} selUnit={selUnit} isMob={isMob}/>}
+    {tab==="sugestoes"&&typeof PortalSugestoesConteudo==="function"&&<PortalSugestoesConteudo cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!lockedClientId}/>}
     {tab==="produtos"&&typeof PortalProdutosServicos==="function"&&<PortalProdutosServicos cl={cl} selUnit={selUnit} isMob={isMob} viewerIsPixels={!lockedClientId}/>}
     {tab==="playbook"&&typeof PortalPlaybookCliente==="function"&&(function(){
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
@@ -109853,7 +109854,7 @@ function PageRoteiros({isMob, perms, viewingAs}){
     {aba==="solicitacoes"&&<SolicitacoesWhatsapp isMob={isMob} lista={_lista} unidades={_unidades} clId={clId} setClId={setClId} unit={unit} setUnit={setUnit} nomeCl={_nomeCl} bl={function(k){ return _bl(k); }}/>}
     {aba==="ideias"&&<>
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-        <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Operação › Ideias da Pixels</b>. O que ele aprova vira card com um clique.</div>
+        <div style={{color:"#64748b",fontSize:12.5,flex:1,minWidth:220}}>Trends e referências que o cliente aprova ou recusa no portal, em <b>Estratégia › Sugestões de conteúdo</b>. O que ele aprova vira card com um clique.</div>
         <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
           {[{id:"todas",l:"Todas"},{id:"enviada",l:"Aguardando"},{id:"aprovada",l:"Aprovadas"},{id:"recusada",l:"Recusadas"}].map(function(v){ const on=ideiaFiltro===v.id; const n=v.id==="todas"?ideias.length:ideias.filter(function(i){return i.status===v.id;}).length; return <button key={v.id} type="button" onClick={function(){setIdeiaFiltro(v.id);}} style={{background:on?"#fff":"transparent",color:on?"#0f172a":"#64748b",border:"none",borderRadius:7,padding:"6px 11px",fontSize:pxFonte(11.5,isMob),fontWeight:on?800:600,cursor:"pointer",fontFamily:_RT_FF}}>{v.l} · {n}</button>; })}
         </div>
@@ -109941,7 +109942,10 @@ function IdeiaForm({f, setF, lista, unidades, onSalvar, onCancel}){
 
 /* ── PORTAL DO CLIENTE › Ideias da Pixels (17/09/2026) ──
    Mesma pegada da Aprovações: uma ideia por vez, cartão grande, Aprovar / Não curti. */
-function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixels}){
+function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixels, embutido}){
+  /* 29/09/2026 (Gustavo): "Ideias da Pixels" saiu do menu do portal. Agora aparece embutido
+     dentro de Sugestões de conteúdo (embutido=true): título "Trends e referências" e, se o
+     cliente não tem nenhuma ideia, a seção nem aparece. */
   const sb=(typeof window!=="undefined")?window._sb:null;
   const cid=cl&&cl.id;
   const unitFiltro=(cid==="bioter")?String(selUnit||""):"";
@@ -109976,10 +109980,11 @@ function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixe
   };
   const _cor=(cl&&/^#[0-9a-f]{6}$/i.test(cl.color||""))?cl.color:"#7c3aed";
   const nEnv=todas.filter(function(i){return i.status==="enviada";}).length;
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  if(embutido&&(lista===null||todas.length===0)) return null;
+  return <div style={Object.assign({display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"},embutido?{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?14:"18px 22px",marginTop:6}:{})}>
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <div style={{flex:1,minWidth:220}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Ideias da Pixels</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{embutido?"Trends e referências":"Ideias da Pixels"}{embutido&&nEnv>0?<span style={{marginLeft:8,background:"#dc2626",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:800,verticalAlign:"middle"}}>{nEnv} pra avaliar</span>:null}</div>
         <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Trends e referências que separamos pra sua marca. Aprova o que faz sentido e a gente produz.</div>
       </div>
       <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:9,padding:2,gap:2}}>
@@ -110022,7 +110027,10 @@ function PortalIdeiasPixels({cl, selUnit, isMob, currentClientUser, viewerIsPixe
 }
 
 /* ── PORTAL DO CLIENTE › Sugestões de conteúdo ── */
-function PortalSugestoesConteudo({cl, selUnit, isMob}){
+function PortalSugestoesConteudo({cl, selUnit, isMob, currentClientUser, viewerIsPixels}){
+  /* 29/09/2026 (Gustavo): Sugestões de conteúdo centraliza TODA a aba Conteúdos da agência pro
+     cliente: Roteiros (olho), Solicitações por WhatsApp (olho) e Ideias pro cliente (trends e
+     referências pra aprovar — antes era a aba "Ideias da Pixels" do portal, que saiu do menu). */
   const sb=(typeof window!=="undefined")?window._sb:null;
   const [lista,setLista]=useState(null);
   const [mapaEs,setMapaEs]=useState(null);
@@ -110062,7 +110070,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
       <div style={{width:44,height:44,borderRadius:12,background:_cor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+_cor+"44"}}><Ico n="video" size={20} color="#fff"/></div>
       <div style={{flex:1,minWidth:200}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4}}>Sugestões de conteúdo</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos e ideias de posts pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou pedir ajustes.</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Roteiros de vídeo de 60 segundos, ideias de posts e trends pensados pra sua empresa. É só escolher, gravar e mandar pra gente — ou aprovar as ideias que fazem sentido.</div>
       </div>
     </div>
     {lista===null&&<div style={{padding:"30px 0",textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando…</div>}
@@ -110107,6 +110115,7 @@ function PortalSugestoesConteudo({cl, selUnit, isMob}){
         </div>
       </div>;
     })}
+    {typeof PortalIdeiasPixels==="function"&&<PortalIdeiasPixels cl={cl} selUnit={selUnit} isMob={isMob} currentClientUser={currentClientUser} viewerIsPixels={!!viewerIsPixels} embutido={true}/>}
   </div>;
 }
 
@@ -110669,6 +110678,22 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
       _toast("success",!p.visivel_portal?"No portal do cliente, em Sugestões de conteúdo.":"Tirado do portal.",2500);
     }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
   };
+  /* v5 (29/09, Gustavo): chave geral do portal — um clique manda TODAS as propostas do pedido
+     pro portal do cliente (Sugestões de conteúdo). Se todas já estão lá, o mesmo clique tira todas.
+     Só mexe no campo visivel_portal (nada é apagado). Descartadas não vão. */
+  const _portalTodas=async function(ligar){
+    const alvo=propostas.filter(function(p){ return p.status!=="descartada" && !!p.visivel_portal!==ligar; });
+    if(!alvo.length) return;
+    setOcupado("portal");
+    try{
+      const ids=alvo.map(function(p){return p.id;});
+      const r=await sb.from("pauta_propostas").update({visivel_portal:ligar,updated_at:new Date().toISOString()}).in("id",ids);
+      if(r.error) throw r.error;
+      setPropostas(function(l){ return l.map(function(x){ return ids.indexOf(x.id)>=0?Object.assign({},x,{visivel_portal:ligar}):x; }); });
+      _toast("success",ligar?(alvo.length+(alvo.length===1?" proposta foi":" propostas foram")+" pro portal do cliente, em Sugestões de conteúdo."):"Todas tiradas do portal.",3000);
+    }catch(e){ _toast("error","Não salvou: "+((e&&e.message)||e)); }
+    setOcupado("");
+  };
   const _toggleCerebro=async function(m){
     try{
       await _upd("claude_materiais",m.id,{ativo:!m.ativo});
@@ -110931,6 +110956,14 @@ function SolicitacoesWhatsapp({isMob, lista, unidades, clId, setClId, unit, setU
               </span>
               :<button type="button" disabled={!!ocupado} onClick={function(){ setConfLimpar(true); }} title="Tira da tela todas as propostas que não viraram card (ficam guardadas em Ver descartadas)"
                 style={Object.assign({},_btnSec,{color:"#b91c1c",flex:isMob?1:undefined})}>{ocupado==="limpar"?<><Spin/> Limpando…</>:"Limpar propostas"}</button>)}
+            {/* v5 (29/09): chave geral do portal — olho que manda (ou tira) todas de uma vez */}
+            {_bl("solic.nova")&&(function(){ const todasNo=vivas.every(function(p){return !!p.visivel_portal;}); const nNo=vivas.filter(function(p){return !!p.visivel_portal;}).length; const _cP="#0d9488";
+              return <button type="button" disabled={!!ocupado} onClick={function(){ _portalTodas(!todasNo); }}
+                title={todasNo?"Todas estão no portal do cliente (Sugestões de conteúdo). Clique pra tirar todas.":"Manda todas as propostas pro portal do cliente, em Sugestões de conteúdo, de uma vez"}
+                style={Object.assign({},_btnSec,{flex:isMob?1:undefined,background:todasNo?_cP:"#fff",color:todasNo?"#fff":"#0f172a",borderColor:todasNo?_cP:"#e2e8f0"})}>
+                {ocupado==="portal"?<Spin/>:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                {todasNo?"Todas no portal":(nNo?("Portal: "+nNo+" de "+vivas.length+" · enviar todas"):"Enviar todas pro portal")}
+              </button>; })()}
             {_bl("solic.aceitar")&&<button type="button" disabled={!nSel||!!ocupado} onClick={_aceitar} style={Object.assign({},_btn(!nSel||!!ocupado),{flex:isMob?1:undefined})}>{ocupado==="aceitar"?<><Spin/> Criando cards…</>:"Aceitar selecionadas"}</button>}
           </div>}
 
