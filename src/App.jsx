@@ -8710,6 +8710,140 @@ function PxComoSaiLinhas({story,musicaModo,naoPublica,folder,disabled,onStory,on
   </>;
 }
 
+/* ═══ BAIXAR A ENTREGA DIRETO — capa do calendário + topo do card (29/09/2026, Gustavo) ═══
+   "ter um botão de download já na capa, tanto pra vídeo quanto pra artes, só que artes é só um
+   botão, já os vídeos é full e comprimido, dois ícones diferentes, porém entre si iguais aos que
+   tem dentro do card; além da capa, aparece dentro logo na primeira tela".
+   • Arte/carrossel: UM botão (seta) — baixa a arte, ou todas as lâminas.
+   • Vídeo: DOIS botões — Full (cantos pra fora = original) e Comprimido (cantos pra dentro = leve).
+     Sem versão comprimida ainda, o botão dela fica apagado, com o motivo no tooltip.
+   • Mesmo componente nos dois lugares: <PxBaixarEntrega task variante="capa"|"card" cor/>.
+   • Download por link assinado do Storage com ?download= (o navegador salva direto no disco —
+     não segura vídeo de 1 GB na memória). Sem storagePath: fetch → blob; por último abre em aba. */
+function _pxBxTs(f){
+  const st=String((f&&(f.addedAtIso||f.addedAt))||"");
+  if(/^\d{4}-\d{2}-\d{2}T/.test(st)){ const d=new Date(st); return isNaN(d.getTime())?0:d.getTime(); }
+  const m=st.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\s,]+(\d{2}):(\d{2}))?/);
+  if(m){ const d=new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0); return isNaN(d.getTime())?0:d.getTime(); }
+  return 0;
+}
+function _pxBxEhVideo(f){ return !!f&&(String(f.type||"").toLowerCase().indexOf("video/")===0||/\.(mp4|m4v|mov|webm|mkv|avi)(\?|#|$)/i.test(String(f.url||f.name||""))); }
+function _pxBxMB(b){ if(!b||b<=0) return ""; return b>=1048576?(Math.max(1,Math.round(b/1048576))+" MB"):(Math.max(1,Math.round(b/1024))+" KB"); }
+function _pxBxNomeBase(task){ return (task&&task.title)?(String(task.title).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_").slice(0,80)||"arquivo"):"arquivo"; }
+/* O que dá pra baixar de um card: {tipo:"video", full, leve} | {tipo:"arte", itens:[...]} | null */
+function pxBaixarAlvos(task){
+  if(!task) return null;
+  let fs=[];
+  try{ fs=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(task):((task.files)||[]); }catch(_){ fs=(task.files)||[]; }
+  fs=(fs||[]).filter(function(f){ return f&&f.url&&!f.isAnnotation&&!f.uploading&&!f.purged; });
+  if(!fs.length) return null;
+  const vids=fs.filter(_pxBxEhVideo);
+  const ehCarrossel=String(task.contentType||task.content_type||"").toLowerCase()==="carrossel"||(fs.length>1&&vids.length<fs.length);
+  const ehVideo=vids.length>0&&!ehCarrossel&&((typeof pxIsVideoTask==="function"&&pxIsVideoTask(task))||vids.length===fs.length);
+  if(ehVideo){
+    const full=vids.slice().sort(function(a,b){ return _pxBxTs(b)-_pxBxTs(a); })[0];
+    return {tipo:"video", full:full, leve:(full&&full.previewUrl)?full:null};
+  }
+  if(typeof pxOrdenarFeedStory==="function"){ try{ fs=pxOrdenarFeedStory(fs); }catch(_){} }
+  return {tipo:"arte", itens:fs};
+}
+async function pxBaixarArquivo(url, storagePath, nome){
+  const sb=(typeof window!=="undefined")?window._sb:null;
+  if(storagePath&&sb&&sb.storage){
+    try{
+      const r=await sb.storage.from("agency-files").createSignedUrl(storagePath,600,{download:nome});
+      if(r&&!r.error&&r.data&&r.data.signedUrl){
+        const a=document.createElement("a"); a.href=r.data.signedUrl; a.rel="noopener"; a.style.display="none";
+        document.body.appendChild(a); a.click(); setTimeout(function(){ a.remove(); },300);
+        return true;
+      }
+    }catch(e){ console.warn("[pxBaixarArquivo] link assinado falhou:",(e&&e.message)||e); }
+  }
+  try{
+    const resp=await fetch(url); if(!resp.ok) throw new Error("HTTP "+resp.status);
+    const b=await resp.blob(); const u=URL.createObjectURL(b);
+    const a=document.createElement("a"); a.href=u; a.download=nome; a.style.display="none";
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); },300);
+    return true;
+  }catch(e){ console.warn("[pxBaixarArquivo] fetch falhou:",(e&&e.message)||e); }
+  try{ window.open(url,"_blank","noopener"); return true; }catch(_){ return false; }
+}
+function _pxBxExt(f,padrao){ const m=String((f&&(f.name||f.url))||"").toLowerCase().split("?")[0].match(/\.([a-z0-9]{2,5})$/); return m?m[1]:padrao; }
+async function pxBaixarEntrega(task, qual){
+  const al=pxBaixarAlvos(task); if(!al) return;
+  const base=_pxBxNomeBase(task);
+  const _t=(typeof pixelsToast!=="undefined")?pixelsToast:null;
+  if(al.tipo==="video"){
+    if(qual==="leve"){
+      if(!al.leve){ if(_t) _t.warning("Esse vídeo ainda não tem versão comprimida. Dá pra gerar na Avaliação de vídeo.",4500); return; }
+      if(_t) _t.info("Baixando o vídeo comprimido…",2500);
+      const ok=await pxBaixarArquivo(al.leve.previewUrl, al.leve.previewPath, base+"_comprimido."+_pxBxExt({url:al.leve.previewUrl},"mp4"));
+      if(!ok&&_t) _t.error("Não consegui baixar o comprimido.",4000);
+      return;
+    }
+    if(_t) _t.info("Baixando o vídeo full…",2500);
+    const ok=await pxBaixarArquivo(al.full.url, al.full.storagePath, base+"_full."+_pxBxExt(al.full,"mp4"));
+    if(!ok&&_t) _t.error("Não consegui baixar o vídeo.",4000);
+    return;
+  }
+  const n=al.itens.length;
+  if(_t) _t.info(n>1?("Baixando "+n+" arquivos…"):"Baixando…",2500);
+  let ok=0;
+  for(let i=0;i<n;i++){
+    const f=al.itens[i];
+    const nome=base+(n>1?("_lamina_"+(i+1)):"")+"."+_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png");
+    if(await pxBaixarArquivo(f.url, f.storagePath, nome)) ok++;
+    if(i<n-1) await new Promise(function(r){ setTimeout(r,450); });
+  }
+  if(_t){ if(ok===n) _t.success(n>1?("Baixados "+n+" arquivos ✓"):"Baixado ✓",3000); else if(ok>0) _t.warning("Baixados "+ok+"/"+n,4000); else _t.error("Falha no download",4000); }
+}
+/* Ícones — os mesmos na capa e no card */
+function PxIcoBaixar({qual, size}){
+  const s=size||16;
+  if(qual==="full") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8V3h5"/><path d="M16 3h5v5"/><path d="M21 16v5h-5"/><path d="M8 21H3v-5"/><path d="M12 7v9"/><polyline points="8.5 12.5 12 16 15.5 12.5"/></svg>;
+  if(qual==="leve") return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v5H3"/><path d="M21 8h-5V3"/><path d="M16 21v-5h5"/><path d="M3 16h5v5"/><path d="M12 8.5v6.5"/><polyline points="9.5 12.5 12 15 14.5 12.5"/></svg>;
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+}
+function PxBaixarEntrega({task, variante, cor}){
+  const [ocup,setOcup]=useState("");
+  const al=pxBaixarAlvos(task);
+  if(!al) return null;
+  const capa=variante==="capa";
+  const _parar=function(e){ if(e){ e.stopPropagation(); } };
+  const clique=function(qual){ return async function(e){
+    if(e){ e.stopPropagation(); e.preventDefault(); }
+    if(ocup) return;
+    setOcup(qual||"arte");
+    try{ await pxBaixarEntrega(task, qual); }finally{ setOcup(""); }
+  }; };
+  const botoes=[];
+  if(al.tipo==="video"){
+    const fs=al.full&&al.full.size, ls=al.leve&&al.leve.previewSize;
+    botoes.push({qual:"full", title:"Baixar vídeo full (original"+(fs?(" · "+_pxBxMB(fs)):"")+")"});
+    botoes.push({qual:"leve", off:!al.leve, title:al.leve?("Baixar vídeo comprimido (leve"+(ls?(" · "+_pxBxMB(ls)):"")+")"):"Vídeo comprimido ainda não existe — dá pra gerar na Avaliação de vídeo"});
+  } else {
+    const n=al.itens.length;
+    botoes.push({qual:"", badge:n>1?n:0, title:n>1?("Baixar as "+n+" lâminas/arquivos da entrega"):"Baixar a arte"});
+  }
+  const _cor=cor||"#475569";
+  return <span onMouseDown={_parar} onPointerDown={_parar} onDragStart={function(e){ e.preventDefault(); e.stopPropagation(); }} draggable={false}
+    style={{display:"inline-flex",alignItems:"center",gap:capa?3:8,flexShrink:0}}>
+    {botoes.map(function(b){
+      const busy=ocup===(b.qual||"arte");
+      const st=capa
+        ?{width:20,height:20,borderRadius:6,border:"none",background:b.off?"rgba(255,255,255,0.45)":"#fff",color:_cor,boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}
+        :{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",color:b.off?"#cbd5e1":"#64748b"};
+      return <button key={b.qual||"arte"} type="button" title={b.title} aria-label={b.title} onClick={clique(b.qual)}
+        style={Object.assign({display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,cursor:b.off?"help":"pointer",position:"relative",flexShrink:0,transition:"all .15s",opacity:busy?.6:1},st)}
+        onMouseEnter={function(e){ if(b.off) return; if(capa){ e.currentTarget.style.transform="scale(1.1)"; } else { e.currentTarget.style.background="#f8fafc"; e.currentTarget.style.color="#0f172a"; } }}
+        onMouseLeave={function(e){ if(capa){ e.currentTarget.style.transform=""; } else { e.currentTarget.style.background="#fff"; e.currentTarget.style.color=b.off?"#cbd5e1":"#64748b"; } }}>
+        <PxIcoBaixar qual={b.qual} size={capa?13:16}/>
+        {b.badge?<span style={{position:"absolute",top:capa?-4:-5,right:capa?-4:-5,background:"#7c3aed",color:"#fff",fontSize:capa?7.5:8.5,fontWeight:800,borderRadius:99,padding:capa?"0 4px":"1px 5px",lineHeight:1.5,border:"1.5px solid #fff"}}>{b.badge}</span>:null}
+      </button>;
+    })}
+  </span>;
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -25441,6 +25575,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, viewingAs,
                                   style={{width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,0.45)",display:"inline-flex",alignItems:"center",justifyContent:"center",marginLeft:-5,color:"#fff",fontSize:pxFonte(9,isMob),fontWeight:800,letterSpacing:.1,flexShrink:0}}>+{_extra}</div>}
                               </div>;
                             })()}
+                            {/* (29/09/2026, Gustavo) Baixar direto da capa: arte = 1 botão; vídeo = Full + Comprimido.
+                                Mesmos ícones do topo do card (PxBaixarEntrega). Clique não abre o card nem arrasta. */}
+                            {typeof PxBaixarEntrega==="function"&&<span style={{marginLeft:"auto",display:"inline-flex",flexShrink:0}}><PxBaixarEntrega task={t} variante="capa" cor={cardColor}/></span>}
                           </div>
 
 
@@ -49359,60 +49496,9 @@ function _cardPodeSerResp(u){
               onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative",width:isMobile?"100%":undefined,flexWrap:isMobile?"wrap":"nowrap"}}>
-            {/* Baixar entrega: imagem única, carrossel completo ou vídeo — direto do card */}
-            {(function(){
-              const _urls=(function(){
-                try{
-                  const _fs=(typeof pxFinalFilesAtuais==="function")?pxFinalFilesAtuais(task):((task&&task.files)||[]);
-                  return (_fs||[]).filter(function(f){return f&&f.url&&!f.isAnnotation&&!f.uploading;}).map(function(f){return f.url;});
-                }catch(_){ return []; }
-              })();
-              if(_urls.length===0) return null;
-              const _baixar=async function(){
-                try{
-                  const _multi=_urls.length>1;
-                  if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" arquivos…"):"Baixando…",2500);
-                  let _ok=0;
-                  for(let i=0;i<_urls.length;i++){
-                    const _url=_urls[i];
-                    let _fname="";
-                    try{ _fname=decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                    if(!_fname||_fname.length<4){
-                      const _t=(task&&task.title)?String(task.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_"):"arquivo";
-                      _fname=_t+(_multi?("_"+(i+1)):"");
-                    } else if(_multi){
-                      const _d=_fname.lastIndexOf(".");
-                      _fname=(_d>0?_fname.slice(0,_d):_fname)+"_lamina_"+(i+1)+(_d>0?_fname.slice(_d):"");
-                    }
-                    try{
-                      const _r=await fetch(_url);
-                      const _b=await _r.blob();
-                      const _u=URL.createObjectURL(_b);
-                      const _a2=document.createElement("a"); _a2.href=_u; _a2.download=_fname;
-                      document.body.appendChild(_a2); _a2.click();
-                      setTimeout(function(){URL.revokeObjectURL(_u);_a2.remove();},250);
-                      _ok++;
-                      if(i<_urls.length-1) await new Promise(function(r){setTimeout(r,350);});
-                    }catch(e2){ console.warn("[card download "+(i+1)+"]",e2); }
-                  }
-                  if(typeof pixelsToast!=="undefined"){
-                    if(_ok===_urls.length) pixelsToast.success(_multi?("Baixados "+_ok+" arquivos ✓"):"Baixado ✓",3000);
-                    else if(_ok>0) pixelsToast.warning("Baixados "+_ok+"/"+_urls.length,4000);
-                    else pixelsToast.error("Falha nos downloads",4000);
-                  }
-                }catch(e){
-                  console.warn("[card download]",e);
-                  if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
-                }
-              };
-              return <button onClick={_baixar} title={_urls.length>1?("Baixar as "+_urls.length+" lâminas/arquivos da entrega"):"Baixar a entrega"}
-                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s",position:"relative"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                {_urls.length>1&&<span style={{position:"absolute",top:-5,right:-5,background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,borderRadius:99,padding:"1px 5px",lineHeight:1.5,border:"1.5px solid #fff"}}>{_urls.length}</span>}
-              </button>;
-            })()}
+            {/* Baixar entrega (29/09/2026, Gustavo): mesmo componente da capa do calendário — arte = 1 botão
+                (todas as lâminas); vídeo = 2 botões, Full e Comprimido. O botão antigo (só o original) virou este. */}
+            {typeof PxBaixarEntrega==="function"&&<PxBaixarEntrega task={task} variante="card"/>}
             {/* Botões soltos no header: Copiar link, Duplicar cartão, Mover para lixeira */}
             {_bl("acao.copiar_link")&&<button onClick={copyCardLink} title="Copiar link"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
