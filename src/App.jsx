@@ -8808,11 +8808,13 @@ async function pxBaixarEntrega(task, qual){
   const n=al.itens.length;
   if(_t) _t.info(n>1?("Baixando "+n+" arquivos…"):"Baixando…",2500);
   let ok=0;
-  for(let i=0;i<n;i++){
+  /* 29/09 (Gustavo): de trás pra frente — a pasta Downloads ordena pelo mais novo, então a lâmina 01
+     (baixada por último) aparece primeiro e a sequência fica certa. Os nomes continuam numerados. */
+  for(let i=n-1;i>=0;i--){
     const f=al.itens[i];
     const nome=base+(n>1?("_lamina_"+String(i+1).padStart(2,"0")):"")+"."+_pxBxExt(f,_pxBxEhVideo(f)?"mp4":"png");
     if(await pxBaixarArquivo(f.url, f.storagePath, nome, n>1)) ok++;   // várias = uma de cada vez, na ordem do carrossel
-    if(i<n-1) await new Promise(function(r){ setTimeout(r,350); });
+    if(i>0) await new Promise(function(r){ setTimeout(r,350); });
   }
   if(_t){ if(ok===n) _t.success(n>1?("Baixados "+n+" arquivos ✓"):"Baixado ✓",3000); else if(ok>0) _t.warning("Baixados "+ok+"/"+n,4000); else _t.error("Falha no download",4000); }
 }
@@ -35121,7 +35123,9 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                         if(typeof pixelsToast!=="undefined") pixelsToast.info(_multi?("Baixando "+_urls.length+" lâminas…"):"Baixando…",2500);
                         const _title = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : (tab==="video"?"video":"arte");
                         let _okCount = 0;
-                        for(let i=0;i<_urls.length;i++){
+                        // 29/09 (Gustavo): baixa de trás pra frente — a pasta Downloads mostra o mais novo primeiro,
+                        // então a lâmina 1 (baixada por último) aparece na frente e a sequência fica na ordem.
+                        for(let i=_urls.length-1;i>=0;i--){
                           const _url = _urls[i];
                           let _fname = "";
                           try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
@@ -35142,7 +35146,7 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                             document.body.appendChild(_a); _a.click();
                             setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
                             _okCount++;
-                            if(i<_urls.length-1) await new Promise(function(r){setTimeout(r,350);});
+                            if(i>0) await new Promise(function(r){setTimeout(r,350);});
                           }catch(e2){
                             console.warn("[download lamina "+(i+1)+"]",e2);
                           }
