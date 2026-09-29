@@ -119333,6 +119333,22 @@ function _EvAprende({ isMob }){
   const [ref, setRef] = useState({ arquivo:null, cliente:"", nota:"" });   // v13: vídeo de referência
   const [refPasso, setRefPasso] = useState(null);
   const [refRes, setRefRes] = useState(null);
+  const [padroes, setPadroes] = useState(null);         // v14 (Cérebro F4): padrões provados pelos números
+  const [padOcupado, setPadOcupado] = useState(null);
+  useEffect(function(){
+    if(!window._sb) return; let vivo = true;
+    window._sb.rpc("criacao_padroes_numeros", { p_client:cli || null }).then(function(r){ if(vivo) setPadroes(r.error ? [] : (Array.isArray(r.data) ? r.data : [])); }).catch(function(){ if(vivo) setPadroes([]); });
+    return function(){ vivo = false; };
+  }, [cli, rec]);
+  const ligarPadrao = function(pd, ligar){
+    if(padOcupado) return; setPadOcupado(pd.id);
+    window._sb.rpc("criacao_padrao_status", { p_id:pd.id, p_ligar:ligar }).then(function(x){
+      setPadOcupado(null);
+      if(x.error){ _evToast("error", "Não salvou: " + (x.error.message || "erro")); return; }
+      _evToast("success", ligar ? "Padrão ligado — a IA volta a seguir." : "Padrão desligado (fica no histórico; a IA não usa mais).");
+      setRec(function(n){ return n + 1; });
+    }).catch(function(e){ setPadOcupado(null); _evToast("error", String((e && e.message) || e)); });
+  };
   useEffect(function(){
     if(!window._sb) return; let vivo = true;
     window._sb.rpc("criacao_reedicao_motivos", { p_client:cli || null }).then(function(r){ if(vivo) setMotivos(r.error ? null : (r.data || null)); }).catch(function(){ if(vivo) setMotivos(null); });
@@ -119514,6 +119530,33 @@ function _EvAprende({ isMob }){
             {cartao("Voz de estúdio", (Number(pf.voz_estudio) || 0) + " de " + pf.videos)}
           </div>
         )}
+      </div>
+
+      <div style={caixa}>
+        <div style={{fontSize:_evF(15, isMob),fontWeight:800}}>Provado pelos números ({(padroes || []).filter(function(x){ return x.status === "aprovado"; }).length})</div>
+        <div style={{fontSize:_evF(12.5, isMob),color:_EV.sub,margin:"2px 0 8px",lineHeight:1.5}}>Toda semana a IA compara os Reels publicados que mais seguraram as pessoas com os que menos seguraram (tempo assistido ÷ duração) e grava o que os melhores fazem diferente. Entra valendo sozinho; um sócio pode desligar.</div>
+        {padroes == null && <div style={{color:_EV.fraco,fontSize:_evF(13, isMob)}}>Carregando…</div>}
+        {padroes && !padroes.length && <div style={{color:_EV.sub,fontSize:_evF(13.5, isMob)}}>Ainda nenhum padrão. Precisa de 8 Reels lidos com números por cliente (a leitura roda no PC do escritório).</div>}
+        {(padroes || []).map(function(pd){
+          const ligado = pd.status === "aprovado", det = pd.detalhe || {}, fatos = Array.isArray(det.fatos) ? det.fatos : [];
+          return (
+            <div key={pd.id} style={{padding:"10px 12px",borderRadius:12,border:"1px solid " + _EV.linha,marginTop:8,opacity:ligado ? 1 : 0.62,background:ligado ? "#fff" : _EV.fundo}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:_evF(10.5, isMob),fontWeight:800,padding:"2px 7px",borderRadius:7,background:ligado ? _EV.verdeClaro : _EV.linha2,color:ligado ? _EV.verde : _EV.sub}}>{ligado ? "ligado" : "desligado"}</span>
+                <span style={{fontSize:_evF(10.5, isMob),fontWeight:700,padding:"2px 7px",borderRadius:7,background:_EV.roxoClaro,color:_EV.roxo}}>{pd.escopo === "geral" ? "todos os clientes" : (pd.client_id || "cliente")}{pd.tipo_video && pd.tipo_video !== "qualquer" ? " · " + pd.tipo_video : ""}</span>
+                <b style={{fontSize:_evF(13.5, isMob)}}>{pd.titulo}</b>
+              </div>
+              <div style={{fontSize:_evF(13, isMob),marginTop:5,lineHeight:1.5}}>{pd.regra}</div>
+              {(pd.evidencia || det.amostra) && <div style={{fontSize:_evF(12, isMob),color:_EV.sub,marginTop:4,lineHeight:1.45}}>{pd.evidencia || det.amostra}</div>}
+              {fatos.length > 0 && <details style={{marginTop:4}}><summary style={{fontSize:_evF(12, isMob),color:_EV.roxo,cursor:"pointer",fontWeight:700}}>Os números ({fatos.length})</summary>
+                <ul style={{margin:"4px 0 0",paddingLeft:18,fontSize:_evF(12, isMob),color:_EV.sub,lineHeight:1.5}}>{fatos.map(function(f, k){ return <li key={k}>{f}</li>; })}</ul></details>}
+              <div style={{display:"flex",gap:8,alignItems:"center",marginTop:6,flexWrap:"wrap"}}>
+                <span style={{fontSize:_evF(11.5, isMob),color:_EV.fraco}}>{pd.decidido_nome || "IA"}{pd.decidido_em ? " · " + _evDataBR(pd.decidido_em) : ""}</span>
+                {!isMob && podeDecidir && <button onClick={function(){ ligarPadrao(pd, !ligado); }} disabled={padOcupado === pd.id} style={btn(ligado ? "claro" : "roxo", padOcupado !== pd.id)}>{padOcupado === pd.id ? "…" : ligado ? "Desligar" : "Ligar de novo"}</button>}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div style={caixa}>
